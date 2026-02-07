@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "volunserve",
+    "name": "VolunServe",
     "slug": "volunserve",
+    "owner": "froyarjan123",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "volunserve",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.froyarjan123.volunserve"
     },
     "web": {
       "output": "static",
@@ -49,6 +50,12 @@
       "eas": {
         "projectId": "d7eaa790-6fa3-427f-b710-7616411e39b2"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d7eaa790-6fa3-427f-b710-7616411e39b2"
     }
   }
 }

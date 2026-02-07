@@ -1,33 +1,63 @@
-import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-export default function Donation() {
-  const donations = [
-    { id: '1', name: 'Froy Arjan Caliboso', amount: 500 },
-    { id: '2', name: 'Mc Iver Basinal', amount: 1000 },
-    { id: '3', name: 'Anonymous', amount: 250 },
-  ];
+export default function DonationHistory() {
+  const [donations, setDonations] = useState([
+    {
+      id: '1',
+      name: 'Froy Arjan Caliboso',
+      amount: '₱500',
+      date: '2026-02-01',
+      status: 'Completed',
+    },
+  ]);
 
-  const total = donations.reduce((sum, d) => sum + d.amount, 0);
+  const addDonation = (source: 'Manual' | 'QR') => {
+    const newDonation = {
+      id: Date.now().toString(),
+      name: source === 'QR' ? 'QR Donor' : 'Anonymous',
+      amount: '₱' + (Math.floor(Math.random() * 900) + 100),
+      date: new Date().toISOString().split('T')[0],
+      status: 'Completed',
+    };
+
+    setDonations([newDonation, ...donations]);
+  };
+
+  const handleScanQR = () => {
+    // Demo-safe QR simulation
+    Alert.alert(
+      'QR Scan Successful',
+      'Donation recorded successfully.',
+      [{ text: 'OK', onPress: () => addDonation('QR') }]
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Donations</Text>
-      <Text style={styles.total}>Total Donations: ₱{total}</Text>
+      <Text style={styles.title}>Donation History</Text>
 
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>Scan QR to Donate</Text>
-      </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => addDonation('Manual')}>
+          <Text style={styles.buttonText}>Add Donation</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.subtitle}>Donation History</Text>
+        <TouchableOpacity style={styles.secondaryButton} onPress={handleScanQR}>
+          <Text style={styles.secondaryText}>Scan QR</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={donations}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 30 }}
         renderItem={({ item }) => (
-          <View style={styles.item}>
-            <MaterialIcons name="person" size={24} color="#2563EB" />
-            <Text style={styles.itemText}>{item.name} - ₱{item.amount}</Text>
+          <View style={styles.card}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text>Amount: {item.amount}</Text>
+            <Text>Date: {item.date}</Text>
+            <Text>Status: {item.status}</Text>
           </View>
         )}
       />
@@ -36,30 +66,52 @@ export default function Donation() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#F8F9FA' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#2563EB', marginBottom: 10 },
-  total: { fontSize: 20, fontWeight: 'bold', color: '#444', marginBottom: 20 },
-  subtitle: { fontSize: 18, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
-  button: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 15,
-    borderRadius: 15,
-    alignItems: 'center',
-    marginBottom: 20,
+  container: {
+    flex: 1,
+    backgroundColor: '#f4f6f8',
+    padding: 16,
   },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  item: {
+  title: {
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  buttonRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
     padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#e5e7eb',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  secondaryText: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
     elevation: 2,
   },
-  itemText: { marginLeft: 10, fontSize: 16 },
+  name: {
+    fontWeight: '600',
+    marginBottom: 4,
+  },
 });

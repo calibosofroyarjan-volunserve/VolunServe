@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 40; // almost full width with padding
+const CARD_WIDTH = width - 40; 
 
 export default function Dashboard() {
   const router = useRouter();
@@ -12,7 +12,7 @@ export default function Dashboard() {
   return (
     <ScrollView
       contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={true} // vertical scroll
+      showsVerticalScrollIndicator={true} 
     >
       <Text style={styles.title}>VolunServe</Text>
       <Text style={styles.subtitle}>Community • Action • Response</Text>
@@ -79,8 +79,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    width: CARD_WIDTH,       // almost full width
-    height: 140,             // big card
+    width: CARD_WIDTH,       
+    height: 140,             
     borderRadius: 18,
     padding: 20,
     marginBottom: 20,
