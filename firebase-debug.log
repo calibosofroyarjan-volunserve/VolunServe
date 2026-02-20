@@ -1,0 +1,196 @@
+[debug] [2026-02-09T13:45:18.048Z] ----------------------------------------------------------------------
+[debug] [2026-02-09T13:45:18.051Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Ryzen\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2026-02-09T13:45:18.051Z] CLI Version:   15.5.1
+[debug] [2026-02-09T13:45:18.051Z] Platform:      win32
+[debug] [2026-02-09T13:45:18.051Z] Node Version:  v24.13.0
+[debug] [2026-02-09T13:45:18.051Z] Time:          Mon Feb 09 2026 21:45:18 GMT+0800 (Philippine Standard Time)
+[debug] [2026-02-09T13:45:18.051Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\Ryzen\Documents\volunserve
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-02-09T13:54:06.927Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-09T13:54:06.927Z] > authorizing via signed-in user (calibosofroyarjan@gmail.com)
+[debug] [2026-02-09T13:54:06.928Z] Checked if tokens are valid: true, expires at: 1770646902594
+[debug] [2026-02-09T13:54:06.928Z] Checked if tokens are valid: true, expires at: 1770646902594
+[debug] [2026-02-09T13:54:06.929Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2026-02-09T13:54:18.033Z] *** [apiv2] error from fetch(https://firebase.googleapis.com/v1beta1/projects?pageSize=100, {"headers":{},"method":"GET","signal":{"reason":""}}): FetchError: request to https://firebase.googleapis.com/v1beta1/projects?pageSize=100 failed, reason: getaddrinfo ENOTFOUND firebase.googleapis.com
+[debug] [2026-02-09T13:54:18.033Z] Failed to make request to https://firebase.googleapis.com/v1beta1/projects?pageSize=100
+[debug] [2026-02-09T13:54:23.043Z] Error: Timed out.
+    at Timeout._onTimeout (C:\Users\Ryzen\AppData\Roaming\npm\node_modules\firebase-tools\lib\utils.js:308:49)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-02-09T14:09:30.829Z] ----------------------------------------------------------------------
+[debug] [2026-02-09T14:09:30.831Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Ryzen\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init --debug
+[debug] [2026-02-09T14:09:30.832Z] CLI Version:   15.5.1
+[debug] [2026-02-09T14:09:30.832Z] Platform:      win32
+[debug] [2026-02-09T14:09:30.832Z] Node Version:  v24.13.0
+[debug] [2026-02-09T14:09:30.832Z] Time:          Mon Feb 09 2026 22:09:30 GMT+0800 (Philippine Standard Time)
+[debug] [2026-02-09T14:09:30.832Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\Ryzen\Documents\volunserve
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-02-09T14:09:52.534Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-09T14:09:52.535Z] > authorizing via signed-in user (calibosofroyarjan@gmail.com)
+[debug] [2026-02-09T14:09:52.536Z] Checked if tokens are valid: false, expires at: 1770646902594
+[debug] [2026-02-09T14:09:52.536Z] Checked if tokens are valid: false, expires at: 1770646902594
+[debug] [2026-02-09T14:09:52.536Z] > refreshing access token with scopes: []
+[debug] [2026-02-09T14:09:52.538Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-02-09T14:09:52.538Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-09T14:09:52.789Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-02-09T14:09:52.789Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-09T14:09:52.794Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2026-02-09T14:09:53.405Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-02-09T14:09:53.405Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] 
+=== Firestore Setup
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-02-09T14:10:04.454Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:10:04.454Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:10:04.455Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firestore.googleapis.com [none]
+[debug] [2026-02-09T14:10:04.455Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firestore.googleapis.com  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:10:05.851Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firestore.googleapis.com 200
+[debug] [2026-02-09T14:10:05.851Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firestore.googleapis.com [omitted]
+[info] +  firestore: required API firestore.googleapis.com is enabled 
+[debug] [2026-02-09T14:10:05.854Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:10:05.854Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:10:05.855Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases [none]
+[debug] [2026-02-09T14:10:07.123Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases 200
+[debug] [2026-02-09T14:10:07.124Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases {"databases":[{"name":"projects/volunserve-3aa5b/databases/(default)","uid":"4da4f155-31b8-4f94-94f0-3eeecf8c56a3","createTime":"2026-02-08T10:59:21.426080Z","updateTime":"2026-02-08T10:59:21.426080Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-02-09T13:10:07.196039Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IMmMvZHLzJIDMLzesLPhyZID"}]}
+[info] 
+[info] Firestore Security Rules allow you to define how and when to allow
+[info] requests. You can keep these rules in your project directory
+[info] and publish them with firebase deploy.
+[info] 
+[debug] [2026-02-09T14:14:12.189Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:12.189Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:12.190Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases pageSize=10&pageToken=
+[debug] [2026-02-09T14:14:13.458Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases 200
+[debug] [2026-02-09T14:14:13.458Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases {"releases":[{"name":"projects/volunserve-3aa5b/releases/cloud.firestore","rulesetName":"projects/volunserve-3aa5b/rulesets/f29f990e-34d3-4975-9f18-0ad8f804d824","createTime":"2026-02-08T10:59:28.625312Z","updateTime":"2026-02-08T10:59:28.625312Z"}]}
+[debug] [2026-02-09T14:14:13.458Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:13.458Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:13.459Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets/f29f990e-34d3-4975-9f18-0ad8f804d824 [none]
+[debug] [2026-02-09T14:14:14.506Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets/f29f990e-34d3-4975-9f18-0ad8f804d824 200
+[debug] [2026-02-09T14:14:14.506Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets/f29f990e-34d3-4975-9f18-0ad8f804d824 [omitted]
+[info] i  Downloaded the existing Firestore Security Rules from the Firebase console 
+[info] 
+[info] Firestore indexes allow you to perform complex queries while
+[info] maintaining performance that scales with the size of the result
+[info] set. You can keep index definitions in your project directory
+[info] and publish them with firebase deploy.
+[info] 
+[debug] [2026-02-09T14:14:21.408Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:21.408Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:21.408Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:21.408Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:21.409Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/indexes [none]
+[debug] [2026-02-09T14:14:21.410Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* [none]
+[debug] [2026-02-09T14:14:22.716Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* 200
+[debug] [2026-02-09T14:14:22.717Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* {"fields":[{"name":"projects/volunserve-3aa5b/databases/(default)/collectionGroups/__default__/fields/*","indexConfig":{"indexes":[{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","order":"ASCENDING"}],"state":"READY"},{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","order":"DESCENDING"}],"state":"READY"},{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","arrayConfig":"CONTAINS"}],"state":"READY"}]}}]}
+[debug] [2026-02-09T14:14:22.724Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/indexes 200
+[debug] [2026-02-09T14:14:22.724Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/volunserve-3aa5b/databases/(default)/collectionGroups/-/indexes {}
+[info] i  Downloaded the existing Firestore indexes from the Firebase console 
+[info] +  Wrote firestore.rules 
+[info] +  Wrote firestore.indexes.json 
+[info] 
+=== Functions Setup
+[debug] [2026-02-09T14:14:22.732Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-09T14:14:22.733Z] > authorizing via signed-in user (calibosofroyarjan@gmail.com)
+[debug] [2026-02-09T14:14:22.733Z] [iam] checking project volunserve-3aa5b for permissions ["firebase.projects.get"]
+[debug] [2026-02-09T14:14:22.733Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:22.734Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:22.734Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/volunserve-3aa5b:testIamPermissions [none]
+[debug] [2026-02-09T14:14:22.734Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/volunserve-3aa5b:testIamPermissions  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:14:22.734Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/volunserve-3aa5b:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-02-09T14:14:23.749Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/volunserve-3aa5b:testIamPermissions 200
+[debug] [2026-02-09T14:14:23.749Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/volunserve-3aa5b:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-02-09T14:14:23.750Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:23.750Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:23.751Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:23.751Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:23.751Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-02-09T14:14:23.751Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:14:23.752Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/runtimeconfig.googleapis.com [none]
+[debug] [2026-02-09T14:14:23.752Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/runtimeconfig.googleapis.com  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:14:25.017Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/runtimeconfig.googleapis.com 200
+[debug] [2026-02-09T14:14:25.017Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2026-02-09T14:14:25.081Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com 200
+[debug] [2026-02-09T14:14:25.081Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-02-09T14:14:25.082Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:25.082Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:14:25.082Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com:enable [none]
+[debug] [2026-02-09T14:14:25.083Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com:enable  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:14:25.499Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com:enable 200
+[debug] [2026-02-09T14:14:25.500Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/cloudfunctions.googleapis.com:enable [omitted]
+[info] Let's create a new codebase for your functions.
+[info] A directory corresponding to the codebase will be created in your project
+[info] with sample code pre-configured.
+
+[info] See https://firebase.google.com/docs/functions/organize-functions for
+[info] more information on organizing your functions using codebases.
+
+[info] Functions can be deployed with firebase deploy.
+
+[info] +  Wrote functions/package.json 
+[info] +  Wrote functions/.eslintrc.js 
+[info] +  Wrote functions/index.js 
+[info] +  Wrote functions/.gitignore 
+[info] 
+=== Storage Setup
+[info] 
+[info] Firebase Storage Security Rules allow you to define how and when to allow
+[info] uploads and downloads. You can keep these rules in your project directory
+[info] and publish them with firebase deploy.
+[info] 
+[info] i  storage: ensuring required API firebasestorage.googleapis.com is enabled... 
+[debug] [2026-02-09T14:16:11.384Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:11.384Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:11.385Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com [none]
+[debug] [2026-02-09T14:16:11.385Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:16:12.699Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com 200
+[debug] [2026-02-09T14:16:12.700Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com [omitted]
+[warn] !  storage: missing required API firebasestorage.googleapis.com. Enabling now... 
+[debug] [2026-02-09T14:16:12.700Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:12.700Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:12.700Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com:enable [none]
+[debug] [2026-02-09T14:16:12.700Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com:enable  x-goog-user-project=volunserve-3aa5b
+[debug] [2026-02-09T14:16:13.073Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com:enable 200
+[debug] [2026-02-09T14:16:13.073Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/volunserve-3aa5b/services/firebasestorage.googleapis.com:enable [omitted]
+[debug] [2026-02-09T14:16:23.083Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:23.083Z] Checked if tokens are valid: true, expires at: 1770649791789
+[debug] [2026-02-09T14:16:23.083Z] >>> [apiv2][query] GET https://firebasestorage.googleapis.com/v1alpha/projects/volunserve-3aa5b/defaultBucket [none]
+[debug] [2026-02-09T14:16:24.308Z] <<< [apiv2][status] GET https://firebasestorage.googleapis.com/v1alpha/projects/volunserve-3aa5b/defaultBucket 404
+[debug] [2026-02-09T14:16:24.308Z] <<< [apiv2][body] GET https://firebasestorage.googleapis.com/v1alpha/projects/volunserve-3aa5b/defaultBucket {"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}}
+[error] 
+[error] Error: Firebase Storage has not been set up on project 'volunserve-3aa5b'. Go to https://console.firebase.google.com/project/volunserve-3aa5b/storage and click 'Get Started' to set up Firebase Storage.

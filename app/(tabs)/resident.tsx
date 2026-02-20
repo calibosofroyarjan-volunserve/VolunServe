@@ -1,143 +1,259 @@
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  addDoc,
+  collection,
+  serverTimestamp,
+} from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { auth, db } from "../../lib/firebase";
+import { getUserProfile } from "../../lib/firebaseAuth";
+
+type Category =
+  | "disaster"
+  | "medical"
+  | "food"
+  | "evacuation"
+  | "other";
+
+type Urgency = "low" | "medium" | "high" | "critical";
 
 export default function Resident() {
+  const user = auth.currentUser;
+
+  const [profile, setProfile] = useState<any>(null);
+
+  const [category, setCategory] = useState<Category>("disaster");
+  const [urgency, setUrgency] = useState<Urgency>("medium");
+  const [description, setDescription] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user) return;
+      const data = await getUserProfile(user.uid);
+      setProfile(data);
+      setAddress(data?.address || "");
+      setPhone(data?.phone || "");
+    };
+    load();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!description || !address || !phone) {
+      Alert.alert("Incomplete", "Please fill all required fields.");
+      return;
+    }
+
+    if (!user) {
+      Alert.alert("Error", "User not authenticated.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await addDoc(collection(db, "assistanceRequests"), {
+        residentUid: user.uid,
+        fullName: profile?.fullName || "Resident",
+        phone,
+        barangay: profile?.barangay || profile?.address || "",
+        address,
+        category,
+        urgencyLevel: urgency,
+        description,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectReason: null,
+      });
+
+      Alert.alert(
+        "Submitted",
+        "Your request has been submitted and is pending review."
+      );
+
+      setDescription("");
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Error", "Failed to submit request.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Resident Dashboard</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Request Community Assistance</Text>
+
       <Text style={styles.subtitle}>
-        Community status and assistance overview
+        Submit your request for disaster or emergency assistance.
+        Our admin team will review your case.
       </Text>
 
-      {/* Quick Stats */}
-      <View style={styles.row}>
-        <LinearGradient colors={['#0ea5e9', '#38bdf8']} style={styles.card}>
-          <MaterialIcons name="assignment" size={32} color="#fff" />
-          <Text style={styles.cardTitle}>Active Requests</Text>
-          <Text style={styles.cardValue}>3</Text>
-        </LinearGradient>
-
-        <LinearGradient colors={['#22c55e', '#4ade80']} style={styles.card}>
-          <MaterialIcons name="groups" size={32} color="#fff" />
-          <Text style={styles.cardTitle}>Volunteers Nearby</Text>
-          <Text style={styles.cardValue}>12</Text>
-        </LinearGradient>
+      {/* CATEGORY */}
+      <Text style={styles.label}>Category</Text>
+      <View style={styles.dropdownCard}>
+        {(["disaster", "medical", "food", "evacuation", "other"] as Category[]).map(
+          (item) => (
+            <TouchableOpacity
+              key={item}
+              style={[
+                styles.option,
+                category === item && styles.selectedOption,
+              ]}
+              onPress={() => setCategory(item)}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  category === item && styles.selectedText,
+                ]}
+              >
+                {item.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
       </View>
 
-      {/* Alerts */}
-      <LinearGradient colors={['#f97316', '#fb923c']} style={styles.alertCard}>
-        <MaterialIcons name="warning" size={28} color="#fff" />
-        <Text style={styles.alertText}>
-          Flood alert in Muzon, SJDM — Stay alert
+      {/* URGENCY */}
+      <Text style={styles.label}>Urgency Level</Text>
+      <View style={styles.dropdownCard}>
+        {(["low", "medium", "high", "critical"] as Urgency[]).map(
+          (item) => (
+            <TouchableOpacity
+              key={item}
+              style={[
+                styles.option,
+                urgency === item && styles.selectedUrgency,
+              ]}
+              onPress={() => setUrgency(item)}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  urgency === item && styles.selectedText,
+                ]}
+              >
+                {item.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
+      </View>
+
+      {/* ADDRESS */}
+      <Text style={styles.label}>Full Address</Text>
+      <TextInput
+        style={styles.input}
+        value={address}
+        onChangeText={setAddress}
+        placeholder="Enter complete address"
+      />
+
+      {/* PHONE */}
+      <Text style={styles.label}>Contact Number</Text>
+      <TextInput
+        style={styles.input}
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="Enter contact number"
+        keyboardType="phone-pad"
+      />
+
+      {/* DESCRIPTION */}
+      <Text style={styles.label}>Describe the Situation</Text>
+      <TextInput
+        style={[styles.input, { height: 120 }]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Explain what assistance is needed..."
+        multiline
+      />
+
+      <TouchableOpacity
+        style={styles.submitButton}
+        onPress={handleSubmit}
+        disabled={loading}
+      >
+        <Text style={styles.submitText}>
+          {loading ? "Submitting..." : "Submit Request"}
         </Text>
-      </LinearGradient>
-
-      {/* My Requests */}
-      <Text style={styles.sectionTitle}>My Relief Requests</Text>
-
-      <View style={styles.requestCard}>
-        <Text style={styles.requestTitle}>Food Assistance</Text>
-        <Text style={styles.requestStatusPending}>Pending</Text>
-      </View>
-
-      <View style={styles.requestCard}>
-        <Text style={styles.requestTitle}>Medical Supplies</Text>
-        <Text style={styles.requestStatusTransit}>In Transit</Text>
-      </View>
-
-      <View style={styles.requestCard}>
-        <Text style={styles.requestTitle}>Evacuation Support</Text>
-        <Text style={styles.requestStatusDone}>Resolved</Text>
-      </View>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#f0f4f8',
-    padding: 20,
+    padding: 24,
+    backgroundColor: "#f4f7fb",
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: "800",
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
+    color: "#64748b",
     marginBottom: 20,
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+  label: {
+    fontWeight: "700",
+    marginBottom: 6,
   },
-  card: {
-    width: '48%',
-    borderRadius: 18,
+  input: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  dropdownCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    overflow: "hidden",
+  },
+  option: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  selectedOption: {
+    backgroundColor: "#e0f2fe",
+  },
+  selectedUrgency: {
+    backgroundColor: "#fee2e2",
+  },
+  optionText: {
+    fontWeight: "600",
+  },
+  selectedText: {
+    color: "#1e40af",
+  },
+  submitButton: {
+    backgroundColor: "#2563eb",
     padding: 16,
-    alignItems: 'center',
-    elevation: 5,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 14,
-    marginTop: 8,
-  },
-  cardValue: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  alertText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 10,
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 10,
-  },
-  requestCard: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    elevation: 2,
-  },
-  requestTitle: {
-    fontSize: 15,
-    color: '#1e293b',
-  },
-  requestStatusPending: {
-    color: '#f97316',
-    fontWeight: 'bold',
-  },
-  requestStatusTransit: {
-    color: '#2563eb',
-    fontWeight: 'bold',
-  },
-  requestStatusDone: {
-    color: '#16a34a',
-    fontWeight: 'bold',
+  submitText: {
+    color: "#fff",
+    fontWeight: "800",
   },
 });
