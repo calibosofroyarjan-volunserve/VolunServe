@@ -50,7 +50,6 @@ export default function DonationList() {
 
   const router = useRouter();
 
-  // 🔐 CHECK ROLE
   useEffect(() => {
     const checkRole = async () => {
       const auth = getAuth();
@@ -74,7 +73,6 @@ export default function DonationList() {
   const isAdmin = role === "admin";
   const isAuthorized = isSuperAdmin || isAdmin;
 
-  // 📦 FETCH DONATIONS
   useEffect(() => {
     if (!isAuthorized) return;
 
@@ -89,7 +87,7 @@ export default function DonationList() {
           amount: data.amount || 0,
           barangay: data.barangay || "SJDM",
           status: data.status || "pending",
-          refNumber: data.refNumber || docSnap.id, // if you used refNumber as doc id
+          refNumber: data.refNumber || docSnap.id,
           rejectionReason: data.rejectionReason || "",
         };
       });
@@ -100,7 +98,7 @@ export default function DonationList() {
     return () => unsubscribe();
   }, [isAuthorized]);
 
-  // ✅ Save action log (subcollection)
+  
   const logAction = async (
     donation: Donation,
     action: LogAction,
@@ -111,34 +109,45 @@ export default function DonationList() {
     const user = auth.currentUser;
     if (!user) return;
 
-    // get admin name (optional)
     let actorName = "Admin";
+
     try {
       const u = await getDoc(doc(db, "users", user.uid));
       actorName = u.data()?.fullName || actorName;
     } catch {}
 
+    
     await addDoc(collection(db, "donations", donation.id, "logs"), {
       donationId: donation.id,
       action,
       note: note || "",
       statusAfter,
-
-      // snapshot donation info for easier display
       donorName: donation.donorName,
       barangay: donation.barangay,
       amount: donation.amount,
       refNumber: donation.refNumber || donation.id,
-
       actorUid: user.uid,
       actorRole: role || "",
       actorName,
+      createdAt: serverTimestamp(),
+    });
 
+    
+    await addDoc(collection(db, "adminLogs"), {
+      actionType: action,
+      targetType: "donation",
+      targetId: donation.id,
+      description: note || "",
+      donorName: donation.donorName,
+      amount: donation.amount,
+      barangay: donation.barangay,
+      actorUid: user.uid,
+      actorRole: role || "",
+      actorName,
       createdAt: serverTimestamp(),
     });
   };
-
-  // 🔥 VERIFY (Superadmin Only)
+  
   const verifyDonation = async (donation: Donation) => {
     try {
       const auth = getAuth();

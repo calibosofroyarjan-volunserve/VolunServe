@@ -2,9 +2,10 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
+  increment,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -30,9 +31,13 @@ interface VolunteerEvent {
   title: string;
   type: "disaster" | "training";
   location: string;
-  date: string; // you can keep string for now (ex: "Feb 20, 2026 10:00 AM")
+  date: string;
   capacity: number;
   status: "upcoming" | "active" | "completed";
+
+  // ✅ NEW (optional but used for auto-sync)
+  participantsCount?: number; // stored in volunteerEvents doc
+  caseId?: string; // link to disasterCases doc
 }
 
 type ParticipantInfo = {
@@ -64,7 +69,9 @@ export default function Volunteer() {
   const [events, setEvents] = useState<VolunteerEvent[]>([]);
   const [joinedEvents, setJoinedEvents] = useState<string[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [participantByEvent, setParticipantByEvent] = useState<Record<string, ParticipantInfo>>({});
+  const [participantByEvent, setParticipantByEvent] = useState<
+    Record<string, ParticipantInfo>
+  >({});
 
   const user = auth.currentUser;
 
@@ -89,19 +96,32 @@ export default function Volunteer() {
 
     const q = query(collection(db, "volunteerEvents"));
     const unsub = onSnapshot(q, (snapshot) => {
-      const list: VolunteerEvent[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<VolunteerEvent, "id">),
-      }));
+      const list: VolunteerEvent[] = snapshot.docs.map((d) => {
+        const data: any = d.data();
+        return {
+          id: d.id,
+          title: data.title,
+          type: data.type,
+          location: data.location,
+          date: data.date,
+          capacity: Number(data.capacity || 0),
+          status: data.status,
+
+          // ✅ new fields (safe if missing)
+          participantsCount: Number(data.participantsCount || 0),
+          caseId: data.caseId || "",
+        };
+      });
+
       setEvents(list);
     });
 
     return unsub;
   }, [status]);
 
-  // Load participants (joined + attendance) + capacity counts
+  // Load my joined/attendance info + counts (now reads participantsCount from event doc)
   useEffect(() => {
-    const loadParticipants = async () => {
+    const loadMine = async () => {
       if (!user || status !== "approved") return;
 
       const joined: string[] = [];
@@ -109,10 +129,8 @@ export default function Volunteer() {
       const mapParticipant: Record<string, ParticipantInfo> = {};
 
       for (const ev of events) {
-        const participantsSnap = await getDocs(
-          collection(db, "volunteerEvents", ev.id, "participants")
-        );
-        mapCounts[ev.id] = participantsSnap.size;
+        // ✅ use event doc participantsCount (fast)
+        mapCounts[ev.id] = Number(ev.participantsCount || 0);
 
         const meRef = doc(db, "volunteerEvents", ev.id, "participants", user.uid);
         const meSnap = await getDoc(meRef);
@@ -133,7 +151,7 @@ export default function Volunteer() {
       setParticipantByEvent(mapParticipant);
     };
 
-    if (events.length) loadParticipants();
+    if (events.length) loadMine();
   }, [events, status]);
 
   // Apply as volunteer
@@ -142,7 +160,6 @@ export default function Volunteer() {
       Alert.alert("Incomplete", "Please fill all required fields.");
       return;
     }
-
     if (!user) return;
 
     await setDoc(doc(db, "volunteerApplications", user.uid), {
@@ -161,43 +178,85 @@ export default function Volunteer() {
     Alert.alert("Submitted", "Your application is under review.");
   };
 
-  // Join event
-  const handleJoin = async (eventId: string, capacity: number) => {
+  /**
+   * ✅ JOIN EVENT (ATOMIC + AUTO SYNC)
+   * - Checks capacity using volunteerEvents.participantsCount
+   * - Prevents duplicate join
+   * - Increments participantsCount
+   * - If event has caseId -> increment disasterCases.assignedVolunteersCount
+   */
+  const handleJoin = async (eventId: string) => {
     if (!user) return;
 
-    if (joinedEvents.includes(eventId)) {
-      Alert.alert("Already Joined", "You already joined this event.");
-      return;
+    try {
+      await runTransaction(db, async (tx) => {
+        const eventRef = doc(db, "volunteerEvents", eventId);
+        const eventSnap = await tx.get(eventRef);
+
+        if (!eventSnap.exists()) throw new Error("Event not found.");
+
+        const ev: any = eventSnap.data();
+        const capacity = Number(ev.capacity || 0);
+        const currentCount = Number(ev.participantsCount || 0);
+        const caseId = (ev.caseId || "").toString();
+
+        if (currentCount >= capacity) throw new Error("FULL");
+
+        const meRef = doc(db, "volunteerEvents", eventId, "participants", user.uid);
+        const meSnap = await tx.get(meRef);
+
+        if (meSnap.exists()) throw new Error("ALREADY_JOINED");
+
+        // create participant doc
+        tx.set(meRef, {
+          uid: user.uid,
+          fullName: profile?.fullName || "Volunteer",
+          barangay: profile?.barangay || profile?.address || "",
+          joinedAt: serverTimestamp(),
+          checkedInAt: null,
+          checkedOutAt: null,
+        });
+
+        // increment event participants count
+        tx.update(eventRef, {
+          participantsCount: increment(1),
+          updatedAt: serverTimestamp(),
+        });
+
+        // if linked to case, increment assignedVolunteersCount
+        if (caseId) {
+          const caseRef = doc(db, "disasterCases", caseId);
+          tx.update(caseRef, {
+            assignedVolunteersCount: increment(1),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+
+      // UI update (fast)
+      setJoinedEvents((prev) => [...prev, eventId]);
+      setCounts((prev) => ({ ...prev, [eventId]: (prev[eventId] ?? 0) + 1 }));
+      setParticipantByEvent((prev) => ({
+        ...prev,
+        [eventId]: { joinedAt: new Date(), checkedInAt: null, checkedOutAt: null },
+      }));
+
+      Alert.alert("Success", "You joined the event.");
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+
+      if (msg.includes("FULL")) {
+        Alert.alert("Full", "This event is already full.");
+        return;
+      }
+      if (msg.includes("ALREADY_JOINED")) {
+        Alert.alert("Already Joined", "You already joined this event.");
+        return;
+      }
+
+      console.log("Join error:", e);
+      Alert.alert("Error", "Failed to join. Check console / rules.");
     }
-
-    const participantsSnap = await getDocs(
-      collection(db, "volunteerEvents", eventId, "participants")
-    );
-
-    if (participantsSnap.size >= capacity) {
-      Alert.alert("Full", "This event is already full.");
-      return;
-    }
-
-    const meRef = doc(db, "volunteerEvents", eventId, "participants", user.uid);
-
-    await setDoc(meRef, {
-      uid: user.uid,
-      fullName: profile?.fullName || "Volunteer",
-      barangay: profile?.barangay || profile?.address || "",
-      joinedAt: serverTimestamp(),
-      checkedInAt: null,
-      checkedOutAt: null,
-    });
-
-    setJoinedEvents((prev) => [...prev, eventId]);
-    setCounts((prev) => ({ ...prev, [eventId]: (prev[eventId] ?? 0) + 1 }));
-    setParticipantByEvent((prev) => ({
-      ...prev,
-      [eventId]: { joinedAt: new Date(), checkedInAt: null, checkedOutAt: null },
-    }));
-
-    Alert.alert("Success", "You joined the event.");
   };
 
   // ✅ Attendance: Check-in
@@ -234,57 +293,51 @@ export default function Volunteer() {
     Alert.alert("Checked In", "Attendance recorded successfully.");
   };
 
-  // ✅ Attendance: Check-out (UPDATED WITH HOURS TRACKING)
-const handleCheckOut = async (eventId: string) => {
-  if (!user) return;
+  // ✅ Attendance: Check-out (+stats)
+  const handleCheckOut = async (eventId: string) => {
+    if (!user) return;
 
-  const info = participantByEvent[eventId];
+    const info = participantByEvent[eventId];
 
-  if (!info?.checkedInAt) {
-    Alert.alert("No Check-in", "You must check in first.");
-    return;
-  }
+    if (!info?.checkedInAt) {
+      Alert.alert("No Check-in", "You must check in first.");
+      return;
+    }
 
-  if (info?.checkedOutAt) {
-    Alert.alert("Already Checked Out", "You already checked out.");
-    return;
-  }
+    if (info?.checkedOutAt) {
+      Alert.alert("Already Checked Out", "You already checked out.");
+      return;
+    }
 
-  const meRef = doc(
-    db,
-    "volunteerEvents",
-    eventId,
-    "participants",
-    user.uid
-  );
+    const meRef = doc(db, "volunteerEvents", eventId, "participants", user.uid);
 
-  await updateDoc(meRef, {
-    checkedOutAt: serverTimestamp(),
-  });
-
-  const checkedOutLocal = new Date();
-
-  setParticipantByEvent((prev) => ({
-    ...prev,
-    [eventId]: {
-      ...(prev[eventId] || {}),
-      checkedOutAt: checkedOutLocal,
-    },
-  }));
-
-  try {
-    await updateVolunteerStatsAfterCheckout({
-      uid: user.uid,
-      eventId,
-      checkedInAt: info.checkedInAt,
-      checkedOutAt: checkedOutLocal,
+    await updateDoc(meRef, {
+      checkedOutAt: serverTimestamp(),
     });
-  } catch (err) {
-    console.log("Volunteer stats update failed:", err);
-  }
 
-  Alert.alert("Checked Out", "Checkout recorded successfully.");
-};
+    const checkedOutLocal = new Date();
+
+    setParticipantByEvent((prev) => ({
+      ...prev,
+      [eventId]: {
+        ...(prev[eventId] || {}),
+        checkedOutAt: checkedOutLocal,
+      },
+    }));
+
+    try {
+      await updateVolunteerStatsAfterCheckout({
+        uid: user.uid,
+        eventId,
+        checkedInAt: info.checkedInAt,
+        checkedOutAt: checkedOutLocal,
+      });
+    } catch (err) {
+      console.log("Volunteer stats update failed:", err);
+    }
+
+    Alert.alert("Checked Out", "Checkout recorded successfully.");
+  };
 
   const renderAttendanceBadge = (info?: ParticipantInfo) => {
     if (!info?.checkedInAt) {
@@ -370,7 +423,7 @@ const handleCheckOut = async (eventId: string) => {
                     (alreadyJoined || isFull) && styles.disabled,
                   ]}
                   disabled={alreadyJoined || isFull}
-                  onPress={() => handleJoin(ev.id, ev.capacity)}
+                  onPress={() => handleJoin(ev.id)}
                 >
                   <Text style={styles.buttonText}>
                     {alreadyJoined ? "Joined" : isFull ? "Full" : "Join Event"}
@@ -503,7 +556,12 @@ const styles = StyleSheet.create({
   attBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: "center" },
   attText: { color: "#fff", fontWeight: "800" },
 
-  attInfo: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#e5e7eb" },
+  attInfo: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
 
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
   pending: { fontSize: 18, fontWeight: "800", color: "#f59e0b" },

@@ -37,9 +37,22 @@ interface VolunteerEvent {
   status: EventStatus;
   createdAt?: any;
   updatedAt?: any;
+
+  // OPTIONAL if created from AdminCases auto-linking
+  caseId?: string;
 }
 
 type Role = "user" | "volunteer" | "admin" | "superadmin" | string;
+
+type Participant = {
+  id: string; // doc id (usually uid)
+  uid: string;
+  fullName?: string;
+  barangay?: string;
+  joinedAt?: any;
+  checkedInAt?: any;
+  checkedOutAt?: any;
+};
 
 const emptyForm = {
   title: "",
@@ -67,6 +80,12 @@ export default function AdminEvents() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+
+  // ✅ Attendance modal
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<VolunteerEvent | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
 
   // 1) Guard: only admin/superadmin can open
   useEffect(() => {
@@ -247,6 +266,170 @@ export default function AdminEvents() {
     }
   };
 
+  // =========================
+  // ✅ ATTENDANCE (ADMIN SIDE)
+  // =========================
+  const openAttendance = (ev: VolunteerEvent) => {
+    setSelectedEvent(ev);
+    setAttendanceOpen(true);
+  };
+
+  const closeAttendance = () => {
+    setAttendanceOpen(false);
+    setSelectedEvent(null);
+    setParticipants([]);
+  };
+
+  // realtime participants for selected event
+  useEffect(() => {
+    if (!attendanceOpen || !selectedEvent?.id) return;
+
+    setParticipantsLoading(true);
+
+    const q = query(
+      collection(db, "volunteerEvents", selectedEvent.id, "participants"),
+      orderBy("joinedAt", "desc")
+    );
+
+    const unsub = onSnapshot(
+      q,
+      async (snap) => {
+        const list: Participant[] = snap.docs.map((d) => {
+          const data: any = d.data();
+          return {
+            id: d.id,
+            uid: data.uid || d.id,
+            fullName: data.fullName || "",
+            barangay: data.barangay || "",
+            joinedAt: data.joinedAt,
+            checkedInAt: data.checkedInAt,
+            checkedOutAt: data.checkedOutAt,
+          };
+        });
+
+        setParticipants(list);
+        setParticipantsLoading(false);
+
+        // OPTIONAL: keep a participantsCount field updated (safe + helpful)
+        try {
+          await updateDoc(doc(db, "volunteerEvents", selectedEvent.id), {
+            participantsCount: list.length,
+            updatedAt: serverTimestamp(),
+          });
+        } catch {}
+      },
+      (err) => {
+        console.log("Participants snapshot error:", err);
+        setParticipantsLoading(false);
+        Alert.alert("Error", "Failed to load participants (permissions?).");
+      }
+    );
+
+    return () => unsub();
+  }, [attendanceOpen, selectedEvent?.id]);
+
+  const adminCheckIn = async (eventId: string, uid: string) => {
+    try {
+      await updateDoc(doc(db, "volunteerEvents", eventId, "participants", uid), {
+        checkedInAt: serverTimestamp(),
+        checkedOutAt: null,
+      });
+      Alert.alert("Success", "Volunteer checked-in.");
+    } catch (e: any) {
+      console.log("adminCheckIn error:", e);
+      Alert.alert("Error", e?.message || "Failed to check-in.");
+    }
+  };
+
+  const adminCheckOut = async (eventId: string, uid: string) => {
+    try {
+      await updateDoc(doc(db, "volunteerEvents", eventId, "participants", uid), {
+        checkedOutAt: serverTimestamp(),
+      });
+      Alert.alert("Success", "Volunteer checked-out.");
+    } catch (e: any) {
+      console.log("adminCheckOut error:", e);
+      Alert.alert("Error", e?.message || "Failed to check-out.");
+    }
+  };
+
+  const confirmCompleteEvent = async () => {
+    if (!selectedEvent?.id) return;
+
+    Alert.alert(
+      "Complete Event",
+      "Mark this event as COMPLETED? (Optional: if this event has caseId, we will also mark the linked disaster case as RESOLVED.)",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Complete",
+          style: "default",
+          onPress: async () => {
+            try {
+              // 1) complete event
+              await updateDoc(doc(db, "volunteerEvents", selectedEvent.id), {
+                status: "completed",
+                updatedAt: serverTimestamp(),
+              });
+
+              // 2) auto-resolve linked disaster case (if the event has caseId)
+              if (selectedEvent.caseId) {
+                await updateDoc(doc(db, "disasterCases", selectedEvent.caseId), {
+                  status: "resolved",
+                  resolvedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                });
+              }
+
+              Alert.alert("Done", "Event marked as completed.");
+              closeAttendance();
+            } catch (e: any) {
+              console.log("complete event error:", e);
+              Alert.alert("Error", e?.message || "Failed to complete event.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const fmt = (v: any) => {
+    try {
+      const d = v?.toDate?.() ? v.toDate() : v instanceof Date ? v : null;
+      if (!d) return "-";
+      return d.toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+
+  const attendanceBadge = (p: Participant) => {
+    const inAt = p.checkedInAt;
+    const outAt = p.checkedOutAt;
+
+    if (!inAt) {
+      return (
+        <View style={[styles.attBadge, { backgroundColor: "#6b7280" }]}>
+          <Text style={styles.attBadgeText}>NOT CHECKED-IN</Text>
+        </View>
+      );
+    }
+    if (inAt && !outAt) {
+      return (
+        <View style={[styles.attBadge, { backgroundColor: "#2563eb" }]}>
+          <Text style={styles.attBadgeText}>CHECKED-IN</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.attBadge, { backgroundColor: "#16a34a" }]}>
+        <Text style={styles.attBadgeText}>COMPLETED</Text>
+      </View>
+    );
+  };
+
+  // =========================
+
   if (checkingRole) {
     return (
       <View style={styles.center}>
@@ -289,44 +472,16 @@ export default function AdminEvents() {
         />
 
         <View style={styles.filterRow}>
-          <FilterChip
-            label="All Types"
-            active={filterType === ""}
-            onPress={() => setFilterType("")}
-          />
-          <FilterChip
-            label="Disaster"
-            active={filterType === "disaster"}
-            onPress={() => setFilterType("disaster")}
-          />
-          <FilterChip
-            label="Training"
-            active={filterType === "training"}
-            onPress={() => setFilterType("training")}
-          />
+          <FilterChip label="All Types" active={filterType === ""} onPress={() => setFilterType("")} />
+          <FilterChip label="Disaster" active={filterType === "disaster"} onPress={() => setFilterType("disaster")} />
+          <FilterChip label="Training" active={filterType === "training"} onPress={() => setFilterType("training")} />
         </View>
 
         <View style={styles.filterRow}>
-          <FilterChip
-            label="All Status"
-            active={filterStatus === ""}
-            onPress={() => setFilterStatus("")}
-          />
-          <FilterChip
-            label="Upcoming"
-            active={filterStatus === "upcoming"}
-            onPress={() => setFilterStatus("upcoming")}
-          />
-          <FilterChip
-            label="Active"
-            active={filterStatus === "active"}
-            onPress={() => setFilterStatus("active")}
-          />
-          <FilterChip
-            label="Completed"
-            active={filterStatus === "completed"}
-            onPress={() => setFilterStatus("completed")}
-          />
+          <FilterChip label="All Status" active={filterStatus === ""} onPress={() => setFilterStatus("")} />
+          <FilterChip label="Upcoming" active={filterStatus === "upcoming"} onPress={() => setFilterStatus("upcoming")} />
+          <FilterChip label="Active" active={filterStatus === "active"} onPress={() => setFilterStatus("active")} />
+          <FilterChip label="Completed" active={filterStatus === "completed"} onPress={() => setFilterStatus("completed")} />
         </View>
       </View>
 
@@ -353,12 +508,22 @@ export default function AdminEvents() {
                     <Text style={styles.meta}>Location: {ev.location}</Text>
                     <Text style={styles.meta}>Date: {ev.date}</Text>
                     <Text style={styles.meta}>Capacity: {ev.capacity}</Text>
+                    {ev.caseId ? <Text style={styles.meta}>Linked Case: {ev.caseId}</Text> : null}
                   </View>
 
                   <View style={styles.actionsCol}>
+                    {/* ✅ NEW: Attendance */}
+                    <TouchableOpacity
+                      style={[styles.smallBtn, { backgroundColor: "#111827", borderColor: "#111827" }]}
+                      onPress={() => openAttendance(ev)}
+                    >
+                      <Text style={[styles.smallBtnText, { color: "#fff" }]}>Attendance</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.smallBtn} onPress={() => openEdit(ev)}>
                       <Text style={styles.smallBtnText}>Edit</Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
                       style={[styles.smallBtn, styles.deleteBtn]}
                       onPress={() => confirmDelete(ev.id)}
@@ -372,52 +537,28 @@ export default function AdminEvents() {
                   <Text style={styles.statusLabel}>Quick Status:</Text>
 
                   <TouchableOpacity
-                    style={[
-                      styles.statusBtn,
-                      ev.status === "upcoming" && styles.statusBtnActive,
-                    ]}
+                    style={[styles.statusBtn, ev.status === "upcoming" && styles.statusBtnActive]}
                     onPress={() => quickStatusUpdate(ev.id, "upcoming")}
                   >
-                    <Text
-                      style={[
-                        styles.statusBtnText,
-                        ev.status === "upcoming" && styles.statusBtnTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.statusBtnText, ev.status === "upcoming" && styles.statusBtnTextActive]}>
                       Upcoming
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[
-                      styles.statusBtn,
-                      ev.status === "active" && styles.statusBtnActive,
-                    ]}
+                    style={[styles.statusBtn, ev.status === "active" && styles.statusBtnActive]}
                     onPress={() => quickStatusUpdate(ev.id, "active")}
                   >
-                    <Text
-                      style={[
-                        styles.statusBtnText,
-                        ev.status === "active" && styles.statusBtnTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.statusBtnText, ev.status === "active" && styles.statusBtnTextActive]}>
                       Active
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[
-                      styles.statusBtn,
-                      ev.status === "completed" && styles.statusBtnActive,
-                    ]}
+                    style={[styles.statusBtn, ev.status === "completed" && styles.statusBtnActive]}
                     onPress={() => quickStatusUpdate(ev.id, "completed")}
                   >
-                    <Text
-                      style={[
-                        styles.statusBtnText,
-                        ev.status === "completed" && styles.statusBtnTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.statusBtnText, ev.status === "completed" && styles.statusBtnTextActive]}>
                       Completed
                     </Text>
                   </TouchableOpacity>
@@ -432,9 +573,7 @@ export default function AdminEvents() {
       <Modal visible={modalOpen} transparent animationType="fade" onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editingId ? "Edit Event" : "Create Event"}
-            </Text>
+            <Text style={styles.modalTitle}>{editingId ? "Edit Event" : "Create Event"}</Text>
 
             <TextInput
               placeholder="Title"
@@ -467,35 +606,15 @@ export default function AdminEvents() {
 
             <Text style={styles.sectionLabel}>Type</Text>
             <View style={styles.pills}>
-              <Pill
-                label="Disaster"
-                active={form.type === "disaster"}
-                onPress={() => setForm((p) => ({ ...p, type: "disaster" }))}
-              />
-              <Pill
-                label="Training"
-                active={form.type === "training"}
-                onPress={() => setForm((p) => ({ ...p, type: "training" }))}
-              />
+              <Pill label="Disaster" active={form.type === "disaster"} onPress={() => setForm((p) => ({ ...p, type: "disaster" }))} />
+              <Pill label="Training" active={form.type === "training"} onPress={() => setForm((p) => ({ ...p, type: "training" }))} />
             </View>
 
             <Text style={styles.sectionLabel}>Status</Text>
             <View style={styles.pills}>
-              <Pill
-                label="Upcoming"
-                active={form.status === "upcoming"}
-                onPress={() => setForm((p) => ({ ...p, status: "upcoming" }))}
-              />
-              <Pill
-                label="Active"
-                active={form.status === "active"}
-                onPress={() => setForm((p) => ({ ...p, status: "active" }))}
-              />
-              <Pill
-                label="Completed"
-                active={form.status === "completed"}
-                onPress={() => setForm((p) => ({ ...p, status: "completed" }))}
-              />
+              <Pill label="Upcoming" active={form.status === "upcoming"} onPress={() => setForm((p) => ({ ...p, status: "upcoming" }))} />
+              <Pill label="Active" active={form.status === "active"} onPress={() => setForm((p) => ({ ...p, status: "active" }))} />
+              <Pill label="Completed" active={form.status === "completed"} onPress={() => setForm((p) => ({ ...p, status: "completed" }))} />
             </View>
 
             <View style={styles.modalBtns}>
@@ -509,6 +628,95 @@ export default function AdminEvents() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ✅ Attendance Modal */}
+      <Modal visible={attendanceOpen} transparent animationType="fade" onRequestClose={closeAttendance}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "85%" }]}>
+            <Text style={styles.modalTitle}>Attendance</Text>
+
+            {selectedEvent ? (
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontWeight: "900", color: "#0f172a" }}>{selectedEvent.title}</Text>
+                <Text style={{ color: "#64748b", fontWeight: "700" }}>
+                  {selectedEvent.location} • {selectedEvent.date}
+                </Text>
+                <Text style={{ color: "#64748b", fontWeight: "700" }}>
+                  Capacity: {selectedEvent.capacity} • Status: {selectedEvent.status}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { flex: 1, backgroundColor: "#111827" }]}
+                onPress={confirmCompleteEvent}
+                disabled={!selectedEvent}
+              >
+                <Text style={styles.primaryBtnText}>Mark Completed</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.secondaryBtn, { flex: 1 }]} onPress={closeAttendance}>
+                <Text style={styles.secondaryBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {participantsLoading ? (
+              <View style={styles.center}>
+                <ActivityIndicator size="large" />
+                <Text style={styles.muted}>Loading participants…</Text>
+              </View>
+            ) : (
+              <ScrollView>
+                {participants.length === 0 ? (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyTitle}>No participants yet</Text>
+                    <Text style={styles.muted}>Volunteers must join first.</Text>
+                  </View>
+                ) : (
+                  participants.map((p) => (
+                    <View key={p.id} style={styles.participantCard}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: "900", color: "#0f172a" }}>
+                            {p.fullName || "Volunteer"}
+                          </Text>
+                          <Text style={{ color: "#64748b", fontWeight: "700" }}>
+                            {p.barangay || "-"}
+                          </Text>
+                          <Text style={{ color: "#64748b" }}>Joined: {fmt(p.joinedAt)}</Text>
+                          <Text style={{ color: "#64748b" }}>In: {fmt(p.checkedInAt)}</Text>
+                          <Text style={{ color: "#64748b" }}>Out: {fmt(p.checkedOutAt)}</Text>
+                        </View>
+
+                        {attendanceBadge(p)}
+                      </View>
+
+                      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, { flex: 1, paddingVertical: 10 }]}
+                          onPress={() => adminCheckIn(selectedEvent!.id, p.uid)}
+                          disabled={!selectedEvent}
+                        >
+                          <Text style={styles.primaryBtnText}>Check-in</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, { flex: 1, paddingVertical: 10, backgroundColor: "#16a34a" }]}
+                          onPress={() => adminCheckOut(selectedEvent!.id, p.uid)}
+                          disabled={!selectedEvent}
+                        >
+                          <Text style={styles.primaryBtnText}>Check-out</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -526,10 +734,7 @@ function FilterChip({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
-    >
+    <TouchableOpacity onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -568,10 +773,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 16, fontWeight: "900", color: "#0f172a", flex: 1 },
 
-  filters: {
-    padding: 16,
-    gap: 10,
-  },
+  filters: { padding: 16, gap: 10 },
   search: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -667,7 +869,14 @@ const styles = StyleSheet.create({
   muted: { color: "#64748b", textAlign: "center" },
   danger: { color: "#dc2626", fontWeight: "900", textAlign: "center" },
 
-  empty: { backgroundColor: "#fff", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#e5e7eb" },
+  empty: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 10,
+  },
   emptyTitle: { fontWeight: "900", fontSize: 16, marginBottom: 6, color: "#0f172a" },
 
   modalOverlay: {
@@ -694,15 +903,27 @@ const styles = StyleSheet.create({
   },
   sectionLabel: { fontWeight: "900", color: "#0f172a", marginTop: 6, marginBottom: 8 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "#f1f5f9",
-  },
+  pill: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999, backgroundColor: "#f1f5f9" },
   pillActive: { backgroundColor: "#2563eb" },
   pillText: { fontWeight: "900", color: "#334155", fontSize: 12 },
   pillTextActive: { color: "#fff" },
 
   modalBtns: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 10 },
+
+  // ✅ Attendance styles
+  participantCard: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  attBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignSelf: "flex-start",
+  },
+  attBadgeText: { color: "#fff", fontWeight: "900", fontSize: 11 },
 });

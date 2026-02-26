@@ -16,244 +16,270 @@ import {
 import { auth, db } from "../../lib/firebase";
 import { getUserProfile } from "../../lib/firebaseAuth";
 
-type Category =
-  | "disaster"
-  | "medical"
-  | "food"
-  | "evacuation"
-  | "other";
-
-type Urgency = "low" | "medium" | "high" | "critical";
+type Severity = "low" | "medium" | "high" | "critical";
+type CaseStatus = "reported" | "validated" | "assigned" | "in_progress" | "resolved" | "closed";
 
 export default function Resident() {
   const user = auth.currentUser;
 
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [profile, setProfile] = useState<any>(null);
 
-  const [category, setCategory] = useState<Category>("disaster");
-  const [urgency, setUrgency] = useState<Urgency>("medium");
-  const [description, setDescription] = useState("");
-  const [address, setAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
+  // case fields
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [severity, setSeverity] = useState<Severity>("medium");
+  const [location, setLocation] = useState("");
+  const [details, setDetails] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      if (!user) return;
-      const data = await getUserProfile(user.uid);
-      setProfile(data);
-      setAddress(data?.address || "");
-      setPhone(data?.phone || "");
+      try {
+        if (!user) return;
+        const p = await getUserProfile(user.uid);
+        setProfile(p);
+
+        // auto-fill best guesses
+        const brgy = p?.barangay || "";
+        const addr = p?.address || "";
+        if (!location) setLocation(brgy ? `Brgy. ${brgy}` : addr);
+
+        // optional: if your profile has phone stored as "phone", this will fill it.
+        if (!contactNumber) setContactNumber(p?.phone || "");
+      } finally {
+        setLoadingProfile(false);
+      }
     };
+
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmit = async () => {
-    if (!description || !address || !phone) {
-      Alert.alert("Incomplete", "Please fill all required fields.");
+  const validate = () => {
+    if (!title.trim()) return "Please enter a case title.";
+    if (!category.trim()) return "Please enter a category (e.g. Flood, Fire, Medical).";
+    if (!location.trim()) return "Please enter the location (Barangay / address).";
+    if (!details.trim()) return "Please enter details of the situation.";
+    if (!contactNumber.trim()) return "Please enter your contact number.";
+    if (contactNumber.trim().length < 8) return "Contact number looks too short.";
+    return null;
+  };
+
+  const submitCase = async () => {
+    const err = validate();
+    if (err) {
+      Alert.alert("Incomplete", err);
       return;
     }
-
     if (!user) {
-      Alert.alert("Error", "User not authenticated.");
+      Alert.alert("Not logged in", "Please login again.");
       return;
     }
 
     try {
-      setLoading(true);
+      setSubmitting(true);
 
-      await addDoc(collection(db, "assistanceRequests"), {
-        residentUid: user.uid,
-        fullName: profile?.fullName || "Resident",
-        phone,
-        barangay: profile?.barangay || profile?.address || "",
-        address,
-        category,
-        urgencyLevel: urgency,
-        description,
-        status: "pending",
+      const payload = {
+        // reporter
+        reporterUid: user.uid,
+        reporterName: profile?.fullName || "Resident",
+        reporterEmail: profile?.email || "",
+        reporterBarangay: profile?.barangay || "",
+        contactNumber: contactNumber.trim(),
+
+        // case info
+        title: title.trim(),
+        category: category.trim(),
+        severity,
+        status: "reported" as CaseStatus,
+        location: location.trim(),
+        details: details.trim(),
+
+        // admin/workflow fields
+        requiredVolunteers: 0,
+        assignedVolunteersCount: 0,
+        adminNote: "",
+        validatedAt: null,
+        assignedAt: null,
+        resolvedAt: null,
+        closedAt: null,
+
         createdAt: serverTimestamp(),
-        reviewedBy: null,
-        reviewedAt: null,
-        rejectReason: null,
-      });
+        updatedAt: serverTimestamp(),
+      };
 
-      Alert.alert(
-        "Submitted",
-        "Your request has been submitted and is pending review."
-      );
+      await addDoc(collection(db, "disasterCases"), payload);
 
-      setDescription("");
-    } catch (err) {
-      console.log(err);
-      Alert.alert("Error", "Failed to submit request.");
+      Alert.alert("Submitted", "Your disaster case has been submitted for validation.");
+
+      // reset
+      setTitle("");
+      setCategory("");
+      setSeverity("medium");
+      setDetails("");
+      // keep location + contact for convenience
+    } catch (e) {
+      console.log(e);
+      Alert.alert("Error", "Failed to submit case. Please try again.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Request Community Assistance</Text>
-
-      <Text style={styles.subtitle}>
-        Submit your request for disaster or emergency assistance.
-        Our admin team will review your case.
-      </Text>
-
-      {/* CATEGORY */}
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.dropdownCard}>
-        {(["disaster", "medical", "food", "evacuation", "other"] as Category[]).map(
-          (item) => (
-            <TouchableOpacity
-              key={item}
-              style={[
-                styles.option,
-                category === item && styles.selectedOption,
-              ]}
-              onPress={() => setCategory(item)}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  category === item && styles.selectedText,
-                ]}
-              >
-                {item.toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          )
-        )}
-      </View>
-
-      {/* URGENCY */}
-      <Text style={styles.label}>Urgency Level</Text>
-      <View style={styles.dropdownCard}>
-        {(["low", "medium", "high", "critical"] as Urgency[]).map(
-          (item) => (
-            <TouchableOpacity
-              key={item}
-              style={[
-                styles.option,
-                urgency === item && styles.selectedUrgency,
-              ]}
-              onPress={() => setUrgency(item)}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  urgency === item && styles.selectedText,
-                ]}
-              >
-                {item.toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          )
-        )}
-      </View>
-
-      {/* ADDRESS */}
-      <Text style={styles.label}>Full Address</Text>
-      <TextInput
-        style={styles.input}
-        value={address}
-        onChangeText={setAddress}
-        placeholder="Enter complete address"
-      />
-
-      {/* PHONE */}
-      <Text style={styles.label}>Contact Number</Text>
-      <TextInput
-        style={styles.input}
-        value={phone}
-        onChangeText={setPhone}
-        placeholder="Enter contact number"
-        keyboardType="phone-pad"
-      />
-
-      {/* DESCRIPTION */}
-      <Text style={styles.label}>Describe the Situation</Text>
-      <TextInput
-        style={[styles.input, { height: 120 }]}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Explain what assistance is needed..."
-        multiline
-      />
-
+  const SeverityPill = ({ value }: { value: Severity }) => {
+    const isActive = severity === value;
+    return (
       <TouchableOpacity
-        style={styles.submitButton}
-        onPress={handleSubmit}
-        disabled={loading}
+        onPress={() => setSeverity(value)}
+        style={[
+          styles.pill,
+          isActive && styles.pillActive,
+        ]}
       >
-        <Text style={styles.submitText}>
-          {loading ? "Submitting..." : "Submit Request"}
+        <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+          {value.toUpperCase()}
         </Text>
       </TouchableOpacity>
+    );
+  };
+
+  if (loadingProfile) {
+    return (
+      <View style={styles.center}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Report a Disaster Case</Text>
+      <Text style={styles.subtitle}>
+        Submit a structured report so the LGU can validate, prioritize, and assign help properly.
+      </Text>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Case Title</Text>
+        <TextInput
+          style={styles.input}
+          placeholder='Example: "Family trapped due to flooding"'
+          value={title}
+          onChangeText={setTitle}
+        />
+
+        <Text style={styles.label}>Category</Text>
+        <TextInput
+          style={styles.input}
+          placeholder='Example: Flood / Fire / Medical / Landslide'
+          value={category}
+          onChangeText={setCategory}
+        />
+
+        <Text style={styles.label}>Severity</Text>
+        <View style={styles.pillRow}>
+          <SeverityPill value="low" />
+          <SeverityPill value="medium" />
+          <SeverityPill value="high" />
+          <SeverityPill value="critical" />
+        </View>
+
+        <Text style={styles.label}>Location (Barangay / Address)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter location"
+          value={location}
+          onChangeText={setLocation}
+        />
+
+        <Text style={styles.label}>Contact Number</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter contact number"
+          value={contactNumber}
+          onChangeText={setContactNumber}
+          keyboardType="phone-pad"
+        />
+
+        <Text style={styles.label}>Details</Text>
+        <TextInput
+          style={[styles.input, { minHeight: 110, textAlignVertical: "top" }]}
+          placeholder="Explain what happened, number of people affected, urgent needs, etc."
+          value={details}
+          onChangeText={setDetails}
+          multiline
+        />
+
+        <TouchableOpacity
+          style={[styles.button, submitting && styles.buttonDisabled]}
+          onPress={submitCase}
+          disabled={submitting}
+        >
+          <Text style={styles.buttonText}>
+            {submitting ? "Submitting..." : "Submit Case"}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.note}>
+          Cases are prioritized by severity and validated by admins before assignment.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    backgroundColor: "#f4f7fb",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: "#64748b",
-    marginBottom: 20,
-  },
-  label: {
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  input: {
+  container: { padding: 20, backgroundColor: "#f4f7fb" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 22, fontWeight: "900", marginBottom: 6 },
+  subtitle: { color: "#475569", fontWeight: "600", marginBottom: 14, lineHeight: 18 },
+
+  card: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  dropdownCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    overflow: "hidden",
-  },
-  option: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  selectedOption: {
-    backgroundColor: "#e0f2fe",
-  },
-  selectedUrgency: {
-    backgroundColor: "#fee2e2",
-  },
-  optionText: {
-    fontWeight: "600",
-  },
-  selectedText: {
-    color: "#1e40af",
-  },
-  submitButton: {
-    backgroundColor: "#2563eb",
+    borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+
+  label: { fontSize: 12, color: "#64748b", fontWeight: "800", marginTop: 10, marginBottom: 6 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+
+  pillRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 4 },
+  pill: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#f8fafc",
+  },
+  pillActive: {
+    borderColor: "#2563eb",
+    backgroundColor: "#2563eb",
+  },
+  pillText: { fontWeight: "900", color: "#0f172a", fontSize: 11 },
+  pillTextActive: { color: "#fff" },
+
+  button: {
+    marginTop: 14,
+    backgroundColor: "#2563eb",
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
   },
-  submitText: {
-    color: "#fff",
-    fontWeight: "800",
-  },
+  buttonDisabled: { backgroundColor: "#93c5fd" },
+  buttonText: { color: "#fff", fontWeight: "900" },
+
+  note: { marginTop: 10, color: "#64748b", fontWeight: "600", fontSize: 12, lineHeight: 16 },
 });

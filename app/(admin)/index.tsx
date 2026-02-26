@@ -1,232 +1,395 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { auth, db } from "../../lib/firebase";
+import SideDrawer from "../../components/SideDrawer";
+import {
+  getUserProfile,
+  onAuthChange,
+  UserProfile,
+} from "../../lib/firebaseAuth";
 
-export default function AdminDashboard() {
+const { width } = Dimensions.get("window");
+
+export default function Dashboard() {
   const router = useRouter();
-  const user = auth.currentUser;
-
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [stats, setStats] = useState({
-    totalDonations: 0,
-    distributed: 0,
-    pendingDonations: 0,
-    totalApplications: 0,
-    approvedVolunteers: 0,
-    totalEvents: 0,
-    activeEvents: 0,
-    completedAttendance: 0,
-  });
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Animated color for "VolunServe SJDM"
+  const colorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const init = async () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 900,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Loop color animation
+    Animated.loop(
+      Animated.timing(colorAnim, {
+        toValue: 1,
+        duration: 4000,
+        useNativeDriver: false,
+      })
+    ).start();
+
+    const unsub = onAuthChange(async (user) => {
       if (!user) {
         router.replace("/login");
         return;
       }
+      const data = await getUserProfile(user.uid);
+      setProfile(data);
+      setLoading(false);
+    });
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      const role = snap.data()?.role;
-
-      if (role !== "admin" && role !== "superadmin") {
-        router.replace("/");
-        return;
-      }
-
-      await loadStats();
-    };
-
-    init();
+    return unsub;
   }, []);
-
-  const loadStats = async () => {
-    // 🔹 Donations
-    const donationsSnap = await getDocs(collection(db, "donations"));
-    let totalDonations = 0;
-    let distributed = 0;
-    let pendingDonations = 0;
-
-    donationsSnap.docs.forEach((d) => {
-      const data = d.data();
-      totalDonations += Number(data.amount || 0);
-
-      if (data.status === "distributed") {
-        distributed += Number(data.amount || 0);
-      }
-
-      if (data.status === "pending") {
-        pendingDonations++;
-      }
-    });
-
-    // 🔹 Volunteer Applications
-    const appsSnap = await getDocs(collection(db, "volunteerApplications"));
-    let approvedVolunteers = 0;
-
-    appsSnap.docs.forEach((d) => {
-      if (d.data().status === "approved") approvedVolunteers++;
-    });
-
-    // 🔹 Events + Attendance
-    const eventsSnap = await getDocs(collection(db, "volunteerEvents"));
-    let totalEvents = eventsSnap.size;
-    let activeEvents = 0;
-    let completedAttendance = 0;
-
-    for (const ev of eventsSnap.docs) {
-      const eventData = ev.data();
-
-      if (eventData.status === "active") activeEvents++;
-
-      const participantsSnap = await getDocs(
-        collection(db, "volunteerEvents", ev.id, "participants")
-      );
-
-      participantsSnap.docs.forEach((p) => {
-        if (p.data().checkedOutAt) completedAttendance++;
-      });
-    }
-
-    setStats({
-      totalDonations,
-      distributed,
-      pendingDonations,
-      totalApplications: appsSnap.size,
-      approvedVolunteers,
-      totalEvents,
-      activeEvents,
-      completedAttendance,
-    });
-
-    setLoading(false);
-  };
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#6366f1" />
       </View>
     );
   }
 
+  const firstName = profile?.fullName?.split(" ")[0] || "User";
+
+  const blobTranslate = scrollY.interpolate({
+    inputRange: [0, 400],
+    outputRange: [0, -60],
+    extrapolate: "clamp",
+  });
+
+  const animatedBrandColor = colorAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["#8b5cf6", "#6366f1", "#2fa9a0"],
+  });
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Admin Control Center</Text>
+    <>
+      <View style={styles.root}>
 
-      <StatCard label="Total Donations (PHP)" value={stats.totalDonations} />
-      <StatCard label="Distributed (PHP)" value={stats.distributed} />
-      <StatCard label="Pending Donations" value={stats.pendingDonations} />
+        {/* Background Blobs */}
+        <Animated.View
+          style={[styles.blob1, { transform: [{ translateY: blobTranslate }] }]}
+        />
+        <Animated.View
+          style={[styles.blob2, { transform: [{ translateY: blobTranslate }] }]}
+        />
 
-      <StatCard label="Volunteer Applications" value={stats.totalApplications} />
-      <StatCard label="Approved Volunteers" value={stats.approvedVolunteers} />
+        {/* HEADER */}
+        <View style={styles.whiteHeader}>
+          <View style={styles.brandRow}>
+            <View style={styles.logoWrap}>
+              <Image
+                source={require("../../assets/images/logo.png")}
+                style={styles.logo}
+              />
+            </View>
+            <View>
+              <Text style={styles.brandTitle}>VolunServe</Text>
+              <Text style={styles.brandSub}>
+                Disaster Relief & Emergency Response
+              </Text>
+            </View>
+          </View>
 
-      <StatCard label="Total Events" value={stats.totalEvents} />
-      <StatCard label="Active Events" value={stats.activeEvents} />
+          <TouchableOpacity onPress={() => setDrawerOpen(true)}>
+            <Ionicons name="menu" size={26} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
 
-      <StatCard label="Completed Attendance" value={stats.completedAttendance} />
-
-      <View style={styles.navSection}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push("/admin-events")}
+        <Animated.ScrollView
+          contentContainerStyle={styles.container}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true }
+          )}
+          scrollEventThrottle={16}
         >
-          <Text style={styles.navText}>Manage Events</Text>
-        </TouchableOpacity>
+          <View style={styles.heroSection}>
 
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push("/admin-volunteers")}
-        >
-          <Text style={styles.navText}>Manage Volunteers</Text>
-        </TouchableOpacity>
+            <Text style={styles.welcomePlain}>
+              Welcome {firstName} to
+            </Text>
 
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push("/admin-attendance")}
-        >
-          <Text style={styles.navText}>Attendance Monitor</Text>
-        </TouchableOpacity>
+            <Animated.Text
+              style={[
+                styles.welcomeBrand,
+                { color: animatedBrandColor },
+              ]}
+            >
+              VolunServe SJDM
+            </Animated.Text>
+
+            <Text style={styles.subText}>
+              San Jose del Monte's disaster relief and emergency response
+              network. Together, we prepare for emergencies and support
+              our community when disaster strikes.
+            </Text>
+          </View>
+
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+
+            <ModuleCard
+              icon="heart"
+              title="Donate Relief Funds"
+              desc="Support disaster relief efforts with secure donations."
+              colors={["#c4b5fd", "#a78bfa"]}
+              onPress={() => router.push("/donation")}
+            />
+
+            <ModuleCard
+              icon="people"
+              title="Be a Volunteer"
+              desc="Join emergency response teams and help residents."
+              colors={["#86efac", "#34d399"]}
+              onPress={() => router.push("/volunteer")}
+            />
+
+            <ModuleCard
+              icon="home"
+              title="Request Emergency Aid"
+              desc="Submit a request for immediate assistance."
+              colors={["#5fd0c7", "#2fa9a0"]}
+              onPress={() => router.push("/resident")}
+            />
+
+            <ModuleCard
+              icon="warning"
+              title="Disaster Response"
+              desc="Submit disaster reports with photo and video proof."
+              colors={["#f87171", "#dc2626"]}
+              onPress={() => router.push("/disaster-response")}
+            />
+
+            <ModuleCard
+              icon="map"
+              title="Live Map Tracking"
+              desc="Monitor ongoing emergency events in real-time."
+              colors={["#bfdbfe", "#60a5fa"]}
+              onPress={() => router.push("/map-tracking")}
+            />
+
+          </Animated.View>
+        </Animated.ScrollView>
       </View>
-    </ScrollView>
+
+      <SideDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        name={profile?.fullName || "User"}
+        email={profile?.email || ""}
+      />
+    </>
   );
 }
 
-function StatCard({ label, value }: any) {
+/* Luxury Glass Module */
+function ModuleCard({ icon, title, desc, onPress, colors }: any) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const shimmerTranslate = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-width, width],
+  });
+
   return (
-    <View style={styles.card}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
-    </View>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={() =>
+          Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()
+        }
+        activeOpacity={0.9}
+      >
+        <LinearGradient colors={colors} style={styles.card}>
+          <Animated.View
+            style={[
+              styles.shimmer,
+              { transform: [{ translateX: shimmerTranslate }] },
+            ]}
+          />
+          <View style={styles.cardContent}>
+            <View style={styles.iconWrap}>
+              <Ionicons name={icon} size={22} color="#ffffff" />
+            </View>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardDesc}>{desc}</Text>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: "#f4f7fb",
+  root: { flex: 1, backgroundColor: "#f5f7fb" },
+
+  blob1: {
+    position: "absolute",
+    top: -80,
+    right: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 120,
+    backgroundColor: "#c4b5fd",
+    opacity: 0.25,
   },
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
+  blob2: {
+    position: "absolute",
+    bottom: 100,
+    left: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 140,
+    backgroundColor: "#86efac",
+    opacity: 0.25,
+  },
+
+  whiteHeader: {
+    backgroundColor: "#2fa9a0",
+    paddingTop: 55,
+    paddingHorizontal: 24,
+    paddingBottom: 18,
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
   },
 
-  title: {
-    fontSize: 24,
+  brandRow: { flexDirection: "row", alignItems: "center" },
+
+  logoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  logo: { width: 38, height: 38 },
+
+  brandTitle: {
+    fontSize: 20,
     fontWeight: "800",
-    marginBottom: 20,
+    color: "#ffffff", // stays white
+  },
+
+  brandSub: { fontSize: 12, color: "#e5e7eb" },
+
+  container: { paddingHorizontal: 24, paddingBottom: 80 },
+
+  heroSection: {
+    alignItems: "center",
+    marginTop: 30,
+    marginBottom: 40,
+  },
+
+  welcomePlain: {
+    fontSize: 22,
+    fontWeight: "400",
+    color: "#4b5563",
+    marginBottom: 4,
+  },
+
+  welcomeBrand: {
+    fontSize: 30,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  subText: {
+    fontSize: 16,
+    textAlign: "center",
+    color: "#4b5563",
+    lineHeight: 24,
+    paddingHorizontal: 10,
+    marginTop: 12,
   },
 
   card: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderRadius: 30,
+    paddingVertical: 30,
+    paddingHorizontal: 26,
+    marginBottom: 24,
+    overflow: "hidden",
   },
 
-  label: {
-    fontSize: 14,
-    color: "#64748b",
+  shimmer: {
+    position: "absolute",
+    width: 120,
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    transform: [{ skewX: "-20deg" }],
   },
 
-  value: {
+  cardContent: { gap: 10 },
+
+  iconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+
+  cardTitle: {
     fontSize: 20,
     fontWeight: "800",
-    marginTop: 6,
+    color: "#111827",
   },
 
-  navSection: {
-    marginTop: 20,
-  },
+  cardDesc: { fontSize: 15, color: "#1f2937" },
 
-  navButton: {
-    backgroundColor: "#2563eb",
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 12,
-    alignItems: "center",
-  },
-
-  navText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

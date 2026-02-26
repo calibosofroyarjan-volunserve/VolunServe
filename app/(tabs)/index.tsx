@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRootNavigationState, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,19 +10,16 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import SideDrawer from "../../components/SideDrawer";
-import {
-  getUserProfile,
-  onAuthChange,
-  UserProfile,
-} from "../../lib/firebaseAuth";
+import { getUserProfile, onAuthChange, UserProfile } from "../../lib/firebaseAuth";
 
 const { width } = Dimensions.get("window");
 
 export default function Dashboard() {
   const router = useRouter();
+  const rootNavState = useRootNavigationState(); // ✅ ADDED
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +31,7 @@ export default function Dashboard() {
   // Animated color for "VolunServe SJDM"
   const colorAnim = useRef(new Animated.Value(0)).current;
 
+  // ✅ Keep your animations as-is (separate effect)
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -48,7 +46,6 @@ export default function Dashboard() {
       }),
     ]).start();
 
-    // Loop color animation
     Animated.loop(
       Animated.timing(colorAnim, {
         toValue: 1,
@@ -56,21 +53,29 @@ export default function Dashboard() {
         useNativeDriver: false,
       })
     ).start();
+  }, []);
+
+  // ✅ FIX: only start auth + navigation when root nav is mounted
+  useEffect(() => {
+    if (!rootNavState?.key) return; // ✅ ADDED GUARD (prevents crash)
 
     const unsub = onAuthChange(async (user) => {
       if (!user) {
-        router.replace("/login");
+        // Delay one tick to ensure router is ready everywhere
+        setTimeout(() => router.replace("/login"), 0);
         return;
       }
+
       const data = await getUserProfile(user.uid);
       setProfile(data);
       setLoading(false);
     });
 
     return unsub;
-  }, []);
+  }, [rootNavState?.key]);
 
-  if (loading) {
+  // ✅ If router isn't ready yet, show loading (prevents early render crash)
+  if (!rootNavState?.key || loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -94,7 +99,6 @@ export default function Dashboard() {
   return (
     <>
       <View style={styles.root}>
-
         {/* Background Blobs */}
         <Animated.View
           style={[styles.blob1, { transform: [{ translateY: blobTranslate }] }]}
@@ -134,24 +138,16 @@ export default function Dashboard() {
           scrollEventThrottle={16}
         >
           <View style={styles.heroSection}>
+            <Text style={styles.welcomePlain}>Welcome {firstName} to</Text>
 
-            <Text style={styles.welcomePlain}>
-              Welcome {firstName} to
-            </Text>
-
-            <Animated.Text
-              style={[
-                styles.welcomeBrand,
-                { color: animatedBrandColor },
-              ]}
-            >
+            <Animated.Text style={[styles.welcomeBrand, { color: animatedBrandColor }]}>
               VolunServe SJDM
             </Animated.Text>
 
             <Text style={styles.subText}>
-              San Jose del Monte's disaster relief and emergency response
-              network. Together, we prepare for emergencies and support
-              our community when disaster strikes.
+              San Jose del Monte's disaster relief and emergency response network.
+              Together, we prepare for emergencies and support our community when
+              disaster strikes.
             </Text>
           </View>
 
@@ -161,7 +157,6 @@ export default function Dashboard() {
               transform: [{ translateY: slideAnim }],
             }}
           >
-
             <ModuleCard
               icon="heart"
               title="Donate Relief Funds"
@@ -201,7 +196,6 @@ export default function Dashboard() {
               colors={["#bfdbfe", "#60a5fa"]}
               onPress={() => router.push("/map-tracking")}
             />
-
           </Animated.View>
         </Animated.ScrollView>
       </View>
@@ -250,10 +244,7 @@ function ModuleCard({ icon, title, desc, onPress, colors }: any) {
       >
         <LinearGradient colors={colors} style={styles.card}>
           <Animated.View
-            style={[
-              styles.shimmer,
-              { transform: [{ translateX: shimmerTranslate }] },
-            ]}
+            style={[styles.shimmer, { transform: [{ translateX: shimmerTranslate }] }]}
           />
           <View style={styles.cardContent}>
             <View style={styles.iconWrap}>
@@ -320,7 +311,7 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#ffffff", // stays white
+    color: "#ffffff",
   },
 
   brandSub: { fontSize: 12, color: "#e5e7eb" },
