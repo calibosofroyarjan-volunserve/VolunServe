@@ -48,7 +48,7 @@ export default function Resident() {
         if (!location) setLocation(brgy ? `Brgy. ${brgy}` : addr);
 
         // optional: if your profile has phone stored as "phone", this will fill it.
-        if (!contactNumber) setContactNumber(p?.phone || "");
+        if (!contactNumber) setContactNumber(p?.phoneNumber || "");
       } finally {
         setLoadingProfile(false);
       }

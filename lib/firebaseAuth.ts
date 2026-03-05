@@ -1,3 +1,4 @@
+// lib/firebaseAuth.ts
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged as firebaseOnAuthStateChanged,
@@ -6,40 +7,59 @@ import {
   User,
 } from "firebase/auth";
 
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
-export type Role = "volunteer" | "resident";
+export type Role = "applicant" | "volunteer" | "resident" | "admin" | "superadmin";
 
 export interface UserProfile {
   uid: string;
+
   fullName: string;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
+  age: number;
   email: string;
   phoneNumber: string;
-  address?: string;
-  occupation?: string;
+
+  region?: string;
+  province?: string;
+  city?: string;
   barangay?: string;
-  phone?: string;
+  address?: string;
+
+  occupationCategory?: string;
+  occupationSpecialization?: string;
+  occupationOther?: string;
+  occupation?: string;
+
   role: Role;
+  status?: "pending_review" | "approved" | "rejected";
+
   profilePictureUrl?: string;
   createdAt: any;
 }
 
 export interface SignupData {
-  fullName: string;
+  lastName: string;
+  firstName: string;
+  middleName?: string;
+  age: number;
   email: string;
   password: string;
+
+  
   phoneNumber: string;
-  address?: string;
-  occupation?: string;
-  role: Role;
+
+  region: string;
+  province: string;
+  city: string;
+  barangay: string;
+
+  occupationCategory: string;
+  occupationSpecialization?: string;
+  occupationOther?: string;
 }
 
 function friendlyAuthError(err: any) {
@@ -56,69 +76,89 @@ function friendlyAuthError(err: any) {
 function friendlyFirestoreError(err: any) {
   const code = err?.code;
   if (code === "permission-denied") {
-    return "Firestore permission denied. Fix Firestore Rules (users/{uid}) and click Publish.";
+    return "Firestore permission denied. Check Firestore Rules for users/{uid} and address_regions read access.";
   }
   return err?.message || "Firestore error.";
 }
 
-// ✅ Signup: create Auth + create Firestore profile
+// ✅ Signup: Auth + Firestore profile
 export const signUpUser = async (data: SignupData) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
-      data.email.trim(),
+      data.email.trim().toLowerCase(),
       data.password
     );
 
     const user = userCredential.user;
 
-    // Create Firestore profile
+    const fullName = [data.lastName, data.firstName, data.middleName]
+      .filter(Boolean)
+      .join(", ")
+      .replace(", ,", ",")
+      .trim();
+
+    const occupation =
+      (data.occupationOther && data.occupationOther.trim()) ||
+      (data.occupationSpecialization && data.occupationSpecialization.trim()) ||
+      data.occupationCategory;
+
     await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
-      fullName: data.fullName.trim(),
+
+      fullName,
+      lastName: data.lastName.trim(),
+      firstName: data.firstName.trim(),
+      middleName: (data.middleName || "").trim(),
+      age: data.age,
       email: data.email.trim().toLowerCase(),
       phoneNumber: data.phoneNumber.trim(),
-      address: data.address?.trim() || "",
-      occupation: data.occupation?.trim() || "",
-      role: data.role,
+
+      region: data.region,
+      province: data.province,
+      city: data.city,
+      barangay: data.barangay,
+      address: `${data.barangay}, ${data.city}, ${data.province}, ${data.region}`,
+
+      occupationCategory: data.occupationCategory,
+      occupationSpecialization: (data.occupationSpecialization || "").trim(),
+      occupationOther: (data.occupationOther || "").trim(),
+      occupation,
+
+      role: "applicant" as Role,
+      status: "pending_review",
+
       profilePictureUrl: "",
       createdAt: serverTimestamp(),
     });
 
     return user;
   } catch (err: any) {
-    // Throw with friendly message so UI can show it
-    // If Firestore is denied, this will show the REAL reason.
-    const msg = err?.code?.startsWith("auth/")
-      ? friendlyAuthError(err)
-      : friendlyFirestoreError(err);
+    const msg = err?.code?.startsWith("auth/") ? friendlyAuthError(err) : friendlyFirestoreError(err);
     throw new Error(msg);
   }
 };
 
-// ✅ Login: sign in, then ensure profile exists (auto-create if missing)
 export const loginUser = async (email: string, password: string) => {
   try {
     const userCredential = await signInWithEmailAndPassword(
       auth,
-      email.trim(),
+      email.trim().toLowerCase(),
       password
     );
     const user = userCredential.user;
 
-    // Auto-create profile if missing (for accounts made before rules were fixed)
+    // ensure profile exists
     const ref = doc(db, "users", user.uid);
     const snap = await getDoc(ref);
-
     if (!snap.exists()) {
       await setDoc(ref, {
         uid: user.uid,
-        fullName: user.displayName || "New User",
+        fullName: user.displayName || "User",
         email: user.email?.toLowerCase() || email.trim().toLowerCase(),
         phoneNumber: "",
-        address: "",
-        occupation: "",
         role: "resident" as Role,
+        status: "approved",
         profilePictureUrl: "",
         createdAt: serverTimestamp(),
       });
@@ -126,9 +166,7 @@ export const loginUser = async (email: string, password: string) => {
 
     return user;
   } catch (err: any) {
-    const msg = err?.code?.startsWith("auth/")
-      ? friendlyAuthError(err)
-      : friendlyFirestoreError(err);
+    const msg = err?.code?.startsWith("auth/") ? friendlyAuthError(err) : friendlyFirestoreError(err);
     throw new Error(msg);
   }
 };
@@ -137,22 +175,17 @@ export const logoutUser = async () => {
   await signOut(auth);
 };
 
-// ✅ Profile screen expects direct profile (throws if missing)
 export const getUserProfile = async (uid: string) => {
   const snap = await getDoc(doc(db, "users", uid));
   if (!snap.exists()) throw new Error("Profile not found");
   return snap.data() as UserProfile;
 };
 
-// ✅ Update profile fields
 export const updateUserProfile = async (uid: string, updates: Partial<UserProfile>) => {
-  // protect critical fields
   const { uid: _uid, email: _email, createdAt: _createdAt, ...safe } = updates as any;
   await updateDoc(doc(db, "users", uid), safe);
 };
 
-// ✅ Auth listener
 export const onAuthChange = (cb: (user: User | null) => void) => {
   return firebaseOnAuthStateChanged(auth, cb);
 };
-

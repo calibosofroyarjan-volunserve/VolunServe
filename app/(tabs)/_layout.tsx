@@ -1,31 +1,52 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
 
 export default function TabsLayout() {
-  const router = useRouter();
   const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        router.replace("/login");
+        setAuthenticated(false);
+        setLoading(false);
       } else {
         try {
           const snap = await getDoc(doc(db, "users", user.uid));
           const userRole = snap.data()?.role?.trim().toLowerCase();
           setRole(userRole);
+          setAuthenticated(true);
         } catch (err) {
           console.log("Role fetch error:", err);
+          setAuthenticated(false);
+        } finally {
+          setLoading(false);
         }
       }
     });
 
     return unsub;
   }, []);
+
+  // While checking auth state
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  // If NOT authenticated → redirect immediately
+  if (!authenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs
@@ -41,7 +62,6 @@ export default function TabsLayout() {
         },
       }}
     >
-      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -52,7 +72,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* DONATION */}
       <Tabs.Screen
         name="donation"
         options={{
@@ -63,7 +82,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* VOLUNTEER */}
       <Tabs.Screen
         name="volunteer"
         options={{
@@ -74,7 +92,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* DISASTER RESPONSE */}
       <Tabs.Screen
         name="disaster-response"
         options={{
@@ -85,7 +102,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* MAP TRACKING */}
       <Tabs.Screen
         name="map-tracking"
         options={{
@@ -96,7 +112,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* PROFILE (History + Admin Tools Inside) */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -106,6 +121,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="volunteer-impact"
         options={{
