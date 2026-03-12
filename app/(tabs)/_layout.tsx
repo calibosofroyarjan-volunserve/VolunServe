@@ -34,16 +34,14 @@ export default function TabsLayout() {
     return unsub;
   }, []);
 
-  // While checking auth state
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#0f766e" />
       </View>
     );
   }
 
-  // If NOT authenticated → redirect immediately
   if (!authenticated) {
     return <Redirect href="/login" />;
   }
@@ -54,83 +52,112 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#0f766e",
         tabBarInactiveTintColor: "#94a3b8",
+
         tabBarStyle: {
           backgroundColor: "#ffffff",
-          height: 65,
-          borderTopWidth: 0,
-          elevation: 10,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 6,
+          borderTopWidth: 0.5,
+          borderColor: "#e2e8f0",
+          elevation: 8,
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
         },
       }}
     >
+
+      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
 
+      {/* RESIDENTS */}
       <Tabs.Screen
-        name="donation"
+        name="resident"
         options={{
-          title: "Donation",
+          title: "Residents",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart" size={size} color={color} />
+            <Ionicons name="business-outline" size={size} color={color} />
           ),
         }}
       />
 
-      <Tabs.Screen
-        name="volunteer"
-        options={{
-          title: "Volunteer",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" size={size} color={color} />
-          ),
-        }}
-      />
-
+      {/* DISASTER RESPONSE */}
       <Tabs.Screen
         name="disaster-response"
         options={{
           title: "Disaster",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="warning" size={size} color={color} />
+            <Ionicons name="warning-outline" size={size} color={color} />
           ),
         }}
       />
 
+      {/* VOLUNTEER */}
+      <Tabs.Screen
+        name="volunteer"
+        options={{
+          title: "Volunteer",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* MAP TRACKING */}
       <Tabs.Screen
         name="map-tracking"
         options={{
           title: "Map",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map" size={size} color={color} />
+            <Ionicons name="map-outline" size={size} color={color} />
           ),
         }}
       />
 
+      {/* DONATIONS */}
+      <Tabs.Screen
+        name="donation"
+        options={{
+          title: "Donations",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="heart-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />
 
+      {/* VOLUNTEER IMPACT */}
       <Tabs.Screen
         name="volunteer-impact"
         options={{
           title: "Impact",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="ribbon" size={size} color={color} />
+            <Ionicons name="ribbon-outline" size={size} color={color} />
           ),
         }}
       />
+
     </Tabs>
   );
 }

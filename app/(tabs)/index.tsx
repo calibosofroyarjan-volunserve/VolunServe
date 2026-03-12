@@ -1,386 +1,416 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRootNavigationState, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
   Image,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import SideDrawer from "../../components/SideDrawer";
-import { getUserProfile, onAuthChange, UserProfile } from "../../lib/firebaseAuth";
-
-const { width } = Dimensions.get("window");
 
 export default function Dashboard() {
+
   const router = useRouter();
-  const rootNavState = useRootNavigationState(); // ✅ ADDED
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Animated color for "VolunServe SJDM"
-  const colorAnim = useRef(new Animated.Value(0)).current;
-
-  // ✅ Keep your animations as-is (separate effect)
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    Animated.loop(
-      Animated.timing(colorAnim, {
-        toValue: 1,
-        duration: 4000,
-        useNativeDriver: false,
-      })
-    ).start();
-  }, []);
-
-  // ✅ FIX: only start auth + navigation when root nav is mounted
-  useEffect(() => {
-    if (!rootNavState?.key) return; // ✅ ADDED GUARD (prevents crash)
-
-    const unsub = onAuthChange(async (user) => {
-      if (!user) {
-        // Delay one tick to ensure router is ready everywhere
-        setTimeout(() => router.replace("/login"), 0);
-        return;
-      }
-
-      const data = await getUserProfile(user.uid);
-      setProfile(data);
-      setLoading(false);
-    });
-
-    return unsub;
-  }, [rootNavState?.key]);
-
-  // ✅ If router isn't ready yet, show loading (prevents early render crash)
-  if (!rootNavState?.key || loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
-  }
-
-  const firstName = profile?.fullName?.split(" ")[0] || "User";
-
-  const blobTranslate = scrollY.interpolate({
-    inputRange: [0, 400],
-    outputRange: [0, -60],
-    extrapolate: "clamp",
-  });
-
-  const animatedBrandColor = colorAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ["#8b5cf6", "#6366f1", "#2fa9a0"],
-  });
+  const [drawerOpen,setDrawerOpen] = useState(false);
 
   return (
     <>
       <View style={styles.root}>
-        {/* Background Blobs */}
-        <Animated.View
-          style={[styles.blob1, { transform: [{ translateY: blobTranslate }] }]}
-        />
-        <Animated.View
-          style={[styles.blob2, { transform: [{ translateY: blobTranslate }] }]}
-        />
 
         {/* HEADER */}
-        <View style={styles.whiteHeader}>
-          <View style={styles.brandRow}>
-            <View style={styles.logoWrap}>
+
+        <SafeAreaView edges={["top"]} style={styles.safeHeader}>
+
+          <View style={styles.header}>
+
+            <View style={styles.brand}>
+
               <Image
                 source={require("../../assets/images/logo.png")}
                 style={styles.logo}
               />
+
+              <View>
+                <Text style={styles.title}>
+                  VolunServe
+                </Text>
+
+                <Text style={styles.subtitle}>
+                  City Disaster Response Platform
+                </Text>
+              </View>
+
             </View>
-            <View>
-              <Text style={styles.brandTitle}>VolunServe</Text>
-              <Text style={styles.brandSub}>
-                Disaster Relief & Emergency Response
-              </Text>
-            </View>
+
+            <Pressable
+              style={styles.menuBtn}
+              onPress={()=>setDrawerOpen(true)}
+            >
+              <Ionicons name="menu" size={26} color="#fff"/>
+            </Pressable>
+
           </View>
 
-          <TouchableOpacity onPress={() => setDrawerOpen(true)}>
-            <Ionicons name="menu" size={26} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
+        </SafeAreaView>
 
-        <Animated.ScrollView
-          contentContainerStyle={styles.container}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-        >
-          <View style={styles.heroSection}>
-            <Text style={styles.welcomePlain}>Welcome {firstName} to</Text>
+        <ScrollView contentContainerStyle={styles.container}>
 
-            <Animated.Text style={[styles.welcomeBrand, { color: animatedBrandColor }]}>
-              VolunServe SJDM
-            </Animated.Text>
+          {/* HERO CARD */}
 
-            <Text style={styles.subText}>
-              San Jose del Monte's disaster relief and emergency response network.
-              Together, we prepare for emergencies and support our community when
-              disaster strikes.
+          <View style={styles.heroCard}>
+
+            <View style={styles.heroTop}>
+
+              <View style={styles.statusBadge}>
+                <Ionicons name="shield-checkmark" size={16} color="#059669"/>
+                <Text style={styles.statusText}>
+                  CITY RESPONSE SYSTEM
+                </Text>
+              </View>
+
+              <View style={styles.operational}>
+                <View style={styles.greenDot}/>
+                <Text style={styles.operationalText}>
+                  Operational
+                </Text>
+              </View>
+
+            </View>
+
+            <Text style={styles.welcome}>
+              Welcome back,
+              {"\n"}Caliboso
             </Text>
+
+            <Text style={styles.description}>
+              A centralized platform for emergency reporting,
+              community assistance, live monitoring and disaster
+              coordination for San Jose del Monte City.
+            </Text>
+
+            {/* STATS */}
+
+            <View style={styles.statsContainer}>
+
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>5</Text>
+                <Text style={styles.statLabel}>Services</Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>24/7</Text>
+                <Text style={styles.statLabel}>Response</Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>Realtime</Text>
+                <Text style={styles.statLabel}>Access</Text>
+              </View>
+
+            </View>
+
           </View>
 
-          <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
-          >
-            <ModuleCard
-              icon="heart"
-              title="Donate Relief Funds"
-              desc="Support disaster relief efforts with secure donations."
-              colors={["#c4b5fd", "#a78bfa"]}
-              onPress={() => router.push("/donation")}
-            />
+          {/* MODULE TITLE */}
 
-            <ModuleCard
-              icon="people"
-              title="Be a Volunteer"
-              desc="Join emergency response teams and help residents."
-              colors={["#86efac", "#34d399"]}
-              onPress={() => router.push("/volunteer")}
-            />
+          <Text style={styles.moduleLabel}>
+            MAIN MODULES
+          </Text>
 
-            <ModuleCard
-              icon="home"
-              title="Request Emergency Aid"
-              desc="Submit a request for immediate assistance."
-              colors={["#5fd0c7", "#2fa9a0"]}
-              onPress={() => router.push("/resident")}
-            />
+          <Text style={styles.moduleTitle}>
+            Operational Services
+          </Text>
 
-            <ModuleCard
-              icon="warning"
-              title="Disaster Response"
-              desc="Submit disaster reports with photo and video proof."
-              colors={["#f87171", "#dc2626"]}
-              onPress={() => router.push("/disaster-response")}
-            />
+          {/* MODULES */}
 
-            <ModuleCard
-              icon="map"
-              title="Live Map Tracking"
-              desc="Monitor ongoing emergency events in real-time."
-              colors={["#bfdbfe", "#60a5fa"]}
-              onPress={() => router.push("/map-tracking")}
-            />
-          </Animated.View>
-        </Animated.ScrollView>
+          <ServiceCard
+            icon="home"
+            color="#2563eb"
+            title="Residents"
+            desc="Submit aid requests and receive immediate assistance."
+            onPress={()=>router.push("/resident")}
+          />
+
+          <ServiceCard
+            icon="warning"
+            color="#dc2626"
+            title="Disaster Response"
+            desc="Report hazards and emergencies with evidence."
+            onPress={()=>router.push("/disaster-response")}
+          />
+
+          <ServiceCard
+            icon="people"
+            color="#16a34a"
+            title="Volunteer"
+            desc="Join response teams and help affected residents."
+            onPress={()=>router.push("/volunteer")}
+          />
+
+          <ServiceCard
+            icon="map"
+            color="#0891b2"
+            title="Map Tracking"
+            desc="View incidents and response zones in real time."
+            onPress={()=>router.push("/map-tracking")}
+          />
+
+          <ServiceCard
+            icon="heart"
+            color="#d97706"
+            title="Donation"
+            desc="Support disaster relief and community programs."
+            onPress={()=>router.push("/donation")}
+          />
+
+        </ScrollView>
+
       </View>
 
       <SideDrawer
         visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        name={profile?.fullName || "User"}
-        email={profile?.email || ""}
+        onClose={()=>setDrawerOpen(false)}
+        name="Caliboso"
+        email=""
       />
     </>
   );
 }
 
-/* Luxury Glass Module */
-function ModuleCard({ icon, title, desc, onPress, colors }: any) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const shimmer = useRef(new Animated.Value(0)).current;
+/* SERVICE CARD */
 
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 3000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
+function ServiceCard({icon,color,title,desc,onPress}:any){
 
-  const shimmerTranslate = shimmer.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-width, width],
-  });
+  return(
 
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()
-        }
-        onPressOut={() =>
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()
-        }
-        activeOpacity={0.9}
-      >
-        <LinearGradient colors={colors} style={styles.card}>
-          <Animated.View
-            style={[styles.shimmer, { transform: [{ translateX: shimmerTranslate }] }]}
-          />
-          <View style={styles.cardContent}>
-            <View style={styles.iconWrap}>
-              <Ionicons name={icon} size={22} color="#ffffff" />
-            </View>
-            <Text style={styles.cardTitle}>{title}</Text>
-            <Text style={styles.cardDesc}>{desc}</Text>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+    <Pressable
+      style={styles.serviceCard}
+      onPress={onPress}
+    >
+
+      <View style={[styles.iconWrap,{backgroundColor:`${color}20`}]}>
+        <Ionicons name={icon} size={22} color={color}/>
+      </View>
+
+      <View style={styles.serviceText}>
+        <Text style={styles.serviceTitle}>{title}</Text>
+        <Text style={styles.serviceDesc}>{desc}</Text>
+      </View>
+
+      <Ionicons name="arrow-forward" size={20} color={color}/>
+
+    </Pressable>
+
+  )
+
 }
 
+/* STYLES */
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f5f7fb" },
 
-  blob1: {
-    position: "absolute",
-    top: -80,
-    right: -60,
-    width: 220,
-    height: 220,
-    borderRadius: 120,
-    backgroundColor: "#c4b5fd",
-    opacity: 0.25,
-  },
+root:{
+  flex:1,
+  backgroundColor:"#f1f5f9"
+},
 
-  blob2: {
-    position: "absolute",
-    bottom: 100,
-    left: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 140,
-    backgroundColor: "#86efac",
-    opacity: 0.25,
-  },
+safeHeader:{
+  backgroundColor:"#0f766e"
+},
 
-  whiteHeader: {
-    backgroundColor: "#2fa9a0",
-    paddingTop: 55,
-    paddingHorizontal: 24,
-    paddingBottom: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+header:{
+  flexDirection:"row",
+  justifyContent:"space-between",
+  alignItems:"center",
+  paddingHorizontal:22,
+  paddingVertical:16
+},
 
-  brandRow: { flexDirection: "row", alignItems: "center" },
+brand:{
+  flexDirection:"row",
+  alignItems:"center"
+},
 
-  logoWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#ffffff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
+logo:{
+  width:46,
+  height:46,
+  borderRadius:23,
+  marginRight:14,
+  backgroundColor:"#fff"
+},
 
-  logo: { width: 38, height: 38 },
+title:{
+  fontSize:22,
+  fontWeight:"800",
+  color:"#fff"
+},
 
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
+subtitle:{
+  fontSize:13,
+  color:"#d1fae5",
+  marginTop:2
+},
 
-  brandSub: { fontSize: 12, color: "#e5e7eb" },
+menuBtn:{
+  width:46,
+  height:46,
+  borderRadius:14,
+  backgroundColor:"rgba(255,255,255,0.25)",
+  justifyContent:"center",
+  alignItems:"center"
+},
 
-  container: { paddingHorizontal: 24, paddingBottom: 80 },
+container:{
+  padding:22
+},
 
-  heroSection: {
-    alignItems: "center",
-    marginTop: 30,
-    marginBottom: 40,
-  },
+heroCard:{
+  backgroundColor:"#ffffff",
+  padding:26,
+  borderRadius:20,
+  marginBottom:28,
+  marginTop:10,
+  shadowColor:"#000",
+  shadowOpacity:0.04,
+  shadowRadius:10,
+  elevation:2
+},
 
-  welcomePlain: {
-    fontSize: 22,
-    fontWeight: "400",
-    color: "#4b5563",
-    marginBottom: 4,
-  },
+heroTop:{
+  flexDirection:"row",
+  justifyContent:"space-between",
+  alignItems:"center",
+  marginBottom:12
+},
 
-  welcomeBrand: {
-    fontSize: 30,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+statusBadge:{
+  flexDirection:"row",
+  alignItems:"center",
+  backgroundColor:"#ecfdf5",
+  paddingHorizontal:12,
+  paddingVertical:6,
+  borderRadius:18
+},
 
-  subText: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#4b5563",
-    lineHeight: 24,
-    paddingHorizontal: 10,
-    marginTop: 12,
-  },
+statusText:{
+  fontSize:12,
+  marginLeft:6,
+  color:"#059669",
+  fontWeight:"700"
+},
 
-  card: {
-    borderRadius: 30,
-    paddingVertical: 30,
-    paddingHorizontal: 26,
-    marginBottom: 24,
-    overflow: "hidden",
-  },
+operational:{
+  flexDirection:"row",
+  alignItems:"center"
+},
 
-  shimmer: {
-    position: "absolute",
-    width: 120,
-    height: "100%",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    transform: [{ skewX: "-20deg" }],
-  },
+greenDot:{
+  width:8,
+  height:8,
+  borderRadius:4,
+  backgroundColor:"#16a34a",
+  marginRight:6
+},
 
-  cardContent: { gap: 10 },
+operationalText:{
+  fontSize:13,
+  color:"#374151"
+},
 
-  iconWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
+welcome:{
+  fontSize:30,
+  fontWeight:"800",
+  marginTop:4,
+  lineHeight:34
+},
 
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
+description:{
+  marginTop:10,
+  fontSize:15,
+  color:"#6b7280",
+  lineHeight:22
+},
 
-  cardDesc: { fontSize: 15, color: "#1f2937" },
+statsContainer:{
+  flexDirection:"row",
+  justifyContent:"space-between",
+  backgroundColor:"#f8fafc",
+  borderRadius:16,
+  paddingVertical:18,
+  paddingHorizontal:12,
+  marginTop:22
+},
 
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+statBox:{
+  flex:1,
+  alignItems:"center"
+},
+
+statNumber:{
+  fontSize:22,
+  fontWeight:"800",
+  color:"#111827"
+},
+
+statLabel:{
+  fontSize:13,
+  color:"#6b7280",
+  marginTop:4
+},
+
+moduleLabel:{
+  fontSize:12,
+  color:"#059669",
+  fontWeight:"700",
+  marginBottom:6,
+  letterSpacing:0.6
+},
+
+moduleTitle:{
+  fontSize:24,
+  fontWeight:"800",
+  marginBottom:20
+},
+
+serviceCard:{
+  flexDirection:"row",
+  alignItems:"center",
+  backgroundColor:"#ffffff",
+  padding:20,
+  borderRadius:18,
+  marginBottom:16,
+  shadowColor:"#000",
+  shadowOpacity:0.03,
+  shadowRadius:8,
+  elevation:1
+},
+
+iconWrap:{
+  width:48,
+  height:48,
+  borderRadius:14,
+  justifyContent:"center",
+  alignItems:"center",
+  marginRight:16
+},
+
+serviceText:{
+  flex:1
+},
+
+serviceTitle:{
+  fontSize:17,
+  fontWeight:"700"
+},
+
+serviceDesc:{
+  fontSize:14,
+  color:"#6b7280",
+  marginTop:3
+}
+
 });
