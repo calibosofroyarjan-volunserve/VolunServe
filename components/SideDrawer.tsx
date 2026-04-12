@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   name: string;
   email: string;
+  role: string; // 🔥 ADDED ONLY
 }
 
 export default function SideDrawer({
@@ -23,6 +24,7 @@ export default function SideDrawer({
   onClose,
   name,
   email,
+  role, // 🔥 ADDED ONLY
 }: Props) {
   const router = useRouter();
 
@@ -62,7 +64,6 @@ export default function SideDrawer({
           </View>
 
           {/* NAVIGATION */}
-
           <View style={styles.section}>
 
             <MenuItem
@@ -95,10 +96,25 @@ export default function SideDrawer({
               onPress={() => navigate("/donation")}
             />
 
+            {/* 🔥 EXISTING */}
+            <MenuItem
+              label="Announcements"
+              icon="megaphone"
+              onPress={() => navigate("/announcements")}
+            />
+
+            {/* 🔥 ONLY MODIFIED THIS PART */}
+            {(role === "admin" || role === "superadmin") && (
+              <MenuItem
+                label="Create Announcement"
+                icon="add-circle"
+                onPress={() => navigate("/(admin)/create-announcement")}
+              />
+            )}
+
           </View>
 
           {/* ACCOUNT */}
-
           <View style={styles.accountSection}>
 
             <MenuItem
@@ -113,7 +129,6 @@ export default function SideDrawer({
           <View style={{ flex: 1 }} />
 
           {/* LOGOUT */}
-
           <Pressable style={styles.logout} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#dc2626" />
             <Text style={styles.logoutText}>Logout</Text>

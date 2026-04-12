@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   Pressable,
@@ -12,10 +12,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import SideDrawer from "../../components/SideDrawer";
 
+/* 🔥 ADDED FIREBASE */
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../../lib/firebase";
+
 export default function Dashboard() {
 
   const router = useRouter();
   const [drawerOpen,setDrawerOpen] = useState(false);
+
+  /* 🔥 ANNOUNCEMENTS STATE */
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+
+  /* 🔥 FETCH ANNOUNCEMENTS */
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "announcements"));
+        const data = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setAnnouncements(data);
+      } catch (error) {
+        console.log("Error fetching announcements:", error);
+      }
+    };
+
+    fetchAnnouncements();
+  }, []);
 
   return (
     <>
@@ -58,6 +83,27 @@ export default function Dashboard() {
         </SafeAreaView>
 
         <ScrollView contentContainerStyle={styles.container}>
+
+          {/* 🔥 ANNOUNCEMENTS SECTION */}
+
+          {announcements.length > 0 && (
+            <>
+              <Text style={styles.moduleLabel}>
+                ANNOUNCEMENTS
+              </Text>
+
+              {announcements.map((item, index) => (
+                <View key={index} style={styles.announcementCard}>
+                  <Text style={styles.announcementTitle}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.announcementMessage}>
+                    {item.message}
+                  </Text>
+                </View>
+              ))}
+            </>
+          )}
 
           {/* HERO CARD */}
 
@@ -176,6 +222,7 @@ export default function Dashboard() {
         onClose={()=>setDrawerOpen(false)}
         name="Caliboso"
         email=""
+        role="superadmin"
       />
     </>
   );
@@ -266,6 +313,26 @@ menuBtn:{
 
 container:{
   padding:22
+},
+
+/* 🔥 NEW STYLE */
+
+announcementCard:{
+  backgroundColor:"#fef9c3",
+  padding:16,
+  borderRadius:14,
+  marginBottom:12
+},
+
+announcementTitle:{
+  fontSize:16,
+  fontWeight:"800",
+  marginBottom:4
+},
+
+announcementMessage:{
+  fontSize:14,
+  color:"#374151"
 },
 
 heroCard:{

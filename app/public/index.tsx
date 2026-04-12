@@ -167,6 +167,7 @@ export default function PublicDashboard() {
         onClose={() => setDrawerOpen(false)}
         name="Public Access Mode"
         email="Guest Session"
+        role="guest"
       />
     </>
   );
