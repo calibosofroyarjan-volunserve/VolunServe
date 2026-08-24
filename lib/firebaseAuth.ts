@@ -58,6 +58,11 @@ export interface UserProfile {
   profilePictureUrl?: string;
 
   createdAt: any;
+
+  points?: number;
+  joined?: number;
+  completed?: number;
+  achievements?: string[];
 }
 
 export interface SignupData {

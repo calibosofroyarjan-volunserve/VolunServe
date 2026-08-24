@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { User } from "firebase/auth";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import SideDrawer from "../../components/SideDrawer";
+import { db } from "../../lib/firebase";
 import {
   getUserProfile,
   logoutUser,
@@ -18,8 +21,6 @@ import {
   updateUserProfile,
   UserProfile,
 } from "../../lib/firebaseAuth";
-
-import SideDrawer from "../../components/SideDrawer";
 
 export default function Profile() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -52,14 +54,39 @@ export default function Profile() {
       setAddress(data.address || "");
       setOccupation(data.occupation || "");
 
-      // ✅ GET ROLE
       setRole(data.role?.trim().toLowerCase() || "");
-
       setLoading(false);
     });
 
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, "notifications"),
+      where("userId", "==", user.uid)
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const unread = snapshot.docs.filter((doc) => {
+          const data: any = doc.data();
+          return data.read !== true;
+        }).length;
+
+        setUnreadNotifications(unread);
+      },
+      (error) => {
+        console.log("Notification count error:", error);
+        setUnreadNotifications(0);
+      }
+    );
+
+    return () => unsub();
+  }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -76,6 +103,66 @@ export default function Profile() {
     setEditOpen(false);
   };
 
+  const points = profile?.points || 0;
+  const joined = profile?.joined || 0;
+  const completed = profile?.completed || 0;
+  const completionRate = Math.round((completed / (joined || 1)) * 100);
+
+  const getRank = () => {
+    if (points >= 50) return "🏆 Elite Volunteer";
+    if (points >= 20) return "🥇 Top Performer";
+    if (points >= 10) return "🔥 Active";
+    if (points >= 5) return "⭐ Contributor";
+    return "👤 Beginner";
+  };
+
+  const getNextRank = () => {
+    if (points >= 50) {
+      return {
+        label: "Max Rank Reached",
+        current: 50,
+        target: 50,
+        percent: 100,
+      };
+    }
+
+    if (points >= 20) {
+      return {
+        label: "Progress to Elite Volunteer",
+        current: points,
+        target: 50,
+        percent: Math.min((points / 50) * 100, 100),
+      };
+    }
+
+    if (points >= 10) {
+      return {
+        label: "Progress to Top Performer",
+        current: points,
+        target: 20,
+        percent: Math.min((points / 20) * 100, 100),
+      };
+    }
+
+    if (points >= 5) {
+      return {
+        label: "Progress to Active",
+        current: points,
+        target: 10,
+        percent: Math.min((points / 10) * 100, 100),
+      };
+    }
+
+    return {
+      label: "Progress to Contributor",
+      current: points,
+      target: 5,
+      percent: Math.min((points / 5) * 100, 100),
+    };
+  };
+
+  const nextRank = getNextRank();
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -86,8 +173,6 @@ export default function Profile() {
 
   return (
     <ScrollView style={styles.container}>
-      
-      {/* HEADER */}
       <View style={styles.headerTop}>
         <Text style={styles.pageTitle}>My Profile</Text>
         <TouchableOpacity onPress={() => setDrawerOpen(true)}>
@@ -99,7 +184,6 @@ export default function Profile() {
         Manage your account and view your activity
       </Text>
 
-      {/* PERSONAL INFO */}
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>Personal Information</Text>
@@ -125,9 +209,50 @@ export default function Profile() {
         <Info label="Occupation" value={profile?.occupation} />
       </View>
 
-      {/* USER ACTIVITY */}
       <View style={[styles.card, { marginTop: 20 }]}>
         <Text style={styles.cardTitle}>My Activity</Text>
+
+        <View style={styles.statsBox}>
+          <Text style={styles.rankText}>{getRank()}</Text>
+
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>⭐ Points</Text>
+            <Text style={styles.statValue}>{points}</Text>
+          </View>
+
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>📅 Events Joined</Text>
+            <Text style={styles.statValue}>{joined}</Text>
+          </View>
+
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>✅ Completed</Text>
+            <Text style={styles.statValue}>{completed}</Text>
+          </View>
+
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>📊 Completion Rate</Text>
+            <Text style={styles.statValue}>{completionRate}%</Text>
+          </View>
+
+          <View style={styles.progressSection}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>{nextRank.label}</Text>
+              <Text style={styles.progressValue}>
+                {nextRank.current}/{nextRank.target} pts
+              </Text>
+            </View>
+
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${nextRank.percent}%` as any },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
 
         <TouchableOpacity
           style={[styles.editBtn, { marginTop: 15 }]}
@@ -135,9 +260,39 @@ export default function Profile() {
         >
           <Text style={{ fontWeight: "600" }}>My Donation History</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.editBtn, styles.notificationBtn, { marginTop: 10 }]}
+          onPress={() => router.push("/(tabs)/notifications" as any)}
+        >
+          <Text style={{ fontWeight: "600" }}>My Notifications</Text>
+
+          {unreadNotifications > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadNotifications}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* ADMIN SECTION */}
+      <View style={[styles.card, { marginTop: 20 }]}>
+        <Text style={styles.cardTitle}>🏆 Achievements</Text>
+
+        {profile?.achievements?.length ? (
+          profile.achievements.map((achievement: string, index: number) => (
+            <View key={index} style={styles.achievementItem}>
+              <Text style={styles.achievementText}>{achievement}</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={{ marginTop: 6, color: "#64748b" }}>
+            No achievements unlocked yet.
+          </Text>
+        )}
+      </View>
+
       {(role === "admin" || role === "superadmin") && (
         <View style={[styles.card, { marginTop: 20 }]}>
           <Text style={styles.cardTitle}>Administration</Text>
@@ -166,10 +321,18 @@ export default function Profile() {
           >
             <Text style={{ fontWeight: "600" }}>Analytics</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.editBtn, { marginTop: 10 }]}
+            onPress={() => router.push("/(tabs)/admin-analytics" as any)}
+          >
+            <Text style={{ fontWeight: "600" }}>
+              Admin Analytics Dashboard
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* ✅ VERIFY RECEIPT BUTTON - Added above Logout */}
       <TouchableOpacity
         style={{
           backgroundColor: "#111827",
@@ -180,10 +343,11 @@ export default function Profile() {
         }}
         onPress={() => router.push("/(tabs)/verify-receipt" as any)}
       >
-        <Text style={{ color: "#fff", fontWeight: "800" }}>Verify Receipt</Text>
+        <Text style={{ color: "#fff", fontWeight: "800" }}>
+          Verify Receipt
+        </Text>
       </TouchableOpacity>
 
-      {/* LOGOUT */}
       <TouchableOpacity
         style={styles.logout}
         onPress={async () => {
@@ -194,7 +358,6 @@ export default function Profile() {
         <Text style={{ color: "#fff", fontWeight: "700" }}>Logout</Text>
       </TouchableOpacity>
 
-      {/* EDIT MODAL */}
       <Modal visible={editOpen} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
@@ -210,13 +373,14 @@ export default function Profile() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setEditOpen(false)}>
-              <Text style={{ textAlign: "center", marginTop: 10 }}>Cancel</Text>
+              <Text style={{ textAlign: "center", marginTop: 10 }}>
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* SIDE DRAWER */}
       <SideDrawer
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -226,8 +390,6 @@ export default function Profile() {
     </ScrollView>
   );
 }
-
-/* Components */
 
 const Info = ({ label, value }: any) => (
   <View style={{ marginTop: 12 }}>
@@ -253,8 +415,6 @@ const Input = ({ value, onChange, placeholder }: any) => (
   />
 );
 
-/* Styles */
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f4f7fb", padding: 20 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -266,7 +426,7 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 26, fontWeight: "700" },
   subtitle: { color: "#64748b", marginBottom: 20 },
   card: { backgroundColor: "#fff", padding: 20, borderRadius: 16 },
-  cardTitle: { fontSize: 16, fontWeight: "600" },
+  cardTitle: { fontSize: 16, fontWeight: "700" },
   headerRow: { flexDirection: "row", justifyContent: "space-between" },
   editBtn: {
     paddingHorizontal: 12,
@@ -275,6 +435,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
+
+  notificationBtn: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  notificationBadge: {
+    backgroundColor: "#dc2626",
+    minWidth: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+
+  notificationBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
   avatar: {
     width: 90,
     height: 90,
@@ -287,6 +470,77 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: "#fff", fontSize: 32, fontWeight: "bold" },
   name: { textAlign: "center", fontSize: 18, fontWeight: "700", marginTop: 10 },
+
+  statsBox: {
+    marginTop: 12,
+    backgroundColor: "#f8fafc",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  rankText: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0f172a",
+    marginBottom: 12,
+  },
+  statRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 5,
+  },
+  statLabel: {
+    color: "#475569",
+    fontWeight: "600",
+  },
+  statValue: {
+    color: "#0f172a",
+    fontWeight: "900",
+  },
+  progressSection: {
+    marginTop: 14,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: "700",
+  },
+  progressValue: {
+    fontSize: 12,
+    color: "#0f172a",
+    fontWeight: "800",
+  },
+  progressTrack: {
+    height: 12,
+    backgroundColor: "#e5e7eb",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#4f46e5",
+    borderRadius: 999,
+  },
+
+  achievementItem: {
+    marginTop: 8,
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  achievementText: {
+    color: "#0f172a",
+    fontWeight: "700",
+  },
+
   logout: {
     backgroundColor: "#ef4444",
     padding: 14,

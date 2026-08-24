@@ -1,20 +1,20 @@
 import {
-    collection,
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    updateDoc
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc
 } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { auth, db } from "../../lib/firebase";
 
@@ -55,14 +55,14 @@ export default function VolunteerApproval() {
       const admin = auth.currentUser;
       if (!admin) return;
 
-      // Update application
+      
       await updateDoc(doc(db, "volunteerApplications", uid), {
         status: "approved",
         reviewedAt: serverTimestamp(),
         reviewedBy: admin.uid,
       });
 
-      // Update user role
+      
       await updateDoc(doc(db, "users", uid), {
         role: "volunteer",
       });
@@ -146,7 +146,7 @@ export default function VolunteerApproval() {
           ))}
       </ScrollView>
 
-      {/* Reject Modal */}
+      
       <Modal visible={rejectOpen} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>

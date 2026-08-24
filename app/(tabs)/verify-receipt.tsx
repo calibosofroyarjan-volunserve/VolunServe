@@ -1,24 +1,24 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    limit,
-    query,
-    where,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  where,
 } from "firebase/firestore";
 import React, { useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { db } from "../../lib/firebase";
 
@@ -43,7 +43,7 @@ export default function VerifyReceipt() {
   const [refNumber, setRefNumber] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [result, setResult] = useState<any | null>(null); // donation data
+  const [result, setResult] = useState<any | null>(null); 
   const [status, setStatus] = useState<"idle" | "valid" | "invalid">("idle");
 
   const verify = async () => {
@@ -59,7 +59,7 @@ export default function VerifyReceipt() {
     setStatus("idle");
 
     try {
-      // ✅ Primary: if you used refNumber as doc ID (your current donation.tsx does this)
+      
       const byId = await getDoc(doc(db, "donations", ref));
       if (byId.exists()) {
         const data = byId.data();
@@ -68,7 +68,7 @@ export default function VerifyReceipt() {
         return;
       }
 
-      // ✅ Fallback: if older donations were saved with random doc IDs
+      
       const q = query(
         collection(db, "donations"),
         where("refNumber", "==", ref),
@@ -127,7 +127,7 @@ export default function VerifyReceipt() {
         </TouchableOpacity>
       </View>
 
-      {/* RESULT */}
+      
       {status === "valid" && result && (
         <View style={[styles.resultCard, styles.validCard]}>
           <Text style={styles.resultTitle}>✅ Valid Receipt</Text>

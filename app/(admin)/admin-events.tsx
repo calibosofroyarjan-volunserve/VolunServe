@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+
   ScrollView,
   StyleSheet,
   Text,
@@ -32,20 +33,20 @@ interface VolunteerEvent {
   title: string;
   type: EventType;
   location: string;
-  date: string; // keep string for now (your volunteer screen expects string)
+  date: string; 
   capacity: number;
   status: EventStatus;
   createdAt?: any;
   updatedAt?: any;
 
-  // OPTIONAL if created from AdminCases auto-linking
+  
   caseId?: string;
 }
 
 type Role = "user" | "volunteer" | "admin" | "superadmin" | string;
 
 type Participant = {
-  id: string; // doc id (usually uid)
+  id: string; 
   uid: string;
   fullName?: string;
   barangay?: string;
@@ -75,19 +76,19 @@ export default function AdminEvents() {
   const [filterType, setFilterType] = useState<"" | EventType>("");
   const [filterStatus, setFilterStatus] = useState<"" | EventStatus>("");
 
-  // Create/Edit modal
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
 
-  // ✅ Attendance modal
+  
   const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<VolunteerEvent | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
 
-  // 1) Guard: only admin/superadmin can open
+  
   useEffect(() => {
     const check = async () => {
       try {
@@ -109,7 +110,7 @@ export default function AdminEvents() {
     check();
   }, []);
 
-  // 2) Realtime events list
+  
   useEffect(() => {
     if (!allowed) {
       setLoading(false);
@@ -266,9 +267,7 @@ export default function AdminEvents() {
     }
   };
 
-  // =========================
-  // ✅ ATTENDANCE (ADMIN SIDE)
-  // =========================
+  
   const openAttendance = (ev: VolunteerEvent) => {
     setSelectedEvent(ev);
     setAttendanceOpen(true);
@@ -280,7 +279,7 @@ export default function AdminEvents() {
     setParticipants([]);
   };
 
-  // realtime participants for selected event
+  
   useEffect(() => {
     if (!attendanceOpen || !selectedEvent?.id) return;
 
@@ -310,7 +309,7 @@ export default function AdminEvents() {
         setParticipants(list);
         setParticipantsLoading(false);
 
-        // OPTIONAL: keep a participantsCount field updated (safe + helpful)
+        
         try {
           await updateDoc(doc(db, "volunteerEvents", selectedEvent.id), {
             participantsCount: list.length,
@@ -366,13 +365,13 @@ export default function AdminEvents() {
           style: "default",
           onPress: async () => {
             try {
-              // 1) complete event
+              
               await updateDoc(doc(db, "volunteerEvents", selectedEvent.id), {
                 status: "completed",
                 updatedAt: serverTimestamp(),
               });
 
-              // 2) auto-resolve linked disaster case (if the event has caseId)
+              
               if (selectedEvent.caseId) {
                 await updateDoc(doc(db, "disasterCases", selectedEvent.caseId), {
                   status: "resolved",
@@ -428,7 +427,7 @@ export default function AdminEvents() {
     );
   };
 
-  // =========================
+  
 
   if (checkingRole) {
     return (
@@ -512,7 +511,7 @@ export default function AdminEvents() {
                   </View>
 
                   <View style={styles.actionsCol}>
-                    {/* ✅ NEW: Attendance */}
+                    
                     <TouchableOpacity
                       style={[styles.smallBtn, { backgroundColor: "#111827", borderColor: "#111827" }]}
                       onPress={() => openAttendance(ev)}
@@ -569,7 +568,7 @@ export default function AdminEvents() {
         </ScrollView>
       )}
 
-      {/* Create/Edit Modal */}
+      
       <Modal visible={modalOpen} transparent animationType="fade" onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -632,7 +631,7 @@ export default function AdminEvents() {
         </View>
       </Modal>
 
-      {/* ✅ Attendance Modal */}
+      
       <Modal visible={attendanceOpen} transparent animationType="fade" onRequestClose={closeAttendance}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { maxHeight: "85%" }]}>
@@ -910,7 +909,7 @@ const styles = StyleSheet.create({
 
   modalBtns: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 10 },
 
-  // ✅ Attendance styles
+  
   participantCard: {
     backgroundColor: "#f8fafc",
     borderWidth: 1,

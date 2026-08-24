@@ -1,20 +1,20 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import React, { useState } from "react";
 import {
-    Button,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  Button,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import { db } from "../../lib/firebase";
 
 export default function CreateAnnouncement() {
 
-  // 🔥 TEMP ROLE (SAFE — NO CRASH)
+  
   const role: any = "superadmin";
 
-  // 🔒 PROTECTION
+  
   if (role !== "admin" && role !== "superadmin") {
     return (
       <View style={styles.container}>

@@ -25,7 +25,7 @@ export default function Resident() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profile, setProfile] = useState<any>(null);
 
-  // case fields
+  
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [severity, setSeverity] = useState<Severity>("medium");
@@ -42,12 +42,12 @@ export default function Resident() {
         const p = await getUserProfile(user.uid);
         setProfile(p);
 
-        // auto-fill best guesses
+        
         const brgy = p?.barangay || "";
         const addr = p?.address || "";
         if (!location) setLocation(brgy ? `Brgy. ${brgy}` : addr);
 
-        // optional: if your profile has phone stored as "phone", this will fill it.
+        
         if (!contactNumber) setContactNumber(p?.phoneNumber || "");
       } finally {
         setLoadingProfile(false);
@@ -55,7 +55,7 @@ export default function Resident() {
     };
 
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, []);
 
   const validate = () => {
@@ -83,14 +83,14 @@ export default function Resident() {
       setSubmitting(true);
 
       const payload = {
-        // reporter
+        
         reporterUid: user.uid,
         reporterName: profile?.fullName || "Resident",
         reporterEmail: profile?.email || "",
         reporterBarangay: profile?.barangay || "",
         contactNumber: contactNumber.trim(),
 
-        // case info
+      
         title: title.trim(),
         category: category.trim(),
         severity,
@@ -98,7 +98,6 @@ export default function Resident() {
         location: location.trim(),
         details: details.trim(),
 
-        // admin/workflow fields
         requiredVolunteers: 0,
         assignedVolunteersCount: 0,
         adminNote: "",
@@ -115,12 +114,11 @@ export default function Resident() {
 
       Alert.alert("Submitted", "Your disaster case has been submitted for validation.");
 
-      // reset
       setTitle("");
       setCategory("");
       setSeverity("medium");
       setDetails("");
-      // keep location + contact for convenience
+     
     } catch (e) {
       console.log(e);
       Alert.alert("Error", "Failed to submit case. Please try again.");

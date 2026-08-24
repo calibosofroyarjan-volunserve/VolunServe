@@ -31,7 +31,7 @@ export default function Dashboard() {
   const slideAnim = useRef(new Animated.Value(40)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Animated color for "VolunServe SJDM"
+  
   const colorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function Dashboard() {
       }),
     ]).start();
 
-    // Loop color animation
+    
     Animated.loop(
       Animated.timing(colorAnim, {
         toValue: 1,
@@ -95,7 +95,7 @@ export default function Dashboard() {
     <>
       <View style={styles.root}>
 
-        {/* Background Blobs */}
+        
         <Animated.View
           style={[styles.blob1, { transform: [{ translateY: blobTranslate }] }]}
         />
@@ -103,7 +103,7 @@ export default function Dashboard() {
           style={[styles.blob2, { transform: [{ translateY: blobTranslate }] }]}
         />
 
-        {/* HEADER */}
+        
         <View style={styles.whiteHeader}>
           <View style={styles.brandRow}>
             <View style={styles.logoWrap}>
@@ -211,12 +211,13 @@ export default function Dashboard() {
         onClose={() => setDrawerOpen(false)}
         name={profile?.fullName || "User"}
         email={profile?.email || ""}
+        role={profile?.role || "admin"}
       />
     </>
   );
 }
 
-/* Luxury Glass Module */
+
 function ModuleCard({ icon, title, desc, onPress, colors }: any) {
   const scale = useRef(new Animated.Value(1)).current;
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#ffffff", // stays white
+    color: "#ffffff", 
   },
 
   brandSub: { fontSize: 12, color: "#e5e7eb" },
