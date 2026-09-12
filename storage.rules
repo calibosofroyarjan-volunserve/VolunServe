@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function approved() {
+      return signedIn()
+        && (profile().status == 'approved'
+          || (!('status' in profile()) && profile().role != 'applicant'));
+    }
+
+    function isAdmin() {
+      return approved() && profile().role in ['admin', 'superadmin'];
+    }
+
+    function isVolunteer() {
+      return approved() && profile().role == 'volunteer';
+    }
+
+    match /disasterCases/{caseId}/{fileName} {
+      allow write: if approved()
+        && fileName.matches(request.auth.uid + '-.*')
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('(image|video)/.*');
+
+      allow read: if approved()
+        && (isAdmin()
+          || isVolunteer()
+          || fileName.matches(request.auth.uid + '-.*'));
+    }
+
+    match /announcements/{announcementId}/{fileName} {
+      allow read: if true;
+
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

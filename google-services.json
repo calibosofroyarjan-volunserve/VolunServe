@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "233201250762",
+    "project_id": "volunserve-3aa5b",
+    "storage_bucket": "volunserve-3aa5b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233201250762:android:f7c025556520622e68df33",
+        "android_client_info": {
+          "package_name": "com.froyarjan123.volunserve"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARgcly-6eJ7XZjHjFwEFRWl2pijCLExLE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

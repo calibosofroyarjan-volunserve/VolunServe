@@ -283,7 +283,7 @@ export default function DonationList() {
         {/* ✅ Global Logs Button */}
         <TouchableOpacity
           style={styles.globalLogsBtn}
-          onPress={() => router.push("/(tabs)/admin-logs")}
+          onPress={() => router.push("/(admin)/admin-logs" as any)}
         >
           <Text style={{ color: "#fff", fontWeight: "800" }}>Admin Logs</Text>
         </TouchableOpacity>

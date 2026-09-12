@@ -324,7 +324,7 @@ export default function Profile() {
 
           <TouchableOpacity
             style={[styles.editBtn, { marginTop: 10 }]}
-            onPress={() => router.push("/(tabs)/admin-analytics" as any)}
+            onPress={() => router.push("/(admin)/admin-analytics" as any)}
           >
             <Text style={{ fontWeight: "600" }}>
               Admin Analytics Dashboard

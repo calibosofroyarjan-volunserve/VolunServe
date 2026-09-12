@@ -2,18 +2,981 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
+    function profile() {
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data;
+    }
+
+    function approved() {
+      return signedIn()
+        && (
+          profile().status == 'approved'
+          || (
+            !('status' in profile())
+            && profile().role != 'applicant'
+          )
+        );
+    }
+
+    function isAdmin() {
+      return approved()
+        && profile().role in [
+          'admin',
+          'superadmin'
+        ];
+    }
+
+    function isSuperAdmin() {
+      return approved()
+        && profile().role == 'superadmin';
+    }
+
+    function isVolunteer() {
+      return approved()
+        && profile().role == 'volunteer';
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'applicant'
+        && request.resource.data.status == 'pending_review'
+        && request.resource.data.requestedRole in [
+          'resident',
+          'volunteer'
+        ]
+        && request.resource.data.province in [
+          'Bulacan',
+          'BULACAN',
+          'Province of Bulacan'
+        ]
+        && request.resource.data.city in [
+          'City of San Jose del Monte',
+          'CITY OF SAN JOSE DEL MONTE',
+          'City of San Jose Del Monte',
+          'San Jose del Monte',
+          'San Jose Del Monte',
+          'SAN JOSE DEL MONTE'
+        ];
+
+      allow create: if isSuperAdmin()
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'admin'
+        && request.resource.data.status == 'approved'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.reviewedBy == request.auth.uid;
+
+      allow get: if signedIn()
+        && (
+          request.auth.uid == uid
+          || isAdmin()
+        );
+
+      allow list: if isAdmin();
+
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'fullName',
+            'lastName',
+            'firstName',
+            'middleName',
+            'age',
+            'phoneNumber',
+            'region',
+            'province',
+            'city',
+            'barangay',
+            'address',
+            'occupationCategory',
+            'occupationSpecialization',
+            'occupationOther',
+            'occupation',
+            'skills',
+            'skillOther',
+            'availability',
+            'profilePictureUrl'
+          ])
+        && request.resource.data.province in [
+          'Bulacan',
+          'BULACAN',
+          'Province of Bulacan'
+        ]
+        && request.resource.data.city in [
+          'City of San Jose del Monte',
+          'CITY OF SAN JOSE DEL MONTE',
+          'City of San Jose Del Monte',
+          'San Jose del Monte',
+          'San Jose Del Monte',
+          'SAN JOSE DEL MONTE'
+        ];
+
+      allow update: if isSuperAdmin();
+
+      allow update: if isAdmin()
+        && resource.data.role != 'superadmin'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'role',
+            'requestedRole',
+            'status',
+            'reviewedAt',
+            'reviewedBy',
+            'rejectedReason'
+          ])
+        && request.resource.data.role in [
+          'applicant',
+          'resident',
+          'volunteer'
+        ]
+        && request.resource.data.status in [
+          'pending_review',
+          'approved',
+          'rejected',
+          'suspended'
+        ];
+
+      allow delete: if isSuperAdmin()
+        && request.auth.uid != uid;
+    }
+
+    match /address_regions/{document=**} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /systemSettings/{settingId} {
+      allow read: if settingId == 'public';
+
+      allow create, update: if isSuperAdmin()
+        && settingId == 'public'
+        && request.resource.data.keys().hasOnly([
+          'cityName',
+          'emergencyHotline',
+          'supportEmail',
+          'publicServiceNotice',
+          'liveLocationRetentionHours',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && request.resource.data.cityName is string
+        && request.resource.data.cityName.size() >= 3
+        && request.resource.data.cityName.size() <= 120
+        && request.resource.data.emergencyHotline is string
+        && request.resource.data.emergencyHotline.size() >= 3
+        && request.resource.data.emergencyHotline.size() <= 160
+        && request.resource.data.supportEmail is string
+        && request.resource.data.supportEmail.size() <= 160
+        && request.resource.data.publicServiceNotice is string
+        && request.resource.data.publicServiceNotice.size() >= 10
+        && request.resource.data.publicServiceNotice.size() <= 500
+        && request.resource.data.liveLocationRetentionHours is int
+        && request.resource.data.liveLocationRetentionHours >= 1
+        && request.resource.data.liveLocationRetentionHours <= 720
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAdmin()
+        || (
+          resource.data.publishAt is timestamp
+          && resource.data.publishAt <= request.time
+        );
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'message',
+          'linkUrl',
+          'imageUrl',
+          'audience',
+          'priority',
+          'publishAt',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.linkUrl is string
+        && request.resource.data.imageUrl is string
+        && request.resource.data.audience in [
+          'all',
+          'resident',
+          'volunteer'
+        ]
+        && request.resource.data.priority in [
+          'normal',
+          'urgent'
+        ]
+        && request.resource.data.publishAt is timestamp
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /volunteerApplications/{uid} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending';
+
+      allow read: if signedIn()
+        && (
+          request.auth.uid == uid
+          || isAdmin()
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /assistanceRequests/{requestId} {
+      function validAssistanceStatusTransition() {
+        return request.resource.data.status
+            == resource.data.status
+          || (
+            resource.data.status == 'submitted'
+            && request.resource.data.status in [
+              'reviewed',
+              'rejected'
+            ]
+          )
+          || (
+            resource.data.status == 'reviewed'
+            && request.resource.data.status in [
+              'approved',
+              'rejected'
+            ]
+          )
+          || (
+            resource.data.status == 'approved'
+            && request.resource.data.status in [
+              'assigned',
+              'delivered'
+            ]
+          )
+          || (
+            resource.data.status == 'assigned'
+            && request.resource.data.status in [
+              'in_progress',
+              'delivered'
+            ]
+          )
+          || (
+            resource.data.status == 'in_progress'
+            && request.resource.data.status == 'delivered'
+          )
+          || (
+            resource.data.status == 'delivered'
+            && request.resource.data.status == 'closed'
+          );
+      }
+
+      allow create: if approved()
+        && request.resource.data.keys().hasOnly([
+          'requestId',
+          'requesterUid',
+          'requesterName',
+          'requesterEmail',
+          'requesterBarangay',
+          'contactNumber',
+          'beneficiaryType',
+          'assistanceType',
+          'urgency',
+          'description',
+          'location',
+          'latitude',
+          'longitude',
+          'gpsAccuracyMeters',
+          'locationCapturedAt',
+          'status',
+          'linkedCaseId',
+          'assignedVolunteerId',
+          'assignedVolunteerName',
+          'adminNote',
+          'reviewedAt',
+          'assignedAt',
+          'deliveredAt',
+          'closedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.requestId == requestId
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterName is string
+        && request.resource.data.requesterName.size() >= 1
+        && request.resource.data.requesterName.size() <= 120
+        && request.resource.data.requesterEmail is string
+        && request.resource.data.requesterEmail.size() <= 160
+        && request.resource.data.requesterBarangay is string
+        && request.resource.data.requesterBarangay.size() <= 120
+        && request.resource.data.contactNumber is string
+        && request.resource.data.contactNumber.size() >= 8
+        && request.resource.data.contactNumber.size() <= 30
+        && request.resource.data.beneficiaryType in [
+          'self',
+          'someone_else'
+        ]
+        && request.resource.data.assistanceType in [
+          'food',
+          'water',
+          'medical',
+          'shelter',
+          'evacuation',
+          'transportation',
+          'other'
+        ]
+        && request.resource.data.urgency in [
+          'normal',
+          'urgent',
+          'critical'
+        ]
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 10
+        && request.resource.data.description.size() <= 600
+        && request.resource.data.location is string
+        && request.resource.data.location.size() >= 3
+        && request.resource.data.location.size() <= 180
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.gpsAccuracyMeters is number
+        && request.resource.data.gpsAccuracyMeters >= 0
+        && request.resource.data.gpsAccuracyMeters <= 10000
+        && request.resource.data.locationCapturedAt is timestamp
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.linkedCaseId == ''
+        && request.resource.data.assignedVolunteerId == ''
+        && request.resource.data.assignedVolunteerName == ''
+        && request.resource.data.adminNote == ''
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.assignedAt == null
+        && request.resource.data.deliveredAt == null
+        && request.resource.data.closedAt == null
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && resource.data.requesterUid == request.auth.uid
+        )
+        || (
+          isVolunteer()
+          && resource.data.assignedVolunteerId == request.auth.uid
+        );
+
+      allow update: if isAdmin()
+        && request.resource.data.requestId
+          == resource.data.requestId
+        && request.resource.data.requesterUid
+          == resource.data.requesterUid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'linkedCaseId',
+            'assignedVolunteerId',
+            'assignedVolunteerName',
+            'adminNote',
+            'reviewedAt',
+            'assignedAt',
+            'deliveredAt',
+            'closedAt',
+            'updatedAt'
+          ])
+        && validAssistanceStatusTransition();
+
+      allow update: if isVolunteer()
+        && resource.data.assignedVolunteerId == request.auth.uid
+        && request.resource.data.requestId
+          == resource.data.requestId
+        && request.resource.data.requesterUid
+          == resource.data.requesterUid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'deliveredAt',
+            'updatedAt'
+          ])
+        && (
+          (
+            resource.data.status == 'assigned'
+            && request.resource.data.status == 'in_progress'
+          )
+          || (
+            resource.data.status == 'in_progress'
+            && request.resource.data.status == 'delivered'
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /disasterCases/{caseId} {
+      function validStatusTransition() {
+        return request.resource.data.status
+            == resource.data.status
+          || (
+            resource.data.status == 'reported'
+            && request.resource.data.status == 'validated'
+          )
+          || (
+            resource.data.status == 'validated'
+            && request.resource.data.status == 'assigned'
+          )
+          || (
+            resource.data.status == 'assigned'
+            && request.resource.data.status == 'in_progress'
+          )
+          || (
+            resource.data.status == 'in_progress'
+            && request.resource.data.status == 'resolved'
+          )
+          || (
+            resource.data.status == 'resolved'
+            && request.resource.data.status == 'closed'
+          );
+      }
+
+      allow create: if approved()
+        && request.resource.data.keys().hasOnly([
+          'reporterUid',
+          'reporterName',
+          'reporterEmail',
+          'reporterBarangay',
+          'contactNumber',
+          'source',
+          'title',
+          'category',
+          'severity',
+          'status',
+          'location',
+          'latitude',
+          'longitude',
+          'gpsAccuracyMeters',
+          'locationCapturedAt',
+          'details',
+          'needs',
+          'attachments',
+          'requiredVolunteers',
+          'assignedVolunteersCount',
+          'adminNote',
+          'validatedAt',
+          'assignedAt',
+          'resolvedAt',
+          'closedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.source == 'resident_disaster_report'
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.category is string
+        && request.resource.data.category.size() >= 2
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.severity in [
+          'low',
+          'medium',
+          'high',
+          'critical'
+        ]
+        && request.resource.data.location is string
+        && request.resource.data.location.size() >= 3
+        && request.resource.data.details is string
+        && request.resource.data.details.size() >= 10
+        && request.resource.data.needs is string
+        && request.resource.data.needs.size() >= 2
+        && request.resource.data.attachments is list
+        && request.resource.data.attachments.size() <= 5
+        && request.resource.data.requiredVolunteers == 0
+        && request.resource.data.assignedVolunteersCount == 0
+        && request.resource.data.adminNote == ''
+        && request.resource.data.status == 'reported'
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180;
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && resource.data.reporterUid == request.auth.uid
+        )
+        || (
+          isVolunteer()
+          && resource.data.status in [
+            'validated',
+            'assigned',
+            'in_progress',
+            'resolved'
+          ]
+        );
+
+      allow update: if isAdmin()
+        && validStatusTransition();
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /publicIncidentSummaries/{caseId} {
+      allow read: if true;
+
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'caseId',
+          'title',
+          'category',
+          'severity',
+          'status',
+          'location',
+          'latitude',
+          'longitude',
+          'requiredVolunteers',
+          'assignedVolunteersCount',
+          'createdAt',
+          'updatedAt',
+          'publishedAt'
+        ])
+        && request.resource.data.caseId == caseId
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.category is string
+        && request.resource.data.category.size() >= 2
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.severity in [
+          'low',
+          'medium',
+          'high',
+          'critical'
+        ]
+        && request.resource.data.status in [
+          'validated',
+          'assigned',
+          'in_progress',
+          'resolved'
+        ]
+        && request.resource.data.location is string
+        && request.resource.data.location.size() >= 3
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.requiredVolunteers is int
+        && request.resource.data.requiredVolunteers >= 0
+        && request.resource.data.assignedVolunteersCount is int
+        && request.resource.data.assignedVolunteersCount >= 0
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.publishedAt is timestamp;
+
+      allow delete: if isAdmin();
+    }
+
+    match /volunteerEvents/{eventId} {
+      allow read: if approved();
+      allow create, update, delete: if isAdmin();
+
+      match /participants/{uid} {
+        allow read: if approved();
+
+        allow create: if isAdmin()
+          || (
+            isVolunteer()
+            && request.auth.uid == uid
+            && request.resource.data.uid == uid
+          );
+
+        allow update: if isAdmin();
+
+        allow update: if isVolunteer()
+          && request.auth.uid == uid
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'checkedInAt',
+              'checkedOutAt',
+              'attendanceStatus',
+              'updatedAt'
+            ]);
+
+        allow delete: if isAdmin()
+          || (
+            isVolunteer()
+            && request.auth.uid == uid
+          );
+      }
+    }
+
+    match /caseInvitations/{invitationId} {
+      allow create, delete: if isAdmin();
+
+      allow read: if isAdmin()
+        || (
+          isVolunteer()
+          && resource.data.volunteerId == request.auth.uid
+        );
+
+      allow update: if isAdmin()
+        || (
+          isVolunteer()
+          && resource.data.volunteerId == request.auth.uid
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'status',
+              'respondedAt'
+            ])
+        );
+    }
+
+    match /donations/{donationId} {
+      function validDonationVerification() {
+        return resource.data.status == 'pending'
+          && request.resource.data.status == 'received'
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'status',
+              'verificationCode',
+              'verifiedBy',
+              'verifiedAt',
+              'updatedAt'
+            ])
+          && request.resource.data.verificationCode is string
+          && request.resource.data.verificationCode.size() >= 12
+          && request.resource.data.verificationCode.size() <= 26
+          && request.resource.data.verifiedBy == request.auth.uid
+          && request.resource.data.verifiedAt is timestamp
+          && request.resource.data.updatedAt is timestamp;
+      }
+
+      function validDonationRejection() {
+        return resource.data.status == 'pending'
+          && request.resource.data.status == 'rejected'
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'status',
+              'rejectedBy',
+              'rejectedAt',
+              'rejectionReason',
+              'updatedAt'
+            ])
+          && request.resource.data.rejectedBy == request.auth.uid
+          && request.resource.data.rejectedAt is timestamp
+          && request.resource.data.rejectionReason is string
+          && request.resource.data.rejectionReason.size() >= 10
+          && request.resource.data.rejectionReason.size() <= 500
+          && request.resource.data.updatedAt is timestamp;
+      }
+
+      function validDonationDistribution() {
+        return resource.data.status == 'received'
+          && request.resource.data.status == 'distributed'
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'status',
+              'beneficiary',
+              'familiesHelped',
+              'distributionNote',
+              'distributedBy',
+              'distributedAt',
+              'updatedAt'
+            ])
+          && request.resource.data.beneficiary is string
+          && request.resource.data.beneficiary.size() >= 3
+          && request.resource.data.beneficiary.size() <= 200
+          && request.resource.data.familiesHelped is int
+          && request.resource.data.familiesHelped > 0
+          && request.resource.data.distributionNote is string
+          && request.resource.data.distributionNote.size() <= 1000
+          && request.resource.data.distributedBy == request.auth.uid
+          && request.resource.data.distributedAt is timestamp
+          && request.resource.data.updatedAt is timestamp;
+      }
+
+      allow create: if false;
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && resource.data.donorUid == request.auth.uid
+        );
+
+      allow update: if isAdmin()
+        && (
+          validDonationVerification()
+          || validDonationRejection()
+          || validDonationDistribution()
+        );
+
+      allow delete: if false;
+
+      match /logs/{logId} {
+        allow read, create: if isAdmin();
+        allow update, delete: if false;
+      }
+    }
+
+    match /publicDonationVerifications/{donationId} {
+      allow read: if true;
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'verificationCode',
+          'officialReference',
+          'receivingOffice',
+          'donationType',
+          'amount',
+          'itemsDescription',
+          'status',
+          'verifiedAt',
+          'distributedAt'
+        ])
+        && request.resource.data.verificationCode is string
+        && request.resource.data.officialReference is string
+        && request.resource.data.receivingOffice is string
+        && request.resource.data.donationType in [
+          'monetary',
+          'in_kind'
+        ]
+        && request.resource.data.amount is number
+        && request.resource.data.itemsDescription is string
+        && request.resource.data.status in [
+          'received',
+          'distributed'
+        ]
+        && request.resource.data.verifiedAt is timestamp
+        && (
+          request.resource.data.status == 'received'
+          || (
+            request.resource.data.keys().hasAll([
+              'distributedAt'
+            ])
+            && request.resource.data.distributedAt is timestamp
+          )
+        );
+
+      allow update: if isAdmin()
+        && resource.data.status == 'received'
+        && request.resource.data.status == 'distributed'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'distributedAt'
+          ])
+        && request.resource.data.distributedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /publicDonationDistributions/{donationId} {
+      allow read: if true;
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'donationType',
+          'amount',
+          'itemsDescription',
+          'barangay',
+          'beneficiary',
+          'familiesHelped',
+          'distributedAt'
+        ])
+        && request.resource.data.donationType in [
+          'monetary',
+          'in_kind'
+        ]
+        && request.resource.data.amount is number
+        && request.resource.data.itemsDescription is string
+        && request.resource.data.barangay is string
+        && request.resource.data.beneficiary is string
+        && request.resource.data.familiesHelped is int
+        && request.resource.data.familiesHelped > 0
+        && request.resource.data.distributedAt is timestamp;
+
+      allow update, delete: if false;
+    }
+
+    match /certificates/{certificateId} {
+      allow read: if isAdmin()
+        || (
+          approved()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create, delete: if false;
+
+      allow update: if isAdmin()
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'verificationStatus',
+            'revocationReason',
+            'revokedAt',
+            'revokedBy',
+            'revokedByName',
+            'updatedAt'
+          ])
+        && (
+          !('verificationStatus' in resource.data)
+          || resource.data.verificationStatus == 'issued'
+        )
+        && request.resource.data.verificationStatus == 'revoked'
+        && request.resource.data.revocationReason is string
+        && request.resource.data.revocationReason.size() >= 10
+        && request.resource.data.revocationReason.size() <= 500
+        && request.resource.data.revokedBy == request.auth.uid
+        && request.resource.data.revokedAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /volunteerStats/{uid} {
+      allow read: if approved();
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if isAdmin();
+
+      allow read, update: if approved()
+        && (
+          resource.data.userId == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid
+        );
+
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /tickets/{ticketId} {
+      allow create: if approved()
+        && request.resource.data.keys().hasOnly([
+          'submitterId',
+          'submitterName',
+          'submitterEmail',
+          'submitterRole',
+          'category',
+          'subject',
+          'description',
+          'status',
+          'priority',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.submitterId == request.auth.uid
+        && request.resource.data.submitterRole == profile().role
+        && request.resource.data.category in [
+          'system',
+          'task',
+          'donation',
+          'emergency',
+          'other'
+        ]
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() >= 5
+        && request.resource.data.subject.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 10
+        && request.resource.data.description.size() <= 1500
+        && request.resource.data.status == 'open'
+        && request.resource.data.priority == 'normal';
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && resource.data.submitterId == request.auth.uid
+        );
+
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /evacuation_centers/{centerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users_live_locations/{uid} {
+      allow read: if isAdmin()
+        || (
+          isVolunteer()
+          && request.auth.uid == uid
+        );
+
+      allow create, update, delete: if approved()
+        && request.auth.uid == uid;
+    }
+
+    match /volunteers_live_locations/{uid} {
+      allow read: if isAdmin()
+        || isVolunteer();
+
+      allow create, update, delete: if isVolunteer()
+        && request.auth.uid == uid;
+    }
+
+    match /adminLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /adminActivityLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /aiMapBriefings/{briefingId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /aiMapRateLimits/{uid} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 3, 10);
+      allow read, write: if false;
     }
   }
 }

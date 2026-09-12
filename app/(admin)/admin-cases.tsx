@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -9,6 +10,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -51,10 +53,13 @@ interface DisasterCase {
   status: CaseStatus;
 
   location: string;
+  latitude?: number;
+  longitude?: number;
   details: string;
 
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
+  assignedVolunteerIds?: string[];
 
   adminNote?: string;
 
@@ -176,10 +181,15 @@ export default function AdminCases() {
             status: (data.status || "reported") as CaseStatus,
 
             location: data.location || "",
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
             details: data.details || "",
 
             requiredVolunteers: Number(data.requiredVolunteers || 0),
             assignedVolunteersCount: Number(data.assignedVolunteersCount || 0),
+            assignedVolunteerIds: Array.isArray(data.assignedVolunteerIds)
+              ? data.assignedVolunteerIds
+              : [],
 
             adminNote: data.adminNote || "",
 
@@ -430,7 +440,7 @@ export default function AdminCases() {
         return;
       }
 
-      await updateDoc(participantRef, {
+      await setDoc(participantRef, {
         uid: volunteer.uid,
         fullName: volunteer.fullName,
         barangay: volunteer.barangay,
@@ -442,6 +452,7 @@ export default function AdminCases() {
       await updateDoc(doc(db, "disasterCases", c.id), {
         assignedVolunteersCount:
           (c.assignedVolunteersCount || 0) + 1,
+        assignedVolunteerIds: arrayUnion(volunteer.uid),
         updatedAt: serverTimestamp(),
       });
 
@@ -685,40 +696,54 @@ export default function AdminCases() {
             {/* STATUS ACTIONS */}
             <Text style={styles.sectionTitle}>Change Status</Text>
             <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#2563eb" }]}
-                onPress={() => setStatus(c, "validated")}
-              >
-                <Text style={styles.btnText}>Validate</Text>
-              </TouchableOpacity>
+              {c.status === "reported" && (
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: "#2563eb" }]}
+                  onPress={() => setStatus(c, "validated")}
+                >
+                  <Text style={styles.btnText}>Validate</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#7c3aed" }]}
-                onPress={() => setStatus(c, "assigned")}
-              >
-                <Text style={styles.btnText}>Assign</Text>
-              </TouchableOpacity>
+              {c.status === "validated" && (
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: "#7c3aed" }]}
+                  onPress={() => setStatus(c, "assigned")}
+                >
+                  <Text style={styles.btnText}>Assign</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#0ea5e9" }]}
-                onPress={() => setStatus(c, "in_progress")}
-              >
-                <Text style={styles.btnText}>In-Progress</Text>
-              </TouchableOpacity>
+              {c.status === "assigned" && (
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: "#0ea5e9" }]}
+                  onPress={() => setStatus(c, "in_progress")}
+                >
+                  <Text style={styles.btnText}>In-Progress</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#16a34a" }]}
-                onPress={() => setStatus(c, "resolved")}
-              >
-                <Text style={styles.btnText}>Resolve</Text>
-              </TouchableOpacity>
+              {c.status === "in_progress" && (
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: "#16a34a" }]}
+                  onPress={() => setStatus(c, "resolved")}
+                >
+                  <Text style={styles.btnText}>Resolve</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#111827" }]}
-                onPress={() => setStatus(c, "closed")}
-              >
-                <Text style={styles.btnText}>Close</Text>
-              </TouchableOpacity>
+              {c.status === "resolved" && (
+                <TouchableOpacity
+                  style={[styles.smallBtn, { backgroundColor: "#111827" }]}
+                  onPress={() => setStatus(c, "closed")}
+                >
+                  <Text style={styles.btnText}>Close</Text>
+                </TouchableOpacity>
+              )}
+
+              {c.status === "closed" && (
+                <Text style={styles.meta}>Case workflow completed.</Text>
+              )}
             </View>
 
             {/* 🧱 STEP 3 — Assign Volunteers UI */}

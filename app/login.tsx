@@ -17,7 +17,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { loginUser } from "../lib/firebaseAuth";
+
+import {
+  homeRouteForProfile,
+  loginUser,
+} from "../lib/firebaseAuth";
 
 const { width, height } = Dimensions.get("window");
 
@@ -62,7 +66,7 @@ export default function Login() {
   }, [heroIndex]);
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(zoomAnim, {
           toValue: 1.08,
@@ -75,12 +79,19 @@ export default function Login() {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
   }, [zoomAnim]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const next = (heroIndexRef.current + 1) % SLIDES.length;
+      const next =
+        (heroIndexRef.current + 1) % SLIDES.length;
 
       heroScrollRef.current?.scrollTo({
         x: next * width,
@@ -99,17 +110,39 @@ export default function Login() {
       x: index * width,
       animated: true,
     });
+
     setHeroIndex(index);
     heroIndexRef.current = index;
   };
 
   const handleLogin = async () => {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
+      alert(
+        "Please enter your email address and password."
+      );
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
     try {
       setLoading(true);
-      await loginUser(email.trim(), password);
-      router.replace("/(tabs)");
+
+      const { profile } = await loginUser(
+        cleanEmail,
+        password
+      );
+
+      const destination =
+        homeRouteForProfile(profile);
+
+      router.replace(destination as any);
     } catch (error: any) {
-      alert(error.message || "Login failed.");
+      alert(error?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -118,28 +151,31 @@ export default function Login() {
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={
+        Platform.OS === "ios" ? "padding" : "height"
+      }
     >
-      {/* HEADER */}
       <View style={styles.header}>
         <Image
           source={require("../assets/images/logo.png")}
           style={styles.headerLogo}
         />
-        <Text style={styles.headerTitle}>VolunServe</Text>
+
+        <Text style={styles.headerTitle}>
+          VolunServe
+        </Text>
       </View>
 
       <View style={styles.headerAccent} />
 
-      {/* TWO-PAGE HORIZONTAL SWIPE */}
       <ScrollView
         ref={mainScrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         bounces={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* PAGE 1: CAROUSEL */}
         <View style={styles.carouselPage}>
           <Animated.ScrollView
             ref={heroScrollRef}
@@ -149,13 +185,25 @@ export default function Login() {
             bounces={false}
             scrollEventThrottle={16}
             onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: false }
+              [
+                {
+                  nativeEvent: {
+                    contentOffset: {
+                      x: scrollX,
+                    },
+                  },
+                },
+              ],
+              {
+                useNativeDriver: false,
+              }
             )}
-            onMomentumScrollEnd={(e) => {
+            onMomentumScrollEnd={(event) => {
               const index = Math.round(
-                e.nativeEvent.contentOffset.x / width
+                event.nativeEvent.contentOffset.x /
+                  width
               );
+
               setHeroIndex(index);
               heroIndexRef.current = index;
             }}
@@ -167,11 +215,12 @@ export default function Login() {
                 (index + 1) * width,
               ];
 
-              const translateX = scrollX.interpolate({
-                inputRange,
-                outputRange: [-30, 0, 30],
-                extrapolate: "clamp",
-              });
+              const translateX =
+                scrollX.interpolate({
+                  inputRange,
+                  outputRange: [-30, 0, 30],
+                  extrapolate: "clamp",
+                });
 
               return (
                 <View
@@ -218,31 +267,43 @@ export default function Login() {
                         size={14}
                         color="#10b981"
                       />
+
                       <Text style={styles.systemText}>
                         CITY RESPONSE SYSTEM
                       </Text>
+
                       <View style={styles.liveDot} />
-                      <Text style={styles.liveText}>Operational</Text>
+
+                      <Text style={styles.liveText}>
+                        Operational
+                      </Text>
                     </View>
 
-                    <Text style={styles.heroTitle}>{slide.title}</Text>
+                    <Text style={styles.heroTitle}>
+                      {slide.title}
+                    </Text>
 
-                    <Text style={styles.heroText}>{slide.desc}</Text>
+                    <Text style={styles.heroText}>
+                      {slide.desc}
+                    </Text>
 
                     <TouchableOpacity
                       style={styles.accessButton}
-                      onPress={() =>
+                      onPress={() => {
                         mainScrollRef.current?.scrollTo({
                           x: width,
                           animated: true,
-                        })
-                      }
+                        });
+                      }}
                     >
-                      <Text style={styles.accessText}>Access Portal</Text>
+                      <Text style={styles.accessText}>
+                        Access Portal
+                      </Text>
+
                       <Ionicons
                         name="chevron-forward"
                         size={16}
-                        color="#fff"
+                        color="#ffffff"
                       />
                     </TouchableOpacity>
                   </View>
@@ -251,22 +312,25 @@ export default function Login() {
             })}
           </Animated.ScrollView>
 
-          {/* NETFLIX-STYLE DOTS WITHOUT WIDTH ANIMATION */}
           <View style={styles.dotsContainer}>
             {SLIDES.map((_, index) => (
               <Pressable
                 key={index}
+                accessibilityRole="button"
+                accessibilityLabel={`Open slide ${
+                  index + 1
+                }`}
                 onPress={() => goToSlide(index)}
                 style={[
                   styles.dot,
-                  index === heroIndex && styles.dotActive,
+                  index === heroIndex &&
+                    styles.dotActive,
                 ]}
               />
             ))}
           </View>
         </View>
 
-        {/* PAGE 2: LOGIN */}
         <View style={styles.loginPage}>
           <ScrollView
             contentContainerStyle={styles.loginScroll}
@@ -274,35 +338,57 @@ export default function Login() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.loginCard}>
-              <Text style={styles.welcomeTitle}>Welcome Back</Text>
+              <Text style={styles.welcomeTitle}>
+                Welcome Back
+              </Text>
+
               <Text style={styles.welcomeSub}>
                 Sign in to continue making a difference
               </Text>
 
-              <Text style={styles.inputLabel}>Email Address</Text>
+              <Text style={styles.inputLabel}>
+                Email Address
+              </Text>
+
               <View
                 style={[
                   styles.inputWrapper,
-                  focused === "email" && styles.inputFocused,
+                  focused === "email" &&
+                    styles.inputFocused,
                 ]}
               >
-                <Ionicons name="mail-outline" size={18} color="#64748b" />
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color="#64748b"
+                />
+
                 <TextInput
                   style={styles.inputField}
                   placeholder="your.email@example.com"
+                  placeholderTextColor="#94a3b8"
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  editable={!loading}
+                  returnKeyType="next"
                   onFocus={() => setFocused("email")}
                   onBlur={() => setFocused(null)}
                 />
               </View>
 
-              <Text style={styles.inputLabel}>Password</Text>
+              <Text style={styles.inputLabel}>
+                Password
+              </Text>
+
               <View
                 style={[
                   styles.inputWrapper,
-                  focused === "password" && styles.inputFocused,
+                  focused === "password" &&
+                    styles.inputFocused,
                 ]}
               >
                 <Ionicons
@@ -310,18 +396,44 @@ export default function Login() {
                   size={18}
                   color="#64748b"
                 />
+
                 <TextInput
                   style={styles.inputField}
                   placeholder="Enter your password"
+                  placeholderTextColor="#94a3b8"
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => setFocused("password")}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="password"
+                  editable={!loading}
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                  onFocus={() =>
+                    setFocused("password")
+                  }
                   onBlur={() => setFocused(null)}
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+
+                <TouchableOpacity
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  onPress={() =>
+                    setShowPassword((current) => !current)
+                  }
+                >
                   <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    name={
+                      showPassword
+                        ? "eye-off-outline"
+                        : "eye-outline"
+                    }
                     size={18}
                     color="#64748b"
                   />
@@ -329,30 +441,51 @@ export default function Login() {
               </View>
 
               <Pressable
+                disabled={loading}
                 style={({ pressed }) => [
                   styles.primaryButton,
-                  pressed && { opacity: 0.9 },
+                  (pressed || loading) &&
+                    styles.buttonDisabled,
                 ]}
                 onPress={handleLogin}
               >
                 {loading ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
+                  <Text
+                    style={styles.primaryButtonText}
+                  >
+                    Sign In
+                  </Text>
                 )}
               </Pressable>
 
               <View style={styles.dividerRow}>
                 <View style={styles.divider} />
-                <Text style={styles.orText}>or</Text>
+
+                <Text style={styles.orText}>
+                  or
+                </Text>
+
                 <View style={styles.divider} />
               </View>
 
               <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => router.replace("/public")}
+                disabled={loading}
+                style={[
+                  styles.guestButton,
+                  loading && styles.buttonDisabled,
+                ]}
+                onPress={() =>
+                  router.replace("/public")
+                }
               >
-                <Ionicons name="globe-outline" size={18} color="#334155" />
+                <Ionicons
+                  name="globe-outline"
+                  size={18}
+                  color="#334155"
+                />
+
                 <Text style={styles.guestText}>
                   Continue as Guest (Public Mode)
                 </Text>
@@ -362,8 +495,17 @@ export default function Login() {
                 <Text style={styles.signupText}>
                   Don’t have an account?
                 </Text>
-                <TouchableOpacity onPress={() => router.push("/signup")}>
-                  <Text style={styles.signupLink}> Sign up</Text>
+
+                <TouchableOpacity
+                  disabled={loading}
+                  onPress={() =>
+                    router.push("/signup")
+                  }
+                >
+                  <Text style={styles.signupLink}>
+                    {" "}
+                    Sign up
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -545,10 +687,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     padding: 28,
     borderRadius: 26,
-    shadowColor: "#000",
+    shadowColor: "#000000",
     shadowOpacity: 0.16,
     shadowRadius: 40,
-    shadowOffset: { width: 0, height: 20 },
+    shadowOffset: {
+      width: 0,
+      height: 20,
+    },
     elevation: 20,
   },
 
@@ -606,6 +751,10 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "700",
     fontSize: 16,
+  },
+
+  buttonDisabled: {
+    opacity: 0.75,
   },
 
   dividerRow: {

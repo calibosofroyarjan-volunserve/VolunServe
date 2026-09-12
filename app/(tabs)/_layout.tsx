@@ -1,8 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  isAdminProfile,
+  isApprovedProfile,
+  logoutUser,
+} from "../../lib/firebaseAuth";
+import { useUserSession } from "../../lib/useUserSession";
 
 const visibleTabs = [
   {
@@ -37,14 +52,192 @@ const visibleTabs = [
   },
 ];
 
+const desktopTabs = [
+  {
+    name: "index",
+    label: "Home",
+    icon: "home-outline",
+    activeIcon: "home",
+  },
+  {
+    name: "map-tracking",
+    label: "Live Map",
+    icon: "map-outline",
+    activeIcon: "map",
+  },
+  {
+    name: "disaster-response",
+    label: "Emergency Report",
+    icon: "alert-circle-outline",
+    activeIcon: "alert-circle",
+  },
+  {
+    name: "resident",
+    label: "Request Assistance",
+    icon: "hand-left-outline",
+    activeIcon: "hand-left",
+  },
+  {
+    name: "volunteer",
+    label: "Volunteer Tasks",
+    icon: "people-outline",
+    activeIcon: "people",
+  },
+  {
+    name: "donation",
+    label: "Donations",
+    icon: "heart-outline",
+    activeIcon: "heart",
+  },
+  {
+    name: "my-cases",
+    label: "My Reports",
+    icon: "document-text-outline",
+    activeIcon: "document-text",
+  },
+  {
+    name: "notifications",
+    label: "Notifications",
+    icon: "notifications-outline",
+    activeIcon: "notifications",
+  },
+];
+
 export default function TabLayout() {
+  const { loading, user, profile } = useUserSession();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && width >= 1040;
+
+  if (loading) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#078F82" />
+        <Text style={styles.loadingText}>Checking your account...</Text>
+      </View>
+    );
+  }
+
+  if (!user || !profile || !isApprovedProfile(profile)) {
+    return <Redirect href="/login" />;
+  }
+
+  const hideResidentTabs = isAdminProfile(profile);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarPosition: isDesktopWeb ? "left" : "bottom",
       }}
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) =>
+        hideResidentTabs ? null : isDesktopWeb ? (
+          <DesktopTabBar {...props} />
+        ) : (
+          <CustomTabBar {...props} />
+        )
+      }
     />
+  );
+}
+
+function DesktopTabBar({ state, navigation }: any) {
+  const navigate = (routeName: string) => {
+    const route = state.routes.find((item: any) => item.name === routeName);
+    if (!route) return;
+
+    const event = navigation.emit({
+      type: "tabPress",
+      target: route.key,
+      canPreventDefault: true,
+    });
+
+    if (!event.defaultPrevented) navigation.navigate(route.name);
+  };
+
+  return (
+    <View style={styles.desktopSidebar}>
+      <View style={styles.desktopBrand}>
+        <Image
+          source={require("../../assets/images/logo.png")}
+          resizeMode="cover"
+          style={styles.desktopLogo}
+        />
+        <View style={styles.desktopBrandCopy}>
+          <Text style={styles.desktopBrandTitle}>VolunServe</Text>
+          <Text style={styles.desktopBrandSubtitle}>Disaster Response Platform</Text>
+        </View>
+      </View>
+
+      <Text style={styles.desktopSectionLabel}>MAIN MENU</Text>
+      <View style={styles.desktopNavigation}>
+        {desktopTabs.map((item) => {
+          const routeIndex = state.routes.findIndex(
+            (route: any) => route.name === item.name
+          );
+          if (routeIndex === -1) return null;
+
+          const focused = state.index === routeIndex;
+          return (
+            <Pressable
+              key={item.name}
+              style={({ pressed }) => [
+                styles.desktopNavItem,
+                focused && styles.desktopNavItemActive,
+                pressed && styles.desktopPressed,
+              ]}
+              onPress={() => navigate(item.name)}
+            >
+              <View
+                style={[
+                  styles.desktopNavIcon,
+                  focused && styles.desktopNavIconActive,
+                ]}
+              >
+                <Ionicons
+                  name={(focused ? item.activeIcon : item.icon) as any}
+                  size={20}
+                  color={focused ? "#FFFFFF" : "#60728A"}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.desktopNavText,
+                  focused && styles.desktopNavTextActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+              {focused ? <View style={styles.desktopActiveMark} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.desktopUtilityArea}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.desktopUtilityButton,
+            pressed && styles.desktopPressed,
+          ]}
+          onPress={() => navigate("profile")}
+        >
+          <Ionicons name="settings-outline" size={18} color="#60728A" />
+          <Text style={styles.desktopUtilityText}>Account Settings</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.desktopUtilityButton,
+            pressed && styles.desktopPressed,
+          ]}
+          onPress={() => void logoutUser()}
+        >
+          <Ionicons name="log-out-outline" size={18} color="#DC3244" />
+          <Text style={[styles.desktopUtilityText, styles.desktopLogoutText]}>
+            Log Out
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -124,6 +317,17 @@ function CustomTabBar({ state, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#64748B",
+    fontWeight: "600",
+  },
   tabBarWrapper: {
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
@@ -179,4 +383,131 @@ const styles = StyleSheet.create({
     color: "#078F82",
     fontWeight: "800",
   },
+
+  desktopSidebar: {
+    width: 268,
+    height: "100%",
+    paddingHorizontal: 17,
+    paddingTop: 22,
+    paddingBottom: 18,
+    backgroundColor: "#FFFFFF",
+    borderRightWidth: 1,
+    borderRightColor: "#E1E8EF",
+    shadowColor: "#183153",
+    shadowOffset: { width: 5, height: 0 },
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+  },
+  desktopBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 7,
+  },
+  desktopLogo: {
+    width: 47,
+    height: 47,
+    borderRadius: 24,
+    backgroundColor: "#E8F8F5",
+  },
+  desktopBrandCopy: { flex: 1, minWidth: 0 },
+  desktopBrandTitle: {
+    color: "#0F675F",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  desktopBrandSubtitle: {
+    marginTop: 1,
+    color: "#718095",
+    fontSize: 8.5,
+    fontWeight: "700",
+  },
+  desktopStatusCard: {
+    marginTop: 21,
+    minHeight: 61,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 13,
+    borderRadius: 15,
+    backgroundColor: "#EAF8F3",
+    borderWidth: 1,
+    borderColor: "#D3EEE5",
+  },
+  desktopStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#08A473",
+  },
+  desktopStatusCopy: { flex: 1 },
+  desktopStatusTitle: {
+    color: "#08725A",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  desktopStatusText: {
+    marginTop: 2,
+    color: "#689083",
+    fontSize: 9.5,
+  },
+  desktopSectionLabel: {
+    marginTop: 24,
+    marginBottom: 9,
+    paddingHorizontal: 10,
+    color: "#95A1B0",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  desktopNavigation: { gap: 4 },
+  desktopNavItem: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 9,
+    borderRadius: 13,
+  },
+  desktopNavItemActive: { backgroundColor: "#EAF8F4" },
+  desktopNavIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F2F5F8",
+  },
+  desktopNavIconActive: { backgroundColor: "#078F82" },
+  desktopNavText: {
+    flex: 1,
+    color: "#52647B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  desktopNavTextActive: { color: "#076E66", fontWeight: "900" },
+  desktopActiveMark: {
+    width: 4,
+    height: 22,
+    borderRadius: 3,
+    backgroundColor: "#078F82",
+  },
+  desktopUtilityArea: {
+    marginTop: "auto",
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#E7EDF2",
+    gap: 4,
+  },
+  desktopUtilityButton: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 10,
+    borderRadius: 11,
+  },
+  desktopUtilityText: { flex: 1, color: "#52647B", fontSize: 11.5, fontWeight: "700" },
+  desktopLogoutText: { color: "#C92537" },
+  desktopPressed: { opacity: 0.72 },
 });

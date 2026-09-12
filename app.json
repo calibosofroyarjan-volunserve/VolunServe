@@ -42,7 +42,7 @@
           }
         }
       ],
-      "expo-barcode-scanner"
+       "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true,
