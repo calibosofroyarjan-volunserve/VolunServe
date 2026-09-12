@@ -983,7 +983,7 @@ export default function Signup() {
                   <Text style={styles.reviewText}>💼 {formData.occupationCategory}</Text>
                 )}
               </View>
-
+ 
               <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
               <Field icon="🔒" label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} autoCapitalize="none" />
               <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showPassword ? "Hide Password" : "Show Password"}</Text></TouchableOpacity>
