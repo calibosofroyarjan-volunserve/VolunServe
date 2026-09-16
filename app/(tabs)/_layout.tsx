@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, useSegments } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -13,46 +14,24 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  activeModeForProfile,
+  hasVolunteerAccess,
   isAdminProfile,
   isApprovedProfile,
   logoutUser,
+  setActiveUserMode,
+  UserProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
-const visibleTabs = [
-  {
-    name: "index",
-    label: "Home",
-    activeIcon: "home",
-    inactiveIcon: "home-outline",
-  },
-  {
-    name: "map-tracking",
-    label: "Map",
-    activeIcon: "location",
-    inactiveIcon: "location-outline",
-  },
-  {
-    name: "disaster-response",
-    label: "Report",
-    activeIcon: "alert-circle",
-    inactiveIcon: "alert-circle-outline",
-  },
-  {
-    name: "volunteer",
-    label: "Events",
-    activeIcon: "calendar",
-    inactiveIcon: "calendar-outline",
-  },
-  {
-    name: "profile",
-    label: "Profile",
-    activeIcon: "person",
-    inactiveIcon: "person-outline",
-  },
-];
+type TabDefinition = {
+  name: string;
+  label: string;
+  icon: string;
+  activeIcon: string;
+};
 
-const desktopTabs = [
+const residentDesktopTabs: TabDefinition[] = [
   {
     name: "index",
     label: "Home",
@@ -78,12 +57,6 @@ const desktopTabs = [
     activeIcon: "hand-left",
   },
   {
-    name: "volunteer",
-    label: "Volunteer Tasks",
-    icon: "people-outline",
-    activeIcon: "people",
-  },
-  {
     name: "donation",
     label: "Donations",
     icon: "heart-outline",
@@ -101,11 +74,136 @@ const desktopTabs = [
     icon: "notifications-outline",
     activeIcon: "notifications",
   },
+  {
+    name: "announcements",
+    label: "Announcements",
+    icon: "megaphone-outline",
+    activeIcon: "megaphone",
+  },
 ];
+
+const volunteerDesktopTabs: TabDefinition[] = [
+  {
+    name: "index",
+    label: "Home",
+    icon: "home-outline",
+    activeIcon: "home",
+  },
+  {
+    name: "map-tracking",
+    label: "Live Response Map",
+    icon: "map-outline",
+    activeIcon: "map",
+  },
+  {
+    name: "volunteer",
+    label: "Volunteer Tasks",
+    icon: "people-outline",
+    activeIcon: "people",
+  },
+  {
+    name: "donation",
+    label: "Donation Operations",
+    icon: "heart-outline",
+    activeIcon: "heart",
+  },
+  {
+    name: "volunteer-impact",
+    label: "My Progress",
+    icon: "ribbon-outline",
+    activeIcon: "ribbon",
+  },
+  {
+    name: "certificate",
+    label: "Certificates",
+    icon: "document-outline",
+    activeIcon: "document",
+  },
+  {
+    name: "notifications",
+    label: "Notifications",
+    icon: "notifications-outline",
+    activeIcon: "notifications",
+  },
+  {
+    name: "announcements",
+    label: "Announcements",
+    icon: "megaphone-outline",
+    activeIcon: "megaphone",
+  },
+];
+
+const residentMobileTabs: TabDefinition[] = [
+  {
+    name: "index",
+    label: "Home",
+    icon: "home-outline",
+    activeIcon: "home",
+  },
+  {
+    name: "map-tracking",
+    label: "Map",
+    icon: "location-outline",
+    activeIcon: "location",
+  },
+  {
+    name: "disaster-response",
+    label: "Report",
+    icon: "alert-circle-outline",
+    activeIcon: "alert-circle",
+  },
+  {
+    name: "profile",
+    label: "Profile",
+    icon: "person-outline",
+    activeIcon: "person",
+  },
+];
+
+const volunteerMobileTabs: TabDefinition[] = [
+  {
+    name: "index",
+    label: "Home",
+    icon: "home-outline",
+    activeIcon: "home",
+  },
+  {
+    name: "map-tracking",
+    label: "Map",
+    icon: "location-outline",
+    activeIcon: "location",
+  },
+  {
+    name: "volunteer",
+    label: "Tasks",
+    icon: "people-outline",
+    activeIcon: "people",
+  },
+  {
+    name: "profile",
+    label: "Profile",
+    icon: "person-outline",
+    activeIcon: "person",
+  },
+];
+
+const volunteerOnlyRoutes = new Set([
+  "volunteer",
+  "volunteer-impact",
+  "certificate",
+]);
+
+const residentOnlyRoutes = new Set([
+  "disaster-response",
+  "resident",
+  "my-cases",
+  "donation-history",
+]);
 
 export default function TabLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
+  const segments = useSegments();
   const isDesktopWeb = Platform.OS === "web" && width >= 1040;
 
   if (loading) {
@@ -122,6 +220,24 @@ export default function TabLayout() {
   }
 
   const hideResidentTabs = isAdminProfile(profile);
+  const activeMode = activeModeForProfile(profile);
+  const currentRoute = segments[segments.length - 1];
+
+  if (typeof currentRoute === "string") {
+    if (
+      volunteerOnlyRoutes.has(currentRoute) &&
+      activeMode !== "volunteer"
+    ) {
+      return <Redirect href="/(tabs)" />;
+    }
+
+    if (
+      residentOnlyRoutes.has(currentRoute) &&
+      activeMode === "volunteer"
+    ) {
+      return <Redirect href="/(tabs)" />;
+    }
+  }
 
   return (
     <Tabs
@@ -131,16 +247,24 @@ export default function TabLayout() {
       }}
       tabBar={(props) =>
         hideResidentTabs ? null : isDesktopWeb ? (
-          <DesktopTabBar {...props} />
+          <DesktopTabBar {...props} profile={profile} />
         ) : (
-          <CustomTabBar {...props} />
+          <CustomTabBar {...props} profile={profile} />
         )
       }
     />
   );
 }
 
-function DesktopTabBar({ state, navigation }: any) {
+function DesktopTabBar({
+  state,
+  navigation,
+  profile,
+}: any & { profile: UserProfile }) {
+  const mode = activeModeForProfile(profile);
+  const canSwitchMode = hasVolunteerAccess(profile);
+  const tabs = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
+
   const navigate = (routeName: string) => {
     const route = state.routes.find((item: any) => item.name === routeName);
     if (!route) return;
@@ -154,6 +278,34 @@ function DesktopTabBar({ state, navigation }: any) {
     if (!event.defaultPrevented) navigation.navigate(route.name);
   };
 
+  const switchMode = async () => {
+    if (!canSwitchMode) return;
+
+    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
+
+    try {
+      // Save the mode FIRST. The live profile listener in useUserSession
+      // will then receive the updated activeMode from Firestore.
+      await setActiveUserMode(nextMode);
+
+      // Only navigate after the Firestore update succeeds.
+      navigate("index");
+    } catch (error: any) {
+      const message =
+        error?.message || "Unable to switch account mode.";
+
+      console.error("Mode switch failed:", error);
+
+      // React Native Alert can be unreliable on web, so make sure
+      // the actual Firebase/Firestore error is visible in the browser.
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(`Mode Switch Failed\n\n${message}`);
+      } else {
+        Alert.alert("Mode Switch Failed", message);
+      }
+    }
+  };
+
   return (
     <View style={styles.desktopSidebar}>
       <View style={styles.desktopBrand}>
@@ -164,13 +316,15 @@ function DesktopTabBar({ state, navigation }: any) {
         />
         <View style={styles.desktopBrandCopy}>
           <Text style={styles.desktopBrandTitle}>VolunServe</Text>
-          <Text style={styles.desktopBrandSubtitle}>Disaster Response Platform</Text>
+          <Text style={styles.desktopBrandSubtitle}>
+            {mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}
+          </Text>
         </View>
       </View>
 
       <Text style={styles.desktopSectionLabel}>MAIN MENU</Text>
       <View style={styles.desktopNavigation}>
-        {desktopTabs.map((item) => {
+        {tabs.map((item) => {
           const routeIndex = state.routes.findIndex(
             (route: any) => route.name === item.name
           );
@@ -214,6 +368,23 @@ function DesktopTabBar({ state, navigation }: any) {
       </View>
 
       <View style={styles.desktopUtilityArea}>
+        {canSwitchMode ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.desktopUtilityButton,
+              pressed && styles.desktopPressed,
+            ]}
+            onPress={() => void switchMode()}
+          >
+            <Ionicons name="swap-horizontal-outline" size={18} color="#078F82" />
+            <Text style={styles.desktopUtilityText}>
+              {mode === "volunteer"
+                ? "Switch to Resident Mode"
+                : "Switch to Volunteer Mode"}
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={({ pressed }) => [
             styles.desktopUtilityButton,
@@ -241,8 +412,14 @@ function DesktopTabBar({ state, navigation }: any) {
   );
 }
 
-function CustomTabBar({ state, navigation }: any) {
+function CustomTabBar({
+  state,
+  navigation,
+  profile,
+}: any & { profile: UserProfile }) {
   const insets = useSafeAreaInsets();
+  const mode = activeModeForProfile(profile);
+  const tabs = mode === "volunteer" ? volunteerMobileTabs : residentMobileTabs;
 
   return (
     <View
@@ -254,7 +431,7 @@ function CustomTabBar({ state, navigation }: any) {
       ]}
     >
       <View style={styles.tabBar}>
-        {visibleTabs.map((item) => {
+        {tabs.map((item) => {
           const routeIndex = state.routes.findIndex(
             (route: any) => route.name === item.name
           );
@@ -290,11 +467,7 @@ function CustomTabBar({ state, navigation }: any) {
                 ]}
               >
                 <Ionicons
-                  name={
-                    focused
-                      ? (item.activeIcon as any)
-                      : (item.inactiveIcon as any)
-                  }
+                  name={(focused ? item.activeIcon : item.icon) as any}
                   size={24}
                   color={focused ? "#078F82" : "#7A8799"}
                 />

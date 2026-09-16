@@ -3,21 +3,25 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ImageBackground,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
 import {
-    homeRouteForProfile,
-    loginUser,
+  connectGoogleAccountWeb,
+  getUserProfile,
+  homeRouteForProfile,
+  isApprovedProfile,
+  loginUser,
+  logoutUser,
 } from "../lib/firebaseAuth";
 
 const SLIDES = [
@@ -88,6 +92,55 @@ export default function WebLogin() {
       router.replace(homeRouteForProfile(profile));
     } catch (error: any) {
       alert(error?.message || "Login failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (loading) return;
+
+    try {
+      setLoading(true);
+
+      const googleUser = await connectGoogleAccountWeb();
+      const profile = await getUserProfile(googleUser.uid);
+
+      if (!isApprovedProfile(profile)) {
+        await logoutUser();
+
+        if (profile.status === "rejected") {
+          throw new Error(
+            profile.rejectedReason
+              ? `Registration rejected: ${profile.rejectedReason}`
+              : "Your registration was rejected. Please contact an administrator."
+          );
+        }
+
+        if (profile.status === "suspended") {
+          throw new Error(
+            "Your account is suspended. Please contact an administrator."
+          );
+        }
+
+        throw new Error(
+          "Your registration is still pending administrative review."
+        );
+      }
+
+      router.replace(homeRouteForProfile(profile));
+    } catch (error: any) {
+      // If Google authentication succeeded but the VolunServe profile is missing
+      // or not approved, do not leave a partial session active.
+      try {
+        if (!String(error?.message || "").toLowerCase().includes("cancelled")) {
+          await logoutUser();
+        }
+      } catch {
+        // Ignore cleanup errors; show the original login problem below.
+      }
+
+      alert(error?.message || "Google sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -381,8 +434,21 @@ export default function WebLogin() {
           </View>
 
           <TouchableOpacity
-            style={styles.guestButton}
+            style={[styles.googleButton, loading && styles.googleButtonDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <View style={styles.googleMark}>
+              <Text style={styles.googleMarkText}>G</Text>
+            </View>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.guestButton, styles.guestButtonSpaced]}
             onPress={() => router.replace("/public")}
+            disabled={loading}
           >
             <Ionicons
               name="person-outline"
@@ -755,6 +821,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 13,
   },
 
+  googleButton: {
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  googleMark: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+
+  googleMarkText: {
+    color: "#2563eb",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  googleButtonText: {
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
   guestButton: {
     minHeight: 58,
     borderRadius: 14,
@@ -764,6 +869,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
+  },
+
+  guestButtonSpaced: {
+    marginTop: 12,
   },
 
   guestButtonText: {

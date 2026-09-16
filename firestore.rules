@@ -38,7 +38,13 @@ service cloud.firestore {
 
     function isVolunteer() {
       return approved()
-        && profile().role == 'volunteer';
+        && (
+          profile().role == 'volunteer'
+          || (
+            'volunteerAccess' in profile()
+            && profile().volunteerAccess == true
+          )
+        );
     }
 
     match /users/{uid} {
@@ -80,6 +86,33 @@ service cloud.firestore {
 
       allow list: if isAdmin();
 
+      // Resident <-> Volunteer mode switching.
+      // User can change ONLY activeMode.
+      // Volunteer Mode requires Admin-granted volunteerAccess.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'activeMode'
+          ])
+        && request.resource.data.activeMode in [
+          'resident',
+          'volunteer'
+        ]
+        && (
+          request.resource.data.activeMode == 'resident'
+          || resource.data.role == 'volunteer'
+          || (
+            'volunteerAccess' in resource.data
+            && resource.data.volunteerAccess == true
+          )
+        );
+
+      // Resident/volunteer can edit their own profile fields.
+      // Province/city are checked only when those fields are actually changed.
+      // This keeps older/legacy accounts saveable.
       allow update: if signedIn()
         && request.auth.uid == uid
         && request.resource.data
@@ -106,19 +139,35 @@ service cloud.firestore {
             'availability',
             'profilePictureUrl'
           ])
-        && request.resource.data.province in [
-          'Bulacan',
-          'BULACAN',
-          'Province of Bulacan'
-        ]
-        && request.resource.data.city in [
-          'City of San Jose del Monte',
-          'CITY OF SAN JOSE DEL MONTE',
-          'City of San Jose Del Monte',
-          'San Jose del Monte',
-          'San Jose Del Monte',
-          'SAN JOSE DEL MONTE'
-        ];
+        && (
+          !request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasAny([
+              'province'
+            ])
+          || request.resource.data.province in [
+            'Bulacan',
+            'BULACAN',
+            'Province of Bulacan'
+          ]
+        )
+        && (
+          !request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasAny([
+              'city'
+            ])
+          || request.resource.data.city in [
+            'City of San Jose del Monte',
+            'CITY OF SAN JOSE DEL MONTE',
+            'City of San Jose Del Monte',
+            'San Jose del Monte',
+            'San Jose Del Monte',
+            'SAN JOSE DEL MONTE'
+          ]
+        );
 
       allow update: if isSuperAdmin();
 
@@ -130,10 +179,17 @@ service cloud.firestore {
           .hasOnly([
             'role',
             'requestedRole',
+            'primaryRole',
+            'residentAccess',
+            'volunteerAccess',
+            'volunteerStatus',
+            'activeMode',
             'status',
             'reviewedAt',
             'reviewedBy',
-            'rejectedReason'
+            'rejectedReason',
+            'volunteerReviewedAt',
+            'volunteerReviewedBy'
           ])
         && request.resource.data.role in [
           'applicant',
@@ -145,7 +201,55 @@ service cloud.firestore {
           'approved',
           'rejected',
           'suspended'
-        ];
+        ]
+        && (
+          !('activeMode' in request.resource.data)
+          || request.resource.data.activeMode in [
+            'resident',
+            'volunteer'
+          ]
+        )
+        && (
+          !('primaryRole' in request.resource.data)
+          || request.resource.data.primaryRole in [
+            'resident',
+            'volunteer'
+          ]
+        )
+        && (
+          !('residentAccess' in request.resource.data)
+          || request.resource.data.residentAccess is bool
+        )
+        && (
+          !('volunteerAccess' in request.resource.data)
+          || request.resource.data.volunteerAccess is bool
+        )
+        && (
+          !('volunteerStatus' in request.resource.data)
+          || request.resource.data.volunteerStatus in [
+            'not_applied',
+            'pending',
+            'approved',
+            'rejected'
+          ]
+        )
+        && (
+          !('volunteerAccess' in request.resource.data)
+          || request.resource.data.volunteerAccess == false
+          || (
+            'volunteerStatus' in request.resource.data
+            && request.resource.data.volunteerStatus == 'approved'
+          )
+        )
+        && (
+          !('activeMode' in request.resource.data)
+          || request.resource.data.activeMode == 'resident'
+          || request.resource.data.role == 'volunteer'
+          || (
+            'volunteerAccess' in request.resource.data
+            && request.resource.data.volunteerAccess == true
+          )
+        );
 
       allow delete: if isSuperAdmin()
         && request.auth.uid != uid;
@@ -437,6 +541,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // =========================================================
+    // EMERGENCY / DISASTER CASES
+    // Resident submits -> Admin verifies -> Admin assigns
+    // -> assigned volunteer can access the private case.
+    // =========================================================
     match /disasterCases/{caseId} {
       function validStatusTransition() {
         return request.resource.data.status
@@ -463,69 +572,211 @@ service cloud.firestore {
           );
       }
 
+      // New resident Emergency Report / Assistance Request.
       allow create: if approved()
         && request.resource.data.keys().hasOnly([
           'reporterUid',
           'reporterName',
           'reporterEmail',
           'reporterBarangay',
+          'reporterAddress',
           'contactNumber',
+          'emergencyContact',
+          'reporterProfilePictureUrl',
+
           'source',
+          'requestKind',
+
           'title',
           'category',
           'severity',
           'status',
+
+          'verificationStatus',
+          'evidenceReviewStatus',
+
           'location',
           'latitude',
           'longitude',
           'gpsAccuracyMeters',
           'locationCapturedAt',
+
           'details',
+          'affectedPeople',
+
+          'assistanceTypes',
+          'requiredSkills',
+          'neededGoods',
+          'needsNote',
           'needs',
+
           'attachments',
+          'photoEvidenceCount',
+          'videoEvidenceCount',
+
+          'verification',
+
+          'residentConfirmationAccepted',
+          'residentConfirmationAt',
+          'privacyScope',
+
           'requiredVolunteers',
           'assignedVolunteersCount',
+          'assignedVolunteerIds',
+
           'adminNote',
+
           'validatedAt',
+          'validatedBy',
           'assignedAt',
           'resolvedAt',
           'closedAt',
+
           'createdAt',
           'updatedAt'
         ])
+
         && request.resource.data.reporterUid == request.auth.uid
-        && request.resource.data.source == 'resident_disaster_report'
+
+        && request.resource.data.reporterName is string
+        && request.resource.data.reporterName.size() >= 1
+        && request.resource.data.reporterName.size() <= 120
+
+        && request.resource.data.reporterEmail is string
+        && request.resource.data.reporterEmail.size() <= 160
+
+        && request.resource.data.reporterBarangay is string
+        && request.resource.data.reporterBarangay.size() <= 120
+
+        && request.resource.data.reporterAddress is string
+        && request.resource.data.reporterAddress.size() <= 240
+
+        && request.resource.data.contactNumber is string
+        && request.resource.data.contactNumber.size() >= 8
+        && request.resource.data.contactNumber.size() <= 30
+
+        && request.resource.data.emergencyContact is string
+        && request.resource.data.emergencyContact.size() <= 30
+
+        && request.resource.data.reporterProfilePictureUrl is string
+        && request.resource.data.reporterProfilePictureUrl.size() <= 2048
+
+        && request.resource.data.source
+          == 'resident_emergency_assistance'
+
+        && request.resource.data.requestKind
+          == 'emergency_assistance'
+
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 3
         && request.resource.data.title.size() <= 120
+
         && request.resource.data.category is string
         && request.resource.data.category.size() >= 2
         && request.resource.data.category.size() <= 80
+
         && request.resource.data.severity in [
           'low',
           'medium',
           'high',
           'critical'
         ]
+
+        && request.resource.data.status == 'reported'
+
+        && request.resource.data.verificationStatus
+          == 'pending_verification'
+
+        && request.resource.data.evidenceReviewStatus
+          == 'pending_review'
+
         && request.resource.data.location is string
         && request.resource.data.location.size() >= 3
-        && request.resource.data.details is string
-        && request.resource.data.details.size() >= 10
-        && request.resource.data.needs is string
-        && request.resource.data.needs.size() >= 2
-        && request.resource.data.attachments is list
-        && request.resource.data.attachments.size() <= 5
-        && request.resource.data.requiredVolunteers == 0
-        && request.resource.data.assignedVolunteersCount == 0
-        && request.resource.data.adminNote == ''
-        && request.resource.data.status == 'reported'
+        && request.resource.data.location.size() <= 240
+
         && request.resource.data.latitude is number
-        && request.resource.data.longitude is number
         && request.resource.data.latitude >= -90
         && request.resource.data.latitude <= 90
-        && request.resource.data.longitude >= -180
-        && request.resource.data.longitude <= 180;
 
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+
+        && (
+          request.resource.data.gpsAccuracyMeters == null
+          || request.resource.data.gpsAccuracyMeters is number
+        )
+
+        && request.resource.data.locationCapturedAt is timestamp
+
+        && request.resource.data.details is string
+        && request.resource.data.details.size() >= 10
+        && request.resource.data.details.size() <= 2000
+
+        && request.resource.data.affectedPeople is int
+        && request.resource.data.affectedPeople >= 1
+
+        && request.resource.data.assistanceTypes is list
+        && request.resource.data.assistanceTypes.size() >= 1
+        && request.resource.data.assistanceTypes.size() <= 12
+
+        && request.resource.data.requiredSkills is list
+        && request.resource.data.requiredSkills.size() >= 1
+        && request.resource.data.requiredSkills.size() <= 12
+
+        && request.resource.data.neededGoods is list
+        && request.resource.data.neededGoods.size() >= 1
+        && request.resource.data.neededGoods.size() <= 12
+
+        && request.resource.data.needsNote is string
+        && request.resource.data.needsNote.size() <= 1500
+
+        && request.resource.data.needs is string
+        && request.resource.data.needs.size() >= 2
+        && request.resource.data.needs.size() <= 2500
+
+        // Up to 5 photos + 1 optional video.
+        && request.resource.data.attachments is list
+        && request.resource.data.attachments.size() >= 1
+        && request.resource.data.attachments.size() <= 6
+
+        && request.resource.data.photoEvidenceCount is int
+        && request.resource.data.photoEvidenceCount >= 1
+        && request.resource.data.photoEvidenceCount <= 5
+
+        && request.resource.data.videoEvidenceCount is int
+        && request.resource.data.videoEvidenceCount >= 0
+        && request.resource.data.videoEvidenceCount <= 1
+
+        && request.resource.data.verification is map
+
+        && request.resource.data.residentConfirmationAccepted == true
+        && request.resource.data.residentConfirmationAt is timestamp
+
+        && request.resource.data.privacyScope
+          == 'admin_and_assigned_responder'
+
+        && request.resource.data.requiredVolunteers == 0
+        && request.resource.data.assignedVolunteersCount == 0
+
+        && request.resource.data.assignedVolunteerIds is list
+        && request.resource.data.assignedVolunteerIds.size() == 0
+
+        && request.resource.data.adminNote == ''
+
+        && request.resource.data.validatedAt == null
+        && request.resource.data.validatedBy == null
+        && request.resource.data.assignedAt == null
+        && request.resource.data.resolvedAt == null
+        && request.resource.data.closedAt == null
+
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // PRIVATE CASE DATA:
+      // - Admin/Super Admin
+      // - resident who submitted it
+      // - volunteer actually assigned to this case
       allow read: if isAdmin()
         || (
           approved()
@@ -533,14 +784,21 @@ service cloud.firestore {
         )
         || (
           isVolunteer()
+          && resource.data.assignedVolunteerIds is list
+          && request.auth.uid in resource.data.assignedVolunteerIds
           && resource.data.status in [
-            'validated',
             'assigned',
             'in_progress',
             'resolved'
           ]
         );
 
+      // Admin performs:
+      // Validate / Request More Evidence / Reject
+      // Assignment / operational status changes.
+      //
+      // Request More Evidence and Reject may keep the operational
+      // status unchanged, while verificationStatus changes.
       allow update: if isAdmin()
         && validStatusTransition();
 
@@ -878,7 +1136,67 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
+      function responderNotificationAssignment() {
+        return getAfter(
+          /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
+        ).data;
+      }
+
+      function responderNotificationCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+
+      // Admin may create ordinary system notifications.
       allow create: if isAdmin();
+
+      // An assigned volunteer may create only a tightly-scoped lifecycle
+      // notification for the resident who owns the linked disaster case.
+      allow create: if isVolunteer()
+        && request.resource.data.keys().hasOnly([
+          'userId',
+          'caseId',
+          'assignmentId',
+          'responderId',
+          'responderName',
+          'title',
+          'message',
+          'type',
+          'status',
+          'read',
+          'createdAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.caseId is string
+        && request.resource.data.assignmentId is string
+        && request.resource.data.responderId == request.auth.uid
+        && request.resource.data.responderName is string
+        && request.resource.data.responderName.size() >= 1
+        && request.resource.data.responderName.size() <= 120
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 160
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 3
+        && request.resource.data.message.size() <= 1000
+        && request.resource.data.type == 'resident_response_update'
+        && request.resource.data.status in [
+          'accepted',
+          'responding',
+          'on_site',
+          'completed'
+        ]
+        && request.resource.data.read == false
+        && request.resource.data.createdAt is timestamp
+        && responderNotificationAssignment().volunteerId
+          == request.auth.uid
+        && responderNotificationAssignment().caseId
+          == request.resource.data.caseId
+        && responderNotificationAssignment().status
+          == request.resource.data.status
+        && responderNotificationCase().reporterUid
+          == request.resource.data.userId;
 
       allow read, update: if approved()
         && (
@@ -954,6 +1272,454 @@ service cloud.firestore {
 
       allow create, update, delete: if isVolunteer()
         && request.auth.uid == uid;
+    }
+
+    // =========================================================
+    // CASE-SPECIFIC EMERGENCY CHAT
+    // Resident <-> assigned Volunteer <-> Admin/LGU.
+    // Chat becomes available only after the responder accepts.
+    // Messages are immutable for auditability.
+    // =========================================================
+    match /caseMessages/{caseId}/messages/{messageId} {
+      function chatCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(caseId)
+        ).data;
+      }
+
+      function existingChatAssignment() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(resource.data.assignmentId)
+        ).data;
+      }
+
+      function incomingChatAssignment() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
+        ).data;
+      }
+
+      function validReadableChatAssignment() {
+        return resource.data.caseId == caseId
+          && existingChatAssignment().caseId == caseId
+          && existingChatAssignment().status in [
+            'accepted',
+            'responding',
+            'on_site',
+            'completed'
+          ];
+      }
+
+      function validIncomingChatAssignment() {
+        return request.resource.data.caseId == caseId
+          && incomingChatAssignment().caseId == caseId
+          && incomingChatAssignment().status in [
+            'accepted',
+            'responding',
+            'on_site',
+            'completed'
+          ];
+      }
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && chatCase().reporterUid == request.auth.uid
+          && validReadableChatAssignment()
+        )
+        || (
+          isVolunteer()
+          && existingChatAssignment().volunteerId == request.auth.uid
+          && validReadableChatAssignment()
+        );
+
+      allow create: if approved()
+        && request.resource.data.keys().hasOnly([
+          'caseId',
+          'assignmentId',
+          'senderUid',
+          'senderName',
+          'senderRole',
+          'text',
+          'createdAt'
+        ])
+        && request.resource.data.caseId == caseId
+        && request.resource.data.assignmentId is string
+        && request.resource.data.assignmentId.size() > 0
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.senderName is string
+        && request.resource.data.senderName.size() >= 1
+        && request.resource.data.senderName.size() <= 120
+        && request.resource.data.senderRole in [
+          'resident',
+          'volunteer',
+          'admin'
+        ]
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.createdAt is timestamp
+        && chatCase().status in [
+          'assigned',
+          'in_progress'
+        ]
+        && validIncomingChatAssignment()
+        && (
+          (
+            isAdmin()
+            && request.resource.data.senderRole == 'admin'
+          )
+          || (
+            chatCase().reporterUid == request.auth.uid
+            && request.resource.data.senderRole == 'resident'
+          )
+          || (
+            isVolunteer()
+            && incomingChatAssignment().volunteerId == request.auth.uid
+            && request.resource.data.senderRole == 'volunteer'
+          )
+        );
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================
+    // DISASTER RESPONSE ASSIGNMENTS
+    // =========================================================
+    match /responseAssignments/{assignmentId} {
+      function validVolunteerResponseTransition() {
+        return (
+          resource.data.status == 'offered'
+          && request.resource.data.status in [
+            'accepted',
+            'declined'
+          ]
+        )
+        || (
+          resource.data.status == 'accepted'
+          && request.resource.data.status == 'responding'
+        )
+        || (
+          resource.data.status == 'responding'
+          && request.resource.data.status == 'on_site'
+        )
+        || (
+          resource.data.status == 'on_site'
+          && request.resource.data.status == 'completed'
+        );
+      }
+
+      function assignmentCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(resource.data.caseId)
+        ).data;
+      }
+
+      // Admin, the assigned volunteer, and the resident who owns the case.
+      // Resident queries must remain case-scoped in the client.
+      allow read: if isAdmin()
+        || (
+          isVolunteer()
+          && resource.data.volunteerId == request.auth.uid
+        )
+        || (
+          approved()
+          && assignmentCase().reporterUid == request.auth.uid
+        );
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'caseId',
+          'volunteerId',
+          'volunteerName',
+          'caseTitle',
+          'status',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.caseId is string
+        && request.resource.data.caseId.size() > 0
+        && request.resource.data.volunteerId is string
+        && request.resource.data.volunteerId.size() > 0
+        && request.resource.data.volunteerName is string
+        && request.resource.data.caseTitle is string
+        && request.resource.data.status == 'offered'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // Admin may cancel or re-offer an assignment.
+      allow update: if isAdmin()
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'updatedAt'
+          ])
+        && request.resource.data.status in [
+          'offered',
+          'accepted',
+          'responding',
+          'on_site',
+          'completed',
+          'declined',
+          'cancelled'
+        ]
+        && request.resource.data.updatedAt is timestamp;
+
+      // Volunteer owns only their own response lifecycle.
+      allow update: if isVolunteer()
+        && resource.data.volunteerId == request.auth.uid
+        && request.resource.data.volunteerId
+          == resource.data.volunteerId
+        && request.resource.data.caseId
+          == resource.data.caseId
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'updatedAt'
+          ])
+        && validVolunteerResponseTransition()
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    // =========================================================
+    // LIVE RESPONDER GPS
+    // GPS allowed only while assignment is RESPONDING / ON_SITE.
+    // =========================================================
+    match /responseLocations/{uid} {
+      function linkedAssignmentForWrite() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
+        ).data;
+      }
+
+      function linkedAssignmentForRead() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(resource.data.assignmentId)
+        ).data;
+      }
+
+      function linkedCaseForRead() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(resource.data.caseId)
+        ).data;
+      }
+
+      // Live volunteer GPS is visible only to:
+      // - Admin/Super Admin
+      // - the volunteer sharing it
+      // - the resident who submitted the linked case
+      // A completed/stale assignment is not readable by the resident.
+      allow read: if isAdmin()
+        || (
+          isVolunteer()
+          && request.auth.uid == uid
+        )
+        || (
+          approved()
+          && linkedCaseForRead().reporterUid == request.auth.uid
+          && linkedCaseForRead().status in [
+            'assigned',
+            'in_progress'
+          ]
+          && linkedAssignmentForRead().volunteerId
+            == resource.data.volunteerId
+          && linkedAssignmentForRead().caseId
+            == resource.data.caseId
+          && linkedAssignmentForRead().status in [
+            'responding',
+            'on_site'
+          ]
+        );
+
+      allow create, update: if isVolunteer()
+        && request.auth.uid == uid
+
+        && request.resource.data.keys().hasOnly([
+          'volunteerId',
+          'assignmentId',
+          'caseId',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'updatedAt'
+        ])
+
+        && request.resource.data.volunteerId == request.auth.uid
+
+        && request.resource.data.assignmentId is string
+        && request.resource.data.assignmentId.size() > 0
+
+        && request.resource.data.caseId is string
+        && request.resource.data.caseId.size() > 0
+
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+
+        && (
+          request.resource.data.accuracy == null
+          || request.resource.data.accuracy is number
+        )
+
+        && request.resource.data.updatedAt is timestamp
+
+        && linkedAssignmentForWrite().volunteerId
+          == request.auth.uid
+
+        && linkedAssignmentForWrite().caseId
+          == request.resource.data.caseId
+
+        && linkedAssignmentForWrite().status in [
+          'responding',
+          'on_site'
+        ];
+
+      allow delete: if isAdmin()
+        || (
+          isVolunteer()
+          && request.auth.uid == uid
+        );
+    }
+
+    // =========================================================
+    // OPTIONAL RESIDENT LIVE GPS DURING AN ACTIVE RESPONSE
+    // Resident explicitly opts in. The location is visible only
+    // to Admin, the resident, and the currently assigned responder.
+    // =========================================================
+    match /residentResponseLocations/{uid} {
+      function residentAssignmentForWrite() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
+        ).data;
+      }
+
+      function residentCaseForWrite() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+
+      function residentAssignmentForRead() {
+        return get(
+          /databases/$(database)/documents/responseAssignments/$(resource.data.assignmentId)
+        ).data;
+      }
+
+      function residentCaseForRead() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(resource.data.caseId)
+        ).data;
+      }
+
+      function validResidentLocationPayload() {
+        return request.resource.data.keys().hasOnly([
+          'residentId',
+          'assignmentId',
+          'caseId',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'updatedAt'
+        ])
+        && request.resource.data.residentId == request.auth.uid
+        && request.resource.data.assignmentId is string
+        && request.resource.data.assignmentId.size() > 0
+        && request.resource.data.caseId is string
+        && request.resource.data.caseId.size() > 0
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && (
+          request.resource.data.accuracy == null
+          || request.resource.data.accuracy is number
+        )
+        && request.resource.data.updatedAt is timestamp;
+      }
+
+      allow read: if isAdmin()
+        || (
+          approved()
+          && request.auth.uid == uid
+          && resource.data.residentId == request.auth.uid
+        )
+        || (
+          isVolunteer()
+          && residentAssignmentForRead().volunteerId
+            == request.auth.uid
+          && residentAssignmentForRead().caseId
+            == resource.data.caseId
+          && residentAssignmentForRead().status in [
+            'accepted',
+            'responding',
+            'on_site'
+          ]
+          && residentCaseForRead().reporterUid
+            == resource.data.residentId
+          && residentCaseForRead().status in [
+            'assigned',
+            'in_progress'
+          ]
+        );
+
+      allow create: if approved()
+        && request.auth.uid == uid
+        && validResidentLocationPayload()
+        && residentCaseForWrite().reporterUid == request.auth.uid
+        && residentCaseForWrite().status in [
+          'assigned',
+          'in_progress'
+        ]
+        && residentAssignmentForWrite().caseId
+          == request.resource.data.caseId
+        && residentAssignmentForWrite().status in [
+          'accepted',
+          'responding',
+          'on_site'
+        ];
+
+      allow update: if approved()
+        && request.auth.uid == uid
+        && resource.data.residentId == request.auth.uid
+        && request.resource.data.residentId == resource.data.residentId
+        && request.resource.data.assignmentId == resource.data.assignmentId
+        && request.resource.data.caseId == resource.data.caseId
+        && validResidentLocationPayload()
+        && residentCaseForWrite().reporterUid == request.auth.uid
+        && residentCaseForWrite().status in [
+          'assigned',
+          'in_progress'
+        ]
+        && residentAssignmentForWrite().caseId
+          == request.resource.data.caseId
+        && residentAssignmentForWrite().status in [
+          'accepted',
+          'responding',
+          'on_site'
+        ];
+
+      // Owner can always stop/delete sharing, even after the assignment
+      // has just been completed. Admin may also clean stale records.
+      allow delete: if isAdmin()
+        || (
+          approved()
+          && request.auth.uid == uid
+          && resource.data.residentId == request.auth.uid
+        );
     }
 
     match /adminLogs/{logId} {

@@ -1,25 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-    collection,
-    onSnapshot,
-    orderBy,
-    query,
-    Timestamp,
-    where,
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
 } from "react-native";
+
 import { db } from "../../lib/firebase";
 import { usePublicSettings } from "../../lib/usePublicSettings";
 import { useUserSession } from "../../lib/useUserSession";
@@ -33,7 +34,7 @@ type Announcement = {
   publishAt?: any;
 };
 
-type CaseItem = {
+type DisasterCase = {
   id: string;
   title?: string;
   category?: string;
@@ -43,10 +44,19 @@ type CaseItem = {
   createdAt?: any;
 };
 
-type VolunteerEvent = {
+type AssistanceRequest = {
   id: string;
+  assistanceType?: string;
+  location?: string;
   status?: string;
   createdAt?: any;
+};
+
+type CaseInvitation = {
+  id: string;
+  caseId?: string;
+  status?: string;
+  invitedAt?: any;
 };
 
 type NotificationItem = {
@@ -54,62 +64,13 @@ type NotificationItem = {
   read?: boolean;
 };
 
-type ServiceCardData = {
-  title: string;
-  description: string;
+type WeatherState = {
+  dataTime: number;
+  temperature: number;
+  code: number;
+  label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  href: string;
-  colors: [string, string];
-  iconBackground: string;
-  foreground: string;
 };
-
-const serviceCards: ServiceCardData[] = [
-  {
-    title: "Emergency Report",
-    description: "Report hazards and emergencies in your area.",
-    icon: "warning",
-    href: "/disaster-response",
-    colors: ["#FFF4F5", "#FFE4E8"],
-    iconBackground: "#EF3340",
-    foreground: "#B91C2A",
-  },
-  {
-    title: "Request Assistance",
-    description: "Ask for support for you or someone in need.",
-    icon: "people",
-    href: "/resident",
-    colors: ["#FFF9ED", "#FFE9C7"],
-    iconBackground: "#F28C13",
-    foreground: "#A85A05",
-  },
-  {
-    title: "Live Operations Map",
-    description: "View incidents and response zones in real time.",
-    icon: "location",
-    href: "/map-tracking",
-    colors: ["#F0FDFA", "#D5F7EF"],
-    iconBackground: "#079A78",
-    foreground: "#076E60",
-  },
-  {
-    title: "Volunteer Tasks",
-    description: "Find events and join ongoing community missions.",
-    icon: "people-circle",
-    href: "/volunteer",
-    colors: ["#EFF7FF", "#DCEEFF"],
-    iconBackground: "#1677E8",
-    foreground: "#145EBA",
-  },
-];
-
-const progressSteps = [
-  { key: "reported", label: "Submitted" },
-  { key: "validated", label: "Validated" },
-  { key: "assigned", label: "Assigned" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "resolved", label: "Resolved" },
-];
 
 const toMillis = (value: any) => {
   if (!value) return 0;
@@ -126,7 +87,8 @@ const toMillis = (value: any) => {
 
 const formatDate = (value: any) => {
   const milliseconds = toMillis(value);
-  if (!milliseconds) return "Recently submitted";
+  if (!milliseconds) return "Recently";
+
   return new Date(milliseconds).toLocaleString([], {
     month: "short",
     day: "numeric",
@@ -137,14 +99,29 @@ const formatDate = (value: any) => {
 };
 
 const formatStatus = (value?: string) =>
-  String(value || "reported")
+  String(value || "pending")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
 
-const getProgressIndex = (status?: string) => {
-  if (status === "closed") return progressSteps.length - 1;
-  const index = progressSteps.findIndex((step) => step.key === status);
-  return index < 0 ? 0 : index;
+const weatherDescription = (
+  code: number
+): Pick<WeatherState, "label" | "icon"> => {
+  if (code === 0) return { label: "Clear sky", icon: "sunny" };
+  if ([1, 2].includes(code)) {
+    return { label: "Partly cloudy", icon: "partly-sunny" };
+  }
+  if (code === 3) return { label: "Cloudy", icon: "cloudy" };
+  if ([45, 48].includes(code)) return { label: "Foggy", icon: "cloudy" };
+  if ([51, 53, 55, 56, 57].includes(code)) {
+    return { label: "Drizzle", icon: "rainy" };
+  }
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+    return { label: "Rain", icon: "rainy" };
+  }
+  if ([95, 96, 99].includes(code)) {
+    return { label: "Thunderstorm", icon: "thunderstorm" };
+  }
+  return { label: "Weather update", icon: "partly-sunny" };
 };
 
 export default function WebHome() {
@@ -152,14 +129,23 @@ export default function WebHome() {
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
   const { settings } = usePublicSettings();
+
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [cases, setCases] = useState<CaseItem[]>([]);
-  const [events, setEvents] = useState<VolunteerEvent[]>([]);
+  const [cases, setCases] = useState<DisasterCase[]>([]);
+  const [assistanceRequests, setAssistanceRequests] = useState<
+    AssistanceRequest[]
+  >([]);
+  const [invitations, setInvitations] = useState<CaseInvitation[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weather, setWeather] = useState<WeatherState | null>(null);
 
-  const isNarrow = width < 860;
-  const isCompact = width < 1260;
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState(false);
+
+  const compact = width < 1040;
+  const narrow = width < 760;
+
   const composedName = [
     profile?.firstName,
     profile?.middleName,
@@ -168,6 +154,7 @@ export default function WebHome() {
     .filter(Boolean)
     .join(" ")
     .trim();
+
   const displayName =
     composedName ||
     profile?.fullName?.trim() ||
@@ -175,6 +162,7 @@ export default function WebHome() {
     profile?.email?.split("@")[0] ||
     user?.email?.split("@")[0] ||
     "VolunServe Member";
+
   const firstName = profile?.firstName?.trim() || displayName.split(" ")[0];
   const profileRole =
     profile?.role === "volunteer" ? "Volunteer" : "Community Member";
@@ -201,6 +189,7 @@ export default function WebHome() {
               item.audience === "all" ||
               item.audience === profile?.role
           );
+
         setAnnouncements(nextAnnouncements);
       },
       () => setAnnouncements([])
@@ -210,49 +199,66 @@ export default function WebHome() {
   useEffect(() => {
     if (!user) {
       setCases([]);
+      setAssistanceRequests([]);
       setNotifications([]);
+      setInvitations([]);
       setLoading(false);
       return;
     }
 
-    let pendingLoads = 2;
-    const markLoaded = () => {
-      pendingLoads -= 1;
-      if (pendingLoads <= 0) setLoading(false);
-    };
-
-    const casesQuery = query(
-      collection(db, "disasterCases"),
-      where("reporterUid", "==", user.uid)
-    );
-    const notificationsQuery = query(
-      collection(db, "notifications"),
-      where("userId", "==", user.uid)
-    );
+    setLoading(true);
 
     const unsubscribeCases = onSnapshot(
-      casesQuery,
+      query(
+        collection(db, "disasterCases"),
+        where("reporterUid", "==", user.uid)
+      ),
       (snapshot) => {
-        const nextCases = snapshot.docs
-          .map((item) => ({
-            id: item.id,
-            ...(item.data() as Omit<CaseItem, "id">),
-          }))
-          .sort(
-            (left, right) =>
-              toMillis(right.createdAt) - toMillis(left.createdAt)
-          );
-        setCases(nextCases);
-        markLoaded();
+        setCases(
+          snapshot.docs
+            .map((item) => ({
+              id: item.id,
+              ...(item.data() as Omit<DisasterCase, "id">),
+            }))
+            .sort(
+              (left, right) =>
+                toMillis(right.createdAt) - toMillis(left.createdAt)
+            )
+        );
+        setLoading(false);
       },
       () => {
         setCases([]);
-        markLoaded();
+        setLoading(false);
       }
     );
 
+    const unsubscribeAssistance = onSnapshot(
+      query(
+        collection(db, "assistanceRequests"),
+        where("requesterUid", "==", user.uid)
+      ),
+      (snapshot) => {
+        setAssistanceRequests(
+          snapshot.docs
+            .map((item) => ({
+              id: item.id,
+              ...(item.data() as Omit<AssistanceRequest, "id">),
+            }))
+            .sort(
+              (left, right) =>
+                toMillis(right.createdAt) - toMillis(left.createdAt)
+            )
+        );
+      },
+      () => setAssistanceRequests([])
+    );
+
     const unsubscribeNotifications = onSnapshot(
-      notificationsQuery,
+      query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid)
+      ),
       (snapshot) => {
         setNotifications(
           snapshot.docs.map((item) => ({
@@ -260,601 +266,429 @@ export default function WebHome() {
             ...(item.data() as Omit<NotificationItem, "id">),
           }))
         );
-        markLoaded();
       },
-      () => {
-        setNotifications([]);
-        markLoaded();
-      }
+      () => setNotifications([])
     );
+
+    let unsubscribeInvitations = () => {};
+
+    if (profile?.role === "volunteer") {
+      unsubscribeInvitations = onSnapshot(
+        query(
+          collection(db, "caseInvitations"),
+          where("volunteerId", "==", user.uid)
+        ),
+        (snapshot) => {
+          setInvitations(
+            snapshot.docs
+              .map((item) => ({
+                id: item.id,
+                ...(item.data() as Omit<CaseInvitation, "id">),
+              }))
+              .sort(
+                (left, right) =>
+                  toMillis(right.invitedAt) - toMillis(left.invitedAt)
+              )
+          );
+        },
+        () => setInvitations([])
+      );
+    } else {
+      setInvitations([]);
+    }
 
     return () => {
       unsubscribeCases();
+      unsubscribeAssistance();
       unsubscribeNotifications();
+      unsubscribeInvitations();
     };
-  }, [user]);
+  }, [user, profile?.role]);
 
-  useEffect(
-    () =>
-      onSnapshot(
-        collection(db, "volunteerEvents"),
-        (snapshot) => {
-          const nextEvents = snapshot.docs
-            .map((item) => ({
-              id: item.id,
-              ...(item.data() as Omit<VolunteerEvent, "id">),
-            }))
-            .filter((item) => item.status !== "completed")
-            .sort(
-              (left, right) =>
-                toMillis(right.createdAt) - toMillis(left.createdAt)
-            );
-          setEvents(nextEvents);
-        },
-        () => setEvents([])
-      ),
-    []
-  );
+  useEffect(() => {
+    let disposed = false;
+    let controller: AbortController | null = null;
+    let lastAttempt = 0;
+
+    const loadWeather = async () => {
+      if (disposed || controller || document.visibilityState === "hidden") return;
+      lastAttempt = Date.now();
+      const request = new AbortController();
+      controller = request;
+      const timeout = setTimeout(() => request.abort(), 12000);
+      setWeatherLoading(true);
+      try {
+        const response = await fetch(
+          "https://api.open-meteo.com/v1/forecast?latitude=14.813&longitude=121.045&current=temperature_2m,weather_code,is_day&temperature_unit=celsius&timeformat=unixtime&timezone=Asia%2FManila",
+          { signal: request.signal, cache: "no-store" }
+        );
+        if (!response.ok) throw new Error("Weather request failed");
+        const data = await response.json();
+        const current = data?.current;
+        if (
+          typeof current?.temperature_2m !== "number" ||
+          !Number.isFinite(current.temperature_2m) ||
+          !Number.isInteger(current.weather_code) ||
+          typeof current.time !== "number" ||
+          !Number.isFinite(current.time) || current.time <= 0
+        ) throw new Error("Invalid weather response");
+        const description = weatherDescription(current.weather_code);
+        if (current.is_day === 0 && current.weather_code === 0) {
+          description.icon = "moon";
+        } else if (current.is_day === 0 && [1, 2].includes(current.weather_code)) {
+          description.icon = "cloudy-night";
+        }
+        if (!disposed) {
+          setWeather({
+            temperature: current.temperature_2m,
+            code: current.weather_code,
+            dataTime: current.time * 1000,
+            ...description,
+          });
+          setWeatherError(false);
+        }
+      } catch {
+        // Keep the last successful reading; never replace a failed request with 0°C.
+        if (!disposed) setWeatherError(true);
+      } finally {
+        clearTimeout(timeout);
+        controller = null;
+        if (!disposed) setWeatherLoading(false);
+      }
+    };
+
+    const resume = () => {
+      // Focus and visibility events can fire together.
+      if (Date.now() - lastAttempt >= 30000) void loadWeather();
+    };
+    const online = () => void loadWeather();
+    void loadWeather();
+    const timer = setInterval(() => void loadWeather(), 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", online);
+
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      controller?.abort();
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", online);
+    };
+  }, []);
 
   const latestCase = cases[0];
-  const activeCases = useMemo(
-    () =>
-      cases.filter(
-        (item) =>
-          !["resolved", "closed"].includes(item.status || "reported")
-      ),
-    [cases]
-  );
-  const pendingCases = useMemo(
-    () =>
-      cases.filter((item) =>
-        ["reported", "validated"].includes(item.status || "reported")
-      ),
-    [cases]
-  );
+  const latestAssistance = assistanceRequests[0];
+  const latestInvitation = invitations[0];
+
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,
     [notifications]
   );
 
+  const reportStatus = latestCase
+    ? formatStatus(latestCase.status)
+    : "No reports";
+
+  const assistanceStatus = latestAssistance
+    ? formatStatus(latestAssistance.status)
+    : "No requests";
+
+  const volunteerStatus =
+    profile?.role === "volunteer"
+      ? latestInvitation
+        ? formatStatus(latestInvitation.status)
+        : "No assignments"
+      : "Not enrolled";
+
   return (
     <View style={styles.screen}>
       <ScrollView
-        showsVerticalScrollIndicator={true}
+        showsVerticalScrollIndicator
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.page}>
-          <View style={[styles.topBar, isNarrow && styles.topBarNarrow]}>
-            <View style={styles.topBarCopy}>
-              <Text style={styles.eyebrow}>RESIDENT OPERATIONS CENTER</Text>
-              <Text style={styles.pageTitle}>Good day, {firstName}</Text>
-              <Text style={styles.pageSubtitle}>
-                Here is the latest safety and community response activity.
-              </Text>
-            </View>
+          <ImageBackground
+            source={require("../../assets/images/sjdm-aerial.png")}
+            resizeMode="cover"
+            style={[styles.hero, compact && styles.heroCompact]}
+            imageStyle={[
+              styles.heroImage,
+              { objectPosition: "center 82%" } as any,
+            ]}
+          >
+            <View style={styles.heroOverlay} />
 
-            <View style={styles.topActions}>
-              {!isNarrow ? (
-                <View style={styles.operationalPill}>
-                  <View style={styles.operationalDot} />
-                  <Text style={styles.operationalText}>System operational</Text>
-                </View>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open notifications"
-                style={({ pressed }) => [
-                  styles.notificationButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => router.push("/notifications")}
-              >
-                <Ionicons
-                  name="notifications-outline"
-                  size={23}
-                  color="#183153"
-                />
-                {unreadCount > 0 ? (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
-                style={({ pressed }) => [
-                  styles.headerProfile,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => router.push("/profile")}
-              >
-                {profile?.profilePictureUrl ? (
-                  <Image
-                    source={{ uri: profile.profilePictureUrl }}
-                    resizeMode="cover"
-                    style={styles.headerAvatarImage}
-                  />
-                ) : (
-                  <View style={styles.headerAvatarFallback}>
-                    <Text style={styles.headerAvatarText}>{profileInitial}</Text>
-                  </View>
-                )}
-                <View style={styles.headerProfileCopy}>
-                  <Text style={styles.headerProfileName} numberOfLines={1}>
-                    {displayName}
-                  </Text>
-                  <Text style={styles.headerProfileRole}>{profileRole}</Text>
-                </View>
-                <Ionicons name="chevron-down" size={16} color="#60728A" />
-              </Pressable>
-            </View>
-          </View>
+            <View style={[styles.heroTop, narrow && styles.heroTopNarrow]}>
+              <View style={styles.operationalPill}>
+                <View style={styles.operationalDot} />
+                <Text style={styles.operationalText}>System operational</Text>
+              </View>
 
-          <View style={[styles.heroRow, isCompact && styles.stack]}>
-            <LinearGradient
-              colors={["#046E71", "#058C88", "#0BAA8E"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.hero}
-            >
-              <View style={[styles.heroCopy, isNarrow && styles.heroCopyNarrow]}>
-                <View style={styles.heroLabel}>
+              <View style={styles.topActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open notifications"
+                  style={({ pressed }) => [
+                    styles.notificationButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => router.push("/notifications")}
+                >
                   <Ionicons
-                    name="shield-checkmark"
-                    size={16}
-                    color="#CFFCF0"
+                    name="notifications-outline"
+                    size={23}
+                    color="#122B55"
                   />
-                  <Text style={styles.heroLabelText}>{settings.cityName}</Text>
-                </View>
-                <Text style={styles.heroTitle}>
-                  Together for a Safer Community
-                </Text>
-                <Text style={styles.heroText}>
-                  Report incidents, request help, follow response updates, and
-                  support your community—all in one place.
-                </Text>
-                <View style={styles.heroButtons}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.primaryHeroButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => router.push("/disaster-response")}
-                  >
-                    <Ionicons name="warning" size={18} color="#C51F31" />
-                    <Text style={styles.primaryHeroButtonText}>
-                      Report Emergency
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.secondaryHeroButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => router.push("/map-tracking")}
-                  >
-                    <Ionicons name="map-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.secondaryHeroButtonText}>
-                      Open Live Map
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              <Image
-                source={require("../../assets/images/volunserve_family_ph_flag.png")}
-                resizeMode="contain"
-                style={[styles.heroImage, isNarrow && styles.heroImageNarrow]}
-              />
-              <View pointerEvents="none" style={styles.heroGlow} />
-            </LinearGradient>
-
-            <View
-              style={[styles.emergencyCard, isCompact && styles.fullWidth]}
-            >
-              <View style={styles.emergencyIcon}>
-                <Ionicons name="call" size={23} color="#FFFFFF" />
-              </View>
-              <Text style={styles.emergencyLabel}>
-                OFFICIAL EMERGENCY CONTACT
-              </Text>
-              <Text style={styles.emergencyTitle}>
-                {settings.emergencyHotline}
-              </Text>
-              <Text style={styles.emergencyText}>
-                For life-threatening emergencies, contact your local response
-                office immediately.
-              </Text>
-              <View style={styles.noticeRow}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={17}
-                  color="#9F1239"
-                />
-                <Text style={styles.noticeText}>
-                  {settings.publicServiceNotice}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <SectionHeader
-            title="Main Services"
-            subtitle="Choose the service you need"
-          />
-
-          <View style={[styles.serviceGrid, isNarrow && styles.stack]}>
-            {serviceCards.map((service) => (
-              <Pressable
-                key={service.title}
-                style={({ pressed }) => [
-                  styles.serviceCard,
-                  isNarrow && styles.fullWidth,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={() => router.push(service.href as any)}
-              >
-                <LinearGradient
-                  colors={service.colors}
-                  style={styles.serviceGradient}
-                >
-                  <View
-                    style={[
-                      styles.serviceIcon,
-                      { backgroundColor: service.iconBackground },
-                    ]}
-                  >
-                    <Ionicons name={service.icon} size={27} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.serviceCopy}>
-                    <Text
-                      style={[
-                        styles.serviceTitle,
-                        { color: service.foreground },
-                      ]}
-                    >
-                      {service.title}
-                    </Text>
-                    <Text style={styles.serviceDescription}>
-                      {service.description}
-                    </Text>
-                  </View>
-                  <View style={styles.arrowCircle}>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={18}
-                      color={service.foreground}
-                    />
-                  </View>
-                </LinearGradient>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.statsGrid}>
-            <StatCard
-              label="Active Reports"
-              value={activeCases.length}
-              icon="alert-circle-outline"
-              background="#FFF1F2"
-              color="#D72D3F"
-              isNarrow={isNarrow}
-            />
-            <StatCard
-              label="Awaiting Review"
-              value={pendingCases.length}
-              icon="time-outline"
-              background="#FFF7E7"
-              color="#C76A08"
-              isNarrow={isNarrow}
-            />
-            <StatCard
-              label="Available Missions"
-              value={events.length}
-              icon="calendar-outline"
-              background="#EAF8F3"
-              color="#078F6F"
-              isNarrow={isNarrow}
-            />
-            <StatCard
-              label="Unread Updates"
-              value={unreadCount}
-              icon="notifications-outline"
-              background="#EDF5FF"
-              color="#176FD1"
-              isNarrow={isNarrow}
-            />
-          </View>
-
-          <View style={[styles.contentGrid, isCompact && styles.stack]}>
-            <View style={styles.primaryColumn}>
-              <View style={styles.panel}>
-                <View style={styles.panelHeader}>
-                  <View>
-                    <Text style={styles.panelEyebrow}>RESPONSE TRACKER</Text>
-                    <Text style={styles.panelTitle}>Latest Report Status</Text>
-                  </View>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.textButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => router.push("/my-cases")}
-                  >
-                    <Text style={styles.textButtonLabel}>View all reports</Text>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={16}
-                      color="#078F82"
-                    />
-                  </Pressable>
-                </View>
-
-                {loading ? (
-                  <View style={styles.loadingBlock}>
-                    <ActivityIndicator color="#078F82" />
-                    <Text style={styles.loadingText}>
-                      Loading your latest report...
-                    </Text>
-                  </View>
-                ) : latestCase ? (
-                  <>
-                    <View style={styles.caseSummary}>
-                      <View style={styles.caseIcon}>
-                        <Ionicons name="warning" size={24} color="#FFFFFF" />
-                      </View>
-                      <View style={styles.caseCopy}>
-                        <View style={styles.caseTitleRow}>
-                          <Text style={styles.caseTitle} numberOfLines={1}>
-                            {latestCase.title ||
-                              latestCase.category ||
-                              "Emergency Report"}
-                          </Text>
-                          <View style={styles.verifiedPill}>
-                            <Ionicons
-                              name="shield-checkmark"
-                              size={14}
-                              color="#087F5B"
-                            />
-                            <Text style={styles.verifiedText}>
-                              {formatStatus(latestCase.status)}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.caseMeta}>
-                          {latestCase.location || "Location pending"} ·{" "}
-                          {formatDate(latestCase.createdAt)}
-                        </Text>
-                        <Text style={styles.caseDescription}>
-                          Severity: {formatStatus(latestCase.severity || "medium")}.
-                          Follow the status below for official response updates.
-                        </Text>
-                      </View>
-                    </View>
-
-                    <ReportProgress
-                      status={latestCase.status}
-                      compact={isNarrow}
-                    />
-
-                    <View
-                      style={[
-                        styles.panelActions,
-                        isNarrow && styles.stack,
-                      ]}
-                    >
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.outlineAction,
-                          pressed && styles.pressed,
-                        ]}
-                        onPress={() => router.push("/my-cases")}
-                      >
-                        <Ionicons
-                          name="document-text-outline"
-                          size={18}
-                          color="#1269CB"
-                        />
-                        <Text style={styles.outlineActionText}>
-                          View Report Details
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.solidAction,
-                          pressed && styles.pressed,
-                        ]}
-                        onPress={() => router.push("/map-tracking")}
-                      >
-                        <Ionicons name="map" size={18} color="#FFFFFF" />
-                        <Text style={styles.solidActionText}>View on Map</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.emptyState}>
-                    <View style={styles.emptyIcon}>
-                      <Ionicons
-                        name="checkmark-circle-outline"
-                        size={30}
-                        color="#078F82"
-                      />
-                    </View>
-                    <Text style={styles.emptyTitle}>
-                      No reports submitted yet
-                    </Text>
-                    <Text style={styles.emptyText}>
-                      Your emergency and disaster reports will appear here with
-                      live status updates.
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.emptyButton,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => router.push("/disaster-response")}
-                    >
-                      <Text style={styles.emptyButtonText}>Create a report</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.donationCard,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={() => router.push("/donation")}
-              >
-                <LinearGradient
-                  colors={["#6E35D7", "#A638D5", "#D5489D"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.donationGradient}
-                >
-                  <View style={styles.donationIcon}>
-                    <Ionicons name="heart" size={28} color="#E32647" />
-                  </View>
-                  <View style={styles.donationCopy}>
-                    <Text style={styles.donationTitle}>
-                      Your support brings hope
-                    </Text>
-                    <Text style={styles.donationText}>
-                      Support relief operations and community recovery programs.
-                    </Text>
-                  </View>
-                  {!isNarrow ? (
-                    <View style={styles.donationButton}>
-                      <Text style={styles.donationButtonText}>Donate now</Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={17}
-                        color="#7331C8"
-                      />
+                  {unreadCount > 0 ? (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </Text>
                     </View>
                   ) : null}
-                </LinearGradient>
-              </Pressable>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                  style={({ pressed }) => [
+                    styles.profileButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => router.push("/profile")}
+                >
+                  {profile?.profilePictureUrl ? (
+                    <Image
+                      source={{ uri: profile.profilePictureUrl }}
+                      style={styles.profileImage}
+                    />
+                  ) : (
+                    <View style={styles.profileFallback}>
+                      <Text style={styles.profileInitial}>{profileInitial}</Text>
+                    </View>
+                  )}
+                  {!narrow ? (
+                    <View style={styles.profileCopy}>
+                      <Text style={styles.profileName} numberOfLines={1}>
+                        {displayName}
+                      </Text>
+                      <Text style={styles.profileRole}>{profileRole}</Text>
+                    </View>
+                  ) : null}
+                  <Ionicons name="chevron-down" size={16} color="#183153" />
+                </Pressable>
+              </View>
             </View>
 
-            <View
-              style={[styles.sideColumn, isCompact && styles.fullWidth]}
-            >
-              <View style={styles.panel}>
-                <View style={styles.panelHeader}>
-                  <View>
-                    <Text style={styles.panelEyebrow}>OFFICIAL UPDATES</Text>
-                    <Text style={styles.panelTitle}>Announcements</Text>
+            <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
+              <View style={styles.heroLeft}>
+                <Text style={styles.eyebrow}>RESIDENT OPERATIONS CENTER</Text>
+                <Text style={[styles.greeting, narrow && styles.greetingNarrow]}>
+                  Good day, {firstName}!
+                </Text>
+                <Text style={styles.heroSubtitle}>
+                  Here&apos;s what&apos;s happening in San Jose del Monte today.
+                </Text>
+
+                <View style={[styles.locationWeather, narrow && styles.locationWeatherNarrow]}>
+                  <View style={styles.locationSection}>
+                    <Ionicons name="location" size={22} color="#FFFFFF" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      San Jose del Monte, Bulacan
+                    </Text>
                   </View>
+
+                  <View style={styles.weatherSection}>
+                    {weather ? (
+                      <>
+                        <Ionicons name={weather.icon} size={29} color="#FFD54A" />
+                        <Text style={styles.temperatureText}>
+                          {Math.round(weather.temperature)}°C
+                        </Text>
+                        <Text style={styles.weatherLabel}>{weather.label}</Text>
+                      </>
+                    ) : (
+                      <Text style={styles.weatherLabel}>
+                        {weatherLoading ? "Loading weather…" : "Weather unavailable"}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.weatherMeta}>
+                  <Text style={styles.weatherMetaText}>
+                    {weather
+                      ? "Weather data: " + new Date(weather.dataTime).toLocaleString("en-PH", {
+                          timeZone: "Asia/Manila", month: "short", day: "numeric",
+                          hour: "numeric", minute: "2-digit",
+                        }) + " PHT"
+                      : "SJDM weather"}
+                    {weatherLoading ? " · Updating…" : weatherError ? " · Update unavailable" : ""}
+                  </Text>
                   <Pressable
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => router.push("/announcements")}
+                    accessibilityRole="link"
+                    accessibilityLabel="Weather data by Open-Meteo"
+                    onPress={() => window.open("https://open-meteo.com/", "_blank", "noopener,noreferrer")}
                   >
-                    <Ionicons
-                      name="arrow-forward"
-                      size={18}
-                      color="#078F82"
-                    />
+                    <Text style={styles.weatherSource}>Weather by Open-Meteo</Text>
                   </Pressable>
                 </View>
-
-                {announcements.length ? (
-                  announcements.slice(0, 3).map((announcement, index) => (
-                    <Pressable
-                      key={announcement.id}
-                      style={({ pressed }) => [
-                        styles.announcementRow,
-                        index > 0 && styles.rowBorder,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => router.push("/announcements")}
-                    >
-                      <View
-                        style={[
-                          styles.announcementIcon,
-                          announcement.priority === "urgent" &&
-                            styles.urgentAnnouncementIcon,
-                        ]}
-                      >
-                        <Ionicons
-                          name={
-                            announcement.priority === "urgent"
-                              ? "warning"
-                              : "megaphone"
-                          }
-                          size={18}
-                          color={
-                            announcement.priority === "urgent"
-                              ? "#D52E42"
-                              : "#078F82"
-                          }
-                        />
-                      </View>
-                      <View style={styles.announcementCopy}>
-                        <View style={styles.announcementTitleRow}>
-                          <Text
-                            style={styles.announcementTitle}
-                            numberOfLines={1}
-                          >
-                            {announcement.title || "VolunServe Update"}
-                          </Text>
-                          {announcement.priority === "urgent" ? (
-                            <Text style={styles.urgentLabel}>URGENT</Text>
-                          ) : null}
-                        </View>
-                        <Text
-                          style={styles.announcementMessage}
-                          numberOfLines={2}
-                        >
-                          {announcement.message ||
-                            "Open to view this announcement."}
-                        </Text>
-                        <Text style={styles.announcementDate}>
-                          {formatDate(announcement.publishAt)}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  ))
-                ) : (
-                  <View style={styles.smallEmptyState}>
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={28}
-                      color="#078F82"
-                    />
-                    <Text style={styles.smallEmptyTitle}>
-                      No current announcements
-                    </Text>
-                    <Text style={styles.smallEmptyText}>
-                      Official notices will appear here.
-                    </Text>
-                  </View>
-                )}
               </View>
 
-              <View style={styles.safetyCard}>
-                <View style={styles.safetyIcon}>
-                  <Ionicons
-                    name="lock-closed"
-                    size={20}
-                    color="#176FD1"
+              <View style={[styles.heroCenter, compact && styles.heroCenterCompact]}>
+                <View style={[styles.citySealGlow, compact && styles.citySealGlowCompact]} />
+                <View style={[styles.citySealFrame, compact && styles.citySealFrameCompact]}>
+                  <Image
+                    source={require("../../assets/images/sjdm-rising-city.png")}
+                    resizeMode="cover"
+                    style={[styles.citySeal, compact && styles.citySealCompact]}
                   />
                 </View>
-                <View style={styles.safetyCopy}>
-                  <Text style={styles.safetyTitle}>Your privacy matters</Text>
-                  <Text style={styles.safetyText}>
-                    Exact locations are visible only to authorized responders
-                    assigned to your request.
-                  </Text>
+              </View>
+
+              <View style={[styles.heroRight, compact && styles.heroRightCompact]}>
+                <Text style={styles.heroRightTitle}>Your community{`\n`}at a glance</Text>
+                <Text style={styles.heroRightText}>
+                  Generally stable conditions across San Jose del Monte today.
+                  Local teams remain on alert and monitoring.
+                </Text>
+                <View style={styles.sloganRow}>
+                  <View style={styles.sloganLine} />
+                  <Text style={styles.slogan}>Together for a Safer Tomorrow</Text>
                 </View>
               </View>
+            </View>
+          </ImageBackground>
+
+          <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
+            <View style={styles.panel}>
+              <PanelTitle
+                icon="document-text"
+                title="Your Current Activity"
+                subtitle="A quick summary of your recent reports, requests, and volunteer involvement."
+              />
+
+              {loading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#177CF2" />
+                  <Text style={styles.loadingText}>Loading your activity…</Text>
+                </View>
+              ) : (
+                <>
+                  <ActivityRow
+                    icon="document-text-outline"
+                    iconBackground="#E8F3FF"
+                    iconColor="#177CF2"
+                    title="Latest Report Status"
+                    subtitle={
+                      latestCase
+                        ? latestCase.title ||
+                          latestCase.category ||
+                          "Emergency report"
+                        : "No reports yet."
+                    }
+                    status={reportStatus}
+                    onPress={() => router.push("/my-cases")}
+                  />
+                  <ActivityRow
+                    icon="people-outline"
+                    iconBackground="#E6F8F4"
+                    iconColor="#079B8B"
+                    title="Assistance Request Status"
+                    subtitle={
+                      latestAssistance
+                        ? latestAssistance.assistanceType ||
+                          latestAssistance.location ||
+                          "Assistance request"
+                        : "No requests yet."
+                    }
+                    status={assistanceStatus}
+                    onPress={() => router.push("/resident")}
+                  />
+                  <ActivityRow
+                    icon="shield-checkmark-outline"
+                    iconBackground="#EEF1FF"
+                    iconColor="#316FEA"
+                    title="Volunteer Assignment Status"
+                    subtitle={
+                      profile?.role === "volunteer"
+                        ? latestInvitation
+                          ? "Open your volunteer tasks for details."
+                          : "No active assignments."
+                        : "Apply as a volunteer to receive assignments."
+                    }
+                    status={volunteerStatus}
+                    onPress={() => router.push("/volunteer-application")}
+                    last
+                  />
+                </>
+              )}
+            </View>
+
+            <View style={styles.panel}>
+              <PanelTitle
+                icon="megaphone"
+                title="Community Updates"
+                subtitle="Important announcements from the local response team."
+                action="View All"
+                onAction={() => router.push("/announcements")}
+              />
+
+              {announcements.length ? (
+                announcements.slice(0, 3).map((announcement, index) => (
+                  <UpdateRow
+                    key={announcement.id}
+                    announcement={announcement}
+                    last={index === Math.min(announcements.length, 3) - 1}
+                    onPress={() => router.push("/announcements")}
+                  />
+                ))
+              ) : (
+                <View style={styles.emptyUpdates}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={30}
+                    color="#0B9B83"
+                  />
+                  <View style={styles.emptyUpdatesCopy}>
+                    <Text style={styles.emptyUpdatesTitle}>
+                      No published updates
+                    </Text>
+                    <Text style={styles.emptyUpdatesText}>
+                      Official announcements will appear here.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.emergencyPanel}>
+            <View style={styles.emergencyHeader}>
+              <View style={styles.emergencyHeadingIcon}>
+                <Ionicons name="call" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.emergencyHeaderCopy}>
+                <Text style={styles.emergencyTitle}>Emergency Contacts</Text>
+                <Text style={styles.emergencySubtitle}>
+                  For life-threatening situations, contact official emergency
+                  services immediately.
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.contactGrid, narrow && styles.contactGridNarrow]}>
+              <ContactCard
+                title="Official Local Response Contact"
+                value={settings.emergencyHotline}
+                subtitle="Local emergency response information"
+              />
+              <ContactCard
+                title="National Emergency Hotline"
+                value="911"
+                subtitle="Available nationwide 24/7"
+              />
             </View>
           </View>
         </View>
@@ -863,192 +697,244 @@ export default function WebHome() {
   );
 }
 
-function SectionHeader({
+function PanelTitle({
+  icon,
   title,
   subtitle,
   action,
-  onPress,
+  onAction,
 }: {
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   action?: string;
-  onPress?: () => void;
+  onAction?: () => void;
 }) {
   return (
-    <View style={styles.sectionHeader}>
-      <View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    <View style={styles.panelHeader}>
+      <View style={styles.panelHeaderLeft}>
+        <View style={styles.panelIcon}>
+          <Ionicons name={icon} size={22} color="#177CF2" />
+        </View>
+        <View style={styles.panelHeaderCopy}>
+          <Text style={styles.panelTitle}>{title}</Text>
+          <Text style={styles.panelSubtitle}>{subtitle}</Text>
+        </View>
       </View>
-      {action && onPress ? (
-        <Pressable
-          style={({ pressed }) => pressed && styles.pressed}
-          onPress={onPress}
-        >
-          <Text style={styles.sectionAction}>{action}</Text>
+
+      {action && onAction ? (
+        <Pressable onPress={onAction} style={({ pressed }) => pressed && styles.pressed}>
+          <Text style={styles.viewAll}>{action}  ›</Text>
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-function StatCard({
-  label,
-  value,
+function ActivityRow({
   icon,
-  background,
-  color,
-  isNarrow,
+  iconBackground,
+  iconColor,
+  title,
+  subtitle,
+  status,
+  onPress,
+  last,
 }: {
-  label: string;
-  value: number;
   icon: keyof typeof Ionicons.glyphMap;
-  background: string;
-  color: string;
-  isNarrow: boolean;
+  iconBackground: string;
+  iconColor: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  onPress: () => void;
+  last?: boolean;
 }) {
   return (
-    <View style={[styles.statCard, isNarrow && styles.statCardNarrow]}>
-      <View style={[styles.statIcon, { backgroundColor: background }]}>
-        <Ionicons name={icon} size={21} color={color} />
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.activityRow,
+        !last && styles.rowDivider,
+        pressed && styles.rowPressed,
+      ]}
+    >
+      <View style={[styles.activityIcon, { backgroundColor: iconBackground }]}>
+        <Ionicons name={icon} size={23} color={iconColor} />
       </View>
-      <View>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
+      <View style={styles.activityCopy}>
+        <Text style={styles.activityTitle}>{title}</Text>
+        <Text style={styles.activitySubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
       </View>
-    </View>
+      <View style={styles.statusPill}>
+        <Text style={styles.statusText} numberOfLines={1}>
+          {status}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
-function ReportProgress({ status, compact }: { status?: string; compact: boolean }) {
-  const progressIndex = getProgressIndex(status);
+function UpdateRow({
+  announcement,
+  onPress,
+  last,
+}: {
+  announcement: Announcement;
+  onPress: () => void;
+  last?: boolean;
+}) {
+  const urgent = announcement.priority === "urgent";
 
   return (
-    <View style={[styles.progress, compact && styles.progressCompact]}>
-      {progressSteps.map((step, index) => {
-        const complete = index <= progressIndex;
-        return (
-          <React.Fragment key={step.key}>
-            <View style={styles.progressStep}>
-              <View
-                style={[
-                  styles.progressCircle,
-                  complete && styles.progressCircleComplete,
-                ]}
-              >
-                {index < progressIndex ? (
-                  <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-                ) : (
-                  <Text
-                    style={[
-                      styles.progressNumber,
-                      complete && styles.progressNumberComplete,
-                    ]}
-                  >
-                    {index + 1}
-                  </Text>
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.progressLabel,
-                  complete && styles.progressLabelComplete,
-                ]}
-              >
-                {step.label}
-              </Text>
-            </View>
-            {index < progressSteps.length - 1 ? (
-              <View
-                style={[
-                  styles.progressLine,
-                  index < progressIndex && styles.progressLineComplete,
-                ]}
-              />
-            ) : null}
-          </React.Fragment>
-        );
-      })}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.updateRow,
+        !last && styles.rowDivider,
+        pressed && styles.rowPressed,
+      ]}
+    >
+      <View
+        style={[
+          styles.updateIcon,
+          urgent ? styles.updateIconUrgent : styles.updateIconNormal,
+        ]}
+      >
+        <Ionicons
+          name={urgent ? "warning-outline" : "information-circle-outline"}
+          size={25}
+          color={urgent ? "#F03447" : "#167AF4"}
+        />
+      </View>
+      <View style={styles.updateCopy}>
+        <Text style={styles.updateTitle} numberOfLines={1}>
+          {announcement.title || "VolunServe Update"}
+        </Text>
+        <Text style={styles.updateMessage} numberOfLines={2}>
+          {announcement.message || "Open this announcement to view details."}
+        </Text>
+      </View>
+      <Text style={styles.updateDate}>{formatDate(announcement.publishAt)}</Text>
+    </Pressable>
+  );
+}
+
+function ContactCard({
+  title,
+  value,
+  subtitle,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+}) {
+  return (
+    <View style={styles.contactCard}>
+      <View style={styles.contactIcon}>
+        <Ionicons name="call" size={24} color="#F13447" />
+      </View>
+      <View style={styles.contactCopy}>
+        <Text style={styles.contactTitle}>{title}</Text>
+        <Text style={styles.contactValue} numberOfLines={2}>
+          {value}
+        </Text>
+        <Text style={styles.contactSubtitle}>{subtitle}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F3F7FA" },
-  scrollContent: { flexGrow: 1, paddingBottom: 34 },
+  screen: {
+    flex: 1,
+    backgroundColor: "#EFF8FD",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
   page: {
     width: "100%",
-    maxWidth: 1480,
+    maxWidth: 1520,
     alignSelf: "center",
-    paddingHorizontal: 28,
-    paddingTop: 22,
+    paddingHorizontal: 18,
+    paddingTop: 16,
   },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
+  hero: {
+    minHeight: 365,
+    overflow: "hidden",
+    borderRadius: 0,
+    paddingHorizontal: 34,
+    paddingTop: 18,
+    paddingBottom: 24,
     justifyContent: "space-between",
-    gap: 24,
-    marginBottom: 20,
   },
-  topBarNarrow: { alignItems: "flex-start" },
-  topBarCopy: { flex: 1, minWidth: 0 },
-  eyebrow: {
-    color: "#078F82",
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.3,
+  heroCompact: {
+    minHeight: 520,
   },
-  pageTitle: {
-    marginTop: 5,
-    color: "#10233F",
-    fontSize: 30,
-    fontWeight: "900",
+  heroImage: {
+    borderRadius: 0,
   },
-  pageSubtitle: {
-    marginTop: 4,
-    color: "#66758A",
-    fontSize: 14,
-    lineHeight: 20,
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3, 18, 31, 0.20)",
   },
-  topActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  heroTop: {
+    zIndex: 3,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 12,
+  },
+  heroTopNarrow: {
+    justifyContent: "space-between",
+  },
   operationalPill: {
-    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 14,
-    borderRadius: 13,
-    backgroundColor: "#E7F8F1",
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(235, 255, 248, 0.94)",
     borderWidth: 1,
-    borderColor: "#C7EDDF",
+    borderColor: "rgba(178, 229, 213, 0.95)",
   },
   operationalDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#08A473",
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#0AA679",
   },
-  operationalText: { color: "#08765B", fontSize: 12, fontWeight: "800" },
+  operationalText: {
+    color: "#08735C",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  topActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   notificationButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1,
-    borderColor: "#DFE7EE",
-    shadowColor: "#17324D",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    borderColor: "rgba(224,232,240,0.95)",
   },
   notificationBadge: {
     position: "absolute",
     right: -3,
-    top: -4,
-    minWidth: 19,
-    height: 19,
+    top: -5,
+    minWidth: 20,
+    height: 20,
     paddingHorizontal: 4,
     borderRadius: 10,
     alignItems: "center",
@@ -1057,578 +943,546 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },
-  notificationBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
-  headerProfile: {
-    minWidth: 196,
-    maxWidth: 235,
-    height: 50,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 9,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    shadowColor: "#17324D",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-  },
-  headerAvatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: "#E7F8F4",
-  },
-  headerAvatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#078F82",
-  },
-  headerAvatarText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  headerProfileCopy: { flex: 1, minWidth: 0 },
-  headerProfileName: { color: "#17243A", fontSize: 11.5, fontWeight: "900" },
-  headerProfileRole: { marginTop: 2, color: "#7A8798", fontSize: 9.5 },
-  heroRow: { flexDirection: "row", gap: 18 },
-  stack: { flexDirection: "column" },
-  fullWidth: { width: "100%", maxWidth: undefined },
-  hero: {
-    flex: 1,
-    minHeight: 288,
-    overflow: "hidden",
-    borderRadius: 26,
-    padding: 32,
-    justifyContent: "center",
-    shadowColor: "#046E71",
-    shadowOffset: { width: 0, height: 13 },
-    shadowOpacity: 0.17,
-    shadowRadius: 24,
-  },
-  heroCopy: { width: "62%", maxWidth: 620, zIndex: 2 },
-  heroCopyNarrow: { width: "100%" },
-  heroLabel: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.13)",
-  },
-  heroLabelText: { color: "#D9FFF5", fontSize: 11, fontWeight: "800" },
-  heroTitle: {
-    marginTop: 18,
+  notificationBadgeText: {
     color: "#FFFFFF",
-    fontSize: 33,
-    lineHeight: 39,
+    fontSize: 9,
     fontWeight: "900",
-    maxWidth: 520,
   },
-  heroText: {
-    marginTop: 12,
-    color: "#D8F8F2",
-    fontSize: 14,
-    lineHeight: 22,
-    maxWidth: 540,
-  },
-  heroButtons: {
-    marginTop: 20,
+  profileButton: {
+    minHeight: 50,
+    minWidth: 198,
+    maxWidth: 260,
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     gap: 10,
-  },
-  primaryHeroButton: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    borderRadius: 13,
-    backgroundColor: "#FFFFFF",
-  },
-  primaryHeroButtonText: { color: "#B91C2A", fontSize: 13, fontWeight: "900" },
-  secondaryHeroButton: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.13)",
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.36)",
+    borderColor: "rgba(224,232,240,0.95)",
   },
-  secondaryHeroButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  heroImage: {
-    position: "absolute",
-    right: -5,
-    bottom: -12,
-    width: "40%",
-    height: "93%",
-    zIndex: 1,
-  },
-  heroImageNarrow: { opacity: 0.3, right: -55, width: "65%" },
-  heroGlow: {
-    position: "absolute",
-    width: 340,
-    height: 340,
-    borderRadius: 170,
-    right: -120,
-    top: -130,
-    backgroundColor: "rgba(255,255,255,0.09)",
-  },
-  emergencyCard: {
-    width: 300,
-    minHeight: 288,
-    borderRadius: 26,
-    padding: 23,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#F0D5D9",
-    shadowColor: "#7F1D1D",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
-  },
-  emergencyIcon: {
-    width: 47,
-    height: 47,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EF3340",
-  },
-  emergencyLabel: {
-    marginTop: 18,
-    color: "#C0263A",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-  emergencyTitle: {
-    marginTop: 7,
-    color: "#17243A",
-    fontSize: 19,
-    lineHeight: 25,
-    fontWeight: "900",
-  },
-  emergencyText: {
-    marginTop: 8,
-    color: "#65758B",
-    fontSize: 12,
-    lineHeight: 19,
-  },
-  noticeRow: {
-    marginTop: "auto",
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 7,
-    paddingTop: 16,
-  },
-  noticeText: { flex: 1, color: "#8A4653", fontSize: 10.5, lineHeight: 16 },
-  sectionHeader: {
-    marginTop: 24,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  sectionTitle: { color: "#152844", fontSize: 20, fontWeight: "900" },
-  sectionSubtitle: { marginTop: 3, color: "#758398", fontSize: 12 },
-  sectionAction: { color: "#078F82", fontSize: 12, fontWeight: "900" },
-  serviceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  serviceCard: {
-    minWidth: 230,
-    flexGrow: 1,
-    flexBasis: 250,
-    maxWidth: "49%",
-    borderRadius: 19,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    shadowColor: "#183153",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-  },
-  serviceGradient: {
-    minHeight: 116,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 17,
-  },
-  serviceIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  serviceCopy: { flex: 1, minWidth: 0, paddingHorizontal: 14 },
-  serviceTitle: { fontSize: 15, fontWeight: "900" },
-  serviceDescription: {
-    marginTop: 6,
-    color: "#5E6D81",
-    fontSize: 11.5,
-    lineHeight: 17,
-  },
-  arrowCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.78)",
-  },
-  statsGrid: {
-    marginTop: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: 190,
-    minHeight: 78,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-    paddingHorizontal: 15,
-    borderRadius: 17,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E1E8EF",
-  },
-  statCardNarrow: { minWidth: "47%" },
-  statIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statValue: { color: "#152844", fontSize: 23, fontWeight: "900" },
-  statLabel: {
-    marginTop: 2,
-    color: "#6C7A8D",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  contentGrid: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  primaryColumn: { flex: 1, minWidth: 0, gap: 14 },
-  sideColumn: { width: 380, gap: 14 },
-  panel: {
-    padding: 20,
-    borderRadius: 21,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    shadowColor: "#183153",
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-  },
-  panelHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-    marginBottom: 14,
-  },
-  panelEyebrow: {
-    color: "#078F82",
-    fontSize: 9.5,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-  panelTitle: {
-    marginTop: 4,
-    color: "#172944",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  textButton: { flexDirection: "row", alignItems: "center", gap: 5 },
-  textButtonLabel: { color: "#078F82", fontSize: 11.5, fontWeight: "900" },
-  iconButton: {
+  profileImage: {
     width: 36,
     height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E7F8F4",
+    borderRadius: 18,
   },
-  loadingBlock: { minHeight: 180, alignItems: "center", justifyContent: "center" },
-  loadingText: { marginTop: 9, color: "#758398", fontSize: 12 },
-  caseSummary: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-    padding: 16,
-    borderRadius: 17,
-    backgroundColor: "#FAFCFE",
-    borderWidth: 1,
-    borderColor: "#E5EBF1",
-  },
-  caseIcon: {
-    width: 49,
-    height: 49,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EF3340",
-  },
-  caseCopy: { flex: 1, minWidth: 0 },
-  caseTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  caseTitle: {
-    flex: 1,
-    minWidth: 0,
-    color: "#17243A",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  verifiedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "#DDF8EC",
-  },
-  verifiedText: { color: "#087F5B", fontSize: 9.5, fontWeight: "900" },
-  caseMeta: {
-    marginTop: 6,
-    color: "#617188",
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
-  caseDescription: {
-    marginTop: 7,
-    color: "#55667D",
-    fontSize: 11.5,
-    lineHeight: 18,
-  },
-  progress: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 25,
-  },
-  progressCompact: { paddingHorizontal: 0 },
-  progressStep: { width: 72, alignItems: "center" },
-  progressCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E5ECF2",
-  },
-  progressCircleComplete: { backgroundColor: "#08A473" },
-  progressNumber: { color: "#6A788B", fontSize: 11, fontWeight: "900" },
-  progressNumberComplete: { color: "#FFFFFF" },
-  progressLabel: {
-    marginTop: 7,
-    color: "#718095",
-    fontSize: 9.5,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  progressLabelComplete: { color: "#078765", fontWeight: "900" },
-  progressLine: {
-    flex: 1,
-    height: 3,
-    marginTop: 14,
-    marginHorizontal: -14,
-    backgroundColor: "#E5ECF2",
-  },
-  progressLineComplete: { backgroundColor: "#08A473" },
-  panelActions: { flexDirection: "row", gap: 10 },
-  outlineAction: {
-    flex: 1,
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    backgroundColor: "#F3F8FE",
-    borderWidth: 1,
-    borderColor: "#BDD8F7",
-  },
-  outlineActionText: { color: "#1269CB", fontSize: 12, fontWeight: "900" },
-  solidAction: {
-    flex: 1,
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    backgroundColor: "#087BEA",
-  },
-  solidActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
-  emptyState: {
-    minHeight: 168,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  emptyIcon: {
-    width: 56,
-    height: 56,
+  profileFallback: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E7F8F4",
+    backgroundColor: "#068D88",
   },
-  emptyTitle: {
-    marginTop: 12,
-    color: "#17243A",
+  profileInitial: {
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "900",
   },
-  emptyText: {
-    marginTop: 6,
-    maxWidth: 390,
-    color: "#6B7A8E",
-    fontSize: 11.5,
-    lineHeight: 18,
-    textAlign: "center",
+  profileCopy: {
+    flex: 1,
+    minWidth: 0,
   },
-  emptyButton: {
-    marginTop: 14,
-    minHeight: 42,
+  profileName: {
+    color: "#0F2552",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  profileRole: {
+    marginTop: 2,
+    color: "#6B7F9B",
+    fontSize: 10,
+  },
+  heroContent: {
+    zIndex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 26,
+    flex: 1,
+    paddingTop: 26,
+    paddingBottom: 2,
+  },
+  heroContentCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 18,
+  },
+  heroLeft: {
+    flex: 1.25,
+    minWidth: 0,
+    maxWidth: 650,
+    paddingTop: 18,
+  },
+  eyebrow: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 2.3,
+    opacity: 0.92,
+  },
+  greeting: {
+    marginTop: 7,
+    color: "#FFFFFF",
+    fontSize: 47,
+    lineHeight: 52,
+    fontWeight: "900",
+    letterSpacing: -1.4,
+    textShadowColor: "rgba(0,0,0,0.24)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  greetingNarrow: {
+    fontSize: 38,
+    lineHeight: 44,
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    color: "#FFFFFF",
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "500",
+    textShadowColor: "rgba(0,0,0,0.22)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  locationWeather: {
+    marginTop: 16,
+    alignSelf: "flex-start",
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    flexWrap: "wrap",
+    gap: 12,
+    maxWidth: "100%",
+    borderRadius: 13,
+    backgroundColor: "rgba(22, 91, 171, 0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  locationWeatherNarrow: {
+    alignSelf: "stretch",
+  },
+  locationSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 0,
+  },
+  locationText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  weatherMeta: {
+    marginTop: 7,
+    gap: 3,
+  },
+  weatherMetaText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+  },
+  weatherSource: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    textDecorationLine: "underline",
+  },
+  weatherDivider: {
+    width: 1,
+    height: 30,
+    marginHorizontal: 16,
+    backgroundColor: "rgba(255,255,255,0.45)",
+  },
+  weatherSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  temperatureText: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "900",
+  },
+  weatherLabel: {
+    color: "rgba(255,255,255,0.80)",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  heroCenter: {
+    width: 226,
+    minWidth: 226,
+    height: 230,
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 17,
-    borderRadius: 11,
-    backgroundColor: "#078F82",
+    position: "relative",
+    marginTop: 22,
   },
-  emptyButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
-  donationCard: {
+  heroCenterCompact: {
+    width: "100%",
+    minWidth: 0,
+    height: 170,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    marginTop: 0,
+  },
+  heroRight: {
+    width: 330,
+    minWidth: 290,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingRight: 8,
+    paddingTop: 22,
+  },
+  heroRightCompact: {
+    width: "100%",
+    minWidth: 0,
+    paddingRight: 0,
+    paddingTop: 0,
+  },
+  citySeal: {
+    width: 184,
+    height: 184,
+    borderRadius: 92,
+  },
+  citySealCompact: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+  },
+  citySealGlow: {
+    position: "absolute",
+    width: 212,
+    height: 212,
+    borderRadius: 106,
+    backgroundColor: "rgba(255, 165, 0, 0.18)",
+    borderWidth: 3,
+    borderColor: "rgba(255, 180, 35, 0.88)",
+    zIndex: 1,
+  },
+  citySealGlowCompact: {
+    width: 176,
+    height: 176,
+    borderRadius: 88,
+  },
+  citySealFrame: {
+    width: 188,
+    height: 188,
+    borderRadius: 94,
     overflow: "hidden",
-    borderRadius: 20,
-    shadowColor: "#7331C8",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-  },
-  donationGradient: {
-    minHeight: 112,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 15,
-    padding: 20,
-  },
-  donationIcon: {
-    width: 53,
-    height: 53,
-    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
+    zIndex: 2,
   },
-  donationCopy: { flex: 1, minWidth: 0 },
-  donationTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
-  donationText: {
-    marginTop: 5,
-    color: "#F3E8FF",
-    fontSize: 11.5,
-    lineHeight: 17,
+  citySealFrameCompact: {
+    width: 154,
+    height: 154,
+    borderRadius: 77,
   },
-  donationButton: {
-    minHeight: 42,
+  heroRightTitle: {
+    marginTop: 0,
+    color: "#FFFFFF",
+    fontSize: 27,
+    lineHeight: 29,
+    fontWeight: "900",
+    textShadowColor: "rgba(0,0,0,0.30)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  heroRightText: {
+    marginTop: 7,
+    maxWidth: 310,
+    color: "rgba(255,255,255,0.97)",
+    fontSize: 12.5,
+    lineHeight: 18,
+    textShadowColor: "rgba(0,0,0,0.28)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  sloganRow: {
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    gap: 10,
   },
-  donationButtonText: { color: "#7331C8", fontSize: 11.5, fontWeight: "900" },
-  announcementRow: { flexDirection: "row", gap: 11, paddingVertical: 13 },
-  rowBorder: { borderTopWidth: 1, borderTopColor: "#E7EDF2" },
-  announcementIcon: {
-    width: 39,
-    height: 39,
+  sloganLine: {
+    width: 38,
+    height: 2,
+    backgroundColor: "#F3C92A",
+  },
+  slogan: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  mainGrid: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 16,
+  },
+  mainGridCompact: {
+    flexDirection: "column",
+  },
+  panel: {
+    flex: 1,
+    minWidth: 0,
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E3EDF5",
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    paddingBottom: 12,
+  },
+  panelHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    gap: 12,
+  },
+  panelIcon: {
+    width: 42,
+    height: 42,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E6F8F4",
+    backgroundColor: "#EDF5FF",
   },
-  urgentAnnouncementIcon: { backgroundColor: "#FFF0F2" },
-  announcementCopy: { flex: 1, minWidth: 0 },
-  announcementTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  announcementTitle: {
+  panelHeaderCopy: {
     flex: 1,
-    color: "#17243A",
-    fontSize: 12.5,
+    minWidth: 0,
+  },
+  panelTitle: {
+    color: "#092665",
+    fontSize: 18,
     fontWeight: "900",
   },
-  urgentLabel: { color: "#D52E42", fontSize: 8.5, fontWeight: "900" },
-  announcementMessage: {
-    marginTop: 4,
-    color: "#617188",
-    fontSize: 10.5,
+  panelSubtitle: {
+    marginTop: 3,
+    color: "#6A7FA3",
+    fontSize: 11.5,
     lineHeight: 16,
   },
-  announcementDate: {
-    marginTop: 5,
-    color: "#94A0AF",
-    fontSize: 9.5,
-    fontWeight: "700",
+  viewAll: {
+    color: "#1178F3",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
-  smallEmptyState: { minHeight: 200, alignItems: "center", justifyContent: "center" },
-  smallEmptyTitle: {
-    marginTop: 8,
-    color: "#21334E",
+  activityRow: {
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+    paddingVertical: 11,
+    paddingHorizontal: 4,
+  },
+  updateRow: {
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5EDF5",
+  },
+  rowPressed: {
+    opacity: 0.72,
+  },
+  activityIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activityTitle: {
+    color: "#092665",
     fontSize: 13,
     fontWeight: "900",
   },
-  smallEmptyText: { marginTop: 4, color: "#7A8798", fontSize: 10.5 },
-  safetyCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: "#EBF5FF",
-    borderWidth: 1,
-    borderColor: "#D2E8FB",
+  activitySubtitle: {
+    marginTop: 3,
+    color: "#6A7FA3",
+    fontSize: 11.5,
   },
-  safetyIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+  statusPill: {
+    minWidth: 104,
+    maxWidth: 150,
+    minHeight: 29,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 11,
+    borderRadius: 8,
+    backgroundColor: "#F0F5FA",
   },
-  safetyCopy: { flex: 1 },
-  safetyTitle: { color: "#174E91", fontSize: 12.5, fontWeight: "900" },
-  safetyText: {
-    marginTop: 5,
-    color: "#476789",
+  statusText: {
+    color: "#123A78",
     fontSize: 10.5,
+    fontWeight: "700",
+  },
+  updateIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateIconUrgent: {
+    backgroundColor: "#FFF0F2",
+  },
+  updateIconNormal: {
+    backgroundColor: "#EDF5FF",
+  },
+  updateCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  updateTitle: {
+    color: "#092665",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  updateMessage: {
+    marginTop: 3,
+    color: "#58709B",
+    fontSize: 11.5,
     lineHeight: 16,
   },
-  pressed: { opacity: 0.72 },
-  cardPressed: { opacity: 0.83, transform: [{ scale: 0.99 }] },
+  updateDate: {
+    width: 118,
+    textAlign: "right",
+    color: "#6980A8",
+    fontSize: 10.5,
+    lineHeight: 15,
+  },
+  loadingRow: {
+    minHeight: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  loadingText: {
+    color: "#6A7FA3",
+    fontSize: 12,
+  },
+  emptyUpdates: {
+    minHeight: 210,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  emptyUpdatesCopy: {
+    alignItems: "center",
+  },
+  emptyUpdatesTitle: {
+    color: "#092665",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  emptyUpdatesText: {
+    marginTop: 4,
+    color: "#6A7FA3",
+    fontSize: 12,
+  },
+  emergencyPanel: {
+    marginTop: 16,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E3EDF5",
+  },
+  emergencyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  emergencyHeadingIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F23447",
+  },
+  emergencyHeaderCopy: {
+    flex: 1,
+  },
+  emergencyTitle: {
+    color: "#092665",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  emergencySubtitle: {
+    marginTop: 2,
+    color: "#6A7FA3",
+    fontSize: 11.5,
+  },
+  contactGrid: {
+    flexDirection: "row",
+    gap: 14,
+  },
+  contactGridNarrow: {
+    flexDirection: "column",
+  },
+  contactCard: {
+    flex: 1,
+    minHeight: 86,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    backgroundColor: "#FFFFFF",
+  },
+  contactIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF0F2",
+  },
+  contactCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  contactTitle: {
+    color: "#092665",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  contactValue: {
+    marginTop: 3,
+    color: "#1178F3",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  contactSubtitle: {
+    marginTop: 2,
+    color: "#6A7FA3",
+    fontSize: 10.5,
+  },
+  pressed: {
+    opacity: 0.72,
+  },
 });

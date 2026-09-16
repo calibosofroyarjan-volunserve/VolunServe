@@ -4,6 +4,7 @@ import React from "react";
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { logoutUser } from "../lib/firebaseAuth";
+import {
+  activeModeForProfile,
+  isAdminProfile,
+  logoutUser,
+  hasVolunteerAccess as profileHasVolunteerAccess,
+  setActiveUserMode,
+} from "../lib/firebaseAuth";
+import { useUserSession } from "../lib/useUserSession";
 
 type DrawerRole =
   | "guest"
@@ -31,6 +39,7 @@ type SideDrawerProps = {
   name?: string;
   email?: string;
   role?: string;
+  activeMode?: string;
 };
 
 type DrawerItemProps = {
@@ -44,19 +53,14 @@ const roleLabel = (role: DrawerRole) => {
   switch (role) {
     case "superadmin":
       return "Super Administrator";
-
     case "admin":
       return "Administrator";
-
     case "volunteer":
       return "Approved Volunteer";
-
     case "applicant":
       return "Applicant";
-
     case "guest":
       return "Public Access";
-
     default:
       return "Resident";
   }
@@ -83,19 +87,53 @@ export default function SideDrawer({
   name = "VolunServe Member",
   email = "",
   role = "resident",
+  activeMode,
 }: SideDrawerProps) {
   const router = useRouter();
-  const currentRole = normalizeRole(role);
+  const { profile } = useUserSession();
 
-  const isGuest = currentRole === "guest";
-  const isVolunteer = currentRole === "volunteer";
+  // Prefer the live Firestore profile whenever the user is authenticated.
+  // This keeps the drawer synchronized with Resident <-> Volunteer mode
+  // even when the legacy role remains "resident".
+  const currentRole = normalizeRole(profile?.role || role);
 
-  const isAdmin =
-    currentRole === "admin" ||
-    currentRole === "superadmin";
+  const isGuest =
+    !profile && currentRole === "guest";
+
+  const isAdmin = profile
+    ? isAdminProfile(profile)
+    : currentRole === "admin" ||
+      currentRole === "superadmin";
 
   const isSuperAdmin =
-    currentRole === "superadmin";
+    profile?.role === "superadmin" ||
+    (!profile && currentRole === "superadmin");
+
+  const canUseVolunteerMode = profile
+    ? profileHasVolunteerAccess(profile)
+    : currentRole === "volunteer" ||
+      activeMode === "volunteer";
+
+  const currentMode = profile
+    ? activeModeForProfile(profile)
+    : canUseVolunteerMode && activeMode === "volunteer"
+      ? "volunteer"
+      : "resident";
+
+  const isVolunteerMode =
+    !isGuest &&
+    !isAdmin &&
+    currentMode === "volunteer";
+
+  const displayName =
+    profile?.fullName?.trim() ||
+    name ||
+    "VolunServe Member";
+
+  const displayEmail =
+    profile?.email?.trim() ||
+    email ||
+    "";
 
   const navigate = (route: string) => {
     onClose();
@@ -105,18 +143,55 @@ export default function SideDrawer({
     }, 80);
   };
 
+  const showError = (
+    title: string,
+    message: string,
+  ) => {
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined"
+    ) {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+
+    Alert.alert(title, message);
+  };
+
+  const handleModeSwitch = async () => {
+    if (!canUseVolunteerMode) return;
+
+    const nextMode =
+      currentMode === "volunteer"
+        ? "resident"
+        : "volunteer";
+
+    try {
+      // Save first. useUserSession receives the updated activeMode
+      // from Firestore and every mode-aware screen updates from it.
+      await setActiveUserMode(nextMode);
+
+      onClose();
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      showError(
+        "Mode Switch Failed",
+        error?.message ||
+          "Unable to switch account mode.",
+      );
+    }
+  };
+
   const handleLogout = async () => {
     try {
       onClose();
-
       await logoutUser();
-
       router.replace("/login");
     } catch (error: any) {
-      Alert.alert(
+      showError(
         "Sign Out Failed",
         error?.message ||
-          "Unable to sign out. Please try again."
+          "Unable to sign out. Please try again.",
       );
     }
   };
@@ -145,7 +220,9 @@ export default function SideDrawer({
                   name={
                     isAdmin
                       ? "shield-checkmark"
-                      : "person"
+                      : isVolunteerMode
+                        ? "people"
+                        : "person"
                   }
                   size={27}
                   color="#078F82"
@@ -157,19 +234,25 @@ export default function SideDrawer({
                   style={styles.profileName}
                   numberOfLines={1}
                 >
-                  {name}
+                  {displayName}
                 </Text>
 
                 <Text style={styles.profileRole}>
-                  {roleLabel(currentRole)}
+                  {isAdmin
+                    ? roleLabel(currentRole)
+                    : isGuest
+                      ? "Public Access"
+                      : isVolunteerMode
+                        ? "Volunteer Mode"
+                        : "Resident Mode"}
                 </Text>
 
-                {!!email && (
+                {!!displayEmail && (
                   <Text
                     style={styles.email}
                     numberOfLines={1}
                   >
-                    {email}
+                    {displayEmail}
                   </Text>
                 )}
               </View>
@@ -206,10 +289,10 @@ export default function SideDrawer({
 
                   <DrawerItem
                     icon="warning-outline"
-                    label="Disaster Information"
+                    label="Emergency Information"
                     onPress={() =>
                       navigate(
-                        "/public/disaster-response"
+                        "/public/disaster-response",
                       )
                     }
                   />
@@ -219,7 +302,7 @@ export default function SideDrawer({
                     label="Evacuation Map"
                     onPress={() =>
                       navigate(
-                        "/public/map-tracking"
+                        "/public/map-tracking",
                       )
                     }
                   />
@@ -252,24 +335,14 @@ export default function SideDrawer({
                 </>
               ) : isAdmin ? (
                 <>
-                  <DrawerSection title="ADMINISTRATION" />
+                  <DrawerSection title="OPERATIONS" />
 
                   <DrawerItem
                     icon="grid-outline"
                     label="Command Center"
                     onPress={() =>
                       navigate(
-                        "/(admin)/command-center"
-                      )
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="person-add-outline"
-                    label="Account Approvals"
-                    onPress={() =>
-                      navigate(
-                        "/(admin)/account-approvals"
+                        "/(admin)/command-center",
                       )
                     }
                   />
@@ -279,7 +352,7 @@ export default function SideDrawer({
                     label="Disaster Cases"
                     onPress={() =>
                       navigate(
-                        "/(admin)/admin-cases"
+                        "/(admin)/admin-cases",
                       )
                     }
                   />
@@ -289,20 +362,22 @@ export default function SideDrawer({
                     label="Assistance Requests"
                     onPress={() =>
                       navigate(
-                        "/(admin)/admin-requests"
+                        "/(admin)/admin-requests",
                       )
                     }
                   />
 
                   <DrawerItem
-                    icon="calendar-outline"
-                    label="Events and Attendance"
+                    icon="person-add-outline"
+                    label="Account Approvals"
                     onPress={() =>
                       navigate(
-                        "/(admin)/admin-events"
+                        "/(admin)/account-approvals",
                       )
                     }
                   />
+
+                  <DrawerSection title="MANAGEMENT" />
 
                   <DrawerItem
                     icon="cash-outline"
@@ -313,11 +388,21 @@ export default function SideDrawer({
                   />
 
                   <DrawerItem
-                    icon="megaphone-outline"
-                    label="Create Announcement"
+                    icon="calendar-outline"
+                    label="Events & Attendance"
                     onPress={() =>
                       navigate(
-                        "/(admin)/create-announcement"
+                        "/(admin)/admin-events",
+                      )
+                    }
+                  />
+
+                  <DrawerItem
+                    icon="megaphone-outline"
+                    label="Announcements"
+                    onPress={() =>
+                      navigate(
+                        "/(admin)/create-announcement",
                       )
                     }
                   />
@@ -329,17 +414,17 @@ export default function SideDrawer({
                     label="Analytics"
                     onPress={() =>
                       navigate(
-                        "/(admin)/admin-analytics"
+                        "/(admin)/admin-analytics",
                       )
                     }
                   />
 
                   <DrawerItem
                     icon="list-outline"
-                    label="Admin Logs"
+                    label="Activity Logs"
                     onPress={() =>
                       navigate(
-                        "/(admin)/admin-logs"
+                        "/(admin)/admin-logs",
                       )
                     }
                   />
@@ -350,7 +435,7 @@ export default function SideDrawer({
                       label="System Settings"
                       onPress={() =>
                         navigate(
-                          "/(admin)/system-settings"
+                          "/(admin)/system-settings",
                         )
                       }
                     />
@@ -367,6 +452,24 @@ export default function SideDrawer({
                 </>
               ) : (
                 <>
+                  {canUseVolunteerMode && (
+                    <>
+                      <DrawerSection title="MODE" />
+
+                      <DrawerItem
+                        icon="swap-horizontal-outline"
+                        label={
+                          isVolunteerMode
+                            ? "Switch to Resident Mode"
+                            : "Switch to Volunteer Mode"
+                        }
+                        onPress={() =>
+                          void handleModeSwitch()
+                        }
+                      />
+                    </>
+                  )}
+
                   <DrawerSection title="MAIN" />
 
                   <DrawerItem
@@ -393,89 +496,107 @@ export default function SideDrawer({
                     }
                   />
 
-                  <DrawerSection title="SERVICES" />
+                  {isVolunteerMode ? (
+                    <>
+                      <DrawerSection title="VOLUNTEER OPERATIONS" />
 
-                  <DrawerItem
-                    icon="warning-outline"
-                    label="Report a Disaster"
-                    onPress={() =>
-                      navigate("/disaster-response")
-                    }
-                  />
+                      <DrawerItem
+                        icon="map-outline"
+                        label="Live Response Map"
+                        onPress={() =>
+                          navigate("/map-tracking")
+                        }
+                      />
 
-                  <DrawerItem
-                    icon="hand-left-outline"
-                    label="Request Assistance"
-                    onPress={() =>
-                      navigate("/resident")
-                    }
-                  />
+                      <DrawerItem
+                        icon="people-outline"
+                        label="Volunteer Tasks"
+                        onPress={() =>
+                          navigate("/volunteer")
+                        }
+                      />
 
-                  {isVolunteer && (
-                    <DrawerItem
-                      icon="people-outline"
-                      label="Volunteer Events"
-                      onPress={() =>
-                        navigate("/volunteer")
-                      }
-                    />
+                      <DrawerItem
+                        icon="heart-outline"
+                        label="Donation Operations"
+                        onPress={() =>
+                          navigate("/donation")
+                        }
+                      />
+
+                      <DrawerSection title="MY VOLUNTEER ACTIVITY" />
+
+                      <DrawerItem
+                        icon="ribbon-outline"
+                        label="My Progress"
+                        onPress={() =>
+                          navigate("/volunteer-impact")
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="document-outline"
+                        label="Certificates"
+                        onPress={() =>
+                          navigate("/certificate")
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DrawerSection title="RESIDENT SERVICES" />
+
+                      <DrawerItem
+                        icon="map-outline"
+                        label="Live Map"
+                        onPress={() =>
+                          navigate("/map-tracking")
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="warning-outline"
+                        label="Report a Disaster"
+                        onPress={() =>
+                          navigate("/disaster-response")
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="hand-left-outline"
+                        label="Request Assistance"
+                        onPress={() =>
+                          navigate("/resident")
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="heart-outline"
+                        label="Make a Donation"
+                        onPress={() =>
+                          navigate("/donation")
+                        }
+                      />
+
+                      <DrawerSection title="MY ACTIVITY" />
+
+                      <DrawerItem
+                        icon="document-text-outline"
+                        label="My Reports"
+                        onPress={() =>
+                          navigate("/my-cases")
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="time-outline"
+                        label="Donation History"
+                        onPress={() =>
+                          navigate("/donation-history")
+                        }
+                      />
+                    </>
                   )}
-
-                  <DrawerItem
-                    icon="map-outline"
-                    label="Map Tracking"
-                    onPress={() =>
-                      navigate("/map-tracking")
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="heart-outline"
-                    label="Make a Donation"
-                    onPress={() =>
-                      navigate("/donation")
-                    }
-                  />
-
-                  <DrawerSection title="MY ACTIVITY" />
-
-                  <DrawerItem
-                    icon="document-text-outline"
-                    label="My Disaster Cases"
-                    onPress={() =>
-                      navigate("/my-cases")
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="time-outline"
-                    label="Donation History"
-                    onPress={() =>
-                      navigate("/donation-history")
-                    }
-                  />
-
-                  {isVolunteer && (
-                    <DrawerItem
-                      icon="ribbon-outline"
-                      label="Volunteer Impact"
-                      onPress={() =>
-                        navigate(
-                          "/volunteer-impact"
-                        )
-                      }
-                    />
-                  )}
-
-                  <DrawerItem
-                    icon="trophy-outline"
-                    label="Event Leaderboard"
-                    onPress={() =>
-                      navigate(
-                        "/event-leaderboard"
-                      )
-                    }
-                  />
 
                   <DrawerSection title="COMMUNITY" />
 
@@ -488,54 +609,10 @@ export default function SideDrawer({
                   />
 
                   <DrawerItem
-                    icon="podium-outline"
-                    label="Leaderboard"
-                    onPress={() =>
-                      navigate("/leaderboard")
-                    }
-                  />
-
-                  <DrawerItem
                     icon="eye-outline"
                     label="Transparency"
                     onPress={() =>
                       navigate("/transparency")
-                    }
-                  />
-
-                  <DrawerSection title="VERIFICATION" />
-
-                  <DrawerItem
-                    icon="scan-outline"
-                    label="Scanner"
-                    onPress={() =>
-                      navigate("/scan")
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="document-outline"
-                    label="Certificate"
-                    onPress={() =>
-                      navigate("/certificate")
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="shield-checkmark-outline"
-                    label="Verify Certificate"
-                    onPress={() =>
-                      navigate(
-                        "/verify-certificate"
-                      )
-                    }
-                  />
-
-                  <DrawerItem
-                    icon="receipt-outline"
-                    label="Verify Receipt"
-                    onPress={() =>
-                      navigate("/verify-receipt")
                     }
                   />
 

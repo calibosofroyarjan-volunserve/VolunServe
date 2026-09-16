@@ -60,6 +60,16 @@ export type AccountStatus =
   | "rejected"
   | "suspended";
 
+export type VolunteerStatus =
+  | "not_applied"
+  | "pending"
+  | "approved"
+  | "rejected";
+
+export type UserMode =
+  | "resident"
+  | "volunteer";
+
 export interface UserProfile {
   uid: string;
 
@@ -88,8 +98,32 @@ export interface UserProfile {
   skillOther?: string;
   availability?: string[];
 
+  /**
+   * Legacy / authorization role used by the existing app.
+   * During signup this remains "applicant" until an admin approves the account.
+   */
   role: Role;
+
+  /**
+   * The role selected by the person during signup.
+   * Kept for compatibility with the current Admin Account Approval flow.
+   */
   requestedRole?: PublicRole;
+
+  /**
+   * New access-model fields.
+   *
+   * primaryRole = how the account originally registered.
+   * residentAccess = whether resident features may be used.
+   * volunteerAccess = whether volunteer-only features may be used.
+   * volunteerStatus = volunteer application state.
+   * activeMode = which interface the user is currently using.
+   */
+  primaryRole?: PublicRole;
+  residentAccess?: boolean;
+  volunteerAccess?: boolean;
+  volunteerStatus?: VolunteerStatus;
+  activeMode?: UserMode;
 
   status?: AccountStatus;
   reviewedAt?: any;
@@ -117,6 +151,11 @@ export interface SignupData {
   email: string;
   password: string;
 
+  // Explicitly tell signup whether the authenticated Firebase user came
+  // from the Google registration button. This prevents a stale session
+  // from being mistaken for a Google signup.
+  authProvider?: "email" | "google";
+
   phoneNumber: string;
 
   region: string;
@@ -140,8 +179,8 @@ export const isApprovedProfile = (
     return false;
   }
 
-  // Compatibility para sa lumang approved accounts
-  // na wala pang status field.
+  // Compatibility for older approved accounts
+  // that do not yet have a status field.
   return (
     profile.status === "approved" ||
     (
@@ -161,6 +200,59 @@ export const isAdminProfile = (
       profile?.role === "superadmin"
     )
   );
+};
+
+/**
+ * Backward-compatible access helpers.
+ * These let old accounts continue working while we migrate to the new
+ * residentAccess / volunteerAccess structure.
+ */
+export const hasResidentAccess = (
+  profile: UserProfile | null | undefined
+) => {
+  if (!profile) return false;
+
+  if (typeof profile.residentAccess === "boolean") {
+    return profile.residentAccess;
+  }
+
+  return (
+    profile.role === "resident" ||
+    profile.role === "volunteer" ||
+    profile.requestedRole === "resident" ||
+    profile.requestedRole === "volunteer"
+  );
+};
+
+export const hasVolunteerAccess = (
+  profile: UserProfile | null | undefined
+) => {
+  if (!profile) return false;
+
+  if (typeof profile.volunteerAccess === "boolean") {
+    return profile.volunteerAccess;
+  }
+
+  // Compatibility for older volunteer accounts.
+  return (
+    isApprovedProfile(profile) &&
+    profile.role === "volunteer"
+  );
+};
+
+export const getActiveMode = (
+  profile: UserProfile | null | undefined
+): UserMode => {
+  if (!profile) return "resident";
+
+  if (
+    profile.activeMode === "volunteer" &&
+    hasVolunteerAccess(profile)
+  ) {
+    return "volunteer";
+  }
+
+  return "resident";
 };
 
 export const homeRouteForProfile = (
@@ -221,32 +313,39 @@ export const signUpUser = async (
   try {
     let user;
 
-    if (auth.currentUser) {
-      const authenticatedEmail =
-        auth.currentUser.email
-          ?.trim()
-          .toLowerCase();
+    const submittedEmail = data.email.trim().toLowerCase();
+    const usesGoogle = data.authProvider === "google";
 
-      const submittedEmail =
-        data.email
-          .trim()
-          .toLowerCase();
-
-      if (
-        authenticatedEmail &&
-        authenticatedEmail !== submittedEmail
-      ) {
+    if (usesGoogle) {
+      // Google registration must use the exact account that was connected
+      // from the signup page. Do not silently reuse an unrelated session.
+      if (!auth.currentUser) {
         throw new Error(
-          "The connected account does not match the email in the registration form."
+          "Your Google registration session expired. Connect your Google account again."
+        );
+      }
+
+      const authenticatedEmail =
+        auth.currentUser.email?.trim().toLowerCase();
+
+      if (!authenticatedEmail || authenticatedEmail !== submittedEmail) {
+        throw new Error(
+          "The connected Google account does not match the email in the registration form."
         );
       }
 
       user = auth.currentUser;
     } else {
+      // Email/password signup should always create its own Firebase account.
+      // A stale signed-in user must never be treated as the applicant.
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+
       const userCredential =
         await createUserWithEmailAndPassword(
           auth,
-          data.email.trim().toLowerCase(),
+          submittedEmail,
           data.password
         );
 
@@ -258,7 +357,9 @@ export const signUpUser = async (
     const existing = await getDoc(profileRef);
 
     if (existing.exists()) {
-      return user;
+      throw new Error(
+        "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
+      );
     }
 
     const fullName = [
@@ -282,8 +383,18 @@ export const signUpUser = async (
       ) ||
       data.occupationCategory;
 
+    const isVolunteerSignup =
+      data.role === "volunteer";
+
     const batch = writeBatch(db);
 
+    /**
+     * IMPORTANT:
+     * role stays "applicant" until an admin approves the account.
+     *
+     * The new access fields are stored separately so a user cannot become
+     * a volunteer simply by selecting Volunteer during signup.
+     */
     batch.set(profileRef, {
       uid,
 
@@ -327,17 +438,40 @@ export const signUpUser = async (
 
       occupation,
 
-      skills: data.skills || [],
+      /**
+       * Resident signup does not need volunteer details.
+       * Volunteer signup keeps them for admin review.
+       */
+      skills:
+        isVolunteerSignup
+          ? (data.skills || [])
+          : [],
+
       skillOther:
-        (data.skillOther || "").trim(),
+        isVolunteerSignup
+          ? (data.skillOther || "").trim()
+          : "",
 
       availability:
-        data.availability || [],
+        isVolunteerSignup
+          ? (data.availability || [])
+          : [],
 
+      // Existing approval architecture
       role: "applicant" as Role,
       requestedRole: data.role,
 
-      status: "pending_review",
+      // New role/access architecture
+      primaryRole: data.role,
+      residentAccess: true,
+      volunteerAccess: false,
+      volunteerStatus:
+        isVolunteerSignup
+          ? ("pending" as VolunteerStatus)
+          : ("not_applied" as VolunteerStatus),
+      activeMode: "resident" as UserMode,
+
+      status: "pending_review" as AccountStatus,
 
       profilePictureUrl:
         user.photoURL || "",
@@ -346,7 +480,11 @@ export const signUpUser = async (
         serverTimestamp(),
     });
 
-    if (data.role === "volunteer") {
+    /**
+     * Only Volunteer signup creates a volunteerApplications document.
+     * Resident signup will use a separate "Apply as Volunteer" flow later.
+     */
+    if (isVolunteerSignup) {
       batch.set(
         doc(
           db,
@@ -356,7 +494,13 @@ export const signUpUser = async (
         {
           uid,
 
+          source:
+            "signup",
+
           requestedRole:
+            "volunteer",
+
+          primaryRole:
             "volunteer",
 
           fullName,
@@ -375,8 +519,26 @@ export const signUpUser = async (
           phoneNumber:
             data.phoneNumber.trim(),
 
+          occupationCategory:
+            data.occupationCategory,
+
+          occupationSpecialization:
+            (
+              data.occupationSpecialization ||
+              ""
+            ).trim(),
+
+          occupationOther:
+            (
+              data.occupationOther ||
+              ""
+            ).trim(),
+
           skills:
             data.skills || [],
+
+          skillOther:
+            (data.skillOther || "").trim(),
 
           availability:
             data.availability || [],
@@ -488,6 +650,12 @@ export const getUserProfile = async (
   return snapshot.data() as UserProfile;
 };
 
+/**
+ * Safe profile editor for ordinary profile fields.
+ *
+ * Permission/access fields are intentionally excluded so the user cannot
+ * self-approve volunteer access using this helper.
+ */
 export const updateUserProfile = async (
   uid: string,
   updates: Partial<UserProfile>
@@ -496,12 +664,21 @@ export const updateUserProfile = async (
     uid: _uid,
     email: _email,
     createdAt: _createdAt,
+
     role: _role,
     requestedRole: _requestedRole,
+    primaryRole: _primaryRole,
+
+    residentAccess: _residentAccess,
+    volunteerAccess: _volunteerAccess,
+    volunteerStatus: _volunteerStatus,
+    activeMode: _activeMode,
+
     status: _status,
     reviewedAt: _reviewedAt,
     reviewedBy: _reviewedBy,
     rejectedReason: _rejectedReason,
+
     ...safeUpdates
   } = updates as any;
 
@@ -509,6 +686,83 @@ export const updateUserProfile = async (
     doc(db, "users", uid),
     safeUpdates
   );
+};
+
+/**
+ * User-facing mode switch.
+ *
+ * This changes only the interface mode.
+ * It NEVER grants volunteer access.
+ */
+export const setActiveMode = async (
+  uid: string,
+  requestedMode: UserMode
+) => {
+  const profileRef =
+    doc(db, "users", uid);
+
+  const snapshot =
+    await getDoc(profileRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("Profile not found.");
+  }
+
+  const profile =
+    snapshot.data() as UserProfile;
+
+  if (!isApprovedProfile(profile)) {
+    throw new Error(
+      "Your account must be approved before changing modes."
+    );
+  }
+
+  if (
+    requestedMode === "volunteer" &&
+    !hasVolunteerAccess(profile)
+  ) {
+    throw new Error(
+      "Volunteer mode is available only after administrator approval."
+    );
+  }
+
+  await updateDoc(
+    profileRef,
+    {
+      activeMode: requestedMode,
+    }
+  );
+
+  return requestedMode;
+};
+
+
+/**
+ * Backward-compatible names used by the current navigation files.
+ *
+ * app/(tabs)/_layout.tsx currently imports:
+ *   activeModeForProfile(profile)
+ *   setActiveUserMode(mode)
+ *
+ * Keep these exports so we do not have to break or rename the existing
+ * navigation code while using the new access model.
+ */
+export const activeModeForProfile = (
+  profile: UserProfile | null | undefined
+): UserMode => {
+  return getActiveMode(profile);
+};
+
+export const setActiveUserMode = async (
+  mode: UserMode
+) => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("Please sign in again.");
+  }
+
+  return setActiveMode(user.uid, mode);
 };
 
 export const onAuthChange = (

@@ -3,41 +3,41 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import {
-    collection,
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    writeBatch,
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import React, {
-    useMemo,
-    useState,
+  useMemo,
+  useState,
 } from "react";
 
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    createAdminLog,
+  createAdminLog,
 } from "../../lib/adminLogger";
 
 import {
-    auth,
-    db,
+  auth,
+  db,
 } from "../../lib/firebase";
 
 import {
-    UserProfile,
+  UserProfile,
 } from "../../lib/firebaseAuth";
 
 type Account =
@@ -48,6 +48,18 @@ type Account =
 type Filter =
   | "pending"
   | "all";
+
+type VolunteerApplication = {
+  uid?: string;
+  status?: "pending" | "approved" | "rejected" | "suspended";
+  skills?: string[];
+  availability?: string[];
+  experienceTraining?: string;
+  preferredActivity?: string;
+  emergencyContact?: string;
+  motivation?: string;
+  rejectedReason?: string;
+};
 
 const timestampValue = (
   value: any
@@ -64,11 +76,9 @@ export default function AccountApprovals() {
   ] = useState<Account[]>([]);
 
   const [
-    volunteerApplicantIds,
-    setVolunteerApplicantIds,
-  ] = useState<Set<string>>(
-    new Set()
-  );
+    volunteerApplications,
+    setVolunteerApplications,
+  ] = useState<Record<string, VolunteerApplication>>({});
 
   const [
     usersLoading,
@@ -152,26 +162,29 @@ export default function AccountApprovals() {
         ),
 
         (snapshot) => {
-          const ids =
-            new Set<string>();
+          const next:
+            Record<string, VolunteerApplication> = {};
 
           snapshot.docs.forEach(
             (item) => {
-              ids.add(item.id);
+              const data =
+                item.data() as VolunteerApplication;
+
+              next[item.id] = data;
 
               const uid =
-                item.data().uid;
+                data.uid;
 
               if (
                 typeof uid === "string" &&
                 uid
               ) {
-                ids.add(uid);
+                next[uid] = data;
               }
             }
           );
 
-          setVolunteerApplicantIds(ids);
+          setVolunteerApplications(next);
           setApplicationsLoading(false);
         },
 
@@ -191,17 +204,29 @@ export default function AccountApprovals() {
     };
   }, []);
 
+  const volunteerApplicationFor = (
+    account: Account
+  ) => {
+    return volunteerApplications[account.id] || null;
+  };
+
   const requestedRoleFor = (
     account: Account
   ) => {
+    const application =
+      volunteerApplicationFor(account);
+
+    // A pending Resident -> Volunteer application takes priority
+    // over the account's original requestedRole ("resident").
+    if (application?.status === "pending") {
+      return "volunteer";
+    }
+
     if (account.requestedRole) {
       return account.requestedRole;
     }
 
-    if (
-      account.role === "volunteer" ||
-      volunteerApplicantIds.has(account.id)
-    ) {
+    if (account.role === "volunteer") {
       return "volunteer";
     }
 
@@ -214,7 +239,9 @@ export default function AccountApprovals() {
         return accounts.filter(
           (item) =>
             item.status ===
-            "pending_review"
+              "pending_review" ||
+            volunteerApplications[item.id]
+              ?.status === "pending"
         );
       }
 
@@ -222,6 +249,7 @@ export default function AccountApprovals() {
     }, [
       accounts,
       filter,
+      volunteerApplications,
     ]);
 
   const saveReview = async (
@@ -247,27 +275,129 @@ export default function AccountApprovals() {
     const requestedRole =
       requestedRoleFor(account);
 
+    const volunteerApplication =
+      volunteerApplicationFor(account);
+
+    const isExistingResidentVolunteerApplication =
+      requestedRole === "volunteer" &&
+      volunteerApplication?.status === "pending" &&
+      account.status === "approved" &&
+      account.role !== "applicant" &&
+      account.primaryRole !== "volunteer";
+
+    const isInitialVolunteerSignup =
+      requestedRole === "volunteer" &&
+      (
+        account.primaryRole === "volunteer" ||
+        (
+          account.role === "applicant" &&
+          account.requestedRole === "volunteer"
+        )
+      );
+
     const nextRole =
       status === "approved"
-        ? requestedRole
+        ? account.role &&
+          account.role !== "applicant"
+          ? account.role
+          : requestedRole
         : account.role;
 
+    /*
+     * IMPORTANT:
+     * Reviewing an existing resident's volunteer application must NOT
+     * reject/suspend/replace the resident account itself.
+     */
     const reviewPatch:
-      Record<string, any> = {
-        status,
-        role: nextRole,
+      Record<string, any> =
+      isExistingResidentVolunteerApplication
+        ? {
+            residentAccess: true,
+            volunteerAccess:
+              status === "approved",
+            volunteerStatus:
+              status === "approved"
+                ? "approved"
+                : status === "rejected"
+                  ? "rejected"
+                  : "pending",
+            activeMode: "resident",
+            volunteerReviewedAt:
+              serverTimestamp(),
+            volunteerReviewedBy:
+              reviewer.uid,
+          }
+        : {
+            status,
+            role: nextRole,
 
-        reviewedAt:
-          serverTimestamp(),
+            primaryRole:
+              account.primaryRole ||
+              requestedRole,
 
-        reviewedBy:
-          reviewer.uid,
+            reviewedAt:
+              serverTimestamp(),
 
-        rejectedReason:
-          status === "rejected"
-            ? reason.trim()
-            : "",
-      };
+            reviewedBy:
+              reviewer.uid,
+
+            rejectedReason:
+              status === "rejected"
+                ? reason.trim()
+                : "",
+
+            ...(status === "approved"
+              ? {
+                  residentAccess: true,
+
+                  volunteerAccess:
+                    requestedRole ===
+                      "volunteer"
+                      ? true
+                      : account.volunteerStatus ===
+                          "approved" ||
+                        account.volunteerAccess ===
+                          true,
+
+                  volunteerStatus:
+                    requestedRole ===
+                      "volunteer"
+                      ? "approved"
+                      : account.volunteerStatus ||
+                        "not_applied",
+
+                  activeMode:
+                    isInitialVolunteerSignup
+                      ? "volunteer"
+                      : account.volunteerAccess ===
+                            true &&
+                          account.activeMode ===
+                            "volunteer"
+                        ? "volunteer"
+                        : "resident",
+                }
+              : {}),
+
+            ...(status === "rejected"
+              ? {
+                  residentAccess: true,
+                  volunteerAccess:
+                    requestedRole ===
+                    "volunteer"
+                      ? false
+                      : account.volunteerAccess ===
+                          true,
+                  volunteerStatus:
+                    requestedRole ===
+                    "volunteer"
+                      ? "rejected"
+                      : account.volunteerStatus ||
+                        "not_applied",
+                  activeMode:
+                    "resident",
+                }
+              : {}),
+          };
 
     try {
       setSavingUid(account.id);
@@ -312,18 +442,22 @@ export default function AccountApprovals() {
             phoneNumber:
               account.phoneNumber || "",
 
-            skills:
-              account.skills || [],
-
-            availability:
-              account.availability || [],
-
             status:
               status === "approved"
                 ? "approved"
                 : status === "rejected"
                   ? "rejected"
                   : "suspended",
+
+            // Explicit access metadata for the volunteer review record.
+            volunteerAccess:
+              status === "approved",
+
+            activeMode:
+              isInitialVolunteerSignup &&
+              status === "approved"
+                ? "volunteer"
+                : "resident",
 
             reviewedAt:
               serverTimestamp(),
@@ -346,7 +480,9 @@ export default function AccountApprovals() {
 
       await createAdminLog({
         actionType:
-          `account_${status}`,
+          isExistingResidentVolunteerApplication
+            ? `volunteer_application_${status}`
+            : `account_${status}`,
 
         targetType:
           "user",
@@ -363,18 +499,28 @@ export default function AccountApprovals() {
           "Administrator",
 
         description:
-          `${
-            account.fullName ||
-            account.email
-          } was marked as ${status}.`,
+          isExistingResidentVolunteerApplication
+            ? `${
+                account.fullName ||
+                account.email
+              } volunteer application was marked as ${status}.`
+            : `${
+                account.fullName ||
+                account.email
+              } account was marked as ${status}.`,
       });
 
       Alert.alert(
         "Saved",
-        `Account marked as ${status.replace(
-          "_",
-          " "
-        )}.`
+        isExistingResidentVolunteerApplication
+          ? `Volunteer application marked as ${status.replace(
+              "_",
+              " "
+            )}.`
+          : `Account marked as ${status.replace(
+              "_",
+              " "
+            )}.`
       );
     } catch (error) {
       console.log(
@@ -484,7 +630,11 @@ export default function AccountApprovals() {
                 accounts.filter(
                   (item) =>
                     item.status ===
-                    "pending_review"
+                      "pending_review" ||
+                    volunteerApplications[
+                      item.id
+                    ]?.status ===
+                      "pending"
                 ).length
               }
             </Text>
@@ -544,6 +694,14 @@ export default function AccountApprovals() {
               const requestedRole =
                 requestedRoleFor(account);
 
+              const application =
+                volunteerApplicationFor(account);
+
+              const isExistingResidentApplication =
+                application?.status === "pending" &&
+                account.status === "approved" &&
+                account.role !== "applicant";
+
               const isSaving =
                 savingUid === account.id;
 
@@ -581,6 +739,12 @@ export default function AccountApprovals() {
                     </View>
                   </View>
 
+                  {isExistingResidentApplication ? (
+                    <Text style={styles.meta}>
+                      Application: Existing Resident → Volunteer
+                    </Text>
+                  ) : null}
+
                   <Text style={styles.meta}>
                     Barangay:{" "}
                     {account.barangay || "-"}
@@ -599,19 +763,33 @@ export default function AccountApprovals() {
                         style={styles.meta}
                       >
                         Skills:{" "}
-                        {account.skills?.join(
-                          ", "
-                        ) || "-"}
+                        {(application?.skills ||
+                          account.skills ||
+                          []).join(", ") || "-"}
                       </Text>
 
                       <Text
                         style={styles.meta}
                       >
                         Availability:{" "}
-                        {account.availability?.join(
-                          ", "
-                        ) || "-"}
+                        {(application?.availability ||
+                          account.availability ||
+                          []).join(", ") || "-"}
                       </Text>
+
+                      {application?.preferredActivity ? (
+                        <Text style={styles.meta}>
+                          Preferred Activity:{" "}
+                          {application.preferredActivity}
+                        </Text>
+                      ) : null}
+
+                      {application?.experienceTraining ? (
+                        <Text style={styles.meta}>
+                          Experience / Training:{" "}
+                          {application.experienceTraining}
+                        </Text>
+                      ) : null}
                     </>
                   ) : null}
 
@@ -639,7 +817,8 @@ export default function AccountApprovals() {
                   ) : null}
 
                   {account.status ===
-                  "pending_review" ? (
+                    "pending_review" ||
+                  isExistingResidentApplication ? (
                     <View
                       style={styles.actionRow}
                     >
@@ -660,7 +839,9 @@ export default function AccountApprovals() {
                         >
                           {isSaving
                             ? "Saving..."
-                            : "Approve"}
+                            : isExistingResidentApplication
+                              ? "Approve Volunteer"
+                              : "Approve"}
                         </Text>
                       </TouchableOpacity>
 
@@ -679,14 +860,17 @@ export default function AccountApprovals() {
                             styles.actionText
                           }
                         >
-                          Reject
+                          {isExistingResidentApplication
+                            ? "Reject Volunteer"
+                            : "Reject"}
                         </Text>
                       </TouchableOpacity>
                     </View>
                   ) : null}
 
                   {account.status ===
-                  "approved" ? (
+                    "approved" &&
+                  !isExistingResidentApplication ? (
                     <TouchableOpacity
                       disabled={isSaving}
                       style={[
@@ -760,7 +944,11 @@ export default function AccountApprovals() {
             <Text
               style={styles.modalTitle}
             >
-              Reject Registration
+              {selected &&
+              volunteerApplications[selected.id]?.status === "pending" &&
+              selected.status === "approved"
+                ? "Reject Volunteer Application"
+                : "Reject Registration"}
             </Text>
 
             <Text style={styles.subtitle}>

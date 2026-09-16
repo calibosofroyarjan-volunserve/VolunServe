@@ -386,6 +386,8 @@ export default function Profile() {
         onClose={() => setDrawerOpen(false)}
         name={profile?.fullName || "User"}
         email={profile?.email || ""}
+        role={profile?.role || "resident"}
+        activeMode={profile?.activeMode}
       />
     </ScrollView>
   );

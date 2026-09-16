@@ -5,20 +5,20 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 
 import {
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 import {
-    SafeAreaView,
-    useSafeAreaInsets,
+  SafeAreaView,
+  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import SideDrawer from "../../components/SideDrawer";
@@ -28,11 +28,12 @@ import SideDrawer from "../../components/SideDrawer";
 ============================================================ */
 
 import {
-    collection,
-    getDocs,
+  collection,
+  getDocs,
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
+import { useUserSession } from "../../lib/useUserSession";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -43,6 +44,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile } = useUserSession();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -747,9 +749,13 @@ export default function HomeScreen() {
         onClose={() =>
           setDrawerOpen(false)
         }
-        name="Froy Arjan"
-        email=""
-        role="superadmin"
+        name={
+          profile?.fullName ||
+          "VolunServe Member"
+        }
+        email={profile?.email || ""}
+        role={profile?.role || "resident"}
+        activeMode={profile?.activeMode}
       />
     </>
   );
