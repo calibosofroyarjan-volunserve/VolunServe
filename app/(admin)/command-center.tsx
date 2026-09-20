@@ -1,33 +1,33 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
-    collection,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    where,
+  collection,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
 } from "firebase/firestore";
 import React, {
-    useEffect,
-    useMemo,
-    useState,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import SideDrawer from "../../components/SideDrawer";
 import { db } from "../../lib/firebase";
 import {
-    isAdminProfile,
-    isApprovedProfile,
+  isAdminProfile,
+  isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -495,16 +495,6 @@ export default function AdminDashboard() {
             onPress={() =>
               navigate(
                 "/(admin)/admin-cases"
-              )
-            }
-          />
-
-          <QuickButton
-            icon="hand-left-outline"
-            label="Assistance"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-requests"
               )
             }
           />

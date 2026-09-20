@@ -84,6 +84,33 @@ type BrowserLocation = {
   timestamp: number;
 };
 
+type RouteCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+type RouteStep = {
+  distanceMeters: number;
+  durationSeconds: number;
+  name: string;
+  type: string;
+  modifier: string;
+  location: [number, number] | null;
+};
+
+type RoadRoute = {
+  geometry: {
+    type: "LineString";
+    coordinates: number[][];
+  };
+  distanceMeters: number;
+  durationSeconds: number;
+  steps: RouteStep[];
+  fetchedAt: number;
+  origin: RouteCoordinate;
+  destination: RouteCoordinate;
+};
+
 type SelectedMapItem =
   | { kind: "incident"; id: string }
   | { kind: "center"; id: string }
@@ -152,15 +179,58 @@ const mapDocument = `
       background: #2563eb;
     }
 
+    .user-marker {
+      position: relative;
+      width: 30px;
+      height: 30px;
+    }
+
     .user-pin {
+      position: absolute;
+      inset: 0;
       width: 22px;
       height: 22px;
+      margin: auto;
       border: 4px solid white;
       border-radius: 999px;
       background: #2563eb;
       box-shadow:
         0 0 0 8px rgba(37,99,235,.18),
         0 5px 16px rgba(15,23,42,.25);
+    }
+
+    .user-label,
+    .destination-label {
+      position: absolute;
+      left: 50%;
+      bottom: 36px;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 5px 18px rgba(15,23,42,.16);
+      color: #0f2740;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      pointer-events: none;
+    }
+
+    .destination-marker {
+      position: relative;
+      width: 32px;
+      height: 32px;
+    }
+
+    .destination-marker .pin {
+      position: absolute;
+      inset: 0;
+    }
+
+    .destination-label {
+      bottom: 39px;
+      color: #b42318;
     }
 
     .maplibregl-popup-content {
@@ -203,7 +273,7 @@ const mapDocument = `
 
       let incidentMarkers = [];
       let centerMarkers = [];
-      let responderMarkers = [];
+      let responderMarkers = new Map();
       let residentMarkers = [];
       let userMarker = null;
       let hasFitted = false;
@@ -227,6 +297,24 @@ const mapDocument = `
       }
 
       function makeIncidentElement(item) {
+        if (item.destination) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "destination-marker";
+
+          const pin = document.createElement("div");
+          pin.className = "pin";
+          pin.style.background = "#ef4444";
+          pin.innerHTML = "<span>⌂</span>";
+
+          const label = document.createElement("div");
+          label.className = "destination-label";
+          label.textContent = "RESIDENT DESTINATION";
+
+          wrapper.appendChild(pin);
+          wrapper.appendChild(label);
+          return wrapper;
+        }
+
         const element = document.createElement("div");
         element.className = "pin";
         element.style.background = incidentColor(
@@ -245,9 +333,19 @@ const mapDocument = `
       }
 
       function makeUserElement() {
-        const element = document.createElement("div");
-        element.className = "user-pin";
-        return element;
+        const wrapper = document.createElement("div");
+        wrapper.className = "user-marker";
+
+        const dot = document.createElement("div");
+        dot.className = "user-pin";
+
+        const label = document.createElement("div");
+        label.className = "user-label";
+        label.textContent = "YOU · START";
+
+        wrapper.appendChild(dot);
+        wrapper.appendChild(label);
+        return wrapper;
       }
 
       function makeResidentElement() {
@@ -256,6 +354,121 @@ const mapDocument = `
         element.style.background = "#0f9f85";
         element.innerHTML = "<span>R</span>";
         return element;
+      }
+
+      function makeResponderElement(stale) {
+        const element = document.createElement("div");
+        element.className = "pin";
+        element.style.background = stale ? "#64748b" : "#7c3aed";
+        element.innerHTML = "<span>V</span>";
+        return element;
+      }
+
+      function animateResponderMarker(marker, longitude, latitude) {
+        const current = marker.getLngLat();
+        const startLng = current.lng;
+        const startLat = current.lat;
+        const deltaLng = longitude - startLng;
+        const deltaLat = latitude - startLat;
+
+        if (
+          Math.abs(deltaLng) < 0.0000001 &&
+          Math.abs(deltaLat) < 0.0000001
+        ) {
+          return;
+        }
+
+        if (marker.__volunserveAnimation) {
+          cancelAnimationFrame(marker.__volunserveAnimation);
+        }
+
+        const started = performance.now();
+        const duration = 900;
+
+        const step = (now) => {
+          const raw = Math.min(1, (now - started) / duration);
+          const eased = 1 - Math.pow(1 - raw, 3);
+
+          marker.setLngLat([
+            startLng + deltaLng * eased,
+            startLat + deltaLat * eased,
+          ]);
+
+          if (raw < 1) {
+            marker.__volunserveAnimation = requestAnimationFrame(step);
+          } else {
+            marker.__volunserveAnimation = null;
+          }
+        };
+
+        marker.__volunserveAnimation = requestAnimationFrame(step);
+      }
+
+      function syncResponderMarkers(people, bounds) {
+        const activeIds = new Set();
+        let count = 0;
+
+        for (const person of people || []) {
+          if (!validPoint(person.latitude, person.longitude)) {
+            continue;
+          }
+
+          const id = String(
+            person.id ||
+            person.volunteerId ||
+            person.assignmentId ||
+            "responder-" + count
+          );
+
+          activeIds.add(id);
+
+          let marker = responderMarkers.get(id);
+
+          if (!marker) {
+            const element = makeResponderElement(person.stale);
+
+            marker = new maplibregl.Marker({ element })
+              .setLngLat([person.longitude, person.latitude])
+              .setPopup(
+                new maplibregl.Popup({ offset: 22 })
+              )
+              .addTo(map);
+
+            responderMarkers.set(id, marker);
+          } else {
+            const element = marker.getElement();
+            element.style.background = person.stale
+              ? "#64748b"
+              : "#7c3aed";
+
+            animateResponderMarker(
+              marker,
+              person.longitude,
+              person.latitude
+            );
+          }
+
+          marker.getPopup()?.setText(
+            (person.name || "Assigned responder") +
+            (person.stale ? " · older reading · " : " · live · ") +
+            new Date(person.lastShared).toLocaleTimeString()
+          );
+
+          bounds.extend([person.longitude, person.latitude]);
+          count += 1;
+        }
+
+        for (const [id, marker] of responderMarkers.entries()) {
+          if (!activeIds.has(id)) {
+            if (marker.__volunserveAnimation) {
+              cancelAnimationFrame(marker.__volunserveAnimation);
+            }
+            marker.remove();
+            responderMarkers.delete(id);
+          }
+        }
+
+        return count;
       }
 
       function clearMarkers() {
@@ -267,17 +480,12 @@ const mapDocument = `
           marker.remove();
         }
 
-        for (const marker of responderMarkers) {
-          marker.remove();
-        }
-
         for (const marker of residentMarkers) {
           marker.remove();
         }
 
         incidentMarkers = [];
         centerMarkers = [];
-        responderMarkers = [];
         residentMarkers = [];
       }
 
@@ -480,48 +688,31 @@ const mapDocument = `
           pointCount += 1;
         }
 
-        for (const person of payload.responders || []) {
+        pointCount += syncResponderMarkers(
+          payload.responders || [],
+          bounds
+        );
+
+        const routeSource = map.getSource("response-route");
+        if (routeSource) {
+          routeSource.setData(
+            payload.route || {
+              type: "FeatureCollection",
+              features: [],
+            }
+          );
+        }
+
+        const routeCoordinates =
+          payload.route?.geometry?.coordinates || [];
+
+        for (const coordinate of routeCoordinates) {
           if (
-            !validPoint(person.latitude, person.longitude)
+            Array.isArray(coordinate) &&
+            validPoint(coordinate[1], coordinate[0])
           ) {
-            continue;
+            bounds.extend([coordinate[0], coordinate[1]]);
           }
-
-          const element = makeCenterElement();
-
-          element.style.background = person.stale
-            ? "#64748b"
-            : "#7c3aed";
-
-          element.innerHTML = "<span>V</span>";
-
-          const marker = new maplibregl.Marker({ element })
-            .setLngLat([
-              person.longitude,
-              person.latitude
-            ])
-            .setPopup(
-              new maplibregl.Popup({
-                offset: 22,
-              }).setText(
-                person.name +
-                (
-                  person.stale
-                    ? " · older reading · "
-                    : " · shared · "
-                ) +
-                new Date(person.lastShared)
-                  .toLocaleTimeString()
-              )
-            )
-            .addTo(map);
-
-          responderMarkers.push(marker);
-          bounds.extend([
-            person.longitude,
-            person.latitude
-          ]);
-          pointCount += 1;
         }
 
         for (const person of payload.residents || []) {
@@ -612,6 +803,44 @@ const mapDocument = `
       });
 
       map.on("load", () => {
+        map.addSource("response-route", {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [],
+          },
+        });
+
+        map.addLayer({
+          id: "response-route-casing",
+          type: "line",
+          source: "response-route",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": 8,
+            "line-opacity": 0.94,
+          },
+        });
+
+        map.addLayer({
+          id: "response-route-line",
+          type: "line",
+          source: "response-route",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#2563eb",
+            "line-width": 6,
+            "line-opacity": 0.96,
+          },
+        });
+
         map.addSource("gps-accuracy", {
           type: "geojson",
           data: {
@@ -755,6 +984,154 @@ function verificationLabel(value?: string) {
   return value ? statusLabel(value) : "VERIFICATION NOT RECORDED";
 }
 
+function haversineMeters(
+  first: RouteCoordinate,
+  second: RouteCoordinate,
+) {
+  const earthRadius = 6371008.8;
+  const toRadians = (value: number) => value * Math.PI / 180;
+
+  const lat1 = toRadians(first.latitude);
+  const lat2 = toRadians(second.latitude);
+  const deltaLat = toRadians(second.latitude - first.latitude);
+  const deltaLng = toRadians(second.longitude - first.longitude);
+
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) ** 2;
+
+  return 2 * earthRadius * Math.atan2(
+    Math.sqrt(a),
+    Math.sqrt(1 - a),
+  );
+}
+
+function formatRoadDistance(meters?: number | null) {
+  if (!Number.isFinite(meters) || meters == null || meters < 0) {
+    return "—";
+  }
+
+  if (meters < 1000) {
+    return `${Math.max(0, Math.round(meters))} m`;
+  }
+
+  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+}
+
+function formatDriveTime(seconds?: number | null) {
+  if (!Number.isFinite(seconds) || seconds == null || seconds < 0) {
+    return "—";
+  }
+
+  const minutes = Math.max(1, Math.round(seconds / 60));
+
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+
+  return remaining
+    ? `${hours} hr ${remaining} min`
+    : `${hours} hr`;
+}
+
+function navigationArrow(modifier?: string) {
+  const value = normalize(modifier);
+
+  if (value.includes("left")) return "↰";
+  if (value.includes("right")) return "↱";
+  if (value.includes("uturn")) return "↶";
+  if (value.includes("straight")) return "↑";
+
+  return "↑";
+}
+
+function routeStepInstruction(step?: RouteStep | null) {
+  if (!step) return "Continue toward the destination";
+
+  const road = step.name.trim();
+  const modifier = normalize(step.modifier);
+  const type = normalize(step.type);
+
+  if (type === "arrive") {
+    return road
+      ? `Arrive at the destination via ${road}`
+      : "Arrive at the destination";
+  }
+
+  if (type === "depart") {
+    if (modifier.includes("left")) {
+      return road ? `Start left onto ${road}` : "Start by heading left";
+    }
+
+    if (modifier.includes("right")) {
+      return road ? `Start right onto ${road}` : "Start by heading right";
+    }
+
+    return road ? `Start on ${road}` : "Start toward the destination";
+  }
+
+  if (type.includes("roundabout") || type === "rotary") {
+    return road
+      ? `Enter the roundabout toward ${road}`
+      : "Enter the roundabout";
+  }
+
+  if (type === "merge") {
+    return road ? `Merge onto ${road}` : "Merge ahead";
+  }
+
+  if (type === "fork") {
+    if (modifier.includes("left")) {
+      return road ? `Keep left toward ${road}` : "Keep left at the fork";
+    }
+
+    if (modifier.includes("right")) {
+      return road ? `Keep right toward ${road}` : "Keep right at the fork";
+    }
+
+    return road ? `Continue toward ${road}` : "Continue at the fork";
+  }
+
+  if (type === "turn" || type === "end of road" || type === "new name") {
+    if (modifier.includes("left")) {
+      return road ? `Turn left onto ${road}` : "Turn left";
+    }
+
+    if (modifier.includes("right")) {
+      return road ? `Turn right onto ${road}` : "Turn right";
+    }
+
+    if (modifier.includes("uturn")) {
+      return road ? `Make a U-turn toward ${road}` : "Make a U-turn";
+    }
+  }
+
+  if (modifier.includes("left")) {
+    return road ? `Keep left onto ${road}` : "Keep left";
+  }
+
+  if (modifier.includes("right")) {
+    return road ? `Keep right onto ${road}` : "Keep right";
+  }
+
+  return road ? `Continue on ${road}` : "Continue toward the destination";
+}
+
+function validRouteCoordinate(
+  coordinate: RouteCoordinate | null | undefined,
+): coordinate is RouteCoordinate {
+  return !!coordinate &&
+    Number.isFinite(coordinate.latitude) &&
+    Number.isFinite(coordinate.longitude) &&
+    Math.abs(coordinate.latitude) <= 90 &&
+    Math.abs(coordinate.longitude) <= 180;
+}
+
 export default function WebMapTracking() {
   const { user, profile, loading } = useUserSession();
   const router = useRouter();
@@ -789,6 +1166,7 @@ export default function WebMapTracking() {
 
   const frame = useRef<HTMLIFrameElement>(null);
   const firstFit = useRef(false);
+  const lastRouteFitKey = useRef("");
 
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
@@ -819,8 +1197,13 @@ export default function WebMapTracking() {
   const [residentShareSentAt, setResidentShareSentAt] =
     useState(0);
   const [liveNow, setLiveNow] = useState(Date.now());
+  const [roadRoute, setRoadRoute] = useState<RoadRoute | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const [navigationActive, setNavigationActive] = useState(false);
 
   const latestUserLocation = useRef<BrowserLocation | null>(null);
+  const routeCache = useRef<RoadRoute | null>(null);
   const residentWriteQueue = useRef<Promise<unknown>>(
     Promise.resolve(),
   );
@@ -1206,8 +1589,29 @@ export default function WebMapTracking() {
     }
   }, [isResidentMode, cases, selected]);
 
+  const residentPreferredCase = useMemo(() => {
+    if (!isResidentMode) return null;
+
+    if (selectedCase) return selectedCase;
+
+    return (
+      cases.find((item) =>
+        ["assigned", "in_progress"].includes(
+          normalize(item.status),
+        ),
+      ) ||
+      cases.find((item) =>
+        ["validated", "reported"].includes(
+          normalize(item.status),
+        ),
+      ) ||
+      cases[0] ||
+      null
+    );
+  }, [isResidentMode, selectedCase, cases]);
+
   const residentCoordinationCaseId = isResidentMode
-    ? residentShareCaseId || selectedCase?.id || ""
+    ? residentShareCaseId || residentPreferredCase?.id || ""
     : "";
 
   const residentCoordinationCase = useMemo(
@@ -1220,7 +1624,21 @@ export default function WebMapTracking() {
     [cases, residentCoordinationCaseId],
   );
 
-  // A resident reads assignments only for their own selected case.
+  const residentAssignmentVolunteerIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (residentCoordinationCase?.assignedVolunteerIds || [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    [residentCoordinationCase?.assignedVolunteerIds],
+  );
+
+  // Resident assignment reads use deterministic exact document ids.
+  // This matches Firestore document-level authorization and avoids the
+  // collection query that can fail even when the resident owns the case.
   useEffect(() => {
     setResidentAssignments([]);
 
@@ -1229,36 +1647,67 @@ export default function WebMapTracking() {
       !user ||
       !profile ||
       !isApprovedProfile(profile) ||
-      !residentCoordinationCaseId
+      !residentCoordinationCaseId ||
+      residentAssignmentVolunteerIds.length === 0
     ) {
       return;
     }
 
-    const assignmentsQuery = query(
-      collection(db, "responseAssignments"),
-      where("caseId", "==", residentCoordinationCaseId),
-    );
+    const disposers = residentAssignmentVolunteerIds.map(
+      (volunteerId) => {
+        const assignmentId =
+          `${residentCoordinationCaseId}_${volunteerId}`;
 
-    return onSnapshot(
-      assignmentsQuery,
-      (snapshot) => {
-        setResidentAssignments(
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            ...item.data(),
-          })),
+        return onSnapshot(
+          doc(db, "responseAssignments", assignmentId),
+          (snapshot) => {
+            setResidentAssignments((current) => {
+              const withoutCurrent = current.filter(
+                (item) => item.id !== assignmentId,
+              );
+
+              if (!snapshot.exists()) {
+                return withoutCurrent;
+              }
+
+              const data = snapshot.data();
+
+              if (
+                data.caseId !== residentCoordinationCaseId ||
+                data.volunteerId !== volunteerId
+              ) {
+                return withoutCurrent;
+              }
+
+              return [
+                ...withoutCurrent,
+                {
+                  id: snapshot.id,
+                  ...data,
+                },
+              ];
+            });
+          },
+          (cause) => {
+            console.error(
+              "resident exact response assignment",
+              assignmentId,
+              cause,
+            );
+          },
         );
       },
-      (cause) => {
-        console.error("resident response assignments", cause);
-        setResidentAssignments([]);
-      },
     );
+
+    return () => {
+      disposers.forEach((dispose) => dispose());
+    };
   }, [
     isResidentMode,
     user?.uid,
     profile,
     residentCoordinationCaseId,
+    residentAssignmentVolunteerIds.join("|"),
   ]);
 
   const residentPrimaryAssignment = useMemo(() => {
@@ -1763,10 +2212,7 @@ export default function WebMapTracking() {
     );
 
   const residentDisplayedAssignment =
-    isResidentMode &&
-    selectedCase?.id === residentCoordinationCaseId
-      ? residentPrimaryAssignment
-      : null;
+    isResidentMode ? residentPrimaryAssignment : null;
 
   const residentCanStartShare =
     isResidentMode &&
@@ -1776,6 +2222,312 @@ export default function WebMapTracking() {
     ["assigned", "in_progress"].includes(
       normalize(selectedCase.status),
     );
+
+  const routeResponderPoint = useMemo(() => {
+    if (!isResidentMode || !residentDisplayedAssignment) {
+      return null;
+    }
+
+    return (
+      residentResponderPins.find(
+        (point) =>
+          point.volunteerId ===
+          residentDisplayedAssignment.volunteerId,
+      ) ||
+      residentResponderPins[0] ||
+      null
+    );
+  }, [
+    isResidentMode,
+    residentDisplayedAssignment?.volunteerId,
+    residentResponderPins,
+  ]);
+
+  const routeOrigin = useMemo<RouteCoordinate | null>(() => {
+    if (isResidentMode && routeResponderPoint) {
+      return {
+        latitude: Number(routeResponderPoint.latitude),
+        longitude: Number(routeResponderPoint.longitude),
+      };
+    }
+
+    if (missionMode && userLocation) {
+      return {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+      };
+    }
+
+    return null;
+  }, [
+    isResidentMode,
+    routeResponderPoint?.latitude,
+    routeResponderPoint?.longitude,
+    missionMode,
+    userLocation?.latitude,
+    userLocation?.longitude,
+  ]);
+
+  const routeDestination = useMemo<RouteCoordinate | null>(() => {
+    // The reported emergency GPS pin is the primary mission destination.
+    // A resident live pin is only a fallback when the case itself has no
+    // saved coordinates. This keeps the route pointed at the actual place
+    // the resident reported for assistance.
+    if (missionMode) {
+      if (missionCase && hasCoordinates(missionCase)) {
+        return {
+          latitude: Number(missionCase.latitude),
+          longitude: Number(missionCase.longitude),
+        };
+      }
+
+      const liveResident =
+        residentLivePins.find(
+          (point) => point.caseId === focusedCaseId,
+        ) || null;
+
+      if (liveResident) {
+        return {
+          latitude: Number(liveResident.latitude),
+          longitude: Number(liveResident.longitude),
+        };
+      }
+    }
+
+    if (isResidentMode && residentCoordinationCase) {
+      if (hasCoordinates(residentCoordinationCase)) {
+        return {
+          latitude: Number(residentCoordinationCase.latitude),
+          longitude: Number(residentCoordinationCase.longitude),
+        };
+      }
+
+      if (
+        residentShareCaseId === residentCoordinationCase.id &&
+        userLocation &&
+        Date.now() - userLocation.timestamp < 60000
+      ) {
+        return {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        };
+      }
+    }
+
+    return null;
+  }, [
+    missionMode,
+    focusedCaseId,
+    residentLivePins,
+    missionCase?.id,
+    missionCase?.latitude,
+    missionCase?.longitude,
+    isResidentMode,
+    residentCoordinationCase?.id,
+    residentCoordinationCase?.latitude,
+    residentCoordinationCase?.longitude,
+    residentShareCaseId,
+    userLocation?.latitude,
+    userLocation?.longitude,
+    userLocation?.timestamp,
+  ]);
+
+  const routeStatus = normalize(
+    missionMode
+      ? missionAssignment?.status
+      : residentDisplayedAssignment?.status,
+  );
+
+  const routeShouldBeLive =
+    ["responding", "on_site"].includes(routeStatus) &&
+    validRouteCoordinate(routeOrigin) &&
+    validRouteCoordinate(routeDestination);
+
+  useEffect(() => {
+    if (!routeShouldBeLive || !routeOrigin || !routeDestination) {
+      setRoadRoute(null);
+      setRouteLoading(false);
+      setRouteError("");
+      return;
+    }
+
+    const cached = routeCache.current;
+    const now = Date.now();
+
+    if (cached) {
+      const originMoved = haversineMeters(
+        cached.origin,
+        routeOrigin,
+      );
+      const destinationMoved = haversineMeters(
+        cached.destination,
+        routeDestination,
+      );
+
+      if (
+        originMoved < 20 &&
+        destinationMoved < 20 &&
+        now - cached.fetchedAt < 30000
+      ) {
+        setRoadRoute(cached);
+        return;
+      }
+    }
+
+    const controller = new AbortController();
+
+    const loadRoute = async () => {
+      setRouteLoading(true);
+      setRouteError("");
+
+      try {
+        const coordinates =
+          `${routeOrigin.longitude},${routeOrigin.latitude};` +
+          `${routeDestination.longitude},${routeDestination.latitude}`;
+
+        const url =
+          `https://router.project-osrm.org/route/v1/driving/${coordinates}` +
+          `?overview=full&geometries=geojson&steps=true&alternatives=false`;
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Routing request failed (${response.status}).`);
+        }
+
+        const data = await response.json();
+        const route = data?.routes?.[0];
+
+        if (
+          !route ||
+          !Number.isFinite(route.distance) ||
+          !Number.isFinite(route.duration) ||
+          route.geometry?.type !== "LineString" ||
+          !Array.isArray(route.geometry?.coordinates) ||
+          route.geometry.coordinates.length < 2
+        ) {
+          throw new Error("No drivable road route was returned.");
+        }
+
+        const steps: RouteStep[] = Array.isArray(route.legs)
+          ? route.legs.flatMap((leg: any) =>
+              Array.isArray(leg?.steps)
+                ? leg.steps.map((step: any) => ({
+                    distanceMeters: Number.isFinite(step?.distance)
+                      ? step.distance
+                      : 0,
+                    durationSeconds: Number.isFinite(step?.duration)
+                      ? step.duration
+                      : 0,
+                    name: String(step?.name || ""),
+                    type: String(step?.maneuver?.type || ""),
+                    modifier: String(step?.maneuver?.modifier || ""),
+                    location:
+                      Array.isArray(step?.maneuver?.location) &&
+                      step.maneuver.location.length >= 2 &&
+                      Number.isFinite(step.maneuver.location[0]) &&
+                      Number.isFinite(step.maneuver.location[1])
+                        ? [
+                            step.maneuver.location[0],
+                            step.maneuver.location[1],
+                          ] as [number, number]
+                        : null,
+                  }))
+                : [],
+            )
+          : [];
+
+        const nextRoute: RoadRoute = {
+          geometry: {
+            type: "LineString",
+            coordinates: route.geometry.coordinates,
+          },
+          distanceMeters: route.distance,
+          durationSeconds: route.duration,
+          steps,
+          fetchedAt: Date.now(),
+          origin: routeOrigin,
+          destination: routeDestination,
+        };
+
+        routeCache.current = nextRoute;
+        setRoadRoute(nextRoute);
+      } catch (problem) {
+        if (controller.signal.aborted) return;
+
+        console.error("road route", problem);
+        setRoadRoute(null);
+        setRouteError(
+          "Road route is temporarily unavailable. Keep GPS active and try again when the connection improves.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setRouteLoading(false);
+        }
+      }
+    };
+
+    void loadRoute();
+
+    return () => controller.abort();
+  }, [
+    routeShouldBeLive,
+    routeOrigin?.latitude,
+    routeOrigin?.longitude,
+    routeDestination?.latitude,
+    routeDestination?.longitude,
+  ]);
+
+  const currentNavigationStep = useMemo(() => {
+    if (!roadRoute?.steps?.length) return null;
+
+    return (
+      roadRoute.steps.find(
+        (step) =>
+          normalize(step.type) !== "arrive" &&
+          step.distanceMeters > 3,
+      ) ||
+      roadRoute.steps[0] ||
+      null
+    );
+  }, [roadRoute]);
+
+  const nextNavigationStep = useMemo(() => {
+    if (!roadRoute?.steps?.length || !currentNavigationStep) {
+      return null;
+    }
+
+    const index = roadRoute.steps.indexOf(currentNavigationStep);
+    return index >= 0
+      ? roadRoute.steps[index + 1] || null
+      : null;
+  }, [roadRoute, currentNavigationStep]);
+
+  const canStartInAppNavigation =
+    missionMode &&
+    ["responding", "on_site"].includes(missionAssignmentStatus) &&
+    tracking &&
+    !!userLocation &&
+    validRouteCoordinate(routeDestination);
+
+  // Clean mission flow: once the volunteer starts responding and GPS is
+  // available, in-app navigation becomes active automatically. There is no
+  // separate Google Maps / Start Navigation step for the responder.
+  useEffect(() => {
+    if (canStartInAppNavigation && isFocused) {
+      setNavigationActive(true);
+      // Keep start + destination + the whole road route visible.
+      setFollowMe(false);
+      return;
+    }
+
+    setNavigationActive(false);
+  }, [canStartInAppNavigation, isFocused]);
 
   const adminChatAssignment = useMemo(() => {
     if (!isAdministrator || !selectedCase) return null;
@@ -1832,6 +2584,16 @@ export default function WebMapTracking() {
         kind: "set-map-data",
         responders: mapResponderPins,
         residents: residentLivePins,
+        route: roadRoute
+          ? {
+              type: "Feature",
+              properties: {},
+              geometry: roadRoute.geometry,
+            }
+          : {
+              type: "FeatureCollection",
+              features: [],
+            },
 
         incidents: visibleCases.map((item) => ({
           id: item.id,
@@ -1840,6 +2602,9 @@ export default function WebMapTracking() {
           severity: item.severity || "medium",
           latitude: numericCoordinate(item.latitude),
           longitude: numericCoordinate(item.longitude),
+          destination:
+            (missionMode || isResidentMode) &&
+            selectedCase?.id === item.id,
         })),
 
         centers: visibleCenters.map((item) => ({
@@ -1858,16 +2623,32 @@ export default function WebMapTracking() {
   useEffect(() => {
     if (!mapReady) return;
 
-    const shouldFit = !firstFit.current;
+    const routeFitKey = roadRoute
+      ? [
+          roadRoute.origin.latitude.toFixed(5),
+          roadRoute.origin.longitude.toFixed(5),
+          roadRoute.destination.latitude.toFixed(5),
+          roadRoute.destination.longitude.toFixed(5),
+        ].join("|")
+      : "";
+
+    const shouldFit =
+      !firstFit.current ||
+      (!!routeFitKey && routeFitKey !== lastRouteFitKey.current);
 
     postMapData(shouldFit);
     firstFit.current = true;
+
+    if (routeFitKey) {
+      lastRouteFitKey.current = routeFitKey;
+    }
   }, [
     mapReady,
     visibleCases,
     visibleCenters,
     mapResponderPins,
     residentLivePins,
+    roadRoute,
   ]);
 
   useEffect(() => {
@@ -1877,7 +2658,7 @@ export default function WebMapTracking() {
       {
         kind: "update-user-location",
         location: userLocation,
-        follow: tracking && followMe,
+        follow: tracking && followMe && !roadRoute,
       },
       "*",
     );
@@ -1886,6 +2667,7 @@ export default function WebMapTracking() {
     userLocation,
     tracking,
     followMe,
+    roadRoute,
   ]);
 
   useEffect(() => {
@@ -2118,105 +2900,238 @@ export default function WebMapTracking() {
     );
   }
 
-  const roleDescription = isAdministrator
-    ? "Admin view · active disaster cases and responder positions"
-    : missionMode
-      ? "Assigned mission · exact incident location and response controls"
-      : isVolunteerMode
-        ? "Volunteer response workspace · open a mission from Volunteer Tasks"
-        : "Resident view · track your assigned responder and optionally share your live location";
+  const volunteerFlowIndex =
+    missionAssignmentStatus === "completed"
+      ? 4
+      : missionAssignmentStatus === "on_site"
+        ? 3
+        : missionAssignmentStatus === "responding"
+          ? 2
+          : missionAssignmentStatus === "accepted"
+            ? 1
+            : 0;
+
+  const residentAssignmentStatus = normalize(
+    residentDisplayedAssignment?.status,
+  );
+
+  const residentFlowIndex =
+    residentAssignmentStatus === "completed"
+      ? 4
+      : residentAssignmentStatus === "on_site"
+        ? 3
+        : residentAssignmentStatus === "responding"
+          ? 2
+          : residentAssignmentStatus === "accepted"
+            ? 1
+            : residentDisplayedAssignment
+              ? 1
+              : 0;
+
+  const pageTitle = missionMode
+    ? "Volunteer Response Map"
+    : isResidentMode
+      ? "Resident Map Tracking"
+      : "Live Response Map";
+
+  const pageSubtitle = missionMode
+    ? "Respond, navigate, arrive, and complete the mission in one clear flow."
+    : isResidentMode
+      ? "Track your assigned responder, road distance, and estimated arrival in real time."
+      : "Monitor active incidents, responders, and evacuation centers.";
 
   return (
-    <main className="response-map-page">
+    <main
+      className={`response-map-page ${
+        missionMode
+          ? "volunteer-map-mode"
+          : isResidentMode
+            ? "resident-map-mode"
+            : "admin-map-mode"
+      }`}
+    >
       <style>{css}</style>
 
-      <header className="map-header">
+      <header className="map-header clean-map-header">
         <div>
           <span className="eyebrow">
             {missionMode
-              ? "VOLUNSERVE · ACTIVE EMERGENCY RESPONSE"
-              : "VOLUNSERVE · LIVE RESPONSE MAP"}
+              ? "VOLUNSERVE · VOLUNTEER MODE"
+              : isResidentMode
+                ? "VOLUNSERVE · RESIDENT MODE"
+                : "VOLUNSERVE · RESPONSE COORDINATION"}
           </span>
-
-          <h1>
-            {missionMode ? "Response Map" : "Map Tracking"}
-          </h1>
-          <p>{roleDescription}</p>
+          <h1>{pageTitle}</h1>
+          <p>{pageSubtitle}</p>
         </div>
 
-        <div className="live-badge">
+        <div
+          className={`clean-live-badge ${
+            missionMode
+              ? tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
+                ? "active"
+                : ""
+              : isResidentMode
+                ? residentResponderLastShared
+                  ? "active"
+                  : ""
+                : "active"
+          }`}
+        >
           <span />
-          LIVE FIRESTORE
+          {missionMode
+            ? missionAssignmentStatus === "completed"
+              ? "MISSION COMPLETE"
+              : tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
+                ? "LIVE RESPONSE"
+                : statusLabel(missionAssignmentStatus || "accepted")
+            : isResidentMode
+              ? residentResponderLastShared
+                ? "RESPONDER LIVE"
+                : "RESPONSE STATUS"
+              : "LIVE"}
         </div>
       </header>
 
-      <ResponsePanel
-        flow={flow}
-        cases={cases}
-      />
+      {(isAdministrator || missionMode) && (
+        <ResponsePanel flow={flow} cases={cases} />
+      )}
 
-      {missionMode ? (
-        <section
-          className="toolbar mission-toolbar"
-          aria-label="Mission map controls"
-        >
-          <div className="mission-toolbar-copy">
-            <strong>
-              {missionCase?.title || "Assigned emergency"}
-            </strong>
-            <span>
-              {missionCase && hasCoordinates(missionCase)
-                ? `GPS destination · ${coordinateLabel(missionCase)}`
-                : missionCase?.location ||
-                  missionCase?.reporterAddress ||
-                  "Waiting for incident GPS…"}
-            </span>
+      {(error || gpsError) && (
+        <div className="clean-alert" role="alert">
+          {error || gpsError}
+        </div>
+      )}
+
+      {missionMode && missionCase && (
+        <section className="clean-flow-card" aria-label="Volunteer response flow">
+          <div className="clean-flow-summary">
+            <div>
+              <span className="clean-kicker">ACTIVE MISSION</span>
+              <h2>{missionCase.title || "Emergency response"}</h2>
+              <div className="clean-destination-line">
+                <span>DESTINATION</span>
+                <strong>
+                  {missionCase.location ||
+                    missionCase.reporterAddress ||
+                    "Resident destination"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="clean-summary-person">
+              <span>Resident</span>
+              <strong>{missionCase.reporterName || "Resident"}</strong>
+              <small>{missionCase.contactNumber || "No contact number"}</small>
+            </div>
+
+            <div className="clean-summary-metric">
+              <span>Distance</span>
+              <strong>
+                {roadRoute
+                  ? formatRoadDistance(roadRoute.distanceMeters)
+                  : routeLoading
+                    ? "…"
+                    : "—"}
+              </strong>
+            </div>
+
+            <div className="clean-summary-metric">
+              <span>ETA</span>
+              <strong>
+                {roadRoute
+                  ? formatDriveTime(roadRoute.durationSeconds)
+                  : routeLoading
+                    ? "…"
+                    : "—"}
+              </strong>
+            </div>
           </div>
 
-          <div className="toolbar-actions">
-            <button
-              type="button"
-              className={
-                followMe && tracking
-                  ? "chip active"
-                  : "chip"
-              }
-              aria-pressed={followMe && tracking}
-              disabled={!tracking}
-              onClick={() =>
-                setFollowMe((value) => !value)
-              }
-            >
-              Follow Me:{" "}
-              {followMe && tracking ? "On" : "Off"}
-            </button>
+        </section>
+      )}
 
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => {
-                setFollowMe(false);
-                postMapData(true);
-              }}
-              disabled={!missionCase}
-            >
-              Fit mission
-            </button>
+      {isResidentMode && residentCoordinationCase && (
+        <section className="clean-flow-card resident-clean-flow" aria-label="Resident response flow">
+          <div className="clean-flow-summary">
+            <div>
+              <span className="clean-kicker">YOUR EMERGENCY RESPONSE</span>
+              <h2>{residentCoordinationCase.title || "Emergency request"}</h2>
+              <p>
+                {residentCoordinationCase.location ||
+                  residentCoordinationCase.reporterAddress ||
+                  "Saved emergency location"}
+              </p>
+            </div>
+
+            <div className="clean-summary-person">
+              <span>Assigned responder</span>
+              <strong>
+                {residentDisplayedAssignment
+                  ? residentDisplayedAssignment.volunteerName || "Assigned responder"
+                  : "Waiting for assignment"}
+              </strong>
+              <small>
+                {residentDisplayedAssignment
+                  ? statusLabel(residentDisplayedAssignment.status)
+                  : "Admin is coordinating your request"}
+              </small>
+            </div>
+
+            <div className="clean-summary-metric">
+              <span>Distance</span>
+              <strong>
+                {roadRoute
+                  ? formatRoadDistance(roadRoute.distanceMeters)
+                  : routeLoading
+                    ? "…"
+                    : "—"}
+              </strong>
+            </div>
+
+            <div className="clean-summary-metric">
+              <span>ETA</span>
+              <strong>
+                {roadRoute
+                  ? formatDriveTime(roadRoute.durationSeconds)
+                  : routeLoading
+                    ? "…"
+                    : "—"}
+              </strong>
+            </div>
+          </div>
+
+          <div className="clean-flow-steps">
+            {["Assigned", "On the way", "Arrived", "Complete"].map(
+              (label, index) => {
+                const step = index + 1;
+                const complete = residentFlowIndex > step;
+                const current = residentFlowIndex === step;
+
+                return (
+                  <div
+                    key={label}
+                    className={`clean-flow-step ${complete ? "done" : ""} ${
+                      current ? "current" : ""
+                    }`}
+                  >
+                    <i>{complete ? "✓" : step}</i>
+                    <span>{label}</span>
+                  </div>
+                );
+              },
+            )}
           </div>
         </section>
-      ) : (
-        <section
-          className="toolbar"
-          aria-label="Map controls"
-        >
+      )}
+
+      {!missionMode && !isResidentMode && (
+        <section className="toolbar admin-map-toolbar" aria-label="Admin map controls">
           <label className="search-box">
             <span>⌕</span>
-
             <input
               value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search incident, barangay or evacuation center…"
               aria-label="Search map"
             />
@@ -2225,767 +3140,413 @@ export default function WebMapTracking() {
           <div className="filter-group">
             <button
               type="button"
-              className={
-                showIncidents
-                  ? "chip active danger"
-                  : "chip"
-              }
-              onClick={() =>
-                setShowIncidents((value) => !value)
-              }
+              className={showIncidents ? "chip active danger" : "chip"}
+              onClick={() => setShowIncidents((value) => !value)}
             >
               ● Incidents
             </button>
-
             <button
               type="button"
-              className={
-                showCenters
-                  ? "chip active blue"
-                  : "chip"
-              }
-              onClick={() =>
-                setShowCenters((value) => !value)
-              }
+              className={showCenters ? "chip active blue" : "chip"}
+              onClick={() => setShowCenters((value) => !value)}
             >
               ◆ Evacuation centers
             </button>
-
             <button
               type="button"
-              className={
-                showResolved
-                  ? "chip active"
-                  : "chip"
-              }
-              onClick={() =>
-                setShowResolved((value) => !value)
-              }
+              className={showResolved ? "chip active" : "chip"}
+              onClick={() => setShowResolved((value) => !value)}
             >
               ✓ Resolved
-            </button>
-          </div>
-
-          <div className="toolbar-actions">
-            {!isResidentMode && (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={toggleTracking}
-                aria-pressed={tracking}
-              >
-                {tracking
-                  ? "■ Stop Tracking"
-                  : "◎ Start Tracking"}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className={
-                followMe && tracking
-                  ? "chip active"
-                  : "chip"
-              }
-              aria-pressed={followMe && tracking}
-              disabled={!tracking}
-              onClick={() =>
-                setFollowMe((value) => !value)
-              }
-            >
-              Follow Me:{" "}
-              {followMe && tracking ? "On" : "Off"}
-            </button>
-
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => {
-                setFollowMe(false);
-                postMapData(true);
-              }}
-            >
-              Fit visible pins
             </button>
           </div>
         </section>
       )}
 
-      {error && (
-        <div
-          className="error"
-          role="alert"
-        >
-          {error}
-        </div>
-      )}
-
-      <div
-        className="tracking-status"
-        role="status"
-      >
-        <strong>
-          {tracking
-            ? locating
-              ? "Finding your location…"
-              : residentShareCaseId
-                ? "Resident live GPS active"
-                : missionMode
-                  ? "Response GPS active"
-                  : "Tracking started"
-            : missionMode
-              ? missionAssignmentStatus === "completed"
-                ? "Mission completed"
-                : ["responding", "on_site"].includes(
-                      missionAssignmentStatus,
-                    )
-                  ? "Response GPS paused"
-                  : "Response GPS off"
-              : residentShareCaseId
-                ? "Resident live GPS paused"
-                : "Tracking stopped"}
-        </strong>
-
-        <span>
-          {residentShareCanPublish
-            ? residentShareSentAt
-              ? "Your live location is shared only with the assigned responder and authorized Admin · last sent " +
-                new Date(residentShareSentAt).toLocaleTimeString("en-PH")
-              : "Resident live sharing started · waiting for a fresh GPS reading…"
-            : flow.canShare
-              ? "Live volunteer location is being shared with authorized Admin."
-              : missionMode
-                ? missionAssignmentStatus === "completed"
-                  ? "Mission completed · live GPS sharing ended automatically."
-                  : ["responding", "on_site"].includes(
-                        missionAssignmentStatus,
-                      )
-                    ? "GPS sharing is paused. Press Resume sharing to continue."
-                    : missionAssignmentStatus === "accepted"
-                      ? "GPS is not shared until you press Respond & Share GPS."
-                      : "GPS sharing is currently off for this mission."
-                : isResidentMode
-                  ? "Select your emergency case to view responder status. Live location sharing is optional."
-                  : "Local map only · location is not shared with admin."}
-        </span>
-
-        {userLocation &&
-          !(missionMode && missionAssignmentStatus === "completed") && (
-          <span>
-            {tracking
-              ? "Last reading"
-              : "Last known location"}
-            :{" "}
-            {new Date(
-              userLocation.timestamp,
-            ).toLocaleTimeString("en-PH")}
-
-            {userLocation.accuracy !== null
-              ? " · Accuracy ±" +
-                Math.round(userLocation.accuracy) +
-                " m"
-              : ""}
-
-            {tracking &&
-            clock - userLocation.timestamp > 60000
-              ? " · No recent reading"
-              : ""}
-          </span>
-        )}
-
-        {gpsError && (
-          <span className="gps-error">
-            {gpsError}
-          </span>
-        )}
-      </div>
-
-      <section className="map-layout">
-        <div className="map-card">
+      <section className="map-layout clean-map-layout">
+        <div className="map-card clean-map-card">
           <iframe
             ref={frame}
             title="VolunServe live disaster response map"
             srcDoc={mapDocument}
-            sandbox="allow-scripts allow-same-origin allow-popups"
+            sandbox="allow-scripts allow-same-origin"
           />
 
-          <div className="legend">
-            <strong>Map Legend</strong>
+          {missionMode &&
+            navigationActive &&
+            ["responding", "on_site"].includes(missionAssignmentStatus) && (
+              <div className="navigation-hud clean-navigation-hud" role="status">
+                <div className="navigation-hud-turn">
+                  <span className="navigation-arrow">
+                    {navigationArrow(currentNavigationStep?.modifier)}
+                  </span>
+                  <div>
+                    <small>NEXT DIRECTION</small>
+                    <strong>
+                      {roadRoute
+                        ? routeStepInstruction(currentNavigationStep)
+                        : routeLoading
+                          ? "Calculating route…"
+                          : "Waiting for road route…"}
+                    </strong>
+                    {currentNavigationStep && (
+                      <span>
+                        In {formatRoadDistance(currentNavigationStep.distanceMeters)}
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-            {(flow.admin || isResidentMode) && (
-              <span>
-                <i
-                  className="legend-dot"
-                  style={{
-                    background: "#7c3aed",
-                  }}
-                />
-                {isResidentMode
-                  ? "Assigned responder"
-                  : "Shared volunteer"}
-              </span>
+                <div className="navigation-hud-progress">
+                  <strong>
+                    {roadRoute
+                      ? formatRoadDistance(roadRoute.distanceMeters)
+                      : "—"}
+                  </strong>
+                  <span>
+                    {roadRoute
+                      ? `${formatDriveTime(roadRoute.durationSeconds)} remaining`
+                      : "Waiting for route"}
+                  </span>
+                </div>
+              </div>
             )}
 
-            {(flow.admin || missionMode) && (
-              <span>
-                <i
-                  className="legend-dot"
-                  style={{
-                    background: "#0f9f85",
-                  }}
-                />
-                Resident live location
-              </span>
+          <div className="clean-map-legend">
+            {isResidentMode && (
+              <span><i className="legend-dot responder-dot" /> Volunteer</span>
             )}
-
-            <span>
-              <i className="legend-dot incident" />
-              {missionMode
-                ? "Assigned incident"
-                : isResidentMode
-                  ? "Your emergency case"
-                  : "Disaster case"}
-            </span>
-
-            {!missionMode && (
-              <span>
-                <i className="legend-dot center" />
-                Evacuation center
-              </span>
+            {missionMode && (
+              <span><i className="legend-dot me" /> You</span>
             )}
-
-            {(!isResidentMode || tracking) && (
-              <span>
-                <i className="legend-dot me" />
-                My location
-              </span>
+            {(missionMode || isResidentMode) && (
+              <span><i className="legend-dot incident" /> Resident / incident</span>
+            )}
+            {(missionMode || isResidentMode) && roadRoute && (
+              <span><i className="legend-route-line" /> Road route</span>
+            )}
+            {!missionMode && !isResidentMode && (
+              <>
+                <span><i className="legend-dot incident" /> Incident</span>
+                <span><i className="legend-dot center" /> Evacuation center</span>
+              </>
             )}
           </div>
         </div>
 
-        <aside className="details-card">
-          {selectedCase ? (
+        <aside className="details-card clean-details-card">
+          {missionMode && selectedCase ? (
             <>
-              <span
-                className={`severity severity-${normalize(
-                  selectedCase.severity || "medium",
-                )}`}
-              >
-                {String(
-                  selectedCase.severity || "medium",
-                ).toUpperCase()}
-              </span>
+              <div className="clean-side-heading">
+                <div>
+                  <span className="clean-kicker">LIVE NAVIGATION</span>
+                  <h2>
+                    {missionAssignmentStatus === "on_site"
+                      ? "You are on site"
+                      : missionAssignmentStatus === "completed"
+                        ? "Mission completed"
+                        : "Navigation to resident"}
+                  </h2>
+                </div>
+                <span className={`clean-status-pill status-${normalize(missionAssignmentStatus)}`}>
+                  {statusLabel(missionAssignmentStatus || "accepted")}
+                </span>
+              </div>
 
-              <h2>
-                {selectedCase.title || "Disaster case"}
-              </h2>
+              <div className="clean-destination-card">
+                <span>GOING TO</span>
+                <strong>
+                  {selectedCase.location ||
+                    selectedCase.reporterAddress ||
+                    "Resident emergency location"}
+                </strong>
+                <small>
+                  Your current GPS is the start point. The blue road line leads to the reported emergency location.
+                </small>
+              </div>
 
-              <p className="detail-type">
-                {selectedCase.category ||
-                  "Uncategorized incident"}
-              </p>
+              <div className="clean-metrics-grid">
+                <div>
+                  <span>Distance</span>
+                  <strong>
+                    {roadRoute
+                      ? formatRoadDistance(roadRoute.distanceMeters)
+                      : routeLoading
+                        ? "…"
+                        : "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span>ETA</span>
+                  <strong>
+                    {roadRoute
+                      ? formatDriveTime(roadRoute.durationSeconds)
+                      : routeLoading
+                        ? "…"
+                        : "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span>GPS</span>
+                  <strong>{flow.canShare ? "LIVE" : tracking ? "READY" : "OFF"}</strong>
+                </div>
+              </div>
 
-              {isResidentMode && (
-                <div className="resident-response-card">
-                  <div className="resident-response-head">
-                    <div>
-                      <strong>Response coordination</strong>
-                      <span>
-                        {residentDisplayedAssignment
-                          ? residentDisplayedAssignment.volunteerName ||
-                            "Assigned responder"
-                          : "Waiting for an assigned responder"}
-                      </span>
-                    </div>
-
-                    {residentDisplayedAssignment && (
-                      <span className="resident-response-status">
-                        {statusLabel(
-                          residentDisplayedAssignment.status,
-                        )}
-                      </span>
-                    )}
+              {["responding", "on_site"].includes(missionAssignmentStatus) && (
+                <div className="clean-next-turn">
+                  <span className="navigation-arrow">
+                    {navigationArrow(currentNavigationStep?.modifier)}
+                  </span>
+                  <div>
+                    <small>NEXT DIRECTION</small>
+                    <strong>
+                      {roadRoute
+                        ? routeStepInstruction(currentNavigationStep)
+                        : routeLoading
+                          ? "Calculating route…"
+                          : routeError || "Waiting for a fresh GPS route…"}
+                    </strong>
                   </div>
+                </div>
+              )}
 
-                  {residentDisplayedAssignment ? (
-                    <>
-                      <p>
-                        {["responding", "on_site"].includes(
-                          normalize(
-                            residentDisplayedAssignment.status,
-                          ),
-                        )
-                          ? residentResponderLastShared
-                            ? "Responder live location updated " +
-                              new Date(
-                                residentResponderLastShared,
-                              ).toLocaleTimeString("en-PH") +
-                              "."
-                            : "Responder GPS is active, but no fresh location is available yet."
-                          : normalize(
-                                residentDisplayedAssignment.status,
-                              ) === "accepted"
-                            ? "The responder accepted your request. Live responder GPS will appear after they start responding."
-                            : normalize(
-                                  residentDisplayedAssignment.status,
-                                ) === "completed"
-                              ? "The responder completed the mission. Live GPS sharing has ended."
-                              : "Admin is coordinating this response."}
-                      </p>
-
-                      {residentCanStartShare && (
-                        <div className="resident-share-actions">
-                          {residentShareCaseId === selectedCase.id ? (
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={stopResidentSharing}
-                            >
-                              ■ Stop sharing my live location
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="primary-button"
-                              onClick={beginResidentSharing}
-                            >
-                              ◎ Share My Live Location
-                            </button>
-                          )}
-
-                          <small>
-                            Optional. Only your assigned responder and
-                            authorized Admin can see this moving pin while
-                            the response is active.
-                          </small>
-                        </div>
+              <div className="clean-person-card">
+                <div className="resident-avatar" aria-hidden="true">
+                  {safeHttpUrl(
+                    selectedCase.reporterProfilePictureUrl ||
+                      selectedCase.profilePictureUrl,
+                  ) ? (
+                    <img
+                      src={safeHttpUrl(
+                        selectedCase.reporterProfilePictureUrl ||
+                          selectedCase.profilePictureUrl,
                       )}
-                    </>
+                      alt=""
+                      referrerPolicy="no-referrer"
+                    />
                   ) : (
-                    <p>
-                      Your fixed emergency location remains on the map.
-                      Live responder tracking becomes available after an
-                      assigned volunteer accepts and starts responding.
-                    </p>
+                    <span>{initialsFor(selectedCase.reporterName)}</span>
                   )}
+                </div>
+                <div>
+                  <span>Resident</span>
+                  <strong>{selectedCase.reporterName || "Resident"}</strong>
+                  <small>
+                    {selectedCase.contactNumber || "No contact number"}
+                  </small>
+                </div>
+              </div>
+
+              <div className="clean-info-block">
+                <strong>Incident</strong>
+                <p>{selectedCase.details || "No additional description"}</p>
+              </div>
+
+              <div className="clean-info-block">
+                <strong>Assistance needed</strong>
+                <p>
+                  {Array.isArray(selectedCase.assistanceTypes) &&
+                  selectedCase.assistanceTypes.length
+                    ? selectedCase.assistanceTypes.join(", ")
+                    : selectedCase.needs || "Not specified"}
+                </p>
+              </div>
+
+              {selectedCase.needsNote && (
+                <div className="clean-info-block attention">
+                  <strong>Response instructions</strong>
+                  <p>{selectedCase.needsNote}</p>
                 </div>
               )}
 
-              {missionMode && (
-                <div className="mission-detail-stack">
-                  <div className="resident-identity-card">
-                    <div className="resident-avatar" aria-hidden="true">
-                      {safeHttpUrl(
-                        selectedCase.reporterProfilePictureUrl ||
-                          selectedCase.profilePictureUrl,
-                      ) ? (
-                        <img
-                          src={safeHttpUrl(
-                            selectedCase.reporterProfilePictureUrl ||
-                              selectedCase.profilePictureUrl,
-                          )}
-                          alt=""
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span>
-                          {initialsFor(selectedCase.reporterName)}
-                        </span>
-                      )}
-                    </div>
+              {missionAssignmentStatus === "accepted" && (
+                <p className="clean-help-text">
+                  Press <strong>Respond &amp; Share GPS</strong> above. GPS sharing and
+                  in-app navigation will start together automatically.
+                </p>
+              )}
 
-                    <div className="resident-identity-copy">
-                      <div className="resident-title-row">
-                        <div>
-                          <strong>Resident / Reporter</strong>
-                          <h3>
-                            {selectedCase.reporterName ||
-                              "Not provided"}
-                          </h3>
-                        </div>
+              {["responding", "on_site"].includes(missionAssignmentStatus) && (
+                <p className="clean-help-text success">
+                  Your responder location is being shared during this active mission.
+                  Navigation stays inside VolunServe.
+                </p>
+              )}
+            </>
+          ) : isResidentMode && selectedCase ? (
+            <>
+              <div className="clean-side-heading">
+                <div>
+                  <span className="clean-kicker">RESPONDER STATUS</span>
+                  <h2>
+                    {residentDisplayedAssignment
+                      ? residentDisplayedAssignment.volunteerName || "Assigned responder"
+                      : "Waiting for responder"}
+                  </h2>
+                </div>
+                {residentDisplayedAssignment && (
+                  <span className={`clean-status-pill status-${residentAssignmentStatus}`}>
+                    {statusLabel(residentDisplayedAssignment.status)}
+                  </span>
+                )}
+              </div>
 
-                        <span
-                          className={`verification-pill verification-${normalize(
-                            selectedCase.verificationStatus || "unknown",
-                          )}`}
-                        >
-                          {verificationLabel(
-                            selectedCase.verificationStatus,
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="resident-contact-grid">
-                        <div>
-                          <b>Contact</b>
-                          {selectedCase.contactNumber ? (
-                            <a
-                              href={`tel:${selectedCase.contactNumber}`}
-                            >
-                              {selectedCase.contactNumber}
-                            </a>
-                          ) : (
-                            <span>No contact number</span>
-                          )}
-                        </div>
-
-                        <div>
-                          <b>Email</b>
-                          <span>
-                            {selectedCase.reporterEmail ||
-                              "Not provided"}
-                          </span>
-                        </div>
-
-                        <div>
-                          <b>Barangay</b>
-                          <span>
-                            {selectedCase.reporterBarangay ||
-                              "Not provided"}
-                          </span>
-                        </div>
-
-                        <div>
-                          <b>Home / saved address</b>
-                          <span>
-                            {selectedCase.reporterAddress ||
-                              "Not provided"}
-                          </span>
-                        </div>
-
-                        <div>
-                          <b>Emergency contact</b>
-                          <span>
-                            {selectedCase.emergencyContact ||
-                              "Not provided"}
-                          </span>
-                        </div>
-
-                        <div>
-                          <b>People affected</b>
-                          <span>
-                            {selectedCase.affectedPeople ??
-                              "Not specified"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {!safeHttpUrl(
-                        selectedCase.reporterProfilePictureUrl ||
-                          selectedCase.profilePictureUrl,
-                      ) && (
-                        <small className="resident-photo-note">
-                          Profile photo not included in this case snapshot.
-                        </small>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <strong>Resident live location</strong>
-                    <span>
-                      {residentLivePins.length > 0
-                        ? "Resident is sharing a live location · last update " +
-                          new Date(
-                            Math.max(
-                              ...residentLivePins.map(
-                                (point) => point.lastShared || 0,
-                              ),
-                            ),
-                          ).toLocaleTimeString("en-PH")
-                        : "Resident is not sharing a live location. Use the fixed emergency pin as the destination."}
-                    </span>
-                  </div>
-
-                  <div>
-                    <strong>Incident details</strong>
-                    <span>
-                      {selectedCase.details ||
-                        "No additional description"}
-                    </span>
-                  </div>
-
-                  <div>
-                    <strong>Assistance needed</strong>
-                    <span>
-                      {Array.isArray(
-                        selectedCase.assistanceTypes,
-                      ) &&
-                      selectedCase.assistanceTypes.length
-                        ? selectedCase.assistanceTypes.join(
-                            ", ",
-                          )
-                        : selectedCase.needs ||
-                          "Not specified"}
-                    </span>
-                  </div>
-
-                  <div>
-                    <strong>Required skills</strong>
-                    <span>
-                      {Array.isArray(
-                        selectedCase.requiredSkills,
-                      ) &&
-                      selectedCase.requiredSkills.length
-                        ? selectedCase.requiredSkills.join(
-                            ", ",
-                          )
-                        : "Not specified"}
-                    </span>
-                  </div>
-
-                  <div>
-                    <strong>Goods / supplies</strong>
-                    <span>
-                      {Array.isArray(
-                        selectedCase.neededGoods,
-                      ) &&
-                      selectedCase.neededGoods.length
-                        ? selectedCase.neededGoods.join(
-                            ", ",
-                          )
-                        : "Not specified"}
-                    </span>
-                  </div>
-
-                  {selectedCase.needsNote && (
+              {residentDisplayedAssignment &&
+                ["responding", "on_site"].includes(residentAssignmentStatus) && (
+                  <div className="clean-metrics-grid">
                     <div>
-                      <strong>Response instructions</strong>
-                      <span>{selectedCase.needsNote}</span>
+                      <span>Distance</span>
+                      <strong>
+                        {roadRoute
+                          ? formatRoadDistance(roadRoute.distanceMeters)
+                          : routeLoading
+                            ? "…"
+                            : "—"}
+                      </strong>
                     </div>
-                  )}
-
-                  {Array.isArray(
-                    selectedCase.attachments,
-                  ) &&
-                    selectedCase.attachments.some(
-                      (attachment) =>
-                        safeHttpUrl(attachment?.url),
-                    ) && (
-                      <div>
-                        <strong>Resident evidence</strong>
-                        <div className="evidence-grid">
-                          {selectedCase.attachments.map(
-                            (attachment, index) => {
-                              const url = safeHttpUrl(
-                                attachment?.url,
-                              );
-
-                              if (!url) return null;
-
-                              const looksLikeImage =
-                                String(
-                                  attachment?.type ||
-                                    attachment?.contentType ||
-                                    "",
-                                )
-                                  .toLowerCase()
-                                  .includes("image") ||
-                                /\.(png|jpe?g|webp|gif)(\?|$)/i.test(
-                                  url,
-                                );
-
-                              return (
-                                <a
-                                  className="evidence-card"
-                                  key={index}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {looksLikeImage ? (
-                                    <img
-                                      src={url}
-                                      alt={`Incident evidence ${index + 1}`}
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <span className="evidence-file-icon">
-                                      ▶
-                                    </span>
-                                  )}
-                                  <span>
-                                    {attachment?.name ||
-                                      `Evidence ${index + 1}`}
-                                  </span>
-                                </a>
-                              );
-                            },
-                          )}
-                        </div>
-                      </div>
-                    )}
-                </div>
-              )}
-
-              {caseChatAvailable && caseChatAssignment && (
-                <CaseChat
-                  caseId={selectedCase.id}
-                  assignmentId={caseChatAssignment.id}
-                  assignmentStatus={caseChatAssignment.status}
-                  caseStatus={selectedCase.status}
-                  user={user}
-                  profile={profile}
-                  viewerRole={caseChatViewerRole}
-                />
-              )}
-
-              {missionMode && !hasCoordinates(selectedCase) && (
-                <div className="error" role="alert" style={{ marginTop: 14 }}>
-                  This test case has no saved GPS coordinates yet. Add valid latitude and longitude to the disaster case before testing navigation and live response.
-                </div>
-              )}
-
-              <dl>
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    {statusLabel(selectedCase.status)}
-                  </dd>
-                </div>
-
-                <div>
-                  <dt>
-                    {missionMode
-                      ? "Reported address / landmark"
-                      : "Location"}
-                  </dt>
-                  <dd>
-                    {selectedCase.location ||
-                      selectedCase.reporterAddress ||
-                      "Location pending"}
-                  </dd>
-                </div>
-
-                {!missionMode && (
-                  <div>
-                    <dt>Volunteers</dt>
-                    <dd>
-                      {selectedCase.assignedVolunteersCount ||
-                        0}
-
-                      {Number.isFinite(
-                        selectedCase.requiredVolunteers,
-                      )
-                        ? ` / ${selectedCase.requiredVolunteers}`
-                        : ""}
-                    </dd>
+                    <div>
+                      <span>ETA</span>
+                      <strong>
+                        {roadRoute
+                          ? formatDriveTime(roadRoute.durationSeconds)
+                          : routeLoading
+                            ? "…"
+                            : "—"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Volunteer GPS</span>
+                      <strong>{residentResponderLastShared ? "LIVE" : "WAITING"}</strong>
+                    </div>
                   </div>
                 )}
 
-                <div>
-                  <dt>Coordinates</dt>
-                  <dd>{coordinateLabel(selectedCase)}</dd>
-                </div>
-              </dl>
+              <div className="clean-resident-message">
+                {residentAssignmentStatus === "completed"
+                  ? "The volunteer marked the mission complete. Confirm the assistance from My Reports."
+                  : residentAssignmentStatus === "on_site"
+                    ? "Your volunteer has arrived at your location."
+                    : residentAssignmentStatus === "responding"
+                      ? residentResponderLastShared
+                        ? "Your volunteer is on the way. The map and ETA update from their live GPS."
+                        : "Your volunteer is on the way. Waiting for a fresh GPS update."
+                      : residentAssignmentStatus === "accepted"
+                        ? "Your volunteer accepted the assignment and will appear on the map when the response starts."
+                        : "Admin is coordinating your emergency response."}
+              </div>
+
+              {routeError && residentAssignmentStatus === "responding" && (
+                <p className="route-warning">{routeError}</p>
+              )}
+
+              {residentCanStartShare &&
+                ["accepted", "responding", "on_site"].includes(
+                  normalize(residentShareAssignment?.status),
+                ) && (
+                  <div className="clean-optional-share">
+                    <div>
+                      <strong>Share my moving location</strong>
+                      <small>
+                        Optional. Use this only if you move away from the original emergency pin.
+                      </small>
+                    </div>
+                    {residentShareCaseId === selectedCase.id ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={stopResidentSharing}
+                      >
+                        Stop sharing
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={beginResidentSharing}
+                      >
+                        Share location
+                      </button>
+                    )}
+                  </div>
+                )}
+
+              <div className="clean-info-block">
+                <strong>Your reported location</strong>
+                <p>
+                  {selectedCase.location ||
+                    selectedCase.reporterAddress ||
+                    "Emergency location saved"}
+                </p>
+              </div>
+            </>
+          ) : selectedCase ? (
+            <>
+              <span className={`severity severity-${normalize(selectedCase.severity || "medium")}`}>
+                {String(selectedCase.severity || "medium").toUpperCase()}
+              </span>
+              <h2>{selectedCase.title || "Disaster case"}</h2>
+              <p className="detail-type">{selectedCase.location || "Location pending"}</p>
+              <div className="clean-info-block">
+                <strong>Status</strong>
+                <p>{statusLabel(selectedCase.status)}</p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Reporter</strong>
+                <p>{selectedCase.reporterName || "Not provided"}</p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Details</strong>
+                <p>{selectedCase.details || "No description provided"}</p>
+              </div>
             </>
           ) : selectedCenter ? (
             <>
-              <span className="severity center-badge">
-                EVACUATION CENTER
-              </span>
-
-              <h2>
-                {selectedCenter.name ||
-                  "Evacuation center"}
-              </h2>
-
+              <span className="severity center-badge">EVACUATION CENTER</span>
+              <h2>{selectedCenter.name || "Evacuation center"}</h2>
               <p className="detail-type">
-                {selectedCenter.address ||
-                  selectedCenter.barangay ||
-                  "Address pending"}
+                {selectedCenter.address || selectedCenter.barangay || "Address pending"}
               </p>
-
-              <dl>
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    {String(
-                      selectedCenter.status ||
-                        "available",
-                    ).toUpperCase()}
-                  </dd>
-                </div>
-
-                <div>
-                  <dt>Occupancy</dt>
-                  <dd>
-                    {selectedCenter.occupied ?? 0}
-
-                    {Number.isFinite(
-                      selectedCenter.capacity,
-                    )
-                      ? ` / ${selectedCenter.capacity}`
-                      : ""}
-                  </dd>
-                </div>
-
-                <div>
-                  <dt>Coordinates</dt>
-                  <dd>{coordinateLabel(selectedCenter)}</dd>
-                </div>
-              </dl>
+              <div className="clean-info-block">
+                <strong>Status</strong>
+                <p>{String(selectedCenter.status || "available").toUpperCase()}</p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Occupancy</strong>
+                <p>
+                  {selectedCenter.occupied ?? 0}
+                  {Number.isFinite(selectedCenter.capacity)
+                    ? ` / ${selectedCenter.capacity}`
+                    : ""}
+                </p>
+              </div>
             </>
           ) : (
             <div className="details-empty">
               <div className="details-icon">⌖</div>
-
-              <h2>
-                {missionMode
-                  ? "Loading assigned incident"
-                  : "Select a map pin"}
-              </h2>
-
-              <p>
-                {missionMode
-                  ? "Open this response from Volunteer Tasks. The assigned resident location will appear here."
-                  : "Click an incident or evacuation-center pin to view its current response details."}
-              </p>
+              <h2>Select a map pin</h2>
+              <p>Choose an incident or evacuation center to view the details.</p>
             </div>
-          )}
-
-          <div className="stats">
-            <div>
-              <strong>
-                {missionMode
-                  ? missionCase
-                    ? "1"
-                    : "0"
-                  : visibleCases.length}
-              </strong>
-              <span>
-                {missionMode ? "assigned mission" : "visible cases"}
-              </span>
-            </div>
-
-            <div>
-              <strong>
-                {missionMode
-                  ? statusLabel(missionCase?.status)
-                  : visibleCenters.length}
-              </strong>
-              <span>
-                {missionMode ? "case status" : "centers"}
-              </span>
-            </div>
-          </div>
-
-          {userLocation && (
-            <p className="gps-note">
-              The blue circle shows estimated location
-              accuracy. {missionMode
-                ? "Live sharing only runs after Respond & Share GPS and stops when the response ends"
-                : "Tracking runs while this map is open"}
-              {userLocation.accuracy !== null
-                ? ` · accuracy ±${Math.round(
-                    userLocation.accuracy,
-                  )} m`
-                : ""}
-              .
-            </p>
           )}
         </aside>
       </section>
+
+      {caseChatAvailable && selectedCase && caseChatAssignment && (
+        <details className="clean-chat-card">
+          <summary>
+            <span>Case chat</span>
+            <small>Optional communication with the other side</small>
+          </summary>
+          <CaseChat
+            caseId={selectedCase.id}
+            assignmentId={caseChatAssignment.id}
+            assignmentStatus={caseChatAssignment.status}
+            caseStatus={selectedCase.status}
+            user={user}
+            profile={profile}
+            viewerRole={caseChatViewerRole}
+          />
+        </details>
+      )}
     </main>
   );
 }
@@ -3051,6 +3612,309 @@ const css = `
 .mission-detail-stack small {
   margin-top: 3px;
   color: #64748b;
+}
+
+.resident-responder-banner {
+  width: min(1380px, 100%);
+  margin: 0 auto 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #d9d0f4;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #faf8ff, #ffffff);
+  box-shadow: 0 7px 24px rgba(76,29,149,.07);
+}
+
+.resident-responder-banner-main,
+.resident-responder-banner-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resident-responder-banner-main > strong {
+  color: #4c1d95;
+  font-size: 17px;
+}
+
+.resident-responder-banner-main > small,
+.resident-responder-banner-status > small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.resident-responder-kicker {
+  color: #7c3aed;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .09em;
+}
+
+.resident-responder-banner-status {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.resident-responder-banner-status > strong {
+  color: #0f2740;
+  font-size: 16px;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+
+.live-indicator i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.live-indicator.active {
+  color: #15803d;
+}
+
+.live-indicator.active i {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34,197,94,.12);
+}
+
+.legend-route-line {
+  width: 18px;
+  height: 4px;
+  display: inline-block;
+  border-radius: 999px;
+  background: #7c3aed;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.route-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.route-metrics > div {
+  padding: 9px 8px;
+  border: 1px solid #e4def7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.route-metrics strong,
+.route-metrics span {
+  display: block;
+}
+
+.route-metrics strong {
+  color: #5b21b6;
+  font-size: 13px;
+}
+
+.route-metrics span {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+}
+
+.route-warning {
+  margin: 9px 0 0 !important;
+  padding: 8px 9px;
+  border: 1px solid #fed7aa;
+  border-radius: 9px;
+  background: #fff7ed;
+  color: #9a3412 !important;
+}
+
+.mission-navigation-card {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-color: #d9d0f4 !important;
+  background: #faf8ff !important;
+}
+
+.mission-navigation-card > div {
+  min-width: 0;
+}
+
+.mission-navigation-card .primary-button,
+.mission-navigation-card .secondary-button {
+  flex: 0 0 auto;
+}
+
+.navigation-stop-button {
+  border-color: #fecaca !important;
+  background: #fff1f2 !important;
+  color: #be123c !important;
+}
+
+.navigation-card-step {
+  margin-top: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid #c4b5fd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.navigation-card-step > span {
+  flex: 0 0 auto;
+  color: #6d28d9;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.navigation-card-step b,
+.navigation-card-step small {
+  display: block;
+}
+
+.navigation-card-step b {
+  color: #312e81;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.navigation-card-step small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.navigation-paused-note {
+  display: block;
+  margin-top: 8px;
+  color: #b45309 !important;
+  font-weight: 800;
+}
+
+.navigation-hud {
+  position: absolute;
+  z-index: 8;
+  top: 16px;
+  left: 50%;
+  width: min(620px, calc(100% - 110px));
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid rgba(196,181,253,.95);
+  border-radius: 16px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 14px 38px rgba(15,23,42,.18);
+  backdrop-filter: blur(10px);
+}
+
+.navigation-hud-turn {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.navigation-arrow {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #6d28d9;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.navigation-hud-turn small,
+.navigation-hud-turn strong,
+.navigation-hud-turn span {
+  display: block;
+}
+
+.navigation-hud-turn small {
+  color: #7c3aed;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.navigation-hud-turn strong {
+  margin-top: 2px;
+  color: #111827;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.navigation-hud-turn span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.navigation-hud-progress {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid #ede9fe;
+  background: #f5f3ff;
+}
+
+.navigation-hud-progress strong {
+  color: #5b21b6;
+  font-size: 20px;
+}
+
+.navigation-hud-progress span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.navigation-next-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-top: 1px solid #ede9fe;
+  color: #475569;
+  font-size: 11px;
+}
+
+.navigation-next-step span {
+  color: #7c3aed;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.navigation-next-step strong {
+  font-weight: 800;
+}
+
+.navigation-arrival-note {
+  padding: 10px 16px;
+  border-top: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .resident-response-card {
@@ -3826,6 +4690,32 @@ const css = `
   }
 }
 
+@media (max-width: 760px) {
+  .resident-responder-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resident-responder-banner-status {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .route-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-navigation-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mission-navigation-card .primary-button,
+  .mission-navigation-card .secondary-button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 620px) {
   .response-map-page {
     padding: 12px;
@@ -3856,6 +4746,35 @@ const css = `
     min-height: 100%;
   }
 
+  .navigation-hud {
+    top: 10px;
+    width: calc(100% - 24px);
+  }
+
+  .navigation-hud-turn {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 9px;
+    padding: 11px 12px;
+  }
+
+  .navigation-arrow {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 24px;
+  }
+
+  .navigation-hud-turn strong {
+    font-size: 14px;
+  }
+
+  .navigation-hud-progress,
+  .navigation-next-step,
+  .navigation-arrival-note {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
   .legend {
     right: 12px;
     left: 12px;
@@ -3880,6 +4799,652 @@ const css = `
   .resident-contact-grid,
   .evidence-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   FINAL CLEAN RESIDENT / VOLUNTEER TRACKING DESIGN
+   ========================================================= */
+.response-map-page {
+  --vs-navy: #12345b;
+  --vs-blue: #2563eb;
+  --vs-teal: #0f8f83;
+  --vs-green: #16a36a;
+  --vs-red: #e94b58;
+  --vs-border: #dce7ee;
+  --vs-muted: #64748b;
+  --vs-bg: #f5f9fb;
+}
+
+.clean-map-header {
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--vs-border);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffffff, #f3fbfa);
+  box-shadow: 0 10px 30px rgba(15, 39, 64, .06);
+}
+
+.clean-map-header h1 {
+  margin: 4px 0 3px;
+  color: var(--vs-navy);
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.05;
+}
+
+.clean-map-header p {
+  margin: 0;
+  color: var(--vs-muted);
+}
+
+.clean-live-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #d7e3ea;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.clean-live-badge span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.clean-live-badge.active {
+  border-color: #b8e7d2;
+  background: #edfdf5;
+  color: #08794f;
+}
+
+.clean-live-badge.active span {
+  background: #16a36a;
+  box-shadow: 0 0 0 5px rgba(22,163,106,.12);
+}
+
+.clean-alert {
+  margin: 0 0 12px;
+  padding: 11px 13px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff5f5;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.clean-flow-card {
+  margin-bottom: 14px;
+  overflow: hidden;
+  border: 1px solid var(--vs-border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15,39,64,.05);
+}
+
+.clean-flow-summary {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.7fr) minmax(180px, 1fr) 120px 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 18px;
+}
+
+.clean-flow-summary h2 {
+  margin: 3px 0 2px;
+  color: var(--vs-navy);
+  font-size: 18px;
+}
+
+.clean-flow-summary p,
+.clean-summary-person small {
+  margin: 0;
+  color: var(--vs-muted);
+  font-size: 12px;
+}
+
+.clean-destination-line {
+  margin-top: 8px;
+}
+
+.clean-destination-line span,
+.clean-destination-card > span {
+  display: block;
+  color: #708399;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.clean-destination-line strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f2740;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.clean-kicker,
+.clean-summary-person > span,
+.clean-summary-metric > span {
+  display: block;
+  color: #708399;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.clean-summary-person,
+.clean-summary-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border-left: 1px solid #e7eef3;
+}
+
+.clean-summary-person strong,
+.clean-summary-metric strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--vs-navy);
+  font-size: 15px;
+}
+
+.clean-summary-metric strong {
+  font-size: 20px;
+}
+
+.clean-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #e8eff4;
+  background: #f9fcfd;
+}
+
+.clean-flow-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 10px;
+  color: #7a8da1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clean-flow-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -14%;
+  width: 28%;
+  height: 2px;
+  background: #dbe5eb;
+}
+
+.clean-flow-step i {
+  position: relative;
+  z-index: 1;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #cbd8e0;
+  border-radius: 50%;
+  background: #fff;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.clean-flow-step.done,
+.clean-flow-step.current {
+  color: #0f766e;
+}
+
+.clean-flow-step.done i {
+  border-color: #16a36a;
+  background: #16a36a;
+  color: #fff;
+}
+
+.clean-flow-step.current i {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 0 0 5px rgba(37,99,235,.10);
+}
+
+.clean-map-layout {
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, .72fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.clean-map-card {
+  min-height: 620px;
+  border-radius: 18px;
+  border: 1px solid var(--vs-border);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15,39,64,.08);
+}
+
+.clean-map-card iframe {
+  min-height: 620px;
+}
+
+.clean-navigation-hud {
+  top: 14px;
+  left: 14px;
+  right: auto;
+  width: min(430px, calc(100% - 28px));
+  border: 1px solid rgba(37,99,235,.18);
+  border-radius: 16px;
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(12px);
+}
+
+.clean-map-legend {
+  position: absolute;
+  z-index: 4;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  max-width: calc(100% - 28px);
+  padding: 9px 11px;
+  border: 1px solid rgba(203,213,225,.9);
+  border-radius: 12px;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 8px 22px rgba(15,23,42,.10);
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.clean-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.responder-dot {
+  background: #7c3aed !important;
+}
+
+.clean-details-card {
+  min-height: 620px;
+  padding: 18px;
+  border: 1px solid var(--vs-border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15,39,64,.06);
+}
+
+.clean-side-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.clean-side-heading h2 {
+  margin: 4px 0 0;
+  color: var(--vs-navy);
+  font-size: 19px;
+}
+
+.clean-status-pill {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #eef4f7;
+  color: #51677b;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.status-responding,
+.status-on_site {
+  background: #e7f8f3;
+  color: #087963;
+}
+
+.status-completed {
+  background: #eaf7ee;
+  color: #19734b;
+}
+
+.clean-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.clean-destination-card {
+  margin: 12px 0 14px;
+  padding: 12px 13px;
+  border: 1px solid #dbe8f5;
+  border-radius: 12px;
+  background: #f7fbff;
+}
+
+.clean-destination-card strong,
+.clean-destination-card small {
+  display: block;
+}
+
+.clean-destination-card strong {
+  margin-top: 4px;
+  color: var(--vs-navy);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.clean-destination-card small {
+  margin-top: 5px;
+  color: var(--vs-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.clean-metrics-grid > div {
+  min-width: 0;
+  padding: 11px 9px;
+  border: 1px solid #e1e9ef;
+  border-radius: 12px;
+  background: #f9fcfd;
+  text-align: center;
+}
+
+.clean-metrics-grid span,
+.clean-metrics-grid strong {
+  display: block;
+}
+
+.clean-metrics-grid span {
+  color: #73879a;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.clean-metrics-grid strong {
+  margin-top: 4px;
+  color: var(--vs-navy);
+  font-size: 17px;
+}
+
+.clean-next-turn {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 13px;
+  border: 1px solid #cfe0ff;
+  border-radius: 13px;
+  background: #f3f7ff;
+}
+
+.clean-next-turn > div {
+  min-width: 0;
+}
+
+.clean-next-turn small,
+.clean-next-turn strong {
+  display: block;
+}
+
+.clean-next-turn small {
+  color: #5f7792;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.clean-next-turn strong {
+  margin-top: 3px;
+  color: #163b67;
+  font-size: 13px;
+}
+
+.clean-person-card {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #e2eaf0;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.clean-person-card > div:last-child {
+  min-width: 0;
+}
+
+.clean-person-card span,
+.clean-person-card strong,
+.clean-person-card small {
+  display: block;
+}
+
+.clean-person-card span {
+  color: #7b8da0;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.clean-person-card strong {
+  margin-top: 2px;
+  color: var(--vs-navy);
+}
+
+.clean-person-card small {
+  margin-top: 2px;
+  color: var(--vs-muted);
+}
+
+.clean-info-block {
+  padding: 12px 0;
+  border-top: 1px solid #e9eef2;
+}
+
+.clean-info-block strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #2f455b;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.clean-info-block p {
+  margin: 0;
+  color: #52687c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clean-info-block.attention {
+  margin-top: 4px;
+  padding: 11px;
+  border: 1px solid #fde4b7;
+  border-radius: 11px;
+  background: #fff9ed;
+}
+
+.clean-help-text,
+.clean-resident-message {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #f1f6fb;
+  color: #496177;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clean-help-text.success,
+.clean-resident-message {
+  background: #eefaf5;
+  color: #276554;
+}
+
+.clean-optional-share {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #dce8ee;
+  border-radius: 12px;
+  background: #f9fcfd;
+}
+
+.clean-optional-share strong,
+.clean-optional-share small {
+  display: block;
+}
+
+.clean-optional-share strong {
+  color: #29445f;
+  font-size: 12px;
+}
+
+.clean-optional-share small {
+  margin-top: 3px;
+  color: #718499;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.clean-chat-card {
+  margin-top: 14px;
+  border: 1px solid var(--vs-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15,39,64,.05);
+}
+
+.clean-chat-card > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--vs-navy);
+  font-weight: 900;
+}
+
+.clean-chat-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.clean-chat-card > summary small {
+  color: #7b8da0;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.admin-map-toolbar {
+  margin-bottom: 14px;
+}
+
+.response-map-page.volunteer-map-mode .mission-action-bar {
+  margin-bottom: 14px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15,39,64,.05);
+}
+
+.response-map-page.volunteer-map-mode .mission-action-copy strong {
+  color: var(--vs-navy);
+}
+
+@media (max-width: 1100px) {
+  .clean-flow-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .clean-summary-metric,
+  .clean-summary-person {
+    border-left: 0;
+    border-top: 1px solid #e7eef3;
+  }
+
+  .clean-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clean-details-card,
+  .clean-map-card,
+  .clean-map-card iframe {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 680px) {
+  .clean-map-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .clean-flow-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .clean-summary-person,
+  .clean-summary-metric {
+    border-left: 0;
+    border-top: 1px solid #e7eef3;
+  }
+
+  .clean-flow-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .clean-flow-step:nth-child(2)::after {
+    display: none;
+  }
+
+  .clean-map-card,
+  .clean-map-card iframe,
+  .clean-details-card {
+    min-height: 460px;
+  }
+
+  .clean-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clean-optional-share {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .clean-chat-card > summary {
+    flex-direction: column;
   }
 }
 

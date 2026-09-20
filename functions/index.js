@@ -3,6 +3,7 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/https");
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
@@ -960,5 +961,1335 @@ exports.generateMapBriefing = onCall(
           });
 
       return briefing;
+    },
+);
+
+// =========================================================
+// VERIFIED VOLUNTEER CONTRIBUTIONS
+// =========================================================
+exports.processAssistanceConfirmation = onDocumentCreated(
+    "assistanceConfirmations/{assignmentId}",
+    async (event) => {
+      const confirmationSnapshot = event.data;
+
+      if (!confirmationSnapshot) {
+        return;
+      }
+
+      const confirmation =
+        confirmationSnapshot.data() || {};
+
+      const assignmentId = cleanText(
+          event.params.assignmentId,
+          160,
+      );
+
+      const caseId = cleanText(
+          confirmation.caseId,
+          160,
+      );
+
+      const volunteerId = cleanText(
+          confirmation.volunteerId,
+          160,
+      );
+
+      const residentId = cleanText(
+          confirmation.residentId,
+          160,
+      );
+
+      const outcome = cleanText(
+          confirmation.outcome,
+          40,
+      ).toLowerCase();
+
+      if (
+        !assignmentId ||
+        !caseId ||
+        !volunteerId ||
+        !residentId ||
+        ![
+          "fully_helped",
+          "partially_helped",
+          "not_helped",
+        ].includes(outcome)
+      ) {
+        logger.error(
+            "Invalid assistance confirmation payload",
+            {assignmentId},
+        );
+
+        return;
+      }
+
+      const database = getFirestore();
+
+      const confirmationRef = database
+          .collection("assistanceConfirmations")
+          .doc(assignmentId);
+
+      const assignmentRef = database
+          .collection("responseAssignments")
+          .doc(assignmentId);
+
+      const caseRef = database
+          .collection("disasterCases")
+          .doc(caseId);
+
+      const contributionRef = database
+          .collection("verifiedContributions")
+          .doc(assignmentId);
+
+      const statsRef = database
+          .collection("volunteerStats")
+          .doc(volunteerId);
+
+      const disputeRef = database
+          .collection("responseDisputes")
+          .doc(assignmentId);
+
+      await database.runTransaction(
+          async (transaction) => {
+            const [
+              currentConfirmationSnapshot,
+              assignmentSnapshot,
+              caseSnapshot,
+              existingContributionSnapshot,
+            ] = await Promise.all([
+              transaction.get(
+                  confirmationRef,
+              ),
+
+              transaction.get(
+                  assignmentRef,
+              ),
+
+              transaction.get(
+                  caseRef,
+              ),
+
+              transaction.get(
+                  contributionRef,
+              ),
+            ]);
+
+            if (
+              !currentConfirmationSnapshot.exists ||
+              !assignmentSnapshot.exists ||
+              !caseSnapshot.exists
+            ) {
+              logger.error(
+                  "Confirmation references missing response data",
+                  {
+                    assignmentId,
+                    caseId,
+                  },
+              );
+
+              return;
+            }
+
+            const currentConfirmation =
+              currentConfirmationSnapshot.data() ||
+              {};
+
+            const assignment =
+              assignmentSnapshot.data() ||
+              {};
+
+            const incident =
+              caseSnapshot.data() ||
+              {};
+
+            if (
+              assignment.caseId !== caseId ||
+              assignment.volunteerId !== volunteerId ||
+              assignment.status !== "completed" ||
+              incident.reporterUid !== residentId
+            ) {
+              transaction.set(
+                  confirmationRef,
+                  {
+                    creditStatus:
+                      "rejected",
+
+                    creditError:
+                      "Linked case or assignment did not pass verification.",
+
+                    processedAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: true,
+                  },
+              );
+
+              return;
+            }
+
+            // -----------------------------------------------
+            // NOT HELPED = ADMIN REVIEW
+            // -----------------------------------------------
+            if (
+              outcome === "not_helped"
+            ) {
+              transaction.set(
+                  confirmationRef,
+                  {
+                    creditStatus:
+                      "disputed",
+
+                    processedAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: true,
+                  },
+              );
+
+              transaction.set(
+                  assignmentRef,
+                  {
+                    residentConfirmationStatus:
+                      "disputed",
+
+                    residentConfirmedAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: true,
+                  },
+              );
+
+              transaction.set(
+                  disputeRef,
+                  {
+                    assignmentId,
+                    caseId,
+                    volunteerId,
+                    residentId,
+
+                    residentNote:
+                      cleanText(
+                          currentConfirmation.residentNote,
+                          1000,
+                      ),
+
+                    contributionType:
+                      cleanText(
+                          assignment.contributionType,
+                          100,
+                      ),
+
+                    contributionSummary:
+                      cleanText(
+                          assignment.contributionSummary,
+                          1200,
+                      ),
+
+                    status: "open",
+
+                    createdAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: false,
+                  },
+              );
+
+              transaction.set(
+                  database
+                      .collection("notifications")
+                      .doc(
+                          `volunteer_dispute_${assignmentId}`,
+                      ),
+
+                  {
+                    userId:
+                      volunteerId,
+
+                    caseId,
+                    assignmentId,
+
+                    title:
+                      "Assistance confirmation needs review",
+
+                    message:
+                      "The resident marked this completed response as not helped. Admin review is required before any service credit is issued.",
+
+                    type:
+                      "volunteer_contribution_review",
+
+                    read: false,
+
+                    createdAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: true,
+                  },
+              );
+
+              return;
+            }
+
+            // Prevent double credit
+            if (
+              existingContributionSnapshot.exists
+            ) {
+              transaction.set(
+                  confirmationRef,
+                  {
+                    creditStatus:
+                      "credited",
+
+                    verifiedContributionId:
+                      assignmentId,
+
+                    processedAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+                  {
+                    merge: true,
+                  },
+              );
+
+              return;
+            }
+
+            const responseStartedAt =
+              assignment.responseStartedAt ||
+              null;
+
+            const arrivedAt =
+              assignment.arrivedAt ||
+              null;
+
+            const completedAt =
+              assignment.completedAt ||
+              null;
+
+            const responseStartedMillis =
+              responseStartedAt
+                  ?.toMillis?.() ||
+              0;
+
+            const completedMillis =
+              completedAt
+                  ?.toMillis?.() ||
+              0;
+
+            let serviceMinutes = 0;
+
+            if (
+              responseStartedMillis > 0 &&
+              completedMillis >=
+                responseStartedMillis
+            ) {
+              serviceMinutes =
+                Math.round(
+                    (
+                      completedMillis -
+                      responseStartedMillis
+                    ) /
+                    (1000 * 60),
+                );
+            }
+
+            serviceMinutes =
+              Math.min(
+                  24 * 60,
+                  Math.max(
+                      0,
+                      serviceMinutes,
+                  ),
+              );
+
+            const peopleHelped =
+              Math.min(
+                  999,
+                  Math.max(
+                      0,
+
+                      Number.isInteger(
+                          assignment.peopleHelped,
+                      ) ?
+                        assignment.peopleHelped :
+                        0,
+                  ),
+              );
+
+            const contributionType =
+              cleanText(
+                  assignment.contributionType ||
+                  "General Volunteer Assistance",
+                  100,
+              );
+
+            const contributionSummary =
+              cleanText(
+                  assignment.contributionSummary,
+                  1200,
+              );
+
+            const volunteerName =
+              cleanText(
+                  assignment.volunteerName ||
+                  "Volunteer",
+                  120,
+              );
+
+            // -----------------------------------------------
+            // CREATE VERIFIED CONTRIBUTION
+            // -----------------------------------------------
+            transaction.create(
+                contributionRef,
+                {
+                  assignmentId,
+                  caseId,
+                  volunteerId,
+                  volunteerName,
+                  residentId,
+
+                  outcome,
+
+                  contributionType,
+                  contributionSummary,
+
+                  peopleHelped,
+                  serviceMinutes,
+
+                  completionNotes:
+                    cleanText(
+                        assignment.completionNotes,
+                        600,
+                    ),
+
+                  responseStartedAt,
+                  arrivedAt,
+                  completedAt,
+
+                  residentConfirmedAt:
+                    currentConfirmation.createdAt ||
+                    FieldValue.serverTimestamp(),
+
+                  verificationSource:
+                    "resident_confirmation",
+
+                  status:
+                    "verified",
+
+                  createdAt:
+                    FieldValue.serverTimestamp(),
+
+                  verifiedAt:
+                    FieldValue.serverTimestamp(),
+                },
+            );
+
+            // -----------------------------------------------
+            // UPDATE VOLUNTEER STATS
+            // -----------------------------------------------
+            const statsPatch = {
+              uid:
+                volunteerId,
+
+              volunteerName,
+
+              verifiedHelps:
+                FieldValue.increment(1),
+
+              verifiedEmergencyResponses:
+                FieldValue.increment(1),
+
+              verifiedServiceMinutes:
+                FieldValue.increment(
+                    serviceMinutes,
+                ),
+
+              peopleHelped:
+                FieldValue.increment(
+                    peopleHelped,
+                ),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
+
+              lastVerifiedAt:
+                FieldValue.serverTimestamp(),
+            };
+
+            if (
+              outcome ===
+              "fully_helped"
+            ) {
+              statsPatch.fullVerifiedHelps =
+                FieldValue.increment(1);
+            } else {
+              statsPatch.partialVerifiedHelps =
+                FieldValue.increment(1);
+            }
+
+            transaction.set(
+                statsRef,
+                statsPatch,
+                {
+                  merge: true,
+                },
+            );
+
+            transaction.set(
+                confirmationRef,
+                {
+                  creditStatus:
+                    "credited",
+
+                  verifiedContributionId:
+                    assignmentId,
+
+                  creditedAt:
+                    FieldValue.serverTimestamp(),
+
+                  processedAt:
+                    FieldValue.serverTimestamp(),
+
+                  updatedAt:
+                    FieldValue.serverTimestamp(),
+                },
+                {
+                  merge: true,
+                },
+            );
+
+            transaction.set(
+                assignmentRef,
+                {
+                  residentConfirmationStatus:
+                    "resident_confirmed",
+
+                  residentConfirmationOutcome:
+                    outcome,
+
+                  verifiedContributionId:
+                    assignmentId,
+
+                  residentConfirmedAt:
+                    FieldValue.serverTimestamp(),
+
+                  verifiedAt:
+                    FieldValue.serverTimestamp(),
+
+                  updatedAt:
+                    FieldValue.serverTimestamp(),
+                },
+                {
+                  merge: true,
+                },
+            );
+
+            // -----------------------------------------------
+            // NOTIFY VOLUNTEER
+            // -----------------------------------------------
+            transaction.set(
+                database
+                    .collection("notifications")
+                    .doc(
+                        `volunteer_verified_${assignmentId}`,
+                    ),
+
+                {
+                  userId:
+                    volunteerId,
+
+                  caseId,
+                  assignmentId,
+
+                  title:
+                    "Verified contribution recorded",
+
+                  message:
+                    outcome ===
+                    "fully_helped" ?
+                      "The resident confirmed the assistance you provided. This mission is now part of your verified volunteer record." :
+                      "The resident confirmed that you provided partial assistance. This mission is now recorded as a verified partial contribution.",
+
+                  type:
+                    "volunteer_contribution_verified",
+
+                  read: false,
+
+                  createdAt:
+                    FieldValue.serverTimestamp(),
+                },
+
+                {
+                  merge: true,
+                },
+            );
+
+            // -----------------------------------------------
+            // AUDIT LOG
+            // -----------------------------------------------
+            transaction.set(
+                database
+                    .collection("responseAuditLogs")
+                    .doc(
+                        `verified_${assignmentId}`,
+                    ),
+
+                {
+                  event:
+                    "verified_contribution_created",
+
+                  assignmentId,
+                  caseId,
+                  volunteerId,
+                  residentId,
+
+                  outcome,
+                  contributionType,
+                  serviceMinutes,
+                  peopleHelped,
+
+                  createdAt:
+                    FieldValue.serverTimestamp(),
+                },
+
+                {
+                  merge: false,
+                },
+            );
+          },
+      );
+    },
+);
+
+// =========================================================
+// VOLUNTEER CERTIFICATE ISSUANCE
+// Admin/Super Admin reviews verified contribution records.
+// =========================================================
+exports.issueVolunteerCertificate = onCall(
+    {
+      timeoutSeconds: 60,
+      memory: "256MiB",
+    },
+
+    async (request) => {
+      if (!request.auth?.uid) {
+        throw new HttpsError(
+            "unauthenticated",
+            "Sign in before issuing a volunteer certificate.",
+        );
+      }
+
+      const database =
+        getFirestore();
+
+      const issuerUid =
+        request.auth.uid;
+
+      const volunteerId =
+        cleanText(
+            request.data?.volunteerId,
+            160,
+        );
+
+      if (!volunteerId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A volunteer ID is required.",
+        );
+      }
+
+      // -----------------------------------------------
+      // LOAD ISSUER + VOLUNTEER
+      // -----------------------------------------------
+      const [
+        issuerSnapshot,
+        volunteerSnapshot,
+      ] = await Promise.all([
+        database
+            .collection("users")
+            .doc(issuerUid)
+            .get(),
+
+        database
+            .collection("users")
+            .doc(volunteerId)
+            .get(),
+      ]);
+
+      if (
+        !issuerSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "permission-denied",
+            "Issuer account was not found.",
+        );
+      }
+
+      const issuerProfile =
+        issuerSnapshot.data() ||
+        {};
+
+      const issuerRole =
+        cleanText(
+            issuerProfile.role,
+            30,
+        ).toLowerCase();
+
+      const issuerApproved =
+        issuerProfile.status ===
+          "approved" ||
+        (
+          !issuerProfile.status &&
+          issuerRole !==
+            "applicant"
+        );
+
+      if (
+        !issuerApproved ||
+        ![
+          "admin",
+          "superadmin",
+        ].includes(
+            issuerRole,
+        )
+      ) {
+        throw new HttpsError(
+            "permission-denied",
+            "Only an approved Admin or Super Admin can issue certificates.",
+        );
+      }
+
+      if (
+        !volunteerSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Volunteer account was not found.",
+        );
+      }
+
+      const volunteerProfile =
+        volunteerSnapshot.data() ||
+        {};
+
+      const volunteerRole =
+        cleanText(
+            volunteerProfile.role,
+            30,
+        ).toLowerCase();
+
+      const volunteerApproved =
+        volunteerProfile.status ===
+          "approved" ||
+        (
+          !volunteerProfile.status &&
+          volunteerRole !==
+            "applicant"
+        );
+
+      const hasVolunteerAccess =
+        volunteerRole ===
+          "volunteer" ||
+        volunteerProfile
+            .volunteerAccess ===
+          true;
+
+      if (
+        !volunteerApproved ||
+        !hasVolunteerAccess
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "The selected account is not an approved volunteer.",
+        );
+      }
+
+      // -----------------------------------------------
+      // LOAD VERIFIED CONTRIBUTIONS
+      // -----------------------------------------------
+      const contributionsSnapshot =
+        await database
+            .collection(
+                "verifiedContributions",
+            )
+            .where(
+                "volunteerId",
+                "==",
+                volunteerId,
+            )
+            .get();
+
+      const verifiedContributions =
+        contributionsSnapshot.docs
+            .map(
+                (
+                  documentSnapshot,
+                ) => ({
+                  id:
+                    documentSnapshot.id,
+
+                  ...(
+                    documentSnapshot.data() ||
+                    {}
+                  ),
+                }),
+            )
+
+            .filter(
+                (item) =>
+                  item.status ===
+                  "verified",
+            )
+
+            .sort(
+                (
+                  left,
+                  right,
+                ) => {
+                  const rightMillis =
+                    right
+                        .verifiedAt
+                        ?.toMillis?.() ||
+                    0;
+
+                  const leftMillis =
+                    left
+                        .verifiedAt
+                        ?.toMillis?.() ||
+                    0;
+
+                  return (
+                    rightMillis -
+                    leftMillis
+                  );
+                },
+            );
+
+      if (
+        verifiedContributions.length ===
+        0
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This volunteer has no verified contribution record yet.",
+        );
+      }
+
+      // -----------------------------------------------
+      // RECALCULATE ACTUAL VERIFIED TOTALS
+      // -----------------------------------------------
+      let fullVerifiedHelps =
+        0;
+
+      let partialVerifiedHelps =
+        0;
+
+      let verifiedServiceMinutes =
+        0;
+
+      let peopleHelped =
+        0;
+
+      const contributionCounts =
+        new Map();
+
+      for (
+        const contribution
+        of verifiedContributions
+      ) {
+        if (
+          contribution.outcome ===
+          "fully_helped"
+        ) {
+          fullVerifiedHelps +=
+            1;
+        } else if (
+          contribution.outcome ===
+          "partially_helped"
+        ) {
+          partialVerifiedHelps +=
+            1;
+        }
+
+        verifiedServiceMinutes +=
+          Math.max(
+              0,
+
+              Math.round(
+                  Number(
+                      contribution.serviceMinutes ||
+                      0,
+                  ),
+              ),
+          );
+
+        peopleHelped +=
+          Math.max(
+              0,
+
+              Math.round(
+                  Number(
+                      contribution.peopleHelped ||
+                      0,
+                  ),
+              ),
+          );
+
+        const contributionType =
+          cleanText(
+              contribution.contributionType ||
+              "General Volunteer Assistance",
+              100,
+          );
+
+        contributionCounts.set(
+            contributionType,
+
+            (
+              contributionCounts.get(
+                  contributionType,
+              ) ||
+              0
+            ) + 1,
+        );
+      }
+
+      const contributionBreakdown =
+        [
+          ...contributionCounts.entries(),
+        ]
+            .map(
+                (
+                  [
+                    type,
+                    count,
+                  ],
+                ) => ({
+                  type,
+                  count,
+                }),
+            )
+
+            .sort(
+                (
+                  left,
+                  right,
+                ) => {
+                  if (
+                    right.count !==
+                    left.count
+                  ) {
+                    return (
+                      right.count -
+                      left.count
+                    );
+                  }
+
+                  return (
+                    left.type.localeCompare(
+                        right.type,
+                    )
+                  );
+                },
+            );
+
+      const contributionIds =
+        verifiedContributions
+            .map(
+                (item) =>
+                  item.id,
+            )
+            .sort();
+
+      const verifiedHelps =
+        fullVerifiedHelps +
+        partialVerifiedHelps;
+
+      // -----------------------------------------------
+      // CREATE SNAPSHOT HASH
+      // -----------------------------------------------
+      const snapshotHash =
+        crypto
+            .createHash(
+                "sha256",
+            )
+
+            .update(
+                JSON.stringify({
+                  volunteerId,
+                  contributionIds,
+                  fullVerifiedHelps,
+                  partialVerifiedHelps,
+                  verifiedServiceMinutes,
+                  peopleHelped,
+                  contributionBreakdown,
+                }),
+            )
+
+            .digest(
+                "hex",
+            );
+
+      const year =
+        new Date()
+            .getUTCFullYear();
+
+      const certificateId =
+        `VS-${year}-${snapshotHash
+            .slice(
+                0,
+                12,
+            )
+            .toUpperCase()}`;
+
+      // -----------------------------------------------
+      // REFERENCES
+      // -----------------------------------------------
+      const certificateRef =
+        database
+            .collection(
+                "certificates",
+            )
+            .doc(
+                certificateId,
+            );
+
+      const publicVerificationRef =
+        database
+            .collection(
+                "publicCertificateVerifications",
+            )
+            .doc(
+                certificateId,
+            );
+
+      const notificationRef =
+        database
+            .collection(
+                "notifications",
+            )
+            .doc(
+                `certificate_issued_${certificateId}`,
+            );
+
+      // -----------------------------------------------
+      // NAMES
+      // -----------------------------------------------
+      const volunteerName =
+        cleanText(
+            volunteerProfile.fullName ||
+            [
+              volunteerProfile.firstName,
+              volunteerProfile.middleName,
+              volunteerProfile.lastName,
+            ]
+                .filter(
+                    Boolean,
+                )
+                .join(" ") ||
+            "Volunteer",
+
+            140,
+        );
+
+      const issuerName =
+        cleanText(
+            issuerProfile.fullName ||
+            [
+              issuerProfile.firstName,
+              issuerProfile.middleName,
+              issuerProfile.lastName,
+            ]
+                .filter(
+                    Boolean,
+                )
+                .join(" ") ||
+            "Authorized Administrator",
+
+            140,
+        );
+
+      // -----------------------------------------------
+      // ATOMIC CERTIFICATE CREATION
+      // -----------------------------------------------
+      const result =
+        await database.runTransaction(
+            async (
+              transaction,
+            ) => {
+              const existingCertificateSnapshot =
+                await transaction.get(
+                    certificateRef,
+                );
+
+              // Avoid duplicate issuance for same snapshot
+              if (
+                existingCertificateSnapshot.exists
+              ) {
+                const existing =
+                  existingCertificateSnapshot.data() ||
+                  {};
+
+                if (
+                  existing.userId ===
+                    volunteerId &&
+                  existing.snapshotHash ===
+                    snapshotHash &&
+                  existing.verificationStatus !==
+                    "revoked"
+                ) {
+                  return {
+                    certificateId,
+                    alreadyIssued:
+                      true,
+                  };
+                }
+
+                throw new HttpsError(
+                    "already-exists",
+                    "A certificate with this verification ID already exists.",
+                );
+              }
+
+              // =======================================
+              // PRIVATE CERTIFICATE
+              // =======================================
+              transaction.create(
+                  certificateRef,
+
+                  {
+                    certificateId,
+
+                    certificateType:
+                      "verified_volunteer_service",
+
+                    certificateTitle:
+                      "Certificate of Volunteer Service",
+
+                    // Compatibility with existing certificate rules
+                    userId:
+                      volunteerId,
+
+                    volunteerId,
+                    volunteerName,
+
+                    verifiedHelps,
+
+                    fullVerifiedHelps,
+
+                    partialVerifiedHelps,
+
+                    verifiedEmergencyResponses:
+                      verifiedHelps,
+
+                    verifiedServiceMinutes,
+
+                    peopleHelped,
+
+                    contributionBreakdown,
+
+                    contributionIds,
+
+                    contributionCount:
+                      contributionIds.length,
+
+                    snapshotHash,
+
+                    verificationStatus:
+                      "issued",
+
+                    issuedBy:
+                      issuerUid,
+
+                    issuedByUid:
+                      issuerUid,
+
+                    issuedByName:
+                      issuerName,
+
+                    issuedByRole:
+                      issuerRole,
+
+                    issuerOrganization:
+                      "VolunServe",
+
+                    issuedAt:
+                      FieldValue.serverTimestamp(),
+
+                    createdAt:
+                      FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                      FieldValue.serverTimestamp(),
+                  },
+              );
+
+              // =======================================
+              // PUBLIC SAFE VERIFICATION
+              // =======================================
+              transaction.create(
+                  publicVerificationRef,
+
+                  {
+                    certificateId,
+
+                    certificateType:
+                      "verified_volunteer_service",
+
+                    certificateTitle:
+                      "Certificate of Volunteer Service",
+
+                    volunteerName,
+
+                    verifiedHelps,
+
+                    verifiedServiceMinutes,
+
+                    peopleHelped,
+
+                    contributionBreakdown,
+
+                    issuerOrganization:
+                      "VolunServe",
+
+                    issuedByName:
+                      issuerName,
+
+                    verificationStatus:
+                      "issued",
+
+                    snapshotHash,
+
+                    issuedAt:
+                      FieldValue.serverTimestamp(),
+
+                    createdAt:
+                      FieldValue.serverTimestamp(),
+                  },
+              );
+
+              // =======================================
+              // VOLUNTEER NOTIFICATION
+              // =======================================
+              transaction.set(
+                  notificationRef,
+
+                  {
+                    userId:
+                      volunteerId,
+
+                    title:
+                      "Volunteer certificate issued",
+
+                    message:
+                      "An authorized administrator issued your verified volunteer service certificate.",
+
+                    type:
+                      "certificate_issued",
+
+                    certificateId,
+
+                    read:
+                      false,
+
+                    createdAt:
+                      FieldValue.serverTimestamp(),
+                  },
+
+                  {
+                    merge: true,
+                  },
+              );
+
+              return {
+                certificateId,
+                alreadyIssued:
+                  false,
+              };
+            },
+        );
+
+      // -----------------------------------------------
+      // SERVER AUDIT LOG
+      // -----------------------------------------------
+      logger.info(
+          "Volunteer certificate issued",
+
+          {
+            certificateId:
+              result.certificateId,
+
+            volunteerUidHash:
+              crypto
+                  .createHash(
+                      "sha256",
+                  )
+                  .update(
+                      volunteerId,
+                  )
+                  .digest(
+                      "hex",
+                  )
+                  .slice(
+                      0,
+                      12,
+                  ),
+
+            issuerUidHash:
+              crypto
+                  .createHash(
+                      "sha256",
+                  )
+                  .update(
+                      issuerUid,
+                  )
+                  .digest(
+                      "hex",
+                  )
+                  .slice(
+                      0,
+                      12,
+                  ),
+
+            alreadyIssued:
+              result.alreadyIssued,
+          },
+      );
+
+      return {
+        ok:
+          true,
+
+        certificateId:
+          result.certificateId,
+
+        alreadyIssued:
+          result.alreadyIssued,
+
+        verifiedHelps,
+
+        verifiedServiceMinutes,
+
+        peopleHelped,
+      };
     },
 );

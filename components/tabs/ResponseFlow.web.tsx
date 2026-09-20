@@ -27,6 +27,25 @@ type Row = {
   [key: string]: any;
 };
 
+type CompletionDetails = {
+  contributionType: string;
+  contributionSummary: string;
+  peopleHelped: number;
+  completionNotes: string;
+};
+
+const contributionOptions = [
+  "Evacuation Assistance",
+  "Transport / Vehicle",
+  "Medical Assistance",
+  "Search and Rescue",
+  "Home Repair",
+  "Clearing / Heavy Lifting",
+  "Relief / Goods Delivery",
+  "Safety / Welfare Check",
+  "Other",
+];
+
 const activeStates = ["responding", "on_site"];
 const terminalStates = ["completed", "declined", "cancelled"];
 
@@ -105,6 +124,7 @@ export function useResponseFlow(
   const busyRef = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const latestLocation = useRef(location);
+  const publishLiveLocationRef = useRef<() => void>(() => {});
 
   latestLocation.current = location;
 
@@ -187,7 +207,7 @@ export function useResponseFlow(
   useEffect(() => {
     const timer = window.setInterval(
       () => setNow(Date.now()),
-      10000,
+      5000,
     );
 
     return () => window.clearInterval(timer);
@@ -239,12 +259,22 @@ export function useResponseFlow(
     activeCase?.status,
   ]);
 
-  // Queue deletion after pending writes to avoid restoring a stopped pin.
+  // Active response GPS publisher.
+  //
+  // - Publishes immediately when a fresh browser GPS reading arrives.
+  // - Sends a 5-second heartbeat even while the volunteer is stationary, so
+  //   the assigned resident does not lose the responder pin.
+  // - Serializes Firestore writes, then deletes the live pin only after the
+  //   active sharing session ends.
   useEffect(() => {
-    if (!canShare || !user || !mission) return;
+    if (!canShare || !user || !mission) {
+      publishLiveLocationRef.current = () => {};
+      return;
+    }
 
     let stopped = false;
-    let pending = false;
+    let lastQueuedAt = 0;
+    let lastPointTimestamp = 0;
 
     const uid = user.uid;
     const assignmentId = mission.id;
@@ -253,34 +283,52 @@ export function useResponseFlow(
 
     setSentAt(0);
 
-    const publish = () => {
+    const publish = (heartbeat = false) => {
       const point = latestLocation.current;
+      const currentTime = Date.now();
 
       if (
         stopped ||
-        pending ||
         !point ||
-        Date.now() - point.timestamp > 30000
+        !Number.isFinite(point.latitude) ||
+        !Number.isFinite(point.longitude) ||
+        currentTime - point.timestamp > 30000
       ) {
         return;
       }
 
-      pending = true;
+      const hasNewGpsReading =
+        point.timestamp !== lastPointTimestamp;
+
+      if (
+        !heartbeat &&
+        (
+          !hasNewGpsReading ||
+          currentTime - lastQueuedAt < 1500
+        )
+      ) {
+        return;
+      }
+
+      lastQueuedAt = currentTime;
+      lastPointTimestamp = point.timestamp;
+
+      const payload = {
+        volunteerId: uid,
+        assignmentId,
+        caseId,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        accuracy: point.accuracy,
+        updatedAt: serverTimestamp(),
+      };
 
       queue.current = queue.current
         .catch(() => {})
         .then(async () => {
           if (stopped) return;
 
-          await setDoc(locationRef, {
-            volunteerId: uid,
-            assignmentId,
-            caseId,
-            latitude: point.latitude,
-            longitude: point.longitude,
-            accuracy: point.accuracy,
-            updatedAt: serverTimestamp(),
-          });
+          await setDoc(locationRef, payload);
 
           if (!stopped) {
             setSentAt(Date.now());
@@ -290,39 +338,62 @@ export function useResponseFlow(
         .catch(() => {
           if (!stopped) {
             setError(
-              "Location sharing failed. Your local pin still works; admin may see an older position.",
+              "Live GPS sharing failed. Your local pin still works, but the assigned resident or Admin may see an older responder position.",
             );
           }
-        })
-        .finally(() => {
-          pending = false;
         });
     };
 
-    publish();
+    publishLiveLocationRef.current = () =>
+      publish(false);
 
-    const timer = window.setInterval(publish, 10000);
+    publish(true);
+
+    const timer = window.setInterval(
+      () => publish(true),
+      5000,
+    );
 
     return () => {
       stopped = true;
+      publishLiveLocationRef.current = () => {};
       window.clearInterval(timer);
 
       queue.current = queue.current
         .catch(() => {})
         .then(() => deleteDoc(locationRef))
         .catch(() => {
-          // Offline deletion may fail. Admin hides expired readings.
+          // If cleanup happens while offline, readers still
+          // ignore stale responder locations after expiry.
         });
     };
-  }, [canShare, user?.uid, mission?.id]);
+  }, [
+    canShare,
+    user?.uid,
+    mission?.id,
+    mission?.caseId,
+  ]);
+
+  useEffect(() => {
+    if (!canShare || !location) return;
+
+    publishLiveLocationRef.current();
+  }, [
+    canShare,
+    location?.latitude,
+    location?.longitude,
+    location?.timestamp,
+  ]);
 
   const stopSharing = () => {
     setShareId("");
     setTracking(false);
   };
 
-  const act = async (operation: () => Promise<void>) => {
-    if (busyRef.current) return;
+  const act = async (
+    operation: () => Promise<void>,
+  ): Promise<boolean> => {
+    if (busyRef.current) return false;
 
     busyRef.current = true;
     setBusy(true);
@@ -330,116 +401,234 @@ export function useResponseFlow(
 
     try {
       await operation();
+      return true;
     } catch (problem) {
       setError(
         problem instanceof Error
           ? problem.message
           : "Operation failed. Please retry.",
       );
+      return false;
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
   };
 
-  const respond = (assignment: Row, next: string) =>
+  const respond = (
+    assignment: Row,
+    next: string,
+    completion?: CompletionDetails,
+  ) =>
     act(async () => {
-      await runTransaction(db, async (transaction) => {
-        const assignmentRef = doc(
-          db,
-          "responseAssignments",
-          assignment.id,
-        );
-
-        const snapshot = await transaction.get(assignmentRef);
-        const current = snapshot.data();
-
-        if (!current || current.volunteerId !== user.uid) {
-          throw new Error("Assignment unavailable.");
-        }
-
-        const previous: Record<string, string> = {
-          accepted: "offered",
-          declined: "offered",
-          responding: "accepted",
-          on_site: "responding",
-          completed: "on_site",
-        };
-
-        if (current.status !== previous[next]) {
+      if (next === "completed") {
+        if (!completion) {
           throw new Error(
-            "Assignment changed. Please check its current status.",
+            "Add the contribution details before completing this mission.",
           );
         }
 
-        const caseRef = doc(db, "disasterCases", current.caseId);
-        const caseSnapshot = await transaction.get(caseRef);
-        const incident = caseSnapshot.data();
-
-        if (!incident) {
-          throw new Error("Incident unavailable.");
+        if (!completion.contributionType.trim()) {
+          throw new Error(
+            "Select the type of contribution you provided.",
+          );
         }
 
-        // Assignment status is the source of truth for responder lifecycle.
-        // Resident chat/tracking access is derived from this assignment state.
-        transaction.update(assignmentRef, {
-          status: next,
-          updatedAt: serverTimestamp(),
-        });
+        if (
+          completion.contributionSummary.trim().length <
+          10
+        ) {
+          throw new Error(
+            "Describe your actual contribution in at least 10 characters.",
+          );
+        }
 
-        const noticeByStatus: Record<
-          string,
-          { title: string; message: string }
-        > = {
-          accepted: {
-            title: "Responder accepted your request",
-            message:
-              "An assigned responder accepted your request. Confirm the situation and needed assistance before dispatch.",
-          },
-          responding: {
-            title: "Responder is on the way",
-            message:
-              "Your assigned responder started the response and is sharing a live response location while the mission is active.",
-          },
-          on_site: {
-            title: "Responder arrived",
-            message:
-              "Your assigned responder marked arrival at the assistance location.",
-          },
-          completed: {
-            title: "Response mission completed",
-            message:
-              "The responder marked the mission complete. Admin will review the case before it is resolved or closed.",
-          },
-        };
+        if (
+          !Number.isInteger(
+            completion.peopleHelped,
+          ) ||
+          completion.peopleHelped < 0 ||
+          completion.peopleHelped > 999
+        ) {
+          throw new Error(
+            "Enter a valid number of people assisted (0 to 999).",
+          );
+        }
+      }
 
-        const notice = noticeByStatus[next];
-        const residentUid = String(incident.reporterUid || "").trim();
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const assignmentRef = doc(
+            db,
+            "responseAssignments",
+            assignment.id,
+          );
 
-        if (notice && residentUid) {
-          transaction.set(
-            doc(
-              db,
-              "notifications",
-              `resident_response_${current.caseId}_${user.uid}_${next}`,
-            ),
+          const snapshot =
+            await transaction.get(assignmentRef);
+          const current = snapshot.data();
+
+          if (
+            !current ||
+            current.volunteerId !== user.uid
+          ) {
+            throw new Error(
+              "Assignment unavailable.",
+            );
+          }
+
+          const previous: Record<
+            string,
+            string
+          > = {
+            accepted: "offered",
+            declined: "offered",
+            responding: "accepted",
+            on_site: "responding",
+            completed: "on_site",
+          };
+
+          if (
+            current.status !== previous[next]
+          ) {
+            throw new Error(
+              "Assignment changed. Please check its current status.",
+            );
+          }
+
+          const caseRef = doc(
+            db,
+            "disasterCases",
+            current.caseId,
+          );
+
+          const caseSnapshot =
+            await transaction.get(caseRef);
+
+          const incident =
+            caseSnapshot.data();
+
+          if (!incident) {
+            throw new Error(
+              "Incident unavailable.",
+            );
+          }
+
+          const assignmentPatch: any = {
+            status: next,
+            updatedAt: serverTimestamp(),
+          };
+
+          if (next === "responding") {
+            assignmentPatch.responseStartedAt =
+              serverTimestamp();
+          }
+
+          if (next === "on_site") {
+            assignmentPatch.arrivedAt =
+              serverTimestamp();
+          }
+
+          if (
+            next === "completed" &&
+            completion
+          ) {
+            assignmentPatch.contributionType =
+              completion.contributionType.trim();
+
+            assignmentPatch.contributionSummary =
+              completion.contributionSummary.trim();
+
+            assignmentPatch.peopleHelped =
+              completion.peopleHelped;
+
+            assignmentPatch.completionNotes =
+              completion.completionNotes.trim();
+
+            assignmentPatch.completedAt =
+              serverTimestamp();
+
+            assignmentPatch.residentConfirmationStatus =
+              "pending";
+          }
+
+          transaction.update(
+            assignmentRef,
+            assignmentPatch,
+          );
+
+          const noticeByStatus: Record<
+            string,
             {
-              userId: residentUid,
-              caseId: current.caseId,
-              assignmentId: assignment.id,
-              responderId: user.uid,
-              responderName:
-                current.volunteerName || nameOf(profile),
-              title: notice.title,
-              message: notice.message,
-              type: "resident_response_update",
-              status: next,
-              read: false,
-              createdAt: serverTimestamp(),
+              title: string;
+              message: string;
+            }
+          > = {
+            accepted: {
+              title:
+                "Responder accepted your request",
+              message:
+                "An assigned responder accepted your request. Confirm the situation and needed assistance before dispatch.",
             },
-          );
-        }
-      });
+
+            responding: {
+              title:
+                "Responder is on the way",
+              message:
+                "Your assigned responder started the response and is sharing a live response location while the mission is active.",
+            },
+
+            on_site: {
+              title:
+                "Responder arrived",
+              message:
+                "Your assigned responder marked arrival at the assistance location.",
+            },
+
+            completed: {
+              title:
+                "Please confirm the assistance received",
+              message:
+                "The responder marked the mission complete and submitted a contribution summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.",
+            },
+          };
+
+          const notice =
+            noticeByStatus[next];
+
+          const residentUid = String(
+            incident.reporterUid || "",
+          ).trim();
+
+          if (notice && residentUid) {
+            transaction.set(
+              doc(
+                db,
+                "notifications",
+                `resident_response_${current.caseId}_${user.uid}_${next}`,
+              ),
+              {
+                userId: residentUid,
+                caseId: current.caseId,
+                assignmentId: assignment.id,
+                responderId: user.uid,
+                responderName:
+                  current.volunteerName ||
+                  nameOf(profile),
+                title: notice.title,
+                message: notice.message,
+                type:
+                  "resident_response_update",
+                status: next,
+                read: false,
+                createdAt:
+                  serverTimestamp(),
+              },
+            );
+          }
+        },
+      );
 
       if (next === "responding") {
         setShareId(assignment.id);
@@ -451,10 +640,15 @@ export function useResponseFlow(
       }
     });
 
-  const assign = (caseId: string, volunteerId: string) =>
+  const assign = (
+    caseId: string,
+    volunteerId: string,
+  ) =>
     act(async () => {
       if (!caseId || !volunteerId) {
-        throw new Error("Select a case and volunteer.");
+        throw new Error(
+          "Select a case and volunteer.",
+        );
       }
 
       const person = people.find(
@@ -462,146 +656,220 @@ export function useResponseFlow(
       );
 
       if (!person) {
-        throw new Error("Volunteer not available.");
+        throw new Error(
+          "Volunteer not available.",
+        );
       }
 
-      await runTransaction(db, async (transaction) => {
-        const caseRef = doc(db, "disasterCases", caseId);
-
-        const assignmentRef = doc(
-          db,
-          "responseAssignments",
-          caseId + "_" + volunteerId,
-        );
-
-        const [caseSnapshot, existing] = await Promise.all([
-          transaction.get(caseRef),
-          transaction.get(assignmentRef),
-        ]);
-
-        const incident = caseSnapshot.data();
-
-        if (
-          !incident ||
-          !["validated", "assigned", "in_progress"].includes(
-            incident.status,
-          )
-        ) {
-          throw new Error(
-            "Validate this report before assigning.",
-          );
-        }
-
-        if (existing.exists()) {
-          throw new Error(
-            "This volunteer already has an assignment record for this case.",
-          );
-        }
-
-        transaction.set(assignmentRef, {
-          caseId,
-          volunteerId,
-          volunteerName: nameOf(person),
-          caseTitle: incident.title || "Incident",
-          status: "offered",
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        const patch: any = {
-          assignedVolunteerIds: arrayUnion(volunteerId),
-          updatedAt: serverTimestamp(),
-        };
-
-        if (
-          !(incident.assignedVolunteerIds || []).includes(
-            volunteerId,
-          )
-        ) {
-          patch.assignedVolunteersCount = increment(1);
-        }
-
-        if (incident.status === "validated") {
-          patch.status = "assigned";
-          patch.assignedAt = serverTimestamp();
-        }
-
-        transaction.update(caseRef, patch);
-
-        transaction.set(
-          doc(
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const caseRef = doc(
             db,
-            "notifications",
-            "response_" + caseId + "_" + volunteerId,
-          ),
-          {
-            userId: volunteerId,
-            title: "New response assignment",
-            message:
-              "You have been assigned to " +
-              (incident.title || "an incident") +
-              ". Open Volunteer Tasks to accept or decline.",
-            type: "response_assignment",
-            read: false,
-            createdAt: serverTimestamp(),
-          },
-        );
-      });
+            "disasterCases",
+            caseId,
+          );
+
+          const assignmentRef = doc(
+            db,
+            "responseAssignments",
+            caseId + "_" + volunteerId,
+          );
+
+          const [
+            caseSnapshot,
+            existing,
+          ] = await Promise.all([
+            transaction.get(caseRef),
+            transaction.get(
+              assignmentRef,
+            ),
+          ]);
+
+          const incident =
+            caseSnapshot.data();
+
+          if (
+            !incident ||
+            ![
+              "validated",
+              "assigned",
+              "in_progress",
+            ].includes(incident.status)
+          ) {
+            throw new Error(
+              "Validate this report before assigning.",
+            );
+          }
+
+          if (existing.exists()) {
+            throw new Error(
+              "This volunteer already has an assignment record for this case.",
+            );
+          }
+
+          transaction.set(
+            assignmentRef,
+            {
+              caseId,
+              volunteerId,
+              volunteerName:
+                nameOf(person),
+              caseTitle:
+                incident.title ||
+                "Incident",
+              status: "offered",
+              createdBy: user.uid,
+              createdAt:
+                serverTimestamp(),
+              updatedAt:
+                serverTimestamp(),
+            },
+          );
+
+          const patch: any = {
+            assignedVolunteerIds:
+              arrayUnion(volunteerId),
+            updatedAt:
+              serverTimestamp(),
+          };
+
+          if (
+            !(
+              incident.assignedVolunteerIds ||
+              []
+            ).includes(volunteerId)
+          ) {
+            patch.assignedVolunteersCount =
+              increment(1);
+          }
+
+          if (
+            incident.status ===
+            "validated"
+          ) {
+            patch.status = "assigned";
+            patch.assignedAt =
+              serverTimestamp();
+          }
+
+          transaction.update(
+            caseRef,
+            patch,
+          );
+
+          transaction.set(
+            doc(
+              db,
+              "notifications",
+              "response_" +
+                caseId +
+                "_" +
+                volunteerId,
+            ),
+            {
+              userId: volunteerId,
+              title:
+                "New response assignment",
+              message:
+                "You have been assigned to " +
+                (
+                  incident.title ||
+                  "an incident"
+                ) +
+                ". Open Volunteer Tasks to accept or decline.",
+              type:
+                "response_assignment",
+              read: false,
+              createdAt:
+                serverTimestamp(),
+            },
+          );
+        },
+      );
     });
 
-  const changeCase = (incident: Row, next: string) =>
+  const changeCase = (
+    incident: Row,
+    next: string,
+  ) =>
     act(async () => {
-      const previous: Record<string, string> = {
+      const previous: Record<
+        string,
+        string
+      > = {
         validated: "reported",
         in_progress: "assigned",
         resolved: "in_progress",
         closed: "resolved",
       };
 
-      await runTransaction(db, async (transaction) => {
-        const caseRef = doc(
-          db,
-          "disasterCases",
-          incident.id,
-        );
-
-        const snapshot = await transaction.get(caseRef);
-
-        if (snapshot.data()?.status !== previous[next]) {
-          throw new Error(
-            "Case status changed. Refresh the selection.",
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const caseRef = doc(
+            db,
+            "disasterCases",
+            incident.id,
           );
-        }
 
-        const patch: any = {
-          status: next,
-          updatedAt: serverTimestamp(),
-        };
+          const snapshot =
+            await transaction.get(
+              caseRef,
+            );
 
-        if (next === "validated") {
-          patch.validatedAt = serverTimestamp();
-        }
+          if (
+            snapshot.data()?.status !==
+            previous[next]
+          ) {
+            throw new Error(
+              "Case status changed. Refresh the selection.",
+            );
+          }
 
-        if (next === "resolved") {
-          patch.resolvedAt = serverTimestamp();
-        }
+          const patch: any = {
+            status: next,
+            updatedAt:
+              serverTimestamp(),
+          };
 
-        if (next === "closed") {
-          patch.closedAt = serverTimestamp();
-        }
+          if (next === "validated") {
+            patch.validatedAt =
+              serverTimestamp();
+          }
 
-        transaction.update(caseRef, patch);
-      });
+          if (next === "resolved") {
+            patch.resolvedAt =
+              serverTimestamp();
+          }
+
+          if (next === "closed") {
+            patch.closedAt =
+              serverTimestamp();
+          }
+
+          transaction.update(
+            caseRef,
+            patch,
+          );
+        },
+      );
     });
 
-  const cancel = (assignment: Row) =>
+  const cancel = (
+    assignment: Row,
+  ) =>
     act(async () => {
       await updateDoc(
-        doc(db, "responseAssignments", assignment.id),
+        doc(
+          db,
+          "responseAssignments",
+          assignment.id,
+        ),
         {
           status: "cancelled",
-          updatedAt: serverTimestamp(),
+          updatedAt:
+            serverTimestamp(),
         },
       );
     });
@@ -611,73 +879,139 @@ export function useResponseFlow(
       admin
         ? locations
             .filter((point) => {
-              const assignment = assignments.find(
-                (item) => item.id === point.assignmentId,
-              );
+              const assignment =
+                assignments.find(
+                  (item) =>
+                    item.id ===
+                    point.assignmentId,
+                );
 
-              const incident = cases.find(
-                (item) => item.id === point.caseId,
-              );
+              const incident =
+                cases.find(
+                  (item) =>
+                    item.id ===
+                    point.caseId,
+                );
 
               return (
                 assignment &&
-                assignment.volunteerId === point.volunteerId &&
-                assignment.caseId === point.caseId &&
-                activeStates.includes(assignment.status) &&
+                assignment.volunteerId ===
+                  point.volunteerId &&
+                assignment.caseId ===
+                  point.caseId &&
+                activeStates.includes(
+                  assignment.status,
+                ) &&
                 incident &&
-                ["assigned", "in_progress"].includes(
+                [
+                  "assigned",
+                  "in_progress",
+                ].includes(
                   incident.status,
                 ) &&
-                millis(point.updatedAt) > 0 &&
-                now - millis(point.updatedAt) < 120000 &&
-                Number.isFinite(point.latitude) &&
-                Number.isFinite(point.longitude)
+                millis(
+                  point.updatedAt,
+                ) > 0 &&
+                now -
+                  millis(
+                    point.updatedAt,
+                  ) <
+                  120000 &&
+                Number.isFinite(
+                  point.latitude,
+                ) &&
+                Number.isFinite(
+                  point.longitude,
+                )
               );
             })
             .map((point) => ({
               ...point,
-              assignmentId: point.assignmentId,
-              accuracy: point.accuracy,
-              stale: now - millis(point.updatedAt) > 30000,
-              lastShared: millis(point.updatedAt),
+              assignmentId:
+                point.assignmentId,
+              accuracy:
+                point.accuracy,
+              stale:
+                now -
+                  millis(
+                    point.updatedAt,
+                  ) >
+                30000,
+              lastShared:
+                millis(
+                  point.updatedAt,
+                ),
               name: (() => {
-                const assignment = assignments.find(
-                  (item) => item.id === point.assignmentId,
-                );
-                const person = people.find(
-                  (item) => item.id === point.volunteerId,
-                );
+                const assignment =
+                  assignments.find(
+                    (item) =>
+                      item.id ===
+                      point.assignmentId,
+                  );
 
-                const liveName = person ? nameOf(person) : "";
-                const savedName = String(
-                  assignment?.volunteerName || "",
-                ).trim();
+                const person =
+                  people.find(
+                    (item) =>
+                      item.id ===
+                      point.volunteerId,
+                  );
+
+                const liveName =
+                  person
+                    ? nameOf(person)
+                    : "";
+
+                const savedName =
+                  String(
+                    assignment
+                      ?.volunteerName ||
+                      "",
+                  ).trim();
 
                 if (
                   liveName &&
-                  normalizeName(liveName) !== "volunteer" &&
-                  normalizeName(liveName) !== "user"
+                  normalizeName(
+                    liveName,
+                  ) !==
+                    "volunteer" &&
+                  normalizeName(
+                    liveName,
+                  ) !== "user"
                 ) {
                   return liveName;
                 }
 
                 if (
                   savedName &&
-                  normalizeName(savedName) !== "user"
+                  normalizeName(
+                    savedName,
+                  ) !== "user"
                 ) {
                   return savedName;
                 }
 
-                return liveName || savedName || "Volunteer";
+                return (
+                  liveName ||
+                  savedName ||
+                  "Volunteer"
+                );
               })(),
             }))
         : [],
-    [admin, locations, assignments, people, cases, now],
+    [
+      admin,
+      locations,
+      assignments,
+      people,
+      cases,
+      now,
+    ],
   );
 
   return {
     admin,
     volunteer,
+    focused,
     assignments,
     people,
     responders,
@@ -691,334 +1025,1065 @@ export function useResponseFlow(
     cancel,
     changeCase,
     stopSharing,
-    resume: (assignment: Row) => {
-      setShareId(assignment.id);
+    resume: (
+      assignment: Row,
+    ) => {
+      setShareId(
+        assignment.id,
+      );
       setTracking(true);
     },
   };
+}
+
+function MissionCompletionForm({
+  assignment,
+  busy,
+  defaultPeopleHelped = 1,
+  onComplete,
+}: {
+  assignment: Row;
+  busy: boolean;
+  defaultPeopleHelped?: number;
+  onComplete: (
+    assignment: Row,
+    next: string,
+    details: CompletionDetails,
+  ) => Promise<boolean>;
+}) {
+  const [open, setOpen] =
+    useState(false);
+
+  const [
+    contributionType,
+    setContributionType,
+  ] = useState("");
+
+  const [
+    contributionSummary,
+    setContributionSummary,
+  ] = useState("");
+
+  const [
+    peopleHelped,
+    setPeopleHelped,
+  ] = useState(
+    String(
+      Math.max(
+        0,
+        Math.min(
+          999,
+          Math.trunc(
+            defaultPeopleHelped ||
+              0,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  const [
+    completionNotes,
+    setCompletionNotes,
+  ] = useState("");
+
+  const [
+    localError,
+    setLocalError,
+  ] = useState("");
+
+  const reset = () => {
+    setOpen(false);
+    setContributionType("");
+    setContributionSummary("");
+
+    setPeopleHelped(
+      String(
+        Math.max(
+          0,
+          Math.min(
+            999,
+            Math.trunc(
+              defaultPeopleHelped ||
+                0,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    setCompletionNotes("");
+    setLocalError("");
+  };
+
+  const submit = async () => {
+    const count =
+      Number(peopleHelped);
+
+    const summary =
+      contributionSummary.trim();
+
+    if (!contributionType) {
+      setLocalError(
+        "Select the type of contribution you provided.",
+      );
+      return;
+    }
+
+    if (summary.length < 10) {
+      setLocalError(
+        "Briefly describe what you actually did during the response.",
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(count) ||
+      count < 0 ||
+      count > 999
+    ) {
+      setLocalError(
+        "Enter a valid number of people assisted (0 to 999).",
+      );
+      return;
+    }
+
+    setLocalError("");
+
+    const completed =
+      await onComplete(
+        assignment,
+        "completed",
+        {
+          contributionType,
+          contributionSummary:
+            summary,
+          peopleHelped: count,
+          completionNotes:
+            completionNotes.trim(),
+        },
+      );
+
+    if (completed) reset();
+  };
+
+  if (!open) {
+    return (
+      <button
+        className="primary-button"
+        disabled={busy}
+        onClick={() =>
+          setOpen(true)
+        }
+      >
+        Complete Mission
+      </button>
+    );
+  }
+
+  return (
+    <div className="mission-completion-card">
+      <div className="mission-completion-heading">
+        <div>
+          <strong>
+            Complete mission &amp;
+            record contribution
+          </strong>
+
+          <span>
+            The resident will
+            review this contribution
+            before it becomes
+            verified help.
+          </span>
+        </div>
+
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={reset}
+        >
+          Cancel
+        </button>
+      </div>
+
+      <label>
+        Contribution type
+
+        <select
+          value={
+            contributionType
+          }
+          disabled={busy}
+          onChange={(event) =>
+            setContributionType(
+              event.target.value,
+            )
+          }
+        >
+          <option value="">
+            Select contribution
+          </option>
+
+          {contributionOptions.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            ),
+          )}
+        </select>
+      </label>
+
+      <label>
+        What did you actually do?
+
+        <textarea
+          value={
+            contributionSummary
+          }
+          disabled={busy}
+          rows={3}
+          maxLength={1200}
+          placeholder="Example: Assisted two residents from the flooded home to the designated evacuation center."
+          onChange={(event) =>
+            setContributionSummary(
+              event.target.value,
+            )
+          }
+        />
+      </label>
+
+      <div className="mission-completion-grid">
+        <label>
+          People assisted
+
+          <input
+            type="number"
+            min="0"
+            max="999"
+            step="1"
+            value={
+              peopleHelped
+            }
+            disabled={busy}
+            onChange={(event) =>
+              setPeopleHelped(
+                event.target.value,
+              )
+            }
+          />
+        </label>
+
+        <label>
+          Optional completion notes
+
+          <input
+            type="text"
+            maxLength={600}
+            value={
+              completionNotes
+            }
+            disabled={busy}
+            placeholder="Any follow-up or important note"
+            onChange={(event) =>
+              setCompletionNotes(
+                event.target.value,
+              )
+            }
+          />
+        </label>
+      </div>
+
+      {localError && (
+        <p
+          className="mission-completion-error"
+          role="alert"
+        >
+          {localError}
+        </p>
+      )}
+
+      <div className="mission-completion-actions">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={busy}
+          onClick={submit}
+        >
+          {busy
+            ? "Saving…"
+            : "Submit Contribution & Complete"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function ResponsePanel({
   flow,
   cases,
 }: {
-  flow: ReturnType<typeof useResponseFlow>;
+  flow: ReturnType<
+    typeof useResponseFlow
+  >;
   cases: Row[];
 }) {
-  const params = useLocalSearchParams<{
-    caseId?: string;
-    volunteerId?: string;
-  }>();
+  const params =
+    useLocalSearchParams<{
+      caseId?: string;
+      volunteerId?: string;
+    }>();
 
-  const [caseId, setCaseId] = useState(
-    typeof params.caseId === "string" ? params.caseId : "",
+  const [
+    caseId,
+    setCaseId,
+  ] = useState(
+    typeof params.caseId ===
+      "string"
+      ? params.caseId
+      : "",
   );
 
-  const [personId, setPersonId] = useState(
-    typeof params.volunteerId === "string"
+  const [
+    personId,
+    setPersonId,
+  ] = useState(
+    typeof params.volunteerId ===
+      "string"
       ? params.volunteerId
       : "",
   );
 
   useEffect(() => {
     setCaseId(
-      typeof params.caseId === "string" ? params.caseId : "",
+      typeof params.caseId ===
+        "string"
+        ? params.caseId
+        : "",
     );
   }, [params.caseId]);
 
   useEffect(() => {
     setPersonId(
-      typeof params.volunteerId === "string"
+      typeof params.volunteerId ===
+        "string"
         ? params.volunteerId
         : "",
     );
   }, [params.volunteerId]);
 
-  const chosen = cases.find((item) => item.id === caseId);
+  const chosen =
+    cases.find(
+      (item) =>
+        item.id === caseId,
+    );
 
-  if (!flow.admin && !flow.volunteer) return null;
-
-  const relevant = flow.admin
-    ? flow.assignments.filter(
-        (assignment) => assignment.caseId === caseId,
-      )
-    : caseId
-      ? flow.assignments.filter(
-          (assignment) => assignment.caseId === caseId,
+  const volunteerMissionAssignment =
+    flow.volunteer && caseId
+      ? flow.assignments.find(
+          (assignment) =>
+            assignment.caseId === caseId,
         )
-      : flow.assignments;
+      : undefined;
 
-  const nextStatus: Record<string, string> = {
+  // Once a volunteer is actively responding, keep GPS sharing automatic
+  // whenever this response map is the focused screen. This removes the
+  // confusing Stop/Resume controls from the normal mission flow.
+  useEffect(() => {
+    if (
+      !flow.volunteer ||
+      !flow.focused ||
+      !caseId ||
+      !volunteerMissionAssignment ||
+      !activeStates.includes(
+        volunteerMissionAssignment.status,
+      ) ||
+      flow.shareId ===
+        volunteerMissionAssignment.id
+    ) {
+      return;
+    }
+
+    flow.resume(
+      volunteerMissionAssignment,
+    );
+  }, [
+    flow.volunteer,
+    flow.focused,
+    caseId,
+    volunteerMissionAssignment?.id,
+    volunteerMissionAssignment?.status,
+    flow.shareId,
+  ]);
+
+  if (
+    !flow.admin &&
+    !flow.volunteer
+  ) {
+    return null;
+  }
+
+  const relevant =
+    flow.admin
+      ? flow.assignments.filter(
+          (assignment) =>
+            assignment.caseId ===
+            caseId,
+        )
+      : caseId
+        ? flow.assignments.filter(
+            (assignment) =>
+              assignment.caseId ===
+              caseId,
+          )
+        : flow.assignments;
+
+  const nextStatus: Record<
+    string,
+    string
+  > = {
     reported: "validated",
     assigned: "in_progress",
     in_progress: "resolved",
     resolved: "closed",
   };
 
-  const actions: Record<string, string> = {
+  const actions: Record<
+    string,
+    string
+  > = {
     reported: "Validate report",
-    assigned: "Mark case in progress",
-    in_progress: "Resolve case",
+    assigned:
+      "Mark case in progress",
+    in_progress:
+      "Resolve case",
     resolved: "Close case",
   };
 
   const mayResolve =
     relevant.some(
-      (assignment) => assignment.status === "completed",
+      (assignment) =>
+        assignment.status ===
+        "completed",
     ) &&
-    relevant.every((assignment) =>
-      terminalStates.includes(assignment.status),
+    relevant.every(
+      (assignment) =>
+        terminalStates.includes(
+          assignment.status,
+        ),
     );
 
+  const visibleRelevant =
+    flow.admin
+      ? relevant.filter(
+          (assignment) =>
+            ![
+              "cancelled",
+              "declined",
+            ].includes(
+              assignment.status,
+            ),
+        )
+      : relevant;
 
-  // Keep legacy cancelled/declined records in Firestore for audit/history,
-  // but do not clutter the active Admin response workspace with them.
-  const visibleRelevant = flow.admin
-    ? relevant.filter(
-        (assignment) =>
-          !["cancelled", "declined"].includes(assignment.status),
-      )
-    : relevant;
+  const volunteerNameFor = (
+    assignment: Row,
+  ) => {
+    const liveProfile =
+      flow.people.find(
+        (person) =>
+          person.id ===
+          assignment.volunteerId,
+      );
 
-  const volunteerNameFor = (assignment: Row) => {
-    const liveProfile = flow.people.find(
-      (person) => person.id === assignment.volunteerId,
-    );
+    const fromProfile =
+      liveProfile
+        ? nameOf(
+            liveProfile,
+          )
+        : "";
 
-    const fromProfile = liveProfile ? nameOf(liveProfile) : "";
-    const fromAssignment = String(
-      assignment.volunteerName || "",
-    ).trim();
+    const fromAssignment =
+      String(
+        assignment.volunteerName ||
+          "",
+      ).trim();
 
     if (
       fromProfile &&
-      normalizeName(fromProfile) !== "volunteer" &&
-      normalizeName(fromProfile) !== "user"
+      normalizeName(
+        fromProfile,
+      ) !== "volunteer" &&
+      normalizeName(
+        fromProfile,
+      ) !== "user"
     ) {
       return fromProfile;
     }
 
     if (
       fromAssignment &&
-      normalizeName(fromAssignment) !== "user"
+      normalizeName(
+        fromAssignment,
+      ) !== "user"
     ) {
       return fromAssignment;
     }
 
-    return fromProfile || fromAssignment || "Volunteer";
+    return (
+      fromProfile ||
+      fromAssignment ||
+      "Volunteer"
+    );
   };
 
-  // Volunteer mission view: keep only the field-response controls here.
-  // Assignment details belong in Volunteer Tasks and incident/resident details
-  // already live beside the map, so repeating the large summary is redundant.
-  if (flow.volunteer && caseId) {
-    const assignment = relevant[0];
+  if (
+    flow.volunteer &&
+    caseId
+  ) {
+    const assignment =
+      volunteerMissionAssignment ||
+      relevant[0];
+
+    const missionStep =
+      !assignment
+        ? 0
+        : assignment.status ===
+            "offered"
+          ? 0
+          : assignment.status ===
+              "accepted"
+            ? 1
+            : assignment.status ===
+                "responding"
+              ? 2
+              : assignment.status ===
+                  "on_site"
+                ? 3
+                : assignment.status ===
+                    "completed"
+                  ? 4
+                  : 0;
+
+    const statusTitle =
+      !assignment
+        ? "Mission unavailable"
+        : assignment.status ===
+            "offered"
+          ? "Waiting for your decision"
+          : assignment.status ===
+              "accepted"
+            ? "Ready to respond"
+            : assignment.status ===
+                "responding"
+              ? "You are on the way"
+              : assignment.status ===
+                  "on_site"
+                ? "You have arrived"
+                : assignment.status ===
+                    "completed"
+                  ? "Mission completed"
+                  : assignment.status ===
+                      "declined"
+                    ? "Assignment declined"
+                    : assignment.status ===
+                        "cancelled"
+                      ? "Assignment cancelled"
+                      : "Mission update";
+
+    const statusCopy =
+      !assignment
+        ? "Return to Volunteer Tasks and reopen the assigned mission."
+        : assignment.status ===
+            "offered"
+          ? "Accept or decline this assignment from Volunteer Tasks first."
+          : assignment.status ===
+              "accepted"
+            ? "Start the response when you are ready. GPS sharing and in-app navigation will begin together."
+            : assignment.status ===
+                "responding"
+              ? "Follow the route on the map. Your resident can see your live responder position while you are responding."
+              : assignment.status ===
+                  "on_site"
+                ? "Provide the needed assistance, then record what you actually contributed before completing the mission."
+                : assignment.status ===
+                    "completed"
+                  ? "Live GPS sharing has ended. The resident will confirm whether the assistance was fully received, partially received, or not received."
+                  : assignment.status ===
+                      "declined"
+                    ? "This mission is no longer active for your account."
+                    : assignment.status ===
+                        "cancelled"
+                      ? "This mission was cancelled by the response coordinator."
+                      : "Follow the current mission status shown on the map.";
 
     return (
-      <section className="mission-action-bar" aria-label="Mission response controls">
+      <section
+        className="clean-mission-flow"
+        aria-label="Volunteer mission response"
+      >
         <style>{`
-          .mission-action-bar {
+          .clean-mission-flow {
             width: min(1380px, 100%);
             margin: 0 auto 14px;
-            padding: 12px 14px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            border: 1px solid #cfe3e0;
-            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid #d9e9e6;
+            border-radius: 18px;
             background: #ffffff;
-            box-shadow: 0 6px 20px rgba(15, 23, 42, .05);
+            box-shadow: 0 8px 26px rgba(15, 23, 42, .055);
           }
 
-          .mission-action-copy {
-            min-width: 0;
+          .clean-mission-head {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
           }
 
-          .mission-action-copy strong {
-            color: #0f2740;
-            font-size: 14px;
+          .clean-mission-copy {
+            min-width: 0;
           }
 
-          .mission-action-status {
-            display: inline-flex;
-            align-items: center;
-            min-height: 28px;
-            padding: 5px 9px;
-            border-radius: 999px;
-            background: #e6f7f4;
+          .clean-mission-kicker {
+            margin: 0 0 4px;
             color: #0f766e;
             font-size: 11px;
             font-weight: 900;
+            letter-spacing: .08em;
             text-transform: uppercase;
-            letter-spacing: .04em;
           }
 
-          .mission-action-controls {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-
-          .mission-action-note {
-            width: 100%;
+          .clean-mission-copy h2 {
             margin: 0;
+            color: #102a43;
+            font-size: 18px;
+            line-height: 1.25;
+          }
+
+          .clean-mission-title {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: 13px;
+          }
+
+          .clean-mission-status {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            min-height: 32px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #e8f7f4;
+            color: #0f766e;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+          }
+
+          .clean-mission-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 18px;
+            align-items: center;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid #edf2f7;
+          }
+
+          .clean-mission-message strong,
+          .clean-mission-message span {
+            display: block;
+          }
+
+          .clean-mission-message strong {
+            color: #102a43;
+            font-size: 14px;
+          }
+
+          .clean-mission-message span {
+            max-width: 780px;
+            margin-top: 3px;
             color: #64748b;
             font-size: 12px;
+            line-height: 1.5;
           }
 
-          .mission-action-error {
-            width: 100%;
-            margin: 0;
-            color: #b91c1c;
-            font-size: 12px;
-            font-weight: 700;
+          .clean-mission-action {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
           }
 
-          .mission-action-bar .primary-button,
-          .mission-action-bar .secondary-button {
-            min-height: 38px;
-            padding: 8px 11px;
-            border-radius: 10px;
+          .clean-mission-flow .primary-button,
+          .clean-mission-flow .secondary-button {
+            min-height: 42px;
+            padding: 9px 15px;
+            border-radius: 11px;
             font: inherit;
-            font-weight: 800;
+            font-weight: 850;
             cursor: pointer;
           }
 
-          .mission-action-bar .primary-button {
+          .clean-mission-flow .primary-button {
             border: 1px solid #0f766e;
             background: #0f766e;
-            color: #fff;
+            color: #ffffff;
           }
 
-          .mission-action-bar .secondary-button {
-            border: 1px solid #cbd5e1;
-            background: #fff;
+          .clean-mission-flow .secondary-button {
+            border: 1px solid #bfd5d1;
+            background: #ffffff;
             color: #0f766e;
           }
 
-          .mission-action-bar button:disabled {
+          .clean-mission-flow button:disabled {
             opacity: .55;
             cursor: wait;
           }
 
-          @media (max-width: 760px) {
-            .mission-action-bar {
-              align-items: stretch;
+          .clean-mission-progress {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 14px;
+          }
+
+          .clean-mission-step {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+            padding: 8px 9px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #f8fafc;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          .clean-mission-step.is-current {
+            border-color: #9ed6cc;
+            background: #effaf8;
+            color: #0f766e;
+          }
+
+          .clean-mission-step.is-done {
+            border-color: #cde8e2;
+            background: #f5fbfa;
+            color: #47756e;
+          }
+
+          .clean-mission-step-number {
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 1px solid currentColor;
+            font-size: 10px;
+            font-weight: 900;
+          }
+
+          .clean-mission-live {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-top: 12px;
+            padding: 9px 11px;
+            border-radius: 10px;
+            background: #f2fbf8;
+            color: #166b5f;
+            font-size: 12px;
+            font-weight: 750;
+          }
+
+          .clean-mission-live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #16a34a;
+            box-shadow: 0 0 0 4px rgba(22, 163, 74, .12);
+          }
+
+          .clean-mission-error {
+            margin: 12px 0 0;
+            padding: 9px 11px;
+            border-radius: 10px;
+            background: #fff5f5;
+            color: #b42318;
+            font-size: 12px;
+            font-weight: 750;
+          }
+
+          .clean-mission-flow .mission-completion-card {
+            width: min(650px, 100%);
+            padding: 14px;
+            border: 1px solid #b9ddd7;
+            border-radius: 12px;
+            background: #f7fcfb;
+          }
+
+          .clean-mission-flow .mission-completion-heading {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 10px;
+          }
+
+          .clean-mission-flow .mission-completion-heading strong,
+          .clean-mission-flow .mission-completion-heading span {
+            display: block;
+          }
+
+          .clean-mission-flow .mission-completion-heading span {
+            margin-top: 3px;
+            color: #64748b;
+            font-size: 11px;
+          }
+
+          .clean-mission-flow .mission-completion-card label {
+            display: block;
+            margin-top: 9px;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          .clean-mission-flow .mission-completion-card :is(select, textarea, input) {
+            display: block;
+            width: 100%;
+            margin-top: 5px;
+            padding: 9px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 9px;
+            background: #ffffff;
+            color: #0f172a;
+            font: inherit;
+          }
+
+          .clean-mission-flow .mission-completion-card textarea {
+            resize: vertical;
+          }
+
+          .clean-mission-flow .mission-completion-grid {
+            display: grid;
+            grid-template-columns: 160px minmax(0, 1fr);
+            gap: 10px;
+          }
+
+          .clean-mission-flow .mission-completion-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+          }
+
+          .clean-mission-flow .mission-completion-error {
+            margin: 8px 0 0;
+            color: #b91c1c;
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          @media (max-width: 800px) {
+            .clean-mission-head {
               flex-direction: column;
             }
 
-            .mission-action-controls {
+            .clean-mission-body {
+              grid-template-columns: 1fr;
+            }
+
+            .clean-mission-action {
               justify-content: flex-start;
+            }
+
+            .clean-mission-progress {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .clean-mission-flow .mission-completion-grid {
+              grid-template-columns: 1fr;
             }
           }
         `}</style>
 
-        <div className="mission-action-copy">
-          <strong>{chosen?.title || assignment?.caseTitle || "Assigned mission"}</strong>
+        <div className="clean-mission-head">
+          <div className="clean-mission-copy">
+            <p className="clean-mission-kicker">
+              Emergency response
+            </p>
+
+            <h2>
+              {statusTitle}
+            </h2>
+
+            <p className="clean-mission-title">
+              {chosen?.title ||
+                assignment?.caseTitle ||
+                "Assigned mission"}
+            </p>
+          </div>
 
           {assignment && (
-            <span className="mission-action-status">
-              {String(assignment.status || "accepted").replaceAll("_", " ")}
+            <span className="clean-mission-status">
+              {String(
+                assignment.status ||
+                  "accepted",
+              ).replaceAll(
+                "_",
+                " ",
+              )}
             </span>
-          )}
-
-          {!assignment && (
-            <p className="mission-action-error">
-              No response assignment was found for this mission. Return to Volunteer Tasks and reopen it.
-            </p>
-          )}
-
-          {flow.error && (
-            <p className="mission-action-error" role="alert">
-              {flow.error}
-            </p>
           )}
         </div>
 
-        {assignment && (
-          <div className="mission-action-controls">
-            {assignment.status === "offered" && (
-              <span className="mission-action-note">
-                Accept or decline this assignment from Volunteer Tasks first.
-              </span>
-            )}
+        <div className="clean-mission-body">
+          <div className="clean-mission-message">
+            <strong>
+              {assignment?.status ===
+              "responding"
+                ? "Navigate to the resident"
+                : assignment?.status ===
+                    "on_site"
+                  ? "Assist the resident"
+                  : assignment?.status ===
+                      "accepted"
+                    ? "Start your response"
+                    : statusTitle}
+            </strong>
 
-            {assignment.status === "accepted" && (
+            <span>
+              {statusCopy}
+            </span>
+          </div>
+
+          <div className="clean-mission-action">
+            {!assignment ? null :
+            assignment.status ===
+              "accepted" ? (
               <button
                 className="primary-button"
                 disabled={flow.busy}
-                onClick={() => flow.respond(assignment, "responding")}
+                onClick={() =>
+                  flow.respond(
+                    assignment,
+                    "responding",
+                  )
+                }
               >
                 Respond &amp; Share GPS
               </button>
-            )}
-
-            {activeStates.includes(assignment.status) && (
-              <>
-                {flow.shareId === assignment.id ? (
-                  <button
-                    className="secondary-button"
-                    onClick={flow.stopSharing}
-                  >
-                    Stop sharing
-                  </button>
-                ) : (
-                  <button
-                    className="primary-button"
-                    disabled={!!flow.shareId}
-                    onClick={() => flow.resume(assignment)}
-                  >
-                    Resume sharing
-                  </button>
-                )}
-
-                {assignment.status === "responding" && (
-                  <button
-                    className="secondary-button"
-                    disabled={flow.busy}
-                    onClick={() => flow.respond(assignment, "on_site")}
-                  >
-                    Mark Arrived
-                  </button>
-                )}
-
-                {assignment.status === "on_site" && (
-                  <button
-                    className="primary-button"
-                    disabled={flow.busy}
-                    onClick={() => flow.respond(assignment, "completed")}
-                  >
-                    Complete Mission
-                  </button>
-                )}
-              </>
-            )}
-
-            {terminalStates.includes(assignment.status) && (
-              <span className="mission-action-note">
-                {assignment.status === "completed"
-                  ? "Mission completed · live GPS sharing ended."
-                  : assignment.status === "declined"
-                    ? "This assignment was declined."
-                    : "This assignment was cancelled."}
-              </span>
-            )}
+            ) : assignment.status ===
+                "responding" ? (
+              <button
+                className="primary-button"
+                disabled={flow.busy}
+                onClick={() =>
+                  flow.respond(
+                    assignment,
+                    "on_site",
+                  )
+                }
+              >
+                Mark Arrived
+              </button>
+            ) : assignment.status ===
+                "on_site" ? (
+              <MissionCompletionForm
+                assignment={assignment}
+                busy={flow.busy}
+                defaultPeopleHelped={
+                  Number(
+                    chosen
+                      ?.affectedPeople ||
+                      1,
+                  )
+                }
+                onComplete={flow.respond}
+              />
+            ) : null}
           </div>
-        )}
+        </div>
 
-        {flow.canShare && (
-          <p className="mission-action-note" role="status">
-            {flow.sentAt
-              ? "Live GPS shared · last update " +
-                new Date(flow.sentAt).toLocaleTimeString()
-              : "GPS sharing started · waiting for a fresh location reading…"}
+        <div
+          className="clean-mission-progress"
+          aria-label="Mission progress"
+        >
+          {[
+            [1, "Accepted"],
+            [2, "Responding"],
+            [3, "Arrived"],
+            [4, "Complete"],
+          ].map(([step, label]) => {
+            const numberStep =
+              Number(step);
+
+            const stateClass =
+              missionStep > numberStep
+                ? "is-done"
+                : missionStep ===
+                    numberStep
+                  ? "is-current"
+                  : "";
+
+            return (
+              <div
+                className={`clean-mission-step ${stateClass}`.trim()}
+                key={String(label)}
+              >
+                <span className="clean-mission-step-number">
+                  {missionStep >
+                  numberStep
+                    ? "✓"
+                    : numberStep}
+                </span>
+                <span>{label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {assignment &&
+          activeStates.includes(
+            assignment.status,
+          ) && (
+            <div
+              className="clean-mission-live"
+              role="status"
+            >
+              <span
+                className="clean-mission-live-dot"
+                aria-hidden="true"
+              />
+              <span>
+                {flow.canShare
+                  ? flow.sentAt
+                    ? "Live GPS active"
+                    : "Starting live GPS…"
+                  : flow.focused
+                    ? "Preparing live GPS…"
+                    : "Live GPS resumes automatically when you return to this response map."}
+              </span>
+            </div>
+          )}
+
+        {flow.error && (
+          <p
+            className="clean-mission-error"
+            role="alert"
+          >
+            {flow.error}
           </p>
         )}
       </section>
@@ -1192,6 +2257,75 @@ export function ResponsePanel({
           font-weight: 700;
         }
 
+        .response-flow .mission-completion-card {
+          width: min(620px, 100%);
+          padding: 14px;
+          border: 1px solid #b9ddd7;
+          border-radius: 12px;
+          background: #f7fcfb;
+        }
+
+        .response-flow .mission-completion-heading {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 10px;
+        }
+
+        .response-flow .mission-completion-heading strong,
+        .response-flow .mission-completion-heading span {
+          display: block;
+        }
+
+        .response-flow .mission-completion-heading span {
+          margin-top: 3px;
+          color: #64748b;
+          font-size: 11px;
+        }
+
+        .response-flow .mission-completion-card label {
+          display: block;
+          margin-top: 9px;
+          color: #334155;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .response-flow .mission-completion-card :is(select, textarea, input) {
+          display: block;
+          width: 100%;
+          margin-top: 5px;
+          padding: 9px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 9px;
+          background: #fff;
+          color: #0f172a;
+          font: inherit;
+        }
+
+        .response-flow .mission-completion-card textarea {
+          resize: vertical;
+        }
+
+        .response-flow .mission-completion-grid {
+          display: grid;
+          grid-template-columns: 160px minmax(0, 1fr);
+          gap: 10px;
+        }
+
+        .response-flow .mission-completion-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 10px;
+        }
+
+        .response-flow .mission-completion-error {
+          color: #b91c1c;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
         @media (max-width: 800px) {
           .mission-grid {
             grid-template-columns: 1fr;
@@ -1199,6 +2333,10 @@ export function ResponsePanel({
 
           .mission-summary-head {
             flex-direction: column;
+          }
+
+          .response-flow .mission-completion-grid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
@@ -1212,11 +2350,14 @@ export function ResponsePanel({
       <p>
         {flow.admin
           ? "Validate reports, assign volunteers, and monitor shared positions on this map."
-          : "Open an accepted assignment from Volunteer Tasks, then choose Respond & Share GPS. Only authorized administrators can see your shared position."}
+          : "Open an accepted assignment from Volunteer Tasks, then choose Respond & Share GPS. During an active response, your assigned resident and authorized administrators can see your shared responder position."}
       </p>
 
       {flow.error && (
-        <p className="flow-error" role="alert">
+        <p
+          className="flow-error"
+          role="alert"
+        >
           {flow.error}
         </p>
       )}
@@ -1228,75 +2369,132 @@ export function ResponsePanel({
               aria-label="Select response case"
               value={caseId}
               onChange={(event) =>
-                setCaseId(event.target.value)
+                setCaseId(
+                  event.target.value,
+                )
               }
             >
-              <option value="">Select report</option>
+              <option value="">
+                Select report
+              </option>
 
               {cases
-                .filter((incident) => incident.status !== "closed")
-                .map((incident) => (
-                  <option
-                    key={incident.id}
-                    value={incident.id}
-                  >
-                    {incident.title} · {incident.status}
-                  </option>
-                ))}
+                .filter(
+                  (incident) =>
+                    incident.status !==
+                    "closed",
+                )
+                .map(
+                  (incident) => (
+                    <option
+                      key={
+                        incident.id
+                      }
+                      value={
+                        incident.id
+                      }
+                    >
+                      {
+                        incident.title
+                      }{" "}
+                      ·{" "}
+                      {
+                        incident.status
+                      }
+                    </option>
+                  ),
+                )}
             </select>
 
-            {chosen && nextStatus[chosen.status] && (
+            {chosen &&
+              nextStatus[
+                chosen.status
+              ] && (
               <button
                 className="secondary-button"
                 disabled={
                   flow.busy ||
                   (
-                    chosen.status === "in_progress" &&
+                    chosen.status ===
+                      "in_progress" &&
                     !mayResolve
                   )
                 }
                 onClick={() =>
                   flow.changeCase(
                     chosen,
-                    nextStatus[chosen.status],
+                    nextStatus[
+                      chosen.status
+                    ],
                   )
                 }
               >
-                {actions[chosen.status]}
+                {
+                  actions[
+                    chosen.status
+                  ]
+                }
               </button>
             )}
 
             {chosen &&
-              ["validated", "assigned", "in_progress"].includes(
+              [
+                "validated",
+                "assigned",
+                "in_progress",
+              ].includes(
                 chosen.status,
               ) && (
                 <>
                   <select
                     aria-label="Select volunteer"
-                    value={personId}
-                    onChange={(event) =>
-                      setPersonId(event.target.value)
+                    value={
+                      personId
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setPersonId(
+                        event
+                          .target
+                          .value,
+                      )
                     }
                   >
                     <option value="">
-                      Select approved volunteer
+                      Select approved
+                      volunteer
                     </option>
 
-                    {flow.people.map((person) => (
-                      <option
-                        key={person.id}
-                        value={person.id}
-                      >
-                        {nameOf(person)}
-                      </option>
-                    ))}
+                    {flow.people.map(
+                      (person) => (
+                        <option
+                          key={
+                            person.id
+                          }
+                          value={
+                            person.id
+                          }
+                        >
+                          {nameOf(
+                            person,
+                          )}
+                        </option>
+                      ),
+                    )}
                   </select>
 
                   <button
                     className="primary-button"
-                    disabled={flow.busy || !personId}
+                    disabled={
+                      flow.busy ||
+                      !personId
+                    }
                     onClick={() =>
-                      flow.assign(caseId, personId)
+                      flow.assign(
+                        caseId,
+                        personId,
+                      )
                     }
                   >
                     Assign volunteer
@@ -1306,74 +2504,122 @@ export function ResponsePanel({
           </div>
 
           {chosen && (
-            <details style={{ marginTop: 12 }}>
+            <details
+              style={{
+                marginTop: 12,
+              }}
+            >
               <summary>
-                Review incident details before proceeding
+                Review incident
+                details before
+                proceeding
               </summary>
 
               <p>
-                <strong>{chosen.title}</strong>
+                <strong>
+                  {chosen.title}
+                </strong>
                 {" · "}
-                {chosen.location || "No address provided"}
+                {chosen.location ||
+                  "No address provided"}
               </p>
 
               <p>
-                {chosen.details || "No description provided"}
+                {chosen.details ||
+                  "No description provided"}
               </p>
 
               <p>
-                Needs: {chosen.needs || "Not specified"}
+                Needs:{" "}
+                {chosen.needs ||
+                  "Not specified"}
               </p>
 
               <p>
-                Reporter: {chosen.reporterName || "Not provided"}
+                Reporter:{" "}
+                {chosen.reporterName ||
+                  "Not provided"}
                 {" · "}
-                Contact: {chosen.contactNumber || "Not provided"}
+                Contact:{" "}
+                {chosen.contactNumber ||
+                  "Not provided"}
               </p>
 
-              {Array.isArray(chosen.attachments) &&
+              {Array.isArray(
+                chosen.attachments,
+              ) &&
                 chosen.attachments.map(
-                  (attachment: any, index: number) =>
-                    typeof attachment.url === "string" &&
-                    attachment.url.startsWith("https://") ? (
+                  (
+                    attachment: any,
+                    index: number,
+                  ) =>
+                    typeof attachment.url ===
+                      "string" &&
+                    attachment.url.startsWith(
+                      "https://",
+                    ) ? (
                       <a
-                        key={index}
-                        href={attachment.url}
+                        key={
+                          index
+                        }
+                        href={
+                          attachment.url
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ marginRight: 12 }}
+                        style={{
+                          marginRight: 12,
+                        }}
                       >
-                        View evidence {index + 1}
+                        View evidence{" "}
+                        {index + 1}
                       </a>
                     ) : null,
                 )}
             </details>
           )}
 
-          {chosen?.status === "in_progress" && !mayResolve && (
+          {chosen?.status ===
+            "in_progress" &&
+            !mayResolve && (
             <p>
-              Resolve after at least one volunteer completes and
-              all other assignments are completed, declined, or
+              Resolve after at
+              least one volunteer
+              completes and all
+              other assignments
+              are completed,
+              declined, or
               cancelled.
             </p>
           )}
 
           <p>
-            Live responder pins expire after two minutes without
-            a new reading. Stopping sharing normally removes the
-            pin immediately.
+            Live responder pins
+            expire after two
+            minutes without a new
+            reading. Stopping
+            sharing normally
+            removes the pin
+            immediately.
           </p>
         </>
       )}
 
-      {flow.volunteer && caseId && chosen && (
+      {flow.volunteer &&
+        caseId &&
+        chosen && (
         <section className="mission-summary">
           <div className="mission-summary-head">
             <div>
               <span className="mission-kicker">
                 ASSIGNED EMERGENCY
               </span>
-              <h3>{chosen.title || "Emergency response"}</h3>
+
+              <h3>
+                {chosen.title ||
+                  "Emergency response"}
+              </h3>
+
               <p>
                 {chosen.location ||
                   chosen.reporterAddress ||
@@ -1382,98 +2628,174 @@ export function ResponsePanel({
             </div>
 
             <span className="mission-case-status">
-              {String(chosen.status || "assigned")
-                .replaceAll("_", " ")
+              {String(
+                chosen.status ||
+                  "assigned",
+              )
+                .replaceAll(
+                  "_",
+                  " ",
+                )
                 .toUpperCase()}
             </span>
           </div>
 
           <div className="mission-grid">
             <div>
-              <strong>Resident / Reporter</strong>
+              <strong>
+                Resident /
+                Reporter
+              </strong>
+
               <span>
-                {chosen.reporterName || "Not provided"}
+                {chosen.reporterName ||
+                  "Not provided"}
               </span>
+
               <small>
-                {chosen.contactNumber || "No contact number"}
+                {chosen.contactNumber ||
+                  "No contact number"}
               </small>
             </div>
 
             <div>
-              <strong>Incident</strong>
+              <strong>
+                Incident
+              </strong>
+
               <span>
-                {chosen.category || "Emergency assistance"}
+                {chosen.category ||
+                  "Emergency assistance"}
               </span>
+
               <small>
-                {chosen.details || "No additional description"}
+                {chosen.details ||
+                  "No additional description"}
               </small>
             </div>
 
             <div>
-              <strong>Assistance needed</strong>
+              <strong>
+                Assistance needed
+              </strong>
+
               <span>
-                {Array.isArray(chosen.assistanceTypes) &&
-                chosen.assistanceTypes.length
-                  ? chosen.assistanceTypes.join(", ")
-                  : chosen.needs || "Not specified"}
+                {Array.isArray(
+                  chosen.assistanceTypes,
+                ) &&
+                chosen
+                  .assistanceTypes
+                  .length
+                  ? chosen.assistanceTypes.join(
+                      ", ",
+                    )
+                  : chosen.needs ||
+                    "Not specified"}
               </span>
             </div>
 
             <div>
-              <strong>Responder skills</strong>
+              <strong>
+                Responder skills
+              </strong>
+
               <span>
-                {Array.isArray(chosen.requiredSkills) &&
-                chosen.requiredSkills.length
-                  ? chosen.requiredSkills.join(", ")
+                {Array.isArray(
+                  chosen.requiredSkills,
+                ) &&
+                chosen
+                  .requiredSkills
+                  .length
+                  ? chosen.requiredSkills.join(
+                      ", ",
+                    )
                   : "Not specified"}
               </span>
             </div>
 
             <div>
-              <strong>Goods / supplies</strong>
+              <strong>
+                Goods / supplies
+              </strong>
+
               <span>
-                {Array.isArray(chosen.neededGoods) &&
-                chosen.neededGoods.length
-                  ? chosen.neededGoods.join(", ")
+                {Array.isArray(
+                  chosen.neededGoods,
+                ) &&
+                chosen
+                  .neededGoods
+                  .length
+                  ? chosen.neededGoods.join(
+                      ", ",
+                    )
                   : "Not specified"}
               </span>
             </div>
 
             <div>
-              <strong>People affected</strong>
+              <strong>
+                People affected
+              </strong>
+
               <span>
-                {chosen.affectedPeople ?? "Not specified"}
+                {chosen.affectedPeople ??
+                  "Not specified"}
               </span>
             </div>
           </div>
 
           {chosen.needsNote && (
             <p className="mission-note">
-              <strong>Response instructions:</strong>{" "}
+              <strong>
+                Response
+                instructions:
+              </strong>{" "}
               {chosen.needsNote}
             </p>
           )}
 
-          {Array.isArray(chosen.attachments) &&
+          {Array.isArray(
+            chosen.attachments,
+          ) &&
             chosen.attachments.some(
-              (attachment: any) =>
-                typeof attachment?.url === "string" &&
-                attachment.url.startsWith("https://"),
+              (
+                attachment: any,
+              ) =>
+                typeof attachment?.url ===
+                  "string" &&
+                attachment.url.startsWith(
+                  "https://",
+                ),
             ) && (
               <div className="mission-evidence">
-                <strong>Resident evidence</strong>
+                <strong>
+                  Resident evidence
+                </strong>
+
                 <div>
                   {chosen.attachments.map(
-                    (attachment: any, index: number) =>
-                      typeof attachment?.url === "string" &&
-                      attachment.url.startsWith("https://") ? (
+                    (
+                      attachment: any,
+                      index: number,
+                    ) =>
+                      typeof attachment?.url ===
+                        "string" &&
+                      attachment.url.startsWith(
+                        "https://",
+                      ) ? (
                         <a
-                          key={index}
-                          href={attachment.url}
+                          key={
+                            index
+                          }
+                          href={
+                            attachment.url
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          View evidence {index + 1}
+                          View evidence{" "}
+                          {index +
+                            1}
                         </a>
                       ) : null,
                   )}
@@ -1483,161 +2805,239 @@ export function ResponsePanel({
         </section>
       )}
 
-      {flow.volunteer && caseId && !chosen && (
-        <p className="flow-error" role="alert">
-          The assigned incident could not be loaded. Return to
-          Volunteer Tasks and reopen the assignment.
+      {flow.volunteer &&
+        caseId &&
+        !chosen && (
+        <p
+          className="flow-error"
+          role="alert"
+        >
+          The assigned incident
+          could not be loaded.
+          Return to Volunteer
+          Tasks and reopen the
+          assignment.
         </p>
       )}
 
-      {visibleRelevant.length === 0 && (
+      {visibleRelevant.length ===
+        0 && (
         <p>
-          No active response assignments
+          No active response
+          assignments
           {flow.admin
             ? " for the selected report"
             : caseId
               ? " for this mission"
-              : " yet"}.
+              : " yet"}
+          .
         </p>
       )}
 
-      {visibleRelevant.map((assignment) => (
-        <article key={assignment.id}>
-          <strong>
-            {flow.admin
-              ? volunteerNameFor(assignment)
-              : assignment.caseTitle}
-          </strong>
+      {visibleRelevant.map(
+        (assignment) => (
+          <article
+            key={assignment.id}
+          >
+            <strong>
+              {flow.admin
+                ? volunteerNameFor(
+                    assignment,
+                  )
+                : assignment.caseTitle}
+            </strong>
 
-          <span className="flow-status">
-            {String(assignment.status).replaceAll("_", " ")}
-          </span>
+            <span className="flow-status">
+              {String(
+                assignment.status,
+              ).replaceAll(
+                "_",
+                " ",
+              )}
+            </span>
 
-          {flow.admin &&
-            activeStates.includes(assignment.status) && (
-              <p>
-                {(() => {
-                  const point = flow.responders.find(
-                    (item) =>
-                      item.assignmentId === assignment.id,
-                  );
-
-                  return point
-                    ? (
-                        point.stale
-                          ? "Older reading · "
-                          : "Location shared · "
-                      ) +
-                        new Date(
-                          point.lastShared,
-                        ).toLocaleTimeString() +
+            {flow.admin &&
+              activeStates.includes(
+                assignment.status,
+              ) && (
+                <p>
+                  {(() => {
+                    const point =
+                      flow.responders.find(
                         (
-                          point.accuracy != null
-                            ? " · ±" +
-                              Math.round(point.accuracy) +
-                              " m"
-                            : ""
-                        )
-                    : "No recent shared location";
-                })()}
-              </p>
-            )}
+                          item,
+                        ) =>
+                          item.assignmentId ===
+                          assignment.id,
+                      );
 
-          <div className="flow-controls">
-            {flow.volunteer &&
-              assignment.status === "offered" && (
-                <p className="task-gate-note">
-                  Accept or decline this assignment from
-                  Volunteer Tasks before opening the response map.
+                    return point
+                      ? (
+                          point.stale
+                            ? "Older reading · "
+                            : "Location shared · "
+                        ) +
+                          new Date(
+                            point.lastShared,
+                          ).toLocaleTimeString() +
+                          (
+                            point.accuracy !=
+                            null
+                              ? " · ±" +
+                                Math.round(
+                                  point.accuracy,
+                                ) +
+                                " m"
+                              : ""
+                          )
+                      : "No recent shared location";
+                  })()}
                 </p>
               )}
 
-            {flow.volunteer &&
-              assignment.status === "accepted" && (
-                <button
-                  className="primary-button"
-                  disabled={flow.busy}
-                  onClick={() =>
-                    flow.respond(assignment, "responding")
-                  }
-                >
-                  Respond &amp; Share GPS
-                </button>
-              )}
+            <div className="flow-controls">
+              {flow.volunteer &&
+                assignment.status ===
+                  "offered" && (
+                  <p className="task-gate-note">
+                    Accept or decline
+                    this assignment
+                    from Volunteer
+                    Tasks before
+                    opening the
+                    response map.
+                  </p>
+                )}
 
-            {flow.volunteer &&
-              activeStates.includes(assignment.status) && (
-                <>
-                  {flow.shareId === assignment.id ? (
-                    <button
-                      className="secondary-button"
-                      onClick={flow.stopSharing}
-                    >
-                      Stop sharing
-                    </button>
-                  ) : (
-                    <button
-                      className="primary-button"
-                      disabled={!!flow.shareId}
-                      onClick={() =>
-                        flow.resume(assignment)
-                      }
-                    >
-                      Resume sharing
-                    </button>
-                  )}
+              {flow.volunteer &&
+                assignment.status ===
+                  "accepted" && (
+                  <button
+                    className="primary-button"
+                    disabled={
+                      flow.busy
+                    }
+                    onClick={() =>
+                      flow.respond(
+                        assignment,
+                        "responding",
+                      )
+                    }
+                  >
+                    Respond &amp;
+                    Share GPS
+                  </button>
+                )}
 
-                  {assignment.status === "responding" && (
-                    <button
-                      className="secondary-button"
-                      disabled={flow.busy}
-                      onClick={() =>
-                        flow.respond(assignment, "on_site")
-                      }
-                    >
-                      Mark arrived
-                    </button>
-                  )}
+              {flow.volunteer &&
+                activeStates.includes(
+                  assignment.status,
+                ) && (
+                  <>
+                    {flow.shareId ===
+                    assignment.id ? (
+                      <button
+                        className="secondary-button"
+                        onClick={
+                          flow.stopSharing
+                        }
+                      >
+                        Stop
+                        sharing
+                      </button>
+                    ) : (
+                      <button
+                        className="primary-button"
+                        disabled={
+                          !!flow.shareId
+                        }
+                        onClick={() =>
+                          flow.resume(
+                            assignment,
+                          )
+                        }
+                      >
+                        Resume
+                        sharing
+                      </button>
+                    )}
 
-                  {assignment.status === "on_site" && (
-                    <button
-                      className="primary-button"
-                      disabled={flow.busy}
-                      onClick={() =>
-                        flow.respond(assignment, "completed")
-                      }
-                    >
-                      Complete my task
-                    </button>
-                  )}
-                </>
-              )}
+                    {assignment.status ===
+                      "responding" && (
+                      <button
+                        className="secondary-button"
+                        disabled={
+                          flow.busy
+                        }
+                        onClick={() =>
+                          flow.respond(
+                            assignment,
+                            "on_site",
+                          )
+                        }
+                      >
+                        Mark
+                        arrived
+                      </button>
+                    )}
 
-            {flow.admin &&
-              !terminalStates.includes(assignment.status) && (
-                <button
-                  className="secondary-button"
-                  disabled={flow.busy}
-                  onClick={() =>
-                    flow.cancel(assignment)
-                  }
-                >
-                  Cancel assignment
-                </button>
-              )}
-          </div>
-        </article>
-      ))}
+                    {assignment.status ===
+                      "on_site" && (
+                      <MissionCompletionForm
+                        assignment={
+                          assignment
+                        }
+                        busy={
+                          flow.busy
+                        }
+                        defaultPeopleHelped={
+                          1
+                        }
+                        onComplete={
+                          flow.respond
+                        }
+                      />
+                    )}
+                  </>
+                )}
+
+              {flow.admin &&
+                !terminalStates.includes(
+                  assignment.status,
+                ) && (
+                  <button
+                    className="secondary-button"
+                    disabled={
+                      flow.busy
+                    }
+                    onClick={() =>
+                      flow.cancel(
+                        assignment,
+                      )
+                    }
+                  >
+                    Cancel
+                    assignment
+                  </button>
+                )}
+            </div>
+          </article>
+        ),
+      )}
 
       {flow.canShare && (
         <p role="status">
           {flow.sentAt
             ? "Last shared: " +
-              new Date(flow.sentAt).toLocaleTimeString()
+              new Date(
+                flow.sentAt,
+              ).toLocaleTimeString()
             : "Waiting for a fresh location reading to share…"}
-          {" · Leave this map or stop tracking to end sharing."}
+          {
+            " · Leave this map or stop tracking to end sharing."
+          }
         </p>
       )}
-    </section>
-  );
-}
+        </section>
+    );
+  }
