@@ -17,9 +17,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { db } from "../../lib/firebase";
 import {
-  activeModeForProfile,
   hasVolunteerAccess,
   isApprovedProfile,
+  type UserProfile,
 } from "../../lib/firebaseAuth";
 
 type Row = {
@@ -106,7 +106,7 @@ export function useResponseFlow(
 ) {
   const admin = ["admin", "superadmin"].includes(profile?.role);
   const volunteer =
-    activeModeForProfile(profile) === "volunteer" &&
+    profile?.role === "volunteer" &&
     hasVolunteerAccess(profile);
 
   const approved =
@@ -176,6 +176,7 @@ export function useResponseFlow(
                 .filter(
                   (person: any) =>
                     isApprovedProfile(person) &&
+                    person?.role === "volunteer" &&
                     hasVolunteerAccess(person),
                 ),
             ),
@@ -515,6 +516,15 @@ export function useResponseFlow(
             );
           }
 
+          if (
+            String(incident.reporterUid || "").trim() ===
+            String(user.uid || "").trim()
+          ) {
+            throw new Error(
+              "You cannot respond to your own emergency report.",
+            );
+          }
+
           const assignmentPatch: any = {
             status: next,
             updatedAt: serverTimestamp(),
@@ -676,18 +686,31 @@ export function useResponseFlow(
             caseId + "_" + volunteerId,
           );
 
+          const volunteerRef = doc(
+            db,
+            "users",
+            volunteerId,
+          );
+
           const [
             caseSnapshot,
             existing,
+            volunteerSnapshot,
           ] = await Promise.all([
             transaction.get(caseRef),
             transaction.get(
               assignmentRef,
             ),
+            transaction.get(
+              volunteerRef,
+            ),
           ]);
 
           const incident =
             caseSnapshot.data();
+
+          const volunteerProfile =
+            volunteerSnapshot.data() as UserProfile | undefined;
 
           if (
             !incident ||
@@ -699,6 +722,27 @@ export function useResponseFlow(
           ) {
             throw new Error(
               "Validate this report before assigning.",
+            );
+          }
+
+          if (
+            String(incident.reporterUid || "").trim() ===
+            String(volunteerId || "").trim()
+          ) {
+            throw new Error(
+              "The reporter cannot be assigned as a volunteer to their own emergency case.",
+            );
+          }
+
+          if (
+            !volunteerSnapshot.exists() ||
+            !volunteerProfile ||
+            volunteerProfile.role !== "volunteer" ||
+            !isApprovedProfile(volunteerProfile) ||
+            !hasVolunteerAccess(volunteerProfile)
+          ) {
+            throw new Error(
+              "Select an approved volunteer account.",
             );
           }
 
@@ -714,7 +758,7 @@ export function useResponseFlow(
               caseId,
               volunteerId,
               volunteerName:
-                nameOf(person),
+                nameOf(volunteerProfile),
               caseTitle:
                 incident.title ||
                 "Incident",
@@ -2466,29 +2510,43 @@ export function ResponsePanel({
                       volunteer
                     </option>
 
-                    {flow.people.map(
-                      (person) => (
-                        <option
-                          key={
-                            person.id
-                          }
-                          value={
-                            person.id
-                          }
-                        >
-                          {nameOf(
-                            person,
-                          )}
-                        </option>
-                      ),
-                    )}
+                    {flow.people
+                      .filter(
+                        (person) =>
+                          person.id !==
+                          String(
+                            chosen?.reporterUid ||
+                              "",
+                          ).trim(),
+                      )
+                      .map(
+                        (person) => (
+                          <option
+                            key={
+                              person.id
+                            }
+                            value={
+                              person.id
+                            }
+                          >
+                            {nameOf(
+                              person,
+                            )}
+                          </option>
+                        ),
+                      )}
                   </select>
 
                   <button
                     className="primary-button"
                     disabled={
                       flow.busy ||
-                      !personId
+                      !personId ||
+                      personId ===
+                        String(
+                          chosen?.reporterUid ||
+                            "",
+                        ).trim()
                     }
                     onClick={() =>
                       flow.assign(

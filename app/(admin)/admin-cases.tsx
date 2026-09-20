@@ -471,13 +471,20 @@ export default function AdminCases() {
             })
           );
 
-          // Admin and Super Admin accounts are control-plane accounts.
-          // Never show them as assignable field responders.
-          const assignableVolunteers = list.filter(
-            (person) =>
-              person.role !== "admin" &&
-              person.role !== "superadmin"
-          );
+          // Final fixed-role model:
+          // only approved accounts whose actual users/{uid}.role is "volunteer"
+          // may appear as field responders. Old resident accounts that still
+          // have an approved volunteerApplications record are intentionally hidden.
+          const assignableVolunteers = list.filter((person) => {
+            const role = String(person.role || "").trim().toLowerCase();
+            const status = String(person.status || "").trim().toLowerCase();
+
+            const approvedAccount =
+              status === "approved" ||
+              (!status && role !== "applicant");
+
+            return role === "volunteer" && approvedAccount;
+          });
 
           assignableVolunteers.sort((a, b) =>
             a.fullName.localeCompare(b.fullName)
@@ -594,6 +601,10 @@ export default function AdminCases() {
 
     return approvedVolunteers
       .filter((volunteer) => {
+        // Never show the resident/reporter of this case as an assignable
+        // responder, including old test data created before fixed roles.
+        if (volunteer.uid === incident.reporterUid) return false;
+
         if (alreadyAssigned.has(volunteer.uid)) return false;
 
         const skillMatch =
@@ -911,6 +922,14 @@ export default function AdminCases() {
       return;
     }
 
+    if (volunteer.uid === incident.reporterUid) {
+      Alert.alert(
+        "Assignment Blocked",
+        "The resident who reported this emergency cannot be assigned as a responder to their own case."
+      );
+      return;
+    }
+
     const required = Number(incident.requiredVolunteers || 0);
     const activeCount = activeAssignmentsForCase(incident.id).length;
 
@@ -935,6 +954,7 @@ export default function AdminCases() {
 
     try {
       const caseRef = doc(db, "disasterCases", incident.id);
+      const volunteerRef = doc(db, "users", volunteer.uid);
       const assignmentRef = doc(
         db,
         "responseAssignments",
@@ -948,16 +968,50 @@ export default function AdminCases() {
       const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
       await runTransaction(db, async (transaction) => {
-        const [caseSnapshot, assignmentSnapshot] = await Promise.all([
-          transaction.get(caseRef),
-          transaction.get(assignmentRef),
-        ]);
+        const [caseSnapshot, volunteerSnapshot, assignmentSnapshot] =
+          await Promise.all([
+            transaction.get(caseRef),
+            transaction.get(volunteerRef),
+            transaction.get(assignmentRef),
+          ]);
 
         if (!caseSnapshot.exists()) {
           throw new Error("The disaster case no longer exists.");
         }
 
+        if (!volunteerSnapshot.exists()) {
+          throw new Error("The selected volunteer account no longer exists.");
+        }
+
         const currentCase: any = caseSnapshot.data();
+        const currentVolunteer: any = volunteerSnapshot.data();
+
+        if (
+          String(currentCase.reporterUid || "").trim() ===
+          String(volunteer.uid || "").trim()
+        ) {
+          throw new Error(
+            "The resident who reported this emergency cannot be assigned as a responder to their own case."
+          );
+        }
+
+        const volunteerRole = String(currentVolunteer.role || "")
+          .trim()
+          .toLowerCase();
+
+        const volunteerStatus = String(currentVolunteer.status || "")
+          .trim()
+          .toLowerCase();
+
+        const volunteerApproved =
+          volunteerStatus === "approved" ||
+          (!volunteerStatus && volunteerRole !== "applicant");
+
+        if (volunteerRole !== "volunteer" || !volunteerApproved) {
+          throw new Error(
+            "Only an approved account with the Volunteer role can be assigned as a responder."
+          );
+        }
 
         const currentVerification = String(
           currentCase.verificationStatus ||

@@ -3,7 +3,6 @@ import { Redirect, Tabs, useSegments } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -14,12 +13,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  activeModeForProfile,
-  hasVolunteerAccess,
   isAdminProfile,
   isApprovedProfile,
   logoutUser,
-  setActiveUserMode,
   UserProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -220,20 +216,20 @@ export default function TabLayout() {
   }
 
   const hideResidentTabs = isAdminProfile(profile);
-  const activeMode = activeModeForProfile(profile);
+  const accountRole = profile.role === "volunteer" ? "volunteer" : "resident";
   const currentRoute = segments[segments.length - 1];
 
   if (typeof currentRoute === "string") {
     if (
       volunteerOnlyRoutes.has(currentRoute) &&
-      activeMode !== "volunteer"
+      accountRole !== "volunteer"
     ) {
       return <Redirect href="/(tabs)" />;
     }
 
     if (
       residentOnlyRoutes.has(currentRoute) &&
-      activeMode === "volunteer"
+      accountRole !== "resident"
     ) {
       return <Redirect href="/(tabs)" />;
     }
@@ -261,8 +257,7 @@ function DesktopTabBar({
   navigation,
   profile,
 }: any & { profile: UserProfile }) {
-  const mode = activeModeForProfile(profile);
-  const canSwitchMode = hasVolunteerAccess(profile);
+  const mode = profile.role === "volunteer" ? "volunteer" : "resident";
   const tabs = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
 
   const navigate = (routeName: string) => {
@@ -278,33 +273,7 @@ function DesktopTabBar({
     if (!event.defaultPrevented) navigation.navigate(route.name);
   };
 
-  const switchMode = async () => {
-    if (!canSwitchMode) return;
 
-    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
-
-    try {
-      // Save the mode FIRST. The live profile listener in useUserSession
-      // will then receive the updated activeMode from Firestore.
-      await setActiveUserMode(nextMode);
-
-      // Only navigate after the Firestore update succeeds.
-      navigate("index");
-    } catch (error: any) {
-      const message =
-        error?.message || "Unable to switch account mode.";
-
-      console.error("Mode switch failed:", error);
-
-      // React Native Alert can be unreliable on web, so make sure
-      // the actual Firebase/Firestore error is visible in the browser.
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.alert(`Mode Switch Failed\n\n${message}`);
-      } else {
-        Alert.alert("Mode Switch Failed", message);
-      }
-    }
-  };
 
   return (
     <View style={styles.desktopSidebar}>
@@ -368,23 +337,6 @@ function DesktopTabBar({
       </View>
 
       <View style={styles.desktopUtilityArea}>
-        {canSwitchMode ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.desktopUtilityButton,
-              pressed && styles.desktopPressed,
-            ]}
-            onPress={() => void switchMode()}
-          >
-            <Ionicons name="swap-horizontal-outline" size={18} color="#078F82" />
-            <Text style={styles.desktopUtilityText}>
-              {mode === "volunteer"
-                ? "Switch to Resident Mode"
-                : "Switch to Volunteer Mode"}
-            </Text>
-          </Pressable>
-        ) : null}
-
         <Pressable
           style={({ pressed }) => [
             styles.desktopUtilityButton,
@@ -418,7 +370,7 @@ function CustomTabBar({
   profile,
 }: any & { profile: UserProfile }) {
   const insets = useSafeAreaInsets();
-  const mode = activeModeForProfile(profile);
+  const mode = profile.role === "volunteer" ? "volunteer" : "resident";
   const tabs = mode === "volunteer" ? volunteerMobileTabs : residentMobileTabs;
 
   return (

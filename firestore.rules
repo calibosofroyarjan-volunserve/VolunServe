@@ -43,13 +43,12 @@ service cloud.firestore {
 
     function isVolunteer() {
       return approved()
-        && (
-          profile().role == 'volunteer'
-          || (
-            'volunteerAccess' in profile()
-            && profile().volunteerAccess == true
-          )
-        );
+        && profile().role == 'volunteer';
+    }
+
+    function isResident() {
+      return approved()
+        && profile().role == 'resident';
     }
 
     // =========================================================
@@ -97,31 +96,6 @@ service cloud.firestore {
         );
 
       allow list: if isAdmin();
-
-      // ---------------------------------------------------------
-      // USER MODE SWITCH
-      // ---------------------------------------------------------
-
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data
-          .diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'activeMode'
-          ])
-        && request.resource.data.activeMode in [
-          'resident',
-          'volunteer'
-        ]
-        && (
-          request.resource.data.activeMode == 'resident'
-          || resource.data.role == 'volunteer'
-          || (
-            'volunteerAccess' in resource.data
-            && resource.data.volunteerAccess == true
-          )
-        );
 
       // ---------------------------------------------------------
       // OWN PROFILE EDITING
@@ -491,7 +465,7 @@ service cloud.firestore {
           );
       }
 
-      allow create: if approved()
+      allow create: if isResident()
         && request.resource.data.keys().hasOnly([
           'requestId',
           'requesterUid',
@@ -599,7 +573,7 @@ service cloud.firestore {
       allow read: if isAdmin()
 
         || (
-          approved()
+          isResident()
           && resource.data.requesterUid == request.auth.uid
         )
 
@@ -696,7 +670,7 @@ service cloud.firestore {
 
       // Canonical detailed Emergency Report.
       // No beneficiaryType field here.
-      allow create: if approved()
+      allow create: if isResident()
 
         && request.resource.data.keys().hasOnly([
           'reporterUid',
@@ -900,7 +874,7 @@ service cloud.firestore {
       allow read: if isAdmin()
 
         || (
-          approved()
+          isResident()
           && resource.data.reporterUid == request.auth.uid
         )
 
@@ -1593,7 +1567,7 @@ service cloud.firestore {
           && resource.data.residentId == request.auth.uid
         );
 
-      allow create: if approved()
+      allow create: if isResident()
 
         && request.resource.data.keys().hasOnly([
           'assignmentId',
@@ -1642,6 +1616,10 @@ service cloud.firestore {
 
         && request.resource.data.volunteerId
           == contributionAssignment().volunteerId
+
+        // Self-response can never become verified contribution credit.
+        && request.resource.data.volunteerId
+          != request.auth.uid
 
         && request.resource.data.volunteerName
           == contributionAssignment().volunteerName
@@ -1734,7 +1712,7 @@ service cloud.firestore {
           && resource.data.residentId == request.auth.uid
         );
 
-      allow create: if approved()
+      allow create: if isResident()
 
         && request.resource.data.keys().hasOnly([
           'assignmentId',
@@ -1766,6 +1744,10 @@ service cloud.firestore {
 
         && disputeAssignment().volunteerId
           == request.resource.data.volunteerId
+
+        // Reporter and responder must be different accounts.
+        && request.resource.data.volunteerId
+          != request.auth.uid
 
         && request.resource.data.contributionType
           == disputeAssignment().contributionType
@@ -1915,7 +1897,11 @@ service cloud.firestore {
           == request.resource.data.status
 
         && responderNotificationCase().reporterUid
-          == request.resource.data.userId;
+          == request.resource.data.userId
+
+        // A responder can never notify themselves as the case reporter.
+        && request.resource.data.userId
+          != request.auth.uid;
 
       allow read, update: if approved()
         && (
@@ -2073,7 +2059,7 @@ service cloud.firestore {
       allow read: if isAdmin()
 
         || (
-          approved()
+          isResident()
           && chatCase().reporterUid == request.auth.uid
           && validReadableChatAssignment()
         )
@@ -2133,13 +2119,15 @@ service cloud.firestore {
           )
 
           || (
-            chatCase().reporterUid == request.auth.uid
+            isResident()
+            && chatCase().reporterUid == request.auth.uid
             && request.resource.data.senderRole == 'resident'
           )
 
           || (
             isVolunteer()
             && incomingChatAssignment().volunteerId == request.auth.uid
+            && chatCase().reporterUid != request.auth.uid
             && request.resource.data.senderRole == 'volunteer'
           )
         );
@@ -2277,6 +2265,29 @@ service cloud.firestore {
         ).data;
       }
 
+      function incomingAssignmentCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+
+      function incomingVolunteerProfile() {
+        return get(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        ).data;
+      }
+
+      function incomingVolunteerIsApproved() {
+        return incomingVolunteerProfile().role == 'volunteer'
+          && (
+            (
+              'status' in incomingVolunteerProfile()
+              && incomingVolunteerProfile().status == 'approved'
+            )
+            || !('status' in incomingVolunteerProfile())
+          );
+      }
+
       allow read: if isAdmin()
 
         || (
@@ -2285,7 +2296,7 @@ service cloud.firestore {
         )
 
         || (
-          approved()
+          isResident()
           && assignmentCase().reporterUid == request.auth.uid
         );
 
@@ -2319,6 +2330,28 @@ service cloud.firestore {
         && request.resource.data.status == 'offered'
 
         && request.resource.data.createdBy == request.auth.uid
+
+        && exists(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        )
+
+        && exists(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        )
+
+        // Only a real approved Volunteer account may be assigned.
+        && incomingVolunteerIsApproved()
+
+        // The reporter can never be assigned to their own case.
+        && incomingAssignmentCase().reporterUid
+          != request.resource.data.volunteerId
+
+        // Assign only operationally valid cases.
+        && incomingAssignmentCase().status in [
+          'validated',
+          'assigned',
+          'in_progress'
+        ]
 
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
@@ -2359,6 +2392,10 @@ service cloud.firestore {
         && request.resource.data.caseId
           == resource.data.caseId
 
+        // A reporter cannot act as responder on their own case,
+        // including any legacy assignment that may already exist.
+        && assignmentCase().reporterUid != request.auth.uid
+
         && validVolunteerResponseTransition()
 
         && validVolunteerResponseFields()
@@ -2377,7 +2414,7 @@ service cloud.firestore {
       // All writes must exist in the same writeBatch().
       // ---------------------------------------------------------
 
-      allow update: if approved()
+      allow update: if isResident()
 
         && assignmentCase().reporterUid == request.auth.uid
 
@@ -2506,7 +2543,7 @@ service cloud.firestore {
           && resource.data.volunteerId == request.auth.uid
         );
 
-      allow create: if approved()
+      allow create: if isResident()
 
         && request.resource.data.keys().hasOnly([
           'assignmentId',
@@ -2553,6 +2590,10 @@ service cloud.firestore {
 
         && confirmationAssignment().volunteerId
           == request.resource.data.volunteerId
+
+        // Reporter and responder must be different accounts.
+        && request.resource.data.volunteerId
+          != request.auth.uid
 
         && confirmationAssignment().status == 'completed'
 
@@ -2631,6 +2672,12 @@ service cloud.firestore {
         ).data;
       }
 
+      function linkedCaseForWrite() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+
       // Admin, sharing volunteer, and resident who owns the case.
       allow read: if isAdmin()
 
@@ -2640,7 +2687,7 @@ service cloud.firestore {
         )
 
         || (
-          approved()
+          isResident()
 
           && linkedCaseForRead().reporterUid
             == request.auth.uid
@@ -2704,6 +2751,10 @@ service cloud.firestore {
 
         && linkedAssignmentForWrite().caseId
           == request.resource.data.caseId
+
+        // Never publish responder GPS for the reporter's own case.
+        && linkedCaseForWrite().reporterUid
+          != request.auth.uid
 
         && linkedAssignmentForWrite().status in [
           'responding',
@@ -2787,7 +2838,7 @@ service cloud.firestore {
       allow read: if isAdmin()
 
         || (
-          approved()
+          isResident()
           && request.auth.uid == uid
           && resource.data.residentId == request.auth.uid
         )
@@ -2816,7 +2867,7 @@ service cloud.firestore {
           ]
         );
 
-      allow create: if approved()
+      allow create: if isResident()
 
         && request.auth.uid == uid
 
@@ -2843,7 +2894,7 @@ service cloud.firestore {
       // live-location document to a new active mission that they own.
       // This prevents an old caseId / assignmentId from blocking
       // live sharing on the resident's next emergency response.
-      allow update: if approved()
+      allow update: if isResident()
 
         && request.auth.uid == uid
 
@@ -2872,7 +2923,7 @@ service cloud.firestore {
       allow delete: if isAdmin()
 
         || (
-          approved()
+          isResident()
           && request.auth.uid == uid
           && resource.data.residentId == request.auth.uid
         );
