@@ -1,6 +1,20 @@
 "use strict";
 
-const admin = require("firebase-admin");
+const {
+  initializeApp,
+  applicationDefault,
+  cert,
+  getApps,
+} = require("firebase-admin/app");
+
+const {
+  getAuth,
+} = require("firebase-admin/auth");
+
+const {
+  getFirestore,
+  FieldValue,
+} = require("firebase-admin/firestore");
 
 function getServiceAccount() {
   const raw =
@@ -37,36 +51,41 @@ function getServiceAccount() {
   return serviceAccount;
 }
 
-if (!admin.apps.length) {
+function getFirebaseApp() {
+  const existingApps =
+    getApps();
+
+  if (existingApps.length > 0) {
+    return existingApps[0];
+  }
+
   const serviceAccount =
     getServiceAccount();
 
   if (serviceAccount) {
-    admin.initializeApp({
+    return initializeApp({
       credential:
-        admin.credential.cert(
-          serviceAccount,
-        ),
-    });
-  } else {
-    admin.initializeApp({
-      credential:
-        admin.credential.applicationDefault(),
+        cert(serviceAccount),
     });
   }
+
+  return initializeApp({
+    credential:
+      applicationDefault(),
+  });
 }
 
+const app =
+  getFirebaseApp();
+
 const auth =
-  admin.auth();
+  getAuth(app);
 
 const db =
-  admin.firestore();
-
-const FieldValue =
-  admin.firestore.FieldValue;
+  getFirestore(app);
 
 module.exports = {
-  admin,
+  app,
   auth,
   db,
   FieldValue,
