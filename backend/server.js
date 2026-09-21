@@ -1,28 +1,20 @@
 "use strict";
 
-const crypto =
-  require("crypto");
-
-const express =
-  require("express");
-
-const cors =
-  require("cors");
+const crypto = require("crypto");
+const express = require("express");
+const cors = require("cors");
 
 const {
   auth,
   db,
   FieldValue,
-} =
-  require("./firebaseAdmin");
+} = require("./firebaseAdmin");
 
 const {
   createDiditSession,
-} =
-  require("./didit");
+} = require("./didit");
 
-const app =
-  express();
+const app = express();
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8081",
@@ -31,16 +23,12 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 function getAllowedOrigins() {
-  const configured =
-    String(
-      process.env.ALLOWED_ORIGINS || "",
-    )
-      .split(",")
-      .map(
-        (value) =>
-          value.trim(),
-      )
-      .filter(Boolean);
+  const configured = String(
+    process.env.ALLOWED_ORIGINS || "",
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   return new Set(
     configured.length > 0
@@ -54,21 +42,12 @@ const allowedOrigins =
 
 app.use(
   cors({
-    origin(
-      origin,
-      callback,
-    ) {
+    origin(origin, callback) {
       if (
         !origin ||
-        allowedOrigins.has(
-          origin,
-        )
+        allowedOrigins.has(origin)
       ) {
-        callback(
-          null,
-          true,
-        );
-
+        callback(null, true);
         return;
       }
 
@@ -96,8 +75,12 @@ app.use(
 
 app.use(
   express.json({
-    limit:
-      "1mb",
+    limit: "1mb",
+
+    verify(request, response, buffer) {
+      request.rawBody =
+        Buffer.from(buffer);
+    },
   }),
 );
 
@@ -150,34 +133,26 @@ function mapDiditStatusToIdentityStatus(
     );
 
   if (
-    status ===
-    "approved"
+    status === "approved"
   ) {
     return "verified";
   }
 
   if (
-    status ===
-      "not started" ||
-    status ===
-      "in progress" ||
-    status ===
-      "in review" ||
-    status ===
-      "resubmitted"
+    status === "not started" ||
+    status === "not finished" ||
+    status === "in progress" ||
+    status === "in review" ||
+    status === "resubmitted"
   ) {
     return "pending";
   }
 
   if (
-    status ===
-      "declined" ||
-    status ===
-      "abandoned" ||
-    status ===
-      "expired" ||
-    status ===
-      "kyc expired"
+    status === "declined" ||
+    status === "abandoned" ||
+    status === "expired" ||
+    status === "kyc expired"
   ) {
     return "failed";
   }
@@ -260,127 +235,16 @@ async function requireFirebaseUser(
   }
 }
 
-function normalizeWholeFloats(
-  value,
+function safeEqualBuffers(
+  first,
+  second,
 ) {
   if (
-    Array.isArray(value)
+    !Buffer.isBuffer(first) ||
+    !Buffer.isBuffer(second)
   ) {
-    return value.map(
-      normalizeWholeFloats,
-    );
+    return false;
   }
-
-  if (
-    value !== null &&
-    typeof value === "object"
-  ) {
-    const result =
-      {};
-
-    for (
-      const [
-        key,
-        childValue,
-      ] of Object.entries(
-        value,
-      )
-    ) {
-      result[key] =
-        normalizeWholeFloats(
-          childValue,
-        );
-    }
-
-    return result;
-  }
-
-  if (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    Number.isInteger(value)
-  ) {
-    return value;
-  }
-
-  return value;
-}
-
-function sortObjectKeys(
-  value,
-) {
-  if (
-    Array.isArray(value)
-  ) {
-    return value.map(
-      sortObjectKeys,
-    );
-  }
-
-  if (
-    value !== null &&
-    typeof value === "object"
-  ) {
-    return Object.keys(
-      value,
-    )
-      .sort()
-      .reduce(
-        (
-          result,
-          key,
-        ) => {
-          result[key] =
-            sortObjectKeys(
-              value[key],
-            );
-
-          return result;
-        },
-        {},
-      );
-  }
-
-  return value;
-}
-
-function createCanonicalJson(
-  value,
-) {
-  const normalized =
-    normalizeWholeFloats(
-      value,
-    );
-
-  const sorted =
-    sortObjectKeys(
-      normalized,
-    );
-
-  return JSON.stringify(
-    sorted,
-  );
-}
-
-function timingSafeEqualText(
-  firstValue,
-  secondValue,
-) {
-  const first =
-    Buffer.from(
-      String(
-        firstValue || "",
-      ),
-      "utf8",
-    );
-
-  const second =
-    Buffer.from(
-      String(
-        secondValue || "",
-      ),
-      "utf8",
-    );
 
   if (
     first.length !==
@@ -395,6 +259,50 @@ function timingSafeEqualText(
   );
 }
 
+function decodeWebhookSignature(
+  signatureValue,
+) {
+  let signature =
+    String(
+      signatureValue || "",
+    ).trim();
+
+  signature =
+    signature.replace(
+      /^sha256=/i,
+      "",
+    );
+
+  if (
+    /^[a-f0-9]{64}$/i.test(
+      signature,
+    )
+  ) {
+    return Buffer.from(
+      signature,
+      "hex",
+    );
+  }
+
+  try {
+    const decoded =
+      Buffer.from(
+        signature,
+        "base64",
+      );
+
+    if (
+      decoded.length === 32
+    ) {
+      return decoded;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function verifyDiditWebhook(
   request,
 ) {
@@ -402,7 +310,7 @@ function verifyDiditWebhook(
     String(
       process.env
         .DIDIT_WEBHOOK_SECRET ||
-        "",
+      "",
     ).trim();
 
   if (!webhookSecret) {
@@ -413,7 +321,7 @@ function verifyDiditWebhook(
     return false;
   }
 
-  const signature =
+  const signatureHeader =
     String(
       request.headers[
         "x-signature-v2"
@@ -430,7 +338,7 @@ function verifyDiditWebhook(
     ).trim();
 
   if (
-    !signature ||
+    !signatureHeader ||
     !timestampHeader
   ) {
     return false;
@@ -451,26 +359,38 @@ function verifyDiditWebhook(
 
   const currentTimestamp =
     Math.floor(
-      Date.now() /
-      1000,
-    );
-
-  const difference =
-    Math.abs(
-      currentTimestamp -
-      timestamp,
+      Date.now() / 1000,
     );
 
   if (
-    difference > 300
+    Math.abs(
+      currentTimestamp -
+      timestamp,
+    ) > 300
   ) {
     return false;
   }
 
-  const canonicalBody =
-    createCanonicalJson(
-      request.body,
+  if (
+    !Buffer.isBuffer(
+      request.rawBody,
+    )
+  ) {
+    console.error(
+      "Raw webhook body was not captured.",
     );
+
+    return false;
+  }
+
+  const receivedSignature =
+    decodeWebhookSignature(
+      signatureHeader,
+    );
+
+  if (!receivedSignature) {
+    return false;
+  }
 
   const expectedSignature =
     crypto
@@ -479,16 +399,13 @@ function verifyDiditWebhook(
         webhookSecret,
       )
       .update(
-        canonicalBody,
-        "utf8",
+        request.rawBody,
       )
-      .digest(
-        "hex",
-      );
+      .digest();
 
-  return timingSafeEqualText(
+  return safeEqualBuffers(
     expectedSignature,
-    signature,
+    receivedSignature,
   );
 }
 
@@ -496,42 +413,54 @@ async function findFirebaseUid({
   vendorData,
   sessionId,
 }) {
+  if (sessionId) {
+    const snapshot =
+      await db
+        .collection(
+          "identityVerifications",
+        )
+        .where(
+          "sessionId",
+          "==",
+          sessionId,
+        )
+        .limit(1)
+        .get();
+
+    if (
+      !snapshot.empty
+    ) {
+      return snapshot
+        .docs[0]
+        .id;
+    }
+  }
+
   const uid =
     cleanText(
       vendorData,
       200,
     );
 
-  if (uid) {
-    return uid;
-  }
-
-  if (!sessionId) {
+  if (!uid) {
     return "";
   }
 
-  const snapshot =
+  const userSnapshot =
     await db
       .collection(
-        "identityVerifications",
+        "users",
       )
-      .where(
-        "sessionId",
-        "==",
-        sessionId,
-      )
-      .limit(1)
+      .doc(uid)
       .get();
 
   if (
-    snapshot.empty
+    !userSnapshot.exists
   ) {
     return "";
   }
 
-  return snapshot
-    .docs[0]
-    .id;
+  return uid;
 }
 
 app.get(
@@ -541,8 +470,7 @@ app.get(
     response,
   ) => {
     response.json({
-      ok:
-        true,
+      ok: true,
 
       service:
         "volunserve-identity-backend",
@@ -721,9 +649,9 @@ app.post(
             email:
               cleanText(
                 profile.email ||
-                  request
-                    .firebaseUser
-                    .email,
+                request
+                  .firebaseUser
+                  .email,
                 240,
               ),
           },
@@ -913,7 +841,7 @@ app.get(
         identityStatus:
           cleanText(
             profile.identityStatus ||
-              "basic",
+            "basic",
             30,
           ).toLowerCase(),
 
@@ -993,7 +921,9 @@ app.post(
 
     const webhookType =
       cleanText(
-        event.webhook_type,
+        event.webhook_type ||
+        event.type ||
+        "",
         80,
       );
 
@@ -1016,7 +946,7 @@ app.post(
       cleanText(
         process.env
           .DIDIT_ENVIRONMENT ||
-          "",
+        "",
         20,
       ).toLowerCase();
 
@@ -1050,31 +980,46 @@ app.post(
 
     const eventId =
       cleanText(
-        event.event_id,
+        event.event_id ||
+        event.id ||
+        "",
         200,
       );
 
     const sessionId =
       cleanText(
-        event.session_id,
+        event.session_id ||
+        event.session?.id ||
+        event.data?.session_id ||
+        "",
         200,
       );
 
     const workflowId =
       cleanText(
-        event.workflow_id,
+        event.workflow_id ||
+        event.session?.workflow_id ||
+        event.data?.workflow_id ||
+        "",
         200,
       );
 
     const vendorData =
       cleanText(
-        event.vendor_data,
+        event.vendor_data ||
+        event.session?.vendor_data ||
+        event.data?.vendor_data ||
+        "",
         200,
       );
 
     const providerStatus =
       cleanText(
-        event.status,
+        event.status ||
+        event.session?.status ||
+        event.data?.status ||
+        event.decision?.status ||
+        "",
         80,
       );
 
@@ -1082,7 +1027,7 @@ app.post(
       cleanText(
         process.env
           .DIDIT_WORKFLOW_ID ||
-          "",
+        "",
         200,
       );
 
@@ -1208,6 +1153,29 @@ app.post(
         return;
       }
 
+      const previousEventId =
+        cleanText(
+          verificationData.lastEventId ||
+          "",
+          200,
+        );
+
+      if (
+        eventId &&
+        previousEventId &&
+        eventId === previousEventId
+      ) {
+        response.json({
+          ok:
+            true,
+
+          duplicate:
+            true,
+        });
+
+        return;
+      }
+
       const identityStatus =
         mapDiditStatusToIdentityStatus(
           providerStatus,
@@ -1216,39 +1184,52 @@ app.post(
       const batch =
         db.batch();
 
+      const verificationUpdate = {
+        uid,
+
+        provider:
+          "didit",
+
+        providerStatus,
+
+        webhookType,
+
+        status:
+          identityStatus ||
+          "pending",
+
+        lastWebhookAt:
+          FieldValue
+            .serverTimestamp(),
+
+        updatedAt:
+          FieldValue
+            .serverTimestamp(),
+      };
+
+      if (sessionId) {
+        verificationUpdate.sessionId =
+          sessionId;
+      }
+
+      if (workflowId) {
+        verificationUpdate.workflowId =
+          workflowId;
+      }
+
+      if (eventId) {
+        verificationUpdate.lastEventId =
+          eventId;
+      }
+
+      if (eventEnvironment) {
+        verificationUpdate.environment =
+          eventEnvironment;
+      }
+
       batch.set(
         verificationRef,
-        {
-          uid,
-
-          provider:
-            "didit",
-
-          sessionId,
-
-          workflowId,
-
-          providerStatus,
-
-          webhookType,
-
-          eventId,
-
-          environment:
-            eventEnvironment,
-
-          status:
-            identityStatus ||
-            "pending",
-
-          lastWebhookAt:
-            FieldValue
-              .serverTimestamp(),
-
-          updatedAt:
-            FieldValue
-              .serverTimestamp(),
-        },
+        verificationUpdate,
         {
           merge:
             true,
