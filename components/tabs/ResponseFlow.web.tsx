@@ -1,16 +1,13 @@
 import { useLocalSearchParams } from "expo-router";
 import {
-  arrayUnion,
   collection,
   deleteDoc,
   doc,
-  increment,
   onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +16,6 @@ import { db } from "../../lib/firebase";
 import {
   hasVolunteerAccess,
   isApprovedProfile,
-  type UserProfile,
 } from "../../lib/firebaseAuth";
 
 type Row = {
@@ -105,9 +101,7 @@ export function useResponseFlow(
   focused: boolean,
 ) {
   const admin = ["admin", "superadmin"].includes(profile?.role);
-  const volunteer =
-    profile?.role === "volunteer" &&
-    hasVolunteerAccess(profile);
+  const volunteer = hasVolunteerAccess(profile);
 
   const approved =
     !!user && !!profile && isApprovedProfile(profile);
@@ -176,7 +170,6 @@ export function useResponseFlow(
                 .filter(
                   (person: any) =>
                     isApprovedProfile(person) &&
-                    person?.role === "volunteer" &&
                     hasVolunteerAccess(person),
                 ),
             ),
@@ -568,6 +561,12 @@ export function useResponseFlow(
             assignmentPatch,
           );
 
+          const responderName = String(
+            current.volunteerName ||
+              nameOf(profile) ||
+              "Your assigned responder",
+          ).trim();
+
           const noticeByStatus: Record<
             string,
             {
@@ -578,29 +577,25 @@ export function useResponseFlow(
             accepted: {
               title:
                 "Responder accepted your request",
-              message:
-                "An assigned responder accepted your request. Confirm the situation and needed assistance before dispatch.",
+              message: `${responderName} accepted the LGU response assignment for your emergency request.`,
             },
 
             responding: {
               title:
                 "Responder is on the way",
-              message:
-                "Your assigned responder started the response and is sharing a live response location while the mission is active.",
+              message: `${responderName} is responding to your location and is now sharing a live responder location. Open Map Tracking to follow the response.`,
             },
 
             on_site: {
               title:
                 "Responder arrived",
-              message:
-                "Your assigned responder marked arrival at the assistance location.",
+              message: `${responderName} has arrived at your assistance location.`,
             },
 
             completed: {
               title:
                 "Please confirm the assistance received",
-              message:
-                "The responder marked the mission complete and submitted a contribution summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.",
+              message: `${responderName} marked the mission complete and submitted a contribution summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.`,
             },
           };
 
@@ -623,9 +618,7 @@ export function useResponseFlow(
                 caseId: current.caseId,
                 assignmentId: assignment.id,
                 responderId: user.uid,
-                responderName:
-                  current.volunteerName ||
-                  nameOf(profile),
+                responderName,
                 title: notice.title,
                 message: notice.message,
                 type:
@@ -648,274 +641,6 @@ export function useResponseFlow(
       if (next === "completed") {
         stopSharing();
       }
-    });
-
-  const assign = (
-    caseId: string,
-    volunteerId: string,
-  ) =>
-    act(async () => {
-      if (!caseId || !volunteerId) {
-        throw new Error(
-          "Select a case and volunteer.",
-        );
-      }
-
-      const person = people.find(
-        (item) => item.id === volunteerId,
-      );
-
-      if (!person) {
-        throw new Error(
-          "Volunteer not available.",
-        );
-      }
-
-      await runTransaction(
-        db,
-        async (transaction) => {
-          const caseRef = doc(
-            db,
-            "disasterCases",
-            caseId,
-          );
-
-          const assignmentRef = doc(
-            db,
-            "responseAssignments",
-            caseId + "_" + volunteerId,
-          );
-
-          const volunteerRef = doc(
-            db,
-            "users",
-            volunteerId,
-          );
-
-          const [
-            caseSnapshot,
-            existing,
-            volunteerSnapshot,
-          ] = await Promise.all([
-            transaction.get(caseRef),
-            transaction.get(
-              assignmentRef,
-            ),
-            transaction.get(
-              volunteerRef,
-            ),
-          ]);
-
-          const incident =
-            caseSnapshot.data();
-
-          const volunteerProfile =
-            volunteerSnapshot.data() as UserProfile | undefined;
-
-          if (
-            !incident ||
-            ![
-              "validated",
-              "assigned",
-              "in_progress",
-            ].includes(incident.status)
-          ) {
-            throw new Error(
-              "Validate this report before assigning.",
-            );
-          }
-
-          if (
-            String(incident.reporterUid || "").trim() ===
-            String(volunteerId || "").trim()
-          ) {
-            throw new Error(
-              "The reporter cannot be assigned as a volunteer to their own emergency case.",
-            );
-          }
-
-          if (
-            !volunteerSnapshot.exists() ||
-            !volunteerProfile ||
-            volunteerProfile.role !== "volunteer" ||
-            !isApprovedProfile(volunteerProfile) ||
-            !hasVolunteerAccess(volunteerProfile)
-          ) {
-            throw new Error(
-              "Select an approved volunteer account.",
-            );
-          }
-
-          if (existing.exists()) {
-            throw new Error(
-              "This volunteer already has an assignment record for this case.",
-            );
-          }
-
-          transaction.set(
-            assignmentRef,
-            {
-              caseId,
-              volunteerId,
-              volunteerName:
-                nameOf(volunteerProfile),
-              caseTitle:
-                incident.title ||
-                "Incident",
-              status: "offered",
-              createdBy: user.uid,
-              createdAt:
-                serverTimestamp(),
-              updatedAt:
-                serverTimestamp(),
-            },
-          );
-
-          const patch: any = {
-            assignedVolunteerIds:
-              arrayUnion(volunteerId),
-            updatedAt:
-              serverTimestamp(),
-          };
-
-          if (
-            !(
-              incident.assignedVolunteerIds ||
-              []
-            ).includes(volunteerId)
-          ) {
-            patch.assignedVolunteersCount =
-              increment(1);
-          }
-
-          if (
-            incident.status ===
-            "validated"
-          ) {
-            patch.status = "assigned";
-            patch.assignedAt =
-              serverTimestamp();
-          }
-
-          transaction.update(
-            caseRef,
-            patch,
-          );
-
-          transaction.set(
-            doc(
-              db,
-              "notifications",
-              "response_" +
-                caseId +
-                "_" +
-                volunteerId,
-            ),
-            {
-              userId: volunteerId,
-              title:
-                "New response assignment",
-              message:
-                "You have been assigned to " +
-                (
-                  incident.title ||
-                  "an incident"
-                ) +
-                ". Open Volunteer Tasks to accept or decline.",
-              type:
-                "response_assignment",
-              read: false,
-              createdAt:
-                serverTimestamp(),
-            },
-          );
-        },
-      );
-    });
-
-  const changeCase = (
-    incident: Row,
-    next: string,
-  ) =>
-    act(async () => {
-      const previous: Record<
-        string,
-        string
-      > = {
-        validated: "reported",
-        in_progress: "assigned",
-        resolved: "in_progress",
-        closed: "resolved",
-      };
-
-      await runTransaction(
-        db,
-        async (transaction) => {
-          const caseRef = doc(
-            db,
-            "disasterCases",
-            incident.id,
-          );
-
-          const snapshot =
-            await transaction.get(
-              caseRef,
-            );
-
-          if (
-            snapshot.data()?.status !==
-            previous[next]
-          ) {
-            throw new Error(
-              "Case status changed. Refresh the selection.",
-            );
-          }
-
-          const patch: any = {
-            status: next,
-            updatedAt:
-              serverTimestamp(),
-          };
-
-          if (next === "validated") {
-            patch.validatedAt =
-              serverTimestamp();
-          }
-
-          if (next === "resolved") {
-            patch.resolvedAt =
-              serverTimestamp();
-          }
-
-          if (next === "closed") {
-            patch.closedAt =
-              serverTimestamp();
-          }
-
-          transaction.update(
-            caseRef,
-            patch,
-          );
-        },
-      );
-    });
-
-  const cancel = (
-    assignment: Row,
-  ) =>
-    act(async () => {
-      await updateDoc(
-        doc(
-          db,
-          "responseAssignments",
-          assignment.id,
-        ),
-        {
-          status: "cancelled",
-          updatedAt:
-            serverTimestamp(),
-        },
-      );
     });
 
   const responders = useMemo(
@@ -1065,9 +790,6 @@ export function useResponseFlow(
     error,
     busy,
     respond,
-    assign,
-    cancel,
-    changeCase,
     stopSharing,
     resume: (
       assignment: Row,
@@ -1380,7 +1102,6 @@ export function ResponsePanel({
   const params =
     useLocalSearchParams<{
       caseId?: string;
-      volunteerId?: string;
     }>();
 
   const [
@@ -1392,34 +1113,6 @@ export function ResponsePanel({
       ? params.caseId
       : "",
   );
-
-  const [
-    personId,
-    setPersonId,
-  ] = useState(
-    typeof params.volunteerId ===
-      "string"
-      ? params.volunteerId
-      : "",
-  );
-
-  useEffect(() => {
-    setCaseId(
-      typeof params.caseId ===
-        "string"
-        ? params.caseId
-        : "",
-    );
-  }, [params.caseId]);
-
-  useEffect(() => {
-    setPersonId(
-      typeof params.volunteerId ===
-        "string"
-        ? params.volunteerId
-        : "",
-    );
-  }, [params.volunteerId]);
 
   const chosen =
     cases.find(
@@ -1486,41 +1179,6 @@ export function ResponsePanel({
               caseId,
           )
         : flow.assignments;
-
-  const nextStatus: Record<
-    string,
-    string
-  > = {
-    reported: "validated",
-    assigned: "in_progress",
-    in_progress: "resolved",
-    resolved: "closed",
-  };
-
-  const actions: Record<
-    string,
-    string
-  > = {
-    reported: "Validate report",
-    assigned:
-      "Mark case in progress",
-    in_progress:
-      "Resolve case",
-    resolved: "Close case",
-  };
-
-  const mayResolve =
-    relevant.some(
-      (assignment) =>
-        assignment.status ===
-        "completed",
-    ) &&
-    relevant.every(
-      (assignment) =>
-        terminalStates.includes(
-          assignment.status,
-        ),
-    );
 
   const visibleRelevant =
     flow.admin
@@ -2387,13 +2045,13 @@ export function ResponsePanel({
 
       <h2>
         {flow.admin
-          ? "Response coordination"
+          ? "Live response monitoring"
           : "My response assignments"}
       </h2>
 
       <p>
         {flow.admin
-          ? "Validate reports, assign volunteers, and monitor shared positions on this map."
+          ? "Monitor assigned responders and their live shared positions here. Validate cases and assign volunteers from Disaster Cases to keep one clear LGU workflow."
           : "Open an accepted assignment from Volunteer Tasks, then choose Respond & Share GPS. During an active response, your assigned resident and authorized administrators can see your shared responder position."}
       </p>
 
@@ -2410,255 +2068,80 @@ export function ResponsePanel({
         <>
           <div className="flow-controls">
             <select
-              aria-label="Select response case"
+              aria-label="Select response case to monitor"
               value={caseId}
               onChange={(event) =>
-                setCaseId(
-                  event.target.value,
-                )
+                setCaseId(event.target.value)
               }
             >
               <option value="">
-                Select report
+                Select report to monitor
               </option>
 
               {cases
                 .filter(
                   (incident) =>
-                    incident.status !==
-                    "closed",
+                    incident.status !== "closed",
                 )
-                .map(
-                  (incident) => (
-                    <option
-                      key={
-                        incident.id
-                      }
-                      value={
-                        incident.id
-                      }
-                    >
-                      {
-                        incident.title
-                      }{" "}
-                      ·{" "}
-                      {
-                        incident.status
-                      }
-                    </option>
-                  ),
-                )}
+                .map((incident) => (
+                  <option
+                    key={incident.id}
+                    value={incident.id}
+                  >
+                    {incident.title} · {incident.status}
+                  </option>
+                ))}
             </select>
-
-            {chosen &&
-              nextStatus[
-                chosen.status
-              ] && (
-              <button
-                className="secondary-button"
-                disabled={
-                  flow.busy ||
-                  (
-                    chosen.status ===
-                      "in_progress" &&
-                    !mayResolve
-                  )
-                }
-                onClick={() =>
-                  flow.changeCase(
-                    chosen,
-                    nextStatus[
-                      chosen.status
-                    ],
-                  )
-                }
-              >
-                {
-                  actions[
-                    chosen.status
-                  ]
-                }
-              </button>
-            )}
-
-            {chosen &&
-              [
-                "validated",
-                "assigned",
-                "in_progress",
-              ].includes(
-                chosen.status,
-              ) && (
-                <>
-                  <select
-                    aria-label="Select volunteer"
-                    value={
-                      personId
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setPersonId(
-                        event
-                          .target
-                          .value,
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select approved
-                      volunteer
-                    </option>
-
-                    {flow.people
-                      .filter(
-                        (person) =>
-                          person.id !==
-                          String(
-                            chosen?.reporterUid ||
-                              "",
-                          ).trim(),
-                      )
-                      .map(
-                        (person) => (
-                          <option
-                            key={
-                              person.id
-                            }
-                            value={
-                              person.id
-                            }
-                          >
-                            {nameOf(
-                              person,
-                            )}
-                          </option>
-                        ),
-                      )}
-                  </select>
-
-                  <button
-                    className="primary-button"
-                    disabled={
-                      flow.busy ||
-                      !personId ||
-                      personId ===
-                        String(
-                          chosen?.reporterUid ||
-                            "",
-                        ).trim()
-                    }
-                    onClick={() =>
-                      flow.assign(
-                        caseId,
-                        personId,
-                      )
-                    }
-                  >
-                    Assign volunteer
-                  </button>
-                </>
-              )}
           </div>
 
           {chosen && (
-            <details
-              style={{
-                marginTop: 12,
-              }}
-            >
-              <summary>
-                Review incident
-                details before
-                proceeding
-              </summary>
+            <section className="mission-summary">
+              <div className="mission-summary-head">
+                <div>
+                  <span className="mission-kicker">
+                    LGU RESPONSE MONITORING
+                  </span>
+                  <h3>{chosen.title || "Emergency response"}</h3>
+                  <p>
+                    {chosen.location ||
+                      chosen.reporterAddress ||
+                      "Exact response location is shown on the map."}
+                  </p>
+                </div>
 
-              <p>
-                <strong>
-                  {chosen.title}
-                </strong>
-                {" · "}
-                {chosen.location ||
-                  "No address provided"}
-              </p>
+                <span className="mission-case-status">
+                  {String(chosen.status || "assigned")
+                    .replaceAll("_", " ")
+                    .toUpperCase()}
+                </span>
+              </div>
 
-              <p>
-                {chosen.details ||
-                  "No description provided"}
-              </p>
+              <div className="mission-grid">
+                <div>
+                  <strong>Resident / Reporter</strong>
+                  <span>{chosen.reporterName || "Not provided"}</span>
+                  <small>{chosen.contactNumber || "No contact number"}</small>
+                </div>
 
-              <p>
-                Needs:{" "}
-                {chosen.needs ||
-                  "Not specified"}
-              </p>
+                <div>
+                  <strong>Incident</strong>
+                  <span>{chosen.category || "Emergency assistance"}</span>
+                  <small>{chosen.details || "No additional description"}</small>
+                </div>
 
-              <p>
-                Reporter:{" "}
-                {chosen.reporterName ||
-                  "Not provided"}
-                {" · "}
-                Contact:{" "}
-                {chosen.contactNumber ||
-                  "Not provided"}
-              </p>
-
-              {Array.isArray(
-                chosen.attachments,
-              ) &&
-                chosen.attachments.map(
-                  (
-                    attachment: any,
-                    index: number,
-                  ) =>
-                    typeof attachment.url ===
-                      "string" &&
-                    attachment.url.startsWith(
-                      "https://",
-                    ) ? (
-                      <a
-                        key={
-                          index
-                        }
-                        href={
-                          attachment.url
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          marginRight: 12,
-                        }}
-                      >
-                        View evidence{" "}
-                        {index + 1}
-                      </a>
-                    ) : null,
-                )}
-            </details>
-          )}
-
-          {chosen?.status ===
-            "in_progress" &&
-            !mayResolve && (
-            <p>
-              Resolve after at
-              least one volunteer
-              completes and all
-              other assignments
-              are completed,
-              declined, or
-              cancelled.
-            </p>
+                <div>
+                  <strong>Assigned responders</strong>
+                  <span>{visibleRelevant.length}</span>
+                  <small>Assignment changes are managed in Disaster Cases.</small>
+                </div>
+              </div>
+            </section>
           )}
 
           <p>
-            Live responder pins
-            expire after two
-            minutes without a new
-            reading. Stopping
-            sharing normally
-            removes the pin
-            immediately.
+            Live responder pins expire after two minutes without a new reading.
+            Active responders publish a fresh location heartbeat while responding
+            or on site.
           </p>
         </>
       )}
@@ -3059,25 +2542,6 @@ export function ResponsePanel({
                   </>
                 )}
 
-              {flow.admin &&
-                !terminalStates.includes(
-                  assignment.status,
-                ) && (
-                  <button
-                    className="secondary-button"
-                    disabled={
-                      flow.busy
-                    }
-                    onClick={() =>
-                      flow.cancel(
-                        assignment,
-                      )
-                    }
-                  >
-                    Cancel
-                    assignment
-                  </button>
-                )}
             </div>
           </article>
         ),

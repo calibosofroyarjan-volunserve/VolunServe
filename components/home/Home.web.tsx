@@ -15,6 +15,7 @@ import {
   ImageBackground,
   Pressable,
   ScrollView,
+  Alert,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -22,6 +23,12 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import {
+  activeModeForProfile,
+  hasResidentAccess,
+  hasVolunteerAccess,
+  setActiveUserMode,
+} from "../../lib/firebaseAuth";
 import { usePublicSettings } from "../../lib/usePublicSettings";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -52,11 +59,13 @@ type AssistanceRequest = {
   createdAt?: any;
 };
 
-type CaseInvitation = {
+type VolunteerAssignmentSummary = {
   id: string;
   caseId?: string;
+  caseTitle?: string;
   status?: string;
-  invitedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
 };
 
 type NotificationItem = {
@@ -135,7 +144,7 @@ export default function WebHome() {
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
   >([]);
-  const [invitations, setInvitations] = useState<CaseInvitation[]>([]);
+  const [assignments, setAssignments] = useState<VolunteerAssignmentSummary[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [weather, setWeather] = useState<WeatherState | null>(null);
@@ -164,8 +173,11 @@ export default function WebHome() {
     "VolunServe Member";
 
   const firstName = profile?.firstName?.trim() || displayName.split(" ")[0];
-  const profileRole =
-    profile?.role === "volunteer" ? "Volunteer" : "Community Member";
+  const activeMode = activeModeForProfile(profile);
+  const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
+  const canSwitchMode =
+    hasResidentAccess(profile) && hasVolunteerAccess(profile);
+  const profileRole = volunteerMode ? "Volunteer" : "Community Member";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
@@ -201,7 +213,7 @@ export default function WebHome() {
       setCases([]);
       setAssistanceRequests([]);
       setNotifications([]);
-      setInvitations([]);
+      setAssignments([]);
       setLoading(false);
       return;
     }
@@ -270,40 +282,41 @@ export default function WebHome() {
       () => setNotifications([])
     );
 
-    let unsubscribeInvitations = () => {};
+    let unsubscribeAssignments = () => {};
 
-    if (profile?.role === "volunteer") {
-      unsubscribeInvitations = onSnapshot(
+    if (volunteerMode) {
+      unsubscribeAssignments = onSnapshot(
         query(
-          collection(db, "caseInvitations"),
+          collection(db, "responseAssignments"),
           where("volunteerId", "==", user.uid)
         ),
         (snapshot) => {
-          setInvitations(
+          setAssignments(
             snapshot.docs
               .map((item) => ({
                 id: item.id,
-                ...(item.data() as Omit<CaseInvitation, "id">),
+                ...(item.data() as Omit<VolunteerAssignmentSummary, "id">),
               }))
               .sort(
                 (left, right) =>
-                  toMillis(right.invitedAt) - toMillis(left.invitedAt)
+                  Math.max(toMillis(right.updatedAt), toMillis(right.createdAt)) -
+                  Math.max(toMillis(left.updatedAt), toMillis(left.createdAt))
               )
           );
         },
-        () => setInvitations([])
+        () => setAssignments([])
       );
     } else {
-      setInvitations([]);
+      setAssignments([]);
     }
 
     return () => {
       unsubscribeCases();
       unsubscribeAssistance();
       unsubscribeNotifications();
-      unsubscribeInvitations();
+      unsubscribeAssignments();
     };
-  }, [user, profile?.role]);
+  }, [user, volunteerMode]);
 
   useEffect(() => {
     let disposed = false;
@@ -380,7 +393,7 @@ export default function WebHome() {
 
   const latestCase = cases[0];
   const latestAssistance = assistanceRequests[0];
-  const latestInvitation = invitations[0];
+  const latestAssignment = assignments[0];
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,
@@ -396,11 +409,26 @@ export default function WebHome() {
     : "No requests";
 
   const volunteerStatus =
-    profile?.role === "volunteer"
-      ? latestInvitation
-        ? formatStatus(latestInvitation.status)
+    hasVolunteerAccess(profile)
+      ? latestAssignment
+        ? formatStatus(latestAssignment.status)
         : "No assignments"
       : "Not enrolled";
+
+  const handleModeSwitch = async () => {
+    if (!user || !canSwitchMode) return;
+
+    const nextMode = volunteerMode ? "resident" : "volunteer";
+    try {
+      await setActiveUserMode(nextMode);
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to switch mode",
+        error?.message || "Please try again."
+      );
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -427,6 +455,29 @@ export default function WebHome() {
               </View>
 
               <View style={styles.topActions}>
+                {compact && canSwitchMode ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
+                    style={({ pressed }) => [
+                      styles.modeSwitchButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleModeSwitch}
+                  >
+                    <Ionicons
+                      name="swap-horizontal"
+                      size={21}
+                      color="#122B55"
+                    />
+                    {!narrow ? (
+                      <Text style={styles.modeSwitchText}>
+                        {volunteerMode ? "Resident" : "Volunteer"}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                ) : null}
+
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Open notifications"
@@ -484,7 +535,11 @@ export default function WebHome() {
 
             <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
               <View style={styles.heroLeft}>
-                <Text style={styles.eyebrow}>RESIDENT OPERATIONS CENTER</Text>
+                <Text style={styles.eyebrow}>
+                  {volunteerMode
+                    ? "VOLUNTEER OPERATIONS CENTER"
+                    : "RESIDENT OPERATIONS CENTER"}
+                </Text>
                 <Text style={[styles.greeting, narrow && styles.greetingNarrow]}>
                   Good day, {firstName}!
                 </Text>
@@ -566,7 +621,11 @@ export default function WebHome() {
               <PanelTitle
                 icon="document-text"
                 title="Your Current Activity"
-                subtitle="A quick summary of your recent reports, requests, and volunteer involvement."
+                subtitle={
+                  volunteerMode
+                    ? "A quick summary of your response assignments and volunteer activity."
+                    : "A quick summary of your recent reports, requests, and volunteer access."
+                }
               />
 
               {loading ? (
@@ -576,52 +635,94 @@ export default function WebHome() {
                 </View>
               ) : (
                 <>
-                  <ActivityRow
-                    icon="document-text-outline"
-                    iconBackground="#E8F3FF"
-                    iconColor="#177CF2"
-                    title="Latest Report Status"
-                    subtitle={
-                      latestCase
-                        ? latestCase.title ||
-                          latestCase.category ||
-                          "Emergency report"
-                        : "No reports yet."
-                    }
-                    status={reportStatus}
-                    onPress={() => router.push("/my-cases")}
-                  />
-                  <ActivityRow
-                    icon="people-outline"
-                    iconBackground="#E6F8F4"
-                    iconColor="#079B8B"
-                    title="Assistance Request Status"
-                    subtitle={
-                      latestAssistance
-                        ? latestAssistance.assistanceType ||
-                          latestAssistance.location ||
-                          "Assistance request"
-                        : "No requests yet."
-                    }
-                    status={assistanceStatus}
-                    onPress={() => router.push("/resident")}
-                  />
-                  <ActivityRow
-                    icon="shield-checkmark-outline"
-                    iconBackground="#EEF1FF"
-                    iconColor="#316FEA"
-                    title="Volunteer Assignment Status"
-                    subtitle={
-                      profile?.role === "volunteer"
-                        ? latestInvitation
-                          ? "Open your volunteer tasks for details."
-                          : "No active assignments."
-                        : "Apply as a volunteer to receive assignments."
-                    }
-                    status={volunteerStatus}
-                    onPress={() => router.push("/volunteer-application")}
-                    last
-                  />
+                  {volunteerMode ? (
+                    <>
+                      <ActivityRow
+                        icon="shield-checkmark-outline"
+                        iconBackground="#EEF1FF"
+                        iconColor="#316FEA"
+                        title="Volunteer Assignment Status"
+                        subtitle={
+                          latestAssignment
+                            ? latestAssignment.caseTitle ||
+                              "Open your volunteer tasks for details."
+                            : "No active assignments."
+                        }
+                        status={volunteerStatus}
+                        onPress={() => router.push("/volunteer")}
+                      />
+                      <ActivityRow
+                        icon="ribbon-outline"
+                        iconBackground="#E6F8F4"
+                        iconColor="#079B8B"
+                        title="Volunteer Progress"
+                        subtitle="Review your verified contributions and response history."
+                        status="View progress"
+                        onPress={() => router.push("/volunteer-impact")}
+                      />
+                      <ActivityRow
+                        icon="document-outline"
+                        iconBackground="#E8F3FF"
+                        iconColor="#177CF2"
+                        title="Certificates"
+                        subtitle="View your issued volunteer certificates."
+                        status="View certificates"
+                        onPress={() => router.push("/certificate")}
+                        last
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <ActivityRow
+                        icon="document-text-outline"
+                        iconBackground="#E8F3FF"
+                        iconColor="#177CF2"
+                        title="Latest Report Status"
+                        subtitle={
+                          latestCase
+                            ? latestCase.title ||
+                              latestCase.category ||
+                              "Emergency report"
+                            : "No reports yet."
+                        }
+                        status={reportStatus}
+                        onPress={() => router.push("/my-cases")}
+                      />
+                      <ActivityRow
+                        icon="people-outline"
+                        iconBackground="#E6F8F4"
+                        iconColor="#079B8B"
+                        title="Assistance Request Status"
+                        subtitle={
+                          latestAssistance
+                            ? latestAssistance.assistanceType ||
+                              latestAssistance.location ||
+                              "Assistance request"
+                            : "No requests yet."
+                        }
+                        status={assistanceStatus}
+                        onPress={() => router.push("/resident")}
+                      />
+                      <ActivityRow
+                        icon="shield-checkmark-outline"
+                        iconBackground="#EEF1FF"
+                        iconColor="#316FEA"
+                        title="Volunteer Access"
+                        subtitle={
+                          hasVolunteerAccess(profile)
+                            ? "Volunteer access approved. Switch modes when you want to respond."
+                            : "Apply as a volunteer to receive response assignments."
+                        }
+                        status={
+                          hasVolunteerAccess(profile)
+                            ? "Approved"
+                            : "Not enrolled"
+                        }
+                        onPress={() => router.push("/volunteer-application")}
+                        last
+                      />
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -918,6 +1019,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  modeSwitchButton: {
+    minHeight: 48,
+    minWidth: 48,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(224,232,240,0.95)",
+  },
+  modeSwitchText: {
+    color: "#122B55",
+    fontSize: 12,
+    fontWeight: "800",
   },
   notificationButton: {
     width: 48,

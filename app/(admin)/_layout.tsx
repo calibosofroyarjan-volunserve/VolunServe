@@ -14,7 +14,6 @@ import {
 } from "react-native";
 
 import {
-  isAdminProfile,
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 
@@ -59,12 +58,33 @@ export default function AdminLayout() {
     );
   }
 
-  if (!isAdminProfile(profile)) {
+  const role =
+    typeof profile?.role === "string"
+      ? profile.role.toLowerCase()
+      : "";
+
+  /*
+   * ADMIN ROUTES:
+   * Only role === "admin" is allowed.
+   *
+   * Super Admin has a separate route group and
+   * separate system-level dashboard.
+   */
+  if (role === "superadmin") {
+    return (
+      <Redirect href="/(superadmin)" />
+    );
+  }
+
+  if (role !== "admin") {
     return (
       <Redirect href="/(tabs)" />
     );
   }
 
+  /*
+   * Operational Admin tools are web-only.
+   */
   if (Platform.OS !== "web") {
     return (
       <View style={styles.blockedContainer}>
@@ -84,7 +104,7 @@ export default function AdminLayout() {
           </Text>
 
           <Text style={styles.blockedDescription}>
-            Admin and Super Admin management
+            Operational Admin management
             is available through the
             VolunServe web portal.
           </Text>

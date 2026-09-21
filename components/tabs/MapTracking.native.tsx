@@ -545,13 +545,30 @@ export default function MapTracking() {
 
       if (snap.exists()) {
         const raw = snap.data() as any;
-        const role = raw.role ?? "resident";
+        const role = String(raw.role || "resident").toLowerCase();
 
-        if (role === "resident" || role === "volunteer" || role === "admin") {
-          return role;
+        if (role === "admin" || role === "superadmin") {
+          return "admin";
         }
 
-        if (role === "superadmin") return "admin";
+        const volunteerAccess =
+          raw.volunteerAccess === true ||
+          (
+            typeof raw.volunteerAccess !== "boolean" &&
+            role === "volunteer"
+          );
+
+        const volunteerApproved =
+          !raw.volunteerStatus ||
+          raw.volunteerStatus === "approved";
+
+        if (
+          raw.activeMode === "volunteer" &&
+          volunteerAccess &&
+          volunteerApproved
+        ) {
+          return "volunteer";
+        }
 
         return "resident";
       }

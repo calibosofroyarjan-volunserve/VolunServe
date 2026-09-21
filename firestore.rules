@@ -41,14 +41,47 @@ service cloud.firestore {
         && profile().role == 'superadmin';
     }
 
-    function isVolunteer() {
+    function hasResidentAccess() {
       return approved()
-        && profile().role == 'volunteer';
+        && (
+          (
+            'residentAccess' in profile()
+            && profile().residentAccess == true
+          )
+          || (
+            !('residentAccess' in profile())
+            && profile().role in [
+              'resident',
+              'volunteer'
+            ]
+          )
+        );
+    }
+
+    function hasVolunteerAccess() {
+      return approved()
+        && (
+          (
+            'volunteerAccess' in profile()
+            && profile().volunteerAccess == true
+            && (
+              !('volunteerStatus' in profile())
+              || profile().volunteerStatus == 'approved'
+            )
+          )
+          || (
+            !('volunteerAccess' in profile())
+            && profile().role == 'volunteer'
+          )
+        );
+    }
+
+    function isVolunteer() {
+      return hasVolunteerAccess();
     }
 
     function isResident() {
-      return approved()
-        && profile().role == 'resident';
+      return hasResidentAccess();
     }
 
     // =========================================================
@@ -157,6 +190,36 @@ service cloud.firestore {
             'San Jose Del Monte',
             'SAN JOSE DEL MONTE'
           ]
+        );
+
+      // ---------------------------------------------------------
+      // OWN MODE SWITCH
+      // ---------------------------------------------------------
+      // activeMode changes only which community interface is shown.
+      // It never grants Resident or Volunteer access. Access must
+      // already exist on the current approved profile.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && approved()
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'activeMode'
+          ])
+        && request.resource.data.activeMode in [
+          'resident',
+          'volunteer'
+        ]
+        && (
+          (
+            request.resource.data.activeMode == 'resident'
+            && isResident()
+          )
+          || (
+            request.resource.data.activeMode == 'volunteer'
+            && isVolunteer()
+          )
         );
 
       // Super Admin has full management access.
@@ -2278,13 +2341,29 @@ service cloud.firestore {
       }
 
       function incomingVolunteerIsApproved() {
-        return incomingVolunteerProfile().role == 'volunteer'
-          && (
+        return (
             (
               'status' in incomingVolunteerProfile()
               && incomingVolunteerProfile().status == 'approved'
             )
-            || !('status' in incomingVolunteerProfile())
+            || (
+              !('status' in incomingVolunteerProfile())
+              && incomingVolunteerProfile().role != 'applicant'
+            )
+          )
+          && (
+            (
+              'volunteerAccess' in incomingVolunteerProfile()
+              && incomingVolunteerProfile().volunteerAccess == true
+              && (
+                !('volunteerStatus' in incomingVolunteerProfile())
+                || incomingVolunteerProfile().volunteerStatus == 'approved'
+              )
+            )
+            || (
+              !('volunteerAccess' in incomingVolunteerProfile())
+              && incomingVolunteerProfile().role == 'volunteer'
+            )
           );
       }
 

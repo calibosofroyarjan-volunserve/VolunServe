@@ -1,28 +1,27 @@
 import React from "react";
 
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    router,
-    type Href,
+  router,
+  type Href,
 } from "expo-router";
 
 import {
-    useUserSession,
+  useUserSession,
 } from "../../lib/useUserSession";
 
 type ControlCardProps = {
   title: string;
   description: string;
   icon: string;
-  onPress?: () => void;
-  pending?: boolean;
+  onPress: () => void;
 };
 
 export default function SuperAdminDashboard() {
@@ -44,7 +43,6 @@ export default function SuperAdminDashboard() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerTextArea}>
           <Text style={styles.eyebrow}>
@@ -56,8 +54,8 @@ export default function SuperAdminDashboard() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Full-system oversight, administration, security,
-            records, and configuration.
+            System-level administration, security, records,
+            configuration, and oversight.
           </Text>
         </View>
 
@@ -68,7 +66,6 @@ export default function SuperAdminDashboard() {
         </View>
       </View>
 
-      {/* WELCOME */}
       <View style={styles.welcomeCard}>
         <View style={styles.welcomeIcon}>
           <Text style={styles.welcomeIconText}>
@@ -82,64 +79,67 @@ export default function SuperAdminDashboard() {
           </Text>
 
           <Text style={styles.welcomeText}>
-            You have system-level access to VolunServe.
-            Admins handle daily operational work, while the
-            Super Admin manages global oversight, system
-            configuration, records, security, and Admin access.
+            You have system-level authority over VolunServe.
+            Operational Admin accounts handle day-to-day user
+            management and community operations, while the Super
+            Admin controls Admin access, system security,
+            configuration, maintenance, and audit oversight.
           </Text>
         </View>
       </View>
 
-      {/* ROLE SEPARATION */}
       <View style={styles.infoCard}>
         <Text style={styles.infoTitle}>
-          Admin and Super Admin Roles
+          Separate Admin and Super Admin Access
         </Text>
 
         <Text style={styles.infoText}>
-          Admins handle operational activities such as
-          validating emergency reports, confirming assistance
-          requests, approving or rejecting applications,
-          assigning volunteers, coordinating responses,
-          handling disputes, and managing daily operations.
+          Admins use the operational Admin portal to manage users,
+          emergency reports, volunteer assignments, disputes,
+          events, certificates, donations, announcements, analytics,
+          and other day-to-day operations.
         </Text>
 
         <Text style={styles.infoText}>
-          Super Admin has control over the entire system,
-          including Admin accounts, all records, global
-          announcements, system settings, permissions,
-          audit logs, and overall system monitoring.
+          Super Admin uses this separate system-control portal to
+          protect and maintain the system, manage Admin access,
+          review system records and audit logs, and control
+          system-level settings. Operational Admin decisions and
+          routes remain inside the separate Admin portal.
         </Text>
       </View>
 
-      {/* SYSTEM MANAGEMENT */}
       <Text style={styles.sectionEyebrow}>
         SYSTEM MANAGEMENT
       </Text>
 
       <Text style={styles.sectionTitle}>
-        Administrative Control
+        System Governance & Control
       </Text>
 
       <View style={styles.grid}>
         <ControlCard
           icon="👤"
           title="Admin Accounts"
-          description="Create, activate, deactivate, and manage Admin accounts and their system access."
-          pending
+          description="Grant, suspend, reactivate, and remove operational Admin access."
+          onPress={() => {
+            openRoute("/(superadmin)/admin-accounts");
+          }}
         />
 
         <ControlCard
           icon="🗂"
           title="All Records"
-          description="Review records across residents, volunteers, emergency cases, donations, certificates, and other system modules."
-          pending
+          description="Review system-wide records across VolunServe from a dedicated Super Admin view."
+          onPress={() => {
+            openRoute("/(superadmin)/all-records");
+          }}
         />
 
         <ControlCard
           icon="⚙"
           title="System Settings"
-          description="Manage global system configuration, security settings, permissions, and system behavior."
+          description="Manage global system configuration and Super Admin-controlled settings."
           onPress={() => {
             openRoute("/(superadmin)/system-settings");
           }}
@@ -148,137 +148,17 @@ export default function SuperAdminDashboard() {
         <ControlCard
           icon="📋"
           title="Audit Logs"
-          description="Review administrative actions and important activity recorded throughout VolunServe."
+          description="Review immutable Admin and system activity logs for accountability and oversight."
           onPress={() => {
             openRoute("/(superadmin)/admin-logs");
           }}
         />
       </View>
 
-      {/* GLOBAL COMMUNICATION */}
-      <Text style={styles.sectionEyebrow}>
-        GLOBAL COMMUNICATION
-      </Text>
-
-      <Text style={styles.sectionTitle}>
-        System-wide Information
-      </Text>
-
-      <View style={styles.grid}>
-        <ControlCard
-          icon="📢"
-          title="Global Announcements"
-          description="Publish announcements, emergency alerts, system updates, volunteer calls, and other notices visible across VolunServe."
-          pending
-        />
-
-        <ControlCard
-          icon="🔔"
-          title="System Notifications"
-          description="Monitor important system notifications and major activities across the platform."
-          pending
-        />
-      </View>
-
-      {/* OVERSIGHT */}
-      <Text style={styles.sectionEyebrow}>
-        OPERATIONAL OVERSIGHT
-      </Text>
-
-      <Text style={styles.sectionTitle}>
-        Monitor Admin Operations
-      </Text>
-
-      <View style={styles.grid}>
-        <ControlCard
-          icon="🚨"
-          title="Emergency Operations"
-          description="Monitor emergency cases, volunteer deployment, assignments, and response activities handled by Admins."
-          onPress={() => {
-            openRoute("/(admin)/command-center");
-          }}
-        />
-
-        <ControlCard
-          icon="📊"
-          title="System Analytics"
-          description="Review operational statistics, volunteer activity, emergency response data, and system trends."
-          onPress={() => {
-            openRoute("/(admin)/admin-analytics");
-          }}
-        />
-
-        <ControlCard
-          icon="⚠"
-          title="Response Disputes"
-          description="Monitor disputes handled by Admins and review response issues that require higher-level oversight."
-          onPress={() => {
-            openRoute("/(admin)/admin-disputes");
-          }}
-        />
-
-        <ControlCard
-          icon="🎓"
-          title="Volunteer Certificates"
-          description="Oversee verified volunteer service records and digital certificates issued through VolunServe."
-          onPress={() => {
-            openRoute("/(admin)/admin-certificates");
-          }}
-        />
-      </View>
-
-      {/* ADMIN OPERATIONS */}
-      <Text style={styles.sectionEyebrow}>
-        ADMIN ACTIVITY
-      </Text>
-
-      <Text style={styles.sectionTitle}>
-        Operational Records
-      </Text>
-
-      <View style={styles.grid}>
-        <ControlCard
-          icon="✅"
-          title="Account Approvals"
-          description="Monitor resident and volunteer account approvals handled by operational Admins."
-          onPress={() => {
-            openRoute("/(admin)/account-approvals");
-          }}
-        />
-
-        <ControlCard
-          icon="📍"
-          title="Emergency Cases"
-          description="Review emergency cases being validated, assigned, and coordinated by Admin personnel."
-          onPress={() => {
-            openRoute("/(admin)/admin-cases");
-          }}
-        />
-
-        <ControlCard
-          icon="📅"
-          title="Volunteer Events"
-          description="Monitor volunteer events, participation activities, and event operations."
-          onPress={() => {
-            openRoute("/(admin)/admin-events");
-          }}
-        />
-
-        <ControlCard
-          icon="🧭"
-          title="Command Center"
-          description="Access the operational response command center for full-system monitoring."
-          onPress={() => {
-            openRoute("/(admin)/command-center");
-          }}
-        />
-      </View>
-
-      {/* AUTHORITY NOTE */}
       <View style={styles.authorityCard}>
         <View style={styles.authorityBadge}>
           <Text style={styles.authorityBadgeText}>
-            FULL SYSTEM AUTHORITY
+            SYSTEM-LEVEL AUTHORITY
           </Text>
         </View>
 
@@ -287,12 +167,11 @@ export default function SuperAdminDashboard() {
         </Text>
 
         <Text style={styles.authorityText}>
-          Super Admin may oversee all operational modules,
-          records, and Admin activity. Ordinary Admin accounts
-          must not have access to Super Admin-only functions
-          such as Admin account management, global role and
-          permission control, system configuration, and
-          system-wide security settings.
+          Super Admin protects and maintains the system by managing
+          Admin access, reviewing system-wide records and audit logs,
+          controlling system-level settings, and overseeing system
+          security. Daily user management and community operations
+          remain under the separate Admin portal.
         </Text>
       </View>
     </ScrollView>
@@ -304,16 +183,11 @@ function ControlCard({
   description,
   icon,
   onPress,
-  pending = false,
 }: ControlCardProps) {
   return (
     <TouchableOpacity
-      style={[
-        styles.controlCard,
-        pending && styles.pendingCard,
-      ]}
-      activeOpacity={pending ? 1 : 0.82}
-      disabled={pending}
+      style={styles.controlCard}
+      activeOpacity={0.82}
       onPress={onPress}
     >
       <View style={styles.cardTopRow}>
@@ -323,19 +197,11 @@ function ControlCard({
           </Text>
         </View>
 
-        {pending ? (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>
-              NEXT BUILD
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>
-              AVAILABLE
-            </Text>
-          </View>
-        )}
+        <View style={styles.activeBadge}>
+          <Text style={styles.activeBadgeText}>
+            AVAILABLE
+          </Text>
+        </View>
       </View>
 
       <Text style={styles.cardTitle}>
@@ -346,15 +212,9 @@ function ControlCard({
         {description}
       </Text>
 
-      {!pending ? (
-        <Text style={styles.openText}>
-          Open module →
-        </Text>
-      ) : (
-        <Text style={styles.pendingText}>
-          Super Admin module will be added next.
-        </Text>
-      )}
+      <Text style={styles.openText}>
+        Open module →
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -525,10 +385,6 @@ const styles = StyleSheet.create({
     padding: 18,
   },
 
-  pendingCard: {
-    backgroundColor: "#FAFAFC",
-  },
-
   cardTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -562,19 +418,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  pendingBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-
-  pendingBadgeText: {
-    color: "#64748B",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
   cardTitle: {
     color: "#12263A",
     fontSize: 17,
@@ -592,13 +435,6 @@ const styles = StyleSheet.create({
     color: "#6D28D9",
     fontSize: 12,
     fontWeight: "900",
-    marginTop: 16,
-  },
-
-  pendingText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "700",
     marginTop: 16,
   },
 

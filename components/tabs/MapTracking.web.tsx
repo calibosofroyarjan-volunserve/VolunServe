@@ -2269,18 +2269,10 @@ export default function WebMapTracking() {
   ]);
 
   const routeDestination = useMemo<RouteCoordinate | null>(() => {
-    // The reported emergency GPS pin is the primary mission destination.
-    // A resident live pin is only a fallback when the case itself has no
-    // saved coordinates. This keeps the route pointed at the actual place
-    // the resident reported for assistance.
+    // If the resident explicitly shares a fresh moving location for this
+    // mission, use it as the live destination. Otherwise, fall back to the
+    // fixed emergency GPS pin saved with the report.
     if (missionMode) {
-      if (missionCase && hasCoordinates(missionCase)) {
-        return {
-          latitude: Number(missionCase.latitude),
-          longitude: Number(missionCase.longitude),
-        };
-      }
-
       const liveResident =
         residentLivePins.find(
           (point) => point.caseId === focusedCaseId,
@@ -2292,16 +2284,16 @@ export default function WebMapTracking() {
           longitude: Number(liveResident.longitude),
         };
       }
+
+      if (missionCase && hasCoordinates(missionCase)) {
+        return {
+          latitude: Number(missionCase.latitude),
+          longitude: Number(missionCase.longitude),
+        };
+      }
     }
 
     if (isResidentMode && residentCoordinationCase) {
-      if (hasCoordinates(residentCoordinationCase)) {
-        return {
-          latitude: Number(residentCoordinationCase.latitude),
-          longitude: Number(residentCoordinationCase.longitude),
-        };
-      }
-
       if (
         residentShareCaseId === residentCoordinationCase.id &&
         userLocation &&
@@ -2310,6 +2302,13 @@ export default function WebMapTracking() {
         return {
           latitude: userLocation.latitude,
           longitude: userLocation.longitude,
+        };
+      }
+
+      if (hasCoordinates(residentCoordinationCase)) {
+        return {
+          latitude: Number(residentCoordinationCase.latitude),
+          longitude: Number(residentCoordinationCase.longitude),
         };
       }
     }
@@ -2331,6 +2330,19 @@ export default function WebMapTracking() {
     userLocation?.longitude,
     userLocation?.timestamp,
   ]);
+
+  const usingResidentLiveDestination =
+    missionMode &&
+    residentLivePins.some(
+      (point) => point.caseId === focusedCaseId,
+    );
+
+  const residentUsingOwnLiveDestination =
+    isResidentMode &&
+    !!residentCoordinationCase &&
+    residentShareCaseId === residentCoordinationCase.id &&
+    !!userLocation &&
+    Date.now() - userLocation.timestamp < 60000;
 
   const routeStatus = normalize(
     missionMode
@@ -3012,9 +3024,11 @@ export default function WebMapTracking() {
               <div className="clean-destination-line">
                 <span>DESTINATION</span>
                 <strong>
-                  {missionCase.location ||
-                    missionCase.reporterAddress ||
-                    "Resident destination"}
+                  {usingResidentLiveDestination
+                    ? "Resident live location"
+                    : missionCase.location ||
+                      missionCase.reporterAddress ||
+                      "Resident destination"}
                 </strong>
               </div>
             </div>
@@ -3058,9 +3072,11 @@ export default function WebMapTracking() {
               <span className="clean-kicker">YOUR EMERGENCY RESPONSE</span>
               <h2>{residentCoordinationCase.title || "Emergency request"}</h2>
               <p>
-                {residentCoordinationCase.location ||
-                  residentCoordinationCase.reporterAddress ||
-                  "Saved emergency location"}
+                {residentUsingOwnLiveDestination
+                  ? "Your live shared location is the current response destination"
+                  : residentCoordinationCase.location ||
+                    residentCoordinationCase.reporterAddress ||
+                    "Saved emergency location"}
               </p>
             </div>
 
@@ -3256,12 +3272,16 @@ export default function WebMapTracking() {
               <div className="clean-destination-card">
                 <span>GOING TO</span>
                 <strong>
-                  {selectedCase.location ||
-                    selectedCase.reporterAddress ||
-                    "Resident emergency location"}
+                  {usingResidentLiveDestination
+                    ? "Resident live location"
+                    : selectedCase.location ||
+                      selectedCase.reporterAddress ||
+                      "Resident emergency location"}
                 </strong>
                 <small>
-                  Your current GPS is the start point. The blue road line leads to the reported emergency location.
+                  {usingResidentLiveDestination
+                    ? "Your current GPS is the start point. The blue road line follows the resident's fresh shared location while sharing remains active."
+                    : "Your current GPS is the start point. The blue road line leads to the reported emergency location."}
                 </small>
               </div>
 
@@ -3447,7 +3467,7 @@ export default function WebMapTracking() {
                     <div>
                       <strong>Share my moving location</strong>
                       <small>
-                        Optional. Use this only if you move away from the original emergency pin.
+                        Optional. If you move away from the original emergency pin, sharing updates the responder's route to your fresh location.
                       </small>
                     </div>
                     {residentShareCaseId === selectedCase.id ? (
@@ -3471,7 +3491,7 @@ export default function WebMapTracking() {
                 )}
 
               <div className="clean-info-block">
-                <strong>Your reported location</strong>
+                <strong>Original reported location</strong>
                 <p>
                   {selectedCase.location ||
                     selectedCase.reporterAddress ||
@@ -5448,4 +5468,4 @@ const css = `
   }
 }
 
-`;
+`

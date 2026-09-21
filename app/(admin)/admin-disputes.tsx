@@ -1,20 +1,21 @@
 import React, { useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    collection,
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    updateDoc,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
@@ -34,6 +35,12 @@ type ResponseDispute = {
 
   contributionType?: string;
   contributionSummary?: string;
+
+  caseTitle?: string;
+  caseLocation?: string;
+  assignmentStatus?: string;
+  residentName?: string;
+  volunteerName?: string;
 
   status: DisputeStatus;
 
@@ -70,8 +77,40 @@ function formatContributionType(value?: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function displayName(data: any, fallback: string) {
+  if (!data) return fallback;
+
+  const composed = [
+    data.firstName,
+    data.middleName,
+    data.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return String(
+    data.fullName ||
+      data.displayName ||
+      data.name ||
+      composed ||
+      fallback
+  ).trim();
+}
+
+function formatAssignmentStatus(value?: string) {
+  if (!value) return "Unknown";
+
+  return String(value)
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function AdminDisputesScreen() {
-  const { loading: sessionLoading, user } = useUserSession();
+  const { loading: sessionLoading, user, profile } = useUserSession();
+
+  const isAuthorizedAdmin =
+    profile?.role === "admin" || profile?.role === "superadmin";
 
   const [disputes, setDisputes] = React.useState<ResponseDispute[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -85,12 +124,33 @@ export default function AdminDisputesScreen() {
   const [errorMessage, setErrorMessage] = useState("");
 
   React.useEffect(() => {
+    if (sessionLoading) {
+      return;
+    }
+
+    if (!user || !isAuthorizedAdmin) {
+      setDisputes([]);
+      setLoading(false);
+      setErrorMessage(
+        user ? "Admin access is required to review response disputes." : "Admin session is unavailable."
+      );
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage("");
+
+    let active = true;
+    let snapshotSequence = 0;
+
     const disputeRef = collection(db, "responseDisputes");
 
     const unsubscribe = onSnapshot(
       disputeRef,
-      (snapshot) => {
-        const rows: ResponseDispute[] = snapshot.docs.map((snap) => {
+      async (snapshot) => {
+        const sequence = ++snapshotSequence;
+
+        const baseRows: ResponseDispute[] = snapshot.docs.map((snap) => {
           const data = snap.data();
 
           return {
@@ -117,41 +177,130 @@ export default function AdminDisputesScreen() {
           };
         });
 
-        rows.sort((a, b) => {
-          const aTime =
-            typeof a.createdAt?.toMillis === "function"
-              ? a.createdAt.toMillis()
-              : 0;
+        try {
+          const rows = await Promise.all(
+            baseRows.map(async (item) => {
+              const [caseSnapshot, assignmentSnapshot, residentSnapshot, volunteerSnapshot] =
+                await Promise.all([
+                  item.caseId
+                    ? getDoc(doc(db, "disasterCases", item.caseId))
+                    : Promise.resolve(null),
+                  item.assignmentId
+                    ? getDoc(doc(db, "responseAssignments", item.assignmentId))
+                    : Promise.resolve(null),
+                  item.residentId
+                    ? getDoc(doc(db, "users", item.residentId))
+                    : Promise.resolve(null),
+                  item.volunteerId
+                    ? getDoc(doc(db, "users", item.volunteerId))
+                    : Promise.resolve(null),
+                ]);
 
-          const bTime =
-            typeof b.createdAt?.toMillis === "function"
-              ? b.createdAt.toMillis()
-              : 0;
+              const caseData = caseSnapshot?.exists()
+                ? caseSnapshot.data()
+                : null;
 
-          return bTime - aTime;
-        });
+              const assignmentData = assignmentSnapshot?.exists()
+                ? assignmentSnapshot.data()
+                : null;
 
-        setDisputes(rows);
+              const residentData = residentSnapshot?.exists()
+                ? residentSnapshot.data()
+                : null;
 
-        setNotes((current) => {
-          const next = { ...current };
+              const volunteerData = volunteerSnapshot?.exists()
+                ? volunteerSnapshot.data()
+                : null;
 
-          rows.forEach((item) => {
-            if (
-              next[item.id] === undefined &&
-              typeof item.adminNote === "string"
-            ) {
-              next[item.id] = item.adminNote;
-            }
+              return {
+                ...item,
+                caseTitle: String(
+                  caseData?.title || assignmentData?.caseTitle || "Emergency case"
+                ),
+                caseLocation: String(caseData?.location || ""),
+                assignmentStatus: String(assignmentData?.status || ""),
+                residentName: String(
+                  caseData?.reporterName ||
+                    displayName(residentData, "Resident")
+                ),
+                volunteerName: String(
+                  assignmentData?.volunteerName ||
+                    displayName(volunteerData, "Volunteer")
+                ),
+              };
+            })
+          );
+
+          rows.sort((a, b) => {
+            const aTime =
+              typeof a.createdAt?.toMillis === "function"
+                ? a.createdAt.toMillis()
+                : 0;
+
+            const bTime =
+              typeof b.createdAt?.toMillis === "function"
+                ? b.createdAt.toMillis()
+                : 0;
+
+            return bTime - aTime;
           });
 
-          return next;
-        });
+          if (!active || sequence !== snapshotSequence) {
+            return;
+          }
 
-        setLoading(false);
+          setDisputes(rows);
+
+          setNotes((current) => {
+            const next = { ...current };
+
+            rows.forEach((item) => {
+              if (
+                next[item.id] === undefined &&
+                typeof item.adminNote === "string"
+              ) {
+                next[item.id] = item.adminNote;
+              }
+            });
+
+            return next;
+          });
+
+          setLoading(false);
+        } catch (error) {
+          console.error("responseDisputes enrichment error:", error);
+
+          if (!active || sequence !== snapshotSequence) {
+            return;
+          }
+
+          baseRows.sort((a, b) => {
+            const aTime =
+              typeof a.createdAt?.toMillis === "function"
+                ? a.createdAt.toMillis()
+                : 0;
+
+            const bTime =
+              typeof b.createdAt?.toMillis === "function"
+                ? b.createdAt.toMillis()
+                : 0;
+
+            return bTime - aTime;
+          });
+
+          setDisputes(baseRows);
+          setErrorMessage(
+            "Disputes loaded, but some linked case or profile details could not be retrieved."
+          );
+          setLoading(false);
+        }
       },
       (error) => {
         console.error("responseDisputes listener error:", error);
+
+        if (!active) {
+          return;
+        }
 
         setErrorMessage(
           "Unable to load response disputes. Please check Firestore access."
@@ -161,8 +310,11 @@ export default function AdminDisputesScreen() {
       }
     );
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [sessionLoading, user?.uid, isAuthorizedAdmin]);
 
   const counts = useMemo(() => {
     return {
@@ -383,9 +535,11 @@ export default function AdminDisputesScreen() {
                   </Text>
 
                   <Text style={styles.cardTitle}>
-                    {formatContributionType(
-                      dispute.contributionType
-                    )}
+                    {dispute.caseTitle || "Emergency case"}
+                  </Text>
+
+                  <Text style={styles.cardSubtitle}>
+                    {formatContributionType(dispute.contributionType)}
                   </Text>
                 </View>
 
@@ -396,23 +550,18 @@ export default function AdminDisputesScreen() {
 
               <View style={styles.infoGrid}>
                 <InfoItem
-                  label="Assignment ID"
-                  value={dispute.assignmentId}
+                  label="Resident"
+                  value={dispute.residentName || "Resident"}
                 />
 
                 <InfoItem
-                  label="Case ID"
-                  value={dispute.caseId}
+                  label="Volunteer"
+                  value={dispute.volunteerName || "Volunteer"}
                 />
 
                 <InfoItem
-                  label="Resident ID"
-                  value={dispute.residentId}
-                />
-
-                <InfoItem
-                  label="Volunteer ID"
-                  value={dispute.volunteerId}
+                  label="Assignment Status"
+                  value={formatAssignmentStatus(dispute.assignmentStatus)}
                 />
 
                 <InfoItem
@@ -420,12 +569,41 @@ export default function AdminDisputesScreen() {
                   value={formatDate(dispute.createdAt)}
                 />
 
+                {dispute.caseLocation ? (
+                  <InfoItem
+                    label="Response Location"
+                    value={dispute.caseLocation}
+                  />
+                ) : null}
+
                 {dispute.resolvedAt ? (
                   <InfoItem
                     label="Reviewed"
                     value={formatDate(dispute.resolvedAt)}
                   />
                 ) : null}
+              </View>
+
+              <View style={styles.auditGrid}>
+                <AuditItem
+                  label="Case ID"
+                  value={dispute.caseId}
+                />
+
+                <AuditItem
+                  label="Assignment ID"
+                  value={dispute.assignmentId}
+                />
+
+                <AuditItem
+                  label="Resident UID"
+                  value={dispute.residentId}
+                />
+
+                <AuditItem
+                  label="Volunteer UID"
+                  value={dispute.volunteerId}
+                />
               </View>
 
               <View style={styles.detailSection}>
@@ -538,8 +716,9 @@ export default function AdminDisputesScreen() {
                   </View>
 
                   <Text style={styles.actionHelp}>
-                    Resolve = Admin handled the complaint. Dismiss =
-                    complaint does not require further action.
+                    Resolve = Admin confirmed or handled the complaint. Dismiss =
+                    Admin found no further dispute action is required. Neither action
+                    automatically creates verified volunteer credit.
                   </Text>
                 </View>
               ) : (
@@ -555,8 +734,7 @@ export default function AdminDisputesScreen() {
 
                   {dispute.resolvedBy ? (
                     <Text style={styles.resolvedByText}>
-                      Reviewed by Admin UID:{" "}
-                      {dispute.resolvedBy}
+                      Reviewed by Admin UID: {dispute.resolvedBy}
                     </Text>
                   ) : null}
                 </View>
@@ -636,6 +814,23 @@ function InfoItem({
         style={styles.infoValue}
         selectable
       >
+        {value || "—"}
+      </Text>
+    </View>
+  );
+}
+
+function AuditItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.auditItem}>
+      <Text style={styles.auditLabel}>{label}</Text>
+      <Text style={styles.auditValue} selectable>
         {value || "—"}
       </Text>
     </View>
@@ -951,6 +1146,14 @@ const styles = StyleSheet.create({
     color: "#123047",
   },
 
+  cardSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -995,6 +1198,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#334155",
+  },
+
+  auditGrid: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  auditItem: {
+    flexGrow: 1,
+    flexBasis: 220,
+    minWidth: 190,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    backgroundColor: "#FBFCFD",
+    borderWidth: 1,
+    borderColor: "#E7EDF1",
+  },
+
+  auditLabel: {
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    color: "#94A3B8",
+  },
+
+  auditValue: {
+    marginTop: 3,
+    fontSize: 10.5,
+    lineHeight: 15,
+    color: "#64748B",
   },
 
   detailSection: {

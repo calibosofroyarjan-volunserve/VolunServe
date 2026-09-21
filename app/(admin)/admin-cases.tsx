@@ -460,30 +460,57 @@ export default function AdminCases() {
                     application.schedule ??
                     userData.availability
                 ),
-                role: String(userData.role || "").toLowerCase(),
+                role: String(userData.role || "").trim().toLowerCase(),
                 volunteerAccess:
                   userData.volunteerAccess === true ||
-                  String(application.status || "").toLowerCase() === "approved",
-                volunteerStatus:
-                  userData.volunteerStatus || application.status || "approved",
-                status: userData.status || "approved",
+                  (typeof userData.volunteerAccess !== "boolean" &&
+                    String(userData.role || "").trim().toLowerCase() ===
+                      "volunteer"),
+                volunteerStatus: String(
+                  userData.volunteerStatus ||
+                    application.status ||
+                    (String(userData.role || "").trim().toLowerCase() ===
+                    "volunteer"
+                      ? "approved"
+                      : "")
+                )
+                  .trim()
+                  .toLowerCase(),
+                status: String(userData.status || "").trim().toLowerCase(),
               } as VolunteerProfile;
             })
           );
 
-          // Final fixed-role model:
-          // only approved accounts whose actual users/{uid}.role is "volunteer"
-          // may appear as field responders. Old resident accounts that still
-          // have an approved volunteerApplications record are intentionally hidden.
+          // A user may have both Resident and approved Volunteer access.
+          // The approved volunteer application provides the volunteer profile,
+          // while users/{uid} confirms that Volunteer access is still granted.
+          // Admin and Super Admin accounts are never responders.
           const assignableVolunteers = list.filter((person) => {
             const role = String(person.role || "").trim().toLowerCase();
             const status = String(person.status || "").trim().toLowerCase();
+            const volunteerStatus = String(person.volunteerStatus || "")
+              .trim()
+              .toLowerCase();
 
             const approvedAccount =
-              status === "approved" ||
-              (!status && role !== "applicant");
+              status === "approved" || (!status && role !== "applicant");
 
-            return role === "volunteer" && approvedAccount;
+            const hasVolunteerAccess =
+              person.volunteerAccess === true ||
+              (person.volunteerAccess === undefined && role === "volunteer");
+
+            const volunteerApproved =
+              !volunteerStatus || volunteerStatus === "approved";
+
+            const blockedSystemRole =
+              role === "admin" || role === "superadmin";
+
+            return (
+              !blockedSystemRole &&
+              approvedAccount &&
+              hasVolunteerAccess &&
+              volunteerApproved
+            );
           });
 
           assignableVolunteers.sort((a, b) =>
@@ -601,9 +628,46 @@ export default function AdminCases() {
 
     return approvedVolunteers
       .filter((volunteer) => {
-        // Never show the resident/reporter of this case as an assignable
-        // responder, including old test data created before fixed roles.
-        if (volunteer.uid === incident.reporterUid) return false;
+        const volunteerRole = String(volunteer.role || "").trim().toLowerCase();
+        const accountStatus = String(volunteer.status || "").trim().toLowerCase();
+        const volunteerStatus = String(volunteer.volunteerStatus || "")
+          .trim()
+          .toLowerCase();
+
+        const approvedAccount =
+          accountStatus === "approved" ||
+          (!accountStatus && volunteerRole !== "applicant");
+
+        const hasVolunteerAccess =
+          volunteer.volunteerAccess === true ||
+          (volunteer.volunteerAccess === undefined &&
+            volunteerRole === "volunteer");
+
+        const volunteerApproved =
+          !volunteerStatus || volunteerStatus === "approved";
+
+        const blockedSystemRole =
+          volunteerRole === "admin" || volunteerRole === "superadmin";
+
+        // Defense in depth: only accounts with approved Volunteer access
+        // may appear, whether their primary dashboard is Resident or Volunteer.
+        if (
+          blockedSystemRole ||
+          !approvedAccount ||
+          !hasVolunteerAccess ||
+          !volunteerApproved
+        ) {
+          return false;
+        }
+
+        // The reporter may still have Volunteer access for other cases,
+        // but can never respond to the emergency request they created.
+        if (
+          String(volunteer.uid || "").trim() ===
+          String(incident.reporterUid || "").trim()
+        ) {
+          return false;
+        }
 
         if (alreadyAssigned.has(volunteer.uid)) return false;
 
@@ -965,6 +1029,11 @@ export default function AdminCases() {
         "notifications",
         `response_${incident.id}_${volunteer.uid}`
       );
+      const residentNotificationRef = doc(
+        db,
+        "notifications",
+        `resident_assignment_${incident.id}_${volunteer.uid}`
+      );
       const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
       await runTransaction(db, async (transaction) => {
@@ -999,17 +1068,39 @@ export default function AdminCases() {
           .trim()
           .toLowerCase();
 
-        const volunteerStatus = String(currentVolunteer.status || "")
+        const accountStatus = String(currentVolunteer.status || "")
           .trim()
           .toLowerCase();
 
-        const volunteerApproved =
-          volunteerStatus === "approved" ||
-          (!volunteerStatus && volunteerRole !== "applicant");
+        const volunteerStatus = String(
+          currentVolunteer.volunteerStatus || ""
+        )
+          .trim()
+          .toLowerCase();
 
-        if (volunteerRole !== "volunteer" || !volunteerApproved) {
+        const approvedAccount =
+          accountStatus === "approved" ||
+          (!accountStatus && volunteerRole !== "applicant");
+
+        const hasVolunteerAccess =
+          currentVolunteer.volunteerAccess === true ||
+          (typeof currentVolunteer.volunteerAccess !== "boolean" &&
+            volunteerRole === "volunteer");
+
+        const volunteerApproved =
+          !volunteerStatus || volunteerStatus === "approved";
+
+        const blockedSystemRole =
+          volunteerRole === "admin" || volunteerRole === "superadmin";
+
+        if (
+          blockedSystemRole ||
+          !approvedAccount ||
+          !hasVolunteerAccess ||
+          !volunteerApproved
+        ) {
           throw new Error(
-            "Only an approved account with the Volunteer role can be assigned as a responder."
+            "Only an approved account with Volunteer access can be assigned as a responder."
           );
         }
 
@@ -1109,6 +1200,21 @@ export default function AdminCases() {
           createdAt: serverTimestamp(),
         });
 
+        if (currentCase.reporterUid) {
+          transaction.set(residentNotificationRef, {
+            userId: currentCase.reporterUid,
+            audience: "resident",
+            type: "responder_assigned",
+            caseId: incident.id,
+            volunteerId: volunteer.uid,
+            volunteerName: volunteer.fullName,
+            title: "Volunteer Assigned by LGU",
+            message: `The LGU has assigned ${volunteer.fullName} as the volunteer responder for your emergency request. You can monitor the responder's status and live location once they begin responding.`,
+            read: false,
+            createdAt: serverTimestamp(),
+          });
+        }
+
         transaction.set(activityLogRef, {
           action: "Volunteer Assigned to Disaster Case",
           caseId: incident.id,
@@ -1121,7 +1227,7 @@ export default function AdminCases() {
 
       Alert.alert(
         "Assignment Sent",
-        `${volunteer.fullName} will receive this case under Volunteer Tasks.`
+        `${volunteer.fullName} was assigned successfully. The volunteer and resident were notified.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);

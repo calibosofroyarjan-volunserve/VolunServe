@@ -1,41 +1,44 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import {
-    collection,
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    writeBatch,
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import React, {
-    useMemo,
-    useState,
+  useMemo,
+  useState,
 } from "react";
 
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    createAdminLog,
+  createAdminLog,
 } from "../../lib/adminLogger";
 
 import {
-    auth,
-    db,
+  db,
 } from "../../lib/firebase";
 
 import {
-    UserProfile,
+  useUserSession,
+} from "../../lib/useUserSession";
+
+import {
+  UserProfile,
 } from "../../lib/firebaseAuth";
 
 type UserAccount =
@@ -78,6 +81,18 @@ const nameFor = (
 };
 
 export default function AdminAccounts() {
+  const {
+    user: sessionUser,
+    profile: sessionProfile,
+    loading: sessionLoading,
+  } = useUserSession();
+
+  const isSuperAdmin =
+    !!sessionUser &&
+    !!sessionProfile &&
+    sessionProfile.role === "superadmin" &&
+    sessionProfile.status === "approved";
+
   const [
     users,
     setUsers,
@@ -114,6 +129,18 @@ export default function AdminAccounts() {
   ] = useState("");
 
   React.useEffect(() => {
+    if (sessionLoading) {
+      return;
+    }
+
+    if (!isSuperAdmin) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
     const unsubscribe =
       onSnapshot(
         collection(
@@ -162,7 +189,10 @@ export default function AdminAccounts() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [
+    sessionLoading,
+    isSuperAdmin,
+  ]);
 
   const adminAccounts =
     useMemo(() => {
@@ -292,10 +322,7 @@ export default function AdminAccounts() {
 
   const verifySuperAdmin =
     () => {
-      const current =
-        auth.currentUser;
-
-      if (!current) {
+      if (!sessionUser) {
         Alert.alert(
           "Session Error",
           "Please sign in again."
@@ -304,29 +331,21 @@ export default function AdminAccounts() {
         return null;
       }
 
-      const profile =
-        users.find(
-          (item) =>
-            item.id ===
-            current.uid
-        );
-
       if (
-        !profile ||
-        profile.role !==
-          "superadmin"
+        !isSuperAdmin ||
+        !sessionProfile
       ) {
         Alert.alert(
           "Access Denied",
-          "Only the Super Admin can manage Admin accounts."
+          "Only the active Super Admin can manage Admin accounts."
         );
 
         return null;
       }
 
       return {
-        current,
-        profile,
+        current: sessionUser,
+        profile: sessionProfile,
       };
     };
 
@@ -806,7 +825,10 @@ export default function AdminAccounts() {
       );
     };
 
-  if (loading) {
+  if (
+    sessionLoading ||
+    (isSuperAdmin && loading)
+  ) {
     return (
       <View
         style={styles.center}
@@ -820,6 +842,33 @@ export default function AdminAccounts() {
           style={styles.loadingText}
         >
           Loading Admin accounts...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <View
+        style={styles.center}
+      >
+        <Ionicons
+          name="shield-outline"
+          size={42}
+          color="#0F766E"
+        />
+
+        <Text
+          style={styles.accessDeniedTitle}
+        >
+          Super Admin access required
+        </Text>
+
+        <Text
+          style={styles.accessDeniedText}
+        >
+          This page is reserved for the dedicated Super Admin account.
+          Operational Admin accounts cannot view or manage Admin access.
         </Text>
       </View>
     );
@@ -878,7 +927,7 @@ export default function AdminAccounts() {
                 styles.addButtonText
               }
             >
-              Add Admin
+              Grant Admin Access
             </Text>
           </TouchableOpacity>
         </View>
@@ -1425,7 +1474,7 @@ export default function AdminAccounts() {
                     styles.modalTitle
                   }
                 >
-                  Add Admin
+                  Grant Admin Access
                 </Text>
 
                 <Text
@@ -1433,9 +1482,10 @@ export default function AdminAccounts() {
                     styles.modalSubtitle
                   }
                 >
-                  Select an existing
+                  Select a separate
                   approved VolunServe
-                  account to promote.
+                  account to grant
+                  operational Admin access.
                 </Text>
               </View>
 
@@ -1631,14 +1681,16 @@ export default function AdminAccounts() {
                   styles.infoText
                 }
               >
-                For the Spark/free
-                architecture, Admin
-                access is given to an
-                existing verified
-                Firebase account instead
-                of creating a second
-                Auth account from the
-                browser.
+                Use a separate verified
+                Firebase Auth account for
+                each operational Admin.
+                The Super Admin account
+                remains separate and is
+                never promoted from this
+                list. For Spark/free,
+                create or register the
+                Admin account first, then
+                grant Admin access here.
               </Text>
             </View>
           </View>
@@ -1670,6 +1722,24 @@ const styles =
       marginTop: 12,
       color: "#64748B",
       fontWeight: "600",
+    },
+
+    accessDeniedTitle: {
+      marginTop: 14,
+      color: "#0F172A",
+      fontSize: 20,
+      fontWeight: "900",
+      textAlign: "center",
+    },
+
+    accessDeniedText: {
+      marginTop: 8,
+      maxWidth: 520,
+      color: "#64748B",
+      fontSize: 13,
+      lineHeight: 20,
+      textAlign: "center",
+      paddingHorizontal: 24,
     },
 
     header: {

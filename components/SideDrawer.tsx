@@ -37,6 +37,8 @@ type SideDrawerProps = {
   email?: string;
   role?: string;
   activeMode?: string;
+  residentAccess?: boolean;
+  volunteerAccess?: boolean;
 };
 
 type DrawerItemProps = {
@@ -94,6 +96,8 @@ export default function SideDrawer({
   email = "",
   role = "resident",
   activeMode,
+  residentAccess,
+  volunteerAccess,
 }: SideDrawerProps) {
   const router =
     useRouter();
@@ -105,14 +109,35 @@ export default function SideDrawer({
     currentRole === "guest";
 
   const hasVolunteerAccess =
-    currentRole === "volunteer";
+    volunteerAccess === true ||
+    (
+      volunteerAccess === undefined &&
+      currentRole === "volunteer"
+    );
+
+  const hasResidentAccess =
+    residentAccess === true ||
+    (
+      residentAccess === undefined &&
+      (
+        currentRole === "resident" ||
+        currentRole === "volunteer"
+      )
+    );
 
   const currentMode =
-    hasVolunteerAccess
-      ? activeMode === "resident"
+    hasVolunteerAccess &&
+    (
+      activeMode === "volunteer" ||
+      (
+        !activeMode &&
+        currentRole === "volunteer"
+      )
+    )
+      ? "volunteer"
+      : hasResidentAccess
         ? "resident"
-        : "volunteer"
-      : "resident";
+        : "resident";
 
   const isVolunteerMode =
     currentMode === "volunteer";
@@ -595,30 +620,34 @@ export default function SideDrawer({
                     title="SERVICES"
                   />
 
-                  <DrawerItem
-                    icon="warning-outline"
-                    label="Report a Disaster"
-                    onPress={() =>
-                      navigate(
-                        "/disaster-response",
-                      )
-                    }
-                  />
+                  {!isVolunteerMode && (
+                    <>
+                      <DrawerItem
+                        icon="warning-outline"
+                        label="Report a Disaster"
+                        onPress={() =>
+                          navigate(
+                            "/disaster-response",
+                          )
+                        }
+                      />
 
-                  <DrawerItem
-                    icon="hand-left-outline"
-                    label="Request Assistance"
-                    onPress={() =>
-                      navigate(
-                        "/resident",
-                      )
-                    }
-                  />
+                      <DrawerItem
+                        icon="hand-left-outline"
+                        label="Request Assistance"
+                        onPress={() =>
+                          navigate(
+                            "/resident",
+                          )
+                        }
+                      />
+                    </>
+                  )}
 
                   {isVolunteerMode && (
                     <DrawerItem
                       icon="people-outline"
-                      label="Volunteer Events"
+                      label="Volunteer Tasks"
                       onPress={() =>
                         navigate(
                           "/volunteer",
@@ -651,47 +680,53 @@ export default function SideDrawer({
                     title="MY ACTIVITY"
                   />
 
-                  <DrawerItem
-                    icon="document-text-outline"
-                    label="My Disaster Cases"
-                    onPress={() =>
-                      navigate(
-                        "/my-cases",
-                      )
-                    }
-                  />
+                  {!isVolunteerMode && (
+                    <>
+                      <DrawerItem
+                        icon="document-text-outline"
+                        label="My Disaster Cases"
+                        onPress={() =>
+                          navigate(
+                            "/my-cases",
+                          )
+                        }
+                      />
 
-                  <DrawerItem
-                    icon="time-outline"
-                    label="Donation History"
-                    onPress={() =>
-                      navigate(
-                        "/donation-history",
-                      )
-                    }
-                  />
-
-                  {isVolunteerMode && (
-                    <DrawerItem
-                      icon="ribbon-outline"
-                      label="Volunteer Impact"
-                      onPress={() =>
-                        navigate(
-                          "/volunteer-impact",
-                        )
-                      }
-                    />
+                      <DrawerItem
+                        icon="time-outline"
+                        label="Donation History"
+                        onPress={() =>
+                          navigate(
+                            "/donation-history",
+                          )
+                        }
+                      />
+                    </>
                   )}
 
-                  <DrawerItem
-                    icon="trophy-outline"
-                    label="Event Leaderboard"
-                    onPress={() =>
-                      navigate(
-                        "/event-leaderboard",
-                      )
-                    }
-                  />
+                  {isVolunteerMode && (
+                    <>
+                      <DrawerItem
+                        icon="ribbon-outline"
+                        label="Volunteer Impact"
+                        onPress={() =>
+                          navigate(
+                            "/volunteer-impact",
+                          )
+                        }
+                      />
+
+                      <DrawerItem
+                        icon="trophy-outline"
+                        label="Event Leaderboard"
+                        onPress={() =>
+                          navigate(
+                            "/event-leaderboard",
+                          )
+                        }
+                      />
+                    </>
+                  )}
 
                   <DrawerSection
                     title="COMMUNITY"

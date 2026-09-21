@@ -1,42 +1,43 @@
 import { Ionicons } from "@expo/vector-icons";
+
 import {
-    doc,
-    serverTimestamp,
-    setDoc,
+  doc,
+  serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 
 import React, {
-    useEffect,
-    useState,
+  useEffect,
+  useState,
 } from "react";
 
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    createAdminAccount,
-} from "../../lib/adminAccounts";
-
-import {
-    createAdminLog,
+  createAdminLog,
 } from "../../lib/adminLogger";
 
 import { db } from "../../lib/firebase";
 
 import {
-    usePublicSettings,
+  isApprovedProfile,
+} from "../../lib/firebaseAuth";
+
+import {
+  usePublicSettings,
 } from "../../lib/usePublicSettings";
 
 import {
-    useUserSession,
+  useUserSession,
 } from "../../lib/useUserSession";
 
 export default function SystemSettings() {
@@ -77,22 +78,6 @@ export default function SystemSettings() {
   const [saving, setSaving] =
     useState(false);
 
-  const [adminName, setAdminName] =
-    useState("");
-
-  const [adminEmail, setAdminEmail] =
-    useState("");
-
-  const [
-    adminPassword,
-    setAdminPassword,
-  ] = useState("");
-
-  const [
-    creatingAdmin,
-    setCreatingAdmin,
-  ] = useState(false);
-
   useEffect(() => {
     setCityName(settings.cityName);
 
@@ -115,16 +100,28 @@ export default function SystemSettings() {
     );
   }, [settings]);
 
+  const role =
+    typeof profile?.role === "string"
+      ? profile.role.toLowerCase()
+      : "";
+
+  const isSuperAdmin =
+    !!user &&
+    isApprovedProfile(profile) &&
+    role === "superadmin";
+
   const saveSettings = async () => {
-    if (
-      !user ||
-      !profile ||
-      profile.role !== "superadmin"
-    ) {
+    if (!isSuperAdmin || !user || !profile) {
+      Alert.alert(
+        "Access Denied",
+        "Only the active Super Admin can update system settings."
+      );
+
       return;
     }
 
-    const hours = Number(retentionHours);
+    const hours =
+      Number(retentionHours);
 
     if (
       cityName.trim().length < 3 ||
@@ -201,7 +198,8 @@ export default function SystemSettings() {
           "public"
         ),
         {
-          cityName: cityName.trim(),
+          cityName:
+            cityName.trim(),
 
           emergencyHotline:
             emergencyHotline.trim(),
@@ -220,7 +218,8 @@ export default function SystemSettings() {
           updatedAt:
             serverTimestamp(),
 
-          updatedBy: user.uid,
+          updatedBy:
+            user.uid,
         }
       );
 
@@ -231,9 +230,11 @@ export default function SystemSettings() {
         targetType:
           "system_settings",
 
-        targetId: "public",
+        targetId:
+          "public",
 
-        adminUid: user.uid,
+        adminUid:
+          user.uid,
 
         adminName:
           profile.fullName ||
@@ -246,8 +247,8 @@ export default function SystemSettings() {
       });
 
       Alert.alert(
-        "Settings saved",
-        "Public contact information and retention controls are updated."
+        "Settings Saved",
+        "Public contact information and live-location retention settings were updated."
       );
     } catch (error: any) {
       console.log(
@@ -256,91 +257,12 @@ export default function SystemSettings() {
       );
 
       Alert.alert(
-        "Unable to save settings",
+        "Unable to Save Settings",
         error?.message ||
           "Please try again."
       );
     } finally {
       setSaving(false);
-    }
-  };
-
-  const createAdmin = async () => {
-    const fullName = adminName
-      .trim()
-      .replace(/\s+/g, " ");
-
-    const email = adminEmail
-      .trim()
-      .toLowerCase();
-
-    if (fullName.length < 3) {
-      Alert.alert(
-        "Invalid name",
-        "Enter the administrator's full name."
-      );
-
-      return;
-    }
-
-    if (
-      !/^\S+@\S+\.\S+$/.test(email)
-    ) {
-      Alert.alert(
-        "Invalid email",
-        "Enter a valid administrator email."
-      );
-
-      return;
-    }
-
-    if (
-      adminPassword.length < 10 ||
-      !/[A-Z]/.test(adminPassword) ||
-      !/[a-z]/.test(adminPassword) ||
-      !/\d/.test(adminPassword) ||
-      !/[^A-Za-z0-9]/.test(
-        adminPassword
-      )
-    ) {
-      Alert.alert(
-        "Weak password",
-        "Use at least 10 characters with uppercase, lowercase, number, and symbol."
-      );
-
-      return;
-    }
-
-    setCreatingAdmin(true);
-
-    try {
-      await createAdminAccount({
-        fullName,
-        email,
-        password: adminPassword,
-      });
-
-      setAdminName("");
-      setAdminEmail("");
-      setAdminPassword("");
-
-      Alert.alert(
-        "Administrator created",
-        `${email} can now sign in through the regular VolunServe login.`
-      );
-    } catch (error: any) {
-      console.log(
-        "Create admin error:",
-        error
-      );
-
-      Alert.alert(
-        "Unable to create administrator",
-        error?.message ||
-          "Please try again."
-      );
-    } finally {
-      setCreatingAdmin(false);
     }
   };
 
@@ -352,25 +274,31 @@ export default function SystemSettings() {
       <View style={styles.center}>
         <ActivityIndicator
           size="large"
-          color="#0F766E"
+          color="#6D28D9"
         />
+
+        <Text style={styles.loadingText}>
+          Loading system settings...
+        </Text>
       </View>
     );
   }
 
-  if (
-    profile?.role !== "superadmin"
-  ) {
+  if (!isSuperAdmin) {
     return (
       <View style={styles.center}>
         <Ionicons
           name="lock-closed-outline"
-          size={36}
+          size={40}
           color="#B91C1C"
         />
 
         <Text style={styles.denied}>
-          Super Administrator access required
+          Super Admin access required
+        </Text>
+
+        <Text style={styles.deniedText}>
+          System configuration is available only to the active Super Admin account.
         </Text>
       </View>
     );
@@ -385,7 +313,7 @@ export default function SystemSettings() {
     >
       <View style={styles.hero}>
         <Ionicons
-          name="settings"
+          name="settings-outline"
           size={31}
           color="#FFFFFF"
         />
@@ -395,99 +323,48 @@ export default function SystemSettings() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Manage public operational
-          contacts and technical
-          location-retention controls.
+          Manage system-wide public contact information and technical live-location retention controls.
         </Text>
       </View>
 
       <View style={styles.notice}>
-        <Text style={styles.noticeTitle}>
-          Security boundary
-        </Text>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={22}
+          color="#5B21B6"
+        />
 
-        <Text style={styles.noticeText}>
-          Account roles and Firestore
-          permissions remain enforced in
-          code and security rules. They
-          cannot be weakened from this
-          screen.
-        </Text>
+        <View style={styles.noticeCopy}>
+          <Text style={styles.noticeTitle}>
+            Super Admin configuration
+          </Text>
+
+          <Text style={styles.noticeText}>
+            This page is intentionally limited to global configuration. Admin account management remains in the separate Admin Accounts module, and operational Admin tools remain in the Admin portal.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          Administrator Accounts
-        </Text>
-
-        <Text style={styles.helper}>
-          Only the super administrator can
-          create an admin. Admin and
-          superadmin roles are never
-          available in public registration.
-        </Text>
-
-        <Field
-          label="Administrator Full Name"
-          value={adminName}
-          onChangeText={setAdminName}
-          maxLength={120}
-        />
-
-        <Field
-          label="Administrator Email"
-          value={adminEmail}
-          onChangeText={setAdminEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          maxLength={160}
-        />
-
-        <Field
-          label="Temporary Password"
-          value={adminPassword}
-          onChangeText={
-            setAdminPassword
-          }
-          secureTextEntry
-          autoCapitalize="none"
-          maxLength={128}
-        />
-
-        <Text style={styles.helper}>
-          Minimum 10 characters with
-          uppercase, lowercase, number,
-          and symbol. Share this password
-          only through a private channel.
-        </Text>
-
-        <TouchableOpacity
-          disabled={creatingAdmin}
-          style={[
-            styles.button,
-            creatingAdmin &&
-              styles.disabled,
-          ]}
-          onPress={createAdmin}
-        >
-          {creatingAdmin ? (
-            <ActivityIndicator
-              color="#FFFFFF"
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <Ionicons
+              name="business-outline"
+              size={21}
+              color="#6D28D9"
             />
-          ) : (
-            <Text
-              style={styles.buttonText}
-            >
-              Create Administrator
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          Public & Location Settings
-        </Text>
+          <View style={styles.cardHeaderText}>
+            <Text style={styles.cardTitle}>
+              Public Service Information
+            </Text>
+
+            <Text style={styles.cardSubtitle}>
+              These values may be displayed to VolunServe users where public service and emergency contact information is needed.
+            </Text>
+          </View>
+        </View>
 
         <Field
           label="City / Service Name"
@@ -523,9 +400,31 @@ export default function SystemSettings() {
           maxLength={500}
           multiline
         />
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <Ionicons
+              name="location-outline"
+              size={21}
+              color="#6D28D9"
+            />
+          </View>
+
+          <View style={styles.cardHeaderText}>
+            <Text style={styles.cardTitle}>
+              Live Location Retention
+            </Text>
+
+            <Text style={styles.cardSubtitle}>
+              Configure the intended retention window for temporary resident and volunteer live-location records.
+            </Text>
+          </View>
+        </View>
 
         <Field
-          label="Live Location Retention (Hours)"
+          label="Retention Period (Hours)"
           value={retentionHours}
           onChangeText={
             setRetentionHours
@@ -535,36 +434,49 @@ export default function SystemSettings() {
         />
 
         <Text style={styles.helper}>
-          When the scheduled server
-          cleanup is deployed, it removes
-          resident and volunteer
-          live-location records older than
-          this value. Choose the shortest
-          period approved by the LGU
-          privacy policy.
+          Valid range: 1–720 hours. This setting records the approved retention period. Automatic deletion still depends on the cleanup mechanism implemented by the system.
         </Text>
+      </View>
 
-        <TouchableOpacity
-          disabled={saving}
-          style={[
-            styles.button,
-            saving && styles.disabled,
-          ]}
-          onPress={saveSettings}
-        >
-          {saving ? (
-            <ActivityIndicator
+      <View style={styles.securityCard}>
+        <Ionicons
+          name="lock-closed-outline"
+          size={21}
+          color="#0369A1"
+        />
+
+        <Text style={styles.securityText}>
+          Role permissions and Firestore security rules cannot be weakened from this screen. Admin Accounts, audit logs, and operational actions remain separate modules.
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        disabled={saving}
+        style={[
+          styles.button,
+          saving &&
+            styles.disabled,
+        ]}
+        onPress={saveSettings}
+      >
+        {saving ? (
+          <ActivityIndicator
+            color="#FFFFFF"
+          />
+        ) : (
+          <>
+            <Ionicons
+              name="save-outline"
+              size={18}
               color="#FFFFFF"
             />
-          ) : (
-            <Text
-              style={styles.buttonText}
-            >
+
+            <Text style={styles.buttonText}>
               Save System Settings
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          </>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -584,137 +496,217 @@ function Field({
         {...props}
         multiline={multiline}
         textAlignVertical={
-          multiline ? "top" : "center"
+          multiline
+            ? "top"
+            : "center"
         }
         style={[
           styles.input,
-          multiline && styles.multiline,
+          multiline &&
+            styles.multiline,
         ]}
       />
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: "#F8FAFC",
-  },
+const styles =
+  StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      backgroundColor: "#F8FAFC",
+    },
 
-  denied: {
-    marginTop: 9,
-    color: "#991B1B",
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    loadingText: {
+      marginTop: 10,
+      color: "#64748B",
+      fontWeight: "600",
+    },
 
-  container: {
-    flexGrow: 1,
-    padding: 20,
-    paddingBottom: 60,
-    backgroundColor: "#F1F5F9",
-  },
+    denied: {
+      marginTop: 10,
+      color: "#991B1B",
+      fontSize: 19,
+      fontWeight: "900",
+      textAlign: "center",
+    },
 
-  hero: {
-    padding: 20,
-    borderRadius: 20,
-    backgroundColor: "#0F766E",
-  },
+    deniedText: {
+      marginTop: 6,
+      maxWidth: 460,
+      color: "#64748B",
+      lineHeight: 20,
+      textAlign: "center",
+    },
 
-  title: {
-    marginTop: 8,
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "900",
-  },
+    container: {
+      width: "100%",
+      maxWidth: 1000,
+      alignSelf: "center",
+      flexGrow: 1,
+      padding: 24,
+      paddingBottom: 60,
+      backgroundColor: "#F1F5F9",
+    },
 
-  subtitle: {
-    marginTop: 5,
-    color: "#CCFBF1",
-    lineHeight: 19,
-  },
+    hero: {
+      padding: 21,
+      borderRadius: 20,
+      backgroundColor: "#6D28D9",
+    },
 
-  notice: {
-    marginTop: 15,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#6EE7B7",
-  },
+    title: {
+      marginTop: 8,
+      color: "#FFFFFF",
+      fontSize: 26,
+      fontWeight: "900",
+    },
 
-  noticeTitle: {
-    color: "#065F46",
-    fontWeight: "900",
-  },
+    subtitle: {
+      marginTop: 5,
+      maxWidth: 700,
+      color: "#EDE9FE",
+      lineHeight: 20,
+    },
 
-  noticeText: {
-    marginTop: 4,
-    color: "#065F46",
-    lineHeight: 18,
-  },
+    notice: {
+      marginTop: 15,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: "#F5F3FF",
+      borderWidth: 1,
+      borderColor: "#DDD6FE",
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+    },
 
-  card: {
-    marginTop: 15,
-    padding: 16,
-    borderRadius: 17,
-    backgroundColor: "#FFFFFF",
-  },
+    noticeCopy: {
+      flex: 1,
+    },
 
-  cardTitle: {
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: "900",
-  },
+    noticeTitle: {
+      color: "#5B21B6",
+      fontWeight: "900",
+    },
 
-  label: {
-    marginTop: 12,
-    marginBottom: 6,
-    color: "#334155",
-    fontSize: 12,
-    fontWeight: "900",
-  },
+    noticeText: {
+      marginTop: 4,
+      color: "#64748B",
+      lineHeight: 18,
+      fontSize: 12.5,
+    },
 
-  input: {
-    minHeight: 47,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    color: "#0F172A",
-    backgroundColor: "#F8FAFC",
-  },
+    card: {
+      marginTop: 15,
+      padding: 17,
+      borderRadius: 17,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
 
-  multiline: {
-    minHeight: 100,
-    paddingTop: 12,
-  },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 11,
+      marginBottom: 2,
+    },
 
-  helper: {
-    marginTop: 7,
-    color: "#64748B",
-    fontSize: 12,
-    lineHeight: 17,
-  },
+    cardIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#EDE9FE",
+    },
 
-  button: {
-    minHeight: 52,
-    marginTop: 19,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0F766E",
-  },
+    cardHeaderText: {
+      flex: 1,
+    },
 
-  buttonText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
+    cardTitle: {
+      color: "#0F172A",
+      fontSize: 18,
+      fontWeight: "900",
+    },
 
-  disabled: {
-    opacity: 0.6,
-  },
-});
+    cardSubtitle: {
+      marginTop: 3,
+      color: "#64748B",
+      lineHeight: 18,
+      fontSize: 12.5,
+    },
+
+    label: {
+      marginTop: 13,
+      marginBottom: 6,
+      color: "#334155",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
+    input: {
+      minHeight: 47,
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+      borderRadius: 11,
+      paddingHorizontal: 12,
+      color: "#0F172A",
+      backgroundColor: "#F8FAFC",
+      outlineStyle: "none",
+    } as any,
+
+    multiline: {
+      minHeight: 110,
+      paddingTop: 12,
+    },
+
+    helper: {
+      marginTop: 8,
+      color: "#64748B",
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    securityCard: {
+      marginTop: 15,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 9,
+      padding: 13,
+      borderRadius: 12,
+      backgroundColor: "#E0F2FE",
+    },
+
+    securityText: {
+      flex: 1,
+      color: "#075985",
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    button: {
+      minHeight: 52,
+      marginTop: 18,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      backgroundColor: "#6D28D9",
+    },
+
+    buttonText: {
+      color: "#FFFFFF",
+      fontWeight: "900",
+    },
+
+    disabled: {
+      opacity: 0.6,
+    },
+  });

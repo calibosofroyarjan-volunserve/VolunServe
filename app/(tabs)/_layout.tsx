@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, Tabs, useSegments } from "expo-router";
+import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -13,9 +14,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  isAdminProfile,
+  activeModeForProfile,
+  administrativeRouteForProfile,
+  hasResidentAccess,
+  hasVolunteerAccess,
   isApprovedProfile,
   logoutUser,
+  setActiveUserMode,
   UserProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -215,21 +220,22 @@ export default function TabLayout() {
     return <Redirect href="/login" />;
   }
 
-  const hideResidentTabs = isAdminProfile(profile);
-  const accountRole = profile.role === "volunteer" ? "volunteer" : "resident";
+  const currentMode = activeModeForProfile(profile);
+  const residentAccess = hasResidentAccess(profile);
+  const volunteerAccess = hasVolunteerAccess(profile);
   const currentRoute = segments[segments.length - 1];
 
   if (typeof currentRoute === "string") {
     if (
       volunteerOnlyRoutes.has(currentRoute) &&
-      accountRole !== "volunteer"
+      (!volunteerAccess || currentMode !== "volunteer")
     ) {
       return <Redirect href="/(tabs)" />;
     }
 
     if (
       residentOnlyRoutes.has(currentRoute) &&
-      accountRole !== "resident"
+      (!residentAccess || currentMode !== "resident")
     ) {
       return <Redirect href="/(tabs)" />;
     }
@@ -242,7 +248,7 @@ export default function TabLayout() {
         tabBarPosition: isDesktopWeb ? "left" : "bottom",
       }}
       tabBar={(props) =>
-        hideResidentTabs ? null : isDesktopWeb ? (
+        isDesktopWeb ? (
           <DesktopTabBar {...props} profile={profile} />
         ) : (
           <CustomTabBar {...props} profile={profile} />
@@ -257,8 +263,35 @@ function DesktopTabBar({
   navigation,
   profile,
 }: any & { profile: UserProfile }) {
-  const mode = profile.role === "volunteer" ? "volunteer" : "resident";
+  const mode = activeModeForProfile(profile);
+  const volunteerAccess = hasVolunteerAccess(profile);
+  const residentAccess = hasResidentAccess(profile);
+  const canSwitchMode = volunteerAccess && residentAccess;
+  const adminRoute = administrativeRouteForProfile(profile);
+  const portalLabel =
+    profile.role === "superadmin" ? "Super Admin Portal" : "Admin Portal";
   const tabs = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
+
+  const switchMode = async () => {
+    if (!canSwitchMode) return;
+
+    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
+
+    try {
+      await setActiveUserMode(nextMode);
+      navigation.navigate("index");
+    } catch (error: any) {
+      Alert.alert(
+        "Mode Switch Failed",
+        error?.message || "Unable to switch account mode."
+      );
+    }
+  };
+
+  const openAdminPortal = () => {
+    if (!adminRoute) return;
+    router.replace(adminRoute as Href);
+  };
 
   const navigate = (routeName: string) => {
     const route = state.routes.find((item: any) => item.name === routeName);
@@ -337,6 +370,37 @@ function DesktopTabBar({
       </View>
 
       <View style={styles.desktopUtilityArea}>
+        {canSwitchMode ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.desktopUtilityButton,
+              pressed && styles.desktopPressed,
+            ]}
+            onPress={() => void switchMode()}
+          >
+            <Ionicons name="swap-horizontal-outline" size={18} color="#60728A" />
+            <Text style={styles.desktopUtilityText}>
+              {mode === "volunteer"
+                ? "Switch to Resident Mode"
+                : "Switch to Volunteer Mode"}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {adminRoute ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.desktopUtilityButton,
+              styles.desktopPortalButton,
+              pressed && styles.desktopPressed,
+            ]}
+            onPress={openAdminPortal}
+          >
+            <Ionicons name="shield-checkmark-outline" size={18} color="#6D28D9" />
+            <Text style={styles.desktopPortalText}>{portalLabel}</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={({ pressed }) => [
             styles.desktopUtilityButton,
@@ -370,8 +434,35 @@ function CustomTabBar({
   profile,
 }: any & { profile: UserProfile }) {
   const insets = useSafeAreaInsets();
-  const mode = profile.role === "volunteer" ? "volunteer" : "resident";
+  const mode = activeModeForProfile(profile);
+  const volunteerAccess = hasVolunteerAccess(profile);
+  const residentAccess = hasResidentAccess(profile);
+  const canSwitchMode = volunteerAccess && residentAccess;
+  const adminRoute = administrativeRouteForProfile(profile);
+  const portalLabel =
+    profile.role === "superadmin" ? "Super Admin" : "Admin";
   const tabs = mode === "volunteer" ? volunteerMobileTabs : residentMobileTabs;
+
+  const switchMode = async () => {
+    if (!canSwitchMode) return;
+
+    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
+
+    try {
+      await setActiveUserMode(nextMode);
+      navigation.navigate("index");
+    } catch (error: any) {
+      Alert.alert(
+        "Mode Switch Failed",
+        error?.message || "Unable to switch account mode."
+      );
+    }
+  };
+
+  const openAdminPortal = () => {
+    if (!adminRoute) return;
+    router.replace(adminRoute as Href);
+  };
 
   return (
     <View
@@ -382,6 +473,48 @@ function CustomTabBar({
         },
       ]}
     >
+      {canSwitchMode || adminRoute ? (
+        <View style={styles.mobileModeRow}>
+          {canSwitchMode ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.mobileModeButton,
+                pressed && styles.mobilePressed,
+              ]}
+              onPress={() => void switchMode()}
+            >
+              <Ionicons
+                name="swap-horizontal-outline"
+                size={16}
+                color="#0F766E"
+              />
+              <Text style={styles.mobileModeButtonText}>
+                {mode === "volunteer" ? "Resident Mode" : "Volunteer Mode"}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {adminRoute ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.mobilePortalButton,
+                pressed && styles.mobilePressed,
+              ]}
+              onPress={openAdminPortal}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={16}
+                color="#6D28D9"
+              />
+              <Text style={styles.mobilePortalButtonText}>
+                {portalLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.tabBar}>
         {tabs.map((item) => {
           const routeIndex = state.routes.findIndex(
@@ -465,6 +598,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 10,
+  },
+
+  mobileModeRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 7,
+  },
+
+  mobileModeButton: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#E7F8F4",
+  },
+
+  mobileModeButtonText: {
+    color: "#0F766E",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  mobilePortalButton: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F3E8FF",
+  },
+
+  mobilePortalButtonText: {
+    color: "#6D28D9",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  mobilePressed: {
+    opacity: 0.72,
   },
 
   tabBar: {
@@ -631,6 +812,15 @@ const styles = StyleSheet.create({
     gap: 11,
     paddingHorizontal: 10,
     borderRadius: 11,
+  },
+  desktopPortalButton: {
+    backgroundColor: "#F5F3FF",
+  },
+  desktopPortalText: {
+    flex: 1,
+    color: "#6D28D9",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   desktopUtilityText: { flex: 1, color: "#52647B", fontSize: 11.5, fontWeight: "700" },
   desktopLogoutText: { color: "#C92537" },

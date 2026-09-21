@@ -21,7 +21,21 @@ service firebase.storage {
     }
 
     function isVolunteer() {
-      return approved() && profile().role == 'volunteer';
+      return approved()
+        && (
+          (
+            'volunteerAccess' in profile()
+            && profile().volunteerAccess == true
+            && (
+              !('volunteerStatus' in profile())
+              || profile().volunteerStatus == 'approved'
+            )
+          )
+          || (
+            !('volunteerAccess' in profile())
+            && profile().role == 'volunteer'
+          )
+        );
     }
 
     match /disasterCases/{caseId}/{fileName} {

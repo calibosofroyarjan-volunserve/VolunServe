@@ -98,27 +98,10 @@ export interface UserProfile {
   skillOther?: string;
   availability?: string[];
 
-  /**
-   * Legacy / authorization role used by the existing app.
-   * During signup this remains "applicant" until an admin approves the account.
-   */
   role: Role;
 
-  /**
-   * The role selected by the person during signup.
-   * Kept for compatibility with the current Admin Account Approval flow.
-   */
   requestedRole?: PublicRole;
 
-  /**
-   * New access-model fields.
-   *
-   * primaryRole = how the account originally registered.
-   * residentAccess = whether resident features may be used.
-   * volunteerAccess = whether volunteer-only features may be used.
-   * volunteerStatus = volunteer application state.
-   * activeMode = which interface the user is currently using.
-   */
   primaryRole?: PublicRole;
   residentAccess?: boolean;
   volunteerAccess?: boolean;
@@ -151,9 +134,6 @@ export interface SignupData {
   email: string;
   password: string;
 
-  // Explicitly tell signup whether the authenticated Firebase user came
-  // from the Google registration button. This prevents a stale session
-  // from being mistaken for a Google signup.
   authProvider?: "email" | "google";
 
   phoneNumber: string;
@@ -179,8 +159,6 @@ export const isApprovedProfile = (
     return false;
   }
 
-  // Compatibility for older approved accounts
-  // that do not yet have a status field.
   return (
     profile.status === "approved" ||
     (
@@ -202,15 +180,17 @@ export const isAdminProfile = (
   );
 };
 
-/**
- * Backward-compatible access helpers.
- * These let old accounts continue working while we migrate to the new
- * residentAccess / volunteerAccess structure.
- */
 export const hasResidentAccess = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) return false;
+  if (!profile || !isApprovedProfile(profile)) return false;
+
+  if (
+    profile.role === "admin" ||
+    profile.role === "superadmin"
+  ) {
+    return true;
+  }
 
   if (typeof profile.residentAccess === "boolean") {
     return profile.residentAccess;
@@ -218,26 +198,33 @@ export const hasResidentAccess = (
 
   return (
     profile.role === "resident" ||
-    profile.role === "volunteer" ||
-    profile.requestedRole === "resident" ||
-    profile.requestedRole === "volunteer"
+    profile.role === "volunteer"
   );
 };
 
 export const hasVolunteerAccess = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) return false;
+  if (!profile || !isApprovedProfile(profile)) return false;
 
-  if (typeof profile.volunteerAccess === "boolean") {
-    return profile.volunteerAccess;
+  if (
+    profile.role === "admin" ||
+    profile.role === "superadmin"
+  ) {
+    return true;
   }
 
-  // Compatibility for older volunteer accounts.
-  return (
-    isApprovedProfile(profile) &&
-    profile.role === "volunteer"
-  );
+  if (typeof profile.volunteerAccess === "boolean") {
+    return (
+      profile.volunteerAccess &&
+      (
+        !profile.volunteerStatus ||
+        profile.volunteerStatus === "approved"
+      )
+    );
+  }
+
+  return profile.role === "volunteer";
 };
 
 export const getActiveMode = (
@@ -255,12 +242,31 @@ export const getActiveMode = (
   return "resident";
 };
 
+export const administrativeRouteForProfile = (
+  profile: UserProfile | null | undefined
+) => {
+  if (!profile || !isApprovedProfile(profile)) {
+    return null;
+  }
+
+  if (profile.role === "superadmin") {
+    return "/(superadmin)" as const;
+  }
+
+  if (profile.role === "admin") {
+    return "/(admin)/command-center" as const;
+  }
+
+  return null;
+};
+
 export const homeRouteForProfile = (
   profile: UserProfile
 ) => {
-  return isAdminProfile(profile)
-    ? ("/(admin)/command-center" as const)
-    : ("/(tabs)" as const);
+  return (
+    administrativeRouteForProfile(profile) ||
+    ("/(tabs)" as const)
+  );
 };
 
 function friendlyAuthError(err: any) {
@@ -317,8 +323,7 @@ export const signUpUser = async (
     const usesGoogle = data.authProvider === "google";
 
     if (usesGoogle) {
-      // Google registration must use the exact account that was connected
-      // from the signup page. Do not silently reuse an unrelated session.
+
       if (!auth.currentUser) {
         throw new Error(
           "Your Google registration session expired. Connect your Google account again."
@@ -336,8 +341,7 @@ export const signUpUser = async (
 
       user = auth.currentUser;
     } else {
-      // Email/password signup should always create its own Firebase account.
-      // A stale signed-in user must never be treated as the applicant.
+ 
       if (auth.currentUser) {
         await signOut(auth);
       }
@@ -388,13 +392,6 @@ export const signUpUser = async (
 
     const batch = writeBatch(db);
 
-    /**
-     * IMPORTANT:
-     * role stays "applicant" until an admin approves the account.
-     *
-     * The new access fields are stored separately so a user cannot become
-     * a volunteer simply by selecting Volunteer during signup.
-     */
     batch.set(profileRef, {
       uid,
 
@@ -438,10 +435,6 @@ export const signUpUser = async (
 
       occupation,
 
-      /**
-       * Resident signup does not need volunteer details.
-       * Volunteer signup keeps them for admin review.
-       */
       skills:
         isVolunteerSignup
           ? (data.skills || [])
@@ -457,11 +450,9 @@ export const signUpUser = async (
           ? (data.availability || [])
           : [],
 
-      // Existing approval architecture
       role: "applicant" as Role,
       requestedRole: data.role,
 
-      // New role/access architecture
       primaryRole: data.role,
       residentAccess: true,
       volunteerAccess: false,
@@ -480,10 +471,6 @@ export const signUpUser = async (
         serverTimestamp(),
     });
 
-    /**
-     * Only Volunteer signup creates a volunteerApplications document.
-     * Resident signup will use a separate "Apply as Volunteer" flow later.
-     */
     if (isVolunteerSignup) {
       batch.set(
         doc(
@@ -650,12 +637,6 @@ export const getUserProfile = async (
   return snapshot.data() as UserProfile;
 };
 
-/**
- * Safe profile editor for ordinary profile fields.
- *
- * Permission/access fields are intentionally excluded so the user cannot
- * self-approve volunteer access using this helper.
- */
 export const updateUserProfile = async (
   uid: string,
   updates: Partial<UserProfile>
@@ -688,12 +669,6 @@ export const updateUserProfile = async (
   );
 };
 
-/**
- * User-facing mode switch.
- *
- * This changes only the interface mode.
- * It NEVER grants volunteer access.
- */
 export const setActiveMode = async (
   uid: string,
   requestedMode: UserMode
@@ -718,6 +693,15 @@ export const setActiveMode = async (
   }
 
   if (
+    requestedMode === "resident" &&
+    !hasResidentAccess(profile)
+  ) {
+    throw new Error(
+      "Resident mode is not available for this account."
+    );
+  }
+
+  if (
     requestedMode === "volunteer" &&
     !hasVolunteerAccess(profile)
   ) {
@@ -737,16 +721,6 @@ export const setActiveMode = async (
 };
 
 
-/**
- * Backward-compatible names used by the current navigation files.
- *
- * app/(tabs)/_layout.tsx currently imports:
- *   activeModeForProfile(profile)
- *   setActiveUserMode(mode)
- *
- * Keep these exports so we do not have to break or rename the existing
- * navigation code while using the new access model.
- */
 export const activeModeForProfile = (
   profile: UserProfile | null | undefined
 ): UserMode => {

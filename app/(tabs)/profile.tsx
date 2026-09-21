@@ -388,6 +388,8 @@ export default function Profile() {
         email={profile?.email || ""}
         role={profile?.role || "resident"}
         activeMode={profile?.activeMode}
+        residentAccess={profile?.residentAccess}
+        volunteerAccess={profile?.volunteerAccess}
       />
     </ScrollView>
   );

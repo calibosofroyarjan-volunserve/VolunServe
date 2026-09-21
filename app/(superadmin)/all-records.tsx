@@ -1,34 +1,38 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import {
-    collection,
-    onSnapshot,
+  collection,
+  onSnapshot,
 } from "firebase/firestore";
 
 import React, {
-    useMemo,
-    useState,
+  useMemo,
+  useState,
 } from "react";
 
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import {
-    db,
+  db,
 } from "../../lib/firebase";
 
 type RecordType =
   | "users"
+  | "applications"
   | "cases"
   | "assignments"
   | "contributions"
+  | "disputes"
+  | "donations"
+  | "events"
   | "certificates";
 
 type GenericRecord = {
@@ -36,21 +40,64 @@ type GenericRecord = {
   [key: string]: any;
 };
 
-type RecordGroup = {
-  users: GenericRecord[];
-  cases: GenericRecord[];
-  assignments: GenericRecord[];
-  contributions: GenericRecord[];
-  certificates: GenericRecord[];
-};
+type RecordGroup = Record<
+  RecordType,
+  GenericRecord[]
+>;
 
 const emptyRecords: RecordGroup = {
   users: [],
+  applications: [],
   cases: [],
   assignments: [],
   contributions: [],
+  disputes: [],
+  donations: [],
+  events: [],
   certificates: [],
 };
+
+const recordSources: Array<{
+  type: RecordType;
+  collectionName: string;
+}> = [
+  {
+    type: "users",
+    collectionName: "users",
+  },
+  {
+    type: "applications",
+    collectionName: "volunteerApplications",
+  },
+  {
+    type: "cases",
+    collectionName: "disasterCases",
+  },
+  {
+    type: "assignments",
+    collectionName: "responseAssignments",
+  },
+  {
+    type: "contributions",
+    collectionName: "verifiedContributions",
+  },
+  {
+    type: "disputes",
+    collectionName: "responseDisputes",
+  },
+  {
+    type: "donations",
+    collectionName: "donations",
+  },
+  {
+    type: "events",
+    collectionName: "volunteerEvents",
+  },
+  {
+    type: "certificates",
+    collectionName: "certificates",
+  },
+];
 
 const timestampValue = (
   value: any
@@ -214,7 +261,8 @@ export default function AllRecords() {
       );
 
       if (
-        loadedCollections.size >= 5
+        loadedCollections.size >=
+        recordSources.length
       ) {
         setLoading(false);
       }
@@ -271,6 +319,14 @@ export default function AllRecords() {
 
                     timestampValue(
                       b.reviewedAt
+                    ),
+
+                    timestampValue(
+                      b.resolvedAt
+                    ),
+
+                    timestampValue(
+                      b.verifiedAt
                     )
                   ) -
                   Math.max(
@@ -292,6 +348,14 @@ export default function AllRecords() {
 
                     timestampValue(
                       a.reviewedAt
+                    ),
+
+                    timestampValue(
+                      a.resolvedAt
+                    ),
+
+                    timestampValue(
+                      a.verifiedAt
                     )
                   )
               );
@@ -339,42 +403,23 @@ export default function AllRecords() {
       );
     };
 
-    const unsubscribeUsers =
-      listen(
-        "users",
-        "users"
-      );
-
-    const unsubscribeCases =
-      listen(
-        "cases",
-        "disasterCases"
-      );
-
-    const unsubscribeAssignments =
-      listen(
-        "assignments",
-        "responseAssignments"
-      );
-
-    const unsubscribeContributions =
-      listen(
-        "contributions",
-        "verifiedContributions"
-      );
-
-    const unsubscribeCertificates =
-      listen(
-        "certificates",
-        "certificates"
+    const unsubscribers =
+      recordSources.map(
+        ({
+          type,
+          collectionName,
+        }) =>
+          listen(
+            type,
+            collectionName
+          )
       );
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeCases();
-      unsubscribeAssignments();
-      unsubscribeContributions();
-      unsubscribeCertificates();
+      unsubscribers.forEach(
+        (unsubscribe) =>
+          unsubscribe()
+      );
     };
   }, []);
 
@@ -433,6 +478,12 @@ export default function AllRecords() {
     },
 
     {
+      key: "applications",
+      label: "Volunteer Applications",
+      icon: "person-add-outline",
+    },
+
+    {
       key: "cases",
       label: "Cases",
       icon: "warning-outline",
@@ -449,6 +500,24 @@ export default function AllRecords() {
       label: "Verified Help",
       icon:
         "checkmark-done-outline",
+    },
+
+    {
+      key: "disputes",
+      label: "Disputes",
+      icon: "alert-circle-outline",
+    },
+
+    {
+      key: "donations",
+      label: "Donations",
+      icon: "gift-outline",
+    },
+
+    {
+      key: "events",
+      label: "Events",
+      icon: "calendar-outline",
     },
 
     {
@@ -519,12 +588,73 @@ export default function AllRecords() {
     }
 
     if (
+      activeTab === "applications"
+    ) {
+      const status =
+        firstText(
+          item.status,
+          "pending"
+        );
+
+      return (
+        <RecordCard
+          key={item.id}
+          icon="person-add-outline"
+          title={firstText(
+            item.fullName,
+            item.name,
+            item.email,
+            "Volunteer Application"
+          )}
+          subtitle={firstText(
+            item.email,
+            item.barangay
+          )}
+          status={status}
+          rows={[
+            {
+              label:
+                "Requested Role",
+              value: firstText(
+                item.requestedRole,
+                "volunteer"
+              ),
+            },
+
+            {
+              label:
+                "Barangay",
+              value: firstText(
+                item.barangay
+              ),
+            },
+
+            {
+              label:
+                "Applicant UID",
+              value: firstText(
+                item.uid,
+                item.userId,
+                item.id
+              ),
+            },
+
+            {
+              label:
+                "Application ID",
+              value: item.id,
+            },
+          ]}
+        />
+      );
+    }
+
+    if (
       activeTab === "cases"
     ) {
       const status =
         firstText(
           item.status,
-          item.caseStatus,
           "unknown"
         );
 
@@ -534,23 +664,21 @@ export default function AllRecords() {
           icon="warning-outline"
           title={firstText(
             item.title,
-            item.disasterType,
-            item.type,
+            item.category,
             "Emergency Case"
           )}
           subtitle={firstText(
-            item.address,
-            item.locationName,
-            item.barangay
+            item.location,
+            item.reporterBarangay,
+            item.reporterAddress
           )}
           status={status}
           rows={[
             {
               label:
-                "Urgency",
+                "Severity",
               value: firstText(
-                item.urgency,
-                item.priority
+                item.severity
               ),
             },
 
@@ -558,18 +686,16 @@ export default function AllRecords() {
               label:
                 "Affected People",
               value: firstText(
-                item.affectedPeople,
-                item.peopleAffected
+                item.affectedPeople
               ),
             },
 
             {
               label:
-                "Resident ID",
+                "Reporter",
               value: firstText(
-                item.residentId,
-                item.userId,
-                item.createdBy
+                item.reporterName,
+                item.reporterUid
               ),
             },
 
@@ -590,7 +716,6 @@ export default function AllRecords() {
       const status =
         firstText(
           item.status,
-          item.assignmentStatus,
           "unknown"
         );
 
@@ -600,7 +725,6 @@ export default function AllRecords() {
           icon="navigate-outline"
           title={firstText(
             item.caseTitle,
-            item.title,
             "Response Assignment"
           )}
           subtitle={`Volunteer: ${firstText(
@@ -619,18 +743,18 @@ export default function AllRecords() {
 
             {
               label:
-                "Resident ID",
+                "Case ID",
               value: firstText(
-                item.residentId
+                item.caseId
               ),
             },
 
             {
               label:
-                "Case ID",
+                "Resident Confirmation",
               value: firstText(
-                item.caseId,
-                item.disasterCaseId
+                item.residentConfirmationStatus,
+                "pending"
               ),
             },
 
@@ -650,9 +774,7 @@ export default function AllRecords() {
     ) {
       const status =
         firstText(
-          item.creditStatus,
-          item.reviewState,
-          item.residentConfirmation,
+          item.status,
           "verified"
         );
 
@@ -666,41 +788,220 @@ export default function AllRecords() {
             item.volunteerName,
             "Verified Contribution"
           )}
-          subtitle={`Volunteer ID: ${firstText(
-            item.volunteerId
-          )}`}
+          subtitle={firstText(
+            item.contributionSummary,
+            `Volunteer ID: ${firstText(
+              item.volunteerId
+            )}`
+          )}
           status={status}
           rows={[
             {
               label:
-                "Confirmation",
+                "Resident Outcome",
               value: firstText(
-                item.confirmation,
-                item.residentConfirmation,
-                item.helpStatus
+                item.outcome
               ),
             },
 
             {
               label:
-                "People Assisted",
+                "Contribution Type",
               value: firstText(
-                item.peopleAssisted,
+                item.contributionType
+              ),
+            },
+
+            {
+              label:
+                "People Helped",
+              value: firstText(
                 item.peopleHelped
               ),
             },
 
             {
               label:
-                "Service Minutes",
+                "Case ID",
               value: firstText(
-                item.serviceMinutes
+                item.caseId
+              ),
+            },
+          ]}
+        />
+      );
+    }
+
+    if (
+      activeTab === "disputes"
+    ) {
+      const status =
+        firstText(
+          item.status,
+          "open"
+        );
+
+      return (
+        <RecordCard
+          key={item.id}
+          icon="alert-circle-outline"
+          title={firstText(
+            item.contributionType,
+            "Response Dispute"
+          )}
+          subtitle={firstText(
+            item.residentNote,
+            "Resident marked this response as Not Helped."
+          )}
+          status={status}
+          rows={[
+            {
+              label:
+                "Resident ID",
+              value: firstText(
+                item.residentId
               ),
             },
 
             {
               label:
-                "Contribution ID",
+                "Volunteer ID",
+              value: firstText(
+                item.volunteerId
+              ),
+            },
+
+            {
+              label:
+                "Case ID",
+              value: firstText(
+                item.caseId
+              ),
+            },
+
+            {
+              label:
+                "Assignment ID",
+              value: firstText(
+                item.assignmentId,
+                item.id
+              ),
+            },
+          ]}
+        />
+      );
+    }
+
+    if (
+      activeTab === "donations"
+    ) {
+      const status =
+        firstText(
+          item.status,
+          "unknown"
+        );
+
+      return (
+        <RecordCard
+          key={item.id}
+          icon="gift-outline"
+          title={firstText(
+            item.donorName,
+            item.donorEmail,
+            "Donation Record"
+          )}
+          subtitle={firstText(
+            item.itemsDescription,
+            item.donationType
+          )}
+          status={status}
+          rows={[
+            {
+              label:
+                "Donation Type",
+              value: firstText(
+                item.donationType
+              ),
+            },
+
+            {
+              label:
+                "Amount",
+              value: firstText(
+                item.amount
+              ),
+            },
+
+            {
+              label:
+                "Families Helped",
+              value: firstText(
+                item.familiesHelped
+              ),
+            },
+
+            {
+              label:
+                "Donation ID",
+              value: item.id,
+            },
+          ]}
+        />
+      );
+    }
+
+    if (
+      activeTab === "events"
+    ) {
+      const status =
+        firstText(
+          item.status,
+          "active"
+        );
+
+      return (
+        <RecordCard
+          key={item.id}
+          icon="calendar-outline"
+          title={firstText(
+            item.title,
+            item.name,
+            "Volunteer Event"
+          )}
+          subtitle={firstText(
+            item.location,
+            item.barangay
+          )}
+          status={status}
+          rows={[
+            {
+              label:
+                "Barangay",
+              value: firstText(
+                item.barangay
+              ),
+            },
+
+            {
+              label:
+                "Required Volunteers",
+              value: firstText(
+                item.requiredVolunteers
+              ),
+            },
+
+            {
+              label:
+                "Assigned Volunteers",
+              value: firstText(
+                item.assignedVolunteersCount,
+                item.participantCount
+              ),
+            },
+
+            {
+              label:
+                "Event ID",
               value: item.id,
             },
           ]}
@@ -710,6 +1011,7 @@ export default function AllRecords() {
 
     const status =
       firstText(
+        item.verificationStatus,
         item.status,
         "issued"
       );
@@ -731,18 +1033,25 @@ export default function AllRecords() {
         rows={[
           {
             label:
-              "Certificate Type",
+              "Verified Helps",
             value: firstText(
-              item.certificateType
+              item.verifiedHelps
             ),
           },
 
           {
             label:
-              "Verified Helps",
+              "Service Minutes",
             value: firstText(
-              item.verifiedHelps,
-              item.totalVerifiedHelps
+              item.verifiedServiceMinutes
+            ),
+          },
+
+          {
+            label:
+              "People Helped",
+            value: firstText(
+              item.peopleHelped
             ),
           },
 
@@ -753,19 +1062,11 @@ export default function AllRecords() {
               item.issuedAt
             ),
           },
-
-          {
-            label:
-              "Certificate ID",
-            value: firstText(
-              item.certificateId,
-              item.id
-            ),
-          },
         ]}
       />
     );
   };
+
 
   if (loading) {
     return (
@@ -846,15 +1147,6 @@ export default function AllRecords() {
         />
 
         <SummaryCard
-          label="Assignments"
-          value={
-            records
-              .assignments.length
-          }
-          icon="navigate-outline"
-        />
-
-        <SummaryCard
           label="Verified Help"
           value={
             records
@@ -863,6 +1155,22 @@ export default function AllRecords() {
           icon={
             "checkmark-done-outline"
           }
+        />
+
+        <SummaryCard
+          label="Disputes"
+          value={
+            records.disputes.length
+          }
+          icon="alert-circle-outline"
+        />
+
+        <SummaryCard
+          label="Donations"
+          value={
+            records.donations.length
+          }
+          icon="gift-outline"
         />
 
         <SummaryCard

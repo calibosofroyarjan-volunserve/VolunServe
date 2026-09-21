@@ -33,6 +33,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
+import { activeModeForProfile, hasVolunteerAccess } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -45,6 +46,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useUserSession();
+
+  const activeMode = activeModeForProfile(profile);
+  const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
+  const displayName =
+    profile?.firstName?.trim() ||
+    profile?.fullName?.trim()?.split(" ")[0] ||
+    "VolunServe Member";
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -501,7 +509,7 @@ export default function HomeScreen() {
                 </Text>
 
                 <Text style={styles.welcomeName}>
-                  Froy Arjan
+                  {displayName}
                 </Text>
 
                 <Text style={styles.welcomeMessage}>
@@ -581,145 +589,155 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* =================================================
-                EMERGENCY
-            ================================================= */}
+            {volunteerMode ? (
+              <>
+                <ServiceCard
+                  delay={300}
+                  glassDelay={0}
+                  identity="RESPONSE"
+                  icon="people"
+                  title="Volunteer Tasks"
+                  description="View and respond to your assigned emergency missions."
+                  iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
+                  cardGradient={["#FFFFFF", "#F5FFF9", "#C9F6DA"]}
+                  accentColor="#0BA861"
+                  badgeColor="#DCF8E9"
+                  onPress={() => router.push("/volunteer")}
+                />
 
-            <ServiceCard
-              delay={300}
-              glassDelay={0}
-              identity="EMERGENCY"
-              icon="warning"
-              title="Report a Disaster"
-              description="Report hazards and emergencies in your area."
-              iconGradient={[
-                "#FF7882",
-                "#FF3E4D",
-                "#E92338",
-              ]}
-              cardGradient={[
-                "#FFFFFF",
-                "#FFF7F8",
-                "#FFD4DB",
-              ]}
-              accentColor="#EF3340"
-              badgeColor="#FFE3E7"
-              onPress={() =>
-                router.push("/disaster-response")
-              }
-            />
+                <ServiceCard
+                  delay={390}
+                  glassDelay={700}
+                  identity="MONITORING"
+                  icon="map"
+                  title="Live Response Map"
+                  description="Track assigned incidents, response zones, and your location."
+                  iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
+                  cardGradient={["#FFFFFF", "#F3FAFF", "#CEE8FF"]}
+                  accentColor="#218FDB"
+                  badgeColor="#DDF2FF"
+                  onPress={() => router.push("/map-tracking")}
+                />
 
-            {/* =================================================
-                ASSISTANCE
-            ================================================= */}
+                <ServiceCard
+                  delay={480}
+                  glassDelay={1400}
+                  identity="PROGRESS"
+                  icon="ribbon"
+                  title="Volunteer Impact"
+                  description="Review your verified contributions and response progress."
+                  iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
+                  cardGradient={["#FFFFFF", "#FFFAF1", "#FFE0A4"]}
+                  accentColor="#F28C13"
+                  badgeColor="#FFF0D5"
+                  onPress={() => router.push("/volunteer-impact")}
+                />
 
-            <ServiceCard
-              delay={390}
-              glassDelay={700}
-              identity="ASSISTANCE"
-              icon="hand-left"
-              title="Request Assistance"
-              description="Request help for you or someone in need."
-              iconGradient={[
-                "#FFC25B",
-                "#FF9C1F",
-                "#F47A00",
-              ]}
-              cardGradient={[
-                "#FFFFFF",
-                "#FFFAF1",
-                "#FFE0A4",
-              ]}
-              accentColor="#F28C13"
-              badgeColor="#FFF0D5"
-              onPress={() =>
-                router.push("/resident")
-              }
-            />
+                <ServiceCard
+                  delay={570}
+                  glassDelay={2100}
+                  identity="RECOGNITION"
+                  icon="document-text"
+                  title="Certificates"
+                  description="View your issued and verifiable volunteer certificates."
+                  iconGradient={["#8DA2FB", "#6177F2", "#4657D9"]}
+                  cardGradient={["#FFFFFF", "#F7F8FF", "#DDE2FF"]}
+                  accentColor="#5368E8"
+                  badgeColor="#E8EBFF"
+                  onPress={() => router.push("/certificate")}
+                />
 
-            {/* =================================================
-                COMMUNITY
-            ================================================= */}
+                <ServiceCard
+                  delay={660}
+                  glassDelay={2800}
+                  identity="SUPPORT"
+                  icon="heart"
+                  title="Donations"
+                  description="Access the existing donation feature and relief support records."
+                  iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
+                  cardGradient={["#FFFFFF", "#FFF6F7", "#FFD6DC"]}
+                  accentColor="#EF4855"
+                  badgeColor="#FFE6E9"
+                  onPress={() => router.push("/donation")}
+                />
+              </>
+            ) : (
+              <>
+                <ServiceCard
+                  delay={300}
+                  glassDelay={0}
+                  identity="EMERGENCY"
+                  icon="warning"
+                  title="Report a Disaster"
+                  description="Report hazards and emergencies in your area."
+                  iconGradient={["#FF7882", "#FF3E4D", "#E92338"]}
+                  cardGradient={["#FFFFFF", "#FFF7F8", "#FFD4DB"]}
+                  accentColor="#EF3340"
+                  badgeColor="#FFE3E7"
+                  onPress={() => router.push("/disaster-response")}
+                />
 
-            <ServiceCard
-              delay={480}
-              glassDelay={1400}
-              identity="COMMUNITY"
-              icon="people"
-              title="Volunteer Events"
-              description="Join events and make a difference."
-              iconGradient={[
-                "#48DA92",
-                "#14BA6E",
-                "#038F56",
-              ]}
-              cardGradient={[
-                "#FFFFFF",
-                "#F5FFF9",
-                "#C9F6DA",
-              ]}
-              accentColor="#0BA861"
-              badgeColor="#DCF8E9"
-              onPress={() =>
-                router.push("/volunteer")
-              }
-            />
+                <ServiceCard
+                  delay={390}
+                  glassDelay={700}
+                  identity="ASSISTANCE"
+                  icon="hand-left"
+                  title="Request Assistance"
+                  description="Request help for you or someone in need."
+                  iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
+                  cardGradient={["#FFFFFF", "#FFFAF1", "#FFE0A4"]}
+                  accentColor="#F28C13"
+                  badgeColor="#FFF0D5"
+                  onPress={() => router.push("/resident")}
+                />
 
-            {/* =================================================
-                MONITORING
-            ================================================= */}
+                <ServiceCard
+                  delay={480}
+                  glassDelay={1400}
+                  identity="COMMUNITY"
+                  icon="people"
+                  title={hasVolunteerAccess(profile) ? "Volunteer Access" : "Apply as Volunteer"}
+                  description={
+                    hasVolunteerAccess(profile)
+                      ? "Your volunteer access is approved. Switch to Volunteer Mode when needed."
+                      : "Apply for volunteer access using your existing resident account."
+                  }
+                  iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
+                  cardGradient={["#FFFFFF", "#F5FFF9", "#C9F6DA"]}
+                  accentColor="#0BA861"
+                  badgeColor="#DCF8E9"
+                  onPress={() => router.push("/volunteer-application")}
+                />
 
-            <ServiceCard
-              delay={570}
-              glassDelay={2100}
-              identity="MONITORING"
-              icon="map"
-              title="Map Tracking"
-              description="View incidents and response zones in real-time."
-              iconGradient={[
-                "#62BBFA",
-                "#2795E5",
-                "#0873C5",
-              ]}
-              cardGradient={[
-                "#FFFFFF",
-                "#F3FAFF",
-                "#CEE8FF",
-              ]}
-              accentColor="#218FDB"
-              badgeColor="#DDF2FF"
-              onPress={() =>
-                router.push("/map-tracking")
-              }
-            />
+                <ServiceCard
+                  delay={570}
+                  glassDelay={2100}
+                  identity="MONITORING"
+                  icon="map"
+                  title="Map Tracking"
+                  description="View incidents and response zones in real-time."
+                  iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
+                  cardGradient={["#FFFFFF", "#F3FAFF", "#CEE8FF"]}
+                  accentColor="#218FDB"
+                  badgeColor="#DDF2FF"
+                  onPress={() => router.push("/map-tracking")}
+                />
 
-            {/* =================================================
-                SUPPORT
-            ================================================= */}
-
-            <ServiceCard
-              delay={660}
-              glassDelay={2800}
-              identity="SUPPORT"
-              icon="heart"
-              title="Make a Donation"
-              description="Support relief efforts and community programs."
-              iconGradient={[
-                "#FF7D86",
-                "#FF4656",
-                "#EB2639",
-              ]}
-              cardGradient={[
-                "#FFFFFF",
-                "#FFF6F7",
-                "#FFD6DC",
-              ]}
-              accentColor="#EF4855"
-              badgeColor="#FFE6E9"
-              onPress={() =>
-                router.push("/donation")
-              }
-            />
+                <ServiceCard
+                  delay={660}
+                  glassDelay={2800}
+                  identity="SUPPORT"
+                  icon="heart"
+                  title="Make a Donation"
+                  description="Support relief efforts and community programs."
+                  iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
+                  cardGradient={["#FFFFFF", "#FFF6F7", "#FFD6DC"]}
+                  accentColor="#EF4855"
+                  badgeColor="#FFE6E9"
+                  onPress={() => router.push("/donation")}
+                />
+              </>
+            )}
 
             <View style={styles.bottomSpace} />
           </View>
@@ -756,6 +774,8 @@ export default function HomeScreen() {
         email={profile?.email || ""}
         role={profile?.role || "resident"}
         activeMode={profile?.activeMode}
+        residentAccess={profile?.residentAccess}
+        volunteerAccess={profile?.volunteerAccess}
       />
     </>
   );
