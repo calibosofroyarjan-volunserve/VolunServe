@@ -69,6 +69,7 @@ app.use(
       "Authorization",
       "X-Signature-V2",
       "X-Timestamp",
+      "X-Didit-Test-Webhook",
     ],
   }),
 );
@@ -413,6 +414,28 @@ async function findFirebaseUid({
   vendorData,
   sessionId,
 }) {
+  const uid =
+    cleanText(
+      vendorData,
+      200,
+    );
+
+  if (uid) {
+    const userSnapshot =
+      await db
+        .collection(
+          "users",
+        )
+        .doc(uid)
+        .get();
+
+    if (
+      userSnapshot.exists
+    ) {
+      return uid;
+    }
+  }
+
   if (sessionId) {
     const snapshot =
       await db
@@ -436,31 +459,28 @@ async function findFirebaseUid({
     }
   }
 
-  const uid =
-    cleanText(
-      vendorData,
-      200,
-    );
+  return "";
+}
 
-  if (!uid) {
-    return "";
-  }
+function isDiditTestWebhook(
+  request,
+) {
+  const headerValue =
+    String(
+      request.headers[
+        "x-didit-test-webhook"
+      ] ||
+      "",
+    )
+      .trim()
+      .toLowerCase();
 
-  const userSnapshot =
-    await db
-      .collection(
-        "users",
-      )
-      .doc(uid)
-      .get();
-
-  if (
-    !userSnapshot.exists
-  ) {
-    return "";
-  }
-
-  return uid;
+  return (
+    headerValue === "true" ||
+    request.body
+      ?.metadata
+      ?.test_webhook === true
+  );
 }
 
 app.get(
@@ -889,10 +909,358 @@ app.get(
   },
 );
 
+async function processDiditWebhookEvent(
+  event,
+) {
+  const webhookType =
+    cleanText(
+      event.webhook_type ||
+      event.type ||
+      "",
+      80,
+    );
+
+  if (
+    webhookType !==
+    "status.updated"
+  ) {
+    return;
+  }
+
+  const configuredEnvironment =
+    cleanText(
+      process.env
+        .DIDIT_ENVIRONMENT ||
+      "",
+      20,
+    ).toLowerCase();
+
+  const eventEnvironment =
+    cleanText(
+      event.environment ||
+      "",
+      20,
+    ).toLowerCase();
+
+  if (
+    configuredEnvironment &&
+    eventEnvironment &&
+    configuredEnvironment !==
+      eventEnvironment
+  ) {
+    console.warn(
+      "Ignored Didit webhook from another environment.",
+    );
+
+    return;
+  }
+
+  const eventId =
+    cleanText(
+      event.event_id ||
+      event.id ||
+      "",
+      200,
+    );
+
+  const sessionId =
+    cleanText(
+      event.session_id ||
+      event.session?.id ||
+      event.data?.session_id ||
+      "",
+      200,
+    );
+
+  const workflowId =
+    cleanText(
+      event.workflow_id ||
+      event.session?.workflow_id ||
+      event.data?.workflow_id ||
+      "",
+      200,
+    );
+
+  const vendorData =
+    cleanText(
+      event.vendor_data ||
+      event.session?.vendor_data ||
+      event.data?.vendor_data ||
+      "",
+      200,
+    );
+
+  const providerStatus =
+    cleanText(
+      event.status ||
+      event.session?.status ||
+      event.data?.status ||
+      event.decision?.status ||
+      "",
+      80,
+    );
+
+  const configuredWorkflowId =
+    cleanText(
+      process.env
+        .DIDIT_WORKFLOW_ID ||
+      "",
+      200,
+    );
+
+  if (
+    configuredWorkflowId &&
+    workflowId &&
+    configuredWorkflowId !==
+      workflowId
+  ) {
+    console.warn(
+      "Ignored Didit webhook from another workflow.",
+    );
+
+    return;
+  }
+
+  const uid =
+    await findFirebaseUid(
+      {
+        vendorData,
+        sessionId,
+      },
+    );
+
+  if (!uid) {
+    console.warn(
+      "Didit webhook could not be linked to a VolunServe user.",
+    );
+
+    return;
+  }
+
+  const userRef =
+    db
+      .collection(
+        "users",
+      )
+      .doc(uid);
+
+  const verificationRef =
+    db
+      .collection(
+        "identityVerifications",
+      )
+      .doc(uid);
+
+  const [
+    userSnapshot,
+    verificationSnapshot,
+  ] =
+    await Promise.all([
+      userRef.get(),
+      verificationRef.get(),
+    ]);
+
+  if (
+    !userSnapshot.exists
+  ) {
+    console.warn(
+      "Didit webhook user does not exist:",
+      uid,
+    );
+
+    return;
+  }
+
+  const verificationData =
+    verificationSnapshot.exists
+      ? verificationSnapshot.data() ||
+        {}
+      : {};
+
+  const storedSessionId =
+    cleanText(
+      verificationData.sessionId ||
+      "",
+      200,
+    );
+
+  if (
+    storedSessionId &&
+    sessionId &&
+    storedSessionId !==
+      sessionId
+  ) {
+    console.warn(
+      "Ignored stale Didit verification session.",
+    );
+
+    return;
+  }
+
+  const previousEventId =
+    cleanText(
+      verificationData.lastEventId ||
+      "",
+      200,
+    );
+
+  if (
+    eventId &&
+    previousEventId &&
+    eventId === previousEventId
+  ) {
+    return;
+  }
+
+  const identityStatus =
+    mapDiditStatusToIdentityStatus(
+      providerStatus,
+    );
+
+  const batch =
+    db.batch();
+
+  const verificationUpdate = {
+    uid,
+
+    provider:
+      "didit",
+
+    providerStatus,
+
+    webhookType,
+
+    status:
+      identityStatus ||
+      "pending",
+
+    lastWebhookAt:
+      FieldValue
+        .serverTimestamp(),
+
+    updatedAt:
+      FieldValue
+        .serverTimestamp(),
+  };
+
+  if (sessionId) {
+    verificationUpdate.sessionId =
+      sessionId;
+  }
+
+  if (workflowId) {
+    verificationUpdate.workflowId =
+      workflowId;
+  }
+
+  if (eventId) {
+    verificationUpdate.lastEventId =
+      eventId;
+  }
+
+  if (eventEnvironment) {
+    verificationUpdate.environment =
+      eventEnvironment;
+  }
+
+  batch.set(
+    verificationRef,
+    verificationUpdate,
+    {
+      merge:
+        true,
+    },
+  );
+
+  if (
+    identityStatus ===
+    "verified"
+  ) {
+    batch.set(
+      userRef,
+      {
+        identityStatus:
+          "verified",
+
+        identityVerified:
+          true,
+
+        identityVerifiedAt:
+          FieldValue
+            .serverTimestamp(),
+
+        identityVerifiedBy:
+          "didit",
+
+        identityFailureReason:
+          FieldValue.delete(),
+
+        updatedAt:
+          FieldValue
+            .serverTimestamp(),
+      },
+      {
+        merge:
+          true,
+      },
+    );
+  } else if (
+    identityStatus ===
+    "failed"
+  ) {
+    batch.set(
+      userRef,
+      {
+        identityStatus:
+          "failed",
+
+        identityVerified:
+          false,
+
+        identityFailureReason:
+          providerStatus ||
+          "Identity verification was not approved.",
+
+        updatedAt:
+          FieldValue
+            .serverTimestamp(),
+      },
+      {
+        merge:
+          true,
+      },
+    );
+  } else if (
+    identityStatus ===
+    "pending"
+  ) {
+    batch.set(
+      userRef,
+      {
+        identityStatus:
+          "pending",
+
+        identityVerified:
+          false,
+
+        updatedAt:
+          FieldValue
+            .serverTimestamp(),
+      },
+      {
+        merge:
+          true,
+      },
+    );
+  }
+
+  await batch.commit();
+}
+
 app.post(
   "/api/identity/webhook",
 
-  async (
+  (
     request,
     response,
   ) => {
@@ -931,414 +1299,65 @@ app.post(
       webhookType !==
       "status.updated"
     ) {
-      response.json({
-        ok:
-          true,
+      response
+        .status(200)
+        .json({
+          ok:
+            true,
 
-        ignored:
-          true,
-      });
+          ignored:
+            true,
+        });
 
       return;
     }
-
-    const configuredEnvironment =
-      cleanText(
-        process.env
-          .DIDIT_ENVIRONMENT ||
-        "",
-        20,
-      ).toLowerCase();
-
-    const eventEnvironment =
-      cleanText(
-        event.environment ||
-        "",
-        20,
-      ).toLowerCase();
 
     if (
-      configuredEnvironment &&
-      eventEnvironment &&
-      configuredEnvironment !==
-        eventEnvironment
+      isDiditTestWebhook(
+        request,
+      )
     ) {
-      console.warn(
-        "Ignored Didit webhook from another environment.",
+      console.log(
+        "Accepted Didit test webhook.",
       );
-
-      response.json({
-        ok:
-          true,
-
-        ignored:
-          true,
-      });
-
-      return;
-    }
-
-    const eventId =
-      cleanText(
-        event.event_id ||
-        event.id ||
-        "",
-        200,
-      );
-
-    const sessionId =
-      cleanText(
-        event.session_id ||
-        event.session?.id ||
-        event.data?.session_id ||
-        "",
-        200,
-      );
-
-    const workflowId =
-      cleanText(
-        event.workflow_id ||
-        event.session?.workflow_id ||
-        event.data?.workflow_id ||
-        "",
-        200,
-      );
-
-    const vendorData =
-      cleanText(
-        event.vendor_data ||
-        event.session?.vendor_data ||
-        event.data?.vendor_data ||
-        "",
-        200,
-      );
-
-    const providerStatus =
-      cleanText(
-        event.status ||
-        event.session?.status ||
-        event.data?.status ||
-        event.decision?.status ||
-        "",
-        80,
-      );
-
-    const configuredWorkflowId =
-      cleanText(
-        process.env
-          .DIDIT_WORKFLOW_ID ||
-        "",
-        200,
-      );
-
-    if (
-      configuredWorkflowId &&
-      workflowId &&
-      configuredWorkflowId !==
-        workflowId
-    ) {
-      console.warn(
-        "Ignored Didit webhook from another workflow.",
-      );
-
-      response.json({
-        ok:
-          true,
-
-        ignored:
-          true,
-      });
-
-      return;
-    }
-
-    try {
-      const uid =
-        await findFirebaseUid(
-          {
-            vendorData,
-            sessionId,
-          },
-        );
-
-      if (!uid) {
-        console.warn(
-          "Didit webhook could not be linked to a VolunServe user.",
-        );
-
-        response.json({
-          ok:
-            true,
-
-          ignored:
-            true,
-        });
-
-        return;
-      }
-
-      const userRef =
-        db
-          .collection(
-            "users",
-          )
-          .doc(uid);
-
-      const verificationRef =
-        db
-          .collection(
-            "identityVerifications",
-          )
-          .doc(uid);
-
-      const [
-        userSnapshot,
-        verificationSnapshot,
-      ] =
-        await Promise.all([
-          userRef.get(),
-          verificationRef.get(),
-        ]);
-
-      if (
-        !userSnapshot.exists
-      ) {
-        console.warn(
-          "Didit webhook user does not exist:",
-          uid,
-        );
-
-        response.json({
-          ok:
-            true,
-
-          ignored:
-            true,
-        });
-
-        return;
-      }
-
-      const verificationData =
-        verificationSnapshot.exists
-          ? verificationSnapshot.data() ||
-            {}
-          : {};
-
-      const storedSessionId =
-        cleanText(
-          verificationData.sessionId ||
-          "",
-          200,
-        );
-
-      if (
-        storedSessionId &&
-        sessionId &&
-        storedSessionId !==
-          sessionId
-      ) {
-        console.warn(
-          "Ignored stale Didit verification session.",
-        );
-
-        response.json({
-          ok:
-            true,
-
-          ignored:
-            true,
-        });
-
-        return;
-      }
-
-      const previousEventId =
-        cleanText(
-          verificationData.lastEventId ||
-          "",
-          200,
-        );
-
-      if (
-        eventId &&
-        previousEventId &&
-        eventId === previousEventId
-      ) {
-        response.json({
-          ok:
-            true,
-
-          duplicate:
-            true,
-        });
-
-        return;
-      }
-
-      const identityStatus =
-        mapDiditStatusToIdentityStatus(
-          providerStatus,
-        );
-
-      const batch =
-        db.batch();
-
-      const verificationUpdate = {
-        uid,
-
-        provider:
-          "didit",
-
-        providerStatus,
-
-        webhookType,
-
-        status:
-          identityStatus ||
-          "pending",
-
-        lastWebhookAt:
-          FieldValue
-            .serverTimestamp(),
-
-        updatedAt:
-          FieldValue
-            .serverTimestamp(),
-      };
-
-      if (sessionId) {
-        verificationUpdate.sessionId =
-          sessionId;
-      }
-
-      if (workflowId) {
-        verificationUpdate.workflowId =
-          workflowId;
-      }
-
-      if (eventId) {
-        verificationUpdate.lastEventId =
-          eventId;
-      }
-
-      if (eventEnvironment) {
-        verificationUpdate.environment =
-          eventEnvironment;
-      }
-
-      batch.set(
-        verificationRef,
-        verificationUpdate,
-        {
-          merge:
-            true,
-        },
-      );
-
-      if (
-        identityStatus ===
-        "verified"
-      ) {
-        batch.set(
-          userRef,
-          {
-            identityStatus:
-              "verified",
-
-            identityVerified:
-              true,
-
-            identityVerifiedAt:
-              FieldValue
-                .serverTimestamp(),
-
-            identityVerifiedBy:
-              "didit",
-
-            identityFailureReason:
-              FieldValue.delete(),
-
-            updatedAt:
-              FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          },
-        );
-      } else if (
-        identityStatus ===
-        "failed"
-      ) {
-        batch.set(
-          userRef,
-          {
-            identityStatus:
-              "failed",
-
-            identityVerified:
-              false,
-
-            identityFailureReason:
-              providerStatus ||
-              "Identity verification was not approved.",
-
-            updatedAt:
-              FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          },
-        );
-      } else if (
-        identityStatus ===
-        "pending"
-      ) {
-        batch.set(
-          userRef,
-          {
-            identityStatus:
-              "pending",
-
-            identityVerified:
-              false,
-
-            updatedAt:
-              FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          },
-        );
-      }
-
-      await batch.commit();
 
       response
         .status(200)
         .json({
           ok:
             true,
-        });
-    } catch (error) {
-      console.error(
-        "Didit webhook processing failed:",
-        error,
-      );
 
-      response
-        .status(500)
-        .json({
-          error:
-            "webhook_processing_failed",
+          test:
+            true,
         });
+
+      return;
     }
+
+    response
+      .status(200)
+      .json({
+        ok:
+          true,
+
+        accepted:
+          true,
+      });
+
+    setImmediate(
+      () => {
+        processDiditWebhookEvent(
+          event,
+        ).catch(
+          (error) => {
+            console.error(
+              "Didit webhook processing failed:",
+              error,
+            );
+          },
+        );
+      },
+    );
   },
 );
 
