@@ -9,7 +9,7 @@
     "check": "node --check server.js && node --check firebaseAdmin.js && node --check didit.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "cors": "^2.8.5",
