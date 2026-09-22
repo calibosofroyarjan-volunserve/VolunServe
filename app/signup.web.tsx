@@ -25,7 +25,6 @@ import { connectGoogleAccountWeb, signUpUser } from "../lib/firebaseAuth";
 type Step = 1 | 2 | 3 | 4;
 
 type FormState = {
-  role: "resident" | "volunteer";
   lastName: string;
   firstName: string;
   middleName: string;
@@ -40,9 +39,6 @@ type FormState = {
   occupationCategory: string;
   occupationSpecialization: string;
   occupationOther: string;
-  skills: string[];
-  skillOther: string;
-  availability: string[];
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
@@ -91,21 +87,6 @@ const SPECIALIZATIONS: Record<string, string[]> = {
   "Skilled Worker": ["Electrician", "Plumber", "Driver", "Welder", "Carpenter", "Other Skill"],
 };
 
-const SKILL_OPTIONS = [
-  "First Aid",
-  "Medical Assistance",
-  "Search and Rescue",
-  "Driving",
-  "Logistics",
-  "IT / Technology",
-  "Other (Specify)",
-];
-
-const AVAILABILITY_OPTIONS = [
-  "Weekdays",
-  "Weekends",
-  "Evenings",
-];
 
 const COMMON_PASSWORDS = new Set([
   "password",
@@ -139,17 +120,17 @@ const PHOTO_SLIDES = [
 const STEP_META: Record<Step, { title: string; subtitle: string; icon: string }> = {
   1: {
     title: "Personal Details",
-    subtitle: "Basic identity and contact information",
+    subtitle: "Create your Basic Account using your identity and contact information.",
     icon: "👤",
   },
   2: {
     title: "Residential Address",
-    subtitle: "Location details for LGU verification.",
+    subtitle: "Add your current residential location.",
     icon: "🏠",
   },
   3: {
-    title: "Profile & Availability",
-    subtitle: "Tell us how you can help your community.",
+    title: "Basic Profile",
+    subtitle: "Complete the profile information saved with your account.",
     icon: "🧰",
   },
   4: {
@@ -404,11 +385,11 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 
         <ScrollView contentContainerStyle={styles.termsBody} showsVerticalScrollIndicator>
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
-          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your account may be subject to administrative review before activation.</Text>
+          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Account can be created without administrator approval. Resident verification is a separate identity-verification step.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
           <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your data for registration verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
+          <Text style={styles.termsP}>You consent to secure processing of your data for account registration, resident identity verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -429,7 +410,6 @@ export default function Signup() {
   const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [specificDays, setSpecificDays] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
   const [regions, setRegions] = useState<string[]>([]);
@@ -441,12 +421,7 @@ export default function Signup() {
   const [countryOpen, setCountryOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryPhone>(COUNTRY_PHONES[0]);
 
-  // Account type is chosen on its own screen before any registration fields.
-  const [selectedRole, setSelectedRole] = useState<FormState["role"] | null>(null);
-  const [roleConfirmed, setRoleConfirmed] = useState(false);
-
   const [formData, setFormData] = useState<FormState>({
-    role: "resident",
     lastName: "",
     firstName: "",
     middleName: "",
@@ -461,9 +436,6 @@ export default function Signup() {
     occupationCategory: "",
     occupationSpecialization: "",
     occupationOther: "",
-    skills: [],
-    skillOther: "",
-    availability: [],
     password: "",
     confirmPassword: "",
     acceptTerms: false,
@@ -472,10 +444,6 @@ export default function Signup() {
 
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  }, []);
-
-  const toggleSelection = useCallback((list: string[], item: string) => {
-    return list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
   }, []);
 
   const today = new Date();
@@ -513,7 +481,9 @@ export default function Signup() {
         setLoadingAddress(true);
         setCities([]);
         setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces", formData.province, "cities"));
+        const snap = await getDocs(
+          collection(db, "address_regions", formData.region, "provinces", formData.province, "cities")
+        );
         setCities(snap.docs.map((d) => d.id).sort());
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load cities.");
@@ -530,7 +500,18 @@ export default function Signup() {
       try {
         setLoadingAddress(true);
         setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces", formData.province, "cities", formData.city, "barangays"));
+        const snap = await getDocs(
+          collection(
+            db,
+            "address_regions",
+            formData.region,
+            "provinces",
+            formData.province,
+            "cities",
+            formData.city,
+            "barangays"
+          )
+        );
         setBarangays(snap.docs.map((d) => d.id).sort());
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load barangays.");
@@ -541,32 +522,37 @@ export default function Signup() {
     fetchBarangays();
   }, [formData.region, formData.province, formData.city]);
 
-  const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
+  const specializationOptions = useMemo(
+    () => SPECIALIZATIONS[formData.occupationCategory] ?? [],
+    [formData.occupationCategory]
+  );
 
   const validation = useMemo(() => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
+
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = !formData.middleName.trim() || nameOk(formData.middleName);
+    const middleNameValid = formData.noMiddleName || !formData.middleName.trim() || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
+
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
-    const phoneValid = phoneDigits.length >= selectedCountry.min && phoneDigits.length <= selectedCountry.max && (selectedCountry.code !== "+63" || /^9\d{9}$/.test(phoneDigits));
+    const phoneValid =
+      phoneDigits.length >= selectedCountry.min &&
+      phoneDigits.length <= selectedCountry.max &&
+      (selectedCountry.code !== "+63" || /^9\d{9}$/.test(phoneDigits));
+
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && !!formData.role;
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid = !!formData.region && !!formData.province && !!formData.city && !!formData.barangay;
+
     const needsSpec = specializationOptions.length > 0;
     const isOther = formData.occupationCategory === "Other (Specify)";
     const occupationOtherValid = !isOther || formData.occupationOther.trim().length >= 2;
     const specializationValid = !needsSpec || !!formData.occupationSpecialization;
-    const residentProfileValid = !!formData.occupationCategory && occupationOtherValid && specializationValid;
-    const volunteerProfileValid =
-      residentProfileValid &&
-      formData.skills.length > 0 &&
-      formData.availability.length > 0 &&
-      (!formData.skills.includes("Other (Specify)") || formData.skillOther.trim().length >= 2);
-    const step3Valid = formData.role === "volunteer" ? volunteerProfileValid : residentProfileValid;
+    const step3Valid = !!formData.occupationCategory && occupationOtherValid && specializationValid;
+
     const passwordChecks = {
       minLength: formData.password.length >= 8,
       upper: /[A-Z]/.test(formData.password),
@@ -576,10 +562,12 @@ export default function Signup() {
       notCommon: !COMMON_PASSWORDS.has(formData.password.toLowerCase()),
       matches: formData.password === formData.confirmPassword && !!formData.confirmPassword,
     };
+
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
     const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+
     return {
       lastNameValid,
       firstNameValid,
@@ -591,8 +579,6 @@ export default function Signup() {
       step1Valid,
       step2Valid,
       step3Valid,
-      residentProfileValid,
-      volunteerProfileValid,
       step4Valid,
       passwordChecks,
       passwordStrength,
@@ -601,40 +587,44 @@ export default function Signup() {
     };
   }, [formData, googleBound, selectedCountry, specializationOptions.length]);
 
-  const isStepValid = useCallback((s: Step) => {
-    if (s === 1) return validation.step1Valid;
-    if (s === 2) return validation.step2Valid;
-    if (s === 3) return validation.step3Valid;
-    return validation.step4Valid;
-  }, [validation]);
+  const isStepValid = useCallback(
+    (s: Step) => {
+      if (s === 1) return validation.step1Valid;
+      if (s === 2) return validation.step2Valid;
+      if (s === 3) return validation.step3Valid;
+      return validation.step4Valid;
+    },
+    [validation]
+  );
 
-  const scrollTop = useCallback(() => setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0), []);
+  const scrollTop = useCallback(
+    () => setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0),
+    []
+  );
 
   const goNext = useCallback(() => {
     if (!isStepValid(step)) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
-      
+
       const stepMessages: Record<Step, string> = {
         1: "Please complete your personal information and contact details.",
         2: "Please select your complete residential address.",
-        3:
-          formData.role === "volunteer"
-            ? "Please complete your occupation, skills, and availability information."
-            : "Please complete your occupation information.",
+        3: "Please complete your basic profile information.",
         4: googleBound
           ? "Please agree to the terms and confirm your information."
           : "Please create a password and agree to the terms.",
       };
-      
+
       Alert.alert("Incomplete Step", stepMessages[step]);
       return;
     }
+
     Keyboard.dismiss();
     if (step < 4) {
       setStep((prev) => (prev + 1) as Step);
       scrollTop();
     }
-  }, [formData.role, googleBound, isStepValid, scrollTop, step]);
+  }, [googleBound, isStepValid, scrollTop, step]);
 
   const goBack = useCallback(() => {
     Keyboard.dismiss();
@@ -673,18 +663,28 @@ export default function Signup() {
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
+
     if (!validation.step4Valid) {
-      Alert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
+      Alert.alert("Incomplete", "Please satisfy all security and consent requirements.");
       return;
     }
+
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Applicants must be at least 18 years old at the time of registration.");
+      Alert.alert("Ineligible", "Users must be at least 18 years old at the time of registration.");
       return;
     }
+
     try {
       setLoadingSubmit(true);
+
       await signUpUser({
-        role: formData.role,
+        // All new users start as a Basic Account.
+        // "resident" is kept here for compatibility with the existing auth/profile schema.
+        role: "resident",
+        accountStatus: "basic",
+        residentVerificationStatus: "unverified",
+        volunteerStatus: "not_applied",
+
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
@@ -693,39 +693,34 @@ export default function Signup() {
         password: formData.password,
         authProvider: googleBound ? "google" : "email",
         phoneNumber: toE164FromLocal(selectedCountry, formData.phoneLocal),
+
         region: formData.region,
         province: formData.province,
         city: formData.city,
         barangay: formData.barangay,
+
         occupationCategory: formData.occupationCategory,
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
-        skills: formData.skills,
-        skillOther: formData.skillOther,
-        availability: formData.availability,
+
+        // Volunteer data is intentionally empty at sign-up.
+        // It will be collected later from the Volunteer Application form.
+        skills: [],
+        skillOther: "",
+        availability: [],
       } as any);
 
-      const successTitle =
-        formData.role === "volunteer"
-          ? "Volunteer Registration Submitted"
-          : "Resident Registration Submitted";
-
+      const successTitle = "Basic Account Created";
       const successMessage =
-        formData.role === "volunteer"
-          ? "Your volunteer registration has been submitted for administrator review. Volunteer access will remain locked until an administrator approves your application."
-          : "Your resident registration has been submitted for administrator review. You will receive access after your account is approved.";
+        "Your account is ready. Sign in to continue. To become a Verified Resident, complete the National ID and face-verification process from your account. Volunteer application will only be available after Resident verification.";
 
-      // React Native Alert button callbacks are not reliable on every web
-      // browser. Use the browser alert on web, then redirect explicitly.
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
         router.replace("/login");
       } else {
-        Alert.alert(
-          successTitle,
-          successMessage,
-          [{ text: "OK", onPress: () => router.replace("/login") }]
-        );
+        Alert.alert(successTitle, successMessage, [
+          { text: "OK", onPress: () => router.replace("/login") },
+        ]);
       }
     } catch (e: any) {
       const message = getFriendlyAuthError(e);
@@ -740,49 +735,52 @@ export default function Signup() {
     }
   }, [formData, googleBound, loadingSubmit, router, selectedCountry, validation]);
 
-  const currentMeta =
-    step === 3
-      ? formData.role === "volunteer"
-        ? {
-            title: "Volunteer Profile",
-            subtitle: "Add the skills and availability used for volunteer matching.",
-            icon: "🧰",
-          }
-        : {
-            title: "Resident Profile",
-            subtitle: "Complete your basic profile information.",
-            icon: "👤",
-          }
-      : STEP_META[step];
+  const currentMeta = STEP_META[step];
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={undefined}
-    >
+    <KeyboardAvoidingView style={styles.screen} behavior={undefined}>
       <View style={styles.desktopShell}>
         {width >= 900 ? (
           <View style={styles.photoPanel}>
-            <Image source={PHOTO_SLIDES[slideIndex].image} style={styles.photoImage} resizeMode="cover" />
+            <Image
+              source={PHOTO_SLIDES[slideIndex].image}
+              style={styles.photoImage}
+              resizeMode="cover"
+            />
             <View style={styles.photoOverlay} />
+
             <View style={styles.photoTop}>
               <View style={styles.brandRow}>
-                <Image source={require("../assets/images/logo.png")} style={styles.logo} resizeMode="contain" />
+                <Image
+                  source={require("../assets/images/logo.png")}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
                 <View>
                   <Text style={styles.brandTitle}>VolunServe</Text>
                   <Text style={styles.brandSub}>City Disaster Response Platform</Text>
                 </View>
               </View>
+
               <View style={styles.secureBadge}>
                 <Text style={styles.secureBadgeText}>🔒 Secure community registration</Text>
               </View>
             </View>
 
             <View style={styles.photoControls}>
-              <TouchableOpacity style={styles.photoArrow} onPress={() => setSlideIndex((slideIndex + PHOTO_SLIDES.length - 1) % PHOTO_SLIDES.length)}>
+              <TouchableOpacity
+                style={styles.photoArrow}
+                onPress={() =>
+                  setSlideIndex((slideIndex + PHOTO_SLIDES.length - 1) % PHOTO_SLIDES.length)
+                }
+              >
                 <Text style={styles.photoArrowText}>‹</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.photoArrow} onPress={() => setSlideIndex((slideIndex + 1) % PHOTO_SLIDES.length)}>
+
+              <TouchableOpacity
+                style={styles.photoArrow}
+                onPress={() => setSlideIndex((slideIndex + 1) % PHOTO_SLIDES.length)}
+              >
                 <Text style={styles.photoArrowText}>›</Text>
               </TouchableOpacity>
             </View>
@@ -791,598 +789,695 @@ export default function Signup() {
               <View style={styles.photoAccentLine} />
               <Text style={styles.photoTitle}>{PHOTO_SLIDES[slideIndex].title}</Text>
               <Text style={styles.photoBody}>{PHOTO_SLIDES[slideIndex].body}</Text>
+
               <View style={styles.photoFooter}>
                 <View style={styles.dots}>
                   {PHOTO_SLIDES.map((_, index) => (
-                    <TouchableOpacity key={index} onPress={() => setSlideIndex(index)} style={[styles.dot, index === slideIndex ? styles.dotOn : styles.dotOff]} />
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setSlideIndex(index)}
+                      style={[styles.dot, index === slideIndex ? styles.dotOn : styles.dotOff]}
+                    />
                   ))}
                 </View>
-                <Text style={styles.photoLocation}>📍  Stronger Communities{`\n`}     Brighter Tomorrows</Text>
+
+                <Text style={styles.photoLocation}>
+                  📍  Stronger Communities{`\n`}     Brighter Tomorrows
+                </Text>
               </View>
             </View>
           </View>
         ) : null}
 
-      <ScrollView
-        ref={(r) => { scrollRef.current = r; }}
-        style={styles.formScroll}
-        contentContainerStyle={[styles.content, width < 900 && styles.contentMobile]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {width < 900 ? (
-          <View style={styles.mobileBrand}>
-            <Image source={require("../assets/images/logo.png")} style={styles.mobileLogo} resizeMode="contain" />
-            <Text style={styles.mobileBrandText}>VolunServe</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.mainCard}>
-          <View style={styles.signupHeading}>
-            <Text style={styles.signupTitle}>
-              {!roleConfirmed
-                ? "Choose your account type"
-                : step === 1
-                  ? "Personal Details"
-                  : currentMeta.title}
-            </Text>
-            <Text style={styles.signupSubtitle}>
-              {!roleConfirmed
-                ? "Select how you want to use VolunServe before filling out the registration form."
-                : step === 1
-                  ? `Registering as ${formData.role === "volunteer" ? "Volunteer" : "Resident"}. Enter your identity and contact information.`
-                  : currentMeta.subtitle}
-            </Text>
-          </View>
-
-          {!roleConfirmed ? (
-            <View style={styles.roleSelectionWrap}>
-              <View style={[styles.roleSelectionGrid, width < 600 && styles.roleSelectionGridMobile]}>
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={() => setSelectedRole("resident")}
-                  style={[
-                    styles.roleChoiceCard,
-                    selectedRole === "resident" && styles.roleChoiceCardActive,
-                  ]}
-                >
-                  <View style={[styles.roleChoiceIconWrap, selectedRole === "resident" && styles.roleChoiceIconWrapActive]}>
-                    <Text style={styles.roleChoiceIcon}>⌂</Text>
-                  </View>
-                  <Text style={styles.roleChoiceTitle}>Resident</Text>
-                  <Text style={styles.roleChoiceText}>
-                    Request assistance, submit community reports, view response maps, receive updates, and access resident services.
-                  </Text>
-                  <View style={styles.roleChoiceBadge}>
-                    <Text style={styles.roleChoiceBadgeText}>Community member</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={() => setSelectedRole("volunteer")}
-                  style={[
-                    styles.roleChoiceCard,
-                    selectedRole === "volunteer" && styles.roleChoiceCardActive,
-                  ]}
-                >
-                  <View style={[styles.roleChoiceIconWrap, selectedRole === "volunteer" && styles.roleChoiceIconWrapActive]}>
-                    <Text style={styles.roleChoiceIcon}>♟</Text>
-                  </View>
-                  <Text style={styles.roleChoiceTitle}>Volunteer</Text>
-                  <Text style={styles.roleChoiceText}>
-                    Apply to assist verified community response tasks. Skills and availability will be reviewed by an administrator.
-                  </Text>
-                  <View style={[styles.roleChoiceBadge, styles.roleChoiceBadgeVolunteer]}>
-                    <Text style={styles.roleChoiceBadgeText}>Responder applicant</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.roleSelectionHint}>
-                You can apply for Volunteer access later from a Resident account, so you do not need two accounts.
-              </Text>
-
-              <View style={styles.roleSelectionFooter}>
-                <TouchableOpacity onPress={() => router.push("/login")} style={styles.loginLinkWrap}>
-                  <Text style={styles.link}>
-                    Already have an account? <Text style={styles.linkStrong}>Sign in</Text>
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  disabled={!selectedRole}
-                  style={[styles.navBtn, styles.primaryBtn, !selectedRole && styles.disabledBtn]}
-                  onPress={() => {
-                    if (!selectedRole) return;
-
-                    setFormData((prev) => ({
-                      ...prev,
-                      role: selectedRole,
-                      ...(selectedRole === "resident"
-                        ? { skills: [], skillOther: "", availability: [] }
-                        : {}),
-                    }));
-                    setRoleConfirmed(true);
-                    setStep(1);
-                    Keyboard.dismiss();
-                    setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0);
-                  }}
-                >
-                  <Text style={styles.primaryText}>Continue  ›</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <>
-              <View style={styles.selectedRoleBanner}>
-                <View style={styles.selectedRoleCopy}>
-                  <Text style={styles.selectedRoleLabel}>ACCOUNT TYPE</Text>
-                  <Text style={styles.selectedRoleName}>
-                    {formData.role === "volunteer" ? "Volunteer" : "Resident"}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.changeRoleBtn}
-                  onPress={() => {
-                    setSelectedRole(formData.role);
-                    setRoleConfirmed(false);
-                    setStep(1);
-                    Keyboard.dismiss();
-                    setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0);
-                  }}
-                >
-                  <Text style={styles.changeRoleText}>Change</Text>
-                </TouchableOpacity>
-              </View>
-
-        <View style={styles.stepperCard}>
-          <View style={styles.stepRow}>
-            {[1, 2, 3, 4].map((n) => {
-              const active = step >= n;
-              const labels = [
-                "Personal",
-                "Address",
-                formData.role === "volunteer" ? "Volunteer" : "Resident",
-                "Security",
-              ];
-              return (
-                <View key={n} style={styles.stepItem}>
-                  <View style={styles.stepNode}>
-                    <View style={[styles.stepCircle, active && styles.stepCircleActive]}>
-                      <Text style={[styles.stepCircleText, active && styles.stepCircleTextActive]}>{step > n && step < 4 ? "✓" : n}</Text>
-                    </View>
-                    <Text style={[styles.stepLabel, step === n && styles.stepLabelActive]}>{labels[n - 1]}</Text>
-                  </View>
-                  {n < 4 ? <View style={[styles.stepLine, step > n && styles.stepLineActive]} /> : null}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.formCard}>
-          {step === 1 && (
-            <View>
-              <View
-                style={[
-                  styles.roleInfoBox,
-                  formData.role === "volunteer" && styles.roleInfoBoxVolunteer,
-                ]}
-              >
-                <Text style={styles.roleInfoTitle}>
-                  {formData.role === "volunteer"
-                    ? "Volunteer registration"
-                    : "Resident registration"}
-                </Text>
-                <Text style={styles.roleInfoText}>
-                  {formData.role === "volunteer"
-                    ? "Complete your identity details first. Skills and availability will be collected on Step 3 before administrator review."
-                    : "Complete your identity details first. Resident services will be available after administrator approval, and Volunteer access can still be applied for later."}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={handleGooglePress}
-                disabled={googleProfileLoaded}
-                style={[styles.googleBtn, googleProfileLoaded && styles.googleBtnDisabled]}
-              >
-                <View style={styles.googleButtonContent}>
-                  <Text style={styles.googleButtonMark}>G</Text>
-                  <Text style={styles.googleBtnText}>{googleProfileLoaded ? "Google Account Connected" : "Continue with Google"}</Text>
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or register with email</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <Field icon="✉" label="Email Address" placeholder="you@example.com" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              {formData.email.length > 0 && !validation.emailValid ? <ValidationText ok={false}>Enter a valid email format.</ValidationText> : null}
-
-              <View style={styles.formRow}>
-                <View style={styles.formColumn}>
-                  <Field icon="♙" label="First Name" placeholder="" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
-                </View>
-                <View style={styles.formColumn}>
-                  <Field icon="♙" label="Last Name" placeholder="" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
-                </View>
-              </View>
-
-              <View style={styles.formRow}>
-                <View style={styles.formColumn}>
-                  <Field icon="♙" label="Middle Name (Optional)" placeholder="" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} invalid={formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
-                </View>
-                <View style={styles.formColumn}>
-                  <View style={styles.field}>
-                    <Text style={styles.label}>Date of Birth</Text>
-                    {Platform.OS === "web" ? (
-                      <View style={[styles.webDateShell, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid]}>
-                        <Text style={styles.webDateIcon}>▣</Text>
-                        {React.createElement("input", {
-                          type: "date",
-                          value: formatDateForInput(formData.dateOfBirth),
-                          min: formatDateForInput(minDOB),
-                          max: formatDateForInput(maxDOB),
-                          onChange: (event: any) => {
-                            const value = event.target.value;
-                            if (!value) return updateField("dateOfBirth", null);
-                            const [year, month, day] = value.split("-").map(Number);
-                            updateField("dateOfBirth", new Date(year, month - 1, day));
-                          },
-                          style: styles.webDateInput as any,
-                        })}
-                      </View>
-                    ) : (
-                      <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
-                        <Text style={{ fontSize: 15, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
-                          {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-              {Platform.OS !== "web" && dobOpen && (
-                <DateTimePicker value={formData.dateOfBirth || maxDOB} mode="date" display="default" maximumDate={maxDOB} minimumDate={minDOB} onChange={(_, selectedDate) => {
-                  setDobOpen(false);
-                  if (selectedDate) updateField("dateOfBirth", selectedDate);
-                }} />
-              )}
-              {formData.dateOfBirth && !validation.ageValid ? <ValidationText ok={false}>You must be at least 18 years old to proceed.</ValidationText> : null}
-
-              <Text style={styles.label}>Mobile Number</Text>
-              <View style={styles.phoneWrap}>
-                <TouchableOpacity style={styles.phonePrefix} onPress={() => setCountryOpen(true)} activeOpacity={0.8}>
-                  <Text style={styles.flag}>{selectedCountry.flag}</Text>
-                  <Text style={styles.phonePrefixText}>{selectedCountry.code}</Text>
-                  <Text style={styles.countryChevron}>⌄</Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={[styles.phoneInput, !validation.phoneValid && formData.phoneLocal.length > 0 && styles.inputInvalid]}
-                  value={formData.phoneLocal}
-                  onChangeText={(v) => updateField("phoneLocal", sanitizePhoneLocal(v.trim()))}
-                  keyboardType="phone-pad"
-                  placeholder={selectedCountry.placeholder}
-                  placeholderTextColor={COLORS.lightText}
-                  maxLength={selectedCountry.max}
-                  returnKeyType="next"
-                />
-              </View>
-              {formData.phoneLocal.length > 0 && !validation.phoneValid ? <ValidationText ok={false}>Enter a valid {selectedCountry.name} mobile number.</ValidationText> : null}
-
-              <Modal visible={countryOpen} transparent animationType="fade" onRequestClose={() => setCountryOpen(false)}>
-                <Pressable style={styles.countryBackdrop} onPress={() => setCountryOpen(false)}>
-                  <Pressable style={styles.countryPanel} onPress={(event) => event.stopPropagation()}>
-                    <Text style={styles.countryTitle}>Select country</Text>
-                    <ScrollView style={styles.countryList}>
-                      {COUNTRY_PHONES.map((country) => (
-                        <TouchableOpacity
-                          key={`${country.name}-${country.code}`}
-                          style={[styles.countryItem, selectedCountry.name === country.name && styles.countryItemActive]}
-                          onPress={() => {
-                            setSelectedCountry(country);
-                            updateField("phoneLocal", "");
-                            setCountryOpen(false);
-                          }}
-                        >
-                          <Text style={styles.countryFlag}>{country.flag}</Text>
-                          <Text style={styles.countryName}>{country.name}</Text>
-                          <Text style={styles.countryCode}>{country.code}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </Pressable>
-                </Pressable>
-              </Modal>
-            </View>
-          )}
-
-          {step === 2 && (
-            <View>
-              {loadingAddress ? <View style={styles.loadingRow}><ActivityIndicator color={COLORS.primary} /><Text style={styles.loadingText}>Loading address options…</Text></View> : null}
-              <Dropdown label="Region" value={formData.region} options={regions} enabled={false} onChange={(value) => {
-                updateField("region", value); updateField("province", ""); updateField("city", ""); updateField("barangay", "");
-              }} />
-              <View style={styles.formRow}>
-                <View style={styles.formColumn}>
-                  <Dropdown label="Province" placeholder="Select province" value={formData.province} options={provinces} enabled={!!formData.region && provinces.length > 0} onChange={(value) => {
-                    updateField("province", value); updateField("city", ""); updateField("barangay", "");
-                  }} />
-                </View>
-                <View style={styles.formColumn}>
-                  <Dropdown label="City" placeholder="Select city" value={formData.city} options={cities} enabled={!!formData.province && cities.length > 0} onChange={(value) => {
-                    updateField("city", value); updateField("barangay", "");
-                  }} />
-                </View>
-              </View>
-              <Dropdown label="Barangay" placeholder="Select barangay" value={formData.barangay} options={barangays} enabled={!!formData.city && barangays.length > 0} onChange={(value) => updateField("barangay", value)} />
-              <View style={styles.addressNotice}>
-                <Text style={styles.addressNoticeIcon}>📍</Text>
-                <Text style={styles.addressNoticeText}>Your address helps the LGU verify your account and coordinate local response.</Text>
-              </View>
-            </View>
-          )}
-
-          {step === 3 && (
-            <View>
-              <View
-                style={[
-                  styles.profileModeBanner,
-                  formData.role === "volunteer" && styles.profileModeBannerVolunteer,
-                ]}
-              >
-                <Text style={styles.profileModeTitle}>
-                  {formData.role === "volunteer" ? "Volunteer Applicant Profile" : "Resident Profile"}
-                </Text>
-                <Text style={styles.profileModeText}>
-                  {formData.role === "volunteer"
-                    ? "These details help administrators review your application and later match you with suitable response tasks."
-                    : "Residents only need basic profile information here. Volunteer skills and availability are not required for Resident registration."}
-                </Text>
-              </View>
-
-              <Dropdown
-                label="Occupation Category"
-                placeholder="Select your occupation category"
-                value={formData.occupationCategory}
-                options={OCCUPATION_OPTIONS}
-                onChange={(value) => {
-                  updateField("occupationCategory", value);
-                  updateField("occupationSpecialization", "");
-                  updateField("occupationOther", "");
-                }}
+        <ScrollView
+          ref={(r) => {
+            scrollRef.current = r;
+          }}
+          style={styles.formScroll}
+          contentContainerStyle={[styles.content, width < 900 && styles.contentMobile]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {width < 900 ? (
+            <View style={styles.mobileBrand}>
+              <Image
+                source={require("../assets/images/logo.png")}
+                style={styles.mobileLogo}
+                resizeMode="contain"
               />
-
-              {validation.needsSpec && (
-                <Dropdown
-                  icon="📌"
-                  label="Specialization *"
-                  value={formData.occupationSpecialization}
-                  options={specializationOptions}
-                  enabled={!!formData.occupationCategory}
-                  onChange={(value) => updateField("occupationSpecialization", value)}
-                />
-              )}
-
-              {validation.isOther && (
-                <Field
-                  icon="✍️"
-                  label="Specify Occupation *"
-                  value={formData.occupationOther}
-                  onChange={(v) => updateField("occupationOther", v)}
-                  invalid={
-                    formData.occupationOther.length > 0 &&
-                    formData.occupationOther.trim().length < 2
-                  }
-                />
-              )}
-
-              {formData.role === "volunteer" ? (
-                <>
-                  <Text style={styles.groupLabel}>Volunteer Skills *</Text>
-                  <Text style={styles.helperText}>Select at least one skill.</Text>
-                  <View style={styles.cardBox}>
-                    <View style={styles.skillWrap}>
-                      {SKILL_OPTIONS.map((skill) => {
-                        const active = formData.skills.includes(skill);
-                        return (
-                          <Pressable
-                            key={skill}
-                            onPress={() =>
-                              updateField(
-                                "skills",
-                                toggleSelection(formData.skills, skill)
-                              )
-                            }
-                            style={[styles.skillTag, active && styles.skillTagActive]}
-                          >
-                            <Text
-                              style={[
-                                styles.skillText,
-                                active && styles.skillTextActive,
-                              ]}
-                            >
-                              {skill}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-
-                    {formData.skills.includes("Other (Specify)") && (
-                      <View style={{ width: "100%" }}>
-                        <Field
-                          icon="✍️"
-                          label="Specify Skill *"
-                          value={formData.skillOther}
-                          onChange={(v) => updateField("skillOther", v)}
-                          invalid={
-                            formData.skillOther.length > 0 &&
-                            formData.skillOther.trim().length < 2
-                          }
-                        />
-                      </View>
-                    )}
-                  </View>
-
-                  <Text style={styles.groupLabel}>Volunteer Availability *</Text>
-                  <Text style={styles.helperText}>Select at least one availability period.</Text>
-                  <View style={styles.cardBox}>
-                    {AVAILABILITY_OPTIONS.map((item) => {
-                      const active = formData.availability.includes(item);
-                      return (
-                        <TouchableOpacity
-                          key={item}
-                          style={styles.checkboxRow}
-                          onPress={() =>
-                            updateField(
-                              "availability",
-                              toggleSelection(formData.availability, item)
-                            )
-                          }
-                          activeOpacity={0.85}
-                        >
-                          <View
-                            style={[styles.checkbox, active && styles.checkboxOn]}
-                          >
-                            {active ? (
-                              <Text style={styles.checkboxTick}>✓</Text>
-                            ) : null}
-                          </View>
-                          <Text style={styles.checkboxLabel}>{item}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <View style={styles.profileNotice}>
-                    <Text style={styles.profileNoticeIcon}>ⓘ</Text>
-                    <Text style={styles.profileNoticeText}>
-                      Volunteer access is not automatic. Your account stays pending until an administrator reviews and approves the volunteer registration.
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <View style={styles.residentNotice}>
-                  <Text style={styles.residentNoticeIcon}>⌂</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.residentNoticeTitle}>Resident registration</Text>
-                    <Text style={styles.residentNoticeText}>
-                      Skills and volunteer availability are skipped. After approval, you will enter Resident Mode and may apply for Volunteer access later.
-                    </Text>
-                  </View>
-                </View>
-              )}
+              <Text style={styles.mobileBrandText}>VolunServe</Text>
             </View>
-          )}
+          ) : null}
 
-          {step === 4 && (
-            <View>
-              {googleBound ? (
-                <View style={styles.googleConnectedCard}>
-                  <View style={styles.googleMark}><Text style={styles.googleMarkText}>G</Text></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.googleConnectedTitle}>Google account connected</Text>
-                    <Text style={styles.googleConnectedEmail}>{formData.email}</Text>
+          <View style={styles.mainCard}>
+            <View style={styles.signupHeading}>
+              <Text style={styles.signupTitle}>{currentMeta.title}</Text>
+              <Text style={styles.signupSubtitle}>{currentMeta.subtitle}</Text>
+            </View>
+
+            <View style={styles.selectedRoleBanner}>
+              <View style={styles.selectedRoleCopy}>
+                <Text style={styles.selectedRoleLabel}>ACCOUNT LEVEL</Text>
+                <Text style={styles.selectedRoleName}>Basic Account</Text>
+              </View>
+              <View style={styles.roleChoiceBadge}>
+                <Text style={styles.roleChoiceBadgeText}>No approval required</Text>
+              </View>
+            </View>
+
+            <View style={styles.stepperCard}>
+              <View style={styles.stepRow}>
+                {[1, 2, 3, 4].map((n) => {
+                  const active = step >= n;
+                  const labels = ["Personal", "Address", "Profile", "Security"];
+
+                  return (
+                    <View key={n} style={styles.stepItem}>
+                      <View style={styles.stepNode}>
+                        <View style={[styles.stepCircle, active && styles.stepCircleActive]}>
+                          <Text
+                            style={[
+                              styles.stepCircleText,
+                              active && styles.stepCircleTextActive,
+                            ]}
+                          >
+                            {step > n && step < 4 ? "✓" : n}
+                          </Text>
+                        </View>
+                        <Text style={[styles.stepLabel, step === n && styles.stepLabelActive]}>
+                          {labels[n - 1]}
+                        </Text>
+                      </View>
+                      {n < 4 ? (
+                        <View style={[styles.stepLine, step > n && styles.stepLineActive]} />
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.formCard}>
+              {step === 1 && (
+                <View>
+                  <View style={styles.roleInfoBox}>
+                    <Text style={styles.roleInfoTitle}>Basic Account registration</Text>
+                    <Text style={styles.roleInfoText}>
+                      Everyone signs up the same way. This creates a Basic Account immediately.
+                      Resident verification and Volunteer application happen later from inside the
+                      account.
+                    </Text>
                   </View>
-                  <View style={styles.verifiedBadge}><Text style={styles.verifiedBadgeText}>✓ Verified</Text></View>
-                </View>
-              ) : (
-                <>
-                  <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
+
+                  <TouchableOpacity
+                    onPress={handleGooglePress}
+                    disabled={googleProfileLoaded}
+                    style={[styles.googleBtn, googleProfileLoaded && styles.googleBtnDisabled]}
+                  >
+                    <View style={styles.googleButtonContent}>
+                      <Text style={styles.googleButtonMark}>G</Text>
+                      <Text style={styles.googleBtnText}>
+                        {googleProfileLoaded ? "Google Account Connected" : "Continue with Google"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or register with email</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <Field
+                    icon="✉"
+                    label="Email Address"
+                    placeholder="you@example.com"
+                    value={formData.email}
+                    onChange={(v) => updateField("email", v.trim().toLowerCase())}
+                    keyboardType="email-address"
+                    invalid={!validation.emailValid && formData.email.length > 0}
+                    returnKeyType="next"
+                    editable={!googleBound}
+                    autoCapitalize="none"
+                  />
+
+                  {formData.email.length > 0 && !validation.emailValid ? (
+                    <ValidationText ok={false}>Enter a valid email format.</ValidationText>
+                  ) : null}
+
                   <View style={styles.formRow}>
                     <View style={styles.formColumn}>
-                      <Field icon="🔒" label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} autoCapitalize="none" />
-                      <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showPassword ? "Hide Password" : "Show Password"}</Text></TouchableOpacity>
+                      <Field
+                        icon="♙"
+                        label="First Name"
+                        value={formData.firstName}
+                        onChange={(v) => updateField("firstName", sanitizeName(v))}
+                        invalid={!validation.firstNameValid && formData.firstName.length > 0}
+                        returnKeyType="next"
+                      />
                     </View>
+
                     <View style={styles.formColumn}>
-                      <Field icon="🔐" label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} autoCapitalize="none" />
-                      <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowConfirmPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}</Text></TouchableOpacity>
+                      <Field
+                        icon="♙"
+                        label="Last Name"
+                        value={formData.lastName}
+                        onChange={(v) => updateField("lastName", sanitizeName(v))}
+                        invalid={!validation.lastNameValid && formData.lastName.length > 0}
+                        returnKeyType="next"
+                      />
                     </View>
                   </View>
 
-                  <View style={styles.passwordPanel}>
-                    <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
-                    <View style={styles.requirementsGrid}>
-                      <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
-                      <ValidationText ok={validation.passwordChecks.upper}>One uppercase letter.</ValidationText>
-                      <ValidationText ok={validation.passwordChecks.lower}>One lowercase letter.</ValidationText>
-                      <ValidationText ok={validation.passwordChecks.number}>One number.</ValidationText>
-                      <ValidationText ok={validation.passwordChecks.special}>One special character.</ValidationText>
-                      <ValidationText ok={validation.passwordChecks.matches}>Passwords match.</ValidationText>
+                  <View style={styles.formRow}>
+                    <View style={styles.formColumn}>
+                      <Field
+                        icon="♙"
+                        label="Middle Name (Optional)"
+                        value={formData.middleName}
+                        onChange={(v) => updateField("middleName", sanitizeName(v))}
+                        editable={!formData.noMiddleName}
+                        invalid={
+                          !formData.noMiddleName &&
+                          formData.middleName.length > 0 &&
+                          !validation.middleNameValid
+                        }
+                        returnKeyType="next"
+                      />
+                      <CheckRow
+                        label="I do not have a middle name"
+                        checked={formData.noMiddleName}
+                        onPress={() => {
+                          const next = !formData.noMiddleName;
+                          updateField("noMiddleName", next);
+                          if (next) updateField("middleName", "");
+                        }}
+                      />
+                    </View>
+
+                    <View style={styles.formColumn}>
+                      <View style={styles.field}>
+                        <Text style={styles.label}>Date of Birth</Text>
+
+                        {Platform.OS === "web" ? (
+                          <View
+                            style={[
+                              styles.webDateShell,
+                              !validation.ageValid &&
+                                formData.dateOfBirth !== null &&
+                                styles.inputInvalid,
+                            ]}
+                          >
+                            <Text style={styles.webDateIcon}>▣</Text>
+                            {React.createElement("input", {
+                              type: "date",
+                              value: formatDateForInput(formData.dateOfBirth),
+                              min: formatDateForInput(minDOB),
+                              max: formatDateForInput(maxDOB),
+                              onChange: (event: any) => {
+                                const value = event.target.value;
+                                if (!value) return updateField("dateOfBirth", null);
+
+                                const [year, month, day] = value.split("-").map(Number);
+                                updateField("dateOfBirth", new Date(year, month - 1, day));
+                              },
+                              style: styles.webDateInput as any,
+                            })}
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() => setDobOpen(true)}
+                            style={[
+                              styles.input,
+                              !validation.ageValid &&
+                                formData.dateOfBirth !== null &&
+                                styles.inputInvalid,
+                              { justifyContent: "center" },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 15,
+                                color: formData.dateOfBirth ? COLORS.text : COLORS.lightText,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {formData.dateOfBirth
+                                ? formatDOB(formData.dateOfBirth)
+                                : "MM/DD/YYYY"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </View>
-                </>
+
+                  {Platform.OS !== "web" && dobOpen && (
+                    <DateTimePicker
+                      value={formData.dateOfBirth || maxDOB}
+                      mode="date"
+                      display="default"
+                      maximumDate={maxDOB}
+                      minimumDate={minDOB}
+                      onChange={(_, selectedDate) => {
+                        setDobOpen(false);
+                        if (selectedDate) updateField("dateOfBirth", selectedDate);
+                      }}
+                    />
+                  )}
+
+                  {formData.dateOfBirth && !validation.ageValid ? (
+                    <ValidationText ok={false}>
+                      You must be at least 18 years old to proceed.
+                    </ValidationText>
+                  ) : null}
+
+                  <Text style={styles.label}>Mobile Number</Text>
+
+                  <View style={styles.phoneWrap}>
+                    <TouchableOpacity
+                      style={styles.phonePrefix}
+                      onPress={() => setCountryOpen(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.flag}>{selectedCountry.flag}</Text>
+                      <Text style={styles.phonePrefixText}>{selectedCountry.code}</Text>
+                      <Text style={styles.countryChevron}>⌄</Text>
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={[
+                        styles.phoneInput,
+                        !validation.phoneValid &&
+                          formData.phoneLocal.length > 0 &&
+                          styles.inputInvalid,
+                      ]}
+                      value={formData.phoneLocal}
+                      onChangeText={(v) =>
+                        updateField("phoneLocal", sanitizePhoneLocal(v.trim()))
+                      }
+                      keyboardType="phone-pad"
+                      placeholder={selectedCountry.placeholder}
+                      placeholderTextColor={COLORS.lightText}
+                      maxLength={selectedCountry.max}
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  {formData.phoneLocal.length > 0 && !validation.phoneValid ? (
+                    <ValidationText ok={false}>
+                      Enter a valid {selectedCountry.name} mobile number.
+                    </ValidationText>
+                  ) : null}
+
+                  <Modal
+                    visible={countryOpen}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setCountryOpen(false)}
+                  >
+                    <Pressable
+                      style={styles.countryBackdrop}
+                      onPress={() => setCountryOpen(false)}
+                    >
+                      <Pressable
+                        style={styles.countryPanel}
+                        onPress={(event) => event.stopPropagation()}
+                      >
+                        <Text style={styles.countryTitle}>Select country</Text>
+
+                        <ScrollView style={styles.countryList}>
+                          {COUNTRY_PHONES.map((country) => (
+                            <TouchableOpacity
+                              key={`${country.name}-${country.code}`}
+                              style={[
+                                styles.countryItem,
+                                selectedCountry.name === country.name &&
+                                  styles.countryItemActive,
+                              ]}
+                              onPress={() => {
+                                setSelectedCountry(country);
+                                updateField("phoneLocal", "");
+                                setCountryOpen(false);
+                              }}
+                            >
+                              <Text style={styles.countryFlag}>{country.flag}</Text>
+                              <Text style={styles.countryName}>{country.name}</Text>
+                              <Text style={styles.countryCode}>{country.code}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </Pressable>
+                    </Pressable>
+                  </Modal>
+                </View>
               )}
 
-              <View style={styles.consentBox}><CheckRow label="I agree to the Terms of Service and Privacy Policy." checked={formData.acceptTerms} onPress={() => updateField("acceptTerms", !formData.acceptTerms)} /></View>
-              <View style={styles.consentBox}><CheckRow label="I confirm that the information provided is accurate." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} /></View>
-              <View style={styles.reviewNotice}>
-                <Text style={styles.reviewNoticeIcon}>ⓘ</Text>
-                <Text style={styles.reviewNoticeText}>
-                  {formData.role === "volunteer"
-                    ? "Your volunteer registration will be submitted for administrator review. Volunteer Mode stays locked until approval."
-                    : "Your resident registration will be submitted for administrator review."}
-                </Text>
-              </View>
+              {step === 2 && (
+                <View>
+                  {loadingAddress ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color={COLORS.primary} />
+                      <Text style={styles.loadingText}>Loading address options…</Text>
+                    </View>
+                  ) : null}
+
+                  <Dropdown
+                    label="Region"
+                    value={formData.region}
+                    options={regions}
+                    enabled={false}
+                    onChange={(value) => {
+                      updateField("region", value);
+                      updateField("province", "");
+                      updateField("city", "");
+                      updateField("barangay", "");
+                    }}
+                  />
+
+                  <View style={styles.formRow}>
+                    <View style={styles.formColumn}>
+                      <Dropdown
+                        label="Province"
+                        placeholder="Select province"
+                        value={formData.province}
+                        options={provinces}
+                        enabled={!!formData.region && provinces.length > 0}
+                        onChange={(value) => {
+                          updateField("province", value);
+                          updateField("city", "");
+                          updateField("barangay", "");
+                        }}
+                      />
+                    </View>
+
+                    <View style={styles.formColumn}>
+                      <Dropdown
+                        label="City"
+                        placeholder="Select city"
+                        value={formData.city}
+                        options={cities}
+                        enabled={!!formData.province && cities.length > 0}
+                        onChange={(value) => {
+                          updateField("city", value);
+                          updateField("barangay", "");
+                        }}
+                      />
+                    </View>
+                  </View>
+
+                  <Dropdown
+                    label="Barangay"
+                    placeholder="Select barangay"
+                    value={formData.barangay}
+                    options={barangays}
+                    enabled={!!formData.city && barangays.length > 0}
+                    onChange={(value) => updateField("barangay", value)}
+                  />
+
+                  <View style={styles.addressNotice}>
+                    <Text style={styles.addressNoticeIcon}>📍</Text>
+                    <Text style={styles.addressNoticeText}>
+                      This address is saved to your account and can later support Resident identity
+                      verification and local response coordination.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {step === 3 && (
+                <View>
+                  <View style={styles.profileModeBanner}>
+                    <Text style={styles.profileModeTitle}>Basic Account Profile</Text>
+                    <Text style={styles.profileModeText}>
+                      This profile is saved once during sign-up. Volunteer-specific questions such
+                      as skills and availability are intentionally not collected here.
+                    </Text>
+                  </View>
+
+                  <Dropdown
+                    label="Occupation Category"
+                    placeholder="Select your occupation category"
+                    value={formData.occupationCategory}
+                    options={OCCUPATION_OPTIONS}
+                    onChange={(value) => {
+                      updateField("occupationCategory", value);
+                      updateField("occupationSpecialization", "");
+                      updateField("occupationOther", "");
+                    }}
+                  />
+
+                  {validation.needsSpec && (
+                    <Dropdown
+                      icon="📌"
+                      label="Occupation / Field *"
+                      value={formData.occupationSpecialization}
+                      options={specializationOptions}
+                      enabled={!!formData.occupationCategory}
+                      onChange={(value) => updateField("occupationSpecialization", value)}
+                    />
+                  )}
+
+                  {validation.isOther && (
+                    <Field
+                      icon="✍️"
+                      label="Specify Occupation *"
+                      value={formData.occupationOther}
+                      onChange={(v) => updateField("occupationOther", v)}
+                      invalid={
+                        formData.occupationOther.length > 0 &&
+                        formData.occupationOther.trim().length < 2
+                      }
+                    />
+                  )}
+
+                  <View style={styles.residentNotice}>
+                    <Text style={styles.residentNoticeIcon}>ⓘ</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.residentNoticeTitle}>What happens after sign-up?</Text>
+                      <Text style={styles.residentNoticeText}>
+                        Your account starts as Basic. Resident verification is a separate step using
+                        National ID and AI-assisted face verification. Only a Verified Resident can
+                        later submit the Volunteer Application form.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {step === 4 && (
+                <View>
+                  {googleBound ? (
+                    <View style={styles.googleConnectedCard}>
+                      <View style={styles.googleMark}>
+                        <Text style={styles.googleMarkText}>G</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.googleConnectedTitle}>Google account connected</Text>
+                        <Text style={styles.googleConnectedEmail}>{formData.email}</Text>
+                      </View>
+                      <View style={styles.verifiedBadge}>
+                        <Text style={styles.verifiedBadgeText}>✓ Email Verified</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <SectionTitle
+                        title="Password Security"
+                        subtitle="Create a strong password to protect your account."
+                      />
+
+                      <View style={styles.formRow}>
+                        <View style={styles.formColumn}>
+                          <Field
+                            icon="🔒"
+                            label="Password *"
+                            value={formData.password}
+                            onChange={(v) => updateField("password", v)}
+                            secureTextEntry={!showPassword}
+                            autoCapitalize="none"
+                          />
+                          <TouchableOpacity
+                            style={styles.passwordToggleBtn}
+                            onPress={() => setShowPassword((prev) => !prev)}
+                          >
+                            <Text style={styles.passwordToggleText}>
+                              {showPassword ? "Hide Password" : "Show Password"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.formColumn}>
+                          <Field
+                            icon="🔐"
+                            label="Confirm Password *"
+                            value={formData.confirmPassword}
+                            onChange={(v) => updateField("confirmPassword", v)}
+                            secureTextEntry={!showConfirmPassword}
+                            autoCapitalize="none"
+                          />
+                          <TouchableOpacity
+                            style={styles.passwordToggleBtn}
+                            onPress={() => setShowConfirmPassword((prev) => !prev)}
+                          >
+                            <Text style={styles.passwordToggleText}>
+                              {showConfirmPassword
+                                ? "Hide Confirm Password"
+                                : "Show Confirm Password"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <View style={styles.passwordPanel}>
+                        <Text style={styles.passwordStrength}>
+                          Password Strength: {validation.passwordStrength}
+                        </Text>
+
+                        <View style={styles.requirementsGrid}>
+                          <ValidationText ok={validation.passwordChecks.minLength}>
+                            Minimum 8 characters.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.upper}>
+                            One uppercase letter.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.lower}>
+                            One lowercase letter.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.number}>
+                            One number.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.special}>
+                            One special character.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.notCommon}>
+                            Not a common password.
+                          </ValidationText>
+                          <ValidationText ok={validation.passwordChecks.matches}>
+                            Passwords match.
+                          </ValidationText>
+                        </View>
+                      </View>
+                    </>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.termsOpenBtn}
+                    onPress={() => setTermsOpen(true)}
+                  >
+                    <Text style={styles.termsOpenText}>Read Terms & Data Privacy</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.consentBox}>
+                    <CheckRow
+                      label="I agree to the Terms of Service and Privacy Policy."
+                      checked={formData.acceptTerms}
+                      onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
+                    />
+                  </View>
+
+                  <View style={styles.consentBox}>
+                    <CheckRow
+                      label="I confirm that the information provided is accurate."
+                      checked={formData.confirmReview}
+                      onPress={() => updateField("confirmReview", !formData.confirmReview)}
+                    />
+                  </View>
+
+                  <View style={styles.reviewNotice}>
+                    <Text style={styles.reviewNoticeIcon}>ⓘ</Text>
+                    <Text style={styles.reviewNoticeText}>
+                      Creating this account does not require administrator approval. You will start
+                      as a Basic Account. Verified Resident status is earned later through identity
+                      verification; Volunteer access requires a separate application and Admin
+                      approval.
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
-          )}
-        </View>
 
-        <View style={[styles.footerRow, step === 4 && styles.footerColumn]}>
-          {step === 1 ? (
-            <TouchableOpacity onPress={() => router.push("/login")} style={styles.loginLinkWrap}>
-              <Text style={styles.link}>Already have an account? <Text style={styles.linkStrong}>Sign in</Text></Text>
-            </TouchableOpacity>
-          ) : null}
+            <View style={[styles.footerRow, step === 4 && styles.footerColumn]}>
+              {step === 1 ? (
+                <TouchableOpacity
+                  onPress={() => router.push("/login")}
+                  style={styles.loginLinkWrap}
+                >
+                  <Text style={styles.link}>
+                    Already have an account?{" "}
+                    <Text style={styles.linkStrong}>Sign in</Text>
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
 
-          <View style={[styles.actions, step > 1 && styles.actionsWide]}>
-          {step > 1 && (
-            <TouchableOpacity style={[styles.navBtn, styles.secondaryBtn]} onPress={goBack} disabled={loadingSubmit}>
-              <Text style={styles.secondaryText}>‹  Back</Text>
-            </TouchableOpacity>
-          )}
+              <View style={[styles.actions, step > 1 && styles.actionsWide]}>
+                {step > 1 && (
+                  <TouchableOpacity
+                    style={[styles.navBtn, styles.secondaryBtn]}
+                    onPress={goBack}
+                    disabled={loadingSubmit}
+                  >
+                    <Text style={styles.secondaryText}>‹ Back</Text>
+                  </TouchableOpacity>
+                )}
 
-          {step < 4 ? (
-            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, !isStepValid(step) && styles.disabledBtn]} onPress={goNext} disabled={!isStepValid(step)}>
-              <Text style={styles.primaryText}>Continue  ›</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, (!validation.step4Valid || loadingSubmit) && styles.disabledBtn]} onPress={handleSubmit} disabled={!validation.step4Valid || loadingSubmit}>
-              {loadingSubmit ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryText}>
-                  {formData.role === "volunteer"
-                    ? "Submit Volunteer Registration  ›"
-                    : "Submit Resident Registration  ›"}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+                {step < 4 ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.navBtn,
+                      styles.primaryBtn,
+                      !isStepValid(step) && styles.disabledBtn,
+                    ]}
+                    onPress={goNext}
+                    disabled={!isStepValid(step)}
+                  >
+                    <Text style={styles.primaryText}>Continue ›</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.navBtn,
+                      styles.primaryBtn,
+                      (!validation.step4Valid || loadingSubmit) && styles.disabledBtn,
+                    ]}
+                    onPress={handleSubmit}
+                    disabled={!validation.step4Valid || loadingSubmit}
+                  >
+                    {loadingSubmit ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryText}>Create Basic Account ›</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {step === 4 ? (
+                <TouchableOpacity
+                  onPress={() => router.push("/login")}
+                  style={styles.loginLinkWrap}
+                >
+                  <Text style={styles.link}>
+                    Already have an account?{" "}
+                    <Text style={styles.linkStrong}>Sign in</Text>
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
-          {step === 4 ? (
-            <TouchableOpacity onPress={() => router.push("/login")} style={styles.loginLinkWrap}>
-              <Text style={styles.link}>Already have an account? <Text style={styles.linkStrong}>Sign in</Text></Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-            </>
-          )}
-        </View>
 
-        <View style={{ height: 24 }} />
-      </ScrollView>
+          <View style={{ height: 24 }} />
+        </ScrollView>
       </View>
 
       {loadingSubmit && (
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.overlayTitle}>Submitting Registration...</Text>
-            <Text style={styles.overlayText}>Please wait while we process your information.</Text>
+            <Text style={styles.overlayTitle}>Creating Basic Account...</Text>
+            <Text style={styles.overlayText}>
+              Please wait while we securely create your account.
+            </Text>
           </View>
         </View>
       )}

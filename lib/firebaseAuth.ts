@@ -66,6 +66,12 @@ export type VolunteerStatus =
   | "approved"
   | "rejected";
 
+export type IdentityStatus =
+  | "basic"
+  | "pending"
+  | "verified"
+  | "failed";
+
 export type UserMode =
   | "resident"
   | "volunteer";
@@ -112,6 +118,13 @@ export interface UserProfile {
   reviewedAt?: any;
   reviewedBy?: string;
   rejectedReason?: string;
+
+  identityStatus?: IdentityStatus;
+  identityVerified?: boolean;
+  identitySubmittedAt?: any;
+  identityVerifiedAt?: any;
+  identityVerifiedBy?: string;
+  identityFailureReason?: string;
 
   profilePictureUrl?: string;
   createdAt: any;
@@ -177,6 +190,32 @@ export const isAdminProfile = (
       profile?.role === "admin" ||
       profile?.role === "superadmin"
     )
+  );
+};
+
+export const getIdentityStatus = (
+  profile: UserProfile | null | undefined
+): IdentityStatus => {
+  if (!profile) {
+    return "basic";
+  }
+
+  if (
+    profile.identityVerified === true ||
+    profile.identityStatus === "verified"
+  ) {
+    return "verified";
+  }
+
+  return profile.identityStatus || "basic";
+};
+
+export const isIdentityVerified = (
+  profile: UserProfile | null | undefined
+) => {
+  return (
+    isApprovedProfile(profile) &&
+    getIdentityStatus(profile) === "verified"
   );
 };
 
@@ -387,7 +426,7 @@ export const signUpUser = async (
       ) ||
       data.occupationCategory;
 
-    const isVolunteerSignup =
+    const hadVolunteerSignupIntent =
       data.role === "volunteer";
 
     const batch = writeBatch(db);
@@ -436,33 +475,35 @@ export const signUpUser = async (
       occupation,
 
       skills:
-        isVolunteerSignup
+        hadVolunteerSignupIntent
           ? (data.skills || [])
           : [],
 
       skillOther:
-        isVolunteerSignup
+        hadVolunteerSignupIntent
           ? (data.skillOther || "").trim()
           : "",
 
       availability:
-        isVolunteerSignup
+        hadVolunteerSignupIntent
           ? (data.availability || [])
           : [],
 
-      role: "applicant" as Role,
+      role: "resident" as Role,
       requestedRole: data.role,
 
-      primaryRole: data.role,
+      primaryRole: "resident",
       residentAccess: true,
       volunteerAccess: false,
       volunteerStatus:
-        isVolunteerSignup
-          ? ("pending" as VolunteerStatus)
-          : ("not_applied" as VolunteerStatus),
+        "not_applied" as VolunteerStatus,
       activeMode: "resident" as UserMode,
 
-      status: "pending_review" as AccountStatus,
+      status: "approved" as AccountStatus,
+
+      identityStatus:
+        "basic" as IdentityStatus,
+      identityVerified: false,
 
       profilePictureUrl:
         user.photoURL || "",
@@ -470,74 +511,6 @@ export const signUpUser = async (
       createdAt:
         serverTimestamp(),
     });
-
-    if (isVolunteerSignup) {
-      batch.set(
-        doc(
-          db,
-          "volunteerApplications",
-          uid
-        ),
-        {
-          uid,
-
-          source:
-            "signup",
-
-          requestedRole:
-            "volunteer",
-
-          primaryRole:
-            "volunteer",
-
-          fullName,
-
-          email:
-            data.email
-              .trim()
-              .toLowerCase(),
-
-          barangay:
-            data.barangay,
-
-          phone:
-            data.phoneNumber.trim(),
-
-          phoneNumber:
-            data.phoneNumber.trim(),
-
-          occupationCategory:
-            data.occupationCategory,
-
-          occupationSpecialization:
-            (
-              data.occupationSpecialization ||
-              ""
-            ).trim(),
-
-          occupationOther:
-            (
-              data.occupationOther ||
-              ""
-            ).trim(),
-
-          skills:
-            data.skills || [],
-
-          skillOther:
-            (data.skillOther || "").trim(),
-
-          availability:
-            data.availability || [],
-
-          status:
-            "pending",
-
-          createdAt:
-            serverTimestamp(),
-        }
-      );
-    }
 
     await batch.commit();
 
@@ -602,7 +575,7 @@ export const loginUser = async (
       }
 
       throw new Error(
-        "Your registration is still pending administrative review."
+        "This legacy account is still pending administrative review."
       );
     }
 
@@ -660,6 +633,13 @@ export const updateUserProfile = async (
     reviewedBy: _reviewedBy,
     rejectedReason: _rejectedReason,
 
+    identityStatus: _identityStatus,
+    identityVerified: _identityVerified,
+    identitySubmittedAt: _identitySubmittedAt,
+    identityVerifiedAt: _identityVerifiedAt,
+    identityVerifiedBy: _identityVerifiedBy,
+    identityFailureReason: _identityFailureReason,
+
     ...safeUpdates
   } = updates as any;
 
@@ -688,7 +668,7 @@ export const setActiveMode = async (
 
   if (!isApprovedProfile(profile)) {
     throw new Error(
-      "Your account must be approved before changing modes."
+      "Your account must be active before changing modes."
     );
   }
 

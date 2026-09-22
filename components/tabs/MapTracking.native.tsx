@@ -29,6 +29,13 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
+import {
+  activeModeForProfile,
+  hasResidentAccess,
+  hasVolunteerAccess,
+  isApprovedProfile,
+  type UserProfile,
+} from "../../lib/firebaseAuth";
 
 type UserLocation = {
   latitude: number;
@@ -110,9 +117,7 @@ export default function MapTracking() {
   const CURRENT_USER_NAME =
     user?.displayName ?? user?.email ?? "Resident User";
 
-  const [userRole, setUserRole] = useState<"resident" | "volunteer" | "admin">(
-    "resident"
-  );
+  const [userRole, setUserRole] = useState<"resident" | "volunteer">("resident");
 
   const [location, setLocation] = useState<UserLocation | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -144,7 +149,7 @@ export default function MapTracking() {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const lastSyncRef = useRef(0);
   const watchingRef = useRef(false);
-  const userRoleRef = useRef<"resident" | "volunteer" | "admin">("resident");
+  const userRoleRef = useRef<"resident" | "volunteer">("resident");
   const modeRef = useRef<"map" | "simulation">("map");
   const firestoreUnsubscribersRef = useRef<(() => void)[]>([]);
   const lastResidentRouteFetchRef = useRef(0);
@@ -518,14 +523,6 @@ export default function MapTracking() {
         subscribeToCenters(),
       ];
 
-      // Residents only read their own cases and public evacuation centers.
-      if (resolvedRole === "volunteer" || resolvedRole === "admin") {
-        subscriptions.push(subscribeToVolunteers());
-      }
-      if (resolvedRole === "admin") {
-        subscriptions.push(subscribeToResidents());
-      }
-
       firestoreUnsubscribersRef.current = subscriptions;
 
       await getInitialLocation();
@@ -536,47 +533,39 @@ export default function MapTracking() {
     }
   }
 
-  async function loadUserRole(): Promise<"resident" | "volunteer" | "admin"> {
+  async function loadUserRole(): Promise<"resident" | "volunteer"> {
     try {
       if (!CURRENT_USER_ID) return "resident";
 
       const userDocRef = doc(db, "users", CURRENT_USER_ID);
       const snap = await getDoc(userDocRef);
 
-      if (snap.exists()) {
-        const raw = snap.data() as any;
-        const role = String(raw.role || "resident").toLowerCase();
-
-        if (role === "admin" || role === "superadmin") {
-          return "admin";
-        }
-
-        const volunteerAccess =
-          raw.volunteerAccess === true ||
-          (
-            typeof raw.volunteerAccess !== "boolean" &&
-            role === "volunteer"
-          );
-
-        const volunteerApproved =
-          !raw.volunteerStatus ||
-          raw.volunteerStatus === "approved";
-
-        if (
-          raw.activeMode === "volunteer" &&
-          volunteerAccess &&
-          volunteerApproved
-        ) {
-          return "volunteer";
-        }
-
+      if (!snap.exists()) {
         return "resident";
       }
 
-      // Account creation and role approval belong to registration/admin flows.
+      const profile = snap.data() as UserProfile;
+
+      if (!isApprovedProfile(profile)) {
+        return "resident";
+      }
+
+      const activeMode = activeModeForProfile(profile);
+
+      if (
+        activeMode === "volunteer" &&
+        hasVolunteerAccess(profile)
+      ) {
+        return "volunteer";
+      }
+
+      if (hasResidentAccess(profile)) {
+        return "resident";
+      }
+
       return "resident";
     } catch (error) {
-      console.log("Load user role error:", error);
+      console.log("Load user mode error:", error);
       return "resident";
     }
   }
@@ -754,24 +743,17 @@ export default function MapTracking() {
     }
   }
 
-  function subscribeToIncidents(role: "resident" | "volunteer" | "admin") {
+  function subscribeToIncidents(role: "resident" | "volunteer") {
     const casesQuery =
       role === "resident"
         ? query(
             collection(db, "disasterCases"),
             where("reporterUid", "==", CURRENT_USER_ID)
           )
-        : role === "volunteer"
-        ? query(
+        : query(
             collection(db, "disasterCases"),
-            where("status", "in", [
-              "validated",
-              "assigned",
-              "in_progress",
-              "resolved",
-            ])
-          )
-        : query(collection(db, "disasterCases"));
+            where("assignedVolunteerIds", "array-contains", CURRENT_USER_ID)
+          );
 
     return onSnapshot(
       casesQuery,
@@ -946,9 +928,6 @@ export default function MapTracking() {
     router.push("/volunteer");
   }
 
-  function openCaseAdministration() {
-    router.push("/(admin)/admin-cases");
-  }
 
   async function handleSearch() {
     const rawQuery = searchQuery.trim();
@@ -1477,7 +1456,7 @@ export default function MapTracking() {
                 <View>
                   <Text style={styles.controlsTitle}>Map Controls</Text>
                   <Text style={styles.controlsSubtitle}>
-                    Live monitoring & pin simulation
+                    Community map & route controls
                   </Text>
                 </View>
 
@@ -1686,23 +1665,6 @@ export default function MapTracking() {
                     </TouchableOpacity>
                   )}
 
-                {userRole === "admin" && (
-                    <TouchableOpacity
-                      activeOpacity={0.82}
-                      onPress={openCaseAdministration}
-                      style={styles.resolveButton}
-                    >
-                      <Ionicons
-                        name="checkmark-done"
-                        size={20}
-                        color="#0A9B78"
-                      />
-
-                      <Text style={styles.resolveButtonText}>
-                        Open Case Administration
-                      </Text>
-                    </TouchableOpacity>
-                  )}
               </ScrollView>
             </View>
           </View>

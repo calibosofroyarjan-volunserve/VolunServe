@@ -30,10 +30,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return approved()
-        && profile().role in [
-          'admin',
-          'superadmin'
-        ];
+        && profile().role == 'admin';
     }
 
     function isSuperAdmin() {
@@ -41,10 +38,31 @@ service cloud.firestore {
         && profile().role == 'superadmin';
     }
 
+    function isAdminOrSuperAdmin() {
+      return isAdmin() || isSuperAdmin();
+    }
+
+    function hasVerifiedIdentity(data) {
+      return (
+        (
+          'identityVerified' in data
+          && data.identityVerified == true
+        )
+        || (
+          'identityStatus' in data
+          && data.identityStatus == 'verified'
+        )
+      );
+    }
+
     function hasResidentAccess() {
       return approved()
         && (
-          (
+          profile().role in [
+            'admin',
+            'superadmin'
+          ]
+          || (
             'residentAccess' in profile()
             && profile().residentAccess == true
           )
@@ -61,7 +79,11 @@ service cloud.firestore {
     function hasVolunteerAccess() {
       return approved()
         && (
-          (
+          profile().role in [
+            'admin',
+            'superadmin'
+          ]
+          || (
             'volunteerAccess' in profile()
             && profile().volunteerAccess == true
             && (
@@ -77,11 +99,17 @@ service cloud.firestore {
     }
 
     function isVolunteer() {
-      return hasVolunteerAccess();
+      return hasVolunteerAccess()
+        && 'activeMode' in profile()
+        && profile().activeMode == 'volunteer';
     }
 
     function isResident() {
-      return hasResidentAccess();
+      return hasResidentAccess()
+        && (
+          !('activeMode' in profile())
+          || profile().activeMode == 'resident'
+        );
     }
 
     // =========================================================
@@ -90,16 +118,27 @@ service cloud.firestore {
 
     match /users/{uid} {
 
-      // Normal applicant registration.
+      function identitySubmissionAfter() {
+        return getAfter(
+          /databases/$(database)/documents/identityVerifications/$(uid)
+        ).data;
+      }
+
+      function volunteerApplicationAfter() {
+        return getAfter(
+          /databases/$(database)/documents/volunteerApplications/$(uid)
+        ).data;
+      }
+
+      // ---------------------------------------------------------
+      // BASIC COMMUNITY ACCOUNT REGISTRATION
+      // ---------------------------------------------------------
+      // New public registrations become active Resident accounts
+      // immediately. Identity verification and Volunteer access are
+      // separate trust layers and do not block ordinary account access.
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
-        && request.resource.data.role == 'applicant'
-        && request.resource.data.status == 'pending_review'
-        && request.resource.data.requestedRole in [
-          'resident',
-          'volunteer'
-        ]
         && request.resource.data.province in [
           'Bulacan',
           'BULACAN',
@@ -112,7 +151,71 @@ service cloud.firestore {
           'San Jose del Monte',
           'San Jose Del Monte',
           'SAN JOSE DEL MONTE'
-        ];
+        ]
+        && (
+          (
+            request.resource.data.keys().hasOnly([
+              'uid',
+              'fullName',
+              'lastName',
+              'firstName',
+              'middleName',
+              'age',
+              'email',
+              'phoneNumber',
+              'region',
+              'province',
+              'city',
+              'barangay',
+              'address',
+              'occupationCategory',
+              'occupationSpecialization',
+              'occupationOther',
+              'occupation',
+              'skills',
+              'skillOther',
+              'availability',
+              'role',
+              'requestedRole',
+              'primaryRole',
+              'residentAccess',
+              'volunteerAccess',
+              'volunteerStatus',
+              'activeMode',
+              'status',
+              'identityStatus',
+              'identityVerified',
+              'profilePictureUrl',
+              'createdAt'
+            ])
+            && request.resource.data.role == 'resident'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.requestedRole in [
+              'resident',
+              'volunteer'
+            ]
+            && request.resource.data.primaryRole == 'resident'
+            && request.resource.data.residentAccess == true
+            && request.resource.data.volunteerAccess == false
+            && request.resource.data.volunteerStatus == 'not_applied'
+            && request.resource.data.activeMode == 'resident'
+            && request.resource.data.identityStatus == 'basic'
+            && request.resource.data.identityVerified == false
+            && request.resource.data.createdAt is timestamp
+          )
+          ||
+          (
+            // Temporary compatibility for an older cached signup client.
+            // This path grants no extra access and can be removed after
+            // the migration is fully deployed.
+            request.resource.data.role == 'applicant'
+            && request.resource.data.status == 'pending_review'
+            && request.resource.data.requestedRole in [
+              'resident',
+              'volunteer'
+            ]
+          )
+        );
 
       // Super Admin may create Admin accounts.
       allow create: if isSuperAdmin()
@@ -125,10 +228,10 @@ service cloud.firestore {
       allow get: if signedIn()
         && (
           request.auth.uid == uid
-          || isAdmin()
+          || isAdminOrSuperAdmin()
         );
 
-      allow list: if isAdmin();
+      allow list: if isAdminOrSuperAdmin();
 
       // ---------------------------------------------------------
       // OWN PROFILE EDITING
@@ -193,11 +296,77 @@ service cloud.firestore {
         );
 
       // ---------------------------------------------------------
+      // OWN IDENTITY VERIFICATION SUBMISSION
+      // ---------------------------------------------------------
+      // The user may only move Basic/Failed -> Pending. They cannot
+      // self-mark the identity as Verified.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && approved()
+        && (
+          !('identityStatus' in resource.data)
+          || resource.data.identityStatus in [
+            'basic',
+            'failed'
+          ]
+        )
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'identityStatus',
+            'identityVerified',
+            'identitySubmittedAt',
+            'identityVerifiedAt',
+            'identityVerifiedBy',
+            'identityFailureReason'
+          ])
+        && request.resource.data.identityStatus == 'pending'
+        && request.resource.data.identityVerified == false
+        && request.resource.data.identitySubmittedAt is timestamp
+        && request.resource.data.identityVerifiedAt == null
+        && request.resource.data.identityVerifiedBy == ''
+        && request.resource.data.identityFailureReason == ''
+        && identitySubmissionAfter().uid == uid
+        && identitySubmissionAfter().status == 'pending';
+
+      // ---------------------------------------------------------
+      // OWN VOLUNTEER APPLICATION
+      // ---------------------------------------------------------
+      // Volunteer access is never granted by the applicant.
+      // A verified Resident may only place the application in Pending.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && approved()
+        && hasVerifiedIdentity(resource.data)
+        && (
+          !('volunteerStatus' in resource.data)
+          || resource.data.volunteerStatus in [
+            'not_applied',
+            'rejected'
+          ]
+        )
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'requestedRole',
+            'volunteerAccess',
+            'volunteerStatus',
+            'activeMode'
+          ])
+        && request.resource.data.requestedRole == 'volunteer'
+        && request.resource.data.volunteerAccess == false
+        && request.resource.data.volunteerStatus == 'pending'
+        && request.resource.data.activeMode == 'resident'
+        && volunteerApplicationAfter().uid == uid
+        && volunteerApplicationAfter().status == 'pending';
+
+      // ---------------------------------------------------------
       // OWN MODE SWITCH
       // ---------------------------------------------------------
       // activeMode changes only which community interface is shown.
-      // It never grants Resident or Volunteer access. Access must
-      // already exist on the current approved profile.
+      // It never grants Resident or Volunteer access.
       allow update: if signedIn()
         && request.auth.uid == uid
         && approved()
@@ -214,20 +383,231 @@ service cloud.firestore {
         && (
           (
             request.resource.data.activeMode == 'resident'
-            && isResident()
+            && hasResidentAccess()
           )
           || (
             request.resource.data.activeMode == 'volunteer'
-            && isVolunteer()
+            && hasVolunteerAccess()
           )
         );
 
-      // Super Admin has full management access.
-      allow update: if isSuperAdmin();
-
-      // Admin approval / role management.
+      // ---------------------------------------------------------
+      // ADMIN IDENTITY REVIEW
+      // ---------------------------------------------------------
+      // Operational Admin reviews Pending identity submissions.
       allow update: if isAdmin()
+        && resource.data.role in [
+          'resident',
+          'volunteer'
+        ]
+        && resource.data.identityStatus == 'pending'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'identityStatus',
+            'identityVerified',
+            'identityVerifiedAt',
+            'identityVerifiedBy',
+            'identityFailureReason'
+          ])
+        && request.resource.data.identityVerifiedBy == request.auth.uid
+        && (
+          (
+            request.resource.data.identityStatus == 'verified'
+            && request.resource.data.identityVerified == true
+            && request.resource.data.identityVerifiedAt is timestamp
+            && request.resource.data.identityFailureReason == ''
+            && identitySubmissionAfter().status == 'verified'
+            && identitySubmissionAfter().reviewedBy == request.auth.uid
+          )
+          ||
+          (
+            request.resource.data.identityStatus == 'failed'
+            && request.resource.data.identityVerified == false
+            && request.resource.data.identityVerifiedAt == null
+            && request.resource.data.identityFailureReason is string
+            && request.resource.data.identityFailureReason.size() >= 3
+            && request.resource.data.identityFailureReason.size() <= 500
+            && identitySubmissionAfter().status == 'failed'
+            && identitySubmissionAfter().reviewedBy == request.auth.uid
+          )
+        );
+
+      // ---------------------------------------------------------
+      // ADMIN VOLUNTEER REVIEW
+      // ---------------------------------------------------------
+      // Approval grants Volunteer access without replacing Resident access.
+      allow update: if isAdmin()
+        && resource.data.role in [
+          'resident',
+          'volunteer'
+        ]
+        && resource.data.status == 'approved'
+        && hasVerifiedIdentity(resource.data)
+        && resource.data.volunteerStatus == 'pending'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'requestedRole',
+            'volunteerAccess',
+            'volunteerStatus',
+            'activeMode',
+            'volunteerReviewedAt',
+            'volunteerReviewedBy'
+          ])
+        && request.resource.data.requestedRole == 'volunteer'
+        && request.resource.data.activeMode == 'resident'
+        && request.resource.data.volunteerReviewedAt is timestamp
+        && request.resource.data.volunteerReviewedBy == request.auth.uid
+        && request.resource.data.volunteerStatus in [
+          'approved',
+          'rejected'
+        ]
+        && (
+          (
+            request.resource.data.volunteerStatus == 'approved'
+            && request.resource.data.volunteerAccess == true
+          )
+          ||
+          (
+            request.resource.data.volunteerStatus == 'rejected'
+            && request.resource.data.volunteerAccess == false
+          )
+        )
+        && volunteerApplicationAfter().status
+          == request.resource.data.volunteerStatus;
+
+      // ---------------------------------------------------------
+      // ADMIN COMMUNITY ACCOUNT MODERATION
+      // ---------------------------------------------------------
+      // Suspension is separate from identity/volunteer verification.
+      allow update: if isAdmin()
+        && resource.data.role in [
+          'resident',
+          'volunteer'
+        ]
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'reviewedAt',
+            'reviewedBy',
+            'rejectedReason'
+          ])
+        && request.resource.data.status in [
+          'approved',
+          'suspended'
+        ]
+        && request.resource.data.reviewedAt is timestamp
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.rejectedReason is string;
+
+      // ---------------------------------------------------------
+      // SUPER ADMIN ADMIN-ACCOUNT MANAGEMENT
+      // ---------------------------------------------------------
+      allow update: if isSuperAdmin()
+        && request.auth.uid != uid
         && resource.data.role != 'superadmin'
+        && (
+          (
+            resource.data.status == 'approved'
+            && request.resource.data.role == 'admin'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.adminStatus == 'active'
+            && request.resource.data.adminCreatedBy == request.auth.uid
+            && request.resource.data.adminUpdatedBy == request.auth.uid
+            && request.resource.data.adminCreatedAt is timestamp
+            && request.resource.data.adminUpdatedAt is timestamp
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'previousRole',
+                'previousPrimaryRole',
+                'role',
+                'adminStatus',
+                'status',
+                'adminCreatedAt',
+                'adminCreatedBy',
+                'adminUpdatedAt',
+                'adminUpdatedBy'
+              ])
+          )
+          || (
+            resource.data.role == 'admin'
+            && request.resource.data.role == 'admin'
+            && request.resource.data.status in [
+              'approved',
+              'suspended'
+            ]
+            && request.resource.data.adminStatus in [
+              'active',
+              'suspended'
+            ]
+            && (
+              (
+                request.resource.data.status == 'approved'
+                && request.resource.data.adminStatus == 'active'
+              )
+              || (
+                request.resource.data.status == 'suspended'
+                && request.resource.data.adminStatus == 'suspended'
+              )
+            )
+            && request.resource.data.adminUpdatedBy == request.auth.uid
+            && request.resource.data.adminUpdatedAt is timestamp
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'status',
+                'adminStatus',
+                'adminUpdatedAt',
+                'adminUpdatedBy'
+              ])
+          )
+          || (
+            resource.data.role == 'admin'
+            && request.resource.data.role in [
+              'resident',
+              'volunteer'
+            ]
+            && request.resource.data.primaryRole in [
+              'resident',
+              'volunteer'
+            ]
+            && request.resource.data.status == 'approved'
+            && request.resource.data.adminStatus == 'suspended'
+            && request.resource.data.adminUpdatedBy == request.auth.uid
+            && request.resource.data.adminRevokedBy == request.auth.uid
+            && request.resource.data.adminUpdatedAt is timestamp
+            && request.resource.data.adminRevokedAt is timestamp
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'role',
+                'primaryRole',
+                'status',
+                'adminStatus',
+                'adminUpdatedAt',
+                'adminUpdatedBy',
+                'adminRevokedAt',
+                'adminRevokedBy'
+              ])
+          )
+        );
+
+      // ---------------------------------------------------------
+      // LEGACY APPLICANT REVIEW
+      // ---------------------------------------------------------
+      // Existing pre-migration Applicant records can still be reviewed.
+      // New public registrations no longer use this approval path.
+      allow update: if isAdmin()
+        && resource.data.role == 'applicant'
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -315,8 +695,7 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if isSuperAdmin()
-        && request.auth.uid != uid;
+      allow delete: if false;
     }
 
     // =========================================================
@@ -373,25 +752,16 @@ service cloud.firestore {
 
     match /announcements/{announcementId} {
 
-      // Published announcements are readable by approved users.
-      // The client feed displays only:
-      //   - global announcements (audience == 'all')
-      //   - announcements for the user's own barangay.
-      // Admin / Super Admin may also read announcement records.
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
         || (
           approved()
           && resource.data.publishAt is timestamp
           && resource.data.publishAt <= request.time
         );
 
-      // ---------------------------------------------------------
-      // CREATE ANNOUNCEMENT
-      //
-      // Super Admin -> global only
-      // Admin       -> own barangay only
-      // ---------------------------------------------------------
       allow create: if isAdmin()
+        && profile().barangay is string
+        && profile().barangay.size() > 0
         && request.resource.data.keys().hasOnly([
           'title',
           'message',
@@ -418,42 +788,166 @@ service cloud.firestore {
         ]
         && request.resource.data.publishAt is timestamp
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.audience == profile().barangay;
+
+      allow update: if isAdmin()
+        && profile().barangay is string
+        && resource.data.audience == profile().barangay
+        && request.resource.data.audience == resource.data.audience
+        && request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isAdmin()
+        && profile().barangay is string
+        && resource.data.audience == profile().barangay;
+    }
+
+    // =========================================================
+    // IDENTITY VERIFICATIONS
+    // =========================================================
+    // The verification document contains only the submitted document
+    // type and private media references needed for review.
+    // Do not store a full government ID number or face embedding here.
+    match /identityVerifications/{uid} {
+
+      function userAfterReview() {
+        return getAfter(
+          /databases/$(database)/documents/users/$(uid)
+        ).data;
+      }
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && approved()
+        && hasResidentAccess()
+        && (
+          !('identityStatus' in profile())
+          || profile().identityStatus in [
+            'basic',
+            'failed'
+          ]
+        )
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'idType',
+          'idDocumentUrl',
+          'selfieUrl',
+          'status',
+          'submittedAt',
+          'updatedAt',
+          'reviewedAt',
+          'reviewedBy',
+          'reviewNote'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.idType in [
+          'national_id',
+          'drivers_license',
+          'passport',
+          'other_government_id'
+        ]
+        && request.resource.data.idDocumentUrl is string
+        && request.resource.data.idDocumentUrl.size() >= 10
+        && request.resource.data.idDocumentUrl.size() <= 2048
+        && request.resource.data.selfieUrl is string
+        && request.resource.data.selfieUrl.size() >= 10
+        && request.resource.data.selfieUrl.size() <= 2048
+        && request.resource.data.status == 'pending'
+        && request.resource.data.submittedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedBy == ''
+        && request.resource.data.reviewNote == ''
+        && userAfterReview().identityStatus == 'pending'
+        && userAfterReview().identityVerified == false;
+
+      // A failed verification may be resubmitted by the same user.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && approved()
+        && resource.data.uid == uid
+        && resource.data.status == 'failed'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'idType',
+            'idDocumentUrl',
+            'selfieUrl',
+            'status',
+            'submittedAt',
+            'updatedAt',
+            'reviewedAt',
+            'reviewedBy',
+            'reviewNote'
+          ])
+        && request.resource.data.idType in [
+          'national_id',
+          'drivers_license',
+          'passport',
+          'other_government_id'
+        ]
+        && request.resource.data.idDocumentUrl is string
+        && request.resource.data.idDocumentUrl.size() >= 10
+        && request.resource.data.idDocumentUrl.size() <= 2048
+        && request.resource.data.selfieUrl is string
+        && request.resource.data.selfieUrl.size() >= 10
+        && request.resource.data.selfieUrl.size() <= 2048
+        && request.resource.data.status == 'pending'
+        && request.resource.data.submittedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedBy == ''
+        && request.resource.data.reviewNote == ''
+        && userAfterReview().identityStatus == 'pending'
+        && userAfterReview().identityVerified == false;
+
+      allow get: if signedIn()
+        && (
+          request.auth.uid == uid
+          || isAdmin()
+        );
+
+      allow list: if isAdmin();
+
+      // Identity review is an operational Admin action.
+      allow update: if isAdmin()
+        && resource.data.uid == uid
+        && resource.data.status == 'pending'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'reviewedAt',
+            'reviewedBy',
+            'reviewNote',
+            'updatedAt'
+          ])
+        && request.resource.data.status in [
+          'verified',
+          'failed'
+        ]
+        && request.resource.data.reviewedAt is timestamp
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewNote is string
+        && request.resource.data.reviewNote.size() <= 500
+        && request.resource.data.updatedAt is timestamp
+        && userAfterReview().identityStatus
+          == request.resource.data.status
         && (
           (
-            isSuperAdmin()
-            && request.resource.data.audience == 'all'
+            request.resource.data.status == 'verified'
+            && userAfterReview().identityVerified == true
           )
-          || (
-            approved()
-            && profile().role == 'admin'
-            && profile().barangay is string
-            && profile().barangay.size() > 0
-            && request.resource.data.audience == profile().barangay
+          ||
+          (
+            request.resource.data.status == 'failed'
+            && userAfterReview().identityVerified == false
+            && request.resource.data.reviewNote.size() >= 3
           )
         );
 
-      // Super Admin may update any announcement.
-      // Admin may update only announcements for their own barangay
-      // and may not change that announcement into another audience.
-      allow update: if isSuperAdmin()
-        || (
-          approved()
-          && profile().role == 'admin'
-          && profile().barangay is string
-          && resource.data.audience == profile().barangay
-          && request.resource.data.audience == resource.data.audience
-          && request.resource.data.createdBy == resource.data.createdBy
-        );
-
-      // Super Admin may delete any announcement.
-      // Admin may delete only announcements for their own barangay.
-      allow delete: if isSuperAdmin()
-        || (
-          approved()
-          && profile().role == 'admin'
-          && profile().barangay is string
-          && resource.data.audience == profile().barangay
-        );
+      allow delete: if false;
     }
 
     // =========================================================
@@ -462,18 +956,87 @@ service cloud.firestore {
 
     match /volunteerApplications/{uid} {
 
+      function applicantAfter() {
+        return getAfter(
+          /databases/$(database)/documents/users/$(uid)
+        ).data;
+      }
+
       allow create: if signedIn()
         && request.auth.uid == uid
+        && approved()
+        && hasVerifiedIdentity(profile())
+        && hasResidentAccess()
+        && (
+          !('volunteerAccess' in profile())
+          || profile().volunteerAccess == false
+        )
+        && (
+          !('volunteerStatus' in profile())
+          || profile().volunteerStatus in [
+            'not_applied',
+            'rejected'
+          ]
+        )
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'source',
+          'requestedRole',
+          'primaryRole',
+          'fullName',
+          'email',
+          'barangay',
+          'phone',
+          'phoneNumber',
+          'occupationCategory',
+          'occupationSpecialization',
+          'occupationOther',
+          'skills',
+          'skillOther',
+          'availability',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
         && request.resource.data.uid == uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.source in [
+          'profile_application',
+          'resident_application',
+          'signup'
+        ]
+        && request.resource.data.requestedRole == 'volunteer'
+        && request.resource.data.primaryRole == 'resident'
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() >= 1
+        && request.resource.data.fullName.size() <= 120
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.barangay is string
+        && request.resource.data.barangay.size() <= 120
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.phoneNumber.size() >= 8
+        && request.resource.data.phoneNumber.size() <= 30
+        && request.resource.data.skills is list
+        && request.resource.data.availability is list
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && (
+          !('updatedAt' in request.resource.data)
+          || request.resource.data.updatedAt is timestamp
+        )
+        && applicantAfter().volunteerStatus == 'pending'
+        && applicantAfter().volunteerAccess == false
+        && applicantAfter().activeMode == 'resident';
 
       allow read: if signedIn()
         && (
           request.auth.uid == uid
-          || isAdmin()
+          || isAdminOrSuperAdmin()
         );
 
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+
+      allow delete: if false;
     }
 
     // =========================================================
@@ -633,7 +1196,7 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           isResident()
@@ -693,7 +1256,7 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
     }
 
     // =========================================================
@@ -934,7 +1497,7 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           isResident()
@@ -957,7 +1520,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         && validStatusTransition();
 
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
     }
 
     // =========================================================
@@ -1085,7 +1648,7 @@ service cloud.firestore {
 
       allow create, delete: if isAdmin();
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
         || (
           isVolunteer()
           && resource.data.volunteerId == request.auth.uid
@@ -1201,7 +1764,7 @@ service cloud.firestore {
 
       allow create: if false;
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           approved()
@@ -1218,7 +1781,8 @@ service cloud.firestore {
       allow delete: if false;
 
       match /logs/{logId} {
-        allow read, create: if isAdmin();
+        allow read: if isAdminOrSuperAdmin();
+        allow create: if isAdmin();
         allow update, delete: if false;
       }
     }
@@ -1332,7 +1896,7 @@ service cloud.firestore {
 
     match /certificates/{certificateId} {
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           approved()
@@ -1618,7 +2182,7 @@ service cloud.firestore {
         ).data;
       }
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           isVolunteer()
@@ -1763,7 +2327,7 @@ service cloud.firestore {
         ).data;
       }
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           isVolunteer()
@@ -1876,7 +2440,7 @@ service cloud.firestore {
     // =========================================================
 
     match /responseAuditLogs/{logId} {
-      allow read: if isAdmin();
+      allow read: if isAdminOrSuperAdmin();
       allow create, update, delete: if false;
     }
 
@@ -2029,7 +2593,7 @@ service cloud.firestore {
 
       allow update: if isAdmin();
 
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
     }
 
     // =========================================================
@@ -2360,6 +2924,10 @@ service cloud.firestore {
                 || incomingVolunteerProfile().volunteerStatus == 'approved'
               )
             )
+            || incomingVolunteerProfile().role in [
+              'admin',
+              'superadmin'
+            ]
             || (
               !('volunteerAccess' in incomingVolunteerProfile())
               && incomingVolunteerProfile().role == 'volunteer'
@@ -2367,7 +2935,7 @@ service cloud.firestore {
           );
       }
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           isVolunteer()
@@ -2610,7 +3178,7 @@ service cloud.firestore {
         ).data;
       }
 
-      allow read: if isAdmin()
+      allow read: if isAdminOrSuperAdmin()
 
         || (
           approved()
@@ -3016,13 +3584,13 @@ service cloud.firestore {
     // Only Super Admin may review the global audit trail.
     match /adminLogs/{logId} {
       allow read: if isSuperAdmin();
-      allow create: if isAdmin();
+      allow create: if isAdminOrSuperAdmin();
       allow update, delete: if false;
     }
 
     match /adminActivityLogs/{logId} {
       allow read: if isSuperAdmin();
-      allow create: if isAdmin();
+      allow create: if isAdminOrSuperAdmin();
       allow update, delete: if false;
     }
 

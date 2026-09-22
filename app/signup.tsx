@@ -36,7 +36,7 @@ const redirectUri = AuthSession.makeRedirectUri({
 type Step = 1 | 2 | 3 | 4;
 
 type FormState = {
-  role: "resident" | "volunteer";
+  role: "resident";
   lastName: string;
   firstName: string;
   middleName: string;
@@ -102,28 +102,6 @@ const SPECIALIZATIONS: Record<string, string[]> = {
   "Skilled Worker": ["Electrician", "Plumber", "Driver", "Welder", "Carpenter", "Other Skill"],
 };
 
-const SKILL_OPTIONS = [
-  "First Aid",
-  "Medical Assistance",
-  "Search and Rescue",
-  "Driving",
-  "Cooking / Relief Packing",
-  "Construction",
-  "Logistics",
-  "IT / Technology",
-  "Teaching",
-  "Counseling",
-  "Other (Specify)",
-];
-
-const AVAILABILITY_OPTIONS = [
-  "Weekdays (Mon–Fri)",
-  "Weekends (Sat–Sun)",
-  "Evenings",
-  "Anytime",
-  "Emergency Response",
-  "Specific Days",
-];
 
 const COMMON_PASSWORDS = new Set([
   "password",
@@ -148,8 +126,8 @@ const SLIDES = [
     icon: "📍",
   },
   {
-    title: "Administrative Review",
-    body: "New accounts are reviewed before activation to protect the platform.",
+    title: "Verify When Ready",
+    body: "Create a Basic Resident Account first, then verify your identity with a government ID and live selfie.",
     icon: "✅",
   },
 ];
@@ -167,7 +145,7 @@ const STEP_META: Record<Step, { title: string; subtitle: string; icon: string }>
   },
   3: {
     title: "Profile & Availability",
-    subtitle: "Skills, occupation, and volunteer availability",
+    subtitle: "Occupation and basic resident profile",
     icon: "🧰",
   },
   4: {
@@ -401,11 +379,11 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 
         <ScrollView contentContainerStyle={styles.termsBody} showsVerticalScrollIndicator>
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
-          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your account may be subject to administrative review before activation.</Text>
+          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Resident Account becomes active after successful registration.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
+          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later request Identity Verification, your submitted government ID and live selfie are processed only for verification purposes and should be handled as private verification evidence.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your data for registration verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
+          <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and Volunteer application are separate steps that you may complete after creating your account.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -426,7 +404,6 @@ export default function Signup() {
   const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [specificDays, setSpecificDays] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
   const [regions, setRegions] = useState<string[]>([]);
@@ -465,9 +442,6 @@ export default function Signup() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const toggleSelection = useCallback((list: string[], item: string) => {
-    return list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
-  }, []);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
@@ -586,7 +560,7 @@ export default function Signup() {
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && !!formData.role;
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid = !!formData.region && !!formData.province && !!formData.city && !!formData.barangay;
     const needsSpec = specializationOptions.length > 0;
     const isOther = formData.occupationCategory === "Other (Specify)";
@@ -605,7 +579,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -623,7 +597,7 @@ export default function Signup() {
       needsSpec,
       isOther,
     };
-  }, [formData, specializationOptions.length]);
+  }, [formData, googleBound, specializationOptions.length]);
 
   const isStepValid = useCallback((s: Step) => {
     if (s === 1) return validation.step1Valid;
@@ -641,8 +615,8 @@ export default function Signup() {
       const stepMessages: Record<Step, string> = {
         1: "Please complete your personal information and contact details.",
         2: "Please select your complete residential address.",
-        3: "Please complete your occupation, skills, and availability information.",
-        4: "Please create a password and agree to the terms.",
+        3: "Please complete your occupation information.",
+        4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
       };
       
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -653,7 +627,7 @@ export default function Signup() {
       setStep((prev) => (prev + 1) as Step);
       scrollTop();
     }
-  }, [isStepValid, scrollTop, step]);
+  }, [googleBound, isStepValid, scrollTop, step]);
 
   const goBack = useCallback(() => {
     Keyboard.dismiss();
@@ -678,19 +652,20 @@ export default function Signup() {
       return;
     }
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Applicants must be at least 18 years old at the time of registration.");
+      Alert.alert("Ineligible", "Residents must be at least 18 years old at the time of registration.");
       return;
     }
     try {
       setLoadingSubmit(true);
       await signUpUser({
-        role: formData.role,
+        role: "resident",
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
         age: validation.ageNumber,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
+        authProvider: googleBound ? "google" : "email",
         phoneNumber: toE164FromLocal(formData.phoneLocal),
         region: formData.region,
         province: formData.province,
@@ -699,22 +674,22 @@ export default function Signup() {
         occupationCategory: formData.occupationCategory,
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
-        skills: formData.skills,
-        skillOther: formData.skillOther,
-        availability: formData.availability,
+        skills: [],
+        skillOther: "",
+        availability: [],
       } as any);
 
       Alert.alert(
-        "✅ Registration Successful",
-        "Your registration has been submitted and is pending administrative review. You will receive a notification once your account is activated.",
-        [{ text: "OK", onPress: () => router.replace("/login") }]
+        "Welcome to VolunServe",
+        "Your Basic Resident Account is ready. You can use Resident services now. When you are ready, verify your identity from your Profile using a supported government ID and live selfie. Verified Residents may then apply for Volunteer access.",
+        [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, loadingSubmit, router, validation]);
+  }, [formData, googleBound, loadingSubmit, router, validation]);
 
   const currentMeta = STEP_META[step];
 
@@ -740,7 +715,7 @@ export default function Signup() {
           </View>
 
           <Text style={styles.heroTitle}>Create your account</Text>
-          <Text style={styles.heroText}>Register as a verified resident or volunteer for local community response and service programs.</Text>
+          <Text style={styles.heroText}>Create one Basic Resident Account first. Identity Verification and Volunteer access are completed later from your account.</Text>
         </View>
 
         <View style={styles.carouselWrap}>
@@ -808,36 +783,10 @@ export default function Signup() {
         <View style={styles.formCard}>
           {step === 1 && (
             <View>
-              <SectionTitle title="Account Type" subtitle="Choose how you want to register in VolunServe." />
-
-              <View style={styles.roleRow}>
-                <TouchableOpacity
-                  disabled={step !== 1}
-                  style={[
-                    styles.roleBtn,
-                    formData.role === "resident" && styles.roleBtnActive,
-                    step !== 1 && { opacity: 0.6 },
-                  ]}
-                  onPress={() => updateField("role", "resident")}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.roleIcon}>🏘️</Text>
-                  <Text style={[styles.roleBtnText, formData.role === "resident" && styles.roleBtnTextActive]}>Resident</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  disabled={step !== 1}
-                  style={[
-                    styles.roleBtn,
-                    formData.role === "volunteer" && styles.roleBtnActive,
-                    step !== 1 && { opacity: 0.6 },
-                  ]}
-                  onPress={() => updateField("role", "volunteer")}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.roleIcon}>🤝</Text>
-                  <Text style={[styles.roleBtnText, formData.role === "volunteer" && styles.roleBtnTextActive]}>Volunteer</Text>
-                </TouchableOpacity>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoBoxText}>
+                  Basic Resident Account — all public users start here. After signup, you may verify your identity with a supported government ID and live selfie. Verified Residents can later apply for Volunteer access.
+                </Text>
               </View>
 
               <TouchableOpacity
@@ -854,7 +803,7 @@ export default function Signup() {
                 </View>
               ) : null}
 
-              <SectionTitle title="Personal Information" subtitle="Use accurate details for LGU account verification." />
+              <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
               <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
               <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : "Enter a valid email format."}</ValidationText>
 
@@ -888,7 +837,7 @@ export default function Signup() {
                     }}
                   />
                 )}
-                <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Applicants must be at least 18 years old at the time of registration."}</ValidationText>
+                <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
 
               <Text style={styles.label}>📱 Mobile Number *</Text>
@@ -935,33 +884,10 @@ export default function Signup() {
               {validation.needsSpec && <Dropdown icon="📌" label="Specialization *" value={formData.occupationSpecialization} options={specializationOptions} enabled={!!formData.occupationCategory} onChange={(value) => updateField("occupationSpecialization", value)} />}
               {validation.isOther && <Field icon="✍️" label="Specify Occupation *" value={formData.occupationOther} onChange={(v) => updateField("occupationOther", v)} invalid={formData.occupationOther.length > 0 && formData.occupationOther.trim().length < 2} />}
 
-              <SectionTitle title="Skills" subtitle="Select all skills that apply." />
-              <View style={styles.cardBox}>
-                <View style={styles.skillWrap}>
-                  {SKILL_OPTIONS.map((skill) => {
-                    const active = formData.skills.includes(skill);
-                    return (
-                      <Pressable key={skill} onPress={() => updateField("skills", toggleSelection(formData.skills, skill))} style={[styles.skillTag, active && styles.skillTagActive]}>
-                        <Text style={[styles.skillText, active && styles.skillTextActive]}>{skill}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {formData.skills.includes("Other (Specify)") && <Field icon="✍️" label="Specify Skill" value={formData.skillOther} onChange={(v) => updateField("skillOther", v)} />}
-              </View>
-
-              <SectionTitle title="Availability" subtitle="Select when you are usually available." />
-              <View style={styles.cardBox}>
-                {AVAILABILITY_OPTIONS.map((item) => {
-                  const active = formData.availability.includes(item);
-                  return (
-                    <TouchableOpacity key={item} style={styles.checkboxRow} onPress={() => updateField("availability", toggleSelection(formData.availability, item))} activeOpacity={0.85}>
-                      <View style={[styles.checkbox, active && styles.checkboxOn]}>{active ? <Text style={styles.checkboxTick}>✓</Text> : null}</View>
-                      <Text style={styles.checkboxLabel}>{item}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-                {formData.availability.includes("Specific Days") && <TextInput style={styles.input} placeholder="Example: Monday, Wednesday" placeholderTextColor={COLORS.lightText} value={specificDays} onChangeText={setSpecificDays} />}
+              <View style={styles.infoBox}>
+                <Text style={styles.infoBoxText}>
+                  Volunteer skills and availability are not collected during signup. After your identity is verified, you can choose “Become a Volunteer” from your account and submit those details for Admin review.
+                </Text>
               </View>
             </View>
           )}
@@ -978,28 +904,38 @@ export default function Signup() {
                 <Text style={styles.reviewText}>
                   📍 {formData.barangay}, {formData.city}, {formData.province}
                 </Text>
-                <Text style={styles.reviewText}>{formData.role === "resident" ? "🏘️" : "🤝"} {formData.role === "resident" ? "Resident" : "Volunteer"}</Text>
+                <Text style={styles.reviewText}>🏘️ Basic Resident Account</Text>
                 {formData.occupationCategory && (
                   <Text style={styles.reviewText}>💼 {formData.occupationCategory}</Text>
                 )}
               </View>
  
-              <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
-              <Field icon="🔒" label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} autoCapitalize="none" />
-              <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showPassword ? "Hide Password" : "Show Password"}</Text></TouchableOpacity>
-              <Field icon="🔐" label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} autoCapitalize="none" />
-              <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowConfirmPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}</Text></TouchableOpacity>
+              {googleBound ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoBoxText}>
+                    ✓ Google account connected. Your Google sign-in will be used for this Basic Resident Account, so no additional password is required here.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
+                  <Field icon="🔒" label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} autoCapitalize="none" />
+                  <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showPassword ? "Hide Password" : "Show Password"}</Text></TouchableOpacity>
+                  <Field icon="🔐" label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} autoCapitalize="none" />
+                  <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowConfirmPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}</Text></TouchableOpacity>
 
-              <View style={styles.passwordPanel}>
-                <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
-                <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
-                <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
-              </View>
+                  <View style={styles.passwordPanel}>
+                    <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
+                    <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
+                    <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
+                  </View>
+                </>
+              )}
 
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
               <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
@@ -1022,7 +958,7 @@ export default function Signup() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, (!validation.step4Valid || loadingSubmit) && styles.disabledBtn]} onPress={handleSubmit} disabled={!validation.step4Valid || loadingSubmit}>
-              {loadingSubmit ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Submit Registration</Text>}
+              {loadingSubmit ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Create Basic Account</Text>}
             </TouchableOpacity>
           )}
         </View>
@@ -1038,8 +974,8 @@ export default function Signup() {
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.overlayTitle}>Submitting Registration...</Text>
-            <Text style={styles.overlayText}>Please wait while we process your information.</Text>
+            <Text style={styles.overlayTitle}>Creating Your Account...</Text>
+            <Text style={styles.overlayText}>Please wait while we set up your Basic Resident Account.</Text>
           </View>
         </View>
       )}
@@ -1270,4 +1206,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   }, 
-});
+})

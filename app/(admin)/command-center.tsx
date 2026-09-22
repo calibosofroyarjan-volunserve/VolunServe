@@ -2,9 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -15,24 +13,17 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
-import SideDrawer from "../../components/SideDrawer";
 import { db } from "../../lib/firebase";
-import {
-  isAdminProfile,
-  isApprovedProfile,
-} from "../../lib/firebaseAuth";
+import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
-
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = width - 40;
 
 type Severity =
   | "low"
@@ -48,41 +39,43 @@ type CaseStatus =
   | "resolved"
   | "closed";
 
-type EventStatus =
-  | "upcoming"
-  | "active"
-  | "completed";
-
 type DisasterCase = {
   id: string;
-  title?: string;
-  disasterType?: string;
-  type?: string;
   severity?: Severity;
   status?: CaseStatus;
-  createdAt?: any;
-  location?: string;
 };
 
-type VolunteerEvent = {
-  id: string;
-  title?: string;
-  type?: "disaster" | "training";
-  status?: EventStatus;
-  capacity?: number;
-  createdAt?: any;
-  location?: string;
-  date?: string;
+type ModuleCardProps = {
+  icon: React.ComponentProps<
+    typeof Ionicons
+  >["name"];
+  iconColor: string;
+  iconBackground: string;
+  title: string;
+  description: string;
+  onPress: () => void;
+  count?: number;
 };
 
-type KpiTone =
-  | "blue"
-  | "red"
-  | "green"
-  | "orange";
+type OverviewCardProps = {
+  icon: React.ComponentProps<
+    typeof Ionicons
+  >["name"];
+  iconColor: string;
+  iconBackground: string;
+  label: string;
+  value: number;
+  description: string;
+  onPress: () => void;
+};
 
 export default function AdminDashboard() {
-  const router = useRouter();
+  const router =
+    useRouter();
+
+  const {
+    width,
+  } = useWindowDimensions();
 
   const {
     loading,
@@ -91,159 +84,176 @@ export default function AdminDashboard() {
   } = useUserSession();
 
   const [
-    drawerOpen,
-    setDrawerOpen,
-  ] = useState(false);
-
-  const [
     cases,
     setCases,
-  ] = useState<DisasterCase[]>([]);
-
-  const [
-    events,
-    setEvents,
-  ] = useState<VolunteerEvent[]>([]);
+  ] = useState<
+    DisasterCase[]
+  >([]);
 
   const [
     pendingUserIds,
     setPendingUserIds,
-  ] = useState<string[]>([]);
+  ] = useState<
+    string[]
+  >([]);
 
   const [
     pendingVolunteerIds,
     setPendingVolunteerIds,
-  ] = useState<string[]>([]);
+  ] = useState<
+    string[]
+  >([]);
 
   const [
     dataError,
     setDataError,
-  ] = useState("");
+  ] = useState(false);
 
-  const isAuthorized =
-    isAdminProfile(profile);
+  const isAdmin =
+    !!profile &&
+    profile.role === "admin" &&
+    isApprovedProfile(profile);
 
-  const isSuperAdmin =
-    profile?.role === "superadmin";
+  const contentWidth =
+    Math.min(
+      Math.max(
+        width - 340,
+        280,
+      ),
+      1180,
+    );
 
-  const navigate = (route: string) => {
-    router.push(route as any);
+  const moduleColumns =
+    contentWidth >= 980
+      ? 4
+      : contentWidth >= 650
+        ? 2
+        : 1;
+
+  const overviewColumns =
+    contentWidth >= 850
+      ? 3
+      : contentWidth >= 560
+        ? 2
+        : 1;
+
+  const moduleGap = 14;
+  const overviewGap = 14;
+
+  const moduleCardWidth =
+    moduleColumns === 1
+      ? "100%"
+      : (contentWidth -
+          moduleGap *
+            (moduleColumns -
+              1)) /
+        moduleColumns;
+
+  const overviewCardWidth =
+    overviewColumns === 1
+      ? "100%"
+      : (contentWidth -
+          overviewGap *
+            (overviewColumns -
+              1)) /
+        overviewColumns;
+
+  const navigate = (
+    route: string,
+  ) => {
+    router.push(
+      route as any,
+    );
   };
 
   useEffect(() => {
-    if (!isAuthorized) {
+    if (!isAdmin) {
       return;
     }
 
-    const casesQuery = query(
-      collection(db, "disasterCases"),
-      orderBy("createdAt", "desc"),
-      limit(200)
-    );
+    const unsubscribe =
+      onSnapshot(
+        collection(
+          db,
+          "disasterCases",
+        ),
+        (snapshot) => {
+          const rows: DisasterCase[] =
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...(item.data() as Omit<
+                  DisasterCase,
+                  "id"
+                >),
+              }),
+            );
 
-    return onSnapshot(
-      casesQuery,
-      (snapshot) => {
-        setCases(
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            ...(item.data() as Omit<
-              DisasterCase,
-              "id"
-            >),
-          }))
-        );
+          setCases(
+            rows,
+          );
+        },
+        (error) => {
+          console.log(
+            "Admin dashboard cases error:",
+            error,
+          );
 
-        setDataError("");
-      },
-      (error) => {
-        console.log(
-          "cases snapshot error:",
-          error
-        );
+          setDataError(
+            true,
+          );
+        },
+      );
 
-        setDataError(
-          "Some dashboard data could not be loaded."
-        );
-      }
-    );
-  }, [isAuthorized]);
+    return unsubscribe;
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAuthorized) {
+    if (!isAdmin) {
       return;
     }
 
-    const eventsQuery = query(
-      collection(db, "volunteerEvents"),
-      orderBy("createdAt", "desc"),
-      limit(200)
-    );
+    const pendingUsersQuery =
+      query(
+        collection(
+          db,
+          "users",
+        ),
+        where(
+          "status",
+          "==",
+          "pending_review",
+        ),
+      );
 
-    return onSnapshot(
-      eventsQuery,
-      (snapshot) => {
-        setEvents(
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            ...(item.data() as Omit<
-              VolunteerEvent,
-              "id"
-            >),
-          }))
-        );
-      },
-      (error) => {
-        console.log(
-          "events snapshot error:",
-          error
-        );
+    const unsubscribe =
+      onSnapshot(
+        pendingUsersQuery,
+        (snapshot) => {
+          setPendingUserIds(
+            snapshot.docs.map(
+              (item) =>
+                item.id,
+            ),
+          );
+        },
+        (error) => {
+          console.log(
+            "Admin dashboard pending users error:",
+            error,
+          );
 
-        setDataError(
-          "Some dashboard data could not be loaded."
-        );
-      }
-    );
-  }, [isAuthorized]);
+          setDataError(
+            true,
+          );
+        },
+      );
 
-  useEffect(() => {
-    if (!isAuthorized) {
-      return;
-    }
-
-    const pendingUsersQuery = query(
-      collection(db, "users"),
-      where(
-        "status",
-        "==",
-        "pending_review"
-      )
-    );
-
-    return onSnapshot(
-      pendingUsersQuery,
-      (snapshot) => {
-        setPendingUserIds(
-          snapshot.docs.map(
-            (item) => item.id
-          )
-        );
-      },
-      (error) => {
-        console.log(
-          "pending users snapshot error:",
-          error
-        );
-
-        setDataError(
-          "Some dashboard data could not be loaded."
-        );
-      }
-    );
-  }, [isAuthorized]);
+    return unsubscribe;
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAuthorized) {
+    if (!isAdmin) {
       return;
     }
 
@@ -251,143 +261,308 @@ export default function AdminDashboard() {
       query(
         collection(
           db,
-          "volunteerApplications"
+          "volunteerApplications",
         ),
         where(
           "status",
           "==",
-          "pending"
-        )
+          "pending",
+        ),
       );
 
-    return onSnapshot(
-      pendingApplicationsQuery,
-      (snapshot) => {
-        setPendingVolunteerIds(
-          snapshot.docs.map(
-            (item) => item.id
-          )
-        );
+    const unsubscribe =
+      onSnapshot(
+        pendingApplicationsQuery,
+        (snapshot) => {
+          setPendingVolunteerIds(
+            snapshot.docs.map(
+              (item) =>
+                item.id,
+            ),
+          );
+        },
+        (error) => {
+          console.log(
+            "Admin dashboard pending volunteer applications error:",
+            error,
+          );
+
+          setDataError(
+            true,
+          );
+        },
+      );
+
+    return unsubscribe;
+  }, [isAdmin]);
+
+  const metrics =
+    useMemo(() => {
+      const activeCases =
+        cases.filter(
+          (item) => {
+            const status =
+              item.status ||
+              "reported";
+
+            return (
+              status !==
+                "resolved" &&
+              status !==
+                "closed"
+            );
+          },
+        ).length;
+
+      const criticalOpen =
+        cases.filter(
+          (item) => {
+            const status =
+              item.status ||
+              "reported";
+
+            return (
+              item.severity ===
+                "critical" &&
+              status !==
+                "resolved" &&
+              status !==
+                "closed"
+            );
+          },
+        ).length;
+
+      const pendingAccounts =
+        new Set([
+          ...pendingUserIds,
+          ...pendingVolunteerIds,
+        ]).size;
+
+      return {
+        activeCases,
+        criticalOpen,
+        pendingAccounts,
+      };
+    }, [
+      cases,
+      pendingUserIds,
+      pendingVolunteerIds,
+    ]);
+
+  const modules:
+    ModuleCardProps[] =
+    [
+      {
+        icon:
+          "people-outline",
+        iconColor:
+          "#2563EB",
+        iconBackground:
+          "#EFF6FF",
+        title:
+          "Account Approvals",
+        description:
+          "Review resident and volunteer applications.",
+        count:
+          metrics.pendingAccounts,
+        onPress: () =>
+          navigate(
+            "/(admin)/account-approvals",
+          ),
       },
-      (error) => {
-        console.log(
-          "volunteer applications snapshot error:",
-          error
-        );
+      {
+        icon:
+          "warning-outline",
+        iconColor:
+          "#DC2626",
+        iconBackground:
+          "#FEF2F2",
+        title:
+          "Emergency Cases",
+        description:
+          "Validate reports and assign responders.",
+        count:
+          metrics.activeCases,
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-cases",
+          ),
+      },
+      {
+        icon:
+          "calendar-outline",
+        iconColor:
+          "#7C3AED",
+        iconBackground:
+          "#F5F3FF",
+        title:
+          "Events",
+        description:
+          "Manage volunteer events and activities.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-events",
+          ),
+      },
+      {
+        icon:
+          "heart-outline",
+        iconColor:
+          "#059669",
+        iconBackground:
+          "#ECFDF5",
+        title:
+          "Donations",
+        description:
+          "Manage verified donation campaigns.",
+        onPress: () =>
+          navigate(
+            "/donation-list",
+          ),
+      },
+      {
+        icon:
+          "megaphone-outline",
+        iconColor:
+          "#D97706",
+        iconBackground:
+          "#FFFBEB",
+        title:
+          "Announcements",
+        description:
+          "Publish important community updates.",
+        onPress: () =>
+          navigate(
+            "/(admin)/create-announcement",
+          ),
+      },
+      {
+        icon:
+          "analytics-outline",
+        iconColor:
+          "#0284C7",
+        iconBackground:
+          "#F0F9FF",
+        title:
+          "Analytics",
+        description:
+          "Review operational trends and reports.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-analytics",
+          ),
+      },
+      {
+        icon:
+          "ribbon-outline",
+        iconColor:
+          "#4F46E5",
+        iconBackground:
+          "#EEF2FF",
+        title:
+          "Certificates",
+        description:
+          "Issue and manage volunteer certificates.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-certificates",
+          ),
+      },
+      {
+        icon:
+          "shield-checkmark-outline",
+        iconColor:
+          "#B45309",
+        iconBackground:
+          "#FFF7ED",
+        title:
+          "Disputes",
+        description:
+          "Review contested assistance outcomes.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-disputes",
+          ),
+      },
+    ];
 
-        setDataError(
-          "Some dashboard data could not be loaded."
-        );
-      }
-    );
-  }, [isAuthorized]);
-
-  const metrics = useMemo(() => {
-    const byStatus: Record<
-      CaseStatus,
-      number
-    > = {
-      reported: 0,
-      validated: 0,
-      assigned: 0,
-      in_progress: 0,
-      resolved: 0,
-      closed: 0,
-    };
-
-    const bySeverity: Record<
-      Severity,
-      number
-    > = {
-      low: 0,
-      medium: 0,
-      high: 0,
-      critical: 0,
-    };
-
-    cases.forEach((item) => {
-      const status =
-        item.status || "reported";
-
-      const severity =
-        item.severity || "medium";
-
-      byStatus[status] =
-        (byStatus[status] || 0) + 1;
-
-      bySeverity[severity] =
-        (bySeverity[severity] || 0) + 1;
-    });
-
-    const eventStatus: Record<
-      EventStatus,
-      number
-    > = {
-      upcoming: 0,
-      active: 0,
-      completed: 0,
-    };
-
-    events.forEach((item) => {
-      const status =
-        item.status || "upcoming";
-
-      eventStatus[status] =
-        (eventStatus[status] || 0) + 1;
-    });
-
-    const activeCases =
-      byStatus.reported +
-      byStatus.validated +
-      byStatus.assigned +
-      byStatus.in_progress;
-
-    const criticalOpen =
-      cases.filter((item) => {
-        const status =
-          item.status || "reported";
-
-        return (
-          (item.severity || "medium") ===
-            "critical" &&
-          status !== "resolved" &&
-          status !== "closed"
-        );
-      }).length;
-
-    const pendingAccounts =
-      new Set([
-        ...pendingUserIds,
-        ...pendingVolunteerIds,
-      ]).size;
-
-    return {
-      byStatus,
-      bySeverity,
-      eventStatus,
-      activeCases,
-      criticalOpen,
-      pendingAccounts,
-      latestCases: cases.slice(0, 5),
-      latestEvents: events.slice(0, 5),
-    };
-  }, [
-    cases,
-    events,
-    pendingUserIds,
-    pendingVolunteerIds,
-  ]);
+  const overview:
+    OverviewCardProps[] =
+    [
+      {
+        icon:
+          "folder-open-outline",
+        iconColor:
+          "#2563EB",
+        iconBackground:
+          "#EFF6FF",
+        label:
+          "Active Cases",
+        value:
+          metrics.activeCases,
+        description:
+          "Cases that still need action.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-cases",
+          ),
+      },
+      {
+        icon:
+          "alert-circle-outline",
+        iconColor:
+          "#DC2626",
+        iconBackground:
+          "#FEF2F2",
+        label:
+          "Critical Open",
+        value:
+          metrics.criticalOpen,
+        description:
+          "Critical cases not yet resolved.",
+        onPress: () =>
+          navigate(
+            "/(admin)/admin-cases",
+          ),
+      },
+      {
+        icon:
+          "person-add-outline",
+        iconColor:
+          "#D97706",
+        iconBackground:
+          "#FFFBEB",
+        label:
+          "Pending Accounts",
+        value:
+          metrics.pendingAccounts,
+        description:
+          "Applications waiting for review.",
+        onPress: () =>
+          navigate(
+            "/(admin)/account-approvals",
+          ),
+      },
+    ];
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View
+        style={
+          styles.center
+        }
+      >
         <ActivityIndicator
           size="large"
-          color="#078F82"
+          color="#4F46E5"
         />
 
-        <Text style={styles.muted}>
-          Loading command center...
+        <Text
+          style={
+            styles.loadingText
+          }
+        >
+          Loading Admin Dashboard...
         </Text>
       </View>
     );
@@ -396,70 +571,105 @@ export default function AdminDashboard() {
   if (
     !user ||
     !profile ||
-    !isApprovedProfile(profile)
+    !isApprovedProfile(
+      profile,
+    )
   ) {
-    return <Redirect href="/login" />;
+    return (
+      <Redirect href="/login" />
+    );
   }
 
-  if (!isAuthorized) {
-    return <Redirect href="/(tabs)" />;
+  if (
+    profile.role ===
+    "superadmin"
+  ) {
+    return (
+      <Redirect href="/(superadmin)" />
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <Redirect href="/(tabs)" />
+    );
   }
 
   return (
-    <>
-      <ScrollView
-        contentContainerStyle={
-          styles.container
-        }
+    <ScrollView
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.page
+      }
+      showsVerticalScrollIndicator={
+        false
+      }
+    >
+      <View
+        style={[
+          styles.content,
+          {
+            maxWidth:
+              contentWidth,
+          },
+        ]}
       >
-        <View style={styles.topHeader}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Open administrator menu"
-            style={styles.menuButton}
-            onPress={() =>
-              setDrawerOpen(true)
+        <View
+          style={
+            styles.header
+          }
+        >
+          <View
+            style={
+              styles.headerCopy
             }
           >
-            <Ionicons
-              name="menu"
-              size={25}
-              color="#0F172A"
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headingText}>
-            <Text style={styles.title}>
-              Command Center
+            <Text
+              style={
+                styles.title
+              }
+            >
+              Admin Dashboard
             </Text>
 
-            <Text style={styles.sub}>
-              {isSuperAdmin
-                ? "Super Administrator"
-                : "Administrator"}
+            <Text
+              style={
+                styles.subtitle
+              }
+            >
+              Manage community operations and response activities.
             </Text>
           </View>
 
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Open admin logs"
-            style={styles.darkButton}
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-logs"
-              )
+          <View
+            style={
+              styles.adminBadge
             }
           >
             <Ionicons
-              name="list-outline"
-              size={18}
-              color="#FFFFFF"
+              name="shield-checkmark-outline"
+              size={15}
+              color="#0F766E"
             />
-          </TouchableOpacity>
+
+            <Text
+              style={
+                styles.adminBadgeText
+              }
+            >
+              ADMIN
+            </Text>
+          </View>
         </View>
 
-        {!!dataError && (
-          <View style={styles.warningBox}>
+        {dataError && (
+          <View
+            style={
+              styles.warningBox
+            }
+          >
             <Ionicons
               name="warning-outline"
               size={18}
@@ -467,833 +677,564 @@ export default function AdminDashboard() {
             />
 
             <Text
-              style={styles.warningText}
-            >
-              {dataError}
-            </Text>
-          </View>
-        )}
-
-        <Text style={styles.sectionHeading}>
-          Quick Actions
-        </Text>
-
-        <View style={styles.quickGrid}>
-          <QuickButton
-            icon="people-outline"
-            label="Approvals"
-            onPress={() =>
-              navigate(
-                "/(admin)/account-approvals"
-              )
-            }
-          />
-
-          <QuickButton
-            icon="warning-outline"
-            label="Cases"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-cases"
-              )
-            }
-          />
-
-          <QuickButton
-            icon="calendar-outline"
-            label="Events"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-events"
-              )
-            }
-          />
-
-          <QuickButton
-            icon="cash-outline"
-            label="Donations"
-            onPress={() =>
-              navigate("/donation-list")
-            }
-          />
-
-          <QuickButton
-            icon="megaphone-outline"
-            label="Announcement"
-            onPress={() =>
-              navigate(
-                "/(admin)/create-announcement"
-              )
-            }
-          />
-
-          <QuickButton
-            icon="analytics-outline"
-            label="Analytics"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-analytics"
-              )
-            }
-          />
-        </View>
-
-        <Text style={styles.sectionHeading}>
-          Live Overview
-        </Text>
-
-        <View style={styles.kpiGrid}>
-          <KpiCard
-            icon="warning-outline"
-            label="Active Cases"
-            value={metrics.activeCases}
-            tone="blue"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-cases"
-              )
-            }
-          />
-
-          <KpiCard
-            icon="alert-circle-outline"
-            label="Critical Open"
-            value={metrics.criticalOpen}
-            tone="red"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-cases"
-              )
-            }
-          />
-
-          <KpiCard
-            icon="person-add-outline"
-            label="Pending Accounts"
-            value={
-              metrics.pendingAccounts
-            }
-            tone="orange"
-            onPress={() =>
-              navigate(
-                "/(admin)/account-approvals"
-              )
-            }
-          />
-
-          <KpiCard
-            icon="calendar-outline"
-            label="Active Events"
-            value={
-              metrics.eventStatus.active
-            }
-            tone="green"
-            onPress={() =>
-              navigate(
-                "/(admin)/admin-events"
-              )
-            }
-          />
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>
-            Case Pipeline
-          </Text>
-
-          <View style={styles.rowWrap}>
-            <SmallStat
-              label="Reported"
-              value={
-                metrics.byStatus.reported
-              }
-            />
-
-            <SmallStat
-              label="Validated"
-              value={
-                metrics.byStatus.validated
-              }
-            />
-
-            <SmallStat
-              label="Assigned"
-              value={
-                metrics.byStatus.assigned
-              }
-            />
-
-            <SmallStat
-              label="In Progress"
-              value={
-                metrics.byStatus
-                  .in_progress
-              }
-            />
-
-            <SmallStat
-              label="Resolved"
-              value={
-                metrics.byStatus.resolved
-              }
-            />
-
-            <SmallStat
-              label="Closed"
-              value={
-                metrics.byStatus.closed
-              }
-            />
-          </View>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>
-            Severity Overview
-          </Text>
-
-          <View style={styles.rowWrap}>
-            <SmallStat
-              label="Critical"
-              value={
-                metrics.bySeverity
-                  .critical
-              }
-            />
-
-            <SmallStat
-              label="High"
-              value={
-                metrics.bySeverity.high
-              }
-            />
-
-            <SmallStat
-              label="Medium"
-              value={
-                metrics.bySeverity.medium
-              }
-            />
-
-            <SmallStat
-              label="Low"
-              value={
-                metrics.bySeverity.low
-              }
-            />
-          </View>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>
-            Events Overview
-          </Text>
-
-          <View style={styles.rowWrap}>
-            <SmallStat
-              label="Upcoming"
-              value={
-                metrics.eventStatus
-                  .upcoming
-              }
-            />
-
-            <SmallStat
-              label="Active"
-              value={
-                metrics.eventStatus.active
-              }
-            />
-
-            <SmallStat
-              label="Completed"
-              value={
-                metrics.eventStatus
-                  .completed
-              }
-            />
-          </View>
-        </View>
-
-        <View style={styles.block}>
-          <View
-            style={styles.blockHeaderRow}
-          >
-            <Text style={styles.blockTitle}>
-              Latest Cases
-            </Text>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigate(
-                  "/(admin)/admin-cases"
-                )
-              }
-            >
-              <Text style={styles.link}>
-                View all
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {metrics.latestCases.length ===
-          0 ? (
-            <Text style={styles.emptyText}>
-              No cases yet.
-            </Text>
-          ) : (
-            metrics.latestCases.map(
-              (item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.itemRow}
-                  onPress={() =>
-                    navigate(
-                      "/(admin)/admin-cases"
-                    )
-                  }
-                >
-                  <View
-                    style={
-                      styles.itemContent
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.itemTitle
-                      }
-                    >
-                      {item.title ||
-                        item.disasterType ||
-                        item.type ||
-                        "Untitled Case"}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.itemMeta
-                      }
-                    >
-                      {String(
-                        item.status ||
-                          "reported"
-                      ).toUpperCase()}{" "}
-                      •{" "}
-                      {String(
-                        item.severity ||
-                          "medium"
-                      ).toUpperCase()}
-                    </Text>
-                  </View>
-
-                  <Ionicons
-                    name="chevron-forward"
-                    size={17}
-                    color="#94A3B8"
-                  />
-                </TouchableOpacity>
-              )
-            )
-          )}
-        </View>
-
-        <View style={styles.block}>
-          <View
-            style={styles.blockHeaderRow}
-          >
-            <Text style={styles.blockTitle}>
-              Latest Events
-            </Text>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigate(
-                  "/(admin)/admin-events"
-                )
-              }
-            >
-              <Text style={styles.link}>
-                View all
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {metrics.latestEvents.length ===
-          0 ? (
-            <Text style={styles.emptyText}>
-              No events yet.
-            </Text>
-          ) : (
-            metrics.latestEvents.map(
-              (item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.itemRow}
-                  onPress={() =>
-                    navigate(
-                      "/(admin)/admin-events"
-                    )
-                  }
-                >
-                  <View
-                    style={
-                      styles.itemContent
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.itemTitle
-                      }
-                    >
-                      {item.title ||
-                        "Untitled Event"}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.itemMeta
-                      }
-                    >
-                      {String(
-                        item.status ||
-                          "upcoming"
-                      ).toUpperCase()}{" "}
-                      •{" "}
-                      {String(
-                        item.type ||
-                          "disaster"
-                      ).toUpperCase()}
-                    </Text>
-                  </View>
-
-                  <Ionicons
-                    name="chevron-forward"
-                    size={17}
-                    color="#94A3B8"
-                  />
-                </TouchableOpacity>
-              )
-            )
-          )}
-        </View>
-
-        {isSuperAdmin && (
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() =>
-              navigate(
-                "/(admin)/system-settings"
-              )
-            }
-          >
-            <Ionicons
-              name="settings-outline"
-              size={20}
-              color="#FFFFFF"
-            />
-
-            <Text
               style={
-                styles.settingsButtonText
+                styles.warningText
               }
             >
-              System Settings
+              Some live dashboard counts could not be loaded. The modules are still available.
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
-      </ScrollView>
 
-      <SideDrawer
-        visible={drawerOpen}
-        onClose={() =>
-          setDrawerOpen(false)
-        }
-        name={
-          profile.fullName ||
-          "Administrator"
-        }
-        email={profile.email || ""}
-        role={profile.role}
-      />
-    </>
+        <View
+          style={
+            styles.sectionHeader
+          }
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            Operations
+          </Text>
+
+          <Text
+            style={
+              styles.sectionSubtitle
+            }
+          >
+            Open the module you need.
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.moduleGrid,
+            {
+              gap:
+                moduleGap,
+            },
+          ]}
+        >
+          {modules.map(
+            (item) => (
+              <View
+                key={
+                  item.title
+                }
+                style={{
+                  width:
+                    moduleCardWidth,
+                }}
+              >
+                <ModuleCard
+                  {...item}
+                />
+              </View>
+            ),
+          )}
+        </View>
+
+        <View
+          style={[
+            styles.sectionHeader,
+            styles.overviewHeader,
+          ]}
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            Live Overview
+          </Text>
+
+          <Text
+            style={
+              styles.sectionSubtitle
+            }
+          >
+            Key items that may need attention.
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.overviewGrid,
+            {
+              gap:
+                overviewGap,
+            },
+          ]}
+        >
+          {overview.map(
+            (item) => (
+              <View
+                key={
+                  item.label
+                }
+                style={{
+                  width:
+                    overviewCardWidth,
+                }}
+              >
+                <OverviewCard
+                  {...item}
+                />
+              </View>
+            ),
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
-function QuickButton({
+function ModuleCard({
   icon,
-  label,
+  iconColor,
+  iconBackground,
+  title,
+  description,
   onPress,
-}: {
-  icon: React.ComponentProps<
-    typeof Ionicons
-  >["name"];
-  label: string;
-  onPress: () => void;
-}) {
+  count,
+}: ModuleCardProps) {
   return (
     <TouchableOpacity
-      style={styles.quickButton}
-      onPress={onPress}
+      activeOpacity={
+        0.78
+      }
+      style={
+        styles.moduleCard
+      }
+      onPress={
+        onPress
+      }
     >
-      <View style={styles.quickIcon}>
-        <Ionicons
-          name={icon}
-          size={19}
-          color="#078F82"
-        />
+      <View
+        style={
+          styles.moduleTop
+        }
+      >
+        <View
+          style={[
+            styles.moduleIcon,
+            {
+              backgroundColor:
+                iconBackground,
+            },
+          ]}
+        >
+          <Ionicons
+            name={icon}
+            size={22}
+            color={
+              iconColor
+            }
+          />
+        </View>
+
+        {typeof count ===
+          "number" &&
+          count > 0 && (
+            <View
+              style={
+                styles.countBadge
+              }
+            >
+              <Text
+                style={
+                  styles.countBadgeText
+                }
+              >
+                {count}
+              </Text>
+            </View>
+          )}
       </View>
 
       <Text
-        style={styles.quickButtonText}
+        style={
+          styles.moduleTitle
+        }
       >
-        {label}
+        {title}
       </Text>
+
+      <Text
+        style={
+          styles.moduleDescription
+        }
+      >
+        {description}
+      </Text>
+
+      <View
+        style={
+          styles.moduleFooter
+        }
+      >
+        <Text
+          style={
+            styles.openText
+          }
+        >
+          Open
+        </Text>
+
+        <Ionicons
+          name="arrow-forward"
+          size={16}
+          color="#4F46E5"
+        />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function OverviewCard({
+  icon,
+  iconColor,
+  iconBackground,
+  label,
+  value,
+  description,
+  onPress,
+}: OverviewCardProps) {
+  return (
+    <TouchableOpacity
+      activeOpacity={
+        0.8
+      }
+      style={
+        styles.overviewCard
+      }
+      onPress={
+        onPress
+      }
+    >
+      <View
+        style={[
+          styles.overviewIcon,
+          {
+            backgroundColor:
+              iconBackground,
+          },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={23}
+          color={
+            iconColor
+          }
+        />
+      </View>
+
+      <View
+        style={
+          styles.overviewBody
+        }
+      >
+        <Text
+          style={
+            styles.overviewLabel
+          }
+        >
+          {label}
+        </Text>
+
+        <Text
+          style={
+            styles.overviewValue
+          }
+        >
+          {value}
+        </Text>
+
+        <Text
+          style={
+            styles.overviewDescription
+          }
+        >
+          {description}
+        </Text>
+      </View>
 
       <Ionicons
         name="chevron-forward"
-        size={15}
+        size={18}
         color="#94A3B8"
       />
     </TouchableOpacity>
   );
 }
 
-function KpiCard({
-  icon,
-  label,
-  value,
-  tone,
-  onPress,
-}: {
-  icon: React.ComponentProps<
-    typeof Ionicons
-  >["name"];
-  label: string;
-  value: number;
-  tone: KpiTone;
-  onPress: () => void;
-}) {
-  const backgroundColor =
-    tone === "blue"
-      ? "#2563EB"
-      : tone === "red"
-        ? "#DC2626"
-        : tone === "green"
-          ? "#16A34A"
-          : "#F59E0B";
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor:
+        "#F5F7FB",
+    },
 
-  return (
-    <TouchableOpacity
-      style={[
-        styles.kpiCard,
-        {
-          backgroundColor,
-        },
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.kpiTopRow}>
-        <Text style={styles.kpiLabel}>
-          {label}
-        </Text>
+    page: {
+      width: "100%",
+      paddingHorizontal: 28,
+      paddingTop: 42,
+      paddingBottom: 64,
+    },
 
-        <Ionicons
-          name={icon}
-          size={21}
-          color="#FFFFFF"
-        />
-      </View>
+    content: {
+      width: "100%",
+      alignSelf: "center",
+    },
 
-      <Text style={styles.kpiValue}>
-        {value}
-      </Text>
-    </TouchableOpacity>
-  );
-}
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      backgroundColor:
+        "#F5F7FB",
+      padding: 24,
+    },
 
-function SmallStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statLabel}>
-        {label}
-      </Text>
+    loadingText: {
+      marginTop: 12,
+      color: "#64748B",
+      fontSize: 13,
+      fontWeight: "600",
+    },
 
-      <Text style={styles.statValue}>
-        {value}
-      </Text>
-    </View>
-  );
-}
+    header: {
+      flexDirection: "row",
+      alignItems:
+        "flex-start",
+      justifyContent:
+        "space-between",
+      gap: 16,
+      marginBottom: 30,
+    },
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    paddingTop: 54,
-    paddingBottom: 45,
-    backgroundColor: "#F4F7FB",
-  },
+    headerCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    gap: 10,
-    backgroundColor: "#F4F7FB",
-  },
+    title: {
+      color: "#0F172A",
+      fontSize: 30,
+      fontWeight: "900",
+      letterSpacing: -0.5,
+    },
 
-  topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 18,
-  },
+    subtitle: {
+      marginTop: 5,
+      color: "#64748B",
+      fontSize: 13,
+      lineHeight: 19,
+    },
 
-  menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
+    adminBadge: {
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      backgroundColor:
+        "#ECFDF5",
+      borderWidth: 1,
+      borderColor:
+        "#A7F3D0",
+    },
 
-  headingText: {
-    flex: 1,
-  },
+    adminBadgeText: {
+      color: "#0F766E",
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0.5,
+    },
 
-  title: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
+    warningBox: {
+      marginBottom: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      padding: 12,
+      borderRadius: 11,
+      backgroundColor:
+        "#FFFBEB",
+      borderWidth: 1,
+      borderColor:
+        "#FDE68A",
+    },
 
-  sub: {
-    color: "#64748B",
-    fontWeight: "700",
-    marginTop: 3,
-  },
+    warningText: {
+      flex: 1,
+      color: "#92400E",
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: "600",
+    },
 
-  muted: {
-    color: "#64748B",
-    textAlign: "center",
-  },
+    sectionHeader: {
+      marginBottom: 13,
+    },
 
-  darkButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#111827",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    overviewHeader: {
+      marginTop: 30,
+    },
 
-  warningBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "#FFFBEB",
-    borderWidth: 1,
-    borderColor: "#FDE68A",
-    marginBottom: 15,
-  },
+    sectionTitle: {
+      color: "#0F172A",
+      fontSize: 18,
+      fontWeight: "900",
+    },
 
-  warningText: {
-    flex: 1,
-    color: "#92400E",
-    fontWeight: "600",
-    fontSize: 12,
-  },
+    sectionSubtitle: {
+      marginTop: 3,
+      color: "#64748B",
+      fontSize: 12.5,
+    },
 
-  sectionHeading: {
-    color: "#0F172A",
-    fontSize: 15,
-    fontWeight: "900",
-    marginBottom: 10,
-  },
+    moduleGrid: {
+      width: "100%",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "stretch",
+    },
 
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 20,
-  },
+    moduleCard: {
+      minHeight: 196,
+      padding: 18,
+      borderRadius: 15,
+      backgroundColor:
+        "#FFFFFF",
+      borderWidth: 1,
+      borderColor:
+        "#E2E8F0",
+    },
 
-  quickButton: {
-    width: (CARD_WIDTH - 10) / 2,
-    minHeight: 56,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
+    moduleTop: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems:
+        "flex-start",
+      justifyContent:
+        "space-between",
+      gap: 10,
+    },
 
-  quickIcon: {
-    width: 33,
-    height: 33,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E5F8F3",
-    marginRight: 8,
-  },
+    moduleIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
 
-  quickButtonText: {
-    flex: 1,
-    color: "#0F172A",
-    fontSize: 12,
-    fontWeight: "800",
-  },
+    countBadge: {
+      minWidth: 27,
+      height: 27,
+      paddingHorizontal: 7,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      backgroundColor:
+        "#F1F5F9",
+    },
 
-  kpiGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 16,
-  },
+    countBadgeText: {
+      color: "#334155",
+      fontSize: 11,
+      fontWeight: "900",
+    },
 
-  kpiCard: {
-    width: (CARD_WIDTH - 10) / 2,
-    minHeight: 112,
-    borderRadius: 16,
-    padding: 14,
-  },
+    moduleTitle: {
+      marginTop: 17,
+      color: "#0F172A",
+      fontSize: 15,
+      fontWeight: "900",
+    },
 
-  kpiTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+    moduleDescription: {
+      marginTop: 6,
+      minHeight: 38,
+      color: "#64748B",
+      fontSize: 12,
+      lineHeight: 18,
+    },
 
-  kpiLabel: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontWeight: "800",
-    opacity: 0.95,
-    fontSize: 12,
-  },
+    moduleFooter: {
+      marginTop: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
 
-  kpiValue: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 30,
-    marginTop: 13,
-  },
+    openText: {
+      color: "#4F46E5",
+      fontSize: 12,
+      fontWeight: "800",
+    },
 
-  block: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-  },
+    overviewGrid: {
+      width: "100%",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "stretch",
+    },
 
-  blockHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+    overviewCard: {
+      minHeight: 132,
+      padding: 17,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 13,
+      borderRadius: 15,
+      backgroundColor:
+        "#FFFFFF",
+      borderWidth: 1,
+      borderColor:
+        "#E2E8F0",
+    },
 
-  blockTitle: {
-    fontWeight: "900",
-    color: "#0F172A",
-    fontSize: 15,
-  },
+    overviewIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
 
-  link: {
-    fontWeight: "900",
-    color: "#078F82",
-  },
+    overviewBody: {
+      flex: 1,
+      minWidth: 0,
+    },
 
-  rowWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 10,
-  },
+    overviewLabel: {
+      color: "#334155",
+      fontSize: 12,
+      fontWeight: "800",
+    },
 
-  stat: {
-    flexGrow: 1,
-    minWidth: 100,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 14,
-    padding: 12,
-  },
+    overviewValue: {
+      marginTop: 3,
+      color: "#0F172A",
+      fontSize: 27,
+      fontWeight: "900",
+    },
 
-  statLabel: {
-    color: "#64748B",
-    fontWeight: "800",
-    fontSize: 11,
-  },
-
-  statValue: {
-    color: "#0F172A",
-    fontWeight: "900",
-    fontSize: 20,
-    marginTop: 6,
-  },
-
-  emptyText: {
-    color: "#64748B",
-    textAlign: "center",
-    paddingVertical: 18,
-  },
-
-  itemRow: {
-    minHeight: 58,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-
-  itemContent: {
-    flex: 1,
-    paddingRight: 8,
-  },
-
-  itemTitle: {
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-
-  itemMeta: {
-    color: "#64748B",
-    fontWeight: "700",
-    marginTop: 3,
-    fontSize: 11,
-  },
-
-  settingsButton: {
-    minHeight: 52,
-    borderRadius: 14,
-    backgroundColor: "#7C3AED",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    marginTop: 5,
-  },
-
-  settingsButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-});
+    overviewDescription: {
+      marginTop: 4,
+      color: "#64748B",
+      fontSize: 11.5,
+      lineHeight: 16,
+    },
+  });

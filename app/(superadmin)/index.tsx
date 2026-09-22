@@ -1,38 +1,29 @@
+import { Ionicons } from "@expo/vector-icons";
+import { router, type Href } from "expo-router";
 import React from "react";
-
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
-import {
-  router,
-  type Href,
-} from "expo-router";
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-import {
-  useUserSession,
-} from "../../lib/useUserSession";
-
-type ControlCardProps = {
+type ModuleCardProps = {
   title: string;
   description: string;
-  icon: string;
+  icon: IconName;
+  iconBackground: string;
+  iconColor: string;
   onPress: () => void;
 };
 
 export default function SuperAdminDashboard() {
-  const {
-    profile,
-  } = useUserSession();
-
-  const displayName =
-    profile?.fullName ||
-    profile?.email ||
-    "Super Admin";
+  const { width } = useWindowDimensions();
+  const compact = width < 760;
 
   const openRoute = (route: string) => {
     router.push(route as Href);
@@ -42,179 +33,103 @@ export default function SuperAdminDashboard() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <View style={styles.headerTextArea}>
-          <Text style={styles.eyebrow}>
-            VOLUNSERVE SYSTEM CONTROL
-          </Text>
-
-          <Text style={styles.title}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerCopy}>
+          <Text style={[styles.title, compact && styles.titleCompact]}>
             Super Admin Dashboard
           </Text>
 
           <Text style={styles.subtitle}>
-            System-level administration, security, records,
-            configuration, and oversight.
+            Manage system access, records, security, and settings.
           </Text>
         </View>
 
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>
-            SUPER ADMIN
-          </Text>
-        </View>
+        {!compact ? (
+          <View style={styles.roleBadge}>
+            <Ionicons name="shield-checkmark" size={16} color="#5B3FD4" />
+            <Text style={styles.roleBadgeText}>SUPER ADMIN</Text>
+          </View>
+        ) : null}
       </View>
 
-      <View style={styles.welcomeCard}>
-        <View style={styles.welcomeIcon}>
-          <Text style={styles.welcomeIconText}>
-            SA
-          </Text>
-        </View>
+      <Text style={styles.sectionTitle}>System Management</Text>
 
-        <View style={styles.welcomeTextArea}>
-          <Text style={styles.welcomeTitle}>
-            Welcome, {displayName}
-          </Text>
-
-          <Text style={styles.welcomeText}>
-            You have system-level authority over VolunServe.
-            Operational Admin accounts handle day-to-day user
-            management and community operations, while the Super
-            Admin controls Admin access, system security,
-            configuration, maintenance, and audit oversight.
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>
-          Separate Admin and Super Admin Access
-        </Text>
-
-        <Text style={styles.infoText}>
-          Admins use the operational Admin portal to manage users,
-          emergency reports, volunteer assignments, disputes,
-          events, certificates, donations, announcements, analytics,
-          and other day-to-day operations.
-        </Text>
-
-        <Text style={styles.infoText}>
-          Super Admin uses this separate system-control portal to
-          protect and maintain the system, manage Admin access,
-          review system records and audit logs, and control
-          system-level settings. Operational Admin decisions and
-          routes remain inside the separate Admin portal.
-        </Text>
-      </View>
-
-      <Text style={styles.sectionEyebrow}>
-        SYSTEM MANAGEMENT
-      </Text>
-
-      <Text style={styles.sectionTitle}>
-        System Governance & Control
-      </Text>
-
-      <View style={styles.grid}>
-        <ControlCard
-          icon="👤"
+      <View style={[styles.grid, compact && styles.gridCompact]}>
+        <ModuleCard
           title="Admin Accounts"
-          description="Grant, suspend, reactivate, and remove operational Admin access."
-          onPress={() => {
-            openRoute("/(superadmin)/admin-accounts");
-          }}
+          description="Manage operational admin access."
+          icon="people"
+          iconBackground="#F0EDFF"
+          iconColor="#5B3FD4"
+          onPress={() => openRoute("/(superadmin)/admin-accounts")}
         />
 
-        <ControlCard
-          icon="🗂"
+        <ModuleCard
           title="All Records"
-          description="Review system-wide records across VolunServe from a dedicated Super Admin view."
-          onPress={() => {
-            openRoute("/(superadmin)/all-records");
-          }}
+          description="View system-wide records."
+          icon="document-text-outline"
+          iconBackground="#EAF4FF"
+          iconColor="#1685E5"
+          onPress={() => openRoute("/(superadmin)/all-records")}
         />
 
-        <ControlCard
-          icon="⚙"
-          title="System Settings"
-          description="Manage global system configuration and Super Admin-controlled settings."
-          onPress={() => {
-            openRoute("/(superadmin)/system-settings");
-          }}
-        />
-
-        <ControlCard
-          icon="📋"
+        <ModuleCard
           title="Audit Logs"
-          description="Review immutable Admin and system activity logs for accountability and oversight."
-          onPress={() => {
-            openRoute("/(superadmin)/admin-logs");
-          }}
+          description="Review system activity logs."
+          icon="time-outline"
+          iconBackground="#EAF8F2"
+          iconColor="#139667"
+          onPress={() => openRoute("/(superadmin)/admin-logs")}
         />
-      </View>
 
-      <View style={styles.authorityCard}>
-        <View style={styles.authorityBadge}>
-          <Text style={styles.authorityBadgeText}>
-            SYSTEM-LEVEL AUTHORITY
-          </Text>
-        </View>
-
-        <Text style={styles.authorityTitle}>
-          Super Admin Control
-        </Text>
-
-        <Text style={styles.authorityText}>
-          Super Admin protects and maintains the system by managing
-          Admin access, reviewing system-wide records and audit logs,
-          controlling system-level settings, and overseeing system
-          security. Daily user management and community operations
-          remain under the separate Admin portal.
-        </Text>
+        <ModuleCard
+          title="System Settings"
+          description="Manage platform settings."
+          icon="settings"
+          iconBackground="#FFF3E8"
+          iconColor="#E68119"
+          onPress={() => openRoute("/(superadmin)/system-settings")}
+        />
       </View>
     </ScrollView>
   );
 }
 
-function ControlCard({
+function ModuleCard({
   title,
   description,
   icon,
+  iconBackground,
+  iconColor,
   onPress,
-}: ControlCardProps) {
+}: ModuleCardProps) {
   return (
     <TouchableOpacity
-      style={styles.controlCard}
+      style={styles.card}
       activeOpacity={0.82}
       onPress={onPress}
     >
-      <View style={styles.cardTopRow}>
-        <View style={styles.cardIcon}>
-          <Text style={styles.cardIconText}>
-            {icon}
-          </Text>
+      <View style={styles.cardMain}>
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: iconBackground,
+            },
+          ]}
+        >
+          <Ionicons name={icon} size={27} color={iconColor} />
         </View>
 
-        <View style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>
-            AVAILABLE
-          </Text>
-        </View>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDescription}>{description}</Text>
       </View>
 
-      <Text style={styles.cardTitle}>
-        {title}
-      </Text>
-
-      <Text style={styles.cardDescription}>
-        {description}
-      </Text>
-
-      <Text style={styles.openText}>
-        Open module →
-      </Text>
+      <View style={styles.arrowButton}>
+        <Ionicons name="arrow-forward" size={20} color="#5B4BDB" />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -222,255 +137,135 @@ function ControlCard({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F7F9FC",
   },
 
   content: {
     width: "100%",
     maxWidth: 1280,
     alignSelf: "center",
-    paddingHorizontal: 28,
-    paddingTop: 30,
-    paddingBottom: 70,
+    paddingHorizontal: 34,
+    paddingTop: 48,
+    paddingBottom: 56,
   },
 
-  header: {
+  headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
+    justifyContent: "space-between",
     gap: 20,
-    marginBottom: 20,
+    marginBottom: 38,
   },
 
-  headerTextArea: {
+  headerCopy: {
     flex: 1,
-  },
-
-  eyebrow: {
-    color: "#6D28D9",
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 1.4,
-    marginBottom: 6,
   },
 
   title: {
-    color: "#12263A",
-    fontSize: 34,
+    color: "#10213A",
+    fontSize: 40,
+    lineHeight: 48,
     fontWeight: "900",
+    letterSpacing: -1,
+  },
+
+  titleCompact: {
+    fontSize: 30,
+    lineHeight: 37,
   },
 
   subtitle: {
-    color: "#64748B",
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 6,
-    maxWidth: 720,
+    color: "#66758D",
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 7,
   },
 
   roleBadge: {
-    backgroundColor: "#EDE9FE",
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DDD6FE",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    borderColor: "#DED7FF",
+    backgroundColor: "#F3F0FF",
   },
 
   roleBadgeText: {
-    color: "#6D28D9",
+    color: "#5B3FD4",
+    fontSize: 12,
     fontWeight: "900",
-    fontSize: 11,
-    letterSpacing: 0.8,
-  },
-
-  welcomeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-  },
-
-  welcomeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EDE9FE",
-    marginRight: 16,
-  },
-
-  welcomeIconText: {
-    color: "#6D28D9",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-
-  welcomeTextArea: {
-    flex: 1,
-  },
-
-  welcomeTitle: {
-    color: "#12263A",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-
-  welcomeText: {
-    color: "#64748B",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 5,
-  },
-
-  infoCard: {
-    backgroundColor: "#F5F3FF",
-    borderWidth: 1,
-    borderColor: "#DDD6FE",
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 28,
-  },
-
-  infoTitle: {
-    color: "#5B21B6",
-    fontSize: 15,
-    fontWeight: "900",
-    marginBottom: 6,
-  },
-
-  infoText: {
-    color: "#5B6474",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 5,
-  },
-
-  sectionEyebrow: {
-    color: "#6D28D9",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    marginTop: 10,
+    letterSpacing: 0.5,
   },
 
   sectionTitle: {
-    color: "#12263A",
-    fontSize: 21,
+    color: "#17213A",
+    fontSize: 20,
     fontWeight: "900",
-    marginTop: 3,
-    marginBottom: 14,
+    marginBottom: 16,
   },
 
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
+    gap: 16,
+  },
+
+  gridCompact: {
+    flexDirection: "column",
+  },
+
+  card: {
+    flexGrow: 1,
+    flexBasis: 230,
+    minHeight: 250,
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#DEE5EE",
+    padding: 24,
+  },
+
+  cardMain: {
+    alignItems: "flex-start",
+  },
+
+  iconBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 24,
   },
 
-  controlCard: {
-    flexGrow: 1,
-    flexBasis: 330,
-    minWidth: 280,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DDE5ED",
-    borderRadius: 17,
-    padding: 18,
-  },
-
-  cardTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-
-  cardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  cardIconText: {
-    fontSize: 21,
-  },
-
-  activeBadge: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-
-  activeBadgeText: {
-    color: "#166534",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
   cardTitle: {
-    color: "#12263A",
-    fontSize: 17,
+    color: "#132039",
+    fontSize: 18,
     fontWeight: "900",
+    lineHeight: 23,
   },
 
   cardDescription: {
-    color: "#64748B",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-
-  openText: {
-    color: "#6D28D9",
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 16,
-  },
-
-  authorityCard: {
-    backgroundColor: "#111827",
-    borderRadius: 17,
-    padding: 20,
+    color: "#617089",
+    fontSize: 14,
+    lineHeight: 21,
     marginTop: 8,
+    maxWidth: 210,
   },
 
-  authorityBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#312E81",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 10,
-  },
-
-  authorityBadgeText: {
-    color: "#DDD6FE",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-
-  authorityTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-
-  authorityText: {
-    color: "#CBD5E1",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 6,
+  arrowButton: {
+    width: 42,
+    height: 42,
+    alignSelf: "flex-end",
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F4F1FF",
+    borderWidth: 1,
+    borderColor: "#E5DEFF",
   },
 });

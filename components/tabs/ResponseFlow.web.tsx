@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { db } from "../../lib/firebase";
 import {
+  activeModeForProfile,
   hasVolunteerAccess,
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
@@ -100,8 +101,11 @@ export function useResponseFlow(
   setTracking: (value: boolean) => void,
   focused: boolean,
 ) {
-  const admin = ["admin", "superadmin"].includes(profile?.role);
-  const volunteer = hasVolunteerAccess(profile);
+  const currentMode = activeModeForProfile(profile);
+  const admin = false;
+  const volunteer =
+    currentMode === "volunteer" &&
+    hasVolunteerAccess(profile);
 
   const approved =
     !!user && !!profile && isApprovedProfile(profile);

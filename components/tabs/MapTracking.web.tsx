@@ -1143,19 +1143,20 @@ export default function WebMapTracking() {
   const focusedCaseId =
     typeof params.caseId === "string" ? params.caseId : "";
 
-  const isAdministrator = ["admin", "superadmin"].includes(
-    profile?.role || "",
-  );
+  const currentMode = activeModeForProfile(profile);
 
   const isVolunteerMode =
-    activeModeForProfile(profile) === "volunteer" &&
+    currentMode === "volunteer" &&
     hasVolunteerAccess(profile);
 
-  const missionMode =
-    !!focusedCaseId && isVolunteerMode && !isAdministrator;
-
   const isResidentMode =
-    !isAdministrator && !isVolunteerMode;
+    currentMode === "resident";
+
+  const missionMode =
+    !!focusedCaseId && isVolunteerMode;
+
+  const volunteerOverviewMode =
+    isVolunteerMode && !missionMode;
 
   const isFocused = useIsFocused();
 
@@ -1256,7 +1257,6 @@ export default function WebMapTracking() {
   useEffect(() => {
     if (
       !isVolunteerMode ||
-      isAdministrator ||
       focusedCaseId ||
       loading
     ) {
@@ -1281,7 +1281,6 @@ export default function WebMapTracking() {
   }, [
     flow.assignments,
     isVolunteerMode,
-    isAdministrator,
     focusedCaseId,
     loading,
     router,
@@ -1371,18 +1370,16 @@ export default function WebMapTracking() {
 
     // A volunteer should not browse exact resident incident data from a
     // generic map. Emergency cases are opened from Volunteer Tasks.
-    if (isVolunteerMode && !isAdministrator) {
+    if (isVolunteerMode) {
       setCases([]);
       setError("");
       return;
     }
 
-    const casesQuery = isAdministrator
-      ? query(collection(db, "disasterCases"))
-      : query(
-          collection(db, "disasterCases"),
-          where("reporterUid", "==", user.uid),
-        );
+    const casesQuery = query(
+      collection(db, "disasterCases"),
+      where("reporterUid", "==", user.uid),
+    );
 
     return onSnapshot(
       casesQuery,
@@ -1411,7 +1408,6 @@ export default function WebMapTracking() {
   }, [
     profile,
     user,
-    isAdministrator,
     isVolunteerMode,
     missionMode,
     focusedCaseId,
@@ -1539,6 +1535,10 @@ export default function WebMapTracking() {
       return missionCase;
     }
 
+    if (volunteerOverviewMode) {
+      return null;
+    }
+
     if (selected?.kind !== "incident") {
       return null;
     }
@@ -1548,7 +1548,13 @@ export default function WebMapTracking() {
         (item) => item.id === selected.id,
       ) || null
     );
-  }, [cases, selected, missionMode, missionCase]);
+  }, [
+    cases,
+    selected,
+    missionMode,
+    missionCase,
+    volunteerOverviewMode,
+  ]);
 
   const selectedCenter = useMemo(() => {
     if (selected?.kind !== "center") {
@@ -1888,26 +1894,6 @@ export default function WebMapTracking() {
       return;
     }
 
-    if (isAdministrator) {
-      return onSnapshot(
-        collection(db, "residentResponseLocations"),
-        (snapshot) =>
-          setResidentSharedLocations(
-            snapshot.docs.map((item) => ({
-              id: item.id,
-              ...item.data(),
-            })),
-          ),
-        (cause) => {
-          console.error(
-            "admin resident live locations",
-            cause,
-          );
-          setResidentSharedLocations([]);
-        },
-      );
-    }
-
     if (
       missionMode &&
       missionCase?.reporterUid &&
@@ -1957,7 +1943,6 @@ export default function WebMapTracking() {
   }, [
     user?.uid,
     profile,
-    isAdministrator,
     missionMode,
     missionCase?.reporterUid,
     missionAssignment?.id,
@@ -2006,7 +1991,9 @@ export default function WebMapTracking() {
 
   const mapResponderPins = isResidentMode
     ? residentResponderPins
-    : flow.responders;
+    : missionMode
+      ? flow.responders
+      : [];
 
   const residentShareCanPublish =
     isResidentMode &&
@@ -2541,40 +2528,11 @@ export default function WebMapTracking() {
     setNavigationActive(false);
   }, [canStartInAppNavigation, isFocused]);
 
-  const adminChatAssignment = useMemo(() => {
-    if (!isAdministrator || !selectedCase) return null;
-
-    const rows = flow.assignments.filter(
-      (assignment) => assignment.caseId === selectedCase.id,
-    );
-
-    for (const status of [
-      "on_site",
-      "responding",
-      "accepted",
-      "completed",
-    ]) {
-      const match = rows.find(
-        (assignment) => normalize(assignment.status) === status,
-      );
-
-      if (match) return match;
-    }
-
-    return null;
-  }, [
-    isAdministrator,
-    selectedCase?.id,
-    flow.assignments,
-  ]);
-
   const caseChatAssignment = missionMode
     ? missionAssignment
     : isResidentMode
       ? residentDisplayedAssignment
-      : isAdministrator
-        ? adminChatAssignment
-        : null;
+      : null;
 
   const caseChatAvailable =
     !!selectedCase &&
@@ -2583,12 +2541,8 @@ export default function WebMapTracking() {
       normalize(caseChatAssignment.status),
     );
 
-  const caseChatViewerRole: "resident" | "volunteer" | "admin" =
-    isAdministrator
-      ? "admin"
-      : missionMode
-        ? "volunteer"
-        : "resident";
+  const caseChatViewerRole: "resident" | "volunteer" =
+    missionMode ? "volunteer" : "resident";
 
   const postMapData = (fit: boolean) => {
     frame.current?.contentWindow?.postMessage(
@@ -2944,22 +2898,20 @@ export default function WebMapTracking() {
     ? "Volunteer Response Map"
     : isResidentMode
       ? "Resident Map Tracking"
-      : "Live Response Map";
+      : "Volunteer Response Map";
 
   const pageSubtitle = missionMode
     ? "Respond, navigate, arrive, and complete the mission in one clear flow."
     : isResidentMode
       ? "Track your assigned responder, road distance, and estimated arrival in real time."
-      : "Monitor active incidents, responders, and evacuation centers.";
+      : "View evacuation centers here. Open an assigned emergency from Volunteer Tasks to start live response navigation.";
 
   return (
     <main
       className={`response-map-page ${
-        missionMode
+        missionMode || volunteerOverviewMode
           ? "volunteer-map-mode"
-          : isResidentMode
-            ? "resident-map-mode"
-            : "admin-map-mode"
+          : "resident-map-mode"
       }`}
     >
       <style>{css}</style>
@@ -2967,11 +2919,9 @@ export default function WebMapTracking() {
       <header className="map-header clean-map-header">
         <div>
           <span className="eyebrow">
-            {missionMode
+            {isVolunteerMode
               ? "VOLUNSERVE · VOLUNTEER MODE"
-              : isResidentMode
-                ? "VOLUNSERVE · RESIDENT MODE"
-                : "VOLUNSERVE · RESPONSE COORDINATION"}
+              : "VOLUNSERVE · RESIDENT MODE"}
           </span>
           <h1>{pageTitle}</h1>
           <p>{pageSubtitle}</p>
@@ -2983,11 +2933,9 @@ export default function WebMapTracking() {
               ? tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
                 ? "active"
                 : ""
-              : isResidentMode
-                ? residentResponderLastShared
-                  ? "active"
-                  : ""
-                : "active"
+              : isResidentMode && residentResponderLastShared
+                ? "active"
+                : ""
           }`}
         >
           <span />
@@ -3001,11 +2949,11 @@ export default function WebMapTracking() {
               ? residentResponderLastShared
                 ? "RESPONDER LIVE"
                 : "RESPONSE STATUS"
-              : "LIVE"}
+              : "READY"}
         </div>
       </header>
 
-      {(isAdministrator || missionMode) && (
+      {isVolunteerMode && (
         <ResponsePanel flow={flow} cases={cases} />
       )}
 
@@ -3141,39 +3089,25 @@ export default function WebMapTracking() {
         </section>
       )}
 
-      {!missionMode && !isResidentMode && (
-        <section className="toolbar admin-map-toolbar" aria-label="Admin map controls">
+      {volunteerOverviewMode && (
+        <section className="toolbar volunteer-map-toolbar" aria-label="Volunteer map controls">
           <label className="search-box">
             <span>⌕</span>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search incident, barangay or evacuation center…"
-              aria-label="Search map"
+              placeholder="Search evacuation center or barangay…"
+              aria-label="Search evacuation centers"
             />
           </label>
 
           <div className="filter-group">
             <button
               type="button"
-              className={showIncidents ? "chip active danger" : "chip"}
-              onClick={() => setShowIncidents((value) => !value)}
-            >
-              ● Incidents
-            </button>
-            <button
-              type="button"
               className={showCenters ? "chip active blue" : "chip"}
               onClick={() => setShowCenters((value) => !value)}
             >
               ◆ Evacuation centers
-            </button>
-            <button
-              type="button"
-              className={showResolved ? "chip active" : "chip"}
-              onClick={() => setShowResolved((value) => !value)}
-            >
-              ✓ Resolved
             </button>
           </div>
         </section>
@@ -3241,11 +3175,8 @@ export default function WebMapTracking() {
             {(missionMode || isResidentMode) && roadRoute && (
               <span><i className="legend-route-line" /> Road route</span>
             )}
-            {!missionMode && !isResidentMode && (
-              <>
-                <span><i className="legend-dot incident" /> Incident</span>
-                <span><i className="legend-dot center" /> Evacuation center</span>
-              </>
+            {volunteerOverviewMode && (
+              <span><i className="legend-dot center" /> Evacuation center</span>
             )}
           </div>
         </div>
@@ -3544,7 +3475,7 @@ export default function WebMapTracking() {
             <div className="details-empty">
               <div className="details-icon">⌖</div>
               <h2>Select a map pin</h2>
-              <p>Choose an incident or evacuation center to view the details.</p>
+              <p>Choose an available map pin to view the details.</p>
             </div>
           )}
         </aside>
@@ -5388,7 +5319,7 @@ const css = `
   font-weight: 700;
 }
 
-.admin-map-toolbar {
+.volunteer-map-toolbar {
   margin-bottom: 14px;
 }
 

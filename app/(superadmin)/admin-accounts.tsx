@@ -64,6 +64,12 @@ type AdminFilter =
   | "active"
   | "suspended";
 
+type AdminAction =
+  | "promote"
+  | "suspend"
+  | "activate"
+  | "revoke";
+
 const timestampValue = (
   value: any
 ) => {
@@ -126,6 +132,21 @@ export default function AdminAccounts() {
   const [
     promoteSearch,
     setPromoteSearch,
+  ] = useState("");
+
+  const [
+    actionType,
+    setActionType,
+  ] = useState<AdminAction | null>(null);
+
+  const [
+    actionTarget,
+    setActionTarget,
+  ] = useState<UserAccount | null>(null);
+
+  const [
+    actionError,
+    setActionError,
   ] = useState("");
 
   React.useEffect(() => {
@@ -349,137 +370,165 @@ export default function AdminAccounts() {
       };
     };
 
-  const promoteToAdmin =
+  const openAdminAction = (
+    action: AdminAction,
+    account: UserAccount
+  ) => {
+    const verified =
+      verifySuperAdmin();
+
+    if (!verified) {
+      return;
+    }
+
+    setActionError("");
+    setActionType(action);
+    setActionTarget(account);
+  };
+
+  const closeAdminAction =
+    () => {
+      if (savingUid) {
+        return;
+      }
+
+      setActionError("");
+      setActionType(null);
+      setActionTarget(null);
+    };
+
+  const actionTitle = (
+    action: AdminAction | null
+  ) => {
+    if (action === "promote") {
+      return "Grant Admin Access";
+    }
+
+    if (action === "suspend") {
+      return "Suspend Admin";
+    }
+
+    if (action === "activate") {
+      return "Activate Admin";
+    }
+
+    return "Remove Admin Access";
+  };
+
+  const actionMessage = (
+    action: AdminAction | null,
+    account: UserAccount | null
+  ) => {
+    if (!account) {
+      return "";
+    }
+
+    const name =
+      nameFor(account);
+
+    if (action === "promote") {
+      return `Grant operational Admin access to ${name}?`;
+    }
+
+    if (action === "suspend") {
+      return `Temporarily suspend Admin access for ${name}?`;
+    }
+
+    if (action === "activate") {
+      return `Restore active Admin access for ${name}?`;
+    }
+
+    const restoredRole =
+      account.previousRole &&
+      account.previousRole !== "admin" &&
+      account.previousRole !== "superadmin"
+        ? account.previousRole
+        : "resident";
+
+    return `Remove Admin access from ${name}? The account will return to ${restoredRole}.`;
+  };
+
+  const actionButtonLabel = (
+    action: AdminAction | null
+  ) => {
+    if (action === "promote") {
+      return "Grant Access";
+    }
+
+    if (action === "suspend") {
+      return "Suspend";
+    }
+
+    if (action === "activate") {
+      return "Activate";
+    }
+
+    return "Remove Access";
+  };
+
+  const readableAdminError = (
+    error: any
+  ) => {
+    const code =
+      String(
+        error?.code || ""
+      );
+
+    if (
+      code.includes(
+        "permission-denied"
+      )
+    ) {
+      return "Firestore blocked this change. Check the deployed Firestore rules and confirm this account is still Super Admin.";
+    }
+
+    if (
+      code.includes(
+        "unauthenticated"
+      )
+    ) {
+      return "Your session expired. Sign in again and retry.";
+    }
+
+    return (
+      error?.message ||
+      "Unable to update this Admin account."
+    );
+  };
+
+  const writeAdminLogSafely =
     async (
-      account: UserAccount
+      payload: Parameters<
+        typeof createAdminLog
+      >[0]
     ) => {
-      const verified =
-        verifySuperAdmin();
-
-      if (!verified) {
-        return;
+      try {
+        await createAdminLog(
+          payload
+        );
+      } catch (logError) {
+        console.warn(
+          "Admin access changed but audit log could not be written.",
+          logError
+        );
       }
-
-      Alert.alert(
-        "Promote to Admin",
-        `Give ${nameFor(
-          account
-        )} Admin access?`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-
-          {
-            text: "Promote",
-            onPress: async () => {
-              try {
-                setSavingUid(
-                  account.id
-                );
-
-                const batch =
-                  writeBatch(db);
-
-                batch.update(
-                  doc(
-                    db,
-                    "users",
-                    account.id
-                  ),
-                  {
-                    previousRole:
-                      account.role ||
-                      "resident",
-
-                    previousPrimaryRole:
-                      account.primaryRole ||
-                      account.role ||
-                      "resident",
-
-                    role: "admin",
-
-                    adminStatus:
-                      "active",
-
-                    status:
-                      "approved",
-
-                    adminCreatedAt:
-                      serverTimestamp(),
-
-                    adminCreatedBy:
-                      verified.current.uid,
-
-                    adminUpdatedAt:
-                      serverTimestamp(),
-
-                    adminUpdatedBy:
-                      verified.current.uid,
-                  }
-                );
-
-                await batch.commit();
-
-                await createAdminLog({
-                  actionType:
-                    "admin_account_created",
-
-                  targetType:
-                    "user",
-
-                  targetId:
-                    account.id,
-
-                  adminUid:
-                    verified.current.uid,
-
-                  adminName:
-                    verified.current
-                      .displayName ||
-                    verified.current
-                      .email ||
-                    "Super Admin",
-
-                  description:
-                    `${nameFor(
-                      account
-                    )} was promoted to Admin.`,
-                });
-
-                setShowAddAdmin(false);
-                setPromoteSearch("");
-
-                Alert.alert(
-                  "Admin Created",
-                  `${nameFor(
-                    account
-                  )} now has Admin access.`
-                );
-              } catch (error) {
-                console.log(
-                  "promote admin error",
-                  error
-                );
-
-                Alert.alert(
-                  "Error",
-                  "Unable to promote this account to Admin."
-                );
-              } finally {
-                setSavingUid(null);
-              }
-            },
-          },
-        ]
-      );
     };
 
-  const suspendAdmin =
-    (
-      account: UserAccount
-    ) => {
+  const confirmAdminAction =
+    async () => {
+      const account =
+        actionTarget;
+
+      const action =
+        actionType;
+
+      if (
+        !account ||
+        !action
+      ) {
+        return;
+      }
+
       const verified =
         verifySuperAdmin();
 
@@ -487,342 +536,292 @@ export default function AdminAccounts() {
         return;
       }
 
-      Alert.alert(
-        "Suspend Admin",
-        `Temporarily suspend Admin access for ${nameFor(
-          account
-        )}?`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-
-          {
-            text: "Suspend",
-            style: "destructive",
-
-            onPress: async () => {
-              try {
-                setSavingUid(
-                  account.id
-                );
-
-                const batch =
-                  writeBatch(db);
-
-                batch.update(
-                  doc(
-                    db,
-                    "users",
-                    account.id
-                  ),
-                  {
-                    status:
-                      "suspended",
-
-                    adminStatus:
-                      "suspended",
-
-                    adminUpdatedAt:
-                      serverTimestamp(),
-
-                    adminUpdatedBy:
-                      verified.current.uid,
-                  }
-                );
-
-                await batch.commit();
-
-                await createAdminLog({
-                  actionType:
-                    "admin_account_suspended",
-
-                  targetType:
-                    "user",
-
-                  targetId:
-                    account.id,
-
-                  adminUid:
-                    verified.current.uid,
-
-                  adminName:
-                    verified.current
-                      .displayName ||
-                    verified.current
-                      .email ||
-                    "Super Admin",
-
-                  description:
-                    `${nameFor(
-                      account
-                    )} Admin account was suspended.`,
-                });
-
-                Alert.alert(
-                  "Admin Suspended",
-                  `${nameFor(
-                    account
-                  )} can no longer use active Admin access until reactivated.`
-                );
-              } catch (error) {
-                console.log(
-                  "suspend admin error",
-                  error
-                );
-
-                Alert.alert(
-                  "Error",
-                  "Unable to suspend this Admin."
-                );
-              } finally {
-                setSavingUid(null);
-              }
-            },
-          },
-        ]
+      setSavingUid(
+        account.id
       );
-    };
 
-  const activateAdmin =
-    (
-      account: UserAccount
-    ) => {
-      const verified =
-        verifySuperAdmin();
+      setActionError("");
 
-      if (!verified) {
-        return;
+      try {
+        const batch =
+          writeBatch(db);
+
+        let logPayload:
+          Parameters<
+            typeof createAdminLog
+          >[0];
+
+        if (
+          action === "promote"
+        ) {
+          batch.update(
+            doc(
+              db,
+              "users",
+              account.id
+            ),
+            {
+              previousRole:
+                account.role ||
+                "resident",
+
+              previousPrimaryRole:
+                account.primaryRole ||
+                account.role ||
+                "resident",
+
+              role: "admin",
+
+              adminStatus:
+                "active",
+
+              status:
+                "approved",
+
+              adminCreatedAt:
+                serverTimestamp(),
+
+              adminCreatedBy:
+                verified.current.uid,
+
+              adminUpdatedAt:
+                serverTimestamp(),
+
+              adminUpdatedBy:
+                verified.current.uid,
+            }
+          );
+
+          logPayload = {
+            actionType:
+              "admin_account_created",
+
+            targetType:
+              "user",
+
+            targetId:
+              account.id,
+
+            adminUid:
+              verified.current.uid,
+
+            adminName:
+              verified.current
+                .displayName ||
+              verified.current
+                .email ||
+              "Super Admin",
+
+            description:
+              `${nameFor(
+                account
+              )} was granted Admin access.`,
+          };
+        } else if (
+          action === "suspend"
+        ) {
+          batch.update(
+            doc(
+              db,
+              "users",
+              account.id
+            ),
+            {
+              status:
+                "suspended",
+
+              adminStatus:
+                "suspended",
+
+              adminUpdatedAt:
+                serverTimestamp(),
+
+              adminUpdatedBy:
+                verified.current.uid,
+            }
+          );
+
+          logPayload = {
+            actionType:
+              "admin_account_suspended",
+
+            targetType:
+              "user",
+
+            targetId:
+              account.id,
+
+            adminUid:
+              verified.current.uid,
+
+            adminName:
+              verified.current
+                .displayName ||
+              verified.current
+                .email ||
+              "Super Admin",
+
+            description:
+              `${nameFor(
+                account
+              )} Admin access was suspended.`,
+          };
+        } else if (
+          action === "activate"
+        ) {
+          batch.update(
+            doc(
+              db,
+              "users",
+              account.id
+            ),
+            {
+              status:
+                "approved",
+
+              adminStatus:
+                "active",
+
+              adminUpdatedAt:
+                serverTimestamp(),
+
+              adminUpdatedBy:
+                verified.current.uid,
+            }
+          );
+
+          logPayload = {
+            actionType:
+              "admin_account_activated",
+
+            targetType:
+              "user",
+
+            targetId:
+              account.id,
+
+            adminUid:
+              verified.current.uid,
+
+            adminName:
+              verified.current
+                .displayName ||
+              verified.current
+                .email ||
+              "Super Admin",
+
+            description:
+              `${nameFor(
+                account
+              )} Admin access was reactivated.`,
+          };
+        } else {
+          const restoredRole =
+            account.previousRole &&
+            account.previousRole !==
+              "admin" &&
+            account.previousRole !==
+              "superadmin"
+              ? account.previousRole
+              : "resident";
+
+          batch.update(
+            doc(
+              db,
+              "users",
+              account.id
+            ),
+            {
+              role:
+                restoredRole,
+
+              primaryRole:
+                account.previousPrimaryRole ||
+                account.primaryRole ||
+                restoredRole,
+
+              status:
+                "approved",
+
+              adminStatus:
+                "suspended",
+
+              adminUpdatedAt:
+                serverTimestamp(),
+
+              adminUpdatedBy:
+                verified.current.uid,
+
+              adminRevokedAt:
+                serverTimestamp(),
+
+              adminRevokedBy:
+                verified.current.uid,
+            }
+          );
+
+          logPayload = {
+            actionType:
+              "admin_access_revoked",
+
+            targetType:
+              "user",
+
+            targetId:
+              account.id,
+
+            adminUid:
+              verified.current.uid,
+
+            adminName:
+              verified.current
+                .displayName ||
+              verified.current
+                .email ||
+              "Super Admin",
+
+            description:
+              `${nameFor(
+                account
+              )} Admin access was removed and the account was restored to ${restoredRole}.`,
+          };
+        }
+
+        await batch.commit();
+
+        await writeAdminLogSafely(
+          logPayload
+        );
+
+        if (
+          action === "promote"
+        ) {
+          setShowAddAdmin(
+            false
+          );
+
+          setPromoteSearch(
+            ""
+          );
+        }
+
+        setActionType(null);
+        setActionTarget(null);
+        setActionError("");
+      } catch (error: any) {
+        console.log(
+          "admin access update error",
+          error
+        );
+
+        setActionError(
+          readableAdminError(
+            error
+          )
+        );
+      } finally {
+        setSavingUid(null);
       }
-
-      Alert.alert(
-        "Activate Admin",
-        `Restore Admin access for ${nameFor(
-          account
-        )}?`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-
-          {
-            text: "Activate",
-
-            onPress: async () => {
-              try {
-                setSavingUid(
-                  account.id
-                );
-
-                const batch =
-                  writeBatch(db);
-
-                batch.update(
-                  doc(
-                    db,
-                    "users",
-                    account.id
-                  ),
-                  {
-                    status:
-                      "approved",
-
-                    adminStatus:
-                      "active",
-
-                    adminUpdatedAt:
-                      serverTimestamp(),
-
-                    adminUpdatedBy:
-                      verified.current.uid,
-                  }
-                );
-
-                await batch.commit();
-
-                await createAdminLog({
-                  actionType:
-                    "admin_account_activated",
-
-                  targetType:
-                    "user",
-
-                  targetId:
-                    account.id,
-
-                  adminUid:
-                    verified.current.uid,
-
-                  adminName:
-                    verified.current
-                      .displayName ||
-                    verified.current
-                      .email ||
-                    "Super Admin",
-
-                  description:
-                    `${nameFor(
-                      account
-                    )} Admin account was reactivated.`,
-                });
-
-                Alert.alert(
-                  "Admin Activated",
-                  `${nameFor(
-                    account
-                  )} now has active Admin access.`
-                );
-              } catch (error) {
-                console.log(
-                  "activate admin error",
-                  error
-                );
-
-                Alert.alert(
-                  "Error",
-                  "Unable to reactivate this Admin."
-                );
-              } finally {
-                setSavingUid(null);
-              }
-            },
-          },
-        ]
-      );
-    };
-
-  const revokeAdmin =
-    (
-      account: UserAccount
-    ) => {
-      const verified =
-        verifySuperAdmin();
-
-      if (!verified) {
-        return;
-      }
-
-      const restoredRole =
-        account.previousRole &&
-        account.previousRole !==
-          "admin" &&
-        account.previousRole !==
-          "superadmin"
-          ? account.previousRole
-          : "resident";
-
-      Alert.alert(
-        "Remove Admin Access",
-        `Remove Admin privileges from ${nameFor(
-          account
-        )}? Their account will return to ${restoredRole}.`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-
-          {
-            text: "Remove Access",
-            style: "destructive",
-
-            onPress: async () => {
-              try {
-                setSavingUid(
-                  account.id
-                );
-
-                const batch =
-                  writeBatch(db);
-
-                batch.update(
-                  doc(
-                    db,
-                    "users",
-                    account.id
-                  ),
-                  {
-                    role:
-                      restoredRole,
-
-                    primaryRole:
-                      account.previousPrimaryRole ||
-                      account.primaryRole ||
-                      restoredRole,
-
-                    status:
-                      "approved",
-
-                    adminStatus:
-                      "suspended",
-
-                    adminUpdatedAt:
-                      serverTimestamp(),
-
-                    adminUpdatedBy:
-                      verified.current.uid,
-
-                    adminRevokedAt:
-                      serverTimestamp(),
-
-                    adminRevokedBy:
-                      verified.current.uid,
-                  }
-                );
-
-                await batch.commit();
-
-                await createAdminLog({
-                  actionType:
-                    "admin_access_revoked",
-
-                  targetType:
-                    "user",
-
-                  targetId:
-                    account.id,
-
-                  adminUid:
-                    verified.current.uid,
-
-                  adminName:
-                    verified.current
-                      .displayName ||
-                    verified.current
-                      .email ||
-                    "Super Admin",
-
-                  description:
-                    `${nameFor(
-                      account
-                    )} Admin access was removed and the account was restored to ${restoredRole}.`,
-                });
-
-                Alert.alert(
-                  "Admin Access Removed",
-                  `${nameFor(
-                    account
-                  )} is no longer an Admin.`
-                );
-              } catch (error) {
-                console.log(
-                  "revoke admin error",
-                  error
-                );
-
-                Alert.alert(
-                  "Error",
-                  "Unable to remove Admin access."
-                );
-              } finally {
-                setSavingUid(null);
-              }
-            },
-          },
-        ]
-      );
     };
 
   if (
@@ -1352,7 +1351,8 @@ export default function AdminAccounts() {
                           styles.activateButton,
                         ]}
                         onPress={() =>
-                          activateAdmin(
+                          openAdminAction(
+                            "activate",
                             account
                           )
                         }
@@ -1383,7 +1383,8 @@ export default function AdminAccounts() {
                           styles.suspendButton,
                         ]}
                         onPress={() =>
-                          suspendAdmin(
+                          openAdminAction(
+                            "suspend",
                             account
                           )
                         }
@@ -1415,7 +1416,8 @@ export default function AdminAccounts() {
                         styles.revokeButton,
                       ]}
                       onPress={() =>
-                        revokeAdmin(
+                        openAdminAction(
+                          "revoke",
                           account
                         )
                       }
@@ -1643,7 +1645,8 @@ export default function AdminAccounts() {
                             styles.promoteButton
                           }
                           onPress={() =>
-                            promoteToAdmin(
+                            openAdminAction(
+                              "promote",
                               account
                             )
                           }
@@ -1692,6 +1695,192 @@ export default function AdminAccounts() {
                 Admin account first, then
                 grant Admin access here.
               </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={
+          !!actionType &&
+          !!actionTarget
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={
+          closeAdminAction
+        }
+      >
+        <View
+          style={
+            styles.modalBackdrop
+          }
+        >
+          <View
+            style={
+              styles.confirmCard
+            }
+          >
+            <View
+              style={
+                styles.confirmIcon
+              }
+            >
+              <Ionicons
+                name={
+                  actionType ===
+                  "promote"
+                    ? "shield-checkmark-outline"
+                    : actionType ===
+                        "activate"
+                      ? "checkmark-circle-outline"
+                      : actionType ===
+                          "suspend"
+                        ? "pause-circle-outline"
+                        : "shield-outline"
+                }
+                size={28}
+                color={
+                  actionType ===
+                    "revoke" ||
+                  actionType ===
+                    "suspend"
+                    ? "#B45309"
+                    : "#0F766E"
+                }
+              />
+            </View>
+
+            <Text
+              style={
+                styles.confirmTitle
+              }
+            >
+              {actionTitle(
+                actionType
+              )}
+            </Text>
+
+            <Text
+              style={
+                styles.confirmMessage
+              }
+            >
+              {actionMessage(
+                actionType,
+                actionTarget
+              )}
+            </Text>
+
+            {actionTarget && (
+              <View
+                style={
+                  styles.confirmAccount
+                }
+              >
+                <Text
+                  style={
+                    styles.confirmAccountName
+                  }
+                >
+                  {nameFor(
+                    actionTarget
+                  )}
+                </Text>
+
+                <Text
+                  style={
+                    styles.confirmAccountMeta
+                  }
+                >
+                  {actionTarget.email ||
+                    "No email"}
+                </Text>
+              </View>
+            )}
+
+            {!!actionError && (
+              <View
+                style={
+                  styles.actionErrorBox
+                }
+              >
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
+                  color="#B91C1C"
+                />
+
+                <Text
+                  style={
+                    styles.actionErrorText
+                  }
+                >
+                  {actionError}
+                </Text>
+              </View>
+            )}
+
+            <View
+              style={
+                styles.confirmActions
+              }
+            >
+              <TouchableOpacity
+                disabled={
+                  !!savingUid
+                }
+                style={[
+                  styles.confirmButton,
+                  styles.confirmCancelButton,
+                ]}
+                onPress={
+                  closeAdminAction
+                }
+              >
+                <Text
+                  style={
+                    styles.confirmCancelText
+                  }
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={
+                  !!savingUid
+                }
+                style={[
+                  styles.confirmButton,
+                  actionType ===
+                    "revoke" ||
+                  actionType ===
+                    "suspend"
+                    ? styles.confirmDangerButton
+                    : styles.confirmPrimaryButton,
+                ]}
+                onPress={() =>
+                  void confirmAdminAction()
+                }
+              >
+                {savingUid ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.confirmPrimaryText
+                    }
+                  >
+                    {actionButtonLabel(
+                      actionType
+                    )}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -2182,5 +2371,132 @@ const styles =
       color: "#075985",
       lineHeight: 18,
       fontSize: 12,
+    },
+
+    confirmCard: {
+      width: "100%",
+      maxWidth: 460,
+      alignSelf: "center",
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius: 18,
+      padding: 24,
+      borderWidth: 1,
+      borderColor:
+        "#E2E8F0",
+    },
+
+    confirmIcon: {
+      width: 54,
+      height: 54,
+      borderRadius: 16,
+      backgroundColor:
+        "#F0FDFA",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+
+    confirmTitle: {
+      color: "#0F172A",
+      fontSize: 21,
+      fontWeight: "900",
+    },
+
+    confirmMessage: {
+      marginTop: 7,
+      color: "#64748B",
+      fontSize: 13,
+      lineHeight: 20,
+    },
+
+    confirmAccount: {
+      marginTop: 18,
+      padding: 13,
+      borderRadius: 12,
+      backgroundColor:
+        "#F8FAFC",
+      borderWidth: 1,
+      borderColor:
+        "#E2E8F0",
+    },
+
+    confirmAccountName: {
+      color: "#0F172A",
+      fontSize: 14,
+      fontWeight: "900",
+    },
+
+    confirmAccountMeta: {
+      marginTop: 3,
+      color: "#64748B",
+      fontSize: 12,
+    },
+
+    actionErrorBox: {
+      marginTop: 14,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      padding: 12,
+      borderRadius: 11,
+      backgroundColor:
+        "#FEF2F2",
+      borderWidth: 1,
+      borderColor:
+        "#FECACA",
+    },
+
+    actionErrorText: {
+      flex: 1,
+      color: "#B91C1C",
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    confirmActions: {
+      marginTop: 20,
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 10,
+    },
+
+    confirmButton: {
+      minHeight: 43,
+      minWidth: 112,
+      paddingHorizontal: 16,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    confirmCancelButton: {
+      backgroundColor:
+        "#FFFFFF",
+      borderWidth: 1,
+      borderColor:
+        "#CBD5E1",
+    },
+
+    confirmPrimaryButton: {
+      backgroundColor:
+        "#0F766E",
+    },
+
+    confirmDangerButton: {
+      backgroundColor:
+        "#B45309",
+    },
+
+    confirmCancelText: {
+      color: "#475569",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
+    confirmPrimaryText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "900",
     },
   });
