@@ -14,8 +14,13 @@ const app = express();
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8081",
+  "http://localhost:8082",
   "http://localhost:19006",
   "http://localhost:3000",
+  "http://127.0.0.1:8081",
+  "http://127.0.0.1:8082",
+  "http://127.0.0.1:19006",
+  "http://127.0.0.1:3000",
 ];
 
 const IDENTITY_UPLOAD_LIMIT = "20mb";
@@ -55,11 +60,10 @@ function getAllowedOrigins() {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  return new Set(
-    configured.length > 0
-      ? configured
-      : DEFAULT_ALLOWED_ORIGINS,
-  );
+  return new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...configured,
+  ]);
 }
 
 const allowedOrigins = getAllowedOrigins();
@@ -685,14 +689,70 @@ async function uploadAssistanceEvidenceToCloudinary({
   return result;
 }
 
-function createCloudinaryAssetDownloadUrl(
-  cloudinaryAssetId,
-) {
+function createCloudinaryPrivateDownloadUrl({
+  publicId,
+  format,
+  resourceType = "image",
+  deliveryType = "authenticated",
+}) {
   const {
     cloudName,
     apiKey,
     apiSecret,
   } = getCloudinaryConfig();
+
+  const safePublicId = cleanText(
+    publicId,
+    500,
+  );
+
+  const safeFormat = cleanText(
+    format,
+    30,
+  )
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9]/g,
+      "",
+    );
+
+  const safeResourceType = cleanText(
+    resourceType,
+    30,
+  ).toLowerCase();
+
+  const safeDeliveryType = cleanText(
+    deliveryType,
+    40,
+  ).toLowerCase();
+
+  if (!safePublicId || !safeFormat) {
+    throw makeHttpError(
+      409,
+      "evidence_storage_reference_missing",
+      "This evidence record is missing the protected Cloudinary public ID or format.",
+    );
+  }
+
+  if (
+    safeResourceType !== "image"
+  ) {
+    throw makeHttpError(
+      409,
+      "unsupported_evidence_resource_type",
+      "This assistance evidence resource type is not supported.",
+    );
+  }
+
+  if (
+    safeDeliveryType !== "authenticated"
+  ) {
+    throw makeHttpError(
+      409,
+      "evidence_not_protected",
+      "This assistance evidence is not stored using authenticated Cloudinary delivery.",
+    );
+  }
 
   const timestamp =
     Math.floor(
@@ -704,11 +764,11 @@ function createCloudinaryAssetDownloadUrl(
     ASSISTANCE_EVIDENCE_URL_TTL_SECONDS;
 
   const signedParameters = {
-    asset_id:
-      cloudinaryAssetId,
-    expires_at:
-      expiresAt,
+    expires_at: expiresAt,
+    format: safeFormat,
+    public_id: safePublicId,
     timestamp,
+    type: safeDeliveryType,
   };
 
   const signature =
@@ -719,22 +779,28 @@ function createCloudinaryAssetDownloadUrl(
 
   const query =
     new URLSearchParams({
-      asset_id:
-        cloudinaryAssetId,
-      expires_at:
-        String(expiresAt),
       timestamp:
         String(timestamp),
+      public_id:
+        safePublicId,
+      format:
+        safeFormat,
+      expires_at:
+        String(expiresAt),
+      type:
+        safeDeliveryType,
+      signature,
       api_key:
         apiKey,
-      signature,
     });
 
   return {
     url:
       `https://api.cloudinary.com/v1_1/${encodeURIComponent(
         cloudName,
-      )}/asset/download?${query.toString()}`,
+      )}/${encodeURIComponent(
+        safeResourceType,
+      )}/download?${query.toString()}`,
 
     expiresAt,
   };
@@ -1149,6 +1215,9 @@ app.get(
         process.env.CLOUDINARY_API_SECRET
           ? "secure_cloudinary_configured"
           : "secure_cloudinary_not_configured",
+
+      assistanceEvidenceViewer:
+        "time_limited_private_download_v1",
 
       time:
         new Date()
@@ -2248,7 +2317,17 @@ app.get(
     try {
       response.set(
         "Cache-Control",
-        "no-store",
+        "no-store, no-cache, must-revalidate, private",
+      );
+
+      response.set(
+        "Pragma",
+        "no-cache",
+      );
+
+      response.set(
+        "X-Robots-Tag",
+        "noindex, nofollow, noarchive",
       );
 
       const uid =
@@ -2292,31 +2371,169 @@ app.get(
         evidenceSnapshot.data() ||
         {};
 
-      await getEvidenceAccessContext(
-        uid,
-        evidenceData,
-      );
+      const accessContext =
+        await getEvidenceAccessContext(
+          uid,
+          evidenceData,
+        );
 
-      const cloudinaryAssetId =
+      const evidenceStatus =
         cleanText(
-          evidenceData
-            .cloudinaryAssetId ||
+          evidenceData.status ||
             "",
-          300,
+          40,
+        ).toLowerCase();
+
+      const requestId =
+        cleanText(
+          evidenceData.requestId ||
+            "",
+          200,
         );
 
-      if (!cloudinaryAssetId) {
-        throw makeHttpError(
-          409,
-          "evidence_storage_reference_missing",
-          "This evidence record is missing its protected storage reference.",
-        );
+      if (
+        accessContext.admin
+      ) {
+        if (
+          evidenceStatus !==
+            "attached" ||
+          !requestId
+        ) {
+          throw makeHttpError(
+            403,
+            "admin_evidence_not_attached",
+            "LGU/Admin access is available only after evidence is attached to a submitted assistance request.",
+          );
+        }
+
+        const assistanceSnapshot =
+          await db
+            .collection(
+              "assistanceRequests",
+            )
+            .doc(requestId)
+            .get();
+
+        if (
+          !assistanceSnapshot.exists
+        ) {
+          throw makeHttpError(
+            404,
+            "assistance_request_not_found",
+            "The Request Assistance record linked to this evidence was not found.",
+          );
+        }
+
+        const assistanceData =
+          assistanceSnapshot.data() ||
+          {};
+
+        if (
+          cleanText(
+            assistanceData.requesterUid ||
+              "",
+            200,
+          ) !==
+          cleanText(
+            evidenceData.ownerUid ||
+              "",
+            200,
+          )
+        ) {
+          throw makeHttpError(
+            409,
+            "evidence_request_owner_mismatch",
+            "The evidence owner does not match the linked Request Assistance record.",
+          );
+        }
       }
 
-      const signedAccess =
-        createCloudinaryAssetDownloadUrl(
-          cloudinaryAssetId,
+      const cloudinaryPublicId =
+        cleanText(
+          evidenceData
+            .cloudinaryPublicId ||
+            "",
+          500,
         );
+
+      const cloudinaryFormat =
+        cleanText(
+          evidenceData
+            .cloudinaryFormat ||
+            "",
+          30,
+        );
+
+      const cloudinaryResourceType =
+        cleanText(
+          evidenceData
+            .cloudinaryResourceType ||
+            "image",
+          30,
+        );
+
+      const cloudinaryDeliveryType =
+        cleanText(
+          evidenceData
+            .cloudinaryDeliveryType ||
+            "",
+          40,
+        );
+
+      const signedAccess =
+        createCloudinaryPrivateDownloadUrl({
+          publicId:
+            cloudinaryPublicId,
+
+          format:
+            cloudinaryFormat,
+
+          resourceType:
+            cloudinaryResourceType,
+
+          deliveryType:
+            cloudinaryDeliveryType,
+        });
+
+      if (
+        accessContext.admin
+      ) {
+        const accessLogRef =
+          db
+            .collection(
+              "assistanceEvidenceAccessLogs",
+            )
+            .doc();
+
+        await accessLogRef.set({
+          accessLogId:
+            accessLogRef.id,
+
+          evidenceId,
+
+          requestId,
+
+          ownerUid:
+            cleanText(
+              evidenceData.ownerUid ||
+                "",
+              200,
+            ),
+
+          accessedBy:
+            uid,
+
+          accessedByRole:
+            "admin",
+
+          action:
+            "temporary_view_url_issued",
+
+          createdAt:
+            FieldValue
+              .serverTimestamp(),
+        });
+      }
 
       response.json({
         ok:
@@ -2324,6 +2541,8 @@ app.get(
 
         evidence: {
           evidenceId,
+
+          requestId,
 
           documentType:
             cleanText(
@@ -2347,6 +2566,9 @@ app.get(
                 "image/jpeg",
               100,
             ),
+
+          status:
+            evidenceStatus,
         },
 
         accessUrl:
@@ -2354,6 +2576,9 @@ app.get(
 
         expiresAt:
           signedAccess.expiresAt,
+
+        expiresInSeconds:
+          ASSISTANCE_EVIDENCE_URL_TTL_SECONDS,
       });
     } catch (error) {
       console.error(
