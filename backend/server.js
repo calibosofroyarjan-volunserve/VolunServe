@@ -4887,6 +4887,1222 @@ app.post(
 );
 
 
+function normalizeReviewChoice(
+  value,
+  allowed,
+  fallback,
+) {
+  const normalized =
+    cleanText(
+      value,
+      80,
+    )
+      .toLowerCase()
+      .replace(
+        /[\s-]+/g,
+        "_",
+      );
+
+  return allowed.includes(
+    normalized,
+  )
+    ? normalized
+    : fallback;
+}
+
+
+function splitReviewList(
+  value,
+  maximumItems = 20,
+  maximumLength = 160,
+) {
+  const values =
+    Array.isArray(value)
+      ? value
+      : String(
+          value || "",
+        ).split(
+          /[\n,]/,
+        );
+
+  return Array.from(
+    new Set(
+      values
+        .map((item) =>
+          cleanText(
+            item,
+            maximumLength,
+          ),
+        )
+        .filter(Boolean),
+    ),
+  ).slice(
+    0,
+    maximumItems,
+  );
+}
+
+
+function parseOptionalCoordinate(
+  value,
+  minimum,
+  maximum,
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ""
+  ) {
+    return null;
+  }
+
+  const parsed =
+    Number(value);
+
+  if (
+    !Number.isFinite(parsed) ||
+    parsed < minimum ||
+    parsed > maximum
+  ) {
+    throw makeHttpError(
+      400,
+      "invalid_private_coordinates",
+      "The private verification coordinates are invalid.",
+    );
+  }
+
+  return parsed;
+}
+
+
+function buildAssistanceReviewPayload({
+  requestId,
+  assistanceData,
+  existingReview,
+  reviewInput,
+  action,
+  decisionReason,
+  adminUid,
+}) {
+  const category =
+    cleanText(
+      assistanceData
+        ?.category ||
+        "",
+      80,
+    )
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9_]/g,
+        "",
+      );
+
+  const requesterUid =
+    cleanText(
+      assistanceData
+        ?.requesterUid ||
+        "",
+      200,
+    );
+
+  if (
+    !requesterUid ||
+    !ASSISTANCE_REQUEST_CATEGORY_CONFIG[
+      category
+    ]
+  ) {
+    throw makeHttpError(
+      409,
+      "assistance_request_invalid_for_review",
+      "This Assistance Request is missing required review data.",
+    );
+  }
+
+  const documentConsistencyStatus =
+    normalizeReviewChoice(
+      reviewInput
+        ?.documentConsistencyStatus,
+      [
+        "pending",
+        "consistent",
+        "inconsistent",
+        "needs_more_information",
+      ],
+      "pending",
+    );
+
+  const duplicateCheckStatus =
+    normalizeReviewChoice(
+      reviewInput
+        ?.duplicateCheckStatus,
+      [
+        "pending",
+        "clear",
+        "potential_duplicate",
+        "confirmed_duplicate",
+      ],
+      "pending",
+    );
+
+  const beneficiaryCheckStatus =
+    normalizeReviewChoice(
+      reviewInput
+        ?.beneficiaryCheckStatus,
+      [
+        "pending",
+        "confirmed",
+        "needs_more_information",
+        "inconsistent",
+      ],
+      "pending",
+    );
+
+  const facilityRequired =
+    [
+      "medical_health",
+      "surgery_treatment",
+      "cancer_serious_illness",
+      "animal_pet_welfare",
+    ].includes(
+      category,
+    );
+
+  const facilityVerificationStatus =
+    facilityRequired
+      ? normalizeReviewChoice(
+          reviewInput
+            ?.facilityVerificationStatus,
+          [
+            "pending",
+            "confirmed",
+            "unable_to_confirm",
+            "inconsistent",
+          ],
+          "pending",
+        )
+      : "not_required";
+
+  const facilityVerificationMethod =
+    facilityRequired
+      ? normalizeReviewChoice(
+          reviewInput
+            ?.facilityVerificationMethod,
+          [
+            "official_phone",
+            "official_email",
+            "official_record",
+            "in_person",
+            "other",
+          ],
+          "not_applicable",
+        )
+      : "not_applicable";
+
+  const residentEstimatedAmount =
+    Number(
+      assistanceData
+        ?.estimatedAmount ||
+        0,
+    );
+
+  const safeResidentEstimatedAmount =
+    Number.isFinite(
+      residentEstimatedAmount,
+    ) &&
+    residentEstimatedAmount >= 0
+      ? Math.min(
+          residentEstimatedAmount,
+          100000000,
+        )
+      : 0;
+
+  const costRequired =
+    safeResidentEstimatedAmount >
+    0;
+
+  const verifiedGrossCost =
+    costRequired
+      ? Number(
+          reviewInput
+            ?.verifiedGrossCost ||
+            0,
+        )
+      : 0;
+
+  const confirmedExistingAssistanceAmount =
+    costRequired
+      ? Number(
+          reviewInput
+            ?.confirmedExistingAssistanceAmount ||
+            0,
+        )
+      : 0;
+
+  if (
+    !Number.isFinite(
+      verifiedGrossCost,
+    ) ||
+    verifiedGrossCost <
+      0 ||
+    verifiedGrossCost >
+      100000000 ||
+    !Number.isFinite(
+      confirmedExistingAssistanceAmount,
+    ) ||
+    confirmedExistingAssistanceAmount <
+      0 ||
+    confirmedExistingAssistanceAmount >
+      100000000 ||
+    confirmedExistingAssistanceAmount >
+      verifiedGrossCost
+  ) {
+    throw makeHttpError(
+      400,
+      "invalid_cost_verification",
+      "The verified cost and existing assistance amounts are invalid.",
+    );
+  }
+
+  const verifiedUncoveredAmount =
+    costRequired
+      ? Math.max(
+          0,
+          verifiedGrossCost -
+            confirmedExistingAssistanceAmount,
+        )
+      : 0;
+
+  const costVerificationStatus =
+    costRequired
+      ? normalizeReviewChoice(
+          reviewInput
+            ?.costVerificationStatus,
+          [
+            "pending",
+            "confirmed",
+            "inconsistent",
+          ],
+          "pending",
+        )
+      : "not_required";
+
+  const residencyVerificationStatus =
+    normalizeReviewChoice(
+      reviewInput
+        ?.residencyVerificationStatus,
+      [
+        "pending",
+        "verified",
+        "unable_to_verify",
+        "inconsistent",
+        "not_required",
+      ],
+      "pending",
+    );
+
+  const residencyVerificationMethod =
+    normalizeReviewChoice(
+      reviewInput
+        ?.residencyVerificationMethod,
+      [
+        "not_applicable",
+        "profile_address",
+        "barangay_confirmation",
+        "resident_confirmation",
+        "site_visit",
+        "other",
+      ],
+      "profile_address",
+    );
+
+  const privateLatitude =
+    parseOptionalCoordinate(
+      reviewInput
+        ?.privateLatitude,
+      -90,
+      90,
+    );
+
+  const privateLongitude =
+    parseOptionalCoordinate(
+      reviewInput
+        ?.privateLongitude,
+      -180,
+      180,
+    );
+
+  if (
+    (privateLatitude === null) !==
+    (privateLongitude === null)
+  ) {
+    throw makeHttpError(
+      400,
+      "incomplete_private_coordinates",
+      "Enter both private latitude and longitude, or leave both blank.",
+    );
+  }
+
+  const videoVerificationRequired =
+    reviewInput
+      ?.videoVerificationRequired ===
+    true;
+
+  const videoVerificationStatus =
+    videoVerificationRequired
+      ? normalizeReviewChoice(
+          reviewInput
+            ?.videoVerificationStatus,
+          [
+            "pending",
+            "requested",
+            "completed",
+            "unable_to_complete",
+          ],
+          "pending",
+        )
+      : "not_required";
+
+  const siteVisitRequired =
+    reviewInput
+      ?.siteVisitRequired ===
+    true;
+
+  const siteVisitStatus =
+    siteVisitRequired
+      ? normalizeReviewChoice(
+          reviewInput
+            ?.siteVisitStatus,
+          [
+            "pending",
+            "scheduled",
+            "completed",
+            "unable_to_complete",
+          ],
+          "pending",
+        )
+      : "not_required";
+
+  const riskFlags =
+    splitReviewList(
+      reviewInput
+        ?.riskFlags,
+      20,
+      160,
+    );
+
+  const duplicateRequestIds =
+    splitReviewList(
+      reviewInput
+        ?.duplicateRequestIds,
+      20,
+      200,
+    );
+
+  const finalDecision =
+    action ===
+      "verify"
+      ? "verified"
+      : action ===
+          "reject"
+        ? "rejected"
+        : action ===
+            "more_information"
+          ? "needs_more_information"
+          : "pending";
+
+  const reviewStatus =
+    finalDecision ===
+      "verified"
+      ? "verified"
+      : finalDecision ===
+          "rejected"
+        ? "rejected"
+        : finalDecision ===
+            "needs_more_information"
+          ? "needs_more_information"
+          : "in_progress";
+
+  const cleanDecisionReason =
+    finalDecision ===
+      "pending"
+      ? ""
+      : cleanText(
+          decisionReason,
+          2000,
+        );
+
+  if (
+    finalDecision ===
+      "needs_more_information" &&
+    cleanDecisionReason.length <
+      10
+  ) {
+    throw makeHttpError(
+      400,
+      "more_information_reason_required",
+      "Explain exactly what information or evidence the Resident must clarify or provide.",
+    );
+  }
+
+  if (
+    finalDecision ===
+      "rejected" &&
+    cleanDecisionReason.length <
+      3
+  ) {
+    throw makeHttpError(
+      400,
+      "rejection_reason_required",
+      "Enter a clear evidence-based reason for rejecting the Assistance Request.",
+    );
+  }
+
+  if (
+    finalDecision ===
+    "verified"
+  ) {
+    const ready =
+      documentConsistencyStatus ===
+        "consistent" &&
+      duplicateCheckStatus ===
+        "clear" &&
+      beneficiaryCheckStatus ===
+        "confirmed" &&
+      residencyVerificationStatus ===
+        "verified" &&
+      (
+        !facilityRequired ||
+        facilityVerificationStatus ===
+          "confirmed"
+      ) &&
+      (
+        !costRequired ||
+        costVerificationStatus ===
+          "confirmed"
+      ) &&
+      [
+        "not_required",
+        "completed",
+      ].includes(
+        videoVerificationStatus,
+      ) &&
+      [
+        "not_required",
+        "completed",
+      ].includes(
+        siteVisitStatus,
+      ) &&
+      riskFlags.length ===
+        0;
+
+    if (!ready) {
+      throw makeHttpError(
+        409,
+        "private_verification_incomplete",
+        "Complete every required private verification check and resolve all risk flags before verifying the need.",
+      );
+    }
+  }
+
+  if (
+    facilityVerificationStatus ===
+      "confirmed" &&
+    (
+      cleanText(
+        reviewInput
+          ?.facilityName,
+        160,
+      ).length <
+        2 ||
+      facilityVerificationMethod ===
+        "not_applicable"
+    )
+  ) {
+    throw makeHttpError(
+      400,
+      "facility_verification_details_required",
+      "Enter the facility name and an independent verification method before confirming the facility.",
+    );
+  }
+
+  if (
+    costVerificationStatus ===
+      "confirmed" &&
+    verifiedGrossCost <=
+      0
+  ) {
+    throw makeHttpError(
+      400,
+      "verified_cost_required",
+      "Enter a verified gross cost greater than zero before confirming the cost.",
+    );
+  }
+
+  if (
+    residencyVerificationStatus ===
+      "verified" &&
+    residencyVerificationMethod ===
+      "not_applicable"
+  ) {
+    throw makeHttpError(
+      400,
+      "residency_verification_method_required",
+      "Choose how the Resident's address or residency was verified.",
+    );
+  }
+
+  const now =
+    FieldValue
+      .serverTimestamp();
+
+  const preserveOrStamp = (
+    existingValue,
+    shouldStamp,
+  ) =>
+    shouldStamp
+      ? existingValue ||
+        now
+      : null;
+
+  return {
+    requestId,
+    requesterUid,
+    category,
+
+    reviewStatus,
+
+    documentConsistencyStatus,
+    documentConsistencyNotes:
+      cleanText(
+        reviewInput
+          ?.documentConsistencyNotes,
+        2000,
+      ),
+
+    duplicateCheckStatus,
+    duplicateRequestIds,
+    duplicateCheckNotes:
+      cleanText(
+        reviewInput
+          ?.duplicateCheckNotes,
+        2000,
+      ),
+
+    beneficiaryCheckStatus,
+    beneficiaryCheckNotes:
+      cleanText(
+        reviewInput
+          ?.beneficiaryCheckNotes,
+        2000,
+      ),
+
+    facilityVerificationRequired:
+      facilityRequired,
+    facilityVerificationStatus,
+    facilityName:
+      cleanText(
+        reviewInput
+          ?.facilityName,
+        160,
+      ),
+    facilityType:
+      cleanText(
+        reviewInput
+          ?.facilityType,
+        80,
+      ),
+    facilityDepartment:
+      cleanText(
+        reviewInput
+          ?.facilityDepartment,
+        160,
+      ),
+    professionalName:
+      cleanText(
+        reviewInput
+          ?.professionalName,
+        160,
+      ),
+    facilityReferenceNumber:
+      cleanText(
+        reviewInput
+          ?.facilityReferenceNumber,
+        160,
+      ),
+    facilityVerificationMethod,
+    facilityVerifiedWith:
+      cleanText(
+        reviewInput
+          ?.facilityVerifiedWith,
+        160,
+      ),
+    facilityVerifiedAt:
+      preserveOrStamp(
+        existingReview
+          ?.facilityVerifiedAt,
+        facilityRequired &&
+          facilityVerificationStatus ===
+            "confirmed",
+      ),
+    facilityNotes:
+      cleanText(
+        reviewInput
+          ?.facilityNotes,
+        2000,
+      ),
+
+    costVerificationRequired:
+      costRequired,
+    residentEstimatedAmount:
+      safeResidentEstimatedAmount,
+    verifiedGrossCost,
+    confirmedExistingAssistanceAmount,
+    verifiedUncoveredAmount,
+    costVerificationStatus,
+    costReferenceNumber:
+      cleanText(
+        reviewInput
+          ?.costReferenceNumber,
+        160,
+      ),
+    costNotes:
+      cleanText(
+        reviewInput
+          ?.costNotes,
+        2000,
+      ),
+
+    residencyVerificationStatus,
+    residencyVerificationMethod,
+    privateAddressSnapshot:
+      cleanText(
+        reviewInput
+          ?.privateAddressSnapshot ||
+          assistanceData
+            ?.requesterAddress ||
+          "",
+        300,
+      ),
+    privateLatitude,
+    privateLongitude,
+    locationVerifiedAt:
+      preserveOrStamp(
+        existingReview
+          ?.locationVerifiedAt,
+        residencyVerificationStatus ===
+          "verified",
+      ),
+    locationVerifiedBy:
+      residencyVerificationStatus ===
+        "verified"
+        ? adminUid
+        : "",
+    residencyNotes:
+      cleanText(
+        reviewInput
+          ?.residencyNotes,
+        2000,
+      ),
+
+    videoVerificationRequired,
+    videoVerificationStatus,
+    videoVerificationAt:
+      preserveOrStamp(
+        existingReview
+          ?.videoVerificationAt,
+        videoVerificationRequired &&
+          videoVerificationStatus ===
+            "completed",
+      ),
+    videoVerificationNotes:
+      cleanText(
+        reviewInput
+          ?.videoVerificationNotes,
+        2000,
+      ),
+
+    siteVisitRequired,
+    siteVisitStatus,
+    siteVisitAt:
+      preserveOrStamp(
+        existingReview
+          ?.siteVisitAt,
+        siteVisitRequired &&
+          siteVisitStatus ===
+            "completed",
+      ),
+    siteVisitBy:
+      siteVisitRequired &&
+      siteVisitStatus ===
+        "completed"
+        ? adminUid
+        : "",
+    siteVisitNotes:
+      cleanText(
+        reviewInput
+          ?.siteVisitNotes,
+        2000,
+      ),
+
+    riskFlags,
+    internalNotes:
+      cleanText(
+        reviewInput
+          ?.internalNotes,
+        3000,
+      ),
+
+    finalDecision,
+    finalDecisionReason:
+      cleanDecisionReason,
+    finalDecisionAt:
+      finalDecision ===
+        "pending"
+        ? null
+        : now,
+    finalDecisionBy:
+      finalDecision ===
+        "pending"
+        ? ""
+        : adminUid,
+
+    createdAt:
+      existingReview
+        ?.createdAt ||
+      now,
+    createdBy:
+      cleanText(
+        existingReview
+          ?.createdBy ||
+          adminUid,
+        160,
+      ),
+    updatedAt:
+      now,
+    updatedBy:
+      adminUid,
+  };
+}
+
+
+app.post(
+
+  "/api/admin/assistance/requests/:requestId/review",
+
+  requireFirebaseUser,
+
+  requireOperationalAdmin,
+
+  async (
+    request,
+    response,
+  ) => {
+    try {
+      const adminUid =
+        request
+          .firebaseUser
+          .uid;
+
+      const requestId =
+        cleanText(
+          request.params
+            ?.requestId ||
+            "",
+          120,
+        );
+
+      if (
+        !requestId ||
+        !/^[A-Za-z0-9_-]{10,120}$/.test(
+          requestId,
+        )
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_assistance_request_id",
+          "The Request Assistance ID is invalid.",
+        );
+      }
+
+      const action =
+        normalizeReviewChoice(
+          request.body
+            ?.action,
+          [
+            "save_progress",
+            "more_information",
+            "verify",
+            "reject",
+          ],
+          "",
+        );
+
+      if (!action) {
+        throw makeHttpError(
+          400,
+          "invalid_review_action",
+          "Choose a valid LGU review action.",
+        );
+      }
+
+      const reviewInput =
+        request.body
+          ?.review &&
+        typeof request.body
+          .review ===
+          "object"
+          ? request.body
+              .review
+          : {};
+
+      const decisionReason =
+        cleanText(
+          request.body
+            ?.decisionReason ||
+            "",
+          2000,
+        );
+
+      const adminNote =
+        cleanText(
+          request.body
+            ?.adminNote ||
+            "",
+          2000,
+        );
+
+      const assistanceRef =
+        db
+          .collection(
+            "assistanceRequests",
+          )
+          .doc(
+            requestId,
+          );
+
+      const reviewRef =
+        db
+          .collection(
+            "assistanceVerificationReviews",
+          )
+          .doc(
+            requestId,
+          );
+
+      const result =
+        await db
+          .runTransaction(
+            async (
+              transaction,
+            ) => {
+              const [
+                assistanceSnapshot,
+                reviewSnapshot,
+              ] =
+                await Promise.all([
+                  transaction.get(
+                    assistanceRef,
+                  ),
+                  transaction.get(
+                    reviewRef,
+                  ),
+                ]);
+
+              if (
+                !assistanceSnapshot
+                  .exists
+              ) {
+                throw makeHttpError(
+                  404,
+                  "assistance_request_not_found",
+                  "The Assistance Request was not found.",
+                );
+              }
+
+              if (
+                !reviewSnapshot
+                  .exists
+              ) {
+                throw makeHttpError(
+                  409,
+                  "assistance_review_not_started",
+                  "Start Review before saving verification progress.",
+                );
+              }
+
+              const assistanceData =
+                assistanceSnapshot
+                  .data() ||
+                {};
+
+              const existingReview =
+                reviewSnapshot
+                  .data() ||
+                {};
+
+              const existingFinalDecision =
+                cleanText(
+                  existingReview
+                    .finalDecision ||
+                    "pending",
+                  60,
+                ).toLowerCase();
+
+              if (
+                ![
+                  "pending",
+                  "needs_more_information",
+                ].includes(
+                  existingFinalDecision,
+                )
+              ) {
+                throw makeHttpError(
+                  409,
+                  "assistance_review_locked",
+                  "This Assistance Request review is already finalized.",
+                );
+              }
+
+              const sameRequest =
+                cleanText(
+                  existingReview
+                    .requestId ||
+                    "",
+                  120,
+                ) ===
+                  requestId &&
+                cleanText(
+                  existingReview
+                    .requesterUid ||
+                    "",
+                  200,
+                ) ===
+                  cleanText(
+                    assistanceData
+                      .requesterUid ||
+                      "",
+                    200,
+                  ) &&
+                cleanText(
+                  existingReview
+                    .category ||
+                    "",
+                  80,
+                ) ===
+                  cleanText(
+                    assistanceData
+                      .category ||
+                      "",
+                    80,
+                  );
+
+              if (
+                !sameRequest
+              ) {
+                throw makeHttpError(
+                  409,
+                  "assistance_review_record_mismatch",
+                  "The protected review record does not match this Assistance Request.",
+                );
+              }
+
+              const reviewPayload =
+                buildAssistanceReviewPayload({
+                  requestId,
+                  assistanceData,
+                  existingReview,
+                  reviewInput,
+                  action,
+                  decisionReason,
+                  adminUid,
+                });
+
+              transaction.set(
+                reviewRef,
+                reviewPayload,
+                {
+                  merge:
+                    false,
+                },
+              );
+
+              const requestUpdate = {
+                reviewedAt:
+                  FieldValue
+                    .serverTimestamp(),
+                reviewedBy:
+                  adminUid,
+                updatedAt:
+                  FieldValue
+                    .serverTimestamp(),
+              };
+
+              if (
+                action ===
+                "save_progress"
+              ) {
+                requestUpdate.status =
+                  "under_review";
+                requestUpdate.verificationStatus =
+                  "under_review";
+              }
+
+              if (
+                action ===
+                "more_information"
+              ) {
+                requestUpdate.status =
+                  "under_review";
+                requestUpdate.verificationStatus =
+                  "under_review";
+                requestUpdate.supportDecision =
+                  "pending";
+                requestUpdate.remainingAmount =
+                  0;
+                requestUpdate.adminNote =
+                  [
+                    "[MORE INFORMATION REQUIRED]",
+                    decisionReason,
+                  ]
+                    .join(
+                      "\n",
+                    )
+                    .slice(
+                      0,
+                      2000,
+                    );
+              }
+
+              if (
+                action ===
+                "verify"
+              ) {
+                requestUpdate.status =
+                  "verified";
+                requestUpdate.verificationStatus =
+                  "verified";
+                requestUpdate.supportDecision =
+                  "pending";
+                requestUpdate.remainingAmount =
+                  0;
+                requestUpdate.adminNote =
+                  adminNote;
+                requestUpdate.verifiedAt =
+                  FieldValue
+                    .serverTimestamp();
+                requestUpdate.verifiedBy =
+                  adminUid;
+                requestUpdate.rejectedAt =
+                  null;
+                requestUpdate.rejectionReason =
+                  "";
+              }
+
+              if (
+                action ===
+                "reject"
+              ) {
+                requestUpdate.status =
+                  "rejected";
+                requestUpdate.verificationStatus =
+                  "rejected";
+                requestUpdate.supportDecision =
+                  "rejected";
+                requestUpdate.remainingAmount =
+                  0;
+                requestUpdate.adminNote =
+                  adminNote;
+                requestUpdate.verifiedAt =
+                  null;
+                requestUpdate.verifiedBy =
+                  "";
+                requestUpdate.rejectedAt =
+                  FieldValue
+                    .serverTimestamp();
+                requestUpdate.rejectionReason =
+                  decisionReason
+                    .slice(
+                      0,
+                      1000,
+                    );
+              }
+
+              transaction.update(
+                assistanceRef,
+                requestUpdate,
+              );
+
+              return {
+                reviewPayload,
+              };
+            },
+          );
+
+      response
+        .status(200)
+        .json({
+          ok:
+            true,
+          requestId,
+          action,
+          status:
+            action ===
+              "verify"
+              ? "verified"
+              : action ===
+                  "reject"
+                ? "rejected"
+                : "under_review",
+          verificationStatus:
+            action ===
+              "verify"
+              ? "verified"
+              : action ===
+                  "reject"
+                ? "rejected"
+                : "under_review",
+          reviewStatus:
+            result
+              .reviewPayload
+              .reviewStatus,
+          finalDecision:
+            result
+              .reviewPayload
+              .finalDecision,
+        });
+    } catch (error) {
+      console.error(
+        "Assistance Review action failed:",
+        error,
+      );
+
+      response
+        .status(
+          Number(
+            error
+              ?.statusCode,
+          ) || 500,
+        )
+        .json({
+          error:
+            cleanText(
+              error?.code ||
+                "assistance_review_action_failed",
+              100,
+            ),
+          message:
+            cleanText(
+              error?.message ||
+                "Unable to save the LGU Assistance Request review.",
+              500,
+            ),
+        });
+    }
+  },
+
+);
+
+
 app.post(
 
   "/api/assistance/evidence/upload",

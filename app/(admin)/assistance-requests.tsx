@@ -5,8 +5,7 @@ import {
     getDoc,
     onSnapshot,
     serverTimestamp,
-    setDoc,
-    updateDoc,
+    updateDoc
 } from "firebase/firestore";
 import React, {
     useEffect,
@@ -1203,21 +1202,50 @@ export default function AssistanceRequestsAdmin() {
     };
   };
 
-  const savePrivateReview = async (
-    finalDecision: "pending" | "needs_more_information" | "verified" | "rejected" = "pending",
+  const persistPrivateReview = async (
+    action: "save_progress" | "more_information" | "verify" | "reject",
     decisionReason = "",
   ) => {
     if (!selected || !user || !reviewDraft) {
       throw new Error("Private LGU verification review is not ready.");
     }
 
-    const payload = buildPrivateReviewPayload(finalDecision, decisionReason);
+    const token = await user.getIdToken(true);
 
-    await setDoc(
-      doc(db, PRIVATE_REVIEW_COLLECTION, selected.id),
-      payload,
-      { merge: false },
+    const response = await fetch(
+      `${SECURE_ASSISTANCE_BACKEND}/api/admin/assistance/requests/${encodeURIComponent(
+        selected.id,
+      )}/review`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          review: reviewDraft,
+          decisionReason,
+          adminNote: adminNote.trim(),
+        }),
+      },
     );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      const backendError: any = new Error(
+        result?.message ||
+          result?.error ||
+          `LGU review update failed with HTTP ${response.status}.`,
+      );
+
+      backendError.code =
+        result?.error ||
+        `http_${response.status}`;
+
+      throw backendError;
+    }
 
     const refreshed = await getDoc(
       doc(db, PRIVATE_REVIEW_COLLECTION, selected.id),
@@ -1228,7 +1256,15 @@ export default function AssistanceRequestsAdmin() {
       : null;
 
     setVerificationReview(data);
-    if (data) setReviewDraft(createPrivateReviewDraft(selected, data));
+
+    if (data) {
+      setReviewDraft(
+        createPrivateReviewDraft(
+          selected,
+          data,
+        ),
+      );
+    }
 
     return data;
   };
@@ -1238,13 +1274,40 @@ export default function AssistanceRequestsAdmin() {
 
     try {
       setSavingAction("save_private_review");
-      await savePrivateReview("pending");
-      Alert.alert("Saved", "Private LGU verification progress has been saved.");
+      await persistPrivateReview("save_progress");
+
+      const message =
+        "Private LGU verification progress has been saved.";
+
+      if (Platform.OS === "web") {
+        const browserAlert = (globalThis as any).alert;
+        if (typeof browserAlert === "function") {
+          browserAlert(message);
+        } else {
+          Alert.alert("Saved", message);
+        }
+      } else {
+        Alert.alert("Saved", message);
+      }
     } catch (error: any) {
-      Alert.alert(
-        "Verification Save Failed",
-        error?.message || "The private LGU verification record could not be saved.",
-      );
+      const message =
+        error?.message ||
+        "The private LGU verification record could not be saved.";
+
+      console.error("Verification progress save failed", error);
+
+      if (Platform.OS === "web") {
+        const browserAlert = (globalThis as any).alert;
+        if (typeof browserAlert === "function") {
+          browserAlert(
+            `Verification Save Failed\n\n${message}`,
+          );
+        } else {
+          Alert.alert("Verification Save Failed", message);
+        }
+      } else {
+        Alert.alert("Verification Save Failed", message);
+      }
     } finally {
       setSavingAction("");
     }
@@ -1403,18 +1466,10 @@ export default function AssistanceRequestsAdmin() {
 
     try {
       setSavingAction("more_info");
-      await savePrivateReview("needs_more_information", note);
-
-      await updateDoc(doc(db, "assistanceRequests", selected.id), {
-        status: "under_review",
-        verificationStatus: "under_review",
-        supportDecision: "pending",
-        remainingAmount: 0,
-        adminNote: ["[MORE INFORMATION REQUIRED]", note].join("\n").slice(0, 2000),
-        reviewedAt: serverTimestamp(),
-        reviewedBy: user?.uid || "",
-        updatedAt: serverTimestamp(),
-      });
+      await persistPrivateReview(
+        "more_information",
+        note,
+      );
     } catch (error: any) {
       Alert.alert(
         "Request More Information Failed",
@@ -1453,25 +1508,10 @@ This still does not automatically create a Donation Campaign.`,
       async () => {
         try {
           setSavingAction("verify");
-          await savePrivateReview(
-            "verified",
+          await persistPrivateReview(
+            "verify",
             adminNote.trim() || "LGU verification completed.",
           );
-
-          await updateDoc(doc(db, "assistanceRequests", selected.id), {
-            status: "verified",
-            verificationStatus: "verified",
-            supportDecision: "pending",
-            remainingAmount: 0,
-            adminNote: adminNote.trim().slice(0, 2000),
-            reviewedAt: serverTimestamp(),
-            reviewedBy: user?.uid || "",
-            verifiedAt: serverTimestamp(),
-            verifiedBy: user?.uid || "",
-            rejectedAt: null,
-            rejectionReason: "",
-            updatedAt: serverTimestamp(),
-          });
         } catch (error: any) {
           Alert.alert(
             "Verification Failed",
@@ -1504,22 +1544,10 @@ This still does not automatically create a Donation Campaign.`,
       async () => {
         try {
           setSavingAction("reject");
-          await savePrivateReview("rejected", reason);
-
-          await updateDoc(doc(db, "assistanceRequests", selected.id), {
-            status: "rejected",
-            verificationStatus: "rejected",
-            supportDecision: "rejected",
-            remainingAmount: 0,
-            adminNote: adminNote.trim().slice(0, 2000),
-            reviewedAt: serverTimestamp(),
-            reviewedBy: user?.uid || "",
-            verifiedAt: null,
-            verifiedBy: "",
-            rejectedAt: serverTimestamp(),
-            rejectionReason: reason.slice(0, 1000),
-            updatedAt: serverTimestamp(),
-          });
+          await persistPrivateReview(
+            "reject",
+            reason,
+          );
         } catch (error: any) {
           Alert.alert(
             "Rejection Failed",
