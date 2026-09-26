@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
     collection,
     doc,
@@ -3414,11 +3415,25 @@ function DecisionTab({
   onSaveLocation: () => void;
   onClearLocation: () => void;
 }) {
+  const router = useRouter();
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
   const reviewLocked = ["verified", "rejected"].includes(
     String(reviewRecord?.finalDecision || ""),
   );
+  const donationCampaignReady =
+    verified &&
+    request.supportDecision === "donation_support" &&
+    Number(request.remainingAmount || 0) > 0 &&
+    String(request.assignedLocationName || "").trim().length >= 3 &&
+    String(request.assignedLocationAddress || "").trim().length >= 5;
+
+  const openDonationCampaign = () => {
+    router.push({
+      pathname: "/donation-list",
+      params: { assistanceRequestId: request.id },
+    } as any);
+  };
 
   const [privateAddressSearch, setPrivateAddressSearch] = useState("");
   const [privateMapSearchQuery, setPrivateMapSearchQuery] = useState("");
@@ -4216,10 +4231,30 @@ function DecisionTab({
 
             {supportDecision === "donation_support" && (
               <View style={styles.donationNotice}>
-                <Ionicons name="lock-closed-outline" size={18} color="#6D28D9" />
-                <Text style={styles.donationNoticeText}>
-                  Donation Support records the verified shortage only. Community Need campaign creation remains locked until the separate Admin Panel 11 flow is connected.
-                </Text>
+                <Ionicons
+                  name={donationCampaignReady ? "heart-circle-outline" : "lock-closed-outline"}
+                  size={18}
+                  color="#6D28D9"
+                />
+                <View style={{ flex: 1, gap: 10 }}>
+                  <Text style={styles.donationNoticeText}>
+                    {request.donationCampaignId
+                      ? "A Community Need Donation Campaign is already linked to this verified Assistance Request."
+                      : donationCampaignReady
+                        ? "The verified shortage and LGU-approved public service location are saved. The Admin may now explicitly continue to Community Need Donation Campaign setup."
+                        : "Save the Donation Support resource assessment and the LGU-approved public service / receiving location first. Campaign creation never happens automatically."}
+                  </Text>
+
+                  {(donationCampaignReady || request.donationCampaignId) && (
+                    <ActionButton
+                      label={request.donationCampaignId ? "Open Donation Campaign" : "Create Donation Campaign"}
+                      icon="heart-outline"
+                      variant="primary"
+                      loading={false}
+                      onPress={openDonationCampaign}
+                    />
+                  )}
+                </View>
               </View>
             )}
 

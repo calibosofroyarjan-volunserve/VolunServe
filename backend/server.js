@@ -9694,6 +9694,1087 @@ app.use(
 );
 
 
+// =========================================================
+// SECURE ADMIN DONATION OPERATIONS
+// =========================================================
+// All privileged Donation Admin mutations run through Firebase Admin SDK.
+// Client apps may keep Firestore listeners for allowed reads, but campaign
+// publication/closure and receipt verification/rejection are backend-gated.
+// =========================================================
+
+const normalizeDonationReference = (value) =>
+  cleanText(value || "", 160)
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+const normalizePrivacyComparableText = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const publicCopyContainsPrivateAssistanceValue = (publicCopy, privateValue) => {
+  const publicComparable = normalizePrivacyComparableText(publicCopy);
+  const privateComparable = normalizePrivacyComparableText(privateValue);
+
+  return (
+    privateComparable.length >= 6 &&
+    publicComparable.includes(privateComparable)
+  );
+};
+
+const assistanceCategoryToPublicCategory = (value) => {
+  const category = cleanText(value || "", 80).toLowerCase();
+
+  if (
+    [
+      "medical_health",
+      "surgery_treatment",
+      "cancer_serious_illness",
+    ].includes(category)
+  ) {
+    return "medical";
+  }
+
+  if (category === "disaster_recovery") return "other";
+  if (category === "homeless_basic_needs") return "other";
+  if (category === "elderly_assistance") return "other";
+  if (category === "animal_pet_welfare") return "other";
+  return "other";
+};
+
+const assistanceLocationToDonationLocationType = (value) => {
+  const type = cleanText(value || "", 80).toLowerCase();
+
+  const mapping = {
+    barangay_hall: "barangay_relief_desk",
+    lgu_office: "city_hall",
+    hospital_social_service: "hospital_social_service",
+    social_welfare_office: "social_welfare_office",
+    vet_clinic: "veterinary_clinic",
+    authorized_public_point: "other",
+  };
+
+  return mapping[type] || "other";
+};
+
+const cleanDonationTypes = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => cleanText(item || "", 30).toLowerCase())
+        .filter((item) => ["monetary", "in_kind"].includes(item)),
+    ),
+  ).slice(0, 2);
+};
+
+app.post(
+  "/api/admin/donations/campaigns",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const sourceType = cleanText(request.body?.sourceType || "", 80).toLowerCase();
+      const sourceId = cleanText(request.body?.sourceId || "", 160);
+
+      if (
+        ![
+          "disaster_relief_need",
+          "community_assistance_request",
+        ].includes(sourceType)
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_campaign_source",
+          "Choose a valid verified Donation Campaign source.",
+        );
+      }
+
+      if (!sourceId || !/^[A-Za-z0-9_-]{6,160}$/.test(sourceId)) {
+        throw makeHttpError(
+          400,
+          "invalid_campaign_source_id",
+          "The verified Donation Campaign source ID is invalid.",
+        );
+      }
+
+      const title = cleanText(request.body?.title || "", 160);
+      const description = cleanText(request.body?.description || "", 1200);
+      const story = cleanText(request.body?.publicStory || "", 1200);
+      const incidentType = cleanText(request.body?.publicIncidentType || "", 120);
+      const severity = cleanText(request.body?.publicSeverity || "", 80);
+      const acceptedDonationTypes = cleanDonationTypes(
+        request.body?.acceptedDonationTypes,
+      );
+      const officialChannelLabel = cleanText(
+        request.body?.officialChannelLabel || "",
+        160,
+      );
+      const officialChannelInstructions = cleanText(
+        request.body?.officialChannelInstructions || "",
+        1000,
+      );
+      const inKindInstructions = cleanText(
+        request.body?.inKindInstructions || "",
+        1000,
+      );
+      const handoffModeRaw = cleanText(
+        request.body?.handoffMode || "receiving_point",
+        60,
+      ).toLowerCase();
+      const handoffMode = [
+        "receiving_point",
+        "coordinated_handover",
+        "both",
+      ].includes(handoffModeRaw)
+        ? handoffModeRaw
+        : "receiving_point";
+      const requestedGoal = Number(request.body?.monetaryGoal ?? 0);
+      const requestedPublicLocation = cleanText(
+        request.body?.publicLocationLabel || "",
+        240,
+      );
+      const requestedHandoffType = cleanText(
+        request.body?.handoffLocationType || "",
+        80,
+      ).toLowerCase();
+      const requestedHandoffName = cleanText(
+        request.body?.handoffLocationName || "",
+        180,
+      );
+      const requestedHandoffAddress = cleanText(
+        request.body?.handoffAddress || "",
+        320,
+      );
+      const requestedHandoffNotes = cleanText(
+        request.body?.handoffNotes || "",
+        600,
+      );
+      const requestedPhotoUrls = Array.isArray(request.body?.publicPhotoUrls)
+        ? request.body.publicPhotoUrls
+            .map((item) => cleanText(item || "", 1000))
+            .filter((item) => item.startsWith("https://"))
+            .slice(0, 5)
+        : [];
+
+      if (title.length < 5) {
+        throw makeHttpError(400, "campaign_title_required", "Enter a clear campaign title.");
+      }
+
+      if (description.length < 15) {
+        throw makeHttpError(
+          400,
+          "campaign_description_required",
+          "Enter a clear privacy-safe campaign description.",
+        );
+      }
+
+      if (story.length < 30) {
+        throw makeHttpError(
+          400,
+          "campaign_story_required",
+          "Enter a privacy-safe public situation summary before publishing.",
+        );
+      }
+
+      if (incidentType.length < 2 || severity.length < 2) {
+        throw makeHttpError(
+          400,
+          "campaign_public_details_required",
+          "Confirm the public case category and LGU-assessed priority.",
+        );
+      }
+
+      if (!acceptedDonationTypes.length) {
+        throw makeHttpError(
+          400,
+          "donation_type_required",
+          "Enable at least one donation type.",
+        );
+      }
+
+      if (
+        acceptedDonationTypes.includes("monetary") &&
+        (!Number.isFinite(requestedGoal) || requestedGoal <= 0)
+      ) {
+        throw makeHttpError(
+          400,
+          "funding_goal_required",
+          "Enter the verified monetary amount still needed.",
+        );
+      }
+
+      if (
+        acceptedDonationTypes.includes("monetary") &&
+        (officialChannelLabel.length < 3 || officialChannelInstructions.length < 10)
+      ) {
+        throw makeHttpError(
+          400,
+          "official_channel_required",
+          "Enter the official LGU monetary channel and clear payment or receipt instructions.",
+        );
+      }
+
+      if (
+        acceptedDonationTypes.includes("in_kind") &&
+        inKindInstructions.length < 10
+      ) {
+        throw makeHttpError(
+          400,
+          "receiving_instructions_required",
+          "Enter clear LGU receiving or handover instructions for in-kind support.",
+        );
+      }
+
+      const campaignRef = db.collection("donationCampaigns").doc();
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      let sourceSummary = null;
+
+      if (sourceType === "community_assistance_request") {
+        const assistanceRef = db.collection("assistanceRequests").doc(sourceId);
+        const reviewRef = db.collection("assistanceVerificationReviews").doc(sourceId);
+
+        sourceSummary = await db.runTransaction(async (transaction) => {
+          const [assistanceSnapshot, reviewSnapshot] = await Promise.all([
+            transaction.get(assistanceRef),
+            transaction.get(reviewRef),
+          ]);
+
+          if (!assistanceSnapshot.exists) {
+            throw makeHttpError(
+              404,
+              "assistance_request_not_found",
+              "The verified Assistance Request was not found.",
+            );
+          }
+
+          if (!reviewSnapshot.exists) {
+            throw makeHttpError(
+              409,
+              "assistance_review_not_found",
+              "The protected LGU verification record was not found.",
+            );
+          }
+
+          const assistance = assistanceSnapshot.data() || {};
+          const review = reviewSnapshot.data() || {};
+
+          if (
+            cleanText(assistance.verificationStatus || "", 60).toLowerCase() !== "verified" ||
+            cleanText(review.finalDecision || "", 60).toLowerCase() !== "verified"
+          ) {
+            throw makeHttpError(
+              409,
+              "verified_assistance_required",
+              "Only a final LGU-verified Assistance Request can open Donation Support.",
+            );
+          }
+
+          if (
+            cleanText(assistance.supportDecision || "", 60).toLowerCase() !==
+            "donation_support"
+          ) {
+            throw makeHttpError(
+              409,
+              "donation_support_not_approved",
+              "LGU Resource Assessment must confirm Donation Support Needed first.",
+            );
+          }
+
+          const remainingAmount = Number(assistance.remainingAmount || 0);
+          if (!Number.isFinite(remainingAmount) || remainingAmount <= 0) {
+            throw makeHttpError(
+              409,
+              "verified_shortage_required",
+              "A verified remaining unmet amount is required before publishing Donation Support.",
+            );
+          }
+
+          const locationName = cleanText(assistance.assignedLocationName || "", 180);
+          const locationAddress = cleanText(assistance.assignedLocationAddress || "", 320);
+          const locationNotes = cleanText(assistance.assignedLocationNotes || "", 600);
+          const sourceLocationType = cleanText(
+            assistance.assignedLocationType || "",
+            80,
+          ).toLowerCase();
+
+          if (locationName.length < 3 || locationAddress.length < 5) {
+            throw makeHttpError(
+              409,
+              "official_location_required",
+              "Save the LGU-approved public service or receiving location before publishing a community campaign.",
+            );
+          }
+
+          const preferredTypes = Array.isArray(assistance.preferredAssistanceTypes)
+            ? assistance.preferredAssistanceTypes
+                .map((item) => cleanText(item || "", 30).toLowerCase())
+                .filter((item) => ["monetary", "in_kind"].includes(item))
+            : [];
+
+          if (
+            acceptedDonationTypes.some(
+              (item) => preferredTypes.length && !preferredTypes.includes(item),
+            )
+          ) {
+            throw makeHttpError(
+              400,
+              "donation_type_not_verified",
+              "The selected donation type was not part of the verified Assistance Request.",
+            );
+          }
+
+          if (
+            acceptedDonationTypes.includes("monetary") &&
+            Math.abs(requestedGoal - remainingAmount) > 0.009
+          ) {
+            throw makeHttpError(
+              400,
+              "funding_goal_must_match_verified_shortage",
+              `The public funding goal must match the verified remaining unmet amount of PHP ${remainingAmount.toLocaleString("en-PH")}.`,
+            );
+          }
+
+          const linkedCampaignId = cleanText(assistance.donationCampaignId || "", 160);
+          if (linkedCampaignId) {
+            const linkedCampaignRef = db.collection("donationCampaigns").doc(linkedCampaignId);
+            const linkedCampaignSnapshot = await transaction.get(linkedCampaignRef);
+
+            if (
+              linkedCampaignSnapshot.exists &&
+              cleanText(linkedCampaignSnapshot.data()?.status || "", 40).toLowerCase() ===
+                "published"
+            ) {
+              throw makeHttpError(
+                409,
+                "campaign_already_active",
+                "This verified Assistance Request already has an active Donation Campaign.",
+              );
+            }
+          }
+
+          const barangay =
+            cleanText(assistance.requesterBarangay || "", 120) ||
+            "San Jose del Monte";
+          const generalArea = barangay.toLowerCase().includes("san jose del monte")
+            ? barangay
+            : `${barangay}, City of San Jose del Monte, Bulacan`;
+          const category =
+            cleanText(assistance.category || "community_assistance", 80)
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_+|_+$/g, "") || "community_assistance";
+          const categoryLabel =
+            cleanText(
+              assistance.categoryLabel || assistance.category || "Community Assistance",
+              120,
+            ) || "Community Assistance";
+
+          // Community Assistance campaigns are intentionally privacy-safe.
+          // Do not allow public copy to repeat private source values from the
+          // Assistance Request, even though those private fields are never
+          // copied into the public campaign document itself.
+          const publicCopy = [title, description, story].join(" ");
+          const privateSourceValues = [
+            assistance.requesterAddress,
+            assistance.contactNumber,
+            assistance.requesterEmail,
+            assistance.requesterName,
+            assistance.beneficiaryName,
+          ];
+
+          if (
+            privateSourceValues.some((value) =>
+              publicCopyContainsPrivateAssistanceValue(publicCopy, value),
+            )
+          ) {
+            throw makeHttpError(
+              400,
+              "private_assistance_data_in_public_copy",
+              "Remove private Resident identity, contact, or home-address details from the public campaign text.",
+            );
+          }
+
+          const publicCategory = assistanceCategoryToPublicCategory(category);
+          const acceptedCategories = acceptedDonationTypes.includes("in_kind")
+            ? [publicCategory]
+            : [];
+          const publicNeeds = [
+            {
+              category: publicCategory,
+              label: `${categoryLabel} support`,
+              needed: acceptedDonationTypes.includes("monetary")
+                ? remainingAmount
+                : 1,
+              unit: acceptedDonationTypes.includes("monetary") ? "PHP" : "verified need",
+            },
+          ];
+
+          const campaignPayload = {
+            campaignId: campaignRef.id,
+            title,
+            description,
+            status: "published",
+            sourceType: "community_assistance_request",
+            campaignGroup: "community_needs_help",
+            campaignCategory: category,
+            beneficiaryType: "Verified Resident Assistance",
+            generalArea,
+            sourceNeedAssessmentIds: [],
+            sourceAssistanceRequestId: sourceId,
+            barangays: [barangay],
+            acceptedDonationTypes,
+            acceptedCategories,
+            officialChannelLabel: acceptedDonationTypes.includes("monetary")
+              ? officialChannelLabel
+              : "",
+            officialChannelInstructions: acceptedDonationTypes.includes("monetary")
+              ? officialChannelInstructions
+              : "",
+            monetaryGoal: acceptedDonationTypes.includes("monetary")
+              ? remainingAmount
+              : 0,
+            verifiedAmountReceived: 0,
+            inKindInstructions: acceptedDonationTypes.includes("in_kind")
+              ? inKindInstructions
+              : "",
+            handoffMode,
+            handoffLocationType: assistanceLocationToDonationLocationType(
+              sourceLocationType,
+            ),
+            handoffLocationName: locationName,
+            handoffAddress: locationAddress,
+            handoffNotes: locationNotes,
+            publicStory: story,
+            publicLocationLabel: generalArea,
+            publicIncidentType: categoryLabel,
+            publicSeverity: "LGU verified need",
+            publicPhotoUrls: [],
+            affectedHouseholds: 1,
+            affectedPeople: 1,
+            publicNeeds,
+            createdBy: adminUid,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedBy: adminUid,
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+
+          transaction.set(campaignRef, campaignPayload);
+          // Link the campaign without rewriting the original LGU review
+          // timestamp/person. The activity log below records who published it.
+          transaction.update(assistanceRef, {
+            donationCampaignId: campaignRef.id,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          transaction.set(activityRef, {
+            action: "Community Assistance Donation Campaign Published",
+            campaignId: campaignRef.id,
+            assistanceRequestId: sourceId,
+            performedBy: adminUid,
+            timestamp: FieldValue.serverTimestamp(),
+          });
+
+          return {
+            campaignId: campaignRef.id,
+            campaignGroup: "community_needs_help",
+            sourceType: "community_assistance_request",
+            monetaryGoal: campaignPayload.monetaryGoal,
+          };
+        });
+      } else {
+        const assessmentRef = db.collection("barangayNeedAssessments").doc(sourceId);
+
+        const existingCampaignsSnapshot = await db
+          .collection("donationCampaigns")
+          .where("status", "==", "published")
+          .get();
+
+        const duplicate = existingCampaignsSnapshot.docs.some((item) => {
+          const ids = item.data()?.sourceNeedAssessmentIds;
+          return Array.isArray(ids) && ids.includes(sourceId);
+        });
+
+        if (duplicate) {
+          throw makeHttpError(
+            409,
+            "campaign_already_active",
+            "This verified relief need already has an active Donation Campaign.",
+          );
+        }
+
+        sourceSummary = await db.runTransaction(async (transaction) => {
+          const assessmentSnapshot = await transaction.get(assessmentRef);
+
+          if (!assessmentSnapshot.exists) {
+            throw makeHttpError(
+              404,
+              "relief_need_not_found",
+              "The selected verified relief need no longer exists.",
+            );
+          }
+
+          const assessment = assessmentSnapshot.data() || {};
+          const status = cleanText(assessment.status || "", 60).toLowerCase();
+
+          if (!["verified", "partially_allocated"].includes(status)) {
+            throw makeHttpError(
+              409,
+              "relief_need_not_active",
+              "Only an active verified relief need can open Donation Support.",
+            );
+          }
+
+          if (requestedPublicLocation.length < 3) {
+            throw makeHttpError(
+              400,
+              "public_location_required",
+              "Enter a privacy-safe public area before publishing.",
+            );
+          }
+
+          if (
+            acceptedDonationTypes.includes("in_kind") &&
+            (requestedHandoffName.length < 3 || requestedHandoffAddress.length < 8)
+          ) {
+            throw makeHttpError(
+              400,
+              "handoff_location_required",
+              "Enter the authorized public receiving or handover location for in-kind support.",
+            );
+          }
+
+          const allowedHandoffTypes = [
+            "barangay_relief_desk",
+            "evacuation_center",
+            "lgu_relief_center",
+            "city_hall",
+            "hospital_social_service",
+            "veterinary_clinic",
+            "social_welfare_office",
+            "animal_shelter",
+            "approved_public_meeting",
+            "other",
+          ];
+
+          if (
+            acceptedDonationTypes.includes("in_kind") &&
+            !allowedHandoffTypes.includes(requestedHandoffType)
+          ) {
+            throw makeHttpError(
+              400,
+              "handoff_location_type_required",
+              "Select a valid authorized public receiving location type.",
+            );
+          }
+
+          const barangay = cleanText(assessment.barangay || "", 120);
+          const categoryPairs = [
+            ["food", Number(assessment.peopleNeedingFood || 0), "Food support", "people"],
+            ["water", Number(assessment.peopleNeedingWater || 0), "Drinking water", "people"],
+            ["clothing", Number(assessment.peopleNeedingClothing || 0), "Clothing", "people"],
+            ["medical", Number(assessment.peopleNeedingMedical || 0), "Medical support", "people"],
+            ["shelter", Number(assessment.householdsNeedingShelter || 0), "Temporary shelter", "households"],
+            ["hygiene", Number(assessment.householdsNeedingHygiene || 0), "Hygiene kits", "households"],
+          ];
+          const acceptedCategories = acceptedDonationTypes.includes("in_kind")
+            ? categoryPairs
+                .filter((item) => Number(item[1]) > 0)
+                .map((item) => item[0])
+            : [];
+          if (
+            acceptedDonationTypes.includes("in_kind") &&
+            !acceptedCategories.length
+          ) {
+            acceptedCategories.push("other");
+          }
+          const publicNeeds = categoryPairs
+            .filter((item) => Number(item[1]) > 0)
+            .map((item) => ({
+              category: item[0],
+              label: item[2],
+              needed: Number(item[1]),
+              unit: item[3],
+            }))
+            .slice(0, 6);
+          const otherNeedDescription = cleanText(
+            assessment.otherNeedDescription || "",
+            160,
+          );
+          if (otherNeedDescription && publicNeeds.length < 7) {
+            publicNeeds.push({
+              category: "other",
+              label: otherNeedDescription,
+            });
+          }
+
+          const campaignCategory =
+            cleanText(request.body?.campaignCategory || incidentType || "disaster_relief", 80)
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_+|_+$/g, "") || "disaster_relief";
+          const affectedHouseholds = Math.max(
+            1,
+            Math.trunc(Number(assessment.affectedHouseholds || 1)),
+          );
+          const affectedPeople = Math.max(
+            1,
+            Math.trunc(Number(assessment.affectedPeople || 1)),
+          );
+
+          const campaignPayload = {
+            campaignId: campaignRef.id,
+            title,
+            description,
+            status: "published",
+            sourceType: "disaster_relief_need",
+            campaignGroup: "disaster_affected",
+            campaignCategory,
+            beneficiaryType:
+              affectedHouseholds === 1 ? "Household Relief" : "Community Relief",
+            generalArea: requestedPublicLocation,
+            sourceNeedAssessmentIds: [sourceId],
+            sourceAssistanceRequestId: "",
+            barangays: [barangay || "San Jose del Monte"],
+            acceptedDonationTypes,
+            acceptedCategories,
+            officialChannelLabel: acceptedDonationTypes.includes("monetary")
+              ? officialChannelLabel
+              : "",
+            officialChannelInstructions: acceptedDonationTypes.includes("monetary")
+              ? officialChannelInstructions
+              : "",
+            monetaryGoal: acceptedDonationTypes.includes("monetary")
+              ? requestedGoal
+              : 0,
+            verifiedAmountReceived: 0,
+            inKindInstructions: acceptedDonationTypes.includes("in_kind")
+              ? inKindInstructions
+              : "",
+            handoffMode: acceptedDonationTypes.includes("in_kind")
+              ? handoffMode
+              : "receiving_point",
+            handoffLocationType: acceptedDonationTypes.includes("in_kind")
+              ? requestedHandoffType
+              : "",
+            handoffLocationName: acceptedDonationTypes.includes("in_kind")
+              ? requestedHandoffName
+              : "",
+            handoffAddress: acceptedDonationTypes.includes("in_kind")
+              ? requestedHandoffAddress
+              : "",
+            handoffNotes: acceptedDonationTypes.includes("in_kind")
+              ? requestedHandoffNotes
+              : "",
+            publicStory: story,
+            publicLocationLabel: requestedPublicLocation,
+            publicIncidentType: incidentType,
+            publicSeverity: severity,
+            publicPhotoUrls: requestedPhotoUrls,
+            affectedHouseholds,
+            affectedPeople,
+            publicNeeds,
+            createdBy: adminUid,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedBy: adminUid,
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+
+          transaction.set(campaignRef, campaignPayload);
+          transaction.set(activityRef, {
+            action: "Donation Campaign Published",
+            campaignId: campaignRef.id,
+            needAssessmentId: sourceId,
+            barangay,
+            performedBy: adminUid,
+            timestamp: FieldValue.serverTimestamp(),
+          });
+
+          return {
+            campaignId: campaignRef.id,
+            campaignGroup: "disaster_affected",
+            sourceType: "disaster_relief_need",
+            monetaryGoal: campaignPayload.monetaryGoal,
+          };
+        });
+      }
+
+      response.status(201).json({
+        ok: true,
+        ...sourceSummary,
+      });
+    } catch (error) {
+      console.error("Donation campaign publication failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "donation_campaign_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to publish the Donation Campaign.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/donations/campaigns/:campaignId/close",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const campaignId = cleanText(request.params?.campaignId || "", 160);
+
+      if (!campaignId) {
+        throw makeHttpError(400, "invalid_campaign_id", "The Donation Campaign ID is invalid.");
+      }
+
+      const campaignRef = db.collection("donationCampaigns").doc(campaignId);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(campaignRef);
+        if (!snapshot.exists) {
+          throw makeHttpError(404, "campaign_not_found", "The Donation Campaign was not found.");
+        }
+
+        if (cleanText(snapshot.data()?.status || "", 40).toLowerCase() !== "published") {
+          throw makeHttpError(409, "campaign_not_active", "Only a published campaign can be closed.");
+        }
+
+        transaction.update(campaignRef, {
+          status: "closed",
+          closedBy: adminUid,
+          closedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(activityRef, {
+          action: "Donation Campaign Closed",
+          campaignId,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      });
+
+      response.status(200).json({ ok: true, campaignId, status: "closed" });
+    } catch (error) {
+      console.error("Donation campaign close failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "donation_campaign_close_failed", 120),
+        message: cleanText(error?.message || "Unable to close the Donation Campaign.", 700),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/donations/:donationId/verify",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const donationId = cleanText(request.params?.donationId || "", 160);
+      const actual = Number(request.body?.actualValue ?? 0);
+      const receiptReference = cleanText(
+        request.body?.officialReceiptReference || "",
+        160,
+      );
+
+      if (!donationId) {
+        throw makeHttpError(400, "invalid_donation_id", "The Donation submission ID is invalid.");
+      }
+
+      if (!Number.isFinite(actual) || actual <= 0) {
+        throw makeHttpError(
+          400,
+          "actual_receipt_required",
+          "Enter the actual monetary amount or physical quantity confirmed by the LGU.",
+        );
+      }
+
+      if (receiptReference.length < 3) {
+        throw makeHttpError(
+          400,
+          "receipt_reference_required",
+          "Enter the official LGU receipt, transaction, or receiving-log reference.",
+        );
+      }
+
+      const donationRef = db.collection("donations").doc(donationId);
+      const inventoryRef = db.collection("lguReliefInventory").doc(`donation_${donationId}`);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      const existingSnapshot = await donationRef.get();
+      if (!existingSnapshot.exists) {
+        throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
+      }
+
+      const existing = existingSnapshot.data() || {};
+      const donationType = cleanText(existing.donationType || "", 40).toLowerCase();
+
+      if (donationType === "in_kind" && !Number.isInteger(actual)) {
+        throw makeHttpError(
+          400,
+          "whole_quantity_required",
+          "In-kind quantity must be a whole number.",
+        );
+      }
+
+      let monetaryReferenceRegistryRef = null;
+
+      if (donationType === "monetary") {
+        const normalizedReference = normalizeDonationReference(existing.transactionReference);
+        if (normalizedReference.length < 4) {
+          throw makeHttpError(
+            409,
+            "transaction_reference_invalid",
+            "This monetary submission does not contain a valid donor transaction reference.",
+          );
+        }
+
+        // Use a single-field query so this backend path does not require a
+        // new composite Firestore index just to check older verified records.
+        // The hashed registry below is the atomic guard for new verifications.
+        const receivedSnapshot = await db
+          .collection("donations")
+          .where("status", "==", "received")
+          .get();
+
+        const duplicate = receivedSnapshot.docs.find(
+          (item) =>
+            item.id !== donationId &&
+            cleanText(item.data()?.donationType || "", 40).toLowerCase() ===
+              "monetary" &&
+            normalizeDonationReference(item.data()?.transactionReference) ===
+              normalizedReference,
+        );
+
+        if (duplicate) {
+          throw makeHttpError(
+            409,
+            "duplicate_transaction_reference",
+            "This donor transaction reference is already linked to another verified donation.",
+          );
+        }
+
+        const referenceHash = crypto
+          .createHash("sha256")
+          .update(normalizedReference)
+          .digest("hex");
+        monetaryReferenceRegistryRef = db
+          .collection("donationTransactionReferences")
+          .doc(referenceHash);
+      }
+
+      const result = await db.runTransaction(async (transaction) => {
+        const donationSnapshot = await transaction.get(donationRef);
+        if (!donationSnapshot.exists) {
+          throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
+        }
+
+        const current = donationSnapshot.data() || {};
+        if (cleanText(current.status || "", 40).toLowerCase() !== "submitted") {
+          throw makeHttpError(409, "donation_already_reviewed", "This donation has already been reviewed.");
+        }
+
+        const currentType = cleanText(current.donationType || "", 40).toLowerCase();
+        let nextVerifiedAmountReceived = 0;
+        let campaignRef = null;
+
+        if (currentType === "monetary") {
+          if (monetaryReferenceRegistryRef) {
+            const registrySnapshot = await transaction.get(monetaryReferenceRegistryRef);
+            if (registrySnapshot.exists && registrySnapshot.data()?.donationId !== donationId) {
+              throw makeHttpError(
+                409,
+                "duplicate_transaction_reference",
+                "This donor transaction reference has already been verified.",
+              );
+            }
+          }
+
+          const campaignId = cleanText(current.campaignId || "", 160);
+          if (!campaignId) {
+            throw makeHttpError(
+              409,
+              "campaign_link_required",
+              "This monetary donation is not linked to a Donation Campaign.",
+            );
+          }
+
+          campaignRef = db.collection("donationCampaigns").doc(campaignId);
+          const campaignSnapshot = await transaction.get(campaignRef);
+          if (!campaignSnapshot.exists) {
+            throw makeHttpError(
+              404,
+              "campaign_not_found",
+              "The linked Donation Campaign was not found.",
+            );
+          }
+
+          const currentVerifiedAmount = Number(
+            campaignSnapshot.data()?.verifiedAmountReceived || 0,
+          );
+          nextVerifiedAmountReceived =
+            (Number.isFinite(currentVerifiedAmount) ? currentVerifiedAmount : 0) + actual;
+        }
+
+        if (currentType === "in_kind") {
+          const inventorySnapshot = await transaction.get(inventoryRef);
+          if (inventorySnapshot.exists) {
+            throw makeHttpError(
+              409,
+              "inventory_already_recorded",
+              "This donation already has an LGU inventory receipt record.",
+            );
+          }
+
+          const itemName = cleanText(current.itemName || "Donated relief item", 160);
+          const category = cleanText(current.category || "other", 80).toLowerCase();
+          const unit = cleanText(current.unit || "unit", 60);
+
+          transaction.set(inventoryRef, {
+            itemId: inventoryRef.id,
+            category,
+            itemName,
+            unit,
+            quantityReceived: actual,
+            quantityAvailable: actual,
+            quantityAllocated: 0,
+            quantityDistributed: 0,
+            sourceType: "donation",
+            sourceReferenceId: donationId,
+            status: "active",
+            notes: `Verified donation: ${cleanText(current.campaignTitle || "LGU campaign", 180)}`,
+            createdBy: adminUid,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedBy: adminUid,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        if (currentType === "monetary" && campaignRef) {
+          transaction.update(campaignRef, {
+            verifiedAmountReceived: nextVerifiedAmountReceived,
+            updatedBy: adminUid,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+          if (monetaryReferenceRegistryRef) {
+            transaction.set(monetaryReferenceRegistryRef, {
+              donationId,
+              campaignId: cleanText(current.campaignId || "", 160),
+              verifiedBy: adminUid,
+              verifiedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+        transaction.update(donationRef, {
+          status: "received",
+          actualQuantityReceived: currentType === "in_kind" ? actual : 0,
+          actualAmountReceived: currentType === "monetary" ? actual : 0,
+          officialReceiptReference: receiptReference,
+          verifiedBy: adminUid,
+          verifiedAt: FieldValue.serverTimestamp(),
+          receivedBy: adminUid,
+          receivedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          rejectionReason: "",
+        });
+
+        transaction.set(activityRef, {
+          action: "Donation Verified as Received",
+          donationId,
+          campaignId: cleanText(current.campaignId || "", 160),
+          donationType: currentType,
+          actualReceived: actual,
+          officialReceiptReference: receiptReference,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        return {
+          donationType: currentType,
+          verifiedAmountReceived: nextVerifiedAmountReceived,
+        };
+      });
+
+      response.status(200).json({ ok: true, donationId, ...result });
+    } catch (error) {
+      console.error("Donation verification failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "donation_verification_failed", 120),
+        message: cleanText(error?.message || "Unable to verify the Donation submission.", 700),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/donations/:donationId/reject",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const donationId = cleanText(request.params?.donationId || "", 160);
+      const reason = cleanText(request.body?.rejectionReason || "", 600);
+
+      if (!donationId) {
+        throw makeHttpError(400, "invalid_donation_id", "The Donation submission ID is invalid.");
+      }
+
+      if (reason.length < 5) {
+        throw makeHttpError(400, "rejection_reason_required", "Enter a clear rejection reason.");
+      }
+
+      const donationRef = db.collection("donations").doc(donationId);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(donationRef);
+        if (!snapshot.exists) {
+          throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
+        }
+
+        if (cleanText(snapshot.data()?.status || "", 40).toLowerCase() !== "submitted") {
+          throw makeHttpError(409, "donation_already_reviewed", "This donation has already been reviewed.");
+        }
+
+        transaction.update(donationRef, {
+          status: "rejected",
+          rejectionReason: reason,
+          rejectedBy: adminUid,
+          rejectedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(activityRef, {
+          action: "Donation Submission Rejected",
+          donationId,
+          campaignId: cleanText(snapshot.data()?.campaignId || "", 160),
+          reason,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      });
+
+      response.status(200).json({ ok: true, donationId, status: "rejected" });
+    } catch (error) {
+      console.error("Donation rejection failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "donation_rejection_failed", 120),
+        message: cleanText(error?.message || "Unable to reject the Donation submission.", 700),
+      });
+    }
+  },
+);
+
 
 const port =
 
