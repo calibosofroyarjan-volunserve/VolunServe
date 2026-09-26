@@ -4,7 +4,7 @@ import {
     doc,
     getDoc,
     onSnapshot,
-    serverTimestamp
+    serverTimestamp,
 } from "firebase/firestore";
 import React, {
     useEffect,
