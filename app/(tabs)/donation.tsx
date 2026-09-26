@@ -15,8 +15,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,7 +24,7 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View,
+  View
 } from "react-native";
 
 import { db } from "../../lib/firebase";
@@ -674,6 +674,8 @@ export default function Donation() {
   const [filter, setFilter] = useState<CampaignFilter>("all");
   const [searchText, setSearchText] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [showDonationPanel, setShowDonationPanel] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [donationType, setDonationType] = useState<DonationType | "">("");
   const [category, setCategory] = useState("");
   const [itemName, setItemName] = useState("");
@@ -752,30 +754,30 @@ export default function Donation() {
   }, [user?.uid, canUseDonationPage]);
 
   const filteredCampaigns = useMemo(() => {
-    const scoped =
-      filter === "all"
-        ? campaigns
-        : campaigns.filter((campaign) => campaignGroupOf(campaign) === filter);
+    const term = searchText.trim().toLowerCase();
 
-    const queryText = searchText.trim().toLowerCase();
-    if (!queryText) return scoped;
+    return campaigns.filter((campaign) => {
+      const groupMatches =
+        filter === "all" || campaignGroupOf(campaign) === filter;
 
-    return scoped.filter((campaign) =>
-      [
+      if (!groupMatches) return false;
+      if (!term) return true;
+
+      const searchable = [
         campaign.title,
         campaign.description,
         campaign.publicStory,
         campaign.publicLocationLabel,
         campaign.generalArea,
         campaign.campaignCategory,
-        campaign.beneficiaryType,
         ...(campaign.barangays || []),
       ]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase()
-        .includes(queryText),
-    );
+        .toLowerCase();
+
+      return searchable.includes(term);
+    });
   }, [campaigns, filter, searchText]);
 
   const disasterCount = useMemo(
@@ -793,6 +795,16 @@ export default function Donation() {
     () => campaigns.find((item) => item.id === selectedCampaignId),
     [campaigns, selectedCampaignId],
   );
+
+  useEffect(() => {
+    if (selectedCampaignId || filteredCampaigns.length === 0) return;
+    setSelectedCampaignId(filteredCampaigns[0].id);
+  }, [filteredCampaigns, selectedCampaignId]);
+
+  const selectedGoal = campaignGoal(selectedCampaign);
+  const selectedRaised = campaignRaised(selectedCampaign);
+  const selectedPercent =
+    selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
 
   const acceptedTypes = selectedCampaign?.acceptedDonationTypes || [];
   const acceptedCategories = selectedCampaign?.acceptedCategories || [];
@@ -838,6 +850,7 @@ export default function Donation() {
 
   const chooseCampaign = (campaignId: string) => {
     setSelectedCampaignId(campaignId);
+    setShowDonationPanel(false);
     resetDonationForm();
 
     const campaign = campaigns.find((item) => item.id === campaignId);
@@ -852,6 +865,7 @@ export default function Donation() {
     if (nextFilter === "all") return;
     if (campaignGroupOf(selectedCampaign) !== nextFilter) {
       setSelectedCampaignId("");
+      setShowDonationPanel(false);
       resetDonationForm();
     }
   };
@@ -1095,12 +1109,6 @@ export default function Donation() {
     }
   };
 
-  const residentDisplayName = String(
-    profile?.fullName || user?.displayName || "Resident",
-  ).trim();
-  const residentFirstName =
-    residentDisplayName.split(/\s+/).filter(Boolean)[0] || "Resident";
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -1121,89 +1129,99 @@ export default function Donation() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={styles.webContainer}
       showsVerticalScrollIndicator
     >
-      <View style={styles.heroCard}>
-        <View style={styles.heroIconWrap}>
-          <Ionicons name="heart" size={26} color="#FFFFFF" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>VOLUNSERVE · RESIDENT DONATION HUB</Text>
-          <Text style={styles.title}>Good day, {residentFirstName}!</Text>
-          <Text style={styles.subtitle}>
-            Together for a safer San Jose del Monte. Browse LGU-verified disaster and community
-            support campaigns, review approved public photos, and donate only through the official
-            channels published for each campaign.
+      <View style={styles.webPageHeader}>
+        <View style={styles.webHeaderCopy}>
+          <Text style={styles.webEyebrow}>VOLUNSERVE · LGU VERIFIED</Text>
+          <Text style={styles.webPageTitle}>Donation Campaigns</Text>
+          <Text style={styles.webPageSubtitle}>
+            Support verified community and disaster needs.
           </Text>
         </View>
-        <View style={styles.heroTrustBadge}>
-          <Ionicons name="shield-checkmark" size={16} color="#15803D" />
-          <Text style={styles.heroTrustText}>LGU VERIFIED</Text>
+
+        <View style={[styles.webHeaderActions, !medium && styles.webHeaderActionsStack]}>
+          <View style={styles.webSearchBox}>
+            <Ionicons name="search-outline" size={17} color="#64748B" />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search campaigns or location"
+              placeholderTextColor="#94A3B8"
+              style={styles.webSearchInput}
+            />
+            {!!searchText && (
+              <TouchableOpacity onPress={() => setSearchText("")}>
+                <Ionicons name="close-circle" size={17} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.webHistoryButton, showHistory && styles.webHistoryButtonActive]}
+            activeOpacity={0.84}
+            onPress={() => setShowHistory((current) => !current)}
+          >
+            <Ionicons
+              name="receipt-outline"
+              size={16}
+              color={showHistory ? "#FFFFFF" : "#0F766E"}
+            />
+            <Text
+              style={[
+                styles.webHistoryButtonText,
+                showHistory && styles.webHistoryButtonTextActive,
+              ]}
+            >
+              My Donations{myDonations.length ? ` (${myDonations.length})` : ""}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.filterPanel}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.sectionEyebrow}>BROWSE VERIFIED CAMPAIGNS</Text>
-          <Text style={styles.sectionTitle}>Donation Campaigns</Text>
-          <Text style={styles.sectionSubtitle}>
-            Support verified community needs in San Jose del Monte, Bulacan. Open a campaign to
-            view its approved public photos, verified funding progress, and official LGU receiving
-            details.
-          </Text>
-        </View>
+      <View style={styles.webFilterBar}>
+        {FILTER_OPTIONS.map((option) => {
+          const active = filter === option.value;
+          const count =
+            option.value === "all"
+              ? campaigns.length
+              : option.value === "disaster_affected"
+                ? disasterCount
+                : communityCount;
 
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color="#64748B" />
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search campaigns, causes, or location..."
-            placeholderTextColor="#94A3B8"
-            style={styles.searchInput}
-          />
-          {!!searchText && (
-            <TouchableOpacity onPress={() => setSearchText("")} style={styles.searchClearButton}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.filterRow}>
-          {FILTER_OPTIONS.map((option) => {
-            const active = filter === option.value;
-            const count =
-              option.value === "all"
-                ? campaigns.length
-                : option.value === "disaster_affected"
-                  ? disasterCount
-                  : communityCount;
-
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                activeOpacity={0.86}
-                onPress={() => chooseFilter(option.value)}
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[styles.webFilterChip, active && styles.webFilterChipActive]}
+              activeOpacity={0.84}
+              onPress={() => chooseFilter(option.value)}
+            >
+              <Text
+                style={[
+                  styles.webFilterChipText,
+                  active && styles.webFilterChipTextActive,
+                ]}
               >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {wide ? option.label : option.shortLabel}
+                {option.value === "all"
+                  ? "All"
+                  : option.value === "disaster_affected"
+                    ? "Disaster Affected"
+                    : "Community Needs Help"}
+              </Text>
+              <View style={[styles.webFilterCount, active && styles.webFilterCountActive]}>
+                <Text
+                  style={[
+                    styles.webFilterCountText,
+                    active && styles.webFilterCountTextActive,
+                  ]}
+                >
+                  {count}
                 </Text>
-                <View style={[styles.filterCount, active && styles.filterCountActive]}>
-                  <Text
-                    style={[
-                      styles.filterCountText,
-                      active && styles.filterCountTextActive,
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {!!error && (
@@ -1213,633 +1231,456 @@ export default function Donation() {
         </View>
       )}
 
-      <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-        <View style={[styles.webCampaignPane, !wide && styles.webPaneFull]}>
-          {!campaignsReady ? (
-            <View style={styles.emptyCard}>
-              <ActivityIndicator color="#4F46E5" />
-              <Text style={styles.emptyText}>Loading active LGU campaigns...</Text>
+      {showHistory ? (
+        <View style={styles.webHistoryPanel}>
+          <View style={styles.webSectionHeaderRow}>
+            <View>
+              <Text style={styles.webSectionTitle}>My Donations</Text>
+              <Text style={styles.webSectionSubtitle}>Your submitted donation records.</Text>
             </View>
-          ) : filteredCampaigns.length === 0 ? (
+            <TouchableOpacity
+              style={styles.webCloseButton}
+              onPress={() => setShowHistory(false)}
+            >
+              <Ionicons name="close" size={18} color="#334155" />
+            </TouchableOpacity>
+          </View>
+
+          {!historyReady ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="checkmark-circle-outline" size={36} color="#15803D" />
-              <Text style={styles.emptyTitle}>No active campaigns in this category</Text>
-              <Text style={styles.emptyText}>
-                Only LGU-verified campaigns that are currently open for public support appear here.
-              </Text>
+              <ActivityIndicator color="#0F766E" />
+            </View>
+          ) : myDonations.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="receipt-outline" size={28} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No donation submissions yet</Text>
             </View>
           ) : (
-            <View style={styles.campaignGrid}>
-              {filteredCampaigns.map((campaign) => (
-                <CampaignCard
-                  key={campaign.id}
-                  campaign={campaign}
-                  selected={selectedCampaignId === campaign.id}
-                  wide={wide}
-                  onPress={() => chooseCampaign(campaign.id)}
-                />
+            <View style={styles.historyList}>
+              {myDonations.map((donation) => (
+                <DonationHistoryCard key={donation.id} donation={donation} />
               ))}
             </View>
           )}
         </View>
-
-        {(wide || selectedCampaign) && (
-          <View style={[styles.webDetailPane, !wide && styles.webPaneFull]}>
-            {wide && !selectedCampaign && (
-              <View style={styles.drawerPlaceholder}>
-                <View style={styles.drawerPlaceholderIcon}>
-                  <Ionicons name="heart-outline" size={30} color="#4F46E5" />
-                </View>
-                <Text style={styles.drawerPlaceholderTitle}>Choose a campaign</Text>
-                <Text style={styles.drawerPlaceholderText}>
-                  Select any verified campaign on the left to open its photos, story, progress,
-                  official receiving location, and donation options here.
+      ) : (
+        <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
+          <View style={styles.webCampaignPane}>
+            <View style={styles.webSectionHeaderRow}>
+              <View>
+                <Text style={styles.webSectionTitle}>Active Campaigns</Text>
+                <Text style={styles.webSectionSubtitle}>
+                  Choose a verified campaign to view details.
                 </Text>
               </View>
-            )}
+              <Text style={styles.webCampaignCount}>{filteredCampaigns.length}</Text>
+            </View>
 
-            {!!selectedCampaign && (
-        <View style={[styles.detailShell, wide && styles.detailShellWeb]}>
-          <View style={styles.detailTopBar}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.detailEyebrow}>SELECTED VERIFIED CAMPAIGN</Text>
-              <Text style={styles.detailTitle}>{selectedCampaign.title || "Donation Campaign"}</Text>
-              <View style={styles.locationLine}>
-                <Ionicons name="location-outline" size={15} color="#0F766E" />
-                <Text style={styles.detailLocation}>{campaignAreaLabel(selectedCampaign)}</Text>
+            {!campaignsReady ? (
+              <View style={styles.emptyCard}>
+                <ActivityIndicator color="#0F766E" />
               </View>
-            </View>
-            <View style={styles.openSupportBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.openSupportText}>OPEN FOR SUPPORT</Text>
-            </View>
+            ) : filteredCampaigns.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="search-outline" size={28} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No matching campaigns</Text>
+              </View>
+            ) : (
+              <View style={styles.campaignGrid}>
+                {filteredCampaigns.map((campaign) => (
+                  <CampaignCard
+                    key={campaign.id}
+                    campaign={campaign}
+                    selected={selectedCampaignId === campaign.id}
+                    wide={wide}
+                    onPress={() => chooseCampaign(campaign.id)}
+                  />
+                ))}
+              </View>
+            )}
           </View>
 
-          <View
-            style={[
-              styles.detailGrid,
-              wide && styles.detailGridDrawer,
-              !wide && styles.stackGrid,
-            ]}
-          >
-            <View style={styles.detailMainColumn}>
-              <PublicPhotoGallery
-                photos={selectedPhotoUrls}
-                title={selectedCampaign.title || "Donation Campaign"}
-                campaign={selectedCampaign}
-              />
-
-              <View style={styles.storyCard}>
-                <View style={styles.storyHeaderRow}>
-                  <View style={styles.storyHeaderIcon}>
-                    <Ionicons name="book-outline" size={18} color="#0F766E" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.storyEyebrow}>LGU-PUBLISHED VERIFIED STORY</Text>
-                    <Text style={styles.storyTitle}>Why this campaign needs support</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.storyText}>
-                  {selectedCampaign.publicStory ||
-                    selectedCampaign.description ||
-                    "The LGU verified this assistance need and opened this campaign for public support."}
-                </Text>
-
-                <View style={styles.factGrid}>
-                  <Fact
-                    icon="shield-checkmark-outline"
-                    label="Verification"
-                    value="LGU Verified"
-                  />
-                  <Fact
-                    icon={campaignGroupOf(selectedCampaign) === "community_needs_help" ? "heart-outline" : "alert-circle-outline"}
-                    label="Campaign Group"
-                    value={campaignGroupLabel(selectedCampaign)}
-                  />
-                  <Fact
-                    icon="pricetag-outline"
-                    label="Category"
-                    value={campaignCategoryLabel(selectedCampaign)}
-                  />
-                  <Fact
-                    icon="people-outline"
-                    label="Beneficiary / Scope"
-                    value={campaignScopeLabel(selectedCampaign)}
-                  />
-                  {!!selectedCampaign.publicSeverity && (
-                    <Fact
-                      icon="speedometer-outline"
-                      label="Priority"
-                      value={selectedCampaign.publicSeverity}
-                    />
-                  )}
-                  <Fact
-                    icon="calendar-outline"
-                    label="Campaign Opened"
-                    value={formatDate(selectedCampaign.createdAt)}
-                  />
-                </View>
+          <View style={styles.webDetailPane}>
+            {!selectedCampaign ? (
+              <View style={styles.webDetailEmpty}>
+                <Ionicons name="heart-outline" size={34} color="#0F766E" />
+                <Text style={styles.webDetailEmptyTitle}>Select a campaign</Text>
+                <Text style={styles.webDetailEmptyText}>Campaign details will appear here.</Text>
               </View>
-
-              <StoryUpdates stories={selectedStories} />
-
-              <View style={styles.needsCard}>
-                <View style={styles.blockHeader}>
-                  <View style={styles.blockIcon}>
-                    <Ionicons name="list-outline" size={18} color="#0F766E" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.blockTitle}>Verified Needs</Text>
-                    <Text style={styles.blockSubtitle}>
-                      Public support is limited to the needs approved by the LGU for this campaign.
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.needGrid}>
-                  {selectedPublicNeeds.length === 0 ? (
-                    <Text style={styles.needEmptyText}>
-                      The LGU has not published an item-by-item breakdown for this campaign.
-                    </Text>
-                  ) : (
-                    selectedPublicNeeds.map((need, index) => {
-                      const key = need.category || need.label || `need-${index}`;
-                      const label =
-                        need.label ||
-                        CATEGORY_LABELS[String(need.category || "")] ||
-                        "Verified Need";
-                      const remaining =
-                        typeof need.remaining === "number"
-                          ? need.remaining
-                          : typeof need.needed === "number" && typeof need.received === "number"
-                            ? Math.max(0, need.needed - need.received)
-                            : null;
-
-                      return (
-                        <View key={`${key}-${index}`} style={styles.needCard}>
-                          <View style={styles.needIcon}>
-                            <Ionicons
-                              name={
-                                CATEGORY_ICONS[String(need.category || "other")] ||
-                                "pricetag-outline"
-                              }
-                              size={17}
-                              color="#0F766E"
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.needCardTitle}>{label}</Text>
-                            {typeof need.needed === "number" ? (
-                              <Text style={styles.needCardMeta}>
-                                Needed: {need.needed} {need.unit || ""}
-                                {typeof need.received === "number"
-                                  ? ` · Received: ${need.received}`
-                                  : ""}
-                                {remaining !== null ? ` · Remaining: ${remaining}` : ""}
-                              </Text>
-                            ) : (
-                              <Text style={styles.needCardMeta}>LGU-verified need</Text>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.detailSideColumn}>
-              <FundingProgressCard campaign={selectedCampaign} />
-
-              <View style={styles.locationCard}>
-                <View style={styles.locationCardTop}>
-                  <View style={styles.locationPinCircle}>
-                    <Ionicons name="navigate" size={20} color="#FFFFFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.locationCardEyebrow}>LGU-APPROVED PUBLIC LOCATION</Text>
-                    <Text style={styles.locationCardTitle}>
-                      {selectedCampaign.handoffLocationName ||
-                        "Official receiving / service / handoff point"}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.locationInfoRows}>
-                  <InfoRow
-                    label="Setup"
-                    value={handoffModeLabel(selectedCampaign.handoffMode)}
-                  />
-                  <InfoRow
-                    label="Location type"
-                    value={handoffLocationTypeLabel(selectedCampaign.handoffLocationType)}
-                  />
-                  <InfoRow
-                    label="Address"
-                    value={
-                      selectedCampaign.handoffAddress ||
-                      "The LGU has not published a public handoff address yet."
-                    }
-                  />
-                </View>
-
-                {!!selectedCampaign.handoffAddress && (
-                  <HandoffLocationMap
-                    locationName={
-                      selectedCampaign.handoffLocationName ||
-                      "LGU-approved donation location"
-                    }
-                    address={selectedCampaign.handoffAddress}
-                  />
-                )}
-
-                {!!selectedCampaign.handoffNotes && (
-                  <View style={styles.handoffNotesBox}>
-                    <Text style={styles.handoffNotesLabel}>LGU instructions</Text>
-                    <Text style={styles.handoffNotesText}>{selectedCampaign.handoffNotes}</Text>
-                  </View>
-                )}
-
-                <View style={styles.privacyNotice}>
-                  <Ionicons name="lock-closed-outline" size={16} color="#0F766E" />
-                  <Text style={styles.privacyNoticeText}>
-                    This map is controlled by the LGU and shows only an approved receiving,
-                    service, or public handoff point. A beneficiary's home address and live GPS
-                    are never shown to donors.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.areaCard}>
-                <View style={styles.areaHeader}>
-                  <Ionicons name="map-outline" size={18} color="#0F766E" />
-                  <Text style={styles.areaTitle}>General Area</Text>
-                </View>
-                <Text style={styles.areaValue}>{campaignAreaLabel(selectedCampaign)}</Text>
-                <Text style={styles.areaHelp}>
-                  General public context only. This is not the beneficiary's exact location.
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.supportSection}>
-            <Text style={styles.supportSectionEyebrow}>CHOOSE HOW YOU WANT TO HELP</Text>
-            <Text style={styles.supportSectionTitle}>Support this verified campaign</Text>
-            <Text style={styles.supportSectionText}>
-              Choose one option. VolunServe shows only the fields required for the selected type
-              of support.
-            </Text>
-
-            <View style={[styles.supportTypeGrid, !medium && styles.stackGrid]}>
-              {acceptedTypes.includes("monetary") && (
-                <SupportTypeCard
-                  icon="cash-outline"
-                  title="Monetary Support"
-                  text="Send financial support using the official channel currently published by the LGU."
-                  selected={donationType === "monetary"}
-                  onPress={() => {
-                    setDonationType("monetary");
-                    setCategory("");
-                    setItemName("");
-                    setUnit("");
-                    setQuantity("");
-                    setDeliveryMethod("");
-                    setProof(null);
-                  }}
-                />
-              )}
-
-              {acceptedTypes.includes("in_kind") && (
-                <SupportTypeCard
-                  icon="cube-outline"
-                  title="In-kind Goods"
-                  text="Donate LGU-requested goods and deliver them only through an approved receiving or handoff setup."
-                  selected={donationType === "in_kind"}
-                  onPress={() => {
-                    setDonationType("in_kind");
-                    setAmount("");
-                    setTransactionReference("");
-                    setProof(null);
-                  }}
-                />
-              )}
-            </View>
-
-            {acceptedTypes.length === 0 && (
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={18} color="#0F766E" />
-                <Text style={styles.infoBoxText}>
-                  The LGU has not published an active donation method for this campaign yet.
-                </Text>
-              </View>
-            )}
-
-            {donationType === "monetary" && (
-              <View style={styles.donationFormCard}>
-                <StepHeader
-                  number="1"
-                  title="Use the Official Monetary Channel"
-                  text="For now, this screen keeps the current LGU verification flow. The planned GCash sandbox/payment-gateway integration will later replace manual transaction proof as the main payment path."
+            ) : (
+              <View style={styles.webDetailCard}>
+                <PublicPhotoGallery
+                  photos={selectedPhotoUrls}
+                  title={selectedCampaign.title || "Donation Campaign"}
+                  campaign={selectedCampaign}
                 />
 
-                <View style={styles.instructionsBox}>
-                  <Text style={styles.instructionsEyebrow}>OFFICIAL RECEIVING CHANNEL</Text>
-                  <Text style={styles.instructionsTitle}>
-                    {selectedCampaign.officialChannelLabel || "Official LGU receiving channel"}
-                  </Text>
-                  <Text style={styles.instructionsText}>
-                    {selectedCampaign.officialChannelInstructions ||
-                      "Follow the official payment and receipt instructions published by the LGU for this campaign."}
-                  </Text>
-                </View>
-
-                <StepHeader
-                  number="2"
-                  title="Enter the Payment Details"
-                  text="Only an amount confirmed through the official receiving record should later count toward the public campaign total."
-                />
-
-                <Text style={styles.label}>Choose donation amount</Text>
-                <View style={styles.quickAmountGrid}>
-                  {[100, 500, 1000, 2500, 5000].map((preset) => {
-                    const active = Number(amount) === preset;
-                    return (
-                      <TouchableOpacity
-                        key={preset}
-                        style={[
-                          styles.quickAmountButton,
-                          active && styles.quickAmountButtonActive,
-                        ]}
-                        onPress={() => setAmount(String(preset))}
-                      >
-                        <Text
-                          style={[
-                            styles.quickAmountText,
-                            active && styles.quickAmountTextActive,
-                          ]}
-                        >
-                          ₱{preset.toLocaleString("en-PH")}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  <TouchableOpacity
-                    style={[
-                      styles.quickAmountButton,
-                      amount === "" && styles.quickAmountButtonActive,
-                    ]}
-                    onPress={() => setAmount("")}
-                  >
-                    <Text
-                      style={[
-                        styles.quickAmountText,
-                        amount === "" && styles.quickAmountTextActive,
-                      ]}
-                    >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={[styles.twoColumnRow, !medium && styles.stackGrid]}>
-                  <View style={styles.flexField}>
-                    <Text style={styles.label}>Amount actually sent (PHP)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={amount}
-                      onChangeText={(value) => setAmount(sanitizeMoneyInput(value))}
-                      keyboardType="decimal-pad"
-                      placeholder="e.g. 500"
-                      placeholderTextColor="#94A3B8"
-                    />
-                    <Text style={styles.helperText}>Any positive amount is allowed.</Text>
-                  </View>
-
-                  <View style={styles.flexField}>
-                    <Text style={styles.label}>Transaction / payment reference</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={transactionReference}
-                      onChangeText={(value) => setTransactionReference(value.slice(0, 160))}
-                      placeholder="Reference from the official channel"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
-                </View>
-
-                <ProofSection
-                  proof={proof}
-                  required
-                  submitting={submitting}
-                  onChoose={() => void chooseProof()}
-                  onRemove={() => setProof(null)}
-                  title="Receipt / transaction proof"
-                  description="Attach the receipt or transaction screenshot. It remains supporting evidence only until the LGU confirms the actual payment record."
-                />
-
-                <DonationNote value={donorNote} onChange={setDonorNote} />
-              </View>
-            )}
-
-            {donationType === "in_kind" && (
-              <View style={styles.donationFormCard}>
-                <StepHeader
-                  number="1"
-                  title="Choose the Requested Goods"
-                  text="Select from the categories approved for this campaign."
-                />
-
-                <Text style={styles.label}>Requested category</Text>
-                <View style={styles.choiceRow}>
-                  {acceptedCategories.map((item) => (
-                    <Choice
-                      key={item}
-                      label={CATEGORY_LABELS[item] || item.replaceAll("_", " ")}
-                      icon={CATEGORY_ICONS[item] || "pricetag-outline"}
-                      selected={category === item}
-                      onPress={() => {
-                        setCategory(item);
-                        setItemName("");
-                        setUnit("");
-                      }}
-                    />
-                  ))}
-                </View>
-
-                <View style={[styles.twoColumnRow, !medium && styles.stackGrid]}>
-                  <View style={styles.flexField}>
-                    <SelectField
-                      label="Item"
-                      placeholder={category ? "Select item" : "Select category first"}
-                      value={itemName}
-                      options={category ? suggestedItemOptions : []}
-                      disabled={!category}
-                      onSelect={setItemName}
-                    />
-                  </View>
-
-                  <View style={styles.flexField}>
-                    <SelectField
-                      label="Unit"
-                      placeholder="Select unit"
-                      value={unit}
-                      options={UNIT_OPTIONS}
-                      disabled={!category}
-                      onSelect={setUnit}
-                    />
-                  </View>
-                </View>
-
-                <Text style={styles.label}>Quantity pledged</Text>
-                <TextInput
-                  style={styles.input}
-                  value={quantity}
-                  onChangeText={(value) =>
-                    setQuantity(value.replace(/[^0-9]/g, "").slice(0, 9))
-                  }
-                  keyboardType="number-pad"
-                  placeholder="Enter quantity"
-                  placeholderTextColor="#94A3B8"
-                />
-
-                <StepHeader
-                  number="2"
-                  title="Choose the Delivery / Handover Method"
-                  text="Use only the public location and delivery options selected by the LGU for this campaign."
-                />
-
-                <View style={styles.handoffSummaryCard}>
-                  <View style={styles.handoffSummaryHeader}>
-                    <View style={styles.handoffSummaryIcon}>
-                      <Ionicons name="navigate-outline" size={19} color="#0F766E" />
+                <View style={styles.webDetailBody}>
+                  <View style={styles.webBadgeRow}>
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="shield-checkmark" size={12} color="#15803D" />
+                      <Text style={styles.verifiedBadgeText}>LGU VERIFIED</Text>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.handoffSummaryEyebrow}>AUTHORIZED LOCATION</Text>
-                      <Text style={styles.handoffSummaryTitle}>
-                        {selectedCampaign.handoffLocationName ||
-                          "Official receiving / handoff point"}
+                    <View style={styles.webCategoryBadge}>
+                      <Text style={styles.webCategoryBadgeText}>
+                        {campaignGroupOf(selectedCampaign) === "community_needs_help"
+                          ? "COMMUNITY NEED"
+                          : "DISASTER"}
                       </Text>
                     </View>
                   </View>
 
-                  <InfoRow
-                    label="Location type"
-                    value={handoffLocationTypeLabel(selectedCampaign.handoffLocationType)}
-                  />
-                  <InfoRow
-                    label="Public address"
-                    value={
-                      selectedCampaign.handoffAddress ||
-                      "Follow the official LGU instructions for this campaign."
-                    }
-                  />
-                </View>
+                  <Text style={styles.webDetailTitle}>
+                    {selectedCampaign.title || "Donation Campaign"}
+                  </Text>
 
-                <SelectField
-                  label="How will the goods reach the approved location?"
-                  placeholder="Select delivery / handover method"
-                  value={deliveryMethod}
-                  options={selectedDeliveryOptions}
-                  onSelect={setDeliveryMethod}
-                />
+                  <View style={styles.webLocationLine}>
+                    <Ionicons name="location-outline" size={15} color="#0F766E" />
+                    <Text style={styles.webLocationText} numberOfLines={1}>
+                      {campaignAreaLabel(selectedCampaign)}
+                    </Text>
+                  </View>
 
-                <ProofSection
-                  proof={proof}
-                  required={false}
-                  submitting={submitting}
-                  onChoose={() => void chooseProof()}
-                  onRemove={() => setProof(null)}
-                  title="Supporting photo"
-                  description="Optional. Attach a photo of the goods you plan to deliver. Only the quantity physically received and verified by authorized staff will count."
-                />
+                  <Text style={styles.webStoryText} numberOfLines={4}>
+                    {selectedCampaign.publicStory ||
+                      selectedCampaign.description ||
+                      "LGU-verified campaign open for public support."}
+                  </Text>
 
-                <DonationNote value={donorNote} onChange={setDonorNote} />
-              </View>
-            )}
-
-            {!!donationType && (
-              <View style={styles.submitSection}>
-                <StepHeader
-                  number="3"
-                  title="Submit for LGU Verification"
-                  text={
-                    donationType === "in_kind"
-                      ? "Your pledge is not inventory yet. Authorized staff must receive and verify the actual goods first."
-                      : "Your submitted payment information is not counted toward the public total until it is confirmed through the official receiving record."
-                  }
-                />
-
-                <View style={styles.processStrip}>
-                  <ProcessPoint icon="send-outline" title="Submitted" />
-                  <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                  <ProcessPoint icon="shield-checkmark-outline" title="LGU Verifies" />
-                  <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                  <ProcessPoint
-                    icon={donationType === "in_kind" ? "cube-outline" : "cash-outline"}
-                    title={donationType === "in_kind" ? "Resource Recorded" : "Funds Confirmed"}
-                  />
-                  <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                  <ProcessPoint icon="people-outline" title="Allocation / Handover" />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.submitButton, submitting && styles.disabled]}
-                  disabled={submitting}
-                  onPress={() => void submitDonation()}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Ionicons name="send-outline" size={18} color="#FFFFFF" />
+                  {selectedGoal > 0 && (
+                    <View style={styles.webProgressCard}>
+                      <View style={styles.webProgressTop}>
+                        <View>
+                          <Text style={styles.webRaisedAmount}>{money(selectedRaised)}</Text>
+                          <Text style={styles.webProgressLabel}>
+                            raised of {money(selectedGoal)}
+                          </Text>
+                        </View>
+                        <Text style={styles.webProgressPercent}>
+                          {Math.round(selectedPercent)}%
+                        </Text>
+                      </View>
+                      <View style={styles.progressTrackLarge}>
+                        <View
+                          style={[
+                            styles.progressFillLarge,
+                            { width: `${selectedPercent}%` as any },
+                          ]}
+                        />
+                      </View>
+                    </View>
                   )}
 
-                  <Text style={styles.submitButtonText}>
-                    {uploadProgress ||
-                      (donationType === "in_kind"
-                        ? "Submit Goods Pledge"
-                        : "Submit Monetary Donation")}
-                  </Text>
-                </TouchableOpacity>
+                  {!!selectedCampaign.handoffLocationName && (
+                    <View style={styles.webLocationCard}>
+                      <View style={styles.webLocationCardCopy}>
+                        <Text style={styles.webLocationCardEyebrow}>OFFICIAL RECEIVING POINT</Text>
+                        <Text style={styles.webLocationCardTitle}>
+                          {selectedCampaign.handoffLocationName}
+                        </Text>
+                        {!!selectedCampaign.handoffAddress && (
+                          <Text style={styles.webLocationCardAddress} numberOfLines={2}>
+                            {selectedCampaign.handoffAddress}
+                          </Text>
+                        )}
+                      </View>
+                      {!!selectedCampaign.handoffAddress && (
+                        <HandoffLocationMap
+                          locationName={selectedCampaign.handoffLocationName}
+                          address={selectedCampaign.handoffAddress}
+                        />
+                      )}
+                    </View>
+                  )}
+
+                  <View style={styles.webSupportTypesRow}>
+                    {acceptedTypes.includes("monetary") && (
+                      <View style={styles.webSupportTypeChip}>
+                        <Ionicons name="cash-outline" size={14} color="#0F766E" />
+                        <Text style={styles.webSupportTypeText}>Monetary</Text>
+                      </View>
+                    )}
+                    {acceptedTypes.includes("in_kind") && (
+                      <View style={styles.webSupportTypeChip}>
+                        <Ionicons name="cube-outline" size={14} color="#0F766E" />
+                        <Text style={styles.webSupportTypeText}>In-kind Goods</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {!showDonationPanel ? (
+                    <TouchableOpacity
+                      style={styles.webDonateButton}
+                      activeOpacity={0.88}
+                      onPress={() => {
+                        setShowDonationPanel(true);
+                        if (!donationType && acceptedTypes.length === 1) {
+                          setDonationType(acceptedTypes[0]);
+                        }
+                      }}
+                    >
+                      <Ionicons name="heart" size={17} color="#FFFFFF" />
+                      <Text style={styles.webDonateButtonText}>Donate Now</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.webDonatePanel}>
+                      <View style={styles.webDonatePanelHeader}>
+                        <Text style={styles.webDonatePanelTitle}>Make a Donation</Text>
+                        <TouchableOpacity
+                          style={styles.webCloseButton}
+                          onPress={() => {
+                            setShowDonationPanel(false);
+                            resetDonationForm();
+                            if (acceptedTypes.length === 1) setDonationType(acceptedTypes[0]);
+                          }}
+                        >
+                          <Ionicons name="close" size={18} color="#334155" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {acceptedTypes.length > 1 && (
+                        <View style={styles.webDonationTypeRow}>
+                          {acceptedTypes.includes("monetary") && (
+                            <TouchableOpacity
+                              style={[
+                                styles.webDonationTypeButton,
+                                donationType === "monetary" && styles.webDonationTypeButtonActive,
+                              ]}
+                              onPress={() => {
+                                setDonationType("monetary");
+                                setCategory("");
+                                setItemName("");
+                                setUnit("");
+                                setQuantity("");
+                                setDeliveryMethod("");
+                                setProof(null);
+                              }}
+                            >
+                              <Ionicons
+                                name="cash-outline"
+                                size={16}
+                                color={donationType === "monetary" ? "#FFFFFF" : "#0F766E"}
+                              />
+                              <Text
+                                style={[
+                                  styles.webDonationTypeText,
+                                  donationType === "monetary" && styles.webDonationTypeTextActive,
+                                ]}
+                              >
+                                Monetary
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                          {acceptedTypes.includes("in_kind") && (
+                            <TouchableOpacity
+                              style={[
+                                styles.webDonationTypeButton,
+                                donationType === "in_kind" && styles.webDonationTypeButtonActive,
+                              ]}
+                              onPress={() => {
+                                setDonationType("in_kind");
+                                setAmount("");
+                                setTransactionReference("");
+                                setProof(null);
+                              }}
+                            >
+                              <Ionicons
+                                name="cube-outline"
+                                size={16}
+                                color={donationType === "in_kind" ? "#FFFFFF" : "#0F766E"}
+                              />
+                              <Text
+                                style={[
+                                  styles.webDonationTypeText,
+                                  donationType === "in_kind" && styles.webDonationTypeTextActive,
+                                ]}
+                              >
+                                In-kind
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+
+                      {donationType === "monetary" && (
+                        <View style={styles.webDonationFields}>
+                          <Text style={styles.webFieldLabel}>Amount</Text>
+                          <View style={styles.webAmountGrid}>
+                            {[100, 500, 1000, 2500, 5000].map((value) => (
+                              <TouchableOpacity
+                                key={value}
+                                style={[
+                                  styles.webAmountButton,
+                                  Number(amount) === value && styles.webAmountButtonActive,
+                                ]}
+                                onPress={() => setAmount(String(value))}
+                              >
+                                <Text
+                                  style={[
+                                    styles.webAmountButtonText,
+                                    Number(amount) === value && styles.webAmountButtonTextActive,
+                                  ]}
+                                >
+                                  ₱{value.toLocaleString("en-PH")}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+
+                          <TextInput
+                            style={styles.input}
+                            value={amount}
+                            onChangeText={(value) => setAmount(sanitizeMoneyInput(value))}
+                            keyboardType="decimal-pad"
+                            placeholder="Other amount"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <View style={styles.webOfficialChannelCard}>
+                            <Ionicons name="shield-checkmark-outline" size={18} color="#0F766E" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.webOfficialChannelTitle}>
+                                {selectedCampaign.officialChannelLabel || "Official LGU channel"}
+                              </Text>
+                              {!!selectedCampaign.officialChannelInstructions && (
+                                <Text style={styles.webOfficialChannelText} numberOfLines={3}>
+                                  {selectedCampaign.officialChannelInstructions}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+
+                          <Text style={styles.webFieldLabel}>Transaction reference</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={transactionReference}
+                            onChangeText={(value) => setTransactionReference(value.slice(0, 160))}
+                            placeholder="Enter reference"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <ProofSection
+                            proof={proof}
+                            required
+                            submitting={submitting}
+                            onChoose={() => void chooseProof()}
+                            onRemove={() => setProof(null)}
+                            title="Receipt / proof"
+                            description="Attach your transaction receipt."
+                          />
+                        </View>
+                      )}
+
+                      {donationType === "in_kind" && (
+                        <View style={styles.webDonationFields}>
+                          <Text style={styles.webFieldLabel}>Category</Text>
+                          <View style={styles.choiceRow}>
+                            {acceptedCategories.map((item) => (
+                              <Choice
+                                key={item}
+                                label={CATEGORY_LABELS[item] || item.replaceAll("_", " ")}
+                                icon={CATEGORY_ICONS[item] || "pricetag-outline"}
+                                selected={category === item}
+                                onPress={() => {
+                                  setCategory(item);
+                                  setItemName("");
+                                  setUnit("");
+                                }}
+                              />
+                            ))}
+                          </View>
+
+                          <View style={[styles.twoColumnRow, !medium && styles.stackGrid]}>
+                            <View style={styles.flexField}>
+                              <SelectField
+                                label="Item"
+                                placeholder="Select item"
+                                value={itemName}
+                                options={category ? suggestedItemOptions : []}
+                                disabled={!category}
+                                onSelect={setItemName}
+                              />
+                            </View>
+                            <View style={styles.flexField}>
+                              <SelectField
+                                label="Unit"
+                                placeholder="Select unit"
+                                value={unit}
+                                options={UNIT_OPTIONS}
+                                disabled={!category}
+                                onSelect={setUnit}
+                              />
+                            </View>
+                          </View>
+
+                          <Text style={styles.webFieldLabel}>Quantity</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={quantity}
+                            onChangeText={(value) =>
+                              setQuantity(value.replace(/[^0-9]/g, "").slice(0, 9))
+                            }
+                            keyboardType="number-pad"
+                            placeholder="Enter quantity"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <SelectField
+                            label="Delivery method"
+                            placeholder="Select delivery method"
+                            value={deliveryMethod}
+                            options={selectedDeliveryOptions}
+                            onSelect={setDeliveryMethod}
+                          />
+
+                          {!!selectedCampaign.handoffAddress && (
+                            <HandoffLocationMap
+                              locationName={
+                                selectedCampaign.handoffLocationName || "Official receiving point"
+                              }
+                              address={selectedCampaign.handoffAddress}
+                            />
+                          )}
+
+                          <ProofSection
+                            proof={proof}
+                            required={false}
+                            submitting={submitting}
+                            onChoose={() => void chooseProof()}
+                            onRemove={() => setProof(null)}
+                            title="Goods photo"
+                            description="Optional photo of the goods."
+                          />
+                        </View>
+                      )}
+
+                      {!!donationType && (
+                        <TouchableOpacity
+                          style={[styles.webSubmitButton, submitting && styles.disabled]}
+                          disabled={submitting}
+                          onPress={() => void submitDonation()}
+                        >
+                          {submitting ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <Ionicons name="send-outline" size={17} color="#FFFFFF" />
+                          )}
+                          <Text style={styles.webSubmitButtonText}>
+                            {uploadProgress ||
+                              (donationType === "in_kind"
+                                ? "Submit Goods Pledge"
+                                : "Submit Donation")}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
             )}
           </View>
         </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.historySection}>
-        <Text style={styles.sectionEyebrow}>YOUR ACTIVITY</Text>
-        <Text style={styles.sectionTitle}>My Donation Submissions</Text>
-        <Text style={styles.sectionSubtitle}>
-          Track what you submitted and whether the LGU has confirmed actual receipt.
-        </Text>
-
-        {!historyReady ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator color="#0F766E" />
-            <Text style={styles.emptyText}>Loading your donation history...</Text>
-          </View>
-        ) : myDonations.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="receipt-outline" size={30} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>No donation submissions yet</Text>
-            <Text style={styles.emptyText}>
-              Your submissions will appear here after you support an active LGU campaign.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.historyList}>
-            {myDonations.map((donation) => (
-              <DonationHistoryCard key={donation.id} donation={donation} />
-            ))}
-          </View>
-        )}
-      </View>
+      )}
     </ScrollView>
   );
 }
@@ -1937,12 +1778,6 @@ function CampaignCard({
           </Text>
         </View>
 
-        <Text style={styles.campaignDescription} numberOfLines={3}>
-          {campaign.publicStory ||
-            campaign.description ||
-            "LGU-verified campaign currently open for public support."}
-        </Text>
-
         {goal > 0 && (
           <View style={styles.cardProgressWrap}>
             <View style={styles.cardProgressTop}>
@@ -2037,10 +1872,7 @@ function PublicPhotoGallery({
           <Ionicons name={campaignVisualIcon(campaign)} size={38} color="#0F766E" />
         </View>
         <Text style={styles.detailPhotoPlaceholderTitle}>{campaignCategoryLabel(campaign)}</Text>
-        <Text style={styles.detailPhotoPlaceholderText}>
-          No LGU-approved public photo has been published for this campaign yet. Private evidence
-          is never shown automatically.
-        </Text>
+        <Text style={styles.detailPhotoPlaceholderText}>No public photo yet.</Text>
       </View>
     );
   }
@@ -2205,108 +2037,34 @@ function HandoffLocationMap({
   locationName: string;
   address: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const cleanName = String(locationName || "Authorized donation location").trim();
   const cleanAddress = String(address || "").trim();
   const mapQuery = [cleanName, cleanAddress].filter(Boolean).join(", ");
-  const embedUrl = `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`;
 
-  const webMap = (height: number) =>
-    React.createElement("iframe" as any, {
-      src: embedUrl,
-      title: `LGU-approved donation location: ${cleanName}`,
-      loading: "lazy",
-      referrerPolicy: "no-referrer-when-downgrade",
-      allowFullScreen: true,
-      style: {
-        width: "100%",
-        height,
-        border: 0,
-        display: "block",
-        backgroundColor: "#E2E8F0",
-      },
-    } as any);
+  const openMap = async () => {
+    try {
+      const supported = await Linking.canOpenURL(mapUrl);
+      if (!supported) throw new Error("Google Maps is not available on this device.");
+      await Linking.openURL(mapUrl);
+    } catch (problem) {
+      Alert.alert(
+        "Unable to Open Map",
+        problem instanceof Error ? problem.message : "Unable to open Google Maps.",
+      );
+    }
+  };
 
   return (
-    <>
-      <View style={styles.embeddedMapCard}>
-        <View style={styles.embeddedMapHeader}>
-          <View style={styles.embeddedMapHeaderIcon}>
-            <Ionicons name="map-outline" size={17} color="#0F766E" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.embeddedMapEyebrow}>GOOGLE MAP</Text>
-            <Text style={styles.embeddedMapTitle}>LGU-approved public location</Text>
-          </View>
-          {Platform.OS === "web" && (
-            <TouchableOpacity
-              style={styles.expandMapButton}
-              activeOpacity={0.82}
-              onPress={() => setExpanded(true)}
-            >
-              <Ionicons name="expand-outline" size={15} color="#0F766E" />
-              <Text style={styles.expandMapButtonText}>Expand</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {Platform.OS === "web" ? (
-          <View style={styles.embeddedMapFrame}>{webMap(250)}</View>
-        ) : (
-          <View style={styles.embeddedMapNativeFallback}>
-            <Ionicons name="map-outline" size={34} color="#0F766E" />
-            <Text style={styles.embeddedMapNativeTitle}>{cleanName}</Text>
-            <Text style={styles.embeddedMapNativeText}>{cleanAddress}</Text>
-          </View>
-        )}
-
-        <View style={styles.embeddedMapLocationRow}>
-          <Ionicons name="location-outline" size={15} color="#0F766E" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.embeddedMapLocationName}>{cleanName}</Text>
-            <Text style={styles.embeddedMapLocationText}>{cleanAddress}</Text>
-          </View>
-        </View>
-      </View>
-
-      {Platform.OS === "web" && (
-        <Modal
-          visible={expanded}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setExpanded(false)}
-        >
-          <View style={styles.mapModalOverlay}>
-            <View style={styles.mapModalCard}>
-              <View style={styles.mapModalHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.mapModalEyebrow}>AUTHORIZED DONATION LOCATION</Text>
-                  <Text style={styles.mapModalTitle}>{cleanName}</Text>
-                  <Text style={styles.mapModalAddress}>{cleanAddress}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.mapModalClose}
-                  activeOpacity={0.82}
-                  onPress={() => setExpanded(false)}
-                >
-                  <Ionicons name="close" size={20} color="#334155" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.mapModalFrame}>{webMap(520)}</View>
-
-              <View style={styles.mapModalPrivacy}>
-                <Ionicons name="shield-checkmark-outline" size={16} color="#0F766E" />
-                <Text style={styles.mapModalPrivacyText}>
-                  This is an LGU-approved public receiving, service, or handoff point. It is not the
-                  beneficiary's home or live GPS location.
-                </Text>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-    </>
+    <TouchableOpacity
+      style={styles.webOpenMapButton}
+      activeOpacity={0.84}
+      onPress={() => void openMap()}
+    >
+      <Ionicons name="map-outline" size={16} color="#0F766E" />
+      <Text style={styles.webOpenMapButtonText}>Open in Google Maps</Text>
+      <Ionicons name="open-outline" size={14} color="#0F766E" />
+    </TouchableOpacity>
   );
 }
 
@@ -2802,44 +2560,43 @@ const styles = StyleSheet.create({
 
   heroCard: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 22,
+    alignItems: "flex-start",
+    gap: 14,
+    padding: 22,
     borderWidth: 1,
-    borderColor: "#17375F",
+    borderColor: "#DCE7E4",
     borderRadius: 18,
-    backgroundColor: "#17375F",
+    backgroundColor: "#FFFFFF",
     shadowColor: "#0F172A",
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   heroIconWrap: {
-    width: 50,
-    height: 50,
+    width: 46,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 15,
-    backgroundColor: "#5B4EF5",
+    borderRadius: 14,
+    backgroundColor: "#0F766E",
   },
   eyebrow: {
-    color: "#C7D2FE",
+    color: "#0F766E",
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 1,
+    letterSpacing: 0.9,
   },
   title: {
     marginTop: 4,
-    color: "#FFFFFF",
-    fontSize: 29,
+    color: "#0F172A",
+    fontSize: 27,
     fontWeight: "900",
   },
   subtitle: {
-    maxWidth: 900,
+    maxWidth: 820,
     marginTop: 7,
-    color: "#DCE7F4",
+    color: "#64748B",
     fontSize: 13,
     lineHeight: 20,
   },
@@ -2847,10 +2604,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#ECFDF5",
   },
   heroTrustText: {
     color: "#0F766E",
@@ -2951,8 +2708,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   filterChipActive: {
-    borderColor: "#5B4EF5",
-    backgroundColor: "#5B4EF5",
+    borderColor: "#0F766E",
+    backgroundColor: "#0F766E",
   },
   filterChipText: {
     color: "#475569",
@@ -2981,80 +2738,6 @@ const styles = StyleSheet.create({
   },
   filterCountTextActive: {
     color: "#FFFFFF",
-  },
-  searchBox: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    marginTop: 15,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "#D9E1EA",
-    borderRadius: 12,
-    backgroundColor: "#F8FAFC",
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 11,
-    color: "#0F172A",
-    fontSize: 11,
-  },
-  searchClearButton: {
-    padding: 4,
-  },
-
-  webWorkspace: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 16,
-    marginTop: 16,
-  },
-  webWorkspaceStack: {
-    flexDirection: "column",
-  },
-  webCampaignPane: {
-    flex: 1.05,
-    minWidth: 0,
-  },
-  webDetailPane: {
-    flex: 0.95,
-    minWidth: 0,
-  },
-  webPaneFull: {
-    width: "100%",
-  },
-  drawerPlaceholder: {
-    minHeight: 430,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 38,
-    borderWidth: 1,
-    borderColor: "#E0E7FF",
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-  },
-  drawerPlaceholderIcon: {
-    width: 68,
-    height: 68,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 22,
-    backgroundColor: "#EEF2FF",
-  },
-  drawerPlaceholderTitle: {
-    marginTop: 16,
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  drawerPlaceholderText: {
-    maxWidth: 430,
-    marginTop: 8,
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 18,
-    textAlign: "center",
   },
 
   errorBox: {
@@ -3095,8 +2778,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   campaignCardWide: {
-    width: "48.6%",
-    minWidth: 250,
+    width: "48.8%",
+    minWidth: 255,
   },
   campaignCardSelected: {
     borderColor: "#0F766E",
@@ -3104,7 +2787,7 @@ const styles = StyleSheet.create({
   },
   campaignVisualWrap: {
     position: "relative",
-    height: 165,
+    height: 148,
     backgroundColor: "#DDE7E5",
   },
   campaignVisualImage: {
@@ -3129,7 +2812,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   campaignVisualPlaceholder: {
-    height: 165,
+    height: 148,
     alignItems: "center",
     justifyContent: "center",
     padding: 18,
@@ -3160,7 +2843,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 15,
+    padding: 12,
   },
   badgeRow: {
     flexDirection: "row",
@@ -3200,10 +2883,10 @@ const styles = StyleSheet.create({
     color: "#7C3AED",
   },
   campaignTitle: {
-    marginTop: 10,
+    marginTop: 8,
     color: "#0F172A",
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: "900",
   },
   locationLine: {
@@ -3252,7 +2935,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#5B4EF5",
+    backgroundColor: "#0F766E",
   },
   cardProgressPercent: {
     marginTop: 5,
@@ -3292,17 +2975,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#DDE4F0",
+    borderColor: "#D5E2DF",
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
-  },
-  detailShellWeb: {
-    marginTop: 0,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.055,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   detailTopBar: {
     flexDirection: "row",
@@ -3356,9 +3031,6 @@ const styles = StyleSheet.create({
     gap: 16,
     marginTop: 16,
   },
-  detailGridDrawer: {
-    flexDirection: "column",
-  },
   detailMainColumn: {
     flex: 1.55,
     gap: 13,
@@ -3369,7 +3041,7 @@ const styles = StyleSheet.create({
   },
 
   detailPhotoPlaceholder: {
-    minHeight: 300,
+    minHeight: 210,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -3411,7 +3083,7 @@ const styles = StyleSheet.create({
   },
   galleryHero: {
     width: "100%",
-    height: 330,
+    height: 240,
     backgroundColor: "#E2E8F0",
   },
   galleryBadge: {
@@ -3611,7 +3283,7 @@ const styles = StyleSheet.create({
     height: 9,
     marginTop: 4,
     borderRadius: 999,
-    backgroundColor: "#5B4EF5",
+    backgroundColor: "#0F766E",
   },
   storyUpdateTop: {
     flexDirection: "row",
@@ -3746,7 +3418,7 @@ const styles = StyleSheet.create({
   progressFillLarge: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#5B4EF5",
+    backgroundColor: "#0F766E",
   },
   fundingStatsRow: {
     flexDirection: "row",
@@ -4265,37 +3937,6 @@ const styles = StyleSheet.create({
     minHeight: 82,
     textAlignVertical: "top",
   },
-  quickAmountGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 9,
-    marginTop: 8,
-    marginBottom: 14,
-  },
-  quickAmountButton: {
-    minWidth: 96,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "#D9E1EA",
-    borderRadius: 11,
-    backgroundColor: "#FFFFFF",
-  },
-  quickAmountButtonActive: {
-    borderColor: "#5B4EF5",
-    backgroundColor: "#5B4EF5",
-  },
-  quickAmountText: {
-    color: "#0F172A",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  quickAmountTextActive: {
-    color: "#FFFFFF",
-  },
-
   twoColumnRow: {
     flexDirection: "row",
     gap: 10,
@@ -4766,4 +4407,510 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     textAlign: "center",
   },
+  webContainer: {
+    width: "100%",
+    maxWidth: 1460,
+    alignSelf: "center",
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 34,
+  },
+  webPageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E7ECEF",
+  },
+  webHeaderCopy: {
+    flex: 1,
+    minWidth: 220,
+  },
+  webEyebrow: {
+    color: "#0F766E",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+  },
+  webPageTitle: {
+    marginTop: 3,
+    color: "#0F172A",
+    fontSize: 27,
+    lineHeight: 32,
+    fontWeight: "900",
+  },
+  webPageSubtitle: {
+    marginTop: 3,
+    color: "#64748B",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  webHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  webHeaderActionsStack: {
+    width: "100%",
+    alignItems: "stretch",
+    flexDirection: "column",
+  },
+  webSearchBox: {
+    minWidth: 300,
+    maxWidth: 440,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  webSearchInput: {
+    flex: 1,
+    minHeight: 42,
+    color: "#0F172A",
+    fontSize: 10.5,
+    outlineStyle: "none" as any,
+  },
+  webHistoryButton: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#B9D8D3",
+    borderRadius: 12,
+    backgroundColor: "#F5FBFA",
+  },
+  webHistoryButtonActive: {
+    borderColor: "#0F766E",
+    backgroundColor: "#0F766E",
+  },
+  webHistoryButtonText: {
+    color: "#0F766E",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  webHistoryButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  webFilterBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  webFilterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  webFilterChipActive: {
+    borderColor: "#5B4CF0",
+    backgroundColor: "#5B4CF0",
+  },
+  webFilterChipText: {
+    color: "#475569",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  webFilterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  webFilterCount: {
+    minWidth: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    alignItems: "center",
+    borderRadius: 999,
+    backgroundColor: "#EEF2F6",
+  },
+  webFilterCountActive: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  webFilterCountText: {
+    color: "#64748B",
+    fontSize: 8,
+    fontWeight: "900",
+  },
+  webFilterCountTextActive: {
+    color: "#FFFFFF",
+  },
+  webWorkspace: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 18,
+  },
+  webWorkspaceStack: {
+    flexDirection: "column",
+  },
+  webCampaignPane: {
+    flex: 1.2,
+    minWidth: 0,
+  },
+  webDetailPane: {
+    flex: 0.8,
+    minWidth: 0,
+  },
+  webSectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  webSectionTitle: {
+    color: "#0F172A",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  webSectionSubtitle: {
+    marginTop: 2,
+    color: "#64748B",
+    fontSize: 9.5,
+    lineHeight: 14,
+  },
+  webCampaignCount: {
+    minWidth: 30,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    textAlign: "center",
+    borderRadius: 999,
+    overflow: "hidden",
+    color: "#0F766E",
+    backgroundColor: "#E8F6F3",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  webDetailCard: {
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  webDetailBody: {
+    padding: 15,
+  },
+  webBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    alignItems: "center",
+  },
+  webCategoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#FFF3E8",
+  },
+  webCategoryBadgeText: {
+    color: "#B45309",
+    fontSize: 7.8,
+    fontWeight: "900",
+  },
+  webDetailTitle: {
+    marginTop: 10,
+    color: "#0F172A",
+    fontSize: 21,
+    lineHeight: 26,
+    fontWeight: "900",
+  },
+  webLocationLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 6,
+  },
+  webLocationText: {
+    flex: 1,
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  webStoryText: {
+    marginTop: 10,
+    color: "#475569",
+    fontSize: 10.3,
+    lineHeight: 16,
+  },
+  webProgressCard: {
+    marginTop: 13,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+  },
+  webProgressTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 8,
+  },
+  webRaisedAmount: {
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  webProgressLabel: {
+    marginTop: 1,
+    color: "#64748B",
+    fontSize: 8.8,
+  },
+  webProgressPercent: {
+    color: "#0F766E",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  webLocationCard: {
+    marginTop: 13,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  webLocationCardCopy: {
+    flex: 1,
+  },
+  webLocationCardEyebrow: {
+    color: "#0F766E",
+    fontSize: 7.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  webLocationCardTitle: {
+    marginTop: 3,
+    color: "#0F172A",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  webLocationCardAddress: {
+    marginTop: 3,
+    color: "#64748B",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  webOpenMapButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#B9D8D3",
+    borderRadius: 9,
+    backgroundColor: "#F5FBFA",
+  },
+  webOpenMapButtonText: {
+    color: "#0F766E",
+    fontSize: 8.8,
+    fontWeight: "900",
+  },
+  webSupportTypesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 12,
+  },
+  webSupportTypeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#EEF7F5",
+  },
+  webSupportTypeText: {
+    color: "#0F766E",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+  webDonateButton: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 13,
+    borderRadius: 11,
+    backgroundColor: "#5B4CF0",
+  },
+  webDonateButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  webDonatePanel: {
+    marginTop: 13,
+    paddingTop: 13,
+    borderTopWidth: 1,
+    borderTopColor: "#E7ECEF",
+  },
+  webDonatePanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  webDonatePanelTitle: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  webCloseButton: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+  webDonationTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 11,
+  },
+  webDonationTypeButton: {
+    flex: 1,
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#B9D8D3",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  webDonationTypeButtonActive: {
+    borderColor: "#0F766E",
+    backgroundColor: "#0F766E",
+  },
+  webDonationTypeText: {
+    color: "#0F766E",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+  webDonationTypeTextActive: {
+    color: "#FFFFFF",
+  },
+  webDonationFields: {
+    gap: 9,
+    marginTop: 12,
+  },
+  webFieldLabel: {
+    color: "#334155",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+  webAmountGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  webAmountButton: {
+    minWidth: 84,
+    flexGrow: 1,
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+  webAmountButtonActive: {
+    borderColor: "#5B4CF0",
+    backgroundColor: "#5B4CF0",
+  },
+  webAmountButtonText: {
+    color: "#334155",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+  webAmountButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  webOfficialChannelCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#F5FBFA",
+  },
+  webOfficialChannelTitle: {
+    color: "#0F172A",
+    fontSize: 9.8,
+    fontWeight: "900",
+  },
+  webOfficialChannelText: {
+    marginTop: 2,
+    color: "#64748B",
+    fontSize: 8.8,
+    lineHeight: 13,
+  },
+  webSubmitButton: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 12,
+    borderRadius: 10,
+    backgroundColor: "#0F766E",
+  },
+  webSubmitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  webDetailEmpty: {
+    minHeight: 300,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 22,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  webDetailEmptyTitle: {
+    marginTop: 8,
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  webDetailEmptyText: {
+    marginTop: 3,
+    color: "#64748B",
+    fontSize: 9.5,
+  },
+  webHistoryPanel: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#DDE5EA",
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+  },
+
 });
