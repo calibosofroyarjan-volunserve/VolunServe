@@ -30,6 +30,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
 
   "http\://localhost:8082",
 
+  "http\://localhost:8083",
+
   "http\://localhost:19006",
 
   "http\://localhost:3000",
@@ -37,6 +39,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:8081",
 
   "http\://127.0.0.1:8082",
+
+  "http\://127.0.0.1:8083",
 
   "http\://127.0.0.1:19006",
 
@@ -1385,6 +1389,125 @@ async function requireVerifiedResident(
 
 }
 
+
+
+async function requireOperationalAdmin(
+
+  request,
+
+  response,
+
+  next,
+
+) {
+
+  try {
+
+    const profile =
+
+      await loadUserProfile(
+
+        request
+
+          .firebaseUser
+
+          .uid,
+
+      );
+
+
+
+    if (
+
+      !isOperationalAdminProfile(
+
+        profile,
+
+      )
+
+    ) {
+
+      response
+
+        .status(403)
+
+        .json({
+
+          error:
+
+            "operational_admin_required",
+
+          message:
+
+            "Only an approved operational Admin can manage Assistance Request reviews.",
+
+        });
+
+
+
+      return;
+
+    }
+
+
+
+    request
+
+      .volunServeProfile =
+
+      profile;
+
+
+
+    next();
+
+  } catch (error) {
+
+    response
+
+      .status(
+
+        Number(
+
+          error
+
+            ?.statusCode,
+
+        ) || 500,
+
+      )
+
+      .json({
+
+        error:
+
+          cleanText(
+
+            error?.code ||
+
+              "admin_profile_check_failed",
+
+            100,
+
+          ),
+
+        message:
+
+          cleanText(
+
+            error?.message ||
+
+              "Unable to verify the Admin account.",
+
+            500,
+
+          ),
+
+      });
+
+  }
+
+}
 
 
 async function uploadAssistanceEvidenceToCloudinary({
@@ -3823,6 +3946,945 @@ app.post(
 
 );
 
+
+
+app.post(
+
+  "/api/admin/assistance/requests/:requestId/start-review",
+
+
+
+  requireFirebaseUser,
+
+
+
+  requireOperationalAdmin,
+
+
+
+  async (
+
+    request,
+
+    response,
+
+  ) => {
+
+    try {
+
+      const adminUid =
+
+        request
+
+          .firebaseUser
+
+          .uid;
+
+
+
+      const requestId =
+
+        cleanText(
+
+          request.params
+
+            ?.requestId ||
+
+            "",
+
+          120,
+
+        );
+
+
+
+      if (
+
+        !requestId ||
+
+        !/^[A-Za-z0-9_-]{10,120}$/.test(
+
+          requestId,
+
+        )
+
+      ) {
+
+        throw makeHttpError(
+
+          400,
+
+          "invalid_assistance_request_id",
+
+          "The Request Assistance ID is invalid.",
+
+        );
+
+      }
+
+
+
+      const assistanceRef =
+
+        db
+
+          .collection(
+
+            "assistanceRequests",
+
+          )
+
+          .doc(
+
+            requestId,
+
+          );
+
+
+
+      const reviewRef =
+
+        db
+
+          .collection(
+
+            "assistanceVerificationReviews",
+
+          )
+
+          .doc(
+
+            requestId,
+
+          );
+
+
+
+      const result =
+
+        await db
+
+          .runTransaction(
+
+            async (
+
+              transaction,
+
+            ) => {
+
+              const [
+
+                assistanceSnapshot,
+
+                reviewSnapshot,
+
+              ] =
+
+                await Promise.all([
+
+                  transaction.get(
+
+                    assistanceRef,
+
+                  ),
+
+                  transaction.get(
+
+                    reviewRef,
+
+                  ),
+
+                ]);
+
+
+
+              if (
+
+                !assistanceSnapshot
+
+                  .exists
+
+              ) {
+
+                throw makeHttpError(
+
+                  404,
+
+                  "assistance_request_not_found",
+
+                  "The Assistance Request was not found.",
+
+                );
+
+              }
+
+
+
+              const assistanceData =
+
+                assistanceSnapshot
+
+                  .data() ||
+
+                {};
+
+
+
+              const currentStatus =
+
+                cleanText(
+
+                  assistanceData
+
+                    .status ||
+
+                    "pending",
+
+                  40,
+
+                ).toLowerCase();
+
+
+
+              const currentVerificationStatus =
+
+                cleanText(
+
+                  assistanceData
+
+                    .verificationStatus ||
+
+                    "pending_review",
+
+                  40,
+
+                ).toLowerCase();
+
+
+
+              if (
+
+                ![
+
+                  "pending",
+
+                  "under_review",
+
+                ].includes(
+
+                  currentStatus,
+
+                ) ||
+
+                ![
+
+                  "pending_review",
+
+                  "under_review",
+
+                ].includes(
+
+                  currentVerificationStatus,
+
+                )
+
+              ) {
+
+                throw makeHttpError(
+
+                  409,
+
+                  "assistance_review_cannot_start",
+
+                  "This Assistance Request is no longer eligible to start a new LGU review.",
+
+                );
+
+              }
+
+
+
+              const requesterUid =
+
+                cleanText(
+
+                  assistanceData
+
+                    .requesterUid ||
+
+                    "",
+
+                  200,
+
+                );
+
+
+
+              const category =
+
+                cleanText(
+
+                  assistanceData
+
+                    .category ||
+
+                    "",
+
+                  80,
+
+                )
+
+                  .toLowerCase()
+
+                  .replace(
+
+                    /[^a-z0-9_]/g,
+
+                    "",
+
+                  );
+
+
+
+              if (
+
+                !requesterUid ||
+
+                !ASSISTANCE_REQUEST_CATEGORY_CONFIG[
+
+                  category
+
+                ]
+
+              ) {
+
+                throw makeHttpError(
+
+                  409,
+
+                  "assistance_request_invalid_for_review",
+
+                  "This Assistance Request is missing required review data.",
+
+                );
+
+              }
+
+
+
+              let alreadyCreated =
+
+                false;
+
+
+
+              if (
+
+                reviewSnapshot
+
+                  .exists
+
+              ) {
+
+                const existingReview =
+
+                  reviewSnapshot
+
+                    .data() ||
+
+                  {};
+
+
+
+                const sameRequest =
+
+                  cleanText(
+
+                    existingReview
+
+                      .requestId ||
+
+                      "",
+
+                    120,
+
+                  ) ===
+
+                    requestId &&
+
+                  cleanText(
+
+                    existingReview
+
+                      .requesterUid ||
+
+                      "",
+
+                    200,
+
+                  ) ===
+
+                    requesterUid &&
+
+                  cleanText(
+
+                    existingReview
+
+                      .category ||
+
+                      "",
+
+                    80,
+
+                  ) ===
+
+                    category;
+
+
+
+                const reviewStillOpen =
+
+                  cleanText(
+
+                    existingReview
+
+                      .reviewStatus ||
+
+                      "",
+
+                    60,
+
+                  ) ===
+
+                    "in_progress" &&
+
+                  cleanText(
+
+                    existingReview
+
+                      .finalDecision ||
+
+                      "",
+
+                    60,
+
+                  ) ===
+
+                    "pending";
+
+
+
+                if (
+
+                  !sameRequest ||
+
+                  !reviewStillOpen
+
+                ) {
+
+                  throw makeHttpError(
+
+                    409,
+
+                    "assistance_review_conflict",
+
+                    "A protected review record already exists and cannot be restarted.",
+
+                  );
+
+                }
+
+
+
+                alreadyCreated =
+
+                  true;
+
+              } else {
+
+                const facilityRequired =
+
+                  [
+
+                    "medical_health",
+
+                    "surgery_treatment",
+
+                    "cancer_serious_illness",
+
+                    "animal_pet_welfare",
+
+                  ].includes(
+
+                    category,
+
+                  );
+
+
+
+                const residentEstimatedAmount =
+
+                  Number(
+
+                    assistanceData
+
+                      .estimatedAmount ||
+
+                      0,
+
+                  );
+
+
+
+                const costRequired =
+
+                  Number.isFinite(
+
+                    residentEstimatedAmount,
+
+                  ) &&
+
+                  residentEstimatedAmount >
+
+                    0;
+
+
+
+                transaction.set(
+
+                  reviewRef,
+
+                  {
+
+                    requestId,
+
+                    requesterUid,
+
+                    category,
+
+
+
+                    reviewStatus:
+
+                      "in_progress",
+
+
+
+                    documentConsistencyStatus:
+
+                      "pending",
+
+                    documentConsistencyNotes:
+
+                      "",
+
+
+
+                    duplicateCheckStatus:
+
+                      "pending",
+
+                    duplicateRequestIds:
+
+                      [],
+
+                    duplicateCheckNotes:
+
+                      "",
+
+
+
+                    beneficiaryCheckStatus:
+
+                      "pending",
+
+                    beneficiaryCheckNotes:
+
+                      "",
+
+
+
+                    facilityVerificationRequired:
+
+                      facilityRequired,
+
+                    facilityVerificationStatus:
+
+                      facilityRequired
+
+                        ? "pending"
+
+                        : "not_required",
+
+                    facilityName:
+
+                      "",
+
+                    facilityType:
+
+                      "",
+
+                    facilityDepartment:
+
+                      "",
+
+                    professionalName:
+
+                      "",
+
+                    facilityReferenceNumber:
+
+                      "",
+
+                    facilityVerificationMethod:
+
+                      "not_applicable",
+
+                    facilityVerifiedWith:
+
+                      "",
+
+                    facilityVerifiedAt:
+
+                      null,
+
+                    facilityNotes:
+
+                      "",
+
+
+
+                    costVerificationRequired:
+
+                      costRequired,
+
+                    residentEstimatedAmount:
+
+                      Number.isFinite(
+
+                        residentEstimatedAmount,
+
+                      )
+
+                        ? Math.max(
+
+                            0,
+
+                            residentEstimatedAmount,
+
+                          )
+
+                        : 0,
+
+                    verifiedGrossCost:
+
+                      0,
+
+                    confirmedExistingAssistanceAmount:
+
+                      0,
+
+                    verifiedUncoveredAmount:
+
+                      0,
+
+                    costVerificationStatus:
+
+                      costRequired
+
+                        ? "pending"
+
+                        : "not_required",
+
+                    costReferenceNumber:
+
+                      "",
+
+                    costNotes:
+
+                      "",
+
+
+
+                    residencyVerificationStatus:
+
+                      "pending",
+
+                    residencyVerificationMethod:
+
+                      "profile_address",
+
+                    privateAddressSnapshot:
+
+                      cleanText(
+
+                        assistanceData
+
+                          .requesterAddress ||
+
+                          "",
+
+                        300,
+
+                      ),
+
+                    privateLatitude:
+
+                      null,
+
+                    privateLongitude:
+
+                      null,
+
+                    locationVerifiedAt:
+
+                      null,
+
+                    locationVerifiedBy:
+
+                      "",
+
+                    residencyNotes:
+
+                      "",
+
+
+
+                    videoVerificationRequired:
+
+                      false,
+
+                    videoVerificationStatus:
+
+                      "not_required",
+
+                    videoVerificationAt:
+
+                      null,
+
+                    videoVerificationNotes:
+
+                      "",
+
+
+
+                    siteVisitRequired:
+
+                      false,
+
+                    siteVisitStatus:
+
+                      "not_required",
+
+                    siteVisitAt:
+
+                      null,
+
+                    siteVisitBy:
+
+                      "",
+
+                    siteVisitNotes:
+
+                      "",
+
+
+
+                    riskFlags:
+
+                      [],
+
+                    internalNotes:
+
+                      "",
+
+
+
+                    finalDecision:
+
+                      "pending",
+
+                    finalDecisionReason:
+
+                      "",
+
+                    finalDecisionAt:
+
+                      null,
+
+                    finalDecisionBy:
+
+                      "",
+
+
+
+                    createdAt:
+
+                      FieldValue
+
+                        .serverTimestamp(),
+
+                    createdBy:
+
+                      adminUid,
+
+                    updatedAt:
+
+                      FieldValue
+
+                        .serverTimestamp(),
+
+                    updatedBy:
+
+                      adminUid,
+
+                  },
+
+                );
+
+              }
+
+
+
+              transaction.update(
+
+                assistanceRef,
+
+                {
+
+                  status:
+
+                    "under_review",
+
+                  verificationStatus:
+
+                    "under_review",
+
+                  reviewedAt:
+
+                    FieldValue
+
+                      .serverTimestamp(),
+
+                  reviewedBy:
+
+                    adminUid,
+
+                  updatedAt:
+
+                    FieldValue
+
+                      .serverTimestamp(),
+
+                },
+
+              );
+
+
+
+              return {
+
+                alreadyCreated,
+
+              };
+
+            },
+
+          );
+
+
+
+      response
+
+        .status(200)
+
+        .json({
+
+          ok:
+
+            true,
+
+          requestId,
+
+          status:
+
+            "under_review",
+
+          verificationStatus:
+
+            "under_review",
+
+          reviewRecord:
+
+            result
+
+              .alreadyCreated
+
+              ? "existing"
+
+              : "created",
+
+        });
+
+    } catch (error) {
+
+      console.error(
+
+        "Assistance Start Review failed:",
+
+        error,
+
+      );
+
+
+
+      response
+
+        .status(
+
+          Number(
+
+            error
+
+              ?.statusCode,
+
+          ) || 500,
+
+        )
+
+        .json({
+
+          error:
+
+            cleanText(
+
+              error?.code ||
+
+                "assistance_start_review_failed",
+
+              100,
+
+            ),
+
+          message:
+
+            cleanText(
+
+              error?.message ||
+
+                "Unable to start the LGU Assistance Request review.",
+
+              500,
+
+            ),
+
+        });
+
+    }
+
+  },
+
+);
 
 
 app.post(
