@@ -98,6 +98,9 @@ type AssistanceCampaignSource = {
   assignedLocationName?: string;
   assignedLocationAddress?: string;
   assignedLocationNotes?: string;
+  publicCampaignPhotoUrl?: string;
+  publicCampaignPhotoConsent?: boolean;
+  publicCampaignPhotoFileName?: string;
   status?: string;
 };
 
@@ -1111,6 +1114,43 @@ export default function DonationAdministration() {
   ]);
 
   useEffect(() => {
+    if (
+      !openedFromAssistance ||
+      !assistanceSource ||
+      selectedPublishedCampaign
+    ) {
+      return;
+    }
+
+    const residentPhoto =
+      String(
+        assistanceSource.publicCampaignPhotoUrl ||
+          "",
+      ).trim();
+
+    if (
+      residentPhoto.startsWith(
+        "https://",
+      )
+    ) {
+      setSelectedPublicPhotoUrls(
+        (current) =>
+          Array.from(
+            new Set([
+              residentPhoto,
+              ...current,
+            ]),
+          ).slice(0, 5),
+      );
+    }
+  }, [
+    openedFromAssistance,
+    assistanceSource?.id,
+    assistanceSource?.publicCampaignPhotoUrl,
+    selectedPublishedCampaign?.id,
+  ]);
+
+  useEffect(() => {
     // Community Assistance public photos are separate Admin-selected publication
     // assets. Never clear them just because there is no linked disaster case.
     if (openedFromAssistance || selectedPublishedCampaign) return;
@@ -1670,6 +1710,17 @@ export default function DonationAdministration() {
       return;
     }
 
+    if (
+      openedFromAssistance &&
+      selectedPublicPhotoUrls.length < 1
+    ) {
+      Alert.alert(
+        "Public Campaign Photo Required",
+        "A Community Needs campaign needs at least one LGU-approved public photo before it can be published.",
+      );
+      return;
+    }
+
     if (!allowMonetary && !allowInKind) {
       Alert.alert("Donation Type", "Enable at least one donation type.");
       return;
@@ -1849,14 +1900,6 @@ export default function DonationAdministration() {
       return;
     }
 
-    if (receiptReference.length < 3) {
-      Alert.alert(
-        "Official Receipt / Record Required",
-        "Enter the LGU receipt, receiving-log, or official verification reference.",
-      );
-      return;
-    }
-
     try {
       setBusyKey(`verify_${donation.id}`);
       setError("");
@@ -1865,7 +1908,10 @@ export default function DonationAdministration() {
         `/api/admin/donations/${encodeURIComponent(donation.id)}/verify`,
         {
           actualValue: actual,
-          officialReceiptReference: receiptReference,
+          officialReceiptReference:
+            type === "in_kind"
+              ? receiptReference
+              : "",
         },
       );
 
@@ -1878,8 +1924,8 @@ export default function DonationAdministration() {
       Alert.alert(
         "Donation Verified",
         type === "in_kind"
-          ? "The actually received goods were added to LGU Relief Inventory."
-          : "The monetary receipt was documented and added to the campaign's verified funding progress. It was not converted into goods inventory.",
+          ? "The received goods were verified and added to LGU Relief Inventory."
+          : "The confirmed amount was added to the campaign funding progress.",
       );
     } catch (problem) {
       const message =
@@ -2676,7 +2722,7 @@ export default function DonationAdministration() {
                     <Text style={styles.label}>Public campaign photos</Text>
                     <Text style={styles.privacyHelper}>
                       {openedFromAssistance
-                        ? "Upload only a separate privacy-safe publication photo approved by the LGU. Private Assistance Request documents, medical records, IDs, and evidence are never copied into the public campaign."
+                        ? "The Resident-submitted transparency photo is preloaded here. Keep it if privacy-safe, or replace/add another LGU-approved public photo."
                         : "Select only privacy-safe incident photos. The Resident Donation page will show up to 5 approved images."}
                     </Text>
                   </View>
@@ -2694,7 +2740,7 @@ export default function DonationAdministration() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.publicPhotoUploadTitle}>LGU Public Campaign Photo</Text>
                         <Text style={styles.publicPhotoUploadText}>
-                          Choose a safe public-facing image for the donor campaign. This is a separate publication asset, not private case evidence.
+                          Add or replace a privacy-safe public photo. Private case evidence is never published.
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -2753,7 +2799,7 @@ export default function DonationAdministration() {
                       <View style={styles.noPublicPhotoBox}>
                         <Ionicons name="image-outline" size={20} color="#64748B" />
                         <Text style={styles.noPublicPhotoText}>
-                          No public campaign photo selected yet. The campaign can still publish, but the Resident page will use a clean category placeholder until an LGU-approved photo is added.
+                          No public photo selected. Community Needs campaigns cannot be published until at least one public photo is approved.
                         </Text>
                       </View>
                     )}
@@ -3321,18 +3367,11 @@ export default function DonationAdministration() {
                       </View>
                     </View>
 
-                    <Text style={styles.cardDescription}>{campaign.description || "—"}</Text>
-
                     {!!campaign.publicLocationLabel && (
                       <View style={styles.recordPublicLine}>
                         <Ionicons name="location-outline" size={14} color="#0F766E" />
                         <Text style={styles.recordPublicText}>{campaign.publicLocationLabel}</Text>
                       </View>
-                    )}
-                    {!!campaign.publicStory && (
-                      <Text style={styles.recordPublicStory} numberOfLines={3}>
-                        Public story: {campaign.publicStory}
-                      </Text>
                     )}
 
                     <View style={styles.campaignMetrics}>
@@ -3627,14 +3666,23 @@ function DonationReviewCard({
           placeholderTextColor="#94A3B8"
         />
 
-        <Text style={styles.label}>Official receipt / receiving-log reference</Text>
-        <TextInput
-          style={styles.input}
-          value={form.officialReceiptReference}
-          onChangeText={(value) => onUpdate("officialReceiptReference", value.slice(0, 160))}
-          placeholder="Official LGU receipt or receiving record"
-          placeholderTextColor="#94A3B8"
-        />
+        {isInKind && (
+          <>
+            <Text style={styles.label}>Receiving reference (optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.officialReceiptReference}
+              onChangeText={(value) =>
+                onUpdate(
+                  "officialReceiptReference",
+                  value.slice(0, 160),
+                )
+              }
+              placeholder="Optional LGU receiving-log reference"
+              placeholderTextColor="#94A3B8"
+            />
+          </>
+        )}
 
         <TouchableOpacity
           style={[styles.verifyButton, busy && styles.disabled]}
@@ -3694,7 +3742,9 @@ function ReviewedDonationCard({ donation }: { donation: DonationSubmission }) {
 
       {received ? (
         <Text style={styles.historySuccessText}>
-          Official LGU record: {donation.officialReceiptReference || "—"}
+          {isInKind && donation.officialReceiptReference
+            ? `Receiving reference: ${donation.officialReceiptReference}`
+            : "Verified by LGU"}
         </Text>
       ) : (
         <Text style={styles.historyRejectedText}>

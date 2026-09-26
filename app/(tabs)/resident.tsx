@@ -89,6 +89,17 @@ type SecureUploadedDocument = {
   document: StoredDocument;
 };
 
+type SecureUploadedPublicPhoto = {
+  assetId: string;
+  publicUrl: string;
+};
+
+type DropdownOption = {
+  value: string;
+  label: string;
+  helper?: string;
+};
+
 type AssistanceRequest = {
   id: string;
   requestId?: string;
@@ -364,6 +375,17 @@ const CURRENT_SITUATION_OPTIONS = [
   "Other",
 ];
 
+const BENEFICIARY_OPTIONS: DropdownOption[] = [
+  { value: "self", label: "Myself" },
+  { value: "someone_else", label: "Someone else" },
+];
+
+const ASSISTANCE_PREFERENCE_OPTIONS: DropdownOption[] = [
+  { value: "monetary", label: "Monetary support" },
+  { value: "in_kind", label: "In-kind support" },
+  { value: "both", label: "Both monetary and in-kind support" },
+];
+
 const timestampMillis = (value: any) => {
   if (!value) return 0;
   if (typeof value?.toMillis === "function") return value.toMillis();
@@ -511,6 +533,16 @@ export default function AssistanceRequestScreen() {
     setPickedDocuments,
   ] = useState<Record<string, PickedDocument>>({});
 
+  const [
+    publicCampaignPhoto,
+    setPublicCampaignPhoto,
+  ] = useState<PickedDocument | null>(null);
+
+  const [
+    publicCampaignPhotoConsent,
+    setPublicCampaignPhotoConsent,
+  ] = useState(false);
+
   const [uploadProgress, setUploadProgress] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -583,6 +615,11 @@ export default function AssistanceRequestScreen() {
     currentSituation === "Other"
       ? otherSituation.trim()
       : currentSituation.trim();
+
+  const preferredAssistanceSelection =
+    preferredAssistanceTypes.length === 2
+      ? "both"
+      : preferredAssistanceTypes[0] || "";
 
   useEffect(() => {
     let mounted = true;
@@ -678,19 +715,35 @@ export default function AssistanceRequestScreen() {
     setOtherSituation("");
     setPreferredAssistanceTypes([]);
     setPickedDocuments({});
+    setPublicCampaignPhoto(null);
+    setPublicCampaignPhotoConsent(false);
     setUploadProgress("");
     setSuccessRequestId("");
     setSubmissionNeedsAttention(false);
   };
 
-  const togglePreferredType = (
-    value: PreferredAssistanceType,
+  const choosePreferredAssistance = (
+    value: string,
   ) => {
-    setPreferredAssistanceTypes((current) =>
-      current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value],
-    );
+    if (value === "both") {
+      setPreferredAssistanceTypes([
+        "monetary",
+        "in_kind",
+      ]);
+      return;
+    }
+
+    if (
+      value === "monetary" ||
+      value === "in_kind"
+    ) {
+      setPreferredAssistanceTypes([
+        value,
+      ]);
+      return;
+    }
+
+    setPreferredAssistanceTypes([]);
   };
 
   const chooseCategory = (
@@ -698,7 +751,8 @@ export default function AssistanceRequestScreen() {
   ) => {
     setCategory(value);
     setPickedDocuments({});
-    setStep(2);
+    setPublicCampaignPhoto(null);
+    setPublicCampaignPhotoConsent(false);
   };
 
   const pickDocument = async (
@@ -765,6 +819,53 @@ export default function AssistanceRequestScreen() {
       delete next[key];
 
       return next;
+    });
+  };
+
+  const pickPublicCampaignPhoto = async () => {
+    if (submitting) return;
+
+    const permission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Gallery Permission",
+        "Allow photo library access so you can choose the required public campaign photo.",
+      );
+      return;
+    }
+
+    const result =
+      await ImagePicker.launchImageLibraryAsync({
+        mediaTypes:
+          ImagePicker.MediaTypeOptions.Images,
+        quality: 0.86,
+      });
+
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+
+    if (
+      typeof asset.fileSize === "number" &&
+      asset.fileSize > MAX_DOCUMENT_BYTES
+    ) {
+      Alert.alert(
+        "Photo Too Large",
+        "Use a public campaign photo smaller than 10 MB.",
+      );
+      return;
+    }
+
+    setPublicCampaignPhoto({
+      key: "public_campaign_photo",
+      label: "Public Campaign Photo",
+      uri: asset.uri,
+      fileName: asset.fileName,
+      fileSize: asset.fileSize,
+      mimeType: asset.mimeType,
+      file: (asset as any).file,
     });
   };
 
@@ -865,6 +966,115 @@ export default function AssistanceRequestScreen() {
     };
   };
 
+  const uploadPublicCampaignPhoto = async (
+    asset: PickedDocument,
+    firebaseToken: string,
+  ): Promise<SecureUploadedPublicPhoto> => {
+    const fileName =
+      asset.fileName ||
+      asset.uri
+        .split("/")
+        .pop()
+        ?.split("?")[0] ||
+      `public-campaign-photo-${Date.now()}.jpg`;
+
+    const contentType = String(
+      asset.mimeType || "image/jpeg",
+    ).toLowerCase();
+
+    const fileBytes =
+      await getDocumentBinary(asset);
+
+    if (
+      fileBytes.byteLength >
+      MAX_DOCUMENT_BYTES
+    ) {
+      throw new Error(
+        "Public campaign photo must be 10 MB or smaller.",
+      );
+    }
+
+    const response = await fetch(
+      `${ASSISTANCE_BACKEND_URL}/api/assistance/public-photo/upload`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${firebaseToken}`,
+          "Content-Type": contentType,
+          "X-File-Name": fileName.slice(0, 180),
+        },
+        body: fileBytes as any,
+      },
+    );
+
+    const result =
+      await response.json().catch(() => null);
+
+    const assetId = String(
+      result?.photo?.assetId || "",
+    ).trim();
+
+    const publicUrl = String(
+      result?.photo?.publicUrl || "",
+    ).trim();
+
+    if (
+      !response.ok ||
+      !assetId ||
+      !publicUrl.startsWith("https://")
+    ) {
+      throw new Error(
+        result?.message ||
+          result?.error ||
+          `Public campaign photo upload failed with HTTP ${response.status}.`,
+      );
+    }
+
+    return {
+      assetId,
+      publicUrl,
+    };
+  };
+
+  const deleteStagedPublicPhoto = async (
+    assetId: string,
+    firebaseToken: string,
+  ) => {
+    try {
+      const response = await fetch(
+        `${ASSISTANCE_BACKEND_URL}/api/assistance/public-photo/${encodeURIComponent(
+          assetId,
+        )}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${firebaseToken}`,
+          },
+        },
+      );
+
+      if (
+        !response.ok &&
+        response.status !== 404
+      ) {
+        const result =
+          await response.json().catch(() => null);
+
+        console.log(
+          "Unable to clean staged public campaign photo:",
+          result?.message ||
+            result?.error ||
+            response.status,
+        );
+      }
+    } catch (error) {
+      console.log(
+        "Staged public campaign photo cleanup failed:",
+        error,
+      );
+    }
+  };
+
   const deleteStagedEvidence = async (
     evidenceId: string,
     firebaseToken: string,
@@ -921,6 +1131,8 @@ export default function AssistanceRequestScreen() {
       preferredAssistanceTypes: PreferredAssistanceType[];
     },
     evidenceIds: string[],
+    publicCampaignPhotoAssetId: string,
+    publicCampaignPhotoConsent: boolean,
     firebaseToken: string,
   ): Promise<string> => {
     let lastError: Error | null = null;
@@ -975,6 +1187,10 @@ export default function AssistanceRequestScreen() {
                 requestPayload.preferredAssistanceTypes,
 
               evidenceIds,
+
+              publicCampaignPhotoAssetId,
+
+              publicCampaignPhotoConsent,
             }),
           },
         );
@@ -1131,6 +1347,14 @@ export default function AssistanceRequestScreen() {
         return `Upload the required supporting evidence: ${missing.label}.`;
       }
 
+      if (!publicCampaignPhoto) {
+        return "Upload the required public campaign photo for transparency.";
+      }
+
+      if (!publicCampaignPhotoConsent) {
+        return "Confirm that the public campaign photo may be shown if the LGU verifies the request and opens Donation Support.";
+      }
+
       return null;
     }
 
@@ -1265,6 +1489,7 @@ export default function AssistanceRequestScreen() {
     const uploadedEvidenceIds:
       string[] = [];
 
+    let uploadedPublicPhotoAssetId = "";
     let firebaseToken = "";
     let requestCreated = false;
     let createdRequestId = "";
@@ -1324,6 +1549,25 @@ export default function AssistanceRequestScreen() {
           uploaded.document,
         );
       }
+
+      if (!publicCampaignPhoto) {
+        throw new Error(
+          "The required public campaign photo is missing.",
+        );
+      }
+
+      setUploadProgress(
+        "Uploading the public campaign photo...",
+      );
+
+      const uploadedPublicPhoto =
+        await uploadPublicCampaignPhoto(
+          publicCampaignPhoto,
+          firebaseToken,
+        );
+
+      uploadedPublicPhotoAssetId =
+        uploadedPublicPhoto.assetId;
 
       setUploadProgress(
         "Saving your assistance request...",
@@ -2086,6 +2330,8 @@ export default function AssistanceRequestScreen() {
               requestPayload.preferredAssistanceTypes,
           },
           uploadedEvidenceIds,
+          uploadedPublicPhotoAssetId,
+          publicCampaignPhotoConsent,
           firebaseToken,
         );
 
@@ -2108,6 +2354,17 @@ export default function AssistanceRequestScreen() {
         "Submit assistance request error:",
         error,
       );
+
+      if (
+        !requestCreated &&
+        firebaseToken &&
+        uploadedPublicPhotoAssetId
+      ) {
+        await deleteStagedPublicPhoto(
+          uploadedPublicPhotoAssetId,
+          firebaseToken,
+        );
+      }
 
       if (
         !requestCreated &&
@@ -2845,101 +3102,83 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 1 OF 4"
-                    title="Choose an Assistance Category"
-                    text="Choose the category that best describes the verified non-emergency need."
+                    title="Assistance Category"
+                    text="Select the category that best matches the non-emergency need."
                   />
 
-                  <View
-                    style={[
-                      styles.categoryGrid,
-                      !wide &&
-                        styles.categoryGridCompact,
-                    ]}
-                  >
-                    {CATEGORY_CONFIGS.map(
-                      (item) => (
-                        <TouchableOpacity
-                          key={
-                            item.value
-                          }
-                          activeOpacity={
-                            0.84
-                          }
-                          style={[
-                            styles.categoryCard,
-
-                            category ===
-                              item.value && {
-                              borderColor:
-                                item.accent,
-
-                              backgroundColor:
-                                item.soft,
-                            },
-                          ]}
-                          onPress={() =>
-                            chooseCategory(
-                              item.value,
-                            )
-                          }
-                        >
-                          <View
-                            style={[
-                              styles.categoryIcon,
-
-                              {
-                                backgroundColor:
-                                  item.soft,
-                              },
-                            ]}
-                          >
-                            <Ionicons
-                              name={
-                                item.icon
-                              }
-                              size={
-                                23
-                              }
-                              color={
-                                item.accent
-                              }
-                            />
-                          </View>
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.categoryTitle
-                              }
-                            >
-                              {
-                                item.label
-                              }
-                            </Text>
-
-                            <Text
-                              style={
-                                styles.categoryText
-                              }
-                            >
-                              {
-                                item.description
-                              }
-                            </Text>
-                          </View>
-
-                          <Ionicons
-                            name="chevron-forward"
-                            size={18}
-                            color="#94A3B8"
-                          />
-                        </TouchableOpacity>
-                      ),
+                  <DropdownField
+                    label="Category"
+                    required
+                    value={category}
+                    placeholder="Select assistance category"
+                    options={CATEGORY_CONFIGS.map(
+                      (item) => ({
+                        value: item.value,
+                        label: item.label,
+                        helper: item.description,
+                      }),
                     )}
+                    onSelect={(value) =>
+                      chooseCategory(
+                        value as AssistanceCategory,
+                      )
+                    }
+                  />
+
+                  {selectedCategory && (
+                    <View
+                      style={[
+                        styles.selectedOptionSummary,
+                        {
+                          borderColor:
+                            selectedCategory.accent,
+                          backgroundColor:
+                            selectedCategory.soft,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={selectedCategory.icon}
+                        size={20}
+                        color={selectedCategory.accent}
+                      />
+                      <Text
+                        style={
+                          styles.selectedOptionSummaryText
+                        }
+                      >
+                        {selectedCategory.description}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View
+                    style={
+                      styles.formActionRow
+                    }
+                  >
+                    <View />
+
+                    <TouchableOpacity
+                      style={
+                        styles.nextButton
+                      }
+                      onPress={goNext}
+                    >
+                      <Text
+                        style={
+                          styles.nextButtonText
+                        }
+                      >
+                        Next
+                      </Text>
+
+                      <Ionicons
+                        name="arrow-forward"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -2957,44 +3196,24 @@ export default function AssistanceRequestScreen() {
                     text="Provide complete, accurate information. Private details are visible only to authorized LGU staff."
                   />
 
-                  <FieldLabel
+                  <DropdownField
                     label="Who needs assistance?"
                     required
+                    value={beneficiaryType}
+                    placeholder="Select beneficiary"
+                    options={BENEFICIARY_OPTIONS}
+                    onSelect={(value) => {
+                      const next =
+                        value as BeneficiaryType;
+
+                      setBeneficiaryType(next);
+
+                      if (next === "self") {
+                        setBeneficiaryName("");
+                        setRelationshipToBeneficiary("");
+                      }
+                    }}
                   />
-
-                  <View
-                    style={
-                      styles.choiceRow
-                    }
-                  >
-                    <ChoiceButton
-                      selected={
-                        beneficiaryType ===
-                        "self"
-                      }
-                      icon="person-outline"
-                      label="Myself"
-                      onPress={() =>
-                        setBeneficiaryType(
-                          "self",
-                        )
-                      }
-                    />
-
-                    <ChoiceButton
-                      selected={
-                        beneficiaryType ===
-                        "someone_else"
-                      }
-                      icon="people-outline"
-                      label="Someone else"
-                      onPress={() =>
-                        setBeneficiaryType(
-                          "someone_else",
-                        )
-                      }
-                    />
-                  </View>
 
                   {beneficiaryType ===
                     "someone_else" && (
@@ -3270,52 +3489,19 @@ export default function AssistanceRequestScreen() {
                     </View>
                   </View>
 
-                  <FieldLabel
+                  <DropdownField
                     label="Current situation"
                     required
-                  />
-
-                  <View
-                    style={
-                      styles.chipWrap
-                    }
-                  >
-                    {CURRENT_SITUATION_OPTIONS.map(
-                      (item) => {
-                        const selected =
-                          currentSituation ===
-                          item;
-
-                        return (
-                          <Pressable
-                            key={item}
-                            style={[
-                              styles.situationChip,
-
-                              selected &&
-                                styles.situationChipActive,
-                            ]}
-                            onPress={() =>
-                              setCurrentSituation(
-                                item,
-                              )
-                            }
-                          >
-                            <Text
-                              style={[
-                                styles.situationChipText,
-
-                                selected &&
-                                  styles.situationChipTextActive,
-                              ]}
-                            >
-                              {item}
-                            </Text>
-                          </Pressable>
-                        );
-                      },
+                    value={currentSituation}
+                    placeholder="Select current situation"
+                    options={CURRENT_SITUATION_OPTIONS.map(
+                      (item) => ({
+                        value: item,
+                        label: item,
+                      }),
                     )}
-                  </View>
+                    onSelect={setCurrentSituation}
+                  />
 
                   {currentSituation ===
                     "Other" && (
@@ -3341,46 +3527,14 @@ export default function AssistanceRequestScreen() {
                     />
                   )}
 
-                  <FieldLabel
+                  <DropdownField
                     label="Preferred type of assistance"
                     required
+                    value={preferredAssistanceSelection}
+                    placeholder="Select assistance type"
+                    options={ASSISTANCE_PREFERENCE_OPTIONS}
+                    onSelect={choosePreferredAssistance}
                   />
-
-                  <View
-                    style={
-                      styles.choiceRow
-                    }
-                  >
-                    <ChoiceButton
-                      selected={
-                        preferredAssistanceTypes.includes(
-                          "monetary",
-                        )
-                      }
-                      icon="cash-outline"
-                      label="Monetary support"
-                      onPress={() =>
-                        togglePreferredType(
-                          "monetary",
-                        )
-                      }
-                    />
-
-                    <ChoiceButton
-                      selected={
-                        preferredAssistanceTypes.includes(
-                          "in_kind",
-                        )
-                      }
-                      icon="cube-outline"
-                      label="In-kind support"
-                      onPress={() =>
-                        togglePreferredType(
-                          "in_kind",
-                        )
-                      }
-                    />
-                  </View>
 
                   <View
                     style={
@@ -3426,9 +3580,212 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 3 OF 4"
-                    title={`Supporting Documents — ${selectedCategory.label}`}
-                    text="Choose clear photos or screenshots. They remain on your device until final submission, then upload through the secured VolunServe backend for private LGU verification."
+                    title={`Documents & Public Photo — ${selectedCategory.label}`}
+                    text="Private evidence stays with authorized LGU reviewers. The separate public campaign photo is required for transparency if this request later becomes a Donation Campaign."
                   />
+
+                  <View
+                    style={
+                      styles.publicPhotoSection
+                    }
+                  >
+                    <View
+                      style={
+                        styles.publicPhotoSectionHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.publicPhotoSectionIcon
+                        }
+                      >
+                        <Ionicons
+                          name="image-outline"
+                          size={21}
+                          color="#4F46E5"
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.publicPhotoSectionTitle
+                          }
+                        >
+                          Public Campaign Photo
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.publicPhotoSectionText
+                          }
+                        >
+                          Required. Choose one clear, respectful photo related to the case. Do not upload IDs, bills, diagnosis pages, account numbers, or documents containing private information here.
+                        </Text>
+                      </View>
+
+                      <Text
+                        style={
+                          styles.requiredBadge
+                        }
+                      >
+                        REQUIRED
+                      </Text>
+                    </View>
+
+                    {publicCampaignPhoto ? (
+                      <View
+                        style={
+                          styles.publicPhotoSelected
+                        }
+                      >
+                        <Image
+                          source={{
+                            uri: publicCampaignPhoto.uri,
+                          }}
+                          style={
+                            styles.publicPhotoPreview
+                          }
+                          resizeMode="cover"
+                        />
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.documentFileName
+                            }
+                            numberOfLines={1}
+                          >
+                            {publicCampaignPhoto.fileName ||
+                              "Public campaign photo"}
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.publicPhotoReadyText
+                            }
+                          >
+                            Ready for LGU review
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={
+                            styles.changePhotoButton
+                          }
+                          onPress={() =>
+                            void pickPublicCampaignPhoto()
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.changePhotoButtonText
+                            }
+                          >
+                            Change
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={
+                          styles.publicPhotoUploadButton
+                        }
+                        onPress={() =>
+                          void pickPublicCampaignPhoto()
+                        }
+                      >
+                        <Ionicons
+                          name="cloud-upload-outline"
+                          size={19}
+                          color="#4F46E5"
+                        />
+
+                        <Text
+                          style={
+                            styles.publicPhotoUploadButtonText
+                          }
+                        >
+                          Choose Public Campaign Photo
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <Pressable
+                      style={
+                        styles.publicPhotoConsentRow
+                      }
+                      onPress={() =>
+                        setPublicCampaignPhotoConsent(
+                          (current) => !current,
+                        )
+                      }
+                    >
+                      <Ionicons
+                        name={
+                          publicCampaignPhotoConsent
+                            ? "checkbox"
+                            : "square-outline"
+                        }
+                        size={21}
+                        color={
+                          publicCampaignPhotoConsent
+                            ? "#15803D"
+                            : "#64748B"
+                        }
+                      />
+
+                      <Text
+                        style={
+                          styles.publicPhotoConsentText
+                        }
+                      >
+                        I allow this photo to be shown publicly only if the LGU verifies this request and opens an official Donation Campaign.
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View
+                    style={
+                      styles.privateDocumentsHeader
+                    }
+                  >
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={17}
+                      color="#0F766E"
+                    />
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <Text
+                        style={
+                          styles.privateDocumentsTitle
+                        }
+                      >
+                        Private Supporting Evidence
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.privateDocumentsText
+                        }
+                      >
+                        These files are for LGU verification only and are never copied to the public Donation page.
+                      </Text>
+                    </View>
+                  </View>
 
                   <View
                     style={
@@ -3790,8 +4147,61 @@ export default function AssistanceRequestScreen() {
                           styles.reviewSideTitle
                         }
                       >
-                        Supporting
-                        Documents
+                        Public Campaign Photo
+                      </Text>
+
+                      {publicCampaignPhoto && (
+                        <View
+                          style={
+                            styles.reviewPublicPhotoCard
+                          }
+                        >
+                          <Image
+                            source={{
+                              uri: publicCampaignPhoto.uri,
+                            }}
+                            style={
+                              styles.reviewPublicPhotoImage
+                            }
+                            resizeMode="cover"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.reviewPublicPhotoTitle
+                              }
+                            >
+                              Required transparency photo attached
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.reviewPublicPhotoText
+                              }
+                            >
+                              Public only if the LGU verifies the request and publishes Donation Support.
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      <View
+                        style={
+                          styles.reviewDivider
+                        }
+                      />
+
+                      <Text
+                        style={
+                          styles.reviewSideTitle
+                        }
+                      >
+                        Private Supporting Documents
                       </Text>
 
                       <Text
@@ -4305,6 +4715,150 @@ function FieldLabel({
         )
         : null}
     </Text>
+  );
+}
+
+function DropdownField({
+  label,
+  required,
+  value,
+  placeholder,
+  options,
+  onSelect,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  placeholder: string;
+  options: DropdownOption[];
+  onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selected =
+    options.find(
+      (item) => item.value === value,
+    ) || null;
+
+  return (
+    <View
+      style={
+        styles.dropdownFieldWrap
+      }
+    >
+      <FieldLabel
+        label={label}
+        required={required}
+      />
+
+      <Pressable
+        style={[
+          styles.dropdownTrigger,
+          open &&
+            styles.dropdownTriggerOpen,
+        ]}
+        onPress={() =>
+          setOpen(
+            (current) => !current,
+          )
+        }
+      >
+        <Text
+          style={[
+            styles.dropdownTriggerText,
+            !selected &&
+              styles.dropdownPlaceholder,
+          ]}
+          numberOfLines={1}
+        >
+          {selected?.label ||
+            placeholder}
+        </Text>
+
+        <Ionicons
+          name={
+            open
+              ? "chevron-up"
+              : "chevron-down"
+          }
+          size={18}
+          color="#64748B"
+        />
+      </Pressable>
+
+      {open && (
+        <View
+          style={
+            styles.dropdownMenu
+          }
+        >
+          {options.map(
+            (item) => {
+              const active =
+                item.value ===
+                value;
+
+              return (
+                <Pressable
+                  key={
+                    item.value
+                  }
+                  style={[
+                    styles.dropdownOption,
+                    active &&
+                      styles.dropdownOptionActive,
+                  ]}
+                  onPress={() => {
+                    onSelect(
+                      item.value,
+                    );
+                    setOpen(false);
+                  }}
+                >
+                  <View
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownOptionText,
+                        active &&
+                          styles.dropdownOptionTextActive,
+                      ]}
+                    >
+                      {
+                        item.label
+                      }
+                    </Text>
+
+                    {!!item.helper && (
+                      <Text
+                        style={
+                          styles.dropdownOptionHelper
+                        }
+                      >
+                        {
+                          item.helper
+                        }
+                      </Text>
+                    )}
+                  </View>
+
+                  {active && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color="#1769E0"
+                    />
+                  )}
+                </Pressable>
+              );
+            },
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -7953,6 +8507,429 @@ const styles =
         11,
       lineHeight:
         17,
+    },
+
+    dropdownFieldWrap: {
+      position:
+        "relative",
+      zIndex:
+        20,
+    },
+
+    dropdownTrigger: {
+      minHeight:
+        48,
+      borderRadius:
+        10,
+      borderWidth:
+        1,
+      borderColor:
+        "#CBD5E1",
+      backgroundColor:
+        "#FFFFFF",
+      paddingHorizontal:
+        13,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between",
+      gap:
+        10,
+    },
+
+    dropdownTriggerOpen: {
+      borderColor:
+        "#1769E0",
+    },
+
+    dropdownTriggerText: {
+      flex:
+        1,
+      color:
+        "#172033",
+      fontSize:
+        13,
+      fontWeight:
+        "700",
+    },
+
+    dropdownPlaceholder: {
+      color:
+        "#94A3B8",
+      fontWeight:
+        "600",
+    },
+
+    dropdownMenu: {
+      marginTop:
+        6,
+      borderRadius:
+        10,
+      borderWidth:
+        1,
+      borderColor:
+        "#CBD5E1",
+      backgroundColor:
+        "#FFFFFF",
+      overflow:
+        "hidden",
+    },
+
+    dropdownOption: {
+      minHeight:
+        46,
+      paddingHorizontal:
+        13,
+      paddingVertical:
+        10,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        10,
+      borderBottomWidth:
+        1,
+      borderBottomColor:
+        "#EEF2F7",
+    },
+
+    dropdownOptionActive: {
+      backgroundColor:
+        "#EFF6FF",
+    },
+
+    dropdownOptionText: {
+      color:
+        "#334155",
+      fontSize:
+        13,
+      fontWeight:
+        "800",
+    },
+
+    dropdownOptionTextActive: {
+      color:
+        "#1769E0",
+    },
+
+    dropdownOptionHelper: {
+      marginTop:
+        3,
+      color:
+        "#64748B",
+      fontSize:
+        11,
+      lineHeight:
+        16,
+    },
+
+    selectedOptionSummary: {
+      marginTop:
+        12,
+      padding:
+        12,
+      borderWidth:
+        1,
+      borderRadius:
+        10,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        9,
+    },
+
+    selectedOptionSummaryText: {
+      flex:
+        1,
+      color:
+        "#475569",
+      fontSize:
+        11.5,
+      lineHeight:
+        17,
+      fontWeight:
+        "700",
+    },
+
+    publicPhotoSection: {
+      marginBottom:
+        16,
+      padding:
+        14,
+      borderRadius:
+        12,
+      borderWidth:
+        1,
+      borderColor:
+        "#DDD6FE",
+      backgroundColor:
+        "#FAF8FF",
+    },
+
+    publicPhotoSectionHeader: {
+      flexDirection:
+        "row",
+      alignItems:
+        "flex-start",
+      gap:
+        10,
+    },
+
+    publicPhotoSectionIcon: {
+      width:
+        38,
+      height:
+        38,
+      borderRadius:
+        10,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      backgroundColor:
+        "#EEF2FF",
+    },
+
+    publicPhotoSectionTitle: {
+      color:
+        "#312E81",
+      fontSize:
+        13,
+      fontWeight:
+        "900",
+    },
+
+    publicPhotoSectionText: {
+      marginTop:
+        3,
+      color:
+        "#64748B",
+      fontSize:
+        11,
+      lineHeight:
+        16,
+    },
+
+    publicPhotoUploadButton: {
+      marginTop:
+        12,
+      minHeight:
+        46,
+      borderRadius:
+        10,
+      borderWidth:
+        1,
+      borderColor:
+        "#C7D2FE",
+      backgroundColor:
+        "#FFFFFF",
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      gap:
+        8,
+    },
+
+    publicPhotoUploadButtonText: {
+      color:
+        "#4F46E5",
+      fontSize:
+        12,
+      fontWeight:
+        "900",
+    },
+
+    publicPhotoSelected: {
+      marginTop:
+        12,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        10,
+      padding:
+        10,
+      borderRadius:
+        10,
+      backgroundColor:
+        "#FFFFFF",
+      borderWidth:
+        1,
+      borderColor:
+        "#E2E8F0",
+    },
+
+    publicPhotoPreview: {
+      width:
+        72,
+      height:
+        58,
+      borderRadius:
+        8,
+      backgroundColor:
+        "#E2E8F0",
+    },
+
+    publicPhotoReadyText: {
+      marginTop:
+        3,
+      color:
+        "#15803D",
+      fontSize:
+        10.5,
+      fontWeight:
+        "800",
+    },
+
+    changePhotoButton: {
+      paddingHorizontal:
+        10,
+      paddingVertical:
+        7,
+      borderRadius:
+        8,
+      backgroundColor:
+        "#EEF2FF",
+    },
+
+    changePhotoButtonText: {
+      color:
+        "#4338CA",
+      fontSize:
+        10.5,
+      fontWeight:
+        "900",
+    },
+
+    publicPhotoConsentRow: {
+      marginTop:
+        12,
+      flexDirection:
+        "row",
+      alignItems:
+        "flex-start",
+      gap:
+        8,
+      paddingTop:
+        10,
+      borderTopWidth:
+        1,
+      borderTopColor:
+        "#E9E5FF",
+    },
+
+    publicPhotoConsentText: {
+      flex:
+        1,
+      color:
+        "#475569",
+      fontSize:
+        10.5,
+      lineHeight:
+        16,
+      fontWeight:
+        "700",
+    },
+
+    privateDocumentsHeader: {
+      marginBottom:
+        10,
+      flexDirection:
+        "row",
+      alignItems:
+        "flex-start",
+      gap:
+        8,
+    },
+
+    privateDocumentsTitle: {
+      color:
+        "#0F766E",
+      fontSize:
+        12,
+      fontWeight:
+        "900",
+    },
+
+    privateDocumentsText: {
+      marginTop:
+        2,
+      color:
+        "#64748B",
+      fontSize:
+        10.5,
+      lineHeight:
+        15,
+    },
+
+    reviewPublicPhotoCard: {
+      marginTop:
+        9,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        9,
+      padding:
+        9,
+      borderRadius:
+        9,
+      borderWidth:
+        1,
+      borderColor:
+        "#DDD6FE",
+      backgroundColor:
+        "#FAF8FF",
+    },
+
+    reviewPublicPhotoImage: {
+      width:
+        62,
+      height:
+        52,
+      borderRadius:
+        8,
+      backgroundColor:
+        "#E2E8F0",
+    },
+
+    reviewPublicPhotoTitle: {
+      color:
+        "#312E81",
+      fontSize:
+        10.5,
+      fontWeight:
+        "900",
+    },
+
+    reviewPublicPhotoText: {
+      marginTop:
+        2,
+      color:
+        "#64748B",
+      fontSize:
+        9.5,
+      lineHeight:
+        14,
+    },
+
+    reviewDivider: {
+      height:
+        1,
+      backgroundColor:
+        "#E2E8F0",
+      marginVertical:
+        14,
     },
 
     campaignLinkCard: {

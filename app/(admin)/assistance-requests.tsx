@@ -78,6 +78,11 @@ type AssistanceRequest = {
   preferredAssistanceTypes?: string[];
   documents?: StoredDocument[];
 
+  publicCampaignPhotoUrl?: string;
+  publicCampaignPhotoConsent?: boolean;
+  publicCampaignPhotoFileName?: string;
+  publicCampaignPhotoSetAt?: any;
+
   status?: string;
   verificationStatus?: string;
   supportDecision?: string;
@@ -3075,11 +3080,128 @@ function EvidenceTab({
   const documents =
     request.documents || [];
 
+  const publicPhotoUrl =
+    String(
+      request.publicCampaignPhotoUrl ||
+        "",
+    ).trim();
+
   return (
     <View style={styles.tabContent}>
       <SectionCard
-        title="Supporting Evidence"
-        subtitle="Open every uploaded file and compare names, dates, facility details, estimates, and other information with the request."
+        title="Public Campaign Photo"
+        subtitle="Required transparency photo submitted separately from private evidence. It may appear publicly only if the LGU verifies the request and later publishes Donation Support."
+        icon="image-outline"
+      >
+        {publicPhotoUrl.startsWith("https://") ? (
+          <View
+            style={
+              styles.publicCampaignPhotoCard
+            }
+          >
+            <Image
+              source={{
+                uri: publicPhotoUrl,
+              }}
+              style={
+                styles.publicCampaignPhotoImage
+              }
+              resizeMode="cover"
+            />
+
+            <View
+              style={
+                styles.publicCampaignPhotoCopy
+              }
+            >
+              <View
+                style={
+                  styles.publicCampaignPhotoBadge
+                }
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={14}
+                  color="#15803D"
+                />
+                <Text
+                  style={
+                    styles.publicCampaignPhotoBadgeText
+                  }
+                >
+                  {request.publicCampaignPhotoConsent === true
+                    ? "RESIDENT CONSENT RECORDED"
+                    : "CONSENT NOT CONFIRMED"}
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.publicCampaignPhotoTitle
+                }
+              >
+                {request.publicCampaignPhotoFileName ||
+                  "Resident public campaign photo"}
+              </Text>
+
+              <Text
+                style={
+                  styles.publicCampaignPhotoText
+                }
+              >
+                Review this image for privacy and relevance before publishing a Donation Campaign. Private medical documents, IDs, bills, and other evidence below must remain private.
+              </Text>
+
+              <TouchableOpacity
+                style={
+                  styles.publicCampaignPhotoOpenButton
+                }
+                onPress={() =>
+                  void Linking.openURL(
+                    publicPhotoUrl,
+                  )
+                }
+              >
+                <Ionicons
+                  name="open-outline"
+                  size={15}
+                  color="#4338CA"
+                />
+                <Text
+                  style={
+                    styles.publicCampaignPhotoOpenButtonText
+                  }
+                >
+                  Open Full Photo
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={
+              styles.emptyInner
+            }
+          >
+            <Ionicons
+              name="image-outline"
+              size={30}
+              color="#B42318"
+            />
+            <Text
+              style={
+                styles.emptyText
+              }
+            >
+              No public campaign photo was submitted.
+            </Text>
+          </View>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Private Supporting Evidence"
+        subtitle="Private LGU verification files. Review names, dates, facility details, estimates, and other relevant information."
         icon="images-outline"
       >
         {documents.length === 0 ? (
@@ -5681,6 +5803,72 @@ const styles = StyleSheet.create({
     minHeight: 130,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  publicCampaignPhotoCard: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+
+  publicCampaignPhotoImage: {
+    width: 180,
+    height: 130,
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+  },
+
+  publicCampaignPhotoCopy: {
+    flex: 1,
+  },
+
+  publicCampaignPhotoBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#ECFDF3",
+  },
+
+  publicCampaignPhotoBadgeText: {
+    color: "#15803D",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+
+  publicCampaignPhotoTitle: {
+    marginTop: 10,
+    color: "#172033",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  publicCampaignPhotoText: {
+    marginTop: 5,
+    color: "#64748B",
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  publicCampaignPhotoOpenButton: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#EEF2FF",
+  },
+
+  publicCampaignPhotoOpenButtonText: {
+    color: "#4338CA",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
 
   warningCard: {

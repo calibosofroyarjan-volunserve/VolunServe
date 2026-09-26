@@ -66,6 +66,13 @@ const ASSISTANCE_EVIDENCE_MAX_STAGED = 12;
 
 const ASSISTANCE_EVIDENCE_URL_TTL_SECONDS = 300;
 
+const ASSISTANCE_PUBLIC_PHOTO_UPLOAD_LIMIT = "10mb";
+
+const ASSISTANCE_PUBLIC_PHOTO_MAX_BYTES =
+  10 * 1024 * 1024;
+
+const ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED = 4;
+
 
 
 const ASSISTANCE_EVIDENCE_DOCUMENT_TYPES =
@@ -1774,6 +1781,100 @@ async function uploadAssistanceEvidenceToCloudinary({
 
 
 
+async function uploadAssistancePublicPhotoToCloudinary({
+  buffer,
+  uid,
+}) {
+  configureCloudinary();
+
+  if (
+    !Buffer.isBuffer(buffer) ||
+    buffer.length === 0
+  ) {
+    throw makeHttpError(
+      400,
+      "public_photo_file_required",
+      "A valid public campaign photo is required.",
+    );
+  }
+
+  const uniqueId =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : crypto.randomBytes(18).toString("hex");
+
+  const publicId =
+    `volunserve/public-campaign-photos/${uid}/${uniqueId}`;
+
+  try {
+    const result = await new Promise(
+      (resolve, reject) => {
+        const uploadStream =
+          cloudinary.uploader.upload_stream(
+            {
+              resource_type: "image",
+              type: "upload",
+              public_id: publicId,
+              overwrite: false,
+              unique_filename: false,
+              use_filename: false,
+            },
+            (error, uploadResult) => {
+              if (error) {
+                reject(error);
+                return;
+              }
+
+              resolve(uploadResult);
+            },
+          );
+
+        uploadStream.on("error", reject);
+        uploadStream.end(buffer);
+      },
+    );
+
+    if (
+      !result?.asset_id ||
+      !result?.public_id ||
+      typeof result?.secure_url !== "string"
+    ) {
+      throw makeHttpError(
+        502,
+        "public_photo_upload_failed",
+        "Cloudinary did not return a complete public photo upload result.",
+      );
+    }
+
+    return result;
+  } catch (error) {
+    if (error?.code === "public_photo_upload_failed") {
+      throw error;
+    }
+
+    const statusCode =
+      Number(
+        error?.http_code ||
+          error?.statusCode ||
+          error?.status ||
+          502,
+      );
+
+    throw makeHttpError(
+      statusCode >= 400 && statusCode <= 599
+        ? statusCode
+        : 502,
+      "public_photo_upload_failed",
+      cleanText(
+        error?.message ||
+          "Cloudinary could not store the public campaign photo.",
+        500,
+      ),
+    );
+  }
+}
+
+
 function createCloudinaryPrivateDownloadUrl({
 
   publicId,
@@ -2156,6 +2257,77 @@ async function destroyAssistanceEvidenceFromCloudinary(
 
 }
 
+
+
+async function destroyAssistancePublicPhotoFromCloudinary(
+  publicId,
+) {
+  configureCloudinary();
+
+  const safePublicId = cleanText(
+    publicId,
+    500,
+  );
+
+  if (!safePublicId) {
+    return {
+      result: "not found",
+    };
+  }
+
+  try {
+    const result =
+      await cloudinary.uploader.destroy(
+        safePublicId,
+        {
+          resource_type: "image",
+          type: "upload",
+          invalidate: true,
+        },
+      );
+
+    if (
+      result?.result !== "ok" &&
+      result?.result !== "not found"
+    ) {
+      throw makeHttpError(
+        502,
+        "public_photo_delete_failed",
+        "Cloudinary could not delete the staged public campaign photo.",
+      );
+    }
+
+    return result;
+  } catch (error) {
+    if (
+      error?.code ===
+      "public_photo_delete_failed"
+    ) {
+      throw error;
+    }
+
+    const statusCode =
+      Number(
+        error?.http_code ||
+          error?.statusCode ||
+          error?.status ||
+          502,
+      );
+
+    throw makeHttpError(
+      statusCode >= 400 &&
+        statusCode <= 599
+        ? statusCode
+        : 502,
+      "public_photo_delete_failed",
+      cleanText(
+        error?.message ||
+          "Cloudinary could not delete the staged public campaign photo.",
+        500,
+      ),
+    );
+  }
+}
 
 
 async function getEvidenceAccessContext(
@@ -6641,6 +6813,379 @@ app.post(
 
 
 app.post(
+  "/api/assistance/public-photo/upload",
+
+  requireFirebaseUser,
+
+  requireVerifiedResident,
+
+  express.raw({
+    type: [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "application/octet-stream",
+    ],
+    limit: ASSISTANCE_PUBLIC_PHOTO_UPLOAD_LIMIT,
+  }),
+
+  async (request, response) => {
+    let uploadedCloudinaryAsset = null;
+
+    try {
+      const uid = request.firebaseUser.uid;
+
+      if (
+        !Buffer.isBuffer(request.body) ||
+        request.body.length === 0
+      ) {
+        throw makeHttpError(
+          400,
+          "public_photo_file_required",
+          "Choose a JPG, PNG, or WebP public campaign photo before uploading.",
+        );
+      }
+
+      if (
+        request.body.length >
+        ASSISTANCE_PUBLIC_PHOTO_MAX_BYTES
+      ) {
+        throw makeHttpError(
+          413,
+          "public_photo_upload_too_large",
+          "Public campaign photo must be 10 MB or smaller.",
+        );
+      }
+
+      const detected =
+        detectAssistanceImage(
+          request.body,
+        );
+
+      if (!detected) {
+        throw makeHttpError(
+          415,
+          "unsupported_public_photo",
+          "Only valid JPG, PNG, and WebP images are accepted as a public campaign photo.",
+        );
+      }
+
+      const stagedSnapshot =
+        await db
+          .collection(
+            "assistancePublicPhotoAssets",
+          )
+          .where(
+            "ownerUid",
+            "==",
+            uid,
+          )
+          .where(
+            "status",
+            "==",
+            "staged",
+          )
+          .limit(
+            ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED,
+          )
+          .get();
+
+      if (
+        stagedSnapshot.size >=
+        ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED
+      ) {
+        throw makeHttpError(
+          429,
+          "too_many_staged_public_photos",
+          "You already have unfinished public photo uploads. Finish or remove them before uploading another one.",
+        );
+      }
+
+      const fileName =
+        sanitizeFileName(
+          request.headers[
+            "x-file-name"
+          ] ||
+            `public-campaign-photo.${detected.extension}`,
+        );
+
+      const contentSha256 =
+        crypto
+          .createHash("sha256")
+          .update(request.body)
+          .digest("hex");
+
+      uploadedCloudinaryAsset =
+        await uploadAssistancePublicPhotoToCloudinary({
+          buffer: request.body,
+          uid,
+        });
+
+      const assetId =
+        `publicphoto_${
+          typeof crypto.randomUUID ===
+          "function"
+            ? crypto
+                .randomUUID()
+                .replace(/-/g, "")
+            : crypto
+                .randomBytes(18)
+                .toString("hex")
+        }`;
+
+      const publicUrl =
+        cleanText(
+          uploadedCloudinaryAsset.secure_url ||
+            "",
+          1000,
+        );
+
+      if (
+        !publicUrl.startsWith(
+          "https://",
+        )
+      ) {
+        throw makeHttpError(
+          502,
+          "public_photo_url_missing",
+          "The public campaign photo did not return a secure public URL.",
+        );
+      }
+
+      await db
+        .collection(
+          "assistancePublicPhotoAssets",
+        )
+        .doc(assetId)
+        .set({
+          assetId,
+          ownerUid: uid,
+          requestId: "",
+          status: "staged",
+          publicUrl,
+          originalFileName: fileName,
+          mimeType: detected.mimeType,
+          bytes: Number(
+            uploadedCloudinaryAsset.bytes ||
+              request.body.length,
+          ),
+          contentSha256,
+          cloudinaryAssetId:
+            cleanText(
+              uploadedCloudinaryAsset.asset_id,
+              300,
+            ),
+          cloudinaryPublicId:
+            cleanText(
+              uploadedCloudinaryAsset.public_id,
+              500,
+            ),
+          cloudinaryVersion:
+            Number(
+              uploadedCloudinaryAsset.version ||
+                0,
+            ),
+          cloudinaryFormat:
+            cleanText(
+              uploadedCloudinaryAsset.format ||
+                detected.extension,
+              30,
+            ),
+          cloudinaryResourceType:
+            "image",
+          cloudinaryDeliveryType:
+            "upload",
+          width:
+            numberOrNull(
+              uploadedCloudinaryAsset.width,
+            ),
+          height:
+            numberOrNull(
+              uploadedCloudinaryAsset.height,
+            ),
+          createdAt:
+            FieldValue.serverTimestamp(),
+          updatedAt:
+            FieldValue.serverTimestamp(),
+          attachedAt: null,
+          deletedAt: null,
+        });
+
+      response
+        .status(201)
+        .json({
+          ok: true,
+          photo: {
+            assetId,
+            publicUrl,
+            fileName,
+          },
+        });
+    } catch (error) {
+      if (
+        uploadedCloudinaryAsset
+          ?.public_id
+      ) {
+        try {
+          await destroyAssistancePublicPhotoFromCloudinary(
+            uploadedCloudinaryAsset.public_id,
+          );
+        } catch (cleanupError) {
+          console.error(
+            "Public campaign photo cleanup failed after upload error:",
+            cleanupError?.message,
+          );
+        }
+      }
+
+      console.error(
+        "Assistance public campaign photo upload failed:",
+        error,
+      );
+
+      response
+        .status(
+          Number(
+            error?.statusCode,
+          ) || 500,
+        )
+        .json({
+          error:
+            cleanText(
+              error?.code ||
+                "assistance_public_photo_upload_failed",
+              100,
+            ),
+          message:
+            cleanText(
+              error?.message ||
+                "Unable to upload the public campaign photo.",
+              500,
+            ),
+        });
+    }
+  },
+);
+
+
+app.delete(
+  "/api/assistance/public-photo/:assetId",
+
+  requireFirebaseUser,
+
+  requireVerifiedResident,
+
+  async (request, response) => {
+    try {
+      const uid =
+        request.firebaseUser.uid;
+
+      const assetId =
+        cleanText(
+          request.params?.assetId ||
+            "",
+          200,
+        );
+
+      if (!assetId) {
+        throw makeHttpError(
+          400,
+          "public_photo_asset_id_required",
+          "A public campaign photo asset ID is required.",
+        );
+      }
+
+      const photoRef =
+        db
+          .collection(
+            "assistancePublicPhotoAssets",
+          )
+          .doc(assetId);
+
+      const photoSnapshot =
+        await photoRef.get();
+
+      if (!photoSnapshot.exists) {
+        response
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              "public_photo_not_found",
+            message:
+              "The staged public campaign photo was not found.",
+          });
+        return;
+      }
+
+      const photo =
+        photoSnapshot.data() ||
+        {};
+
+      if (
+        photo.ownerUid !== uid
+      ) {
+        throw makeHttpError(
+          403,
+          "public_photo_delete_denied",
+          "You are not authorized to remove this public campaign photo.",
+        );
+      }
+
+      if (
+        photo.status !==
+        "staged"
+      ) {
+        throw makeHttpError(
+          409,
+          "attached_public_photo_cannot_be_deleted",
+          "A public campaign photo already attached to a Request Assistance record cannot be deleted from the staging endpoint.",
+        );
+      }
+
+      await destroyAssistancePublicPhotoFromCloudinary(
+        photo.cloudinaryPublicId,
+      );
+
+      await photoRef.delete();
+
+      response.json({
+        ok: true,
+        assetId,
+      });
+    } catch (error) {
+      console.error(
+        "Assistance public campaign photo delete failed:",
+        error,
+      );
+
+      response
+        .status(
+          Number(
+            error?.statusCode,
+          ) || 500,
+        )
+        .json({
+          error:
+            cleanText(
+              error?.code ||
+                "assistance_public_photo_delete_failed",
+              100,
+            ),
+          message:
+            cleanText(
+              error?.message ||
+                "Unable to remove the staged public campaign photo.",
+              500,
+            ),
+        });
+    }
+  },
+);
+
+
+app.post(
 
   "/api/assistance/evidence/upload",
 
@@ -7751,6 +8296,106 @@ app.post(
         );
       }
 
+      const publicCampaignPhotoAssetId =
+        cleanText(
+          request.body
+            ?.publicCampaignPhotoAssetId ||
+            "",
+          200,
+        );
+
+      const publicCampaignPhotoConsent =
+        request.body
+          ?.publicCampaignPhotoConsent ===
+        true;
+
+      if (
+        !publicCampaignPhotoAssetId
+      ) {
+        throw makeHttpError(
+          400,
+          "public_campaign_photo_required",
+          "Upload the required public campaign photo before submitting the Request Assistance.",
+        );
+      }
+
+      if (
+        !publicCampaignPhotoConsent
+      ) {
+        throw makeHttpError(
+          400,
+          "public_campaign_photo_consent_required",
+          "Confirm public photo consent before submitting the Request Assistance.",
+        );
+      }
+
+      const publicPhotoRef =
+        db
+          .collection(
+            "assistancePublicPhotoAssets",
+          )
+          .doc(
+            publicCampaignPhotoAssetId,
+          );
+
+      const publicPhotoSnapshot =
+        await publicPhotoRef.get();
+
+      if (
+        !publicPhotoSnapshot.exists
+      ) {
+        throw makeHttpError(
+          404,
+          "public_campaign_photo_not_found",
+          "The required public campaign photo could not be found.",
+        );
+      }
+
+      const publicPhotoData =
+        publicPhotoSnapshot.data() ||
+        {};
+
+      if (
+        publicPhotoData.ownerUid !==
+        uid
+      ) {
+        throw makeHttpError(
+          403,
+          "public_campaign_photo_owner_mismatch",
+          "The public campaign photo belongs to another account.",
+        );
+      }
+
+      if (
+        publicPhotoData.status !==
+        "staged"
+      ) {
+        throw makeHttpError(
+          409,
+          "public_campaign_photo_not_staged",
+          "The public campaign photo is no longer available for this request.",
+        );
+      }
+
+      const publicCampaignPhotoUrl =
+        cleanText(
+          publicPhotoData.publicUrl ||
+            "",
+          1000,
+        );
+
+      if (
+        !publicCampaignPhotoUrl.startsWith(
+          "https://",
+        )
+      ) {
+        throw makeHttpError(
+          409,
+          "public_campaign_photo_url_invalid",
+          "The public campaign photo is missing a valid secure URL.",
+        );
+      }
+
       const evidenceIds =
         Array.from(
           new Set(
@@ -7984,6 +8629,20 @@ app.post(
 
         documents,
 
+        publicCampaignPhotoUrl,
+
+        publicCampaignPhotoConsent:
+          true,
+
+        publicCampaignPhotoFileName:
+          sanitizeFileName(
+            publicPhotoData.originalFileName ||
+              "Public Campaign Photo",
+          ),
+
+        publicCampaignPhotoSetAt:
+          FieldValue.serverTimestamp(),
+
         status:
           "pending",
 
@@ -8055,6 +8714,25 @@ app.post(
         assistanceData,
       );
 
+      batch.set(
+        publicPhotoRef,
+        {
+          status:
+            "attached",
+          requestId,
+          consentConfirmed:
+            true,
+          attachedAt:
+            FieldValue.serverTimestamp(),
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        },
+        {
+          merge:
+            true,
+        },
+      );
+
       evidenceRefs.forEach(
         (ref) => {
           batch.set(
@@ -8095,6 +8773,9 @@ app.post(
 
           attachedEvidenceCount:
             evidenceIds.length,
+
+          publicCampaignPhotoAttached:
+            true,
         });
     } catch (error) {
       console.error(
@@ -9860,6 +10541,14 @@ app.post(
             .slice(0, 5)
         : [];
 
+      if (requestedPhotoUrls.length < 1) {
+        throw makeHttpError(
+          400,
+          "public_campaign_photo_required",
+          "Add at least one LGU-approved public campaign photo before publishing.",
+        );
+      }
+
       if (title.length < 5) {
         throw makeHttpError(400, "campaign_title_required", "Enter a clear campaign title.");
       }
@@ -9982,6 +10671,23 @@ app.post(
               409,
               "donation_support_not_approved",
               "LGU Resource Assessment must confirm Donation Support Needed first.",
+            );
+          }
+
+          const sourcePublicPhotoUrl =
+            cleanText(
+              assistance.publicCampaignPhotoUrl || "",
+              1000,
+            );
+
+          if (
+            assistance.publicCampaignPhotoConsent !== true ||
+            !sourcePublicPhotoUrl.startsWith("https://")
+          ) {
+            throw makeHttpError(
+              409,
+              "resident_public_campaign_photo_required",
+              "The Assistance Request must include the Resident-consented public campaign photo before Donation Support can be published.",
             );
           }
 
@@ -10601,14 +11307,6 @@ app.post(
           400,
           "actual_receipt_required",
           "Enter the actual monetary amount or physical quantity confirmed by the LGU.",
-        );
-      }
-
-      if (receiptReference.length < 3) {
-        throw makeHttpError(
-          400,
-          "receipt_reference_required",
-          "Enter the official LGU receipt, transaction, or receiving-log reference.",
         );
       }
 
