@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as ImagePicker from "expo-image-picker";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   collection,
@@ -281,6 +282,11 @@ const sanitizeMoneyInput = (value: string) => {
 };
 
 const SECURE_DONATION_BACKEND = "https://volunserve.onrender.com";
+const CLOUDINARY_CLOUD_NAME = "netjawtz";
+const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
+const CLOUDINARY_UPLOAD_URL =
+  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+const MAX_PUBLIC_CAMPAIGN_PHOTO_BYTES = 10 * 1024 * 1024;
 
 const normalizeCategoryLabel = (value?: string) =>
   String(value || "Community Assistance")
@@ -721,6 +727,8 @@ export default function DonationAdministration() {
   const [publicIncidentType, setPublicIncidentType] = useState("");
   const [publicSeverity, setPublicSeverity] = useState("");
   const [selectedPublicPhotoUrls, setSelectedPublicPhotoUrls] = useState<string[]>([]);
+  const [publicPhotoUploading, setPublicPhotoUploading] = useState(false);
+  const [publicPhotoUploadStatus, setPublicPhotoUploadStatus] = useState("");
 
   const [verificationForms, setVerificationForms] = useState<
     Record<string, VerificationForm>
@@ -1103,6 +1111,10 @@ export default function DonationAdministration() {
   ]);
 
   useEffect(() => {
+    // Community Assistance public photos are separate Admin-selected publication
+    // assets. Never clear them just because there is no linked disaster case.
+    if (openedFromAssistance || selectedPublishedCampaign) return;
+
     if (!availablePublicPhotos.length) {
       setSelectedPublicPhotoUrls([]);
       return;
@@ -1111,7 +1123,25 @@ export default function DonationAdministration() {
     setSelectedPublicPhotoUrls((current) =>
       current.filter((url) => availablePublicPhotos.includes(url)).slice(0, 5),
     );
-  }, [availablePublicPhotos]);
+  }, [
+    openedFromAssistance,
+    selectedPublishedCampaign?.id,
+    availablePublicPhotos,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPublishedCampaign) return;
+
+    setSelectedPublicPhotoUrls(
+      (Array.isArray(selectedPublishedCampaign.publicPhotoUrls)
+        ? selectedPublishedCampaign.publicPhotoUrls
+        : []
+      )
+        .map((url) => String(url || "").trim())
+        .filter((url) => url.startsWith("https://"))
+        .slice(0, 5),
+    );
+  }, [selectedPublishedCampaign?.id, selectedPublishedCampaign?.updatedAt]);
 
   useEffect(() => {
     if (!isAdmin || !requestedAssessmentId || !assessments.length) return;
@@ -1288,6 +1318,7 @@ export default function DonationAdministration() {
     setPublicIncidentType("");
     setPublicSeverity("");
     setSelectedPublicPhotoUrls([]);
+    setPublicPhotoUploadStatus("");
     setShowCampaignForm(false);
   };
 
@@ -1324,6 +1355,151 @@ export default function DonationAdministration() {
 
       return [...current, url];
     });
+  };
+
+  const uploadPublicCampaignPhoto = async (
+    asset: ImagePicker.ImagePickerAsset,
+  ) => {
+    const fileName =
+      asset.fileName ||
+      asset.uri.split("/").pop()?.split("?")[0] ||
+      `public-campaign-photo-${Date.now()}.jpg`;
+
+    const contentType = asset.mimeType || "image/jpeg";
+    const body = new FormData();
+    const webFile = (asset as any).file;
+
+    if (webFile) {
+      body.append("file", webFile);
+    } else {
+      body.append(
+        "file",
+        {
+          uri: asset.uri,
+          name: fileName,
+          type: contentType,
+        } as any,
+      );
+    }
+
+    body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+      method: "POST",
+      body,
+    });
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result || typeof result.secure_url !== "string") {
+      throw new Error(
+        result?.error?.message ||
+          `Public campaign photo upload failed with HTTP ${response.status}.`,
+      );
+    }
+
+    return String(result.secure_url);
+  };
+
+  const chooseAndUploadPublicCampaignPhoto = async () => {
+    if (publicPhotoUploading || selectedPublicPhotoUrls.length >= 5) {
+      if (selectedPublicPhotoUrls.length >= 5) {
+        Alert.alert(
+          "Public Photo Limit",
+          "A campaign may publish up to 5 LGU-approved public photos.",
+        );
+      }
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Gallery Permission",
+        "Allow photo library access so the Admin can add a separate privacy-safe public campaign photo.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.86,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+
+    if (
+      typeof asset.fileSize === "number" &&
+      asset.fileSize > MAX_PUBLIC_CAMPAIGN_PHOTO_BYTES
+    ) {
+      Alert.alert("Photo Too Large", "Use a public campaign photo smaller than 10 MB.");
+      return;
+    }
+
+    try {
+      setPublicPhotoUploading(true);
+      setPublicPhotoUploadStatus("Uploading public campaign photo...");
+
+      const publicUrl = await uploadPublicCampaignPhoto(asset);
+
+      setSelectedPublicPhotoUrls((current) =>
+        Array.from(new Set([...current, publicUrl])).slice(0, 5),
+      );
+      setPublicPhotoUploadStatus("Public campaign photo uploaded.");
+    } catch (problem) {
+      const message =
+        problem instanceof Error
+          ? problem.message
+          : "Unable to upload the public campaign photo.";
+      setPublicPhotoUploadStatus("");
+      Alert.alert("Photo Upload Failed", message);
+    } finally {
+      setPublicPhotoUploading(false);
+    }
+  };
+
+  const removePublicCampaignPhoto = (url: string) => {
+    if (publicPhotoUploading) return;
+    setSelectedPublicPhotoUrls((current) =>
+      current.filter((item) => item !== url),
+    );
+    setPublicPhotoUploadStatus("");
+  };
+
+  const savePublishedCampaignPhotos = async () => {
+    if (!selectedPublishedCampaign || !user || !isAdmin || busyKey) return;
+
+    try {
+      setBusyKey(`photos_${selectedPublishedCampaign.id}`);
+      setError("");
+
+      await secureAdminPost(
+        `/api/admin/donations/campaigns/${encodeURIComponent(
+          selectedPublishedCampaign.id,
+        )}/public-photos`,
+        {
+          publicPhotoUrls: selectedPublicPhotoUrls,
+        },
+      );
+
+      setPublicPhotoUploadStatus("Public campaign photos saved.");
+      Alert.alert(
+        "Public Photos Saved",
+        "The Resident Donation page will now use these LGU-approved campaign photos.",
+      );
+    } catch (problem) {
+      const message =
+        problem instanceof Error
+          ? problem.message
+          : "Unable to save the public campaign photos.";
+      setError(message);
+      Alert.alert("Photo Save Failed", message);
+    } finally {
+      setBusyKey("");
+    }
   };
 
   const chooseHandoffLocationType = (value: string) => {
@@ -1592,7 +1768,7 @@ export default function DonationAdministration() {
         publicLocationLabel: publicLocation,
         publicIncidentType: incidentType,
         publicSeverity: severityLabel,
-        publicPhotoUrls: openedFromAssistance ? [] : selectedPublicPhotoUrls,
+        publicPhotoUrls: selectedPublicPhotoUrls,
         campaignCategory: String(sourceCase?.category || incidentType || "disaster_relief"),
         acceptedDonationTypes,
         officialChannelLabel: moneyLabel,
@@ -2098,6 +2274,103 @@ export default function DonationAdministration() {
                 {selectedPublishedCampaign.description || "—"}
               </Text>
 
+              <View style={styles.activePublicPhotosCard}>
+                <View style={styles.activePublicPhotosHeader}>
+                  <View style={styles.activePublicPhotosIcon}>
+                    <Ionicons name="images-outline" size={18} color="#4F46E5" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activePublicPhotosTitle}>Public Campaign Photos</Text>
+                    <Text style={styles.activePublicPhotosText}>
+                      These are the only campaign images shown to Residents. Keep private beneficiary evidence, IDs, medical records, and exact home details out of this section.
+                    </Text>
+                  </View>
+                  <View style={styles.photoCountBadge}>
+                    <Text style={styles.photoCountText}>{selectedPublicPhotoUrls.length}/5</Text>
+                  </View>
+                </View>
+
+                {selectedPublicPhotoUrls.length > 0 ? (
+                  <View style={styles.uploadedPublicPhotoGrid}>
+                    {selectedPublicPhotoUrls.map((url, index) => (
+                      <View key={`${url}-${index}`} style={styles.uploadedPublicPhotoCard}>
+                        <Image
+                          source={{ uri: url }}
+                          style={styles.uploadedPublicPhotoImage}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={styles.removePublicPhotoButton}
+                          disabled={publicPhotoUploading}
+                          onPress={() => removePublicCampaignPhoto(url)}
+                        >
+                          <Ionicons name="close" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <View style={styles.uploadedPublicPhotoLabel}>
+                          <Ionicons name="shield-checkmark" size={12} color="#15803D" />
+                          <Text style={styles.uploadedPublicPhotoLabelText}>
+                            Public photo {index + 1}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.noPublicPhotoBox}>
+                    <Ionicons name="image-outline" size={20} color="#64748B" />
+                    <Text style={styles.noPublicPhotoText}>
+                      No public campaign photo is published yet. Residents currently see the category placeholder.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.activePublicPhotoActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.publicPhotoUploadButton,
+                      (publicPhotoUploading || selectedPublicPhotoUrls.length >= 5) &&
+                        styles.disabledButton,
+                    ]}
+                    disabled={
+                      publicPhotoUploading || selectedPublicPhotoUrls.length >= 5
+                    }
+                    onPress={() => void chooseAndUploadPublicCampaignPhoto()}
+                  >
+                    {publicPhotoUploading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="add-outline" size={16} color="#FFFFFF" />
+                    )}
+                    <Text style={styles.publicPhotoUploadButtonText}>
+                      {publicPhotoUploading ? "Uploading..." : "Add Public Photo"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.savePublicPhotosButton,
+                      busyKey === `photos_${selectedPublishedCampaign.id}` &&
+                        styles.disabledButton,
+                    ]}
+                    disabled={busyKey === `photos_${selectedPublishedCampaign.id}`}
+                    onPress={() => void savePublishedCampaignPhotos()}
+                  >
+                    {busyKey === `photos_${selectedPublishedCampaign.id}` ? (
+                      <ActivityIndicator size="small" color="#4F46E5" />
+                    ) : (
+                      <Ionicons name="save-outline" size={16} color="#4F46E5" />
+                    )}
+                    <Text style={styles.savePublicPhotosButtonText}>Save Public Photos</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!!publicPhotoUploadStatus && (
+                  <Text style={styles.publicPhotoUploadStatus}>
+                    {publicPhotoUploadStatus}
+                  </Text>
+                )}
+              </View>
+
               {!!selectedPublishedCampaign.handoffLocationName && (
                 <View style={styles.activeHandoffStrip}>
                   <Ionicons name="location-outline" size={17} color="#0F766E" />
@@ -2400,11 +2673,11 @@ export default function DonationAdministration() {
 
                 <View style={styles.photoSectionHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Public campaign photos (optional)</Text>
+                    <Text style={styles.label}>Public campaign photos</Text>
                     <Text style={styles.privacyHelper}>
                       {openedFromAssistance
-                        ? "Private Assistance Request documents and evidence are never copied into the public campaign."
-                        : "Select only privacy-safe incident photos. The donor page will show up to 5 selected images."}
+                        ? "Upload only a separate privacy-safe publication photo approved by the LGU. Private Assistance Request documents, medical records, IDs, and evidence are never copied into the public campaign."
+                        : "Select only privacy-safe incident photos. The Resident Donation page will show up to 5 approved images."}
                     </Text>
                   </View>
                   <View style={styles.photoCountBadge}>
@@ -2412,49 +2685,131 @@ export default function DonationAdministration() {
                   </View>
                 </View>
 
-                {sourceCaseLoading ? (
-                  <View style={styles.photoLoadingBox}>
-                    <ActivityIndicator color="#0F766E" />
-                    <Text style={styles.photoLoadingText}>Loading linked case photos...</Text>
-                  </View>
-                ) : availablePublicPhotos.length > 0 ? (
-                  <View style={styles.publicPhotoGrid}>
-                    {availablePublicPhotos.map((url, index) => {
-                      const selected = selectedPublicPhotoUrls.includes(url);
-                      return (
-                        <TouchableOpacity
-                          key={`${url}-${index}`}
-                          style={[styles.publicPhotoCard, selected && styles.publicPhotoCardSelected]}
-                          activeOpacity={0.86}
-                          onPress={() => togglePublicPhoto(url)}
-                        >
-                          <Image source={{ uri: url }} style={styles.publicPhotoImage} />
-                          <View style={styles.publicPhotoFooter}>
-                            <Ionicons
-                              name={selected ? "checkmark-circle" : "ellipse-outline"}
-                              size={16}
-                              color={selected ? "#0F766E" : "#64748B"}
+                {openedFromAssistance && (
+                  <View style={styles.publicPhotoUploadPanel}>
+                    <View style={styles.publicPhotoUploadTop}>
+                      <View style={styles.publicPhotoUploadIcon}>
+                        <Ionicons name="images-outline" size={20} color="#4F46E5" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.publicPhotoUploadTitle}>LGU Public Campaign Photo</Text>
+                        <Text style={styles.publicPhotoUploadText}>
+                          Choose a safe public-facing image for the donor campaign. This is a separate publication asset, not private case evidence.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.publicPhotoUploadButton,
+                          (publicPhotoUploading || selectedPublicPhotoUrls.length >= 5) &&
+                            styles.disabledButton,
+                        ]}
+                        disabled={
+                          publicPhotoUploading || selectedPublicPhotoUrls.length >= 5
+                        }
+                        onPress={() => void chooseAndUploadPublicCampaignPhoto()}
+                      >
+                        {publicPhotoUploading ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.publicPhotoUploadButtonText}>
+                          {publicPhotoUploading ? "Uploading..." : "Add Public Photo"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {!!publicPhotoUploadStatus && (
+                      <Text style={styles.publicPhotoUploadStatus}>
+                        {publicPhotoUploadStatus}
+                      </Text>
+                    )}
+
+                    {selectedPublicPhotoUrls.length > 0 ? (
+                      <View style={styles.uploadedPublicPhotoGrid}>
+                        {selectedPublicPhotoUrls.map((url, index) => (
+                          <View key={`${url}-${index}`} style={styles.uploadedPublicPhotoCard}>
+                            <Image
+                              source={{ uri: url }}
+                              style={styles.uploadedPublicPhotoImage}
+                              resizeMode="cover"
                             />
-                            <Text style={[styles.publicPhotoText, selected && styles.publicPhotoTextSelected]}>
-                              {selected ? "Included publicly" : `Photo ${index + 1}`}
-                            </Text>
+                            <TouchableOpacity
+                              style={styles.removePublicPhotoButton}
+                              onPress={() => removePublicCampaignPhoto(url)}
+                            >
+                              <Ionicons name="close" size={15} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <View style={styles.uploadedPublicPhotoLabel}>
+                              <Ionicons name="shield-checkmark" size={12} color="#15803D" />
+                              <Text style={styles.uploadedPublicPhotoLabelText}>
+                                Public photo {index + 1}
+                              </Text>
+                            </View>
                           </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <View style={styles.noPublicPhotoBox}>
-                    <Ionicons name="images-outline" size={20} color="#64748B" />
-                    <Text style={styles.noPublicPhotoText}>
-                      {openedFromAssistance
-                        ? "Private Assistance Request evidence remains protected. Add no public photo unless the LGU has a separate privacy-safe publication asset."
-                        : selectedAssessment.sourceCaseId
-                          ? "No image evidence is available from the linked case. Photos are optional."
-                          : "This relief assessment is not linked to a single resident emergency case. Public photos are optional."}
-                    </Text>
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={styles.noPublicPhotoBox}>
+                        <Ionicons name="image-outline" size={20} color="#64748B" />
+                        <Text style={styles.noPublicPhotoText}>
+                          No public campaign photo selected yet. The campaign can still publish, but the Resident page will use a clean category placeholder until an LGU-approved photo is added.
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
+
+                {!openedFromAssistance &&
+                  (sourceCaseLoading ? (
+                    <View style={styles.photoLoadingBox}>
+                      <ActivityIndicator color="#0F766E" />
+                      <Text style={styles.photoLoadingText}>Loading linked case photos...</Text>
+                    </View>
+                  ) : availablePublicPhotos.length > 0 ? (
+                    <View style={styles.publicPhotoGrid}>
+                      {availablePublicPhotos.map((url, index) => {
+                        const selected = selectedPublicPhotoUrls.includes(url);
+                        return (
+                          <TouchableOpacity
+                            key={`${url}-${index}`}
+                            style={[
+                              styles.publicPhotoCard,
+                              selected && styles.publicPhotoCardSelected,
+                            ]}
+                            activeOpacity={0.86}
+                            onPress={() => togglePublicPhoto(url)}
+                          >
+                            <Image source={{ uri: url }} style={styles.publicPhotoImage} />
+                            <View style={styles.publicPhotoFooter}>
+                              <Ionicons
+                                name={selected ? "checkmark-circle" : "ellipse-outline"}
+                                size={16}
+                                color={selected ? "#0F766E" : "#64748B"}
+                              />
+                              <Text
+                                style={[
+                                  styles.publicPhotoText,
+                                  selected && styles.publicPhotoTextSelected,
+                                ]}
+                              >
+                                {selected ? "Included publicly" : `Photo ${index + 1}`}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={styles.noPublicPhotoBox}>
+                      <Ionicons name="images-outline" size={20} color="#64748B" />
+                      <Text style={styles.noPublicPhotoText}>
+                        {selectedAssessment.sourceCaseId
+                          ? "No image evidence is available from the linked case. Photos are optional."
+                          : "This relief assessment is not linked to a single resident emergency case. Public photos are optional."}
+                      </Text>
+                    </View>
+                  ))}
               </View>
 
               <View style={styles.formDivider} />
@@ -4151,6 +4506,160 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   noPublicPhotoText: { flex: 1, color: "#64748B", fontSize: 9.5, lineHeight: 14 },
+  publicPhotoUploadPanel: {
+    marginTop: 9,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#DDE4FF",
+    borderRadius: 12,
+    backgroundColor: "#FAFBFF",
+  },
+  publicPhotoUploadTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  publicPhotoUploadIcon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    backgroundColor: "#EEF2FF",
+  },
+  publicPhotoUploadTitle: {
+    color: "#0F172A",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  publicPhotoUploadText: {
+    marginTop: 3,
+    color: "#64748B",
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  publicPhotoUploadButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 13,
+    borderRadius: 10,
+    backgroundColor: "#4F46E5",
+  },
+  publicPhotoUploadButtonText: {
+    color: "#FFFFFF",
+    fontSize: 9.2,
+    fontWeight: "900",
+  },
+  publicPhotoUploadStatus: {
+    marginTop: 8,
+    color: "#4F46E5",
+    fontSize: 8.8,
+    fontWeight: "800",
+  },
+  uploadedPublicPhotoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginTop: 10,
+  },
+  uploadedPublicPhotoCard: {
+    position: "relative",
+    width: 160,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#DDE4FF",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  uploadedPublicPhotoImage: {
+    width: "100%",
+    height: 100,
+    backgroundColor: "#E2E8F0",
+  },
+  removePublicPhotoButton: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.82)",
+  },
+  uploadedPublicPhotoLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  uploadedPublicPhotoLabelText: {
+    color: "#475569",
+    fontSize: 8.3,
+    fontWeight: "800",
+  },
+  activePublicPhotosCard: {
+    marginTop: 13,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#DDE4FF",
+    borderRadius: 12,
+    backgroundColor: "#FAFBFF",
+  },
+  activePublicPhotosHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+  },
+  activePublicPhotosIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "#EEF2FF",
+  },
+  activePublicPhotosTitle: {
+    color: "#0F172A",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  activePublicPhotosText: {
+    marginTop: 3,
+    color: "#64748B",
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  activePublicPhotoActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  savePublicPhotosButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  savePublicPhotosButtonText: {
+    color: "#4F46E5",
+    fontSize: 9.2,
+    fontWeight: "900",
+  },
+  disabledButton: {
+    opacity: 0.55,
+  },
   publicPreviewCard: {
     marginTop: 12,
     marginBottom: 11,

@@ -10153,7 +10153,7 @@ app.post(
             publicLocationLabel: generalArea,
             publicIncidentType: categoryLabel,
             publicSeverity: "LGU verified need",
-            publicPhotoUrls: [],
+            publicPhotoUrls: requestedPhotoUrls,
             affectedHouseholds: 1,
             affectedPeople: 1,
             publicNeeds,
@@ -10412,6 +10412,113 @@ app.post(
         error: cleanText(error?.code || "donation_campaign_failed", 120),
         message: cleanText(
           error?.message || "Unable to publish the Donation Campaign.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/donations/campaigns/:campaignId/public-photos",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const campaignId = cleanText(request.params?.campaignId || "", 160);
+      const rawPhotoUrls = request.body?.publicPhotoUrls;
+
+      if (!campaignId) {
+        throw makeHttpError(
+          400,
+          "invalid_campaign_id",
+          "The Donation Campaign ID is invalid.",
+        );
+      }
+
+      if (!Array.isArray(rawPhotoUrls)) {
+        throw makeHttpError(
+          400,
+          "invalid_public_photo_list",
+          "Public campaign photos must be submitted as a list.",
+        );
+      }
+
+      if (rawPhotoUrls.length > 5) {
+        throw makeHttpError(
+          400,
+          "public_photo_limit",
+          "A Donation Campaign may publish up to 5 public photos.",
+        );
+      }
+
+      const publicPhotoUrls = Array.from(
+        new Set(
+          rawPhotoUrls
+            .map((item) => cleanText(item || "", 1000))
+            .filter((item) => item.startsWith("https://")),
+        ),
+      ).slice(0, 5);
+
+      if (publicPhotoUrls.length !== rawPhotoUrls.length) {
+        throw makeHttpError(
+          400,
+          "invalid_public_photo_url",
+          "Every public campaign photo must use a valid HTTPS URL.",
+        );
+      }
+
+      const campaignRef = db.collection("donationCampaigns").doc(campaignId);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(campaignRef);
+
+        if (!snapshot.exists) {
+          throw makeHttpError(
+            404,
+            "campaign_not_found",
+            "The Donation Campaign no longer exists.",
+          );
+        }
+
+        const campaign = snapshot.data() || {};
+
+        if (String(campaign.status || "") !== "published") {
+          throw makeHttpError(
+            409,
+            "campaign_not_published",
+            "Only a published Donation Campaign can update public photos.",
+          );
+        }
+
+        transaction.update(campaignRef, {
+          publicPhotoUrls,
+          updatedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(activityRef, {
+          action: "Donation Campaign Public Photos Updated",
+          campaignId,
+          publicPhotoCount: publicPhotoUrls.length,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      });
+
+      response.json({
+        ok: true,
+        campaignId,
+        publicPhotoUrls,
+      });
+    } catch (error) {
+      console.error("Donation campaign public photo update failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "donation_public_photos_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to update public campaign photos.",
           700,
         ),
       });
