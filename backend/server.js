@@ -6501,15 +6501,6 @@ app.post(
                       0,
                   );
 
-                const preferredTypes =
-                  Array.isArray(
-                    assistanceData
-                      .preferredAssistanceTypes,
-                  )
-                    ? assistanceData
-                        .preferredAssistanceTypes
-                    : [];
-
                 if (
                   supportDecision ===
                     "donation_support" &&
@@ -6526,9 +6517,6 @@ app.post(
                 if (
                   supportDecision ===
                     "donation_support" &&
-                  preferredTypes.includes(
-                    "monetary",
-                  ) &&
                   requestedAmount <= 0
                 ) {
                   throw makeHttpError(
@@ -8247,54 +8235,7 @@ app.post(
         );
       }
 
-      const preferredAssistanceTypes =
-        Array.from(
-          new Set(
-            Array.isArray(
-              request.body
-                ?.preferredAssistanceTypes,
-            )
-              ? request.body
-                  .preferredAssistanceTypes
-                  .map(
-                    (value) =>
-                      cleanText(
-                        value,
-                        40,
-                      )
-                        .toLowerCase()
-                        .replace(
-                          /[^a-z_]/g,
-                          "",
-                        ),
-                  )
-                  .filter(
-                    Boolean,
-                  )
-              : [],
-          ),
-        );
-
-      if (
-        preferredAssistanceTypes
-          .length < 1 ||
-        preferredAssistanceTypes
-          .length > 2 ||
-        preferredAssistanceTypes
-          .some(
-            (value) =>
-              value !==
-                "monetary" &&
-              value !==
-                "in_kind",
-          )
-      ) {
-        throw makeHttpError(
-          400,
-          "invalid_assistance_preference",
-          "Choose at least one valid preferred type of assistance.",
-        );
-      }
+      const preferredAssistanceTypes = ["monetary"];
 
       const publicCampaignPhotoAssetId =
         cleanText(
@@ -10440,15 +10381,13 @@ const assistanceLocationToDonationLocationType = (value) => {
 };
 
 const cleanDonationTypes = (value) => {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return ["monetary"];
 
-  return Array.from(
-    new Set(
-      value
-        .map((item) => cleanText(item || "", 30).toLowerCase())
-        .filter((item) => ["monetary", "in_kind"].includes(item)),
-    ),
-  ).slice(0, 2);
+  return value
+    .map((item) => cleanText(item || "", 30).toLowerCase())
+    .includes("monetary")
+    ? ["monetary"]
+    : [];
 };
 
 app.post(
@@ -10498,41 +10437,10 @@ app.post(
         request.body?.officialChannelInstructions || "",
         1000,
       );
-      const inKindInstructions = cleanText(
-        request.body?.inKindInstructions || "",
-        1000,
-      );
-      const handoffModeRaw = cleanText(
-        request.body?.handoffMode || "receiving_point",
-        60,
-      ).toLowerCase();
-      const handoffMode = [
-        "receiving_point",
-        "coordinated_handover",
-        "both",
-      ].includes(handoffModeRaw)
-        ? handoffModeRaw
-        : "receiving_point";
       const requestedGoal = Number(request.body?.monetaryGoal ?? 0);
       const requestedPublicLocation = cleanText(
         request.body?.publicLocationLabel || "",
         240,
-      );
-      const requestedHandoffType = cleanText(
-        request.body?.handoffLocationType || "",
-        80,
-      ).toLowerCase();
-      const requestedHandoffName = cleanText(
-        request.body?.handoffLocationName || "",
-        180,
-      );
-      const requestedHandoffAddress = cleanText(
-        request.body?.handoffAddress || "",
-        320,
-      );
-      const requestedHandoffNotes = cleanText(
-        request.body?.handoffNotes || "",
-        600,
       );
       const requestedPhotoUrls = Array.isArray(request.body?.publicPhotoUrls)
         ? request.body.publicPhotoUrls
@@ -10577,18 +10485,15 @@ app.post(
         );
       }
 
-      if (!acceptedDonationTypes.length) {
+      if (acceptedDonationTypes.length !== 1 || acceptedDonationTypes[0] !== "monetary") {
         throw makeHttpError(
           400,
-          "donation_type_required",
-          "Enable at least one donation type.",
+          "monetary_donation_required",
+          "Donation campaigns currently accept monetary support only.",
         );
       }
 
-      if (
-        acceptedDonationTypes.includes("monetary") &&
-        (!Number.isFinite(requestedGoal) || requestedGoal <= 0)
-      ) {
+      if (!Number.isFinite(requestedGoal) || requestedGoal <= 0) {
         throw makeHttpError(
           400,
           "funding_goal_required",
@@ -10596,10 +10501,7 @@ app.post(
         );
       }
 
-      if (
-        acceptedDonationTypes.includes("monetary") &&
-        (officialChannelLabel.length < 3 || officialChannelInstructions.length < 10)
-      ) {
+      if (officialChannelLabel.length < 3 || officialChannelInstructions.length < 10) {
         throw makeHttpError(
           400,
           "official_channel_required",
@@ -10607,16 +10509,6 @@ app.post(
         );
       }
 
-      if (
-        acceptedDonationTypes.includes("in_kind") &&
-        inKindInstructions.length < 10
-      ) {
-        throw makeHttpError(
-          400,
-          "receiving_instructions_required",
-          "Enter clear LGU receiving or handover instructions for in-kind support.",
-        );
-      }
 
       const campaignRef = db.collection("donationCampaigns").doc();
       const activityRef = db.collection("adminActivityLogs").doc();
@@ -10712,14 +10604,14 @@ app.post(
             throw makeHttpError(
               409,
               "official_location_required",
-              "Save the LGU-approved public service or receiving location before publishing a community campaign.",
+              "Save the LGU-approved public service location before publishing a community campaign.",
             );
           }
 
           const preferredTypes = Array.isArray(assistance.preferredAssistanceTypes)
             ? assistance.preferredAssistanceTypes
                 .map((item) => cleanText(item || "", 30).toLowerCase())
-                .filter((item) => ["monetary", "in_kind"].includes(item))
+                .filter((item) => item === "monetary")
             : [];
 
           if (
@@ -10806,17 +10698,12 @@ app.post(
           }
 
           const publicCategory = assistanceCategoryToPublicCategory(category);
-          const acceptedCategories = acceptedDonationTypes.includes("in_kind")
-            ? [publicCategory]
-            : [];
           const publicNeeds = [
             {
               category: publicCategory,
               label: `${categoryLabel} support`,
-              needed: acceptedDonationTypes.includes("monetary")
-                ? remainingAmount
-                : 1,
-              unit: acceptedDonationTypes.includes("monetary") ? "PHP" : "verified need",
+              needed: remainingAmount,
+              unit: "PHP",
             },
           ];
 
@@ -10834,21 +10721,10 @@ app.post(
             sourceAssistanceRequestId: sourceId,
             barangays: [barangay],
             acceptedDonationTypes,
-            acceptedCategories,
-            officialChannelLabel: acceptedDonationTypes.includes("monetary")
-              ? officialChannelLabel
-              : "",
-            officialChannelInstructions: acceptedDonationTypes.includes("monetary")
-              ? officialChannelInstructions
-              : "",
-            monetaryGoal: acceptedDonationTypes.includes("monetary")
-              ? remainingAmount
-              : 0,
+            officialChannelLabel,
+            officialChannelInstructions,
+            monetaryGoal: remainingAmount,
             verifiedAmountReceived: 0,
-            inKindInstructions: acceptedDonationTypes.includes("in_kind")
-              ? inKindInstructions
-              : "",
-            handoffMode,
             handoffLocationType: assistanceLocationToDonationLocationType(
               sourceLocationType,
             ),
@@ -10942,40 +10818,6 @@ app.post(
             );
           }
 
-          if (
-            acceptedDonationTypes.includes("in_kind") &&
-            (requestedHandoffName.length < 3 || requestedHandoffAddress.length < 8)
-          ) {
-            throw makeHttpError(
-              400,
-              "handoff_location_required",
-              "Enter the authorized public receiving or handover location for in-kind support.",
-            );
-          }
-
-          const allowedHandoffTypes = [
-            "barangay_relief_desk",
-            "evacuation_center",
-            "lgu_relief_center",
-            "city_hall",
-            "hospital_social_service",
-            "veterinary_clinic",
-            "social_welfare_office",
-            "animal_shelter",
-            "approved_public_meeting",
-            "other",
-          ];
-
-          if (
-            acceptedDonationTypes.includes("in_kind") &&
-            !allowedHandoffTypes.includes(requestedHandoffType)
-          ) {
-            throw makeHttpError(
-              400,
-              "handoff_location_type_required",
-              "Select a valid authorized public receiving location type.",
-            );
-          }
 
           const barangay = cleanText(assessment.barangay || "", 120);
           const categoryPairs = [
@@ -10986,17 +10828,6 @@ app.post(
             ["shelter", Number(assessment.householdsNeedingShelter || 0), "Temporary shelter", "households"],
             ["hygiene", Number(assessment.householdsNeedingHygiene || 0), "Hygiene kits", "households"],
           ];
-          const acceptedCategories = acceptedDonationTypes.includes("in_kind")
-            ? categoryPairs
-                .filter((item) => Number(item[1]) > 0)
-                .map((item) => item[0])
-            : [];
-          if (
-            acceptedDonationTypes.includes("in_kind") &&
-            !acceptedCategories.length
-          ) {
-            acceptedCategories.push("other");
-          }
           const publicNeeds = categoryPairs
             .filter((item) => Number(item[1]) > 0)
             .map((item) => ({
@@ -11046,35 +10877,10 @@ app.post(
             sourceAssistanceRequestId: "",
             barangays: [barangay || "San Jose del Monte"],
             acceptedDonationTypes,
-            acceptedCategories,
-            officialChannelLabel: acceptedDonationTypes.includes("monetary")
-              ? officialChannelLabel
-              : "",
-            officialChannelInstructions: acceptedDonationTypes.includes("monetary")
-              ? officialChannelInstructions
-              : "",
-            monetaryGoal: acceptedDonationTypes.includes("monetary")
-              ? requestedGoal
-              : 0,
+            officialChannelLabel,
+            officialChannelInstructions,
+            monetaryGoal: requestedGoal,
             verifiedAmountReceived: 0,
-            inKindInstructions: acceptedDonationTypes.includes("in_kind")
-              ? inKindInstructions
-              : "",
-            handoffMode: acceptedDonationTypes.includes("in_kind")
-              ? handoffMode
-              : "receiving_point",
-            handoffLocationType: acceptedDonationTypes.includes("in_kind")
-              ? requestedHandoffType
-              : "",
-            handoffLocationName: acceptedDonationTypes.includes("in_kind")
-              ? requestedHandoffName
-              : "",
-            handoffAddress: acceptedDonationTypes.includes("in_kind")
-              ? requestedHandoffAddress
-              : "",
-            handoffNotes: acceptedDonationTypes.includes("in_kind")
-              ? requestedHandoffNotes
-              : "",
             publicStory: story,
             publicLocationLabel: requestedPublicLocation,
             publicIncidentType: incidentType,
@@ -11293,10 +11099,6 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const donationId = cleanText(request.params?.donationId || "", 160);
       const actual = Number(request.body?.actualValue ?? 0);
-      const receiptReference = cleanText(
-        request.body?.officialReceiptReference || "",
-        160,
-      );
 
       if (!donationId) {
         throw makeHttpError(400, "invalid_donation_id", "The Donation submission ID is invalid.");
@@ -11306,12 +11108,11 @@ app.post(
         throw makeHttpError(
           400,
           "actual_receipt_required",
-          "Enter the actual monetary amount or physical quantity confirmed by the LGU.",
+          "Enter the actual monetary amount confirmed by the LGU.",
         );
       }
 
       const donationRef = db.collection("donations").doc(donationId);
-      const inventoryRef = db.collection("lguReliefInventory").doc(`donation_${donationId}`);
       const activityRef = db.collection("adminActivityLogs").doc();
 
       const existingSnapshot = await donationRef.get();
@@ -11322,17 +11123,17 @@ app.post(
       const existing = existingSnapshot.data() || {};
       const donationType = cleanText(existing.donationType || "", 40).toLowerCase();
 
-      if (donationType === "in_kind" && !Number.isInteger(actual)) {
+      if (donationType !== "monetary") {
         throw makeHttpError(
-          400,
-          "whole_quantity_required",
-          "In-kind quantity must be a whole number.",
+          409,
+          "monetary_donation_required",
+          "Only monetary donation submissions are supported in the current thesis scope.",
         );
       }
 
       let monetaryReferenceRegistryRef = null;
 
-      if (donationType === "monetary") {
+      {
         const normalizedReference = normalizeDonationReference(existing.transactionReference);
         if (normalizedReference.length < 4) {
           throw makeHttpError(
@@ -11388,10 +11189,18 @@ app.post(
         }
 
         const currentType = cleanText(current.donationType || "", 40).toLowerCase();
+        if (currentType !== "monetary") {
+          throw makeHttpError(
+            409,
+            "monetary_donation_required",
+            "Only monetary donation submissions are supported in the current thesis scope.",
+          );
+        }
+
         let nextVerifiedAmountReceived = 0;
         let campaignRef = null;
 
-        if (currentType === "monetary") {
+        {
           if (monetaryReferenceRegistryRef) {
             const registrySnapshot = await transaction.get(monetaryReferenceRegistryRef);
             if (registrySnapshot.exists && registrySnapshot.data()?.donationId !== donationId) {
@@ -11429,41 +11238,7 @@ app.post(
             (Number.isFinite(currentVerifiedAmount) ? currentVerifiedAmount : 0) + actual;
         }
 
-        if (currentType === "in_kind") {
-          const inventorySnapshot = await transaction.get(inventoryRef);
-          if (inventorySnapshot.exists) {
-            throw makeHttpError(
-              409,
-              "inventory_already_recorded",
-              "This donation already has an LGU inventory receipt record.",
-            );
-          }
-
-          const itemName = cleanText(current.itemName || "Donated relief item", 160);
-          const category = cleanText(current.category || "other", 80).toLowerCase();
-          const unit = cleanText(current.unit || "unit", 60);
-
-          transaction.set(inventoryRef, {
-            itemId: inventoryRef.id,
-            category,
-            itemName,
-            unit,
-            quantityReceived: actual,
-            quantityAvailable: actual,
-            quantityAllocated: 0,
-            quantityDistributed: 0,
-            sourceType: "donation",
-            sourceReferenceId: donationId,
-            status: "active",
-            notes: `Verified donation: ${cleanText(current.campaignTitle || "LGU campaign", 180)}`,
-            createdBy: adminUid,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedBy: adminUid,
-            updatedAt: FieldValue.serverTimestamp(),
-          });
-        }
-
-        if (currentType === "monetary" && campaignRef) {
+        if (campaignRef) {
           transaction.update(campaignRef, {
             verifiedAmountReceived: nextVerifiedAmountReceived,
             updatedBy: adminUid,
@@ -11482,9 +11257,7 @@ app.post(
 
         transaction.update(donationRef, {
           status: "received",
-          actualQuantityReceived: currentType === "in_kind" ? actual : 0,
-          actualAmountReceived: currentType === "monetary" ? actual : 0,
-          officialReceiptReference: receiptReference,
+          actualAmountReceived: actual,
           verifiedBy: adminUid,
           verifiedAt: FieldValue.serverTimestamp(),
           receivedBy: adminUid,
@@ -11497,15 +11270,14 @@ app.post(
           action: "Donation Verified as Received",
           donationId,
           campaignId: cleanText(current.campaignId || "", 160),
-          donationType: currentType,
+          donationType: "monetary",
           actualReceived: actual,
-          officialReceiptReference: receiptReference,
           performedBy: adminUid,
           timestamp: FieldValue.serverTimestamp(),
         });
 
         return {
-          donationType: currentType,
+          donationType: "monetary",
           verifiedAmountReceived: nextVerifiedAmountReceived,
         };
       });
