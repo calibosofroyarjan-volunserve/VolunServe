@@ -1,17 +1,18 @@
 {
-  "name": "volunserve-identity-backend",
+  "name": "volunserve-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "VolunServe secure identity verification backend",
+  "description": "VolunServe secure backend services",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check firebaseAdmin.js && node --check didit.js"
+    "check": "node --check server.js && node --check firebaseAdmin.js"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
+    "cloudinary": "^2.11.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "firebase-admin": "^14.3.0"

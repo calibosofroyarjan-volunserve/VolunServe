@@ -1,9 +1,8 @@
 "use strict";
-
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
-
+const { v2: cloudinary } = require("cloudinary");
 const {
   auth,
   db,
@@ -27,30 +26,32 @@ const IDENTITY_UPLOAD_LIMIT = "20mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
 
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
-const ASSISTANCE_EVIDENCE_MAX_BYTES = 10 * 1024 * 1024;
+const ASSISTANCE_EVIDENCE_MAX_BYTES =
+  10 * 1024 * 1024;
 const ASSISTANCE_EVIDENCE_MAX_STAGED = 12;
 const ASSISTANCE_EVIDENCE_URL_TTL_SECONDS = 300;
 
-const ASSISTANCE_EVIDENCE_DOCUMENT_TYPES = new Set([
-  "damage_evidence",
-  "barangay_incident_reference",
-  "medical_certificate",
-  "hospital_estimate",
-  "other_medical_support",
-  "treatment_estimate",
-  "other_treatment_support",
-  "diagnosis_document",
-  "treatment_plan_or_bill",
-  "other_illness_support",
-  "animal_case_photo",
-  "vet_assessment",
-  "other_animal_support",
-  "elderly_need_evidence",
-  "elderly_supporting_document",
-  "basic_need_evidence",
-  "barangay_social_welfare_reference",
-  "other_supporting_evidence",
-]);
+const ASSISTANCE_EVIDENCE_DOCUMENT_TYPES =
+  new Set([
+    "damage_evidence",
+    "barangay_incident_reference",
+    "medical_certificate",
+    "hospital_estimate",
+    "other_medical_support",
+    "treatment_estimate",
+    "other_treatment_support",
+    "diagnosis_document",
+    "treatment_plan_or_bill",
+    "other_illness_support",
+    "animal_case_photo",
+    "vet_assessment",
+    "other_animal_support",
+    "elderly_need_evidence",
+    "elderly_supporting_document",
+    "basic_need_evidence",
+    "barangay_social_welfare_reference",
+    "other_supporting_evidence",
+  ]);
 
 function getAllowedOrigins() {
   const configured = String(
@@ -66,7 +67,8 @@ function getAllowedOrigins() {
   ]);
 }
 
-const allowedOrigins = getAllowedOrigins();
+const allowedOrigins =
+  getAllowedOrigins();
 
 app.use(
   cors({
@@ -186,8 +188,10 @@ function normalizeAiDecision(
     decision === "no_match" ||
     decision === "not_matched"
   ) {
-    // AI-assisted verification does not permanently reject a Resident.
-    // A non-match is sent to LGU/Admin manual review.
+    // AI-assisted verification does not
+    // permanently reject a Resident.
+    // A non-match is sent to LGU/Admin
+    // manual review.
     return "manual_review";
   }
 
@@ -230,9 +234,10 @@ async function requireFirebaseUser(
   next,
 ) {
   try {
-    const token = getBearerToken(
-      request,
-    );
+    const token =
+      getBearerToken(
+        request,
+      );
 
     if (!token) {
       response
@@ -240,7 +245,6 @@ async function requireFirebaseUser(
         .json({
           error:
             "unauthenticated",
-
           message:
             "Sign in to continue.",
         });
@@ -269,7 +273,6 @@ async function requireFirebaseUser(
       .json({
         error:
           "invalid_token",
-
         message:
           "Your sign-in session could not be verified. Please sign in again.",
       });
@@ -281,29 +284,41 @@ function makeHttpError(
   code,
   message,
 ) {
-  const error = new Error(message);
+  const error =
+    new Error(message);
 
-  error.statusCode = statusCode;
-  error.code = code;
+  error.statusCode =
+    statusCode;
+
+  error.code =
+    code;
 
   return error;
 }
 
 function getCloudinaryConfig() {
-  const cloudName = cleanText(
-    process.env.CLOUDINARY_CLOUD_NAME ||
-      "netjawtz",
-    120,
-  );
+  const cloudName =
+    cleanText(
+      process.env
+        .CLOUDINARY_CLOUD_NAME ||
+        "netjawtz",
+      120,
+    );
 
-  const apiKey = cleanText(
-    process.env.CLOUDINARY_API_KEY || "",
-    200,
-  );
+  const apiKey =
+    cleanText(
+      process.env
+        .CLOUDINARY_API_KEY ||
+        "",
+      200,
+    );
 
-  const apiSecret = String(
-    process.env.CLOUDINARY_API_SECRET || "",
-  ).trim();
+  const apiSecret =
+    String(
+      process.env
+        .CLOUDINARY_API_SECRET ||
+        "",
+    ).trim();
 
   if (
     !cloudName ||
@@ -324,56 +339,49 @@ function getCloudinaryConfig() {
   };
 }
 
-function cloudinarySign(
-  parameters,
-  apiSecret,
-) {
-  const serialized = Object.keys(
-    parameters,
-  )
-    .filter((key) => {
-      const value = parameters[key];
+function configureCloudinary() {
+  const {
+    cloudName,
+    apiKey,
+    apiSecret,
+  } =
+    getCloudinaryConfig();
 
-      return (
-        value !== undefined &&
-        value !== null &&
-        value !== ""
-      );
-    })
-    .sort()
-    .map(
-      (key) =>
-        `${key}=${String(
-          parameters[key],
-        )}`,
-    )
-    .join("&");
+  cloudinary.config({
+    cloud_name:
+      cloudName,
+    api_key:
+      apiKey,
+    api_secret:
+      apiSecret,
+    secure:
+      true,
+  });
 
-  return crypto
-    .createHash("sha1")
-    .update(
-      `${serialized}${apiSecret}`,
-      "utf8",
-    )
-    .digest("hex");
+  return {
+    cloudName,
+    apiKey,
+    apiSecret,
+  };
 }
 
 function sanitizeFileName(
   value,
 ) {
-  const cleaned = cleanText(
-    value,
-    180,
-  )
-    .replace(
-      /[^A-Za-z0-9._ -]/g,
-      "_",
+  const cleaned =
+    cleanText(
+      value,
+      180,
     )
-    .replace(
-      /\s+/g,
-      " ",
-    )
-    .trim();
+      .replace(
+        /[^A-Za-z0-9._ -]/g,
+        "_",
+      )
+      .replace(
+        /\s+/g,
+        " ",
+      )
+      .trim();
 
   return (
     cleaned ||
@@ -385,7 +393,9 @@ function detectAssistanceImage(
   buffer,
 ) {
   if (
-    !Buffer.isBuffer(buffer) ||
+    !Buffer.isBuffer(
+      buffer,
+    ) ||
     buffer.length < 12
   ) {
     return null;
@@ -397,8 +407,10 @@ function detectAssistanceImage(
     buffer[2] === 0xff
   ) {
     return {
-      mimeType: "image/jpeg",
-      extension: "jpg",
+      mimeType:
+        "image/jpeg",
+      extension:
+        "jpg",
     };
   }
 
@@ -413,24 +425,36 @@ function detectAssistanceImage(
     buffer[7] === 0x0a
   ) {
     return {
-      mimeType: "image/png",
-      extension: "png",
+      mimeType:
+        "image/png",
+      extension:
+        "png",
     };
   }
 
   if (
     buffer
-      .subarray(0, 4)
-      .toString("ascii") ===
-      "RIFF" &&
+      .subarray(
+        0,
+        4,
+      )
+      .toString(
+        "ascii",
+      ) === "RIFF" &&
     buffer
-      .subarray(8, 12)
-      .toString("ascii") ===
-      "WEBP"
+      .subarray(
+        8,
+        12,
+      )
+      .toString(
+        "ascii",
+      ) === "WEBP"
   ) {
     return {
-      mimeType: "image/webp",
-      extension: "webp",
+      mimeType:
+        "image/webp",
+      extension:
+        "webp",
     };
   }
 
@@ -453,7 +477,8 @@ function isApprovedAccount(
 ) {
   return (
     cleanText(
-      profile?.status || "",
+      profile?.status ||
+        "",
       40,
     ).toLowerCase() ===
     "approved"
@@ -464,13 +489,18 @@ function isVerifiedResidentProfile(
   profile,
 ) {
   return (
-    isApprovedAccount(profile) &&
-    profile?.residentAccess === true &&
+    isApprovedAccount(
+      profile,
+    ) &&
+    profile?.residentAccess ===
+      true &&
     (
-      profile?.identityVerified ===
+      profile
+        ?.identityVerified ===
         true ||
       normalizeIdentityStatus(
-        profile?.identityStatus,
+        profile
+          ?.identityStatus,
       ) === "verified"
     )
   );
@@ -480,9 +510,12 @@ function isOperationalAdminProfile(
   profile,
 ) {
   return (
-    isApprovedAccount(profile) &&
-    getProfileRole(profile) ===
-      "admin"
+    isApprovedAccount(
+      profile,
+    ) &&
+    getProfileRole(
+      profile,
+    ) === "admin"
   );
 }
 
@@ -491,11 +524,15 @@ async function loadUserProfile(
 ) {
   const snapshot =
     await db
-      .collection("users")
+      .collection(
+        "users",
+      )
       .doc(uid)
       .get();
 
-  if (!snapshot.exists) {
+  if (
+    !snapshot.exists
+  ) {
     throw makeHttpError(
       404,
       "profile_not_found",
@@ -503,7 +540,10 @@ async function loadUserProfile(
     );
   }
 
-  return snapshot.data() || {};
+  return (
+    snapshot.data() ||
+    {}
+  );
 }
 
 async function requireVerifiedResident(
@@ -514,7 +554,9 @@ async function requireVerifiedResident(
   try {
     const profile =
       await loadUserProfile(
-        request.firebaseUser.uid,
+        request
+          .firebaseUser
+          .uid,
       );
 
     if (
@@ -527,7 +569,6 @@ async function requireVerifiedResident(
         .json({
           error:
             "verified_resident_required",
-
           message:
             "Only a Verified Resident can upload Request Assistance evidence.",
         });
@@ -535,7 +576,8 @@ async function requireVerifiedResident(
       return;
     }
 
-    request.volunServeProfile =
+    request
+      .volunServeProfile =
       profile;
 
     next();
@@ -543,7 +585,8 @@ async function requireVerifiedResident(
     response
       .status(
         Number(
-          error?.statusCode,
+          error
+            ?.statusCode,
         ) || 500,
       )
       .json({
@@ -553,7 +596,6 @@ async function requireVerifiedResident(
               "profile_check_failed",
             100,
           ),
-
         message:
           cleanText(
             error?.message ||
@@ -570,29 +612,20 @@ async function uploadAssistanceEvidenceToCloudinary({
   extension,
   uid,
 }) {
-  const {
-    cloudName,
-    apiKey,
-    apiSecret,
-  } = getCloudinaryConfig();
+  configureCloudinary();
 
   if (
-    typeof fetch !== "function" ||
-    typeof FormData ===
-      "undefined" ||
-    typeof Blob === "undefined"
+    !Buffer.isBuffer(
+      buffer,
+    ) ||
+    buffer.length === 0
   ) {
     throw makeHttpError(
-      500,
-      "secure_upload_runtime_unavailable",
-      "This backend runtime does not provide the secure upload APIs required by VolunServe.",
+      400,
+      "evidence_file_required",
+      "A valid evidence image is required.",
     );
   }
-
-  const timestamp =
-    Math.floor(
-      Date.now() / 1000,
-    );
 
   const uniqueId =
     typeof crypto.randomUUID ===
@@ -600,93 +633,109 @@ async function uploadAssistanceEvidenceToCloudinary({
       ? crypto.randomUUID()
       : crypto
           .randomBytes(18)
-          .toString("hex");
+          .toString(
+            "hex",
+          );
 
   const publicId =
     `volunserve/assistance-evidence/${uid}/${uniqueId}`;
 
-  const signedParameters = {
-    public_id: publicId,
-    timestamp,
-  };
+  try {
+    const result =
+      await new Promise(
+        (
+          resolve,
+          reject,
+        ) => {
+          const uploadStream =
+            cloudinary
+              .uploader
+              .upload_stream(
+                {
+                  resource_type:
+                    "image",
+                  type:
+                    "authenticated",
+                  public_id:
+                    publicId,
+                  overwrite:
+                    false,
+                  unique_filename:
+                    false,
+                  use_filename:
+                    false,
+                },
+                (
+                  error,
+                  uploadResult,
+                ) => {
+                  if (
+                    error
+                  ) {
+                    reject(
+                      error,
+                    );
+                    return;
+                  }
 
-  const signature =
-    cloudinarySign(
-      signedParameters,
-      apiSecret,
-    );
+                  resolve(
+                    uploadResult,
+                  );
+                },
+              );
 
-  const form =
-    new FormData();
+          uploadStream.on(
+            "error",
+            reject,
+          );
 
-  form.append(
-    "file",
-    new Blob(
-      [buffer],
-      {
-        type: mimeType,
-      },
-    ),
-    `evidence.${extension}`,
-  );
+          uploadStream.end(
+            buffer,
+          );
+        },
+      );
 
-  form.append(
-    "api_key",
-    apiKey,
-  );
+    if (
+      !result?.asset_id ||
+      !result?.public_id
+    ) {
+      throw makeHttpError(
+        502,
+        "secure_cloudinary_upload_failed",
+        "Cloudinary did not return a complete secure upload result.",
+      );
+    }
 
-  form.append(
-    "timestamp",
-    String(timestamp),
-  );
+    return result;
+  } catch (error) {
+    if (
+      error?.code ===
+      "secure_cloudinary_upload_failed"
+    ) {
+      throw error;
+    }
 
-  form.append(
-    "public_id",
-    publicId,
-  );
+    const statusCode =
+      Number(
+        error?.http_code ||
+          error?.statusCode ||
+          error?.status ||
+          502,
+      );
 
-  form.append(
-    "signature",
-    signature,
-  );
-
-  const response =
-    await fetch(
-      `https://api.cloudinary.com/v1_1/${encodeURIComponent(
-        cloudName,
-      )}/image/authenticated`,
-      {
-        method: "POST",
-        body: form,
-      },
-    );
-
-  const result =
-    await readJsonResponse(
-      response,
-    );
-
-  if (
-    !response.ok ||
-    !result?.asset_id ||
-    !result?.public_id
-  ) {
     throw makeHttpError(
-      response.status >= 400 &&
-        response.status <= 599
-        ? response.status
+      statusCode >= 400 &&
+        statusCode <= 599
+        ? statusCode
         : 502,
       "secure_cloudinary_upload_failed",
       cleanText(
-        result?.error?.message ||
-          result?.message ||
+        error?.message ||
           "Cloudinary could not securely store the assistance evidence.",
         500,
       ),
     );
   }
-
-  return result;
 }
 
 function createCloudinaryPrivateDownloadUrl({
@@ -695,38 +744,41 @@ function createCloudinaryPrivateDownloadUrl({
   resourceType = "image",
   deliveryType = "authenticated",
 }) {
-  const {
-    cloudName,
-    apiKey,
-    apiSecret,
-  } = getCloudinaryConfig();
+  configureCloudinary();
 
-  const safePublicId = cleanText(
-    publicId,
-    500,
-  );
-
-  const safeFormat = cleanText(
-    format,
-    30,
-  )
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]/g,
-      "",
+  const safePublicId =
+    cleanText(
+      publicId,
+      500,
     );
 
-  const safeResourceType = cleanText(
-    resourceType,
-    30,
-  ).toLowerCase();
+  const safeFormat =
+    cleanText(
+      format,
+      30,
+    )
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]/g,
+        "",
+      );
 
-  const safeDeliveryType = cleanText(
-    deliveryType,
-    40,
-  ).toLowerCase();
+  const safeResourceType =
+    cleanText(
+      resourceType,
+      30,
+    ).toLowerCase();
 
-  if (!safePublicId || !safeFormat) {
+  const safeDeliveryType =
+    cleanText(
+      deliveryType,
+      40,
+    ).toLowerCase();
+
+  if (
+    !safePublicId ||
+    !safeFormat
+  ) {
     throw makeHttpError(
       409,
       "evidence_storage_reference_missing",
@@ -735,7 +787,8 @@ function createCloudinaryPrivateDownloadUrl({
   }
 
   if (
-    safeResourceType !== "image"
+    safeResourceType !==
+    "image"
   ) {
     throw makeHttpError(
       409,
@@ -745,7 +798,8 @@ function createCloudinaryPrivateDownloadUrl({
   }
 
   if (
-    safeDeliveryType !== "authenticated"
+    safeDeliveryType !==
+    "authenticated"
   ) {
     throw makeHttpError(
       409,
@@ -754,170 +808,126 @@ function createCloudinaryPrivateDownloadUrl({
     );
   }
 
-  const timestamp =
-    Math.floor(
-      Date.now() / 1000,
-    );
-
   const expiresAt =
-    timestamp +
+    Math.floor(
+      Date.now() /
+        1000,
+    ) +
     ASSISTANCE_EVIDENCE_URL_TTL_SECONDS;
 
-  const signedParameters = {
-    expires_at: expiresAt,
-    format: safeFormat,
-    public_id: safePublicId,
-    timestamp,
-    type: safeDeliveryType,
-  };
+  try {
+    const url =
+      cloudinary
+        .utils
+        .private_download_url(
+          safePublicId,
+          safeFormat,
+          {
+            resource_type:
+              safeResourceType,
+            type:
+              safeDeliveryType,
+            expires_at:
+              expiresAt,
+          },
+        );
 
-  const signature =
-    cloudinarySign(
-      signedParameters,
-      apiSecret,
+    return {
+      url,
+      expiresAt,
+    };
+  } catch (error) {
+    throw makeHttpError(
+      502,
+      "secure_cloudinary_access_url_failed",
+      cleanText(
+        error?.message ||
+          "Cloudinary could not create a temporary private evidence URL.",
+        500,
+      ),
     );
-
-  const query =
-    new URLSearchParams({
-      timestamp:
-        String(timestamp),
-      public_id:
-        safePublicId,
-      format:
-        safeFormat,
-      expires_at:
-        String(expiresAt),
-      type:
-        safeDeliveryType,
-      signature,
-      api_key:
-        apiKey,
-    });
-
-  return {
-    url:
-      `https://api.cloudinary.com/v1_1/${encodeURIComponent(
-        cloudName,
-      )}/${encodeURIComponent(
-        safeResourceType,
-      )}/download?${query.toString()}`,
-
-    expiresAt,
-  };
+  }
 }
 
 async function destroyAssistanceEvidenceFromCloudinary(
   publicId,
 ) {
-  const {
-    cloudName,
-    apiKey,
-    apiSecret,
-  } = getCloudinaryConfig();
+  configureCloudinary();
+
+  const safePublicId =
+    cleanText(
+      publicId,
+      500,
+    );
 
   if (
-    typeof fetch !== "function" ||
-    typeof FormData ===
-      "undefined"
+    !safePublicId
   ) {
-    throw makeHttpError(
-      500,
-      "secure_delete_runtime_unavailable",
-      "This backend runtime does not provide the secure deletion APIs required by VolunServe.",
-    );
+    return {
+      result:
+        "not found",
+    };
   }
 
-  const timestamp =
-    Math.floor(
-      Date.now() / 1000,
-    );
+  try {
+    const result =
+      await cloudinary
+        .uploader
+        .destroy(
+          safePublicId,
+          {
+            resource_type:
+              "image",
+            type:
+              "authenticated",
+            invalidate:
+              true,
+          },
+        );
 
-  const signedParameters = {
-    invalidate: "true",
-    public_id: publicId,
-    timestamp,
-    type: "authenticated",
-  };
-
-  const signature =
-    cloudinarySign(
-      signedParameters,
-      apiSecret,
-    );
-
-  const form =
-    new FormData();
-
-  form.append(
-    "public_id",
-    publicId,
-  );
-
-  form.append(
-    "timestamp",
-    String(timestamp),
-  );
-
-  form.append(
-    "type",
-    "authenticated",
-  );
-
-  form.append(
-    "invalidate",
-    "true",
-  );
-
-  form.append(
-    "api_key",
-    apiKey,
-  );
-
-  form.append(
-    "signature",
-    signature,
-  );
-
-  const response =
-    await fetch(
-      `https://api.cloudinary.com/v1_1/${encodeURIComponent(
-        cloudName,
-      )}/image/destroy`,
-      {
-        method: "POST",
-        body: form,
-      },
-    );
-
-  const result =
-    await readJsonResponse(
-      response,
-    );
-
-  if (
-    !response.ok ||
-    (
-      result?.result !== "ok" &&
+    if (
+      result?.result !==
+        "ok" &&
       result?.result !==
         "not found"
-    )
-  ) {
+    ) {
+      throw makeHttpError(
+        502,
+        "secure_cloudinary_delete_failed",
+        "Cloudinary could not delete the staged evidence.",
+      );
+    }
+
+    return result;
+  } catch (error) {
+    if (
+      error?.code ===
+      "secure_cloudinary_delete_failed"
+    ) {
+      throw error;
+    }
+
+    const statusCode =
+      Number(
+        error?.http_code ||
+          error?.statusCode ||
+          error?.status ||
+          502,
+      );
+
     throw makeHttpError(
-      response.status >= 400 &&
-        response.status <= 599
-        ? response.status
+      statusCode >= 400 &&
+        statusCode <= 599
+        ? statusCode
         : 502,
       "secure_cloudinary_delete_failed",
       cleanText(
-        result?.error?.message ||
-          result?.message ||
+        error?.message ||
           "Cloudinary could not delete the staged evidence.",
         500,
       ),
     );
   }
-
-  return result;
 }
 
 async function getEvidenceAccessContext(
@@ -925,16 +935,21 @@ async function getEvidenceAccessContext(
   evidenceData,
 ) {
   if (
-    evidenceData?.ownerUid === uid
+    evidenceData?.ownerUid ===
+    uid
   ) {
     return {
-      owner: true,
-      admin: false,
+      owner:
+        true,
+      admin:
+        false,
     };
   }
 
   const profile =
-    await loadUserProfile(uid);
+    await loadUserProfile(
+      uid,
+    );
 
   if (
     isOperationalAdminProfile(
@@ -942,8 +957,10 @@ async function getEvidenceAccessContext(
     )
   ) {
     return {
-      owner: false,
-      admin: true,
+      owner:
+        false,
+      admin:
+        true,
     };
   }
 
@@ -955,17 +972,23 @@ async function getEvidenceAccessContext(
 }
 
 function getIdentityAiEndpoint() {
-  const configured = cleanText(
-    process.env.IDENTITY_AI_SERVICE_URL || "",
-    1000,
-  );
+  const configured =
+    cleanText(
+      process.env
+        .IDENTITY_AI_SERVICE_URL ||
+        "",
+      1000,
+    );
 
   if (!configured) {
     return "";
   }
 
   const baseUrl =
-    configured.replace(/\/+$/, "");
+    configured.replace(
+      /\/+$/,
+      "",
+    );
 
   if (
     baseUrl.endsWith(
@@ -983,20 +1006,30 @@ function getIdentityAiHeaders(
 ) {
   const headers = {
     "Content-Type":
-      request.headers["content-type"],
+      request.headers[
+        "content-type"
+      ],
 
     "X-VolunServe-User-Id":
-      request.firebaseUser.uid,
+      request
+        .firebaseUser
+        .uid,
   };
 
-  const internalKey = String(
-    process.env.IDENTITY_AI_INTERNAL_KEY || "",
-  ).trim();
+  const internalKey =
+    String(
+      process.env
+        .IDENTITY_AI_INTERNAL_KEY ||
+        "",
+    ).trim();
 
-  if (internalKey) {
+  if (
+    internalKey
+  ) {
     headers[
       "X-VolunServe-Internal-Key"
-    ] = internalKey;
+    ] =
+      internalKey;
   }
 
   return headers;
@@ -1013,7 +1046,9 @@ async function readJsonResponse(
   }
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(
+      text,
+    );
   } catch {
     return {
       message:
@@ -1032,9 +1067,10 @@ async function callIdentityAiService(
     getIdentityAiEndpoint();
 
   if (!endpoint) {
-    const error = new Error(
-      "The VolunServe AI identity service is not configured yet.",
-    );
+    const error =
+      new Error(
+        "The VolunServe AI identity service is not configured yet.",
+      );
 
     error.code =
       "identity_ai_not_configured";
@@ -1049,11 +1085,13 @@ async function callIdentityAiService(
     !Buffer.isBuffer(
       request.body,
     ) ||
-    request.body.length === 0
+    request.body.length ===
+      0
   ) {
-    const error = new Error(
-      "Government ID and selfie files are required.",
-    );
+    const error =
+      new Error(
+        "Government ID and selfie files are required.",
+      );
 
     error.code =
       "missing_identity_media";
@@ -1064,18 +1102,22 @@ async function callIdentityAiService(
     throw error;
   }
 
-  const contentType = String(
-    request.headers["content-type"] || "",
-  ).toLowerCase();
+  const contentType =
+    String(
+      request.headers[
+        "content-type"
+      ] || "",
+    ).toLowerCase();
 
   if (
     !contentType.startsWith(
       "multipart/form-data",
     )
   ) {
-    const error = new Error(
-      "Identity verification must be submitted as multipart form data.",
-    );
+    const error =
+      new Error(
+        "Identity verification must be submitted as multipart form data.",
+      );
 
     error.code =
       "invalid_content_type";
@@ -1087,11 +1129,13 @@ async function callIdentityAiService(
   }
 
   if (
-    typeof fetch !== "function"
+    typeof fetch !==
+    "function"
   ) {
-    const error = new Error(
-      "This backend runtime does not provide the fetch API required by the AI verification proxy.",
-    );
+    const error =
+      new Error(
+        "This backend runtime does not provide the fetch API required by the AI verification proxy.",
+      );
 
     error.code =
       "fetch_unavailable";
@@ -1124,16 +1168,19 @@ async function callIdentityAiService(
       aiResponse,
     );
 
-  if (!aiResponse.ok) {
-    const error = new Error(
-      cleanText(
-        body?.message ||
-          body?.detail ||
-          body?.error ||
-          "The VolunServe AI identity service could not process the submission.",
-        500,
-      ),
-    );
+  if (
+    !aiResponse.ok
+  ) {
+    const error =
+      new Error(
+        cleanText(
+          body?.message ||
+            body?.detail ||
+            body?.error ||
+            "The VolunServe AI identity service could not process the submission.",
+          500,
+        ),
+      );
 
     error.code =
       cleanText(
@@ -1143,8 +1190,10 @@ async function callIdentityAiService(
       );
 
     error.statusCode =
-      aiResponse.status >= 400 &&
-      aiResponse.status <= 599
+      aiResponse.status >=
+        400 &&
+      aiResponse.status <=
+        599
         ? aiResponse.status
         : 502;
 
@@ -1193,7 +1242,6 @@ function diditCleanupFields() {
 
 app.get(
   "/health",
-
   (
     request,
     response,
@@ -1211,8 +1259,10 @@ app.get(
           : "volunserve_ai_not_configured",
 
       assistanceEvidenceStorage:
-        process.env.CLOUDINARY_API_KEY &&
-        process.env.CLOUDINARY_API_SECRET
+        process.env
+          .CLOUDINARY_API_KEY &&
+        process.env
+          .CLOUDINARY_API_SECRET
           ? "secure_cloudinary_configured"
           : "secure_cloudinary_not_configured",
 
@@ -1250,14 +1300,18 @@ app.get(
             .collection(
               "users",
             )
-            .doc(uid)
+            .doc(
+              uid,
+            )
             .get(),
 
           db
             .collection(
               "identityVerifications",
             )
-            .doc(uid)
+            .doc(
+              uid,
+            )
             .get(),
         ]);
 
@@ -1265,7 +1319,9 @@ app.get(
         !userSnapshot.exists
       ) {
         response
-          .status(404)
+          .status(
+            404,
+          )
           .json({
             error:
               "profile_not_found",
@@ -1289,7 +1345,8 @@ app.get(
 
       const identityStatus =
         normalizeIdentityStatus(
-          profile.identityStatus ||
+          profile
+            .identityStatus ||
             verification.status ||
             "basic",
         );
@@ -1301,39 +1358,46 @@ app.get(
         identityStatus,
 
         identityVerified:
-          profile.identityVerified ===
+          profile
+            .identityVerified ===
             true ||
           identityStatus ===
             "verified",
 
         verificationId:
           cleanText(
-            verification.verificationId ||
+            verification
+              .verificationId ||
               "",
             200,
           ),
 
         decision:
           cleanText(
-            verification.aiDecision ||
-              verification.decision ||
+            verification
+              .aiDecision ||
+              verification
+                .decision ||
               "",
             80,
           ),
 
         matchScore:
           numberOrNull(
-            verification.matchScore,
+            verification
+              .matchScore,
           ),
 
         livenessScore:
           numberOrNull(
-            verification.livenessScore,
+            verification
+              .livenessScore,
           ),
 
         message:
           cleanText(
-            verification.message ||
+            verification
+              .message ||
               "",
             500,
           ),
@@ -1385,14 +1449,18 @@ app.post(
           .collection(
             "users",
           )
-          .doc(uid);
+          .doc(
+            uid,
+          );
 
       const verificationRef =
         db
           .collection(
             "identityVerifications",
           )
-          .doc(uid);
+          .doc(
+            uid,
+          );
 
       const [
         userSnapshot,
@@ -1407,7 +1475,9 @@ app.post(
         !userSnapshot.exists
       ) {
         response
-          .status(404)
+          .status(
+            404,
+          )
           .json({
             error:
               "profile_not_found",
@@ -1435,7 +1505,9 @@ app.post(
         "approved"
       ) {
         response
-          .status(403)
+          .status(
+            403,
+          )
           .json({
             error:
               "account_not_active",
@@ -1449,18 +1521,22 @@ app.post(
 
       const currentIdentityStatus =
         normalizeIdentityStatus(
-          profile.identityStatus ||
+          profile
+            .identityStatus ||
             "basic",
         );
 
       if (
-        profile.identityVerified ===
+        profile
+          .identityVerified ===
           true ||
         currentIdentityStatus ===
           "verified"
       ) {
         response
-          .status(409)
+          .status(
+            409,
+          )
           .json({
             error:
               "already_verified",
@@ -1490,7 +1566,9 @@ app.post(
         IDENTITY_RETRY_DELAY_MS
       ) {
         response
-          .status(429)
+          .status(
+            429,
+          )
           .json({
             error:
               "too_many_requests",
@@ -1515,17 +1593,20 @@ app.post(
 
       const matchScore =
         numberOrNull(
-          aiResult?.matchScore,
+          aiResult
+            ?.matchScore,
         );
 
       const livenessScore =
         numberOrNull(
-          aiResult?.livenessScore,
+          aiResult
+            ?.livenessScore,
         );
 
       const verificationId =
         cleanText(
-          aiResult?.verificationId ||
+          aiResult
+            ?.verificationId ||
             `identity_${uid}_${Date.now()}`,
           200,
         );
@@ -1586,7 +1667,8 @@ app.post(
               .serverTimestamp(),
 
           createdAt:
-            verificationData.createdAt ||
+            verificationData
+              .createdAt ||
             FieldValue
               .serverTimestamp(),
         },
@@ -1681,7 +1763,9 @@ app.post(
       await batch.commit();
 
       response
-        .status(200)
+        .status(
+          200,
+        )
         .json({
           ok:
             true,
@@ -1711,7 +1795,8 @@ app.post(
 
       const statusCode =
         Number(
-          error?.statusCode,
+          error
+            ?.statusCode,
         );
 
       response
@@ -1769,13 +1854,16 @@ app.post(
 
     try {
       const uid =
-        request.firebaseUser.uid;
+        request
+          .firebaseUser
+          .uid;
 
       if (
         !Buffer.isBuffer(
           request.body,
         ) ||
-        request.body.length === 0
+        request.body.length ===
+          0
       ) {
         throw makeHttpError(
           400,
@@ -1877,11 +1965,15 @@ app.post(
 
       const contentSha256 =
         crypto
-          .createHash("sha256")
+          .createHash(
+            "sha256",
+          )
           .update(
             request.body,
           )
-          .digest("hex");
+          .digest(
+            "hex",
+          );
 
       uploadedCloudinaryAsset =
         await uploadAssistanceEvidenceToCloudinary(
@@ -1910,15 +2002,21 @@ app.post(
                   "",
                 )
             : crypto
-                .randomBytes(18)
-                .toString("hex")
+                .randomBytes(
+                  18,
+                )
+                .toString(
+                  "hex",
+                )
         }`;
 
       await db
         .collection(
           "assistanceEvidenceAssets",
         )
-        .doc(evidenceId)
+        .doc(
+          evidenceId,
+        )
         .set({
           evidenceId,
 
@@ -1941,34 +2039,41 @@ app.post(
 
           bytes:
             Number(
-              uploadedCloudinaryAsset.bytes ||
-                request.body.length,
+              uploadedCloudinaryAsset
+                .bytes ||
+                request.body
+                  .length,
             ),
 
           contentSha256,
 
           cloudinaryAssetId:
             cleanText(
-              uploadedCloudinaryAsset.asset_id,
+              uploadedCloudinaryAsset
+                .asset_id,
               300,
             ),
 
           cloudinaryPublicId:
             cleanText(
-              uploadedCloudinaryAsset.public_id,
+              uploadedCloudinaryAsset
+                .public_id,
               500,
             ),
 
           cloudinaryVersion:
             Number(
-              uploadedCloudinaryAsset.version ||
+              uploadedCloudinaryAsset
+                .version ||
                 0,
             ),
 
           cloudinaryFormat:
             cleanText(
-              uploadedCloudinaryAsset.format ||
-                detected.extension,
+              uploadedCloudinaryAsset
+                .format ||
+                detected
+                  .extension,
               30,
             ),
 
@@ -1980,12 +2085,14 @@ app.post(
 
           width:
             numberOrNull(
-              uploadedCloudinaryAsset.width,
+              uploadedCloudinaryAsset
+                .width,
             ),
 
           height:
             numberOrNull(
-              uploadedCloudinaryAsset.height,
+              uploadedCloudinaryAsset
+                .height,
             ),
 
           createdAt:
@@ -2004,7 +2111,9 @@ app.post(
         });
 
       response
-        .status(201)
+        .status(
+          201,
+        )
         .json({
           ok:
             true,
@@ -2017,12 +2126,15 @@ app.post(
             fileName,
 
             mimeType:
-              detected.mimeType,
+              detected
+                .mimeType,
 
             bytes:
               Number(
-                uploadedCloudinaryAsset.bytes ||
-                  request.body.length,
+                uploadedCloudinaryAsset
+                  .bytes ||
+                  request.body
+                    .length,
               ),
 
             status:
@@ -2036,11 +2148,13 @@ app.post(
       );
 
       if (
-        uploadedCloudinaryAsset?.public_id
+        uploadedCloudinaryAsset
+          ?.public_id
       ) {
         try {
           await destroyAssistanceEvidenceFromCloudinary(
-            uploadedCloudinaryAsset.public_id,
+            uploadedCloudinaryAsset
+              .public_id,
           );
         } catch (
           cleanupError
@@ -2055,7 +2169,8 @@ app.post(
       response
         .status(
           Number(
-            error?.statusCode,
+            error
+              ?.statusCode,
           ) || 500,
         )
         .json({
@@ -2090,11 +2205,14 @@ app.post(
   ) => {
     try {
       const uid =
-        request.firebaseUser.uid;
+        request
+          .firebaseUser
+          .uid;
 
       const requestId =
         cleanText(
-          request.body?.requestId ||
+          request.body
+            ?.requestId ||
             "",
           200,
         );
@@ -2103,24 +2221,33 @@ app.post(
         Array.from(
           new Set(
             Array.isArray(
-              request.body?.evidenceIds,
+              request.body
+                ?.evidenceIds,
             )
-              ? request.body.evidenceIds
-                  .map((value) =>
-                    cleanText(
+              ? request.body
+                  .evidenceIds
+                  .map(
+                    (
                       value,
-                      200,
-                    ),
+                    ) =>
+                      cleanText(
+                        value,
+                        200,
+                      ),
                   )
-                  .filter(Boolean)
+                  .filter(
+                    Boolean,
+                  )
               : [],
           ),
         );
 
       if (
         !requestId ||
-        evidenceIds.length === 0 ||
-        evidenceIds.length > 8
+        evidenceIds.length ===
+          0 ||
+        evidenceIds.length >
+          8
       ) {
         throw makeHttpError(
           400,
@@ -2134,13 +2261,16 @@ app.post(
           .collection(
             "assistanceRequests",
           )
-          .doc(requestId);
+          .doc(
+            requestId,
+          );
 
       const assistanceSnapshot =
         await assistanceRef.get();
 
       if (
-        !assistanceSnapshot.exists
+        !assistanceSnapshot
+          .exists
       ) {
         throw makeHttpError(
           404,
@@ -2154,7 +2284,8 @@ app.post(
         {};
 
       if (
-        assistanceData.requesterUid !==
+        assistanceData
+          .requesterUid !==
         uid
       ) {
         throw makeHttpError(
@@ -2166,7 +2297,9 @@ app.post(
 
       const evidenceRefs =
         evidenceIds.map(
-          (evidenceId) =>
+          (
+            evidenceId,
+          ) =>
             db
               .collection(
                 "assistanceEvidenceAssets",
@@ -2179,7 +2312,9 @@ app.post(
       const evidenceSnapshots =
         await Promise.all(
           evidenceRefs.map(
-            (ref) =>
+            (
+              ref,
+            ) =>
               ref.get(),
           ),
         );
@@ -2191,11 +2326,14 @@ app.post(
         index += 1
       ) {
         const snapshot =
-          evidenceSnapshots[index];
+          evidenceSnapshots[
+            index
+          ];
 
         const data =
           snapshot.exists
-            ? snapshot.data() || {}
+            ? snapshot.data() ||
+              {}
             : null;
 
         if (!data) {
@@ -2207,7 +2345,8 @@ app.post(
         }
 
         if (
-          data.ownerUid !== uid
+          data.ownerUid !==
+          uid
         ) {
           throw makeHttpError(
             403,
@@ -2238,7 +2377,9 @@ app.post(
         db.batch();
 
       evidenceRefs.forEach(
-        (ref) => {
+        (
+          ref,
+        ) => {
           batch.set(
             ref,
             {
@@ -2283,7 +2424,8 @@ app.post(
       response
         .status(
           Number(
-            error?.statusCode,
+            error
+              ?.statusCode,
           ) || 500,
         )
         .json({
@@ -2331,7 +2473,9 @@ app.get(
       );
 
       const uid =
-        request.firebaseUser.uid;
+        request
+          .firebaseUser
+          .uid;
 
       const evidenceId =
         cleanText(
@@ -2354,11 +2498,14 @@ app.get(
           .collection(
             "assistanceEvidenceAssets",
           )
-          .doc(evidenceId)
+          .doc(
+            evidenceId,
+          )
           .get();
 
       if (
-        !evidenceSnapshot.exists
+        !evidenceSnapshot
+          .exists
       ) {
         throw makeHttpError(
           404,
@@ -2379,14 +2526,16 @@ app.get(
 
       const evidenceStatus =
         cleanText(
-          evidenceData.status ||
+          evidenceData
+            .status ||
             "",
           40,
         ).toLowerCase();
 
       const requestId =
         cleanText(
-          evidenceData.requestId ||
+          evidenceData
+            .requestId ||
             "",
           200,
         );
@@ -2411,11 +2560,14 @@ app.get(
             .collection(
               "assistanceRequests",
             )
-            .doc(requestId)
+            .doc(
+              requestId,
+            )
             .get();
 
         if (
-          !assistanceSnapshot.exists
+          !assistanceSnapshot
+            .exists
         ) {
           throw makeHttpError(
             404,
@@ -2430,12 +2582,14 @@ app.get(
 
         if (
           cleanText(
-            assistanceData.requesterUid ||
+            assistanceData
+              .requesterUid ||
               "",
             200,
           ) !==
           cleanText(
-            evidenceData.ownerUid ||
+            evidenceData
+              .ownerUid ||
               "",
             200,
           )
@@ -2515,7 +2669,8 @@ app.get(
 
           ownerUid:
             cleanText(
-              evidenceData.ownerUid ||
+              evidenceData
+                .ownerUid ||
                 "",
               200,
             ),
@@ -2575,7 +2730,8 @@ app.get(
           signedAccess.url,
 
         expiresAt:
-          signedAccess.expiresAt,
+          signedAccess
+            .expiresAt,
 
         expiresInSeconds:
           ASSISTANCE_EVIDENCE_URL_TTL_SECONDS,
@@ -2589,7 +2745,8 @@ app.get(
       response
         .status(
           Number(
-            error?.statusCode,
+            error
+              ?.statusCode,
           ) || 500,
         )
         .json({
@@ -2622,7 +2779,9 @@ app.delete(
   ) => {
     try {
       const uid =
-        request.firebaseUser.uid;
+        request
+          .firebaseUser
+          .uid;
 
       const evidenceId =
         cleanText(
@@ -2645,13 +2804,16 @@ app.delete(
           .collection(
             "assistanceEvidenceAssets",
           )
-          .doc(evidenceId);
+          .doc(
+            evidenceId,
+          );
 
       const evidenceSnapshot =
         await evidenceRef.get();
 
       if (
-        !evidenceSnapshot.exists
+        !evidenceSnapshot
+          .exists
       ) {
         response.json({
           ok:
@@ -2733,7 +2895,8 @@ app.delete(
       response
         .status(
           Number(
-            error?.statusCode,
+            error
+              ?.statusCode,
           ) || 500,
         )
         .json({
@@ -2773,13 +2936,16 @@ app.use(
     ) {
       const assistanceEvidenceRequest =
         String(
-          request?.path || "",
+          request?.path ||
+            "",
         ).startsWith(
           "/api/assistance/evidence/",
         );
 
       response
-        .status(413)
+        .status(
+          413,
+        )
         .json({
           error:
             assistanceEvidenceRequest
@@ -2796,7 +2962,9 @@ app.use(
     }
 
     response
-      .status(500)
+      .status(
+        500,
+      )
       .json({
         error:
           "server_error",
