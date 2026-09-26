@@ -4,8 +4,7 @@ import {
     doc,
     getDoc,
     onSnapshot,
-    serverTimestamp,
-    updateDoc
+    serverTimestamp
 } from "firebase/firestore";
 import React, {
     useEffect,
@@ -1329,30 +1328,118 @@ export default function AssistanceRequestsAdmin() {
     try {
       setSavingAction(actionKey);
 
-      await updateDoc(
-        doc(
-          db,
-          "assistanceRequests",
+      const token = await user.getIdToken(true);
+
+      let payload: Record<string, any> = {};
+
+      if (actionKey === "resource_assessment") {
+        payload = {
+          supportDecision: String(values.supportDecision || ""),
+          remainingAmount: Number(values.remainingAmount || 0),
+          adminNote: String(values.adminNote || ""),
+        };
+      } else if (actionKey === "assistance_provided") {
+        payload = {
+          supportDecision: String(values.supportDecision || ""),
+          remainingAmount: Number(values.remainingAmount || 0),
+          adminNote: String(values.adminNote || ""),
+        };
+      } else if (actionKey === "save_location") {
+        payload = {
+          assignedLocationType: String(values.assignedLocationType || ""),
+          assignedLocationName: String(values.assignedLocationName || ""),
+          assignedLocationAddress: String(values.assignedLocationAddress || ""),
+          assignedLocationNotes: String(values.assignedLocationNotes || ""),
+          adminNote: String(values.adminNote || ""),
+        };
+      } else if (actionKey === "clear_location") {
+        payload = {
+          adminNote: String(values.adminNote || ""),
+        };
+      } else {
+        throw new Error("Unsupported Assistance Request operation.");
+      }
+
+      const response = await fetch(
+        `${SECURE_ASSISTANCE_BACKEND}/api/admin/assistance/requests/${encodeURIComponent(
           selected.id,
-        ),
+        )}/operation`,
         {
-          ...values,
-          reviewedAt: serverTimestamp(),
-          reviewedBy: user.uid,
-          updatedAt: serverTimestamp(),
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: actionKey,
+            ...payload,
+          }),
         },
       );
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.ok) {
+        const backendError: any = new Error(
+          result?.message ||
+            result?.error ||
+            `Assistance operation failed with HTTP ${response.status}.`,
+        );
+
+        backendError.code =
+          result?.error ||
+          `http_${response.status}`;
+
+        throw backendError;
+      }
+
+      const successMessages: Record<string, string> = {
+        resource_assessment:
+          "LGU resource assessment has been saved.",
+        assistance_provided:
+          "Assistance has been marked as provided.",
+        save_location:
+          "Official public service / receiving location has been saved.",
+        clear_location:
+          "Official public service / receiving location has been cleared.",
+      };
+
+      const message =
+        successMessages[actionKey] ||
+        "Assistance Request update has been saved.";
+
+      if (Platform.OS === "web") {
+        const browserAlert = (globalThis as any).alert;
+        if (typeof browserAlert === "function") {
+          browserAlert(message);
+        } else {
+          Alert.alert("Saved", message);
+        }
+      } else {
+        Alert.alert("Saved", message);
+      }
     } catch (error: any) {
-      console.log(
-        "assistance request update error",
+      console.error(
+        "assistance request operation error",
         error,
       );
 
-      Alert.alert(
-        "Update Failed",
+      const message =
         error?.message ||
-          "The Assistance Request could not be updated.",
-      );
+        "The Assistance Request could not be updated.";
+
+      if (Platform.OS === "web") {
+        const browserAlert = (globalThis as any).alert;
+        if (typeof browserAlert === "function") {
+          browserAlert(
+            `Update Failed\n\n${message}`,
+          );
+        } else {
+          Alert.alert("Update Failed", message);
+        }
+      } else {
+        Alert.alert("Update Failed", message);
+      }
     } finally {
       setSavingAction("");
     }

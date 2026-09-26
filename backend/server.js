@@ -6105,6 +6105,543 @@ app.post(
 
 app.post(
 
+  "/api/admin/assistance/requests/:requestId/operation",
+
+  requireFirebaseUser,
+
+  requireOperationalAdmin,
+
+  async (
+    request,
+    response,
+  ) => {
+    try {
+      const adminUid =
+        request
+          .firebaseUser
+          .uid;
+
+      const requestId =
+        cleanText(
+          request.params
+            ?.requestId ||
+            "",
+          120,
+        );
+
+      if (
+        !requestId ||
+        !/^[A-Za-z0-9_-]{10,120}$/.test(
+          requestId,
+        )
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_assistance_request_id",
+          "The Request Assistance ID is invalid.",
+        );
+      }
+
+      const action =
+        cleanText(
+          request.body
+            ?.action ||
+            "",
+          60,
+        ).toLowerCase();
+
+      if (
+        ![
+          "resource_assessment",
+          "assistance_provided",
+          "save_location",
+          "clear_location",
+        ].includes(action)
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_assistance_operation",
+          "Choose a valid Assistance Request operation.",
+        );
+      }
+
+      const assistanceRef =
+        db
+          .collection(
+            "assistanceRequests",
+          )
+          .doc(
+            requestId,
+          );
+
+      const reviewRef =
+        db
+          .collection(
+            "assistanceVerificationReviews",
+          )
+          .doc(
+            requestId,
+          );
+
+      const result =
+        await db
+          .runTransaction(
+            async (
+              transaction,
+            ) => {
+              const [
+                assistanceSnapshot,
+                reviewSnapshot,
+              ] =
+                await Promise.all([
+                  transaction.get(
+                    assistanceRef,
+                  ),
+                  transaction.get(
+                    reviewRef,
+                  ),
+                ]);
+
+              if (
+                !assistanceSnapshot
+                  .exists
+              ) {
+                throw makeHttpError(
+                  404,
+                  "assistance_request_not_found",
+                  "The Assistance Request was not found.",
+                );
+              }
+
+              if (
+                !reviewSnapshot
+                  .exists
+              ) {
+                throw makeHttpError(
+                  409,
+                  "assistance_review_not_found",
+                  "The protected LGU verification review was not found.",
+                );
+              }
+
+              const assistanceData =
+                assistanceSnapshot
+                  .data() ||
+                {};
+
+              const reviewData =
+                reviewSnapshot
+                  .data() ||
+                {};
+
+              const verificationStatus =
+                cleanText(
+                  assistanceData
+                    .verificationStatus ||
+                    "",
+                  60,
+                ).toLowerCase();
+
+              const finalDecision =
+                cleanText(
+                  reviewData
+                    .finalDecision ||
+                    "",
+                  60,
+                ).toLowerCase();
+
+              if (
+                verificationStatus !==
+                  "verified" ||
+                finalDecision !==
+                  "verified"
+              ) {
+                throw makeHttpError(
+                  409,
+                  "verified_need_required",
+                  "Complete final LGU verification before recording post-verification assistance actions.",
+                );
+              }
+
+              const commonUpdate = {
+                reviewedAt:
+                  FieldValue
+                    .serverTimestamp(),
+                reviewedBy:
+                  adminUid,
+                updatedAt:
+                  FieldValue
+                    .serverTimestamp(),
+              };
+
+              if (
+                action ===
+                "resource_assessment"
+              ) {
+                const supportDecision =
+                  cleanText(
+                    request.body
+                      ?.supportDecision ||
+                      "",
+                    60,
+                  ).toLowerCase();
+
+                if (
+                  ![
+                    "internal_support",
+                    "donation_support",
+                    "not_required",
+                  ].includes(
+                    supportDecision,
+                  )
+                ) {
+                  throw makeHttpError(
+                    400,
+                    "support_decision_required",
+                    "Select how the verified need will be supported.",
+                  );
+                }
+
+                const requestedAmount =
+                  Number(
+                    request.body
+                      ?.remainingAmount ??
+                      0,
+                  );
+
+                if (
+                  !Number.isFinite(
+                    requestedAmount,
+                  ) ||
+                  requestedAmount < 0
+                ) {
+                  throw makeHttpError(
+                    400,
+                    "invalid_remaining_amount",
+                    "Enter a valid verified remaining unmet amount.",
+                  );
+                }
+
+                const verifiedCap =
+                  Number(
+                    reviewData
+                      .verifiedUncoveredAmount ||
+                      0,
+                  );
+
+                const preferredTypes =
+                  Array.isArray(
+                    assistanceData
+                      .preferredAssistanceTypes,
+                  )
+                    ? assistanceData
+                        .preferredAssistanceTypes
+                    : [];
+
+                if (
+                  supportDecision ===
+                    "donation_support" &&
+                  requestedAmount >
+                    verifiedCap
+                ) {
+                  throw makeHttpError(
+                    400,
+                    "remaining_amount_exceeds_verified_need",
+                    `Donation support cannot exceed the LGU-verified uncovered amount of PHP ${verifiedCap.toLocaleString("en-PH")}.`,
+                  );
+                }
+
+                if (
+                  supportDecision ===
+                    "donation_support" &&
+                  preferredTypes.includes(
+                    "monetary",
+                  ) &&
+                  requestedAmount <= 0
+                ) {
+                  throw makeHttpError(
+                    400,
+                    "remaining_amount_required",
+                    "For a monetary shortage, enter the verified remaining unmet amount before opening Donation Support.",
+                  );
+                }
+
+                const remainingAmount =
+                  supportDecision ===
+                    "donation_support"
+                    ? requestedAmount
+                    : 0;
+
+                transaction.update(
+                  assistanceRef,
+                  {
+                    ...commonUpdate,
+                    status:
+                      "verified",
+                    verificationStatus:
+                      "verified",
+                    supportDecision,
+                    remainingAmount,
+                    adminNote:
+                      cleanText(
+                        request.body
+                          ?.adminNote ||
+                          assistanceData
+                            .adminNote ||
+                          "",
+                        2000,
+                      ),
+                  },
+                );
+
+                return {
+                  supportDecision,
+                  remainingAmount,
+                };
+              }
+
+              if (
+                action ===
+                "assistance_provided"
+              ) {
+                const requestedDecision =
+                  cleanText(
+                    request.body
+                      ?.supportDecision ||
+                      assistanceData
+                        .supportDecision ||
+                      "",
+                    60,
+                  ).toLowerCase();
+
+                if (
+                  ![
+                    "internal_support",
+                    "not_required",
+                  ].includes(
+                    requestedDecision,
+                  )
+                ) {
+                  throw makeHttpError(
+                    409,
+                    "assistance_provided_not_allowed",
+                    "Mark Assistance Provided only when LGU/partner support is available or no additional support is required.",
+                  );
+                }
+
+                transaction.update(
+                  assistanceRef,
+                  {
+                    ...commonUpdate,
+                    status:
+                      "assistance_provided",
+                    verificationStatus:
+                      "verified",
+                    supportDecision:
+                      requestedDecision,
+                    remainingAmount:
+                      0,
+                    adminNote:
+                      cleanText(
+                        request.body
+                          ?.adminNote ||
+                          assistanceData
+                            .adminNote ||
+                          "",
+                        2000,
+                      ),
+                  },
+                );
+
+                return {
+                  supportDecision:
+                    requestedDecision,
+                  remainingAmount:
+                    0,
+                };
+              }
+
+              if (
+                action ===
+                "save_location"
+              ) {
+                const locationType =
+                  cleanText(
+                    request.body
+                      ?.assignedLocationType ||
+                      "",
+                    80,
+                  ).toLowerCase();
+
+                const allowedLocationTypes = [
+                  "barangay_hall",
+                  "lgu_office",
+                  "hospital_social_service",
+                  "social_welfare_office",
+                  "vet_clinic",
+                  "authorized_public_point",
+                ];
+
+                const locationName =
+                  cleanText(
+                    request.body
+                      ?.assignedLocationName ||
+                      "",
+                    160,
+                  );
+
+                const locationAddress =
+                  cleanText(
+                    request.body
+                      ?.assignedLocationAddress ||
+                      "",
+                    300,
+                  );
+
+                if (
+                  !allowedLocationTypes
+                    .includes(
+                      locationType,
+                    ) ||
+                  locationName.length <
+                    3 ||
+                  locationAddress.length <
+                    5
+                ) {
+                  throw makeHttpError(
+                    400,
+                    "official_location_required",
+                    "Select a valid public location type and enter the official location name and address.",
+                  );
+                }
+
+                transaction.update(
+                  assistanceRef,
+                  {
+                    ...commonUpdate,
+                    assignedLocationType:
+                      locationType,
+                    assignedLocationName:
+                      locationName,
+                    assignedLocationAddress:
+                      locationAddress,
+                    assignedLocationNotes:
+                      cleanText(
+                        request.body
+                          ?.assignedLocationNotes ||
+                          "",
+                        1000,
+                      ),
+                    assignedLocationSetBy:
+                      adminUid,
+                    assignedLocationSetAt:
+                      FieldValue
+                        .serverTimestamp(),
+                    adminNote:
+                      cleanText(
+                        request.body
+                          ?.adminNote ||
+                          assistanceData
+                            .adminNote ||
+                          "",
+                        2000,
+                      ),
+                  },
+                );
+
+                return {
+                  assignedLocationType:
+                    locationType,
+                  assignedLocationName:
+                    locationName,
+                  assignedLocationAddress:
+                    locationAddress,
+                };
+              }
+
+              transaction.update(
+                assistanceRef,
+                {
+                  ...commonUpdate,
+                  assignedLocationType:
+                    "",
+                  assignedLocationName:
+                    "",
+                  assignedLocationAddress:
+                    "",
+                  assignedLocationNotes:
+                    "",
+                  assignedLocationSetBy:
+                    "",
+                  assignedLocationSetAt:
+                    null,
+                  adminNote:
+                    cleanText(
+                      request.body
+                        ?.adminNote ||
+                        assistanceData
+                          .adminNote ||
+                        "",
+                      2000,
+                    ),
+                },
+              );
+
+              return {
+                assignedLocationType:
+                  "",
+                assignedLocationName:
+                  "",
+                assignedLocationAddress:
+                  "",
+              };
+            },
+          );
+
+      response
+        .status(200)
+        .json({
+          ok:
+            true,
+          requestId,
+          action,
+          ...result,
+        });
+    } catch (error) {
+      console.error(
+        "Assistance post-verification operation failed:",
+        error,
+      );
+
+      response
+        .status(
+          Number(
+            error
+              ?.statusCode,
+          ) || 500,
+        )
+        .json({
+          error:
+            cleanText(
+              error?.code ||
+                "assistance_operation_failed",
+              100,
+            ),
+          message:
+            cleanText(
+              error?.message ||
+                "Unable to save the Assistance Request operation.",
+              500,
+            ),
+        });
+    }
+  },
+
+);
+
+
+app.post(
+
   "/api/assistance/evidence/upload",
 
 
