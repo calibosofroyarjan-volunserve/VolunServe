@@ -394,6 +394,312 @@ app.use(
 
 
 
+// =========================================================
+// PAYMONGO TEST CHECKOUT + WEBHOOK
+// =========================================================
+// IMPORTANT: This webhook route MUST stay before express.json().
+// PayMongo signs the exact raw request body, so parsing JSON first would
+// invalidate the HMAC signature.
+// =========================================================
+
+const PAYMONGO_API_BASE = "https://api.paymongo.com";
+
+const paymongoText = (value, maximumLength = 500) =>
+  String(value ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximumLength);
+
+const paymongoMode = () =>
+  paymongoText(process.env.PAYMONGO_MODE || "test", 20).toLowerCase() === "live"
+    ? "live"
+    : "test";
+
+const getPaymongoSecretKey = () =>
+  String(process.env.PAYMONGO_SECRET_KEY || "").trim();
+
+const getPaymongoWebhookSecret = () =>
+  String(process.env.PAYMONGO_WEBHOOK_SECRET || "").trim();
+
+const maskDonationName = (value) => {
+  const parts = paymongoText(value || "Donor", 160)
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "Anonymous Donor";
+
+  return parts
+    .map((part) => {
+      if (part.length <= 1) return `${part}*`;
+      return `${part[0]}${"*".repeat(Math.max(1, part.length - 2))}${part[part.length - 1]}`;
+    })
+    .join(" ")
+    .slice(0, 160);
+};
+
+const parsePaymongoSignature = (headerValue) => {
+  const result = {};
+
+  String(headerValue || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      const separator = item.indexOf("=");
+      if (separator <= 0) return;
+      const key = item.slice(0, separator).trim();
+      const value = item.slice(separator + 1).trim();
+      if (key) result[key] = value;
+    });
+
+  return result;
+};
+
+const verifyPaymongoWebhookSignature = (rawBody, signatureHeader) => {
+  const secret = getPaymongoWebhookSecret();
+  if (!secret || !Buffer.isBuffer(rawBody)) return false;
+
+  const parts = parsePaymongoSignature(signatureHeader);
+  const timestamp = String(parts.t || "").trim();
+  const signatureKey = paymongoMode() === "live" ? "li" : "te";
+  const provided = String(parts[signatureKey] || "").trim().toLowerCase();
+
+  if (!timestamp || !/^[a-f0-9]{64}$/i.test(provided)) return false;
+
+  const rawText = rawBody.toString("utf8");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${timestamp}.${rawText}`)
+    .digest("hex");
+
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const providedBuffer = Buffer.from(provided, "utf8");
+
+  return (
+    expectedBuffer.length === providedBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  );
+};
+
+const finalizePaymongoDonation = async (session) => {
+  const sessionId = paymongoText(session?.id || "", 180);
+  const attributes = session?.attributes || {};
+  const donationId = paymongoText(attributes.reference_number || "", 180);
+
+  if (!sessionId || !donationId) {
+    const error = new Error("PayMongo checkout session is missing its reference number.");
+    error.statusCode = 400;
+    error.code = "paymongo_reference_missing";
+    throw error;
+  }
+
+  if (paymongoMode() === "test" && attributes.livemode === true) {
+    const error = new Error("Live PayMongo events are disabled while VolunServe is in test mode.");
+    error.statusCode = 409;
+    error.code = "live_paymongo_event_blocked";
+    throw error;
+  }
+
+  const donationRef = db.collection("donations").doc(donationId);
+  const activityRef = db.collection("adminActivityLogs").doc();
+
+  return db.runTransaction(async (transaction) => {
+    const donationSnapshot = await transaction.get(donationRef);
+
+    if (!donationSnapshot.exists) {
+      const error = new Error("The PayMongo donation record was not found yet.");
+      error.statusCode = 404;
+      error.code = "paymongo_donation_not_found";
+      throw error;
+    }
+
+    const donation = donationSnapshot.data() || {};
+
+    if (
+      paymongoText(donation.paymentProvider || "", 40).toLowerCase() !== "paymongo"
+    ) {
+      const error = new Error("This donation is not linked to PayMongo.");
+      error.statusCode = 409;
+      error.code = "paymongo_donation_link_required";
+      throw error;
+    }
+
+    const storedSessionId = paymongoText(
+      donation.paymongoCheckoutSessionId || "",
+      180,
+    );
+
+    if (storedSessionId && storedSessionId !== sessionId) {
+      const error = new Error("The PayMongo checkout session does not match this donation.");
+      error.statusCode = 409;
+      error.code = "paymongo_session_mismatch";
+      throw error;
+    }
+
+    if (
+      paymongoText(donation.status || "", 40).toLowerCase() === "received" &&
+      paymongoText(donation.paymentStatus || "", 40).toLowerCase() === "paid"
+    ) {
+      return {
+        donationId,
+        campaignId: paymongoText(donation.campaignId || "", 160),
+        alreadyProcessed: true,
+      };
+    }
+
+    if (
+      !["payment_creating", "payment_pending"].includes(
+        paymongoText(donation.status || "", 40).toLowerCase(),
+      )
+    ) {
+      const error = new Error("This PayMongo donation is not awaiting payment confirmation.");
+      error.statusCode = 409;
+      error.code = "paymongo_donation_not_pending";
+      throw error;
+    }
+
+    const amount = Number(donation.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      const error = new Error("The stored PayMongo donation amount is invalid.");
+      error.statusCode = 409;
+      error.code = "paymongo_amount_invalid";
+      throw error;
+    }
+
+    const campaignId = paymongoText(donation.campaignId || "", 160);
+    if (!campaignId) {
+      const error = new Error("This PayMongo donation is not linked to a campaign.");
+      error.statusCode = 409;
+      error.code = "paymongo_campaign_link_required";
+      throw error;
+    }
+
+    const campaignRef = db.collection("donationCampaigns").doc(campaignId);
+    const campaignSnapshot = await transaction.get(campaignRef);
+
+    if (!campaignSnapshot.exists) {
+      const error = new Error("The linked Donation Campaign was not found.");
+      error.statusCode = 404;
+      error.code = "campaign_not_found";
+      throw error;
+    }
+
+    const campaign = campaignSnapshot.data() || {};
+    const currentVerified = Number(campaign.verifiedAmountReceived || 0);
+    const nextVerified =
+      (Number.isFinite(currentVerified) ? currentVerified : 0) + amount;
+
+    transaction.update(campaignRef, {
+      verifiedAmountReceived: nextVerified,
+      updatedBy: "paymongo_webhook",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    transaction.update(donationRef, {
+      status: "received",
+      paymentStatus: "paid",
+      actualAmountReceived: amount,
+      transactionReference: sessionId,
+      paymongoCheckoutSessionId: sessionId,
+      paymongoReferenceNumber: donationId,
+      paymongoLivemode: attributes.livemode === true,
+      paidAt: FieldValue.serverTimestamp(),
+      verifiedBy: "paymongo_webhook",
+      verifiedAt: FieldValue.serverTimestamp(),
+      receivedBy: "paymongo_webhook",
+      receivedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      rejectionReason: "",
+    });
+
+    transaction.set(activityRef, {
+      action: "PayMongo Donation Automatically Verified",
+      donationId,
+      campaignId,
+      donationType: "monetary",
+      actualReceived: amount,
+      paymentProvider: "paymongo",
+      paymongoCheckoutSessionId: sessionId,
+      performedBy: "paymongo_webhook",
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      donationId,
+      campaignId,
+      verifiedAmountReceived: nextVerified,
+      alreadyProcessed: false,
+    };
+  });
+};
+
+app.post(
+  "/api/paymongo/webhook",
+  express.raw({ type: "application/json", limit: "2mb" }),
+  async (request, response) => {
+    try {
+      const signatureHeader =
+        request.headers["paymongo-signature"] ||
+        request.headers["x-paymongo-signature"] ||
+        "";
+
+      if (!getPaymongoWebhookSecret()) {
+        return response.status(503).json({
+          ok: false,
+          error: "paymongo_webhook_secret_not_configured",
+        });
+      }
+
+      if (!verifyPaymongoWebhookSignature(request.body, signatureHeader)) {
+        return response.status(401).json({
+          ok: false,
+          error: "invalid_paymongo_signature",
+        });
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(request.body.toString("utf8"));
+      } catch {
+        return response.status(400).json({
+          ok: false,
+          error: "invalid_paymongo_webhook_json",
+        });
+      }
+
+      const event = payload?.data || {};
+      const eventType = paymongoText(event?.type || "", 120);
+
+      if (eventType !== "checkout_session.payment.paid") {
+        return response.status(200).json({
+          ok: true,
+          ignored: true,
+          eventType,
+        });
+      }
+
+      const result = await finalizePaymongoDonation(event?.data || {});
+
+      return response.status(200).json({
+        ok: true,
+        eventType,
+        ...result,
+      });
+    } catch (error) {
+      console.error("PayMongo webhook processing failed:", error);
+      return response.status(Number(error?.statusCode) || 500).json({
+        ok: false,
+        error: paymongoText(error?.code || "paymongo_webhook_failed", 120),
+        message: paymongoText(
+          error?.message || "Unable to process the PayMongo webhook.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
 app.use(
 
   express.json({
@@ -3005,6 +3311,32 @@ app.get(
       assistanceEvidenceViewer:
 
         "time_limited_private_download_v1",
+
+
+
+      paymongoMode:
+
+        paymongoMode(),
+
+
+
+      paymongoCheckout:
+
+        getPaymongoSecretKey()
+
+          ? "configured"
+
+          : "not_configured",
+
+
+
+      paymongoWebhook:
+
+        getPaymongoWebhookSecret()
+
+          ? "configured"
+
+          : "not_configured",
 
 
 
@@ -10315,6 +10647,372 @@ app.use(
 
 );
 
+
+// =========================================================
+// PAYMONGO HOSTED CHECKOUT — TEST MODE
+// =========================================================
+// Resident creates a PayMongo Checkout Session through this backend. The
+// browser never receives the secret API key. Payment is counted ONLY after the
+// signed checkout_session.payment.paid webhook is processed above.
+// =========================================================
+
+const validatedPaymongoReturnBaseUrl = (value) => {
+  const raw = cleanText(value || "", 700);
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw makeHttpError(
+      400,
+      "invalid_checkout_return_url",
+      "The Donation page return URL is invalid.",
+    );
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw makeHttpError(
+      400,
+      "invalid_checkout_return_url",
+      "The Donation page return URL must use HTTP or HTTPS.",
+    );
+  }
+
+  if (!allowedOrigins.has(parsed.origin)) {
+    throw makeHttpError(
+      403,
+      "checkout_return_origin_not_allowed",
+      "This Donation page origin is not allowed by the VolunServe backend.",
+    );
+  }
+
+  parsed.hash = "";
+  parsed.search = "";
+  return parsed;
+};
+
+const paymongoCheckoutErrorMessage = (payload, fallback) => {
+  const firstError = Array.isArray(payload?.errors) ? payload.errors[0] : null;
+  return cleanText(
+    firstError?.detail ||
+      firstError?.title ||
+      payload?.message ||
+      fallback ||
+      "PayMongo could not create the test checkout session.",
+    700,
+  );
+};
+
+app.post(
+  "/api/paymongo/checkout-session",
+  requireFirebaseUser,
+  async (request, response) => {
+    let donationRef = null;
+
+    try {
+      if (paymongoMode() !== "test") {
+        throw makeHttpError(
+          503,
+          "paymongo_test_mode_required",
+          "VolunServe payment integration is currently locked to PayMongo Test Mode.",
+        );
+      }
+
+      const secretKey = getPaymongoSecretKey();
+      if (!secretKey || !secretKey.startsWith("sk_test_")) {
+        throw makeHttpError(
+          503,
+          "paymongo_test_key_not_configured",
+          "Configure a PayMongo Secret Test key on the backend before starting checkout.",
+        );
+      }
+
+      if (typeof fetch !== "function") {
+        throw makeHttpError(
+          500,
+          "fetch_unavailable",
+          "The backend runtime cannot connect to PayMongo.",
+        );
+      }
+
+      const uid = request.firebaseUser.uid;
+      const profile = await loadUserProfile(uid);
+      const role = getProfileRole(profile);
+
+      if (
+        !isApprovedAccount(profile) ||
+        profile?.residentAccess !== true ||
+        ["admin", "superadmin"].includes(role)
+      ) {
+        throw makeHttpError(
+          403,
+          "resident_donor_required",
+          "Only an approved Resident account can start a Donation checkout.",
+        );
+      }
+
+      const campaignId = cleanText(request.body?.campaignId || "", 160);
+      const amount = Number(request.body?.amount ?? 0);
+
+      if (!campaignId || !/^[A-Za-z0-9_-]{6,160}$/.test(campaignId)) {
+        throw makeHttpError(
+          400,
+          "invalid_campaign_id",
+          "Choose a valid Donation Campaign.",
+        );
+      }
+
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) {
+        throw makeHttpError(
+          400,
+          "invalid_donation_amount",
+          "Enter a valid donation amount greater than zero.",
+        );
+      }
+
+      const amountCentavos = Math.round(amount * 100);
+      if (!Number.isSafeInteger(amountCentavos) || amountCentavos <= 0) {
+        throw makeHttpError(
+          400,
+          "invalid_donation_amount",
+          "The donation amount could not be converted to PHP centavos.",
+        );
+      }
+
+      const returnBaseUrl = validatedPaymongoReturnBaseUrl(
+        request.body?.returnBaseUrl,
+      );
+
+      const campaignRef = db.collection("donationCampaigns").doc(campaignId);
+      const campaignSnapshot = await campaignRef.get();
+
+      if (!campaignSnapshot.exists) {
+        throw makeHttpError(
+          404,
+          "campaign_not_found",
+          "The selected Donation Campaign was not found.",
+        );
+      }
+
+      const campaign = campaignSnapshot.data() || {};
+      if (cleanText(campaign.status || "", 40).toLowerCase() !== "published") {
+        throw makeHttpError(
+          409,
+          "campaign_not_open",
+          "This Donation Campaign is no longer open.",
+        );
+      }
+
+      const acceptedTypes = cleanDonationTypes(campaign.acceptedDonationTypes);
+      if (!acceptedTypes.includes("monetary")) {
+        throw makeHttpError(
+          409,
+          "monetary_donation_unavailable",
+          "This campaign is not accepting monetary donations.",
+        );
+      }
+
+      const goal = Number(campaign.monetaryGoal || 0);
+      const raised = Number(campaign.verifiedAmountReceived || 0);
+      if (
+        Number.isFinite(goal) &&
+        goal > 0 &&
+        Number.isFinite(raised) &&
+        raised >= goal
+      ) {
+        throw makeHttpError(
+          409,
+          "campaign_fully_funded",
+          "This campaign has already reached its verified funding goal.",
+        );
+      }
+
+      donationRef = db.collection("donations").doc();
+      const donationId = donationRef.id;
+      const donorName = cleanText(
+        profile?.fullName ||
+          request.firebaseUser?.name ||
+          request.firebaseUser?.email ||
+          "Donor",
+        160,
+      );
+
+      const successUrl = new URL(returnBaseUrl.toString());
+      successUrl.searchParams.set("payment", "success");
+      successUrl.searchParams.set("donationId", donationId);
+
+      const cancelUrl = new URL(returnBaseUrl.toString());
+      cancelUrl.searchParams.set("payment", "cancelled");
+      cancelUrl.searchParams.set("donationId", donationId);
+
+      await donationRef.set({
+        donationId,
+        source: "campaign_submission",
+        campaignId,
+        campaignTitle: cleanText(
+          campaign.title || "LGU Donation Campaign",
+          160,
+        ),
+        campaignBarangays: Array.isArray(campaign.barangays)
+          ? campaign.barangays.slice(0, 20)
+          : [],
+        donorUid: uid,
+        donorName,
+        donorDisplayName: maskDonationName(donorName),
+        donationType: "monetary",
+        amount,
+        transactionReference: "",
+        donorNote: "",
+        proofUrls: [],
+        status: "payment_creating",
+        actualAmountReceived: 0,
+        rejectionReason: "",
+        paymentProvider: "paymongo",
+        paymentMode: "test",
+        paymentStatus: "creating_checkout",
+        paymongoReferenceNumber: donationId,
+        paymongoCheckoutSessionId: "",
+        paymongoCheckoutUrl: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const checkoutResponse = await fetch(
+        `${PAYMONGO_API_BASE}/v2/checkout_sessions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": donationId,
+          },
+          body: JSON.stringify({
+            data: {
+              attributes: {
+                line_items: [
+                  {
+                    name: cleanText(
+                      `VolunServe Donation - ${campaign.title || "Campaign"}`,
+                      120,
+                    ),
+                    amount: amountCentavos,
+                    currency: "PHP",
+                    quantity: 1,
+                  },
+                ],
+                payment_method_types: ["gcash"],
+                success_url: successUrl.toString(),
+                cancel_url: cancelUrl.toString(),
+                reference_number: donationId,
+                description: cleanText(
+                  `Test donation for ${campaign.title || "VolunServe campaign"}`,
+                  255,
+                ),
+              },
+            },
+          }),
+        },
+      );
+
+      const checkoutPayload = await checkoutResponse.json().catch(() => null);
+
+      if (!checkoutResponse.ok) {
+        const message = paymongoCheckoutErrorMessage(
+          checkoutPayload,
+          `PayMongo checkout failed with HTTP ${checkoutResponse.status}.`,
+        );
+
+        await donationRef.set(
+          {
+            status: "payment_failed",
+            paymentStatus: "checkout_creation_failed",
+            paymentError: message,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        throw makeHttpError(
+          checkoutResponse.status >= 400 && checkoutResponse.status < 500
+            ? 400
+            : 502,
+          "paymongo_checkout_creation_failed",
+          message,
+        );
+      }
+
+      const session = checkoutPayload?.data || {};
+      const sessionId = cleanText(session?.id || "", 180);
+      const checkoutUrl = cleanText(
+        session?.attributes?.checkout_url || "",
+        1200,
+      );
+
+      if (!sessionId || !checkoutUrl.startsWith("https://checkout.paymongo.com/")) {
+        await donationRef.set(
+          {
+            status: "payment_failed",
+            paymentStatus: "invalid_checkout_response",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        throw makeHttpError(
+          502,
+          "invalid_paymongo_checkout_response",
+          "PayMongo did not return a valid hosted checkout URL.",
+        );
+      }
+
+      await donationRef.set(
+        {
+          status: "payment_pending",
+          paymentStatus: "awaiting_payment",
+          transactionReference: sessionId,
+          paymongoCheckoutSessionId: sessionId,
+          paymongoCheckoutUrl: checkoutUrl,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return response.status(200).json({
+        ok: true,
+        mode: "test",
+        donationId,
+        checkoutSessionId: sessionId,
+        checkoutUrl,
+      });
+    } catch (error) {
+      console.error("PayMongo checkout creation failed:", error);
+
+      if (donationRef && error?.code !== "paymongo_checkout_creation_failed") {
+        try {
+          await donationRef.set(
+            {
+              status: "payment_failed",
+              paymentStatus: "checkout_creation_failed",
+              paymentError: cleanText(error?.message || "Checkout creation failed.", 700),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        } catch (writeError) {
+          console.error("Unable to record PayMongo checkout failure:", writeError);
+        }
+      }
+
+      return response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "paymongo_checkout_creation_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to start PayMongo test checkout.",
+          700,
+        ),
+      });
+    }
+  },
+);
 
 // =========================================================
 // SECURE ADMIN DONATION OPERATIONS

@@ -1,13 +1,9 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import * as ImagePicker from "expo-image-picker";
 import { Redirect } from "expo-router";
 import {
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -16,8 +12,6 @@ import {
   Alert,
   Image,
   Linking,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,38 +25,15 @@ import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
-type DonationType = "monetary" | "in_kind";
+type DonationType = "monetary";
 type CampaignGroup = "disaster_affected" | "community_needs_help";
 type CampaignFilter = "all" | CampaignGroup;
-type HandoffMode = "receiving_point" | "coordinated_handover" | "both";
-type HandoffLocationType =
-  | "barangay_relief_desk"
-  | "evacuation_center"
-  | "lgu_relief_center"
-  | "city_hall"
-  | "hospital"
-  | "vet_clinic"
-  | "social_welfare_office"
-  | "shelter"
-  | "public_meeting_point"
-  | "other_authorized_location"
-  | "other";
-
-type DonationProof = {
-  uri: string;
-  fileName?: string | null;
-  fileSize?: number | null;
-  mimeType?: string | null;
-  file?: any;
-};
 
 type PublicNeed = {
-  category?: string;
   label?: string;
   needed?: number;
   received?: number;
   remaining?: number;
-  unit?: string;
 };
 
 type PublicStory = {
@@ -82,10 +53,8 @@ type DonationCampaign = {
   status?: string;
   barangays?: string[];
   acceptedDonationTypes?: DonationType[];
-  acceptedCategories?: string[];
   officialChannelLabel?: string;
   officialChannelInstructions?: string;
-  inKindInstructions?: string;
   createdAt?: any;
   sourceType?: string;
 
@@ -119,9 +88,7 @@ type DonationCampaign = {
   amountRaised?: number;
   monetaryRaised?: number;
 
-  // LGU-controlled public donation handoff / receiving / service location.
-  handoffMode?: HandoffMode;
-  handoffLocationType?: HandoffLocationType | string;
+  // LGU-controlled public service location shown for transparency/coordination.
   handoffLocationName?: string;
   handoffAddress?: string;
   handoffNotes?: string;
@@ -132,182 +99,15 @@ type MyDonation = {
   campaignId?: string;
   campaignTitle?: string;
   donationType?: DonationType | string;
-  category?: string;
-  itemName?: string;
-  unit?: string;
-  quantityPledged?: number;
   amount?: number;
   status?: string;
   rejectionReason?: string;
   transactionReference?: string;
   proofUrls?: string[];
   actualAmountReceived?: number;
-  actualQuantityReceived?: number;
-  officialReceiptReference?: string;
   donorNote?: string;
   createdAt?: any;
 };
-
-type SelectOption = {
-  value: string;
-  label: string;
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  food: "Food",
-  water: "Water",
-  hygiene: "Hygiene",
-  clothing: "Clothing",
-  shelter: "Shelter",
-  medical: "Medical",
-  medicine: "Medicine",
-  surgery: "Surgery / Treatment",
-  animal_welfare: "Animal / Pet Welfare",
-  pet_food: "Pet Food",
-  veterinary: "Veterinary Support",
-  elderly: "Elderly Assistance",
-  basic_needs: "Basic Needs",
-  mobility: "Mobility Aid",
-  other: "Other",
-};
-
-const CATEGORY_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
-  food: "restaurant-outline",
-  water: "water-outline",
-  hygiene: "sparkles-outline",
-  clothing: "shirt-outline",
-  shelter: "home-outline",
-  medical: "medkit-outline",
-  medicine: "medical-outline",
-  surgery: "fitness-outline",
-  animal_welfare: "paw-outline",
-  pet_food: "paw-outline",
-  veterinary: "paw-outline",
-  elderly: "accessibility-outline",
-  basic_needs: "heart-outline",
-  mobility: "accessibility-outline",
-  other: "ellipsis-horizontal-circle-outline",
-};
-
-const ITEM_SUGGESTIONS: Record<string, SelectOption[]> = {
-  food: [
-    { value: "Rice", label: "Rice" },
-    { value: "Food Pack", label: "Food Pack" },
-    { value: "Canned Goods", label: "Canned Goods" },
-    { value: "Biscuits", label: "Biscuits" },
-    { value: "Ready-to-Eat Meals", label: "Ready-to-Eat Meals" },
-    { value: "Other Food Item", label: "Other Food Item" },
-  ],
-  water: [
-    { value: "Bottled Water", label: "Bottled Water" },
-    { value: "Drinking Water Container", label: "Drinking Water Container" },
-    { value: "Water Refill", label: "Water Refill" },
-    { value: "Other Water Item", label: "Other Water Item" },
-  ],
-  hygiene: [
-    { value: "Hygiene Kit", label: "Hygiene Kit" },
-    { value: "Soap", label: "Soap" },
-    { value: "Toothpaste", label: "Toothpaste" },
-    { value: "Sanitary Pads", label: "Sanitary Pads" },
-    { value: "Diapers", label: "Diapers" },
-    { value: "Other Hygiene Item", label: "Other Hygiene Item" },
-  ],
-  clothing: [
-    { value: "Adult Clothing Set", label: "Adult Clothing Set" },
-    { value: "Children's Clothing Set", label: "Children's Clothing Set" },
-    { value: "Blanket", label: "Blanket" },
-    { value: "Towel", label: "Towel" },
-    { value: "Other Clothing Item", label: "Other Clothing Item" },
-  ],
-  shelter: [
-    { value: "Tarpaulin", label: "Tarpaulin" },
-    { value: "Roofing Sheet", label: "Roofing Sheet" },
-    { value: "Plywood", label: "Plywood" },
-    { value: "Sleeping Mat", label: "Sleeping Mat" },
-    { value: "Nails / Fasteners", label: "Nails / Fasteners" },
-    { value: "Other Shelter Material", label: "Other Shelter Material" },
-  ],
-  medical: [
-    { value: "First Aid Kit", label: "First Aid Kit" },
-    { value: "Face Masks", label: "Face Masks" },
-    { value: "Basic Medical Supplies", label: "Basic Medical Supplies" },
-    { value: "Other Medical Item", label: "Other Medical Item" },
-  ],
-  medicine: [
-    { value: "Prescribed Medical Supplies", label: "Prescribed Medical Supplies" },
-    { value: "Adult Diapers", label: "Adult Diapers" },
-    { value: "Wound Care Supplies", label: "Wound Care Supplies" },
-    { value: "Other Approved Medical Supply", label: "Other Approved Medical Supply" },
-  ],
-  animal_welfare: [
-    { value: "Pet Food", label: "Pet Food" },
-    { value: "Animal Care Supplies", label: "Animal Care Supplies" },
-    { value: "Carrier / Crate", label: "Carrier / Crate" },
-    { value: "Other Animal Welfare Item", label: "Other Animal Welfare Item" },
-  ],
-  pet_food: [
-    { value: "Dog Food", label: "Dog Food" },
-    { value: "Cat Food", label: "Cat Food" },
-    { value: "Other Pet Food", label: "Other Pet Food" },
-  ],
-  veterinary: [
-    { value: "Animal Care Supplies", label: "Animal Care Supplies" },
-    { value: "Recovery Cone", label: "Recovery Cone" },
-    { value: "Pet Hygiene Supplies", label: "Pet Hygiene Supplies" },
-    { value: "Other Veterinary Support Item", label: "Other Veterinary Support Item" },
-  ],
-  elderly: [
-    { value: "Adult Diapers", label: "Adult Diapers" },
-    { value: "Blanket", label: "Blanket" },
-    { value: "Nutrition Pack", label: "Nutrition Pack" },
-    { value: "Other Elderly Support Item", label: "Other Elderly Support Item" },
-  ],
-  basic_needs: [
-    { value: "Food Pack", label: "Food Pack" },
-    { value: "Hygiene Kit", label: "Hygiene Kit" },
-    { value: "Clothing Set", label: "Clothing Set" },
-    { value: "Blanket", label: "Blanket" },
-    { value: "Other Basic Need", label: "Other Basic Need" },
-  ],
-  mobility: [
-    { value: "Wheelchair", label: "Wheelchair" },
-    { value: "Walker", label: "Walker" },
-    { value: "Cane", label: "Cane" },
-    { value: "Other Mobility Aid", label: "Other Mobility Aid" },
-  ],
-  other: [{ value: "Other Verified Item", label: "Other Verified Item" }],
-};
-
-const UNIT_OPTIONS: SelectOption[] = [
-  { value: "pack", label: "Pack / packs" },
-  { value: "piece", label: "Piece / pieces" },
-  { value: "box", label: "Box / boxes" },
-  { value: "bottle", label: "Bottle / bottles" },
-  { value: "kit", label: "Kit / kits" },
-  { value: "set", label: "Set / sets" },
-  { value: "sack", label: "Sack / sacks" },
-  { value: "kg", label: "Kilogram / kg" },
-  { value: "liter", label: "Liter / liters" },
-];
-
-const DELIVERY_OPTIONS: SelectOption[] = [
-  {
-    value: "drop_off",
-    label: "Drop off at the LGU-approved receiving point",
-  },
-  {
-    value: "courier",
-    label: "Send by courier to the LGU-approved receiving point",
-  },
-  {
-    value: "coordinate_pickup",
-    label: "Request an LGU-approved pickup",
-  },
-  {
-    value: "coordinated_handover",
-    label: "Meet at the LGU-approved public handoff location",
-  },
-];
 
 const FILTER_OPTIONS: { value: CampaignFilter; label: string; shortLabel: string }[] = [
   { value: "all", label: "All", shortLabel: "All" },
@@ -359,12 +159,7 @@ const COMMUNITY_KEYWORDS = [
   "wheelchair",
 ];
 
-const CLOUDINARY_CLOUD_NAME = "netjawtz";
-const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
-const CLOUDINARY_UPLOAD_URL =
-  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
-
-const MAX_PROOF_BYTES = 10 * 1024 * 1024;
+const PAYMONGO_BACKEND_URL = "https://volunserve.onrender.com";
 
 const sanitizeMoneyInput = (value: string) => {
   const cleaned = value.replace(/[^0-9.]/g, "");
@@ -376,13 +171,6 @@ const sanitizeMoneyInput = (value: string) => {
   return `${safeWhole}.${decimal}`;
 };
 
-const proofFromAsset = (asset: ImagePicker.ImagePickerAsset): DonationProof => ({
-  uri: asset.uri,
-  fileName: asset.fileName,
-  fileSize: asset.fileSize,
-  mimeType: asset.mimeType,
-  file: (asset as any).file,
-});
 
 const timestampMillis = (value: any) => {
   if (!value) return 0;
@@ -414,21 +202,6 @@ const money = (value: number) =>
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
-const maskName = (name: string) => {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "Anonymous Donor";
-
-  return parts
-    .map((part) => {
-      if (part.length === 1) return `${part}*`;
-      return `${part[0]}${"*".repeat(Math.max(1, part.length - 2))}${part[part.length - 1]}`;
-    })
-    .join(" ");
-};
 
 const statusLabel = (value?: string) =>
   String(value || "submitted").replaceAll("_", " ").toUpperCase();
@@ -452,8 +225,7 @@ const campaignScopeLabel = (campaign: DonationCampaign) => {
     : "Disaster Relief";
 };
 
-const donationTypeLabel = (value?: string) =>
-  value === "in_kind" ? "In-kind Goods" : "Monetary";
+const donationTypeLabel = (_value?: string) => "Monetary";
 
 const validPublicPhotoUrls = (campaign?: DonationCampaign) => {
   if (!campaign) return [] as string[];
@@ -572,58 +344,9 @@ const campaignVisualIcon = (
   return "heart-outline";
 };
 
-const handoffModeLabel = (value?: string) => {
-  if (value === "coordinated_handover") return "Coordinated Public Handover";
-  if (value === "both") return "Receiving Point + Coordinated Handover";
-  return "Official Receiving Point";
-};
-
-const handoffLocationTypeLabel = (value?: string) => {
-  if (value === "barangay_relief_desk") return "Barangay Hall / Relief Desk";
-  if (value === "evacuation_center") return "Authorized Evacuation Center";
-  if (value === "lgu_relief_center") return "LGU Relief Operations Center";
-  if (value === "city_hall") return "City Hall Receiving Area";
-  if (value === "hospital") return "Hospital / Social Service Office";
-  if (value === "vet_clinic") return "Veterinary Clinic / Animal Care Point";
-  if (value === "social_welfare_office") return "Social Welfare Office";
-  if (value === "shelter") return "Authorized Shelter / Care Center";
-  if (value === "public_meeting_point") return "LGU-Approved Public Meeting Point";
-  if (value === "other_authorized_location" || value === "other") {
-    return "Other Authorized Public Location";
-  }
-  return "Authorized Public Location";
-};
-
-const deliveryOptionsForCampaign = (campaign?: DonationCampaign): SelectOption[] => {
-  const mode = String(campaign?.handoffMode || "receiving_point");
-
-  if (mode === "coordinated_handover") {
-    return DELIVERY_OPTIONS.filter((item) =>
-      ["coordinated_handover", "coordinate_pickup"].includes(item.value),
-    );
-  }
-
-  if (mode === "both") return DELIVERY_OPTIONS;
-
-  return DELIVERY_OPTIONS.filter((item) =>
-    ["drop_off", "courier", "coordinate_pickup"].includes(item.value),
-  );
-};
-
-const deliveryLabel = (value: string) =>
-  DELIVERY_OPTIONS.find((item) => item.value === value)?.label || "";
-
 const publicNeedsForCampaign = (campaign?: DonationCampaign): PublicNeed[] => {
-  if (!campaign) return [] as PublicNeed[];
-
-  if (Array.isArray(campaign.publicNeeds) && campaign.publicNeeds.length > 0) {
-    return campaign.publicNeeds.slice(0, 12);
-  }
-
-  return (campaign.acceptedCategories || []).map<PublicNeed>((category) => ({
-    category,
-    label: CATEGORY_LABELS[category] || category,
-  }));
+  if (!campaign) return [];
+  return Array.isArray(campaign.publicNeeds) ? campaign.publicNeeds.slice(0, 12) : [];
 };
 
 const publicStoriesForCampaign = (campaign?: DonationCampaign): PublicStory[] => {
@@ -676,17 +399,9 @@ export default function Donation() {
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [donationType, setDonationType] = useState<DonationType | "">("");
-  const [category, setCategory] = useState("");
-  const [itemName, setItemName] = useState("");
-  const [unit, setUnit] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const donationType: DonationType = "monetary";
   const [amount, setAmount] = useState("");
-  const [transactionReference, setTransactionReference] = useState("");
-  const [deliveryMethod, setDeliveryMethod] = useState("");
-  const [donorNote, setDonorNote] = useState("");
-  const [proof, setProof] = useState<DonationProof | null>(null);
-  const [uploadProgress, setUploadProgress] = useState("");
+  const [checkoutProgress, setCheckoutProgress] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const canUseDonationPage =
@@ -706,7 +421,11 @@ export default function Donation() {
             id: item.id,
             ...(item.data() as Omit<DonationCampaign, "id">),
           }))
-          .filter((item) => item.status === "published")
+          .filter(
+            (item) =>
+              item.status === "published" &&
+              (item.acceptedDonationTypes?.includes("monetary") || campaignGoal(item) > 0),
+          )
           .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
 
         setCampaigns(rows);
@@ -739,6 +458,7 @@ export default function Donation() {
             id: item.id,
             ...(item.data() as Omit<MyDonation, "id">),
           }))
+          .filter((item) => String(item.donationType || "monetary") === "monetary")
           .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
 
         setMyDonations(rows);
@@ -807,8 +527,6 @@ export default function Donation() {
     selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
 
   const acceptedTypes = selectedCampaign?.acceptedDonationTypes || [];
-  const acceptedCategories = selectedCampaign?.acceptedCategories || [];
-
   const selectedPublicNeeds = useMemo(
     () => publicNeedsForCampaign(selectedCampaign),
     [selectedCampaign],
@@ -824,28 +542,9 @@ export default function Donation() {
     [selectedCampaign],
   );
 
-  const selectedDeliveryOptions = useMemo(
-    () => deliveryOptionsForCampaign(selectedCampaign),
-    [selectedCampaign?.handoffMode],
-  );
-
-  const suggestedItemOptions = useMemo(
-    () => ITEM_SUGGESTIONS[category] || ITEM_SUGGESTIONS.other,
-    [category],
-  );
-
   const resetDonationForm = () => {
-    setDonationType("");
-    setCategory("");
-    setItemName("");
-    setUnit("");
-    setQuantity("");
     setAmount("");
-    setTransactionReference("");
-    setDeliveryMethod("");
-    setDonorNote("");
-    setProof(null);
-    setUploadProgress("");
+    setCheckoutProgress("");
   };
 
   const chooseCampaign = (campaignId: string) => {
@@ -853,9 +552,6 @@ export default function Donation() {
     setShowDonationPanel(false);
     resetDonationForm();
 
-    const campaign = campaigns.find((item) => item.id === campaignId);
-    const types = campaign?.acceptedDonationTypes || [];
-    if (types.length === 1) setDonationType(types[0]);
   };
 
   const chooseFilter = (nextFilter: CampaignFilter) => {
@@ -870,172 +566,65 @@ export default function Donation() {
     }
   };
 
-  const chooseProof = async () => {
-    if (submitting) return;
+  useEffect(() => {
+    const location = (globalThis as any)?.location;
+    const history = (globalThis as any)?.history;
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!location || typeof location.search !== "string") return;
 
-    if (!permission.granted) {
+    const params = new URLSearchParams(location.search);
+    const paymentState = params.get("payment");
+
+    if (paymentState === "success") {
       Alert.alert(
-        "Gallery Permission",
-        "Allow photo library access to attach your donation receipt or proof.",
+        "Test Payment Submitted",
+        "PayMongo is confirming the sandbox payment. The campaign progress updates only after the signed webhook is received.",
       );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.82,
-    });
-
-    if (result.canceled) return;
-
-    const selected = proofFromAsset(result.assets[0]);
-
-    if (typeof selected.fileSize === "number" && selected.fileSize > MAX_PROOF_BYTES) {
-      Alert.alert("Proof Too Large", "Use an image smaller than 10 MB.");
-      return;
-    }
-
-    setProof(selected);
-  };
-
-  const uploadProof = async (asset: DonationProof) => {
-    setUploadProgress("Uploading receipt / proof...");
-
-    const fileName =
-      asset.fileName ||
-      asset.uri.split("/").pop()?.split("?")[0] ||
-      `donation-proof-${Date.now()}.jpg`;
-
-    const contentType = asset.mimeType || "image/jpeg";
-    const body = new FormData();
-
-    if (asset.file) {
-      body.append("file", asset.file);
-    } else {
-      body.append(
-        "file",
-        {
-          uri: asset.uri,
-          name: fileName,
-          type: contentType,
-        } as any,
+    } else if (paymentState === "cancelled") {
+      Alert.alert(
+        "Test Payment Cancelled",
+        "No donation was counted. You may start another test checkout anytime while the campaign is open.",
       );
     }
 
-    body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    if (paymentState && history?.replaceState) {
+      history.replaceState({}, "", location.pathname);
+    }
+  }, []);
 
-    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-      method: "POST",
-      body,
-    });
+  const currentDonationReturnBaseUrl = () => {
+    const location = (globalThis as any)?.location;
 
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok || !result || typeof result.secure_url !== "string") {
-      throw new Error(
-        result?.error?.message ||
-          `Receipt upload failed with HTTP ${response.status}.`,
-      );
+    if (!location || typeof location.origin !== "string") {
+      return "";
     }
 
-    return result.secure_url as string;
+    return `${location.origin}/donation`;
   };
 
   const submitDonation = async () => {
     if (!user || !profile || !selectedCampaign || submitting) return;
 
-    if (!acceptedTypes.includes(donationType as DonationType)) {
-      Alert.alert("Donation Type", "Select an available donation type for this campaign.");
+    if (!acceptedTypes.includes("monetary") && campaignGoal(selectedCampaign) <= 0) {
+      Alert.alert(
+        "Monetary Donation Unavailable",
+        "This campaign is not accepting monetary donations.",
+      );
       return;
     }
 
-    let cleanNote = donorNote.trim();
+    const numericAmount = Number(amount);
 
-    let numericAmount = 0;
-    let numericQuantity = 0;
-    let cleanCategory = "";
-    let cleanItemName = "";
-    let cleanUnit = "";
-    let cleanReference = "";
-
-    if (donationType === "monetary") {
-      numericAmount = Number(amount);
-      cleanReference = transactionReference.trim();
-
-      if (!amount.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
-        Alert.alert(
-          "Invalid Amount",
-          "Enter any valid positive amount that you actually sent through the official LGU channel.",
-        );
-        return;
-      }
-
-      if (cleanReference.length < 4) {
-        Alert.alert(
-          "Transaction Reference Required",
-          "Enter the reference shown by the official LGU payment/receiving channel.",
-        );
-        return;
-      }
-
-      if (!proof) {
-        Alert.alert(
-          "Receipt / Proof Required",
-          "Attach the receipt or transaction screenshot so the LGU can match it with the official receiving account.",
-        );
-        return;
-      }
+    if (!amount.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      Alert.alert("Invalid Amount", "Enter a valid donation amount greater than zero.");
+      return;
     }
 
-    if (donationType === "in_kind") {
-      numericQuantity = Number(quantity);
-      cleanCategory = category.trim().toLowerCase();
-      cleanItemName = itemName.trim();
-      cleanUnit = unit.trim();
-
-      if (!acceptedCategories.includes(cleanCategory)) {
-        Alert.alert("Item Category", "Select one of the categories requested by the LGU campaign.");
-        return;
-      }
-
-      if (cleanItemName.length < 2) {
-        Alert.alert("Item Name", "Select the item you intend to donate.");
-        return;
-      }
-
-      if (!Number.isInteger(numericQuantity) || numericQuantity <= 0) {
-        Alert.alert("Quantity", "Enter a whole quantity greater than zero.");
-        return;
-      }
-
-      if (cleanUnit.length < 1) {
-        Alert.alert("Unit", "Select the unit for the pledged goods.");
-        return;
-      }
-
-      if (
-        !deliveryMethod ||
-        !selectedDeliveryOptions.some((option) => option.value === deliveryMethod)
-      ) {
-        Alert.alert(
-          "Delivery / Handover Method",
-          "Select one of the delivery or handover methods approved by the LGU for this campaign.",
-        );
-        return;
-      }
-
-      const deliveryText = deliveryLabel(deliveryMethod);
-      cleanNote = [`Delivery plan: ${deliveryText}`, cleanNote]
-        .filter(Boolean)
-        .join(" | ");
-    }
-
-    if (cleanNote.length > 600) {
+    const returnBaseUrl = currentDonationReturnBaseUrl();
+    if (!returnBaseUrl) {
       Alert.alert(
-        "Donor Note",
-        "Keep the delivery details and optional note to 600 characters or fewer.",
+        "Web Checkout Required",
+        "PayMongo sandbox checkout is currently enabled on the VolunServe web app.",
       );
       return;
     }
@@ -1043,6 +632,7 @@ export default function Donation() {
     try {
       setSubmitting(true);
       setError("");
+      setCheckoutProgress("Creating secure test checkout...");
 
       const campaignSnapshotCampaign = campaigns.find(
         (item) => item.id === selectedCampaign.id && item.status === "published",
@@ -1052,60 +642,44 @@ export default function Donation() {
         throw new Error("This campaign is no longer open for donations.");
       }
 
-      const proofUrls = proof ? [await uploadProof(proof)] : [];
-      setUploadProgress("Saving donation submission...");
+      const firebaseToken = await user.getIdToken();
 
-      const donationRef = doc(collection(db, "donations"));
-      const fullName = String(profile.fullName || user.displayName || "Donor").trim() || "Donor";
-
-      // IMPORTANT: Keep the current donation document shape so existing strict
-      // Firestore rules are not broken by this resident-page redesign.
-      await setDoc(donationRef, {
-        donationId: donationRef.id,
-        source: "campaign_submission",
-        campaignId: selectedCampaign.id,
-        campaignTitle: String(selectedCampaign.title || "LGU Donation Campaign").slice(0, 160),
-        campaignBarangays: Array.isArray(selectedCampaign.barangays)
-          ? selectedCampaign.barangays.slice(0, 20)
-          : [],
-        donorUid: user.uid,
-        donorName: fullName.slice(0, 160),
-        donorDisplayName: maskName(fullName).slice(0, 160),
-        donationType,
-        category: donationType === "in_kind" ? cleanCategory : "",
-        itemName: donationType === "in_kind" ? cleanItemName.slice(0, 160) : "",
-        unit: donationType === "in_kind" ? cleanUnit.slice(0, 60) : "",
-        quantityPledged: donationType === "in_kind" ? numericQuantity : 0,
-        amount: donationType === "monetary" ? numericAmount : 0,
-        transactionReference:
-          donationType === "monetary" ? cleanReference.slice(0, 160) : "",
-        donorNote: cleanNote.slice(0, 600),
-        proofUrls,
-        status: "submitted",
-        actualQuantityReceived: 0,
-        actualAmountReceived: 0,
-        officialReceiptReference: "",
-        rejectionReason: "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const response = await fetch(`${PAYMONGO_BACKEND_URL}/api/paymongo/checkout-session`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${firebaseToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          campaignId: selectedCampaign.id,
+          amount: numericAmount,
+          returnBaseUrl,
+        }),
       });
 
-      resetDonationForm();
+      const result = await response.json().catch(() => null);
 
-      Alert.alert(
-        "Donation Submitted",
-        donationType === "in_kind"
-          ? "Your goods pledge was submitted. It will be counted only after the LGU physically receives and verifies the actual quantity."
-          : "Your transaction details were submitted for LGU verification. VolunServe does not process the money transfer itself yet.",
-      );
+      if (!response.ok) {
+        throw new Error(
+          result?.message || `Unable to start PayMongo checkout (HTTP ${response.status}).`,
+        );
+      }
+
+      const checkoutUrl = String(result?.checkoutUrl || "").trim();
+      if (!checkoutUrl.startsWith("https://checkout.paymongo.com/")) {
+        throw new Error("PayMongo did not return a valid checkout URL.");
+      }
+
+      setCheckoutProgress("Opening PayMongo Test Checkout...");
+      await Linking.openURL(checkoutUrl);
     } catch (problem) {
       const message =
-        problem instanceof Error ? problem.message : "Unable to submit the donation.";
+        problem instanceof Error ? problem.message : "Unable to start the test donation checkout.";
       setError(message);
-      Alert.alert("Submission Failed", message);
+      Alert.alert("Checkout Failed", message);
     } finally {
       setSubmitting(false);
-      setUploadProgress("");
+      setCheckoutProgress("");
     }
   };
 
@@ -1374,7 +948,7 @@ export default function Donation() {
                   {!!selectedCampaign.handoffLocationName && (
                     <View style={styles.webLocationCard}>
                       <View style={styles.webLocationCardCopy}>
-                        <Text style={styles.webLocationCardEyebrow}>OFFICIAL RECEIVING POINT</Text>
+                        <Text style={styles.webLocationCardEyebrow}>OFFICIAL LGU LOCATION</Text>
                         <Text style={styles.webLocationCardTitle}>
                           {selectedCampaign.handoffLocationName}
                         </Text>
@@ -1394,18 +968,10 @@ export default function Donation() {
                   )}
 
                   <View style={styles.webSupportTypesRow}>
-                    {acceptedTypes.includes("monetary") && (
-                      <View style={styles.webSupportTypeChip}>
-                        <Ionicons name="cash-outline" size={14} color="#0F766E" />
-                        <Text style={styles.webSupportTypeText}>Monetary</Text>
-                      </View>
-                    )}
-                    {acceptedTypes.includes("in_kind") && (
-                      <View style={styles.webSupportTypeChip}>
-                        <Ionicons name="cube-outline" size={14} color="#0F766E" />
-                        <Text style={styles.webSupportTypeText}>In-kind Goods</Text>
-                      </View>
-                    )}
+                    <View style={styles.webSupportTypeChip}>
+                      <Ionicons name="cash-outline" size={14} color="#0F766E" />
+                      <Text style={styles.webSupportTypeText}>Monetary</Text>
+                    </View>
                   </View>
 
                   {!showDonationPanel ? (
@@ -1414,9 +980,6 @@ export default function Donation() {
                       activeOpacity={0.88}
                       onPress={() => {
                         setShowDonationPanel(true);
-                        if (!donationType && acceptedTypes.length === 1) {
-                          setDonationType(acceptedTypes[0]);
-                        }
                       }}
                     >
                       <Ionicons name="heart" size={17} color="#FFFFFF" />
@@ -1431,79 +994,13 @@ export default function Donation() {
                           onPress={() => {
                             setShowDonationPanel(false);
                             resetDonationForm();
-                            if (acceptedTypes.length === 1) setDonationType(acceptedTypes[0]);
                           }}
                         >
                           <Ionicons name="close" size={18} color="#334155" />
                         </TouchableOpacity>
                       </View>
 
-                      {acceptedTypes.length > 1 && (
-                        <View style={styles.webDonationTypeRow}>
-                          {acceptedTypes.includes("monetary") && (
-                            <TouchableOpacity
-                              style={[
-                                styles.webDonationTypeButton,
-                                donationType === "monetary" && styles.webDonationTypeButtonActive,
-                              ]}
-                              onPress={() => {
-                                setDonationType("monetary");
-                                setCategory("");
-                                setItemName("");
-                                setUnit("");
-                                setQuantity("");
-                                setDeliveryMethod("");
-                                setProof(null);
-                              }}
-                            >
-                              <Ionicons
-                                name="cash-outline"
-                                size={16}
-                                color={donationType === "monetary" ? "#FFFFFF" : "#0F766E"}
-                              />
-                              <Text
-                                style={[
-                                  styles.webDonationTypeText,
-                                  donationType === "monetary" && styles.webDonationTypeTextActive,
-                                ]}
-                              >
-                                Monetary
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                          {acceptedTypes.includes("in_kind") && (
-                            <TouchableOpacity
-                              style={[
-                                styles.webDonationTypeButton,
-                                donationType === "in_kind" && styles.webDonationTypeButtonActive,
-                              ]}
-                              onPress={() => {
-                                setDonationType("in_kind");
-                                setAmount("");
-                                setTransactionReference("");
-                                setProof(null);
-                              }}
-                            >
-                              <Ionicons
-                                name="cube-outline"
-                                size={16}
-                                color={donationType === "in_kind" ? "#FFFFFF" : "#0F766E"}
-                              />
-                              <Text
-                                style={[
-                                  styles.webDonationTypeText,
-                                  donationType === "in_kind" && styles.webDonationTypeTextActive,
-                                ]}
-                              >
-                                In-kind
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-
-                      {donationType === "monetary" && (
-                        <View style={styles.webDonationFields}>
+                      <View style={styles.webDonationFields}>
                           <Text style={styles.webFieldLabel}>Amount</Text>
                           <View style={styles.webAmountGrid}>
                             {[100, 500, 1000, 2500, 5000].map((value) => (
@@ -1540,122 +1037,16 @@ export default function Donation() {
                             <Ionicons name="shield-checkmark-outline" size={18} color="#0F766E" />
                             <View style={{ flex: 1 }}>
                               <Text style={styles.webOfficialChannelTitle}>
-                                {selectedCampaign.officialChannelLabel || "Official LGU channel"}
+                                PayMongo Sandbox · GCash Test Checkout
                               </Text>
-                              {!!selectedCampaign.officialChannelInstructions && (
-                                <Text style={styles.webOfficialChannelText} numberOfLines={3}>
-                                  {selectedCampaign.officialChannelInstructions}
-                                </Text>
-                              )}
+                              <Text style={styles.webOfficialChannelText}>
+                                Test mode only — no real money will be charged. Payment confirmation is handled automatically by the signed PayMongo webhook; no screenshot or manual transaction reference is required.
+                              </Text>
                             </View>
                           </View>
-
-                          <Text style={styles.webFieldLabel}>Transaction reference</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={transactionReference}
-                            onChangeText={(value) => setTransactionReference(value.slice(0, 160))}
-                            placeholder="Enter reference"
-                            placeholderTextColor="#94A3B8"
-                          />
-
-                          <ProofSection
-                            proof={proof}
-                            required
-                            submitting={submitting}
-                            onChoose={() => void chooseProof()}
-                            onRemove={() => setProof(null)}
-                            title="Receipt / proof"
-                            description="Attach your transaction receipt."
-                          />
                         </View>
-                      )}
 
-                      {donationType === "in_kind" && (
-                        <View style={styles.webDonationFields}>
-                          <Text style={styles.webFieldLabel}>Category</Text>
-                          <View style={styles.choiceRow}>
-                            {acceptedCategories.map((item) => (
-                              <Choice
-                                key={item}
-                                label={CATEGORY_LABELS[item] || item.replaceAll("_", " ")}
-                                icon={CATEGORY_ICONS[item] || "pricetag-outline"}
-                                selected={category === item}
-                                onPress={() => {
-                                  setCategory(item);
-                                  setItemName("");
-                                  setUnit("");
-                                }}
-                              />
-                            ))}
-                          </View>
-
-                          <View style={[styles.twoColumnRow, !medium && styles.stackGrid]}>
-                            <View style={styles.flexField}>
-                              <SelectField
-                                label="Item"
-                                placeholder="Select item"
-                                value={itemName}
-                                options={category ? suggestedItemOptions : []}
-                                disabled={!category}
-                                onSelect={setItemName}
-                              />
-                            </View>
-                            <View style={styles.flexField}>
-                              <SelectField
-                                label="Unit"
-                                placeholder="Select unit"
-                                value={unit}
-                                options={UNIT_OPTIONS}
-                                disabled={!category}
-                                onSelect={setUnit}
-                              />
-                            </View>
-                          </View>
-
-                          <Text style={styles.webFieldLabel}>Quantity</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={quantity}
-                            onChangeText={(value) =>
-                              setQuantity(value.replace(/[^0-9]/g, "").slice(0, 9))
-                            }
-                            keyboardType="number-pad"
-                            placeholder="Enter quantity"
-                            placeholderTextColor="#94A3B8"
-                          />
-
-                          <SelectField
-                            label="Delivery method"
-                            placeholder="Select delivery method"
-                            value={deliveryMethod}
-                            options={selectedDeliveryOptions}
-                            onSelect={setDeliveryMethod}
-                          />
-
-                          {!!selectedCampaign.handoffAddress && (
-                            <HandoffLocationMap
-                              locationName={
-                                selectedCampaign.handoffLocationName || "Official receiving point"
-                              }
-                              address={selectedCampaign.handoffAddress}
-                            />
-                          )}
-
-                          <ProofSection
-                            proof={proof}
-                            required={false}
-                            submitting={submitting}
-                            onChoose={() => void chooseProof()}
-                            onRemove={() => setProof(null)}
-                            title="Goods photo"
-                            description="Optional photo of the goods."
-                          />
-                        </View>
-                      )}
-
-                      {!!donationType && (
-                        <TouchableOpacity
+                      <TouchableOpacity
                           style={[styles.webSubmitButton, submitting && styles.disabled]}
                           disabled={submitting}
                           onPress={() => void submitDonation()}
@@ -1663,16 +1054,12 @@ export default function Donation() {
                           {submitting ? (
                             <ActivityIndicator color="#FFFFFF" />
                           ) : (
-                            <Ionicons name="send-outline" size={17} color="#FFFFFF" />
+                            <Ionicons name="card-outline" size={17} color="#FFFFFF" />
                           )}
                           <Text style={styles.webSubmitButtonText}>
-                            {uploadProgress ||
-                              (donationType === "in_kind"
-                                ? "Submit Goods Pledge"
-                                : "Submit Donation")}
+                            {checkoutProgress || "Proceed to Test Checkout"}
                           </Text>
                         </TouchableOpacity>
-                      )}
                     </View>
                   )}
                 </View>
@@ -2013,8 +1400,7 @@ function FundingProgressCard({ campaign }: { campaign: DonationCampaign }) {
         <View style={styles.noGoalBox}>
           <Ionicons name="information-circle-outline" size={18} color="#64748B" />
           <Text style={styles.noGoalText}>
-            No public monetary goal has been published for this campaign. In-kind support can still
-            be tracked separately when enabled.
+            No public monetary goal has been published for this campaign.
           </Text>
         </View>
       )}
@@ -2158,183 +1544,6 @@ function StepHeader({
   );
 }
 
-function Choice({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon?: React.ComponentProps<typeof Ionicons>["name"];
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.choice, selected && styles.choiceSelected]}
-      onPress={onPress}
-      activeOpacity={0.82}
-    >
-      <Ionicons
-        name={selected ? "checkmark-circle" : icon || "ellipse-outline"}
-        size={16}
-        color={selected ? "#0F766E" : "#64748B"}
-      />
-      <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function SelectField({
-  label,
-  placeholder,
-  value,
-  options,
-  disabled = false,
-  onSelect,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  options: SelectOption[];
-  disabled?: boolean;
-  onSelect: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedLabel = options.find((option) => option.value === value)?.label;
-
-  return (
-    <>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={[styles.selectField, disabled && styles.selectFieldDisabled]}
-        activeOpacity={0.82}
-        disabled={disabled}
-        onPress={() => setOpen(true)}
-      >
-        <Text
-          style={[
-            styles.selectFieldText,
-            !selectedLabel && styles.selectFieldPlaceholder,
-          ]}
-        >
-          {selectedLabel || placeholder}
-        </Text>
-        <Ionicons name="chevron-down" size={17} color="#64748B" />
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.selectModal} onPress={(event) => event.stopPropagation()}>
-            <View style={styles.selectModalHeader}>
-              <Text style={styles.selectModalTitle}>{label}</Text>
-              <TouchableOpacity onPress={() => setOpen(false)}>
-                <Ionicons name="close" size={20} color="#334155" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.selectModalScroll}>
-              {options.length === 0 ? (
-                <Text style={styles.selectModalEmpty}>No options available.</Text>
-              ) : (
-                options.map((option) => {
-                  const active = option.value === value;
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[styles.selectOption, active && styles.selectOptionActive]}
-                      onPress={() => {
-                        onSelect(option.value);
-                        setOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.selectOptionText,
-                          active && styles.selectOptionTextActive,
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                      {active && <Ionicons name="checkmark" size={18} color="#0F766E" />}
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
-
-function ProofSection({
-  proof,
-  required,
-  submitting,
-  onChoose,
-  onRemove,
-  title,
-  description,
-}: {
-  proof: DonationProof | null;
-  required: boolean;
-  submitting: boolean;
-  onChoose: () => void;
-  onRemove: () => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <View style={styles.proofSection}>
-      <Text style={styles.label}>
-        {title} {required ? "*" : "(optional)"}
-      </Text>
-
-      {!proof ? (
-        <TouchableOpacity
-          style={styles.proofPicker}
-          activeOpacity={0.82}
-          disabled={submitting}
-          onPress={onChoose}
-        >
-          <Ionicons name="cloud-upload-outline" size={27} color="#0F766E" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.proofPickerTitle}>Choose image</Text>
-            <Text style={styles.proofPickerText}>{description}</Text>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.proofPreviewCard}>
-          <Image source={{ uri: proof.uri }} style={styles.proofImage} />
-          <View style={styles.proofPreviewInfo}>
-            <Text style={styles.proofPreviewTitle}>{proof.fileName || "Selected image"}</Text>
-            <Text style={styles.proofPreviewText}>
-              {typeof proof.fileSize === "number"
-                ? `${(proof.fileSize / (1024 * 1024)).toFixed(2)} MB`
-                : "Ready to upload"}
-            </Text>
-            <TouchableOpacity
-              style={styles.removeProofButton}
-              disabled={submitting}
-              onPress={onRemove}
-            >
-              <Ionicons name="trash-outline" size={14} color="#B42318" />
-              <Text style={styles.removeProofText}>Remove</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
 function DonationNote({
   value,
   onChange,
@@ -2350,7 +1559,7 @@ function DonationNote({
         multiline
         value={value}
         onChangeText={(text) => onChange(text.slice(0, 600))}
-        placeholder="Add a short note or delivery detail for the LGU."
+        placeholder="Add a short optional note for the LGU."
         placeholderTextColor="#94A3B8"
       />
       <Text style={styles.helperText}>{value.length}/600</Text>
@@ -2378,37 +1587,15 @@ function ProcessPoint({
 function DonationHistoryCard({ donation }: { donation: MyDonation }) {
   const status = String(donation.status || "submitted").toLowerCase();
   const rejected = status === "rejected";
-  const received = [
-    "received",
-    "verified",
-    "resource_recorded",
-    "allocated",
-    "out_for_distribution",
-    "delivered",
-    "completed",
-  ].includes(status);
-  const verified = [
-    "verified",
-    "resource_recorded",
-    "allocated",
-    "out_for_distribution",
-    "delivered",
-    "completed",
-  ].includes(status);
-  const allocated = ["allocated", "out_for_distribution", "delivered", "completed"].includes(status);
-  const completed = ["delivered", "completed"].includes(status);
-
-  const valueText =
-    donation.donationType === "in_kind"
-      ? `${donation.quantityPledged || 0} ${donation.unit || ""} ${donation.itemName || "goods"}`.trim()
-      : money(Number(donation.amount || 0));
+  const received = ["received", "verified", "completed"].includes(status);
+  const valueText = money(Number(donation.amount || 0));
 
   return (
     <View style={styles.historyCard}>
       <View style={styles.historyTop}>
         <View style={styles.historyIcon}>
           <Ionicons
-            name={donation.donationType === "in_kind" ? "cube-outline" : "cash-outline"}
+            name="cash-outline"
             size={19}
             color="#0F766E"
           />
@@ -2438,32 +1625,13 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
 
       {!rejected && (
         <View style={styles.historyTracker}>
-          <TrackerStep
-            icon="send-outline"
-            label="Submitted"
-            complete
-            active={!received}
-          />
+          <TrackerStep icon="send-outline" label="Submitted" complete active={!received} />
           <View style={styles.trackerLine} />
           <TrackerStep
             icon="shield-checkmark-outline"
             label="Verified"
-            complete={verified}
-            active={received && !verified}
-          />
-          <View style={styles.trackerLine} />
-          <TrackerStep
-            icon="people-outline"
-            label="Allocated"
-            complete={allocated}
-            active={verified && !allocated}
-          />
-          <View style={styles.trackerLine} />
-          <TrackerStep
-            icon="checkmark-done-outline"
-            label="Completed"
-            complete={completed}
-            active={allocated && !completed}
+            complete={received}
+            active={received}
           />
         </View>
       )}
@@ -2476,18 +1644,13 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
               "The LGU could not verify this donation submission. Contact the authorized office if you need clarification."}
           </Text>
         </View>
-      ) : verified ? (
+      ) : received ? (
         <View style={styles.historyMessageReceived}>
           <Ionicons name="checkmark-circle-outline" size={16} color="#15803D" />
           <View style={{ flex: 1 }}>
             <Text style={styles.historyMessageReceivedText}>
               The LGU has verified actual receipt of this donation.
             </Text>
-            {!!donation.officialReceiptReference && (
-              <Text style={styles.receiptReferenceText}>
-                Official receipt / log: {donation.officialReceiptReference}
-              </Text>
-            )}
           </View>
         </View>
       ) : (
@@ -4062,61 +3225,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  proofSection: {
-    marginTop: 2,
-  },
-  proofPicker: {
-    minHeight: 82,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#9FD8CB",
-    borderRadius: 10,
-    backgroundColor: "#F6FBFA",
-  },
-  proofPickerTitle: {
-    color: "#0F172A",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
-  proofPickerText: {
-    marginTop: 3,
-    color: "#64748B",
-    fontSize: 9.3,
-    lineHeight: 14,
-  },
-  proofPreviewCard: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#D9E1E8",
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-  },
-  proofImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 8,
-    backgroundColor: "#E2E8F0",
-  },
-  proofPreviewInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  proofPreviewTitle: {
-    color: "#0F172A",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
-  proofPreviewText: {
-    marginTop: 3,
-    color: "#64748B",
-    fontSize: 9.5,
-  },
   removeProofButton: {
     alignSelf: "flex-start",
     flexDirection: "row",
