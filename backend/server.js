@@ -668,8 +668,29 @@ app.post(
         });
       }
 
-      const event = payload?.data || {};
-      const eventType = paymongoText(event?.type || "", 120);
+      // PayMongo webhook payloads use an event envelope:
+      // data.type === "event"
+      // data.attributes.type === "checkout_session.payment.paid"
+      // data.attributes.data === the Checkout Session resource.
+      // Keep a small compatibility fallback for older/simplified examples.
+      const eventEnvelope = payload?.data || {};
+      const eventAttributes = eventEnvelope?.attributes || {};
+      const eventType = paymongoText(
+        eventAttributes?.type ||
+          eventEnvelope?.event_type ||
+          payload?.event_type ||
+          (eventEnvelope?.type !== "event" ? eventEnvelope?.type : "") ||
+          "",
+        120,
+      );
+
+      if (paymongoMode() === "test" && eventAttributes?.livemode === true) {
+        return response.status(409).json({
+          ok: false,
+          error: "live_paymongo_event_blocked",
+          message: "Live PayMongo events are disabled while VolunServe is in test mode.",
+        });
+      }
 
       if (eventType !== "checkout_session.payment.paid") {
         return response.status(200).json({
@@ -679,13 +700,33 @@ app.post(
         });
       }
 
-      const result = await finalizePaymongoDonation(event?.data || {});
+      const checkoutSession =
+        eventAttributes?.data || eventEnvelope?.data || {};
 
-      return response.status(200).json({
-        ok: true,
-        eventType,
-        ...result,
-      });
+      try {
+        const result = await finalizePaymongoDonation(checkoutSession);
+
+        return response.status(200).json({
+          ok: true,
+          eventType,
+          ...result,
+        });
+      } catch (error) {
+        // PayMongo's dashboard test event uses a sample checkout reference
+        // that does not exist in VolunServe. A valid signed event with an
+        // unknown merchant reference can be acknowledged without creating or
+        // changing any donation record.
+        if (error?.code === "paymongo_donation_not_found") {
+          return response.status(200).json({
+            ok: true,
+            ignored: true,
+            eventType,
+            reason: "unknown_volunserve_reference",
+          });
+        }
+
+        throw error;
+      }
     } catch (error) {
       console.error("PayMongo webhook processing failed:", error);
       return response.status(Number(error?.statusCode) || 500).json({
@@ -10814,16 +10855,47 @@ app.post(
 
       const goal = Number(campaign.monetaryGoal || 0);
       const raised = Number(campaign.verifiedAmountReceived || 0);
-      if (
-        Number.isFinite(goal) &&
-        goal > 0 &&
-        Number.isFinite(raised) &&
-        raised >= goal
-      ) {
+      const publicLocationName = cleanText(
+        campaign.handoffLocationName || "",
+        180,
+      );
+      const publicLocationAddress = cleanText(
+        campaign.handoffAddress || "",
+        320,
+      );
+
+      if (!Number.isFinite(goal) || goal <= 0) {
+        throw makeHttpError(
+          409,
+          "campaign_funding_goal_missing",
+          "This campaign is missing its verified monetary goal. Ask the LGU/Admin to complete the campaign setup first.",
+        );
+      }
+
+      if (!publicLocationName || !publicLocationAddress) {
+        throw makeHttpError(
+          409,
+          "campaign_public_location_missing",
+          "This campaign is missing its LGU-approved public service location. Ask the LGU/Admin to complete the campaign setup first.",
+        );
+      }
+
+      const safeRaised = Number.isFinite(raised) ? Math.max(0, raised) : 0;
+      const remaining = Math.max(0, goal - safeRaised);
+
+      if (remaining <= 0) {
         throw makeHttpError(
           409,
           "campaign_fully_funded",
           "This campaign has already reached its verified funding goal.",
+        );
+      }
+
+      if (amount - remaining > 0.009) {
+        throw makeHttpError(
+          409,
+          "donation_exceeds_remaining_goal",
+          `The remaining verified funding need is PHP ${remaining.toFixed(2)}. Enter an amount that does not exceed the remaining goal.`,
         );
       }
 
@@ -11139,6 +11211,18 @@ app.post(
       const requestedPublicLocation = cleanText(
         request.body?.publicLocationLabel || "",
         240,
+      );
+      const requestedHandoffLocationName = cleanText(
+        request.body?.handoffLocationName || "",
+        180,
+      );
+      const requestedHandoffAddress = cleanText(
+        request.body?.handoffAddress || "",
+        320,
+      );
+      const requestedHandoffNotes = cleanText(
+        request.body?.handoffNotes || "",
+        600,
       );
       const requestedPhotoUrls = Array.isArray(request.body?.publicPhotoUrls)
         ? request.body.publicPhotoUrls
@@ -11516,6 +11600,16 @@ app.post(
             );
           }
 
+          if (
+            requestedHandoffLocationName.length < 3 ||
+            requestedHandoffAddress.length < 5
+          ) {
+            throw makeHttpError(
+              400,
+              "official_public_location_required",
+              "Set the LGU-approved public service or coordination point before publishing the disaster campaign.",
+            );
+          }
 
           const barangay = cleanText(assessment.barangay || "", 120);
           const categoryPairs = [
@@ -11579,6 +11673,10 @@ app.post(
             officialChannelInstructions,
             monetaryGoal: requestedGoal,
             verifiedAmountReceived: 0,
+            handoffLocationType: "lgu_public_service_point",
+            handoffLocationName: requestedHandoffLocationName,
+            handoffAddress: requestedHandoffAddress,
+            handoffNotes: requestedHandoffNotes,
             publicStory: story,
             publicLocationLabel: requestedPublicLocation,
             publicIncidentType: incidentType,
@@ -11622,6 +11720,134 @@ app.post(
         error: cleanText(error?.code || "donation_campaign_failed", 120),
         message: cleanText(
           error?.message || "Unable to publish the Donation Campaign.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+// Complete or repair a published disaster campaign that predates the
+// monetary-only public-location requirements. Community Assistance locations
+// remain locked to their verified Assistance Request source.
+app.post(
+  "/api/admin/donations/campaigns/:campaignId/public-setup",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const campaignId = cleanText(request.params?.campaignId || "", 160);
+      const monetaryGoal = Number(request.body?.monetaryGoal ?? 0);
+      const handoffLocationName = cleanText(
+        request.body?.handoffLocationName || "",
+        180,
+      );
+      const handoffAddress = cleanText(
+        request.body?.handoffAddress || "",
+        320,
+      );
+      const handoffNotes = cleanText(
+        request.body?.handoffNotes || "",
+        600,
+      );
+
+      if (!campaignId || !/^[A-Za-z0-9_-]{6,160}$/.test(campaignId)) {
+        throw makeHttpError(400, "invalid_campaign_id", "Choose a valid Donation Campaign.");
+      }
+
+      if (!Number.isFinite(monetaryGoal) || monetaryGoal <= 0) {
+        throw makeHttpError(
+          400,
+          "funding_goal_required",
+          "Enter the verified monetary goal for this campaign.",
+        );
+      }
+
+      if (handoffLocationName.length < 3 || handoffAddress.length < 5) {
+        throw makeHttpError(
+          400,
+          "official_public_location_required",
+          "Enter the LGU-approved public service location name and address.",
+        );
+      }
+
+      const campaignRef = db.collection("donationCampaigns").doc(campaignId);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      const result = await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(campaignRef);
+
+        if (!snapshot.exists) {
+          throw makeHttpError(404, "campaign_not_found", "The Donation Campaign was not found.");
+        }
+
+        const campaign = snapshot.data() || {};
+        const sourceType = cleanText(campaign.sourceType || "", 80).toLowerCase();
+        const status = cleanText(campaign.status || "", 40).toLowerCase();
+        const verifiedAmountReceived = Number(campaign.verifiedAmountReceived || 0);
+
+        if (sourceType !== "disaster_relief_need") {
+          throw makeHttpError(
+            409,
+            "community_location_locked",
+            "Community Assistance campaign locations must remain linked to the verified Assistance Request.",
+          );
+        }
+
+        if (status !== "published") {
+          throw makeHttpError(
+            409,
+            "published_campaign_required",
+            "Only a currently published disaster campaign can be completed from this screen.",
+          );
+        }
+
+        if (
+          Number.isFinite(verifiedAmountReceived) &&
+          monetaryGoal + 0.009 < Math.max(0, verifiedAmountReceived)
+        ) {
+          throw makeHttpError(
+            409,
+            "funding_goal_below_verified_amount",
+            "The funding goal cannot be lower than the amount already verified for this campaign.",
+          );
+        }
+
+        transaction.update(campaignRef, {
+          monetaryGoal,
+          handoffLocationType: "lgu_public_service_point",
+          handoffLocationName,
+          handoffAddress,
+          handoffNotes,
+          updatedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(activityRef, {
+          action: "Donation Campaign Public Setup Completed",
+          campaignId,
+          monetaryGoal,
+          handoffLocationName,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        return {
+          campaignId,
+          monetaryGoal,
+          handoffLocationName,
+          handoffAddress,
+        };
+      });
+
+      response.json({ ok: true, ...result });
+    } catch (error) {
+      console.error("Donation campaign public setup update failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "campaign_public_setup_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to update the Donation Campaign public setup.",
           700,
         ),
       });

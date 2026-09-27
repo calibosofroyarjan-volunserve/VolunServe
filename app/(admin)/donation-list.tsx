@@ -13,15 +13,13 @@ import {
   Alert,
   Image,
   Linking,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { db } from "../../lib/firebase";
@@ -55,7 +53,7 @@ type NeedAssessment = {
 };
 
 type CampaignStatus = "published" | "closed" | string;
-type DonationType = "monetary" | "in_kind";
+type DonationType = "monetary";
 type CampaignGroup = "disaster_affected" | "community_needs_help";
 type CampaignSourceType = "disaster_relief_need" | "community_assistance_request";
 
@@ -114,10 +112,8 @@ type DonationCampaign = {
   sourceAssistanceRequestId?: string;
   barangays?: string[];
   acceptedDonationTypes?: DonationType[];
-  acceptedCategories?: string[];
   officialChannelLabel?: string;
   officialChannelInstructions?: string;
-  inKindInstructions?: string;
   publicStory?: string;
   publicLocationLabel?: string;
   publicIncidentType?: string;
@@ -141,9 +137,7 @@ type DonationCampaign = {
   monetaryGoal?: number;
   verifiedAmountReceived?: number;
 
-  // Controlled donation handoff / receiving fields.
-  handoffMode?: HandoffMode;
-  handoffLocationType?: HandoffLocationType;
+  // Legacy-compatible LGU public service-location fields used by the public map.
   handoffLocationName?: string;
   handoffAddress?: string;
   handoffNotes?: string;
@@ -160,18 +154,12 @@ type DonationSubmission = {
   donorName?: string;
   donorDisplayName?: string;
   donationType?: DonationType | string;
-  category?: string;
-  itemName?: string;
-  unit?: string;
-  quantityPledged?: number;
   amount?: number;
   transactionReference?: string;
   donorNote?: string;
   proofUrls?: string[];
   status?: "submitted" | "received" | "rejected" | string;
-  actualQuantityReceived?: number;
   actualAmountReceived?: number;
-  officialReceiptReference?: string;
   rejectionReason?: string;
   createdAt?: any;
   receivedAt?: any;
@@ -180,71 +168,17 @@ type DonationSubmission = {
 
 type VerificationForm = {
   actualValue: string;
-  officialReceiptReference: string;
   rejectionReason: string;
 };
 
+type CampaignPublicSetupDraft = {
+  monetaryGoal: string;
+  handoffLocationName: string;
+  handoffAddress: string;
+  handoffNotes: string;
+};
+
 type AdminDonationView = "campaigns" | "verification";
-
-type SelectOption = {
-  value: string;
-  label: string;
-  helper?: string;
-};
-
-type HandoffMode = "receiving_point" | "coordinated_handover" | "both";
-type HandoffLocationType =
-  | "barangay_relief_desk"
-  | "evacuation_center"
-  | "lgu_relief_center"
-  | "city_hall"
-  | "hospital_social_service"
-  | "veterinary_clinic"
-  | "social_welfare_office"
-  | "animal_shelter"
-  | "approved_public_meeting"
-  | "other";
-
-const HANDOFF_MODE_OPTIONS: SelectOption[] = [
-  {
-    value: "receiving_point",
-    label: "Barangay / LGU Receiving Point",
-    helper: "Donor sends or drops off goods at an authorized receiving point.",
-  },
-  {
-    value: "coordinated_handover",
-    label: "Coordinated Beneficiary Handover",
-    helper: "LGU may arrange a meeting at an authorized public location when the beneficiary agrees.",
-  },
-  {
-    value: "both",
-    label: "Both",
-    helper: "Allow LGU receiving and, when approved, a coordinated public handover.",
-  },
-];
-
-const HANDOFF_LOCATION_TYPE_OPTIONS: SelectOption[] = [
-  { value: "barangay_relief_desk", label: "Barangay Hall / Relief Desk" },
-  { value: "evacuation_center", label: "Authorized Evacuation Center" },
-  { value: "lgu_relief_center", label: "LGU Relief Operations Center" },
-  { value: "city_hall", label: "City Hall Receiving Area" },
-  { value: "hospital_social_service", label: "Hospital / Medical Social Service Office" },
-  { value: "veterinary_clinic", label: "Veterinary Clinic / Animal Care Partner" },
-  { value: "social_welfare_office", label: "Social Welfare / Assistance Office" },
-  { value: "animal_shelter", label: "Animal Shelter / Rescue Receiving Point" },
-  { value: "approved_public_meeting", label: "LGU-Approved Public Meeting Point" },
-  { value: "other", label: "Other Authorized Public Location" },
-];
-
-const NEED_CATEGORY_LABELS: Record<string, string> = {
-  food: "Food",
-  water: "Water",
-  hygiene: "Hygiene",
-  clothing: "Clothing",
-  shelter: "Shelter",
-  medical: "Medical",
-  other: "Other",
-};
 
 const timestampMillis = (value: any) => {
   if (!value) return 0;
@@ -326,19 +260,6 @@ const defaultCommunityPublicStory = (source?: AssistanceCampaignSource | null) =
   return `The LGU verified a legitimate ${label.toLowerCase()} need in ${area} and confirmed that available LGU or partner resources cannot fully cover the remaining requirement. Public support is limited to the verified shortage, while beneficiary identity and private case information remain protected.`;
 };
 
-const mapAssistanceLocationType = (value?: string): HandoffLocationType => {
-  const normalized = String(value || "").trim().toLowerCase();
-  const mapping: Record<string, HandoffLocationType> = {
-    barangay_hall: "barangay_relief_desk",
-    lgu_office: "city_hall",
-    hospital_social_service: "hospital_social_service",
-    social_welfare_office: "social_welfare_office",
-    vet_clinic: "veterinary_clinic",
-    authorized_public_point: "other",
-  };
-  return mapping[normalized] || "other";
-};
-
 const campaignGroupLabel = (campaign?: DonationCampaign) =>
   String(campaign?.campaignGroup || "") === "community_needs_help"
     ? "Community Need Donation Support"
@@ -350,29 +271,6 @@ const campaignCategoryLabel = (campaign?: DonationCampaign) => {
   return raw
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-};
-
-const categoriesFromAssessment = (assessment?: NeedAssessment) => {
-  if (!assessment) return [] as string[];
-
-  const categories: string[] = [];
-  if (Number(assessment.peopleNeedingFood || 0) > 0) categories.push("food");
-  if (Number(assessment.peopleNeedingWater || 0) > 0) categories.push("water");
-  if (Number(assessment.householdsNeedingHygiene || 0) > 0) {
-    categories.push("hygiene");
-  }
-  if (Number(assessment.peopleNeedingClothing || 0) > 0) {
-    categories.push("clothing");
-  }
-  if (Number(assessment.householdsNeedingShelter || 0) > 0) {
-    categories.push("shelter");
-  }
-  if (Number(assessment.peopleNeedingMedical || 0) > 0) {
-    categories.push("medical");
-  }
-  if (String(assessment.otherNeedDescription || "").trim()) categories.push("other");
-
-  return Array.from(new Set(categories));
 };
 
 const statusLabel = (value?: string) =>
@@ -419,126 +317,6 @@ const defaultPublicLocation = (assessment?: NeedAssessment) => {
   return barangay
     ? `${barangay}, San Jose del Monte, Bulacan`
     : "San Jose del Monte, Bulacan";
-};
-
-const handoffModeLabel = (value?: string) =>
-  HANDOFF_MODE_OPTIONS.find((item) => item.value === value)?.label || "Barangay / LGU Receiving Point";
-
-const handoffLocationTypeLabel = (value?: string) =>
-  HANDOFF_LOCATION_TYPE_OPTIONS.find((item) => item.value === value)?.label || "Authorized Public Location";
-
-const authorizedLocationOptions = (
-  assessment?: NeedAssessment,
-  locationType?: HandoffLocationType | "",
-): SelectOption[] => {
-  const barangay = String(assessment?.barangay || "Selected Barangay").trim() || "Selected Barangay";
-
-  if (locationType === "barangay_relief_desk") {
-    return [
-      {
-        value: `${barangay} Barangay Hall - Relief Receiving Desk`,
-        label: `${barangay} Barangay Hall - Relief Receiving Desk`,
-        helper: "Barangay-level receiving point. Confirm the exact public address before publishing.",
-      },
-      {
-        value: `${barangay} Barangay Relief Desk`,
-        label: `${barangay} Barangay Relief Desk`,
-        helper: "Use only when this is an authorized public receiving point.",
-      },
-    ];
-  }
-
-  if (locationType === "evacuation_center") {
-    return [
-      {
-        value: "Authorized Evacuation Center Receiving Desk",
-        label: "Authorized Evacuation Center Receiving Desk",
-        helper: "Select this only when the LGU has designated an evacuation center to receive goods.",
-      },
-    ];
-  }
-
-  if (locationType === "lgu_relief_center") {
-    return [
-      {
-        value: "LGU Relief Operations Center",
-        label: "LGU Relief Operations Center",
-        helper: "Central LGU relief receiving and verification point.",
-      },
-    ];
-  }
-
-  if (locationType === "city_hall") {
-    return [
-      {
-        value: "City Hall Relief Receiving Area",
-        label: "City Hall Relief Receiving Area",
-        helper: "Use the authorized City Hall receiving desk or relief area.",
-      },
-    ];
-  }
-
-  if (locationType === "hospital_social_service") {
-    return [
-      {
-        value: "__custom__",
-        label: "Hospital / Medical Social Service Office",
-        helper: "Enter the exact LGU-approved hospital or medical assistance office and its public address.",
-      },
-    ];
-  }
-
-  if (locationType === "veterinary_clinic") {
-    return [
-      {
-        value: "__custom__",
-        label: "Veterinary Clinic / Animal Care Partner",
-        helper: "Enter the exact verified veterinary clinic or animal-care partner selected by the LGU.",
-      },
-    ];
-  }
-
-  if (locationType === "social_welfare_office") {
-    return [
-      {
-        value: "__custom__",
-        label: "Social Welfare / Assistance Office",
-        helper: "Enter the authorized public social-welfare or assistance receiving point.",
-      },
-    ];
-  }
-
-  if (locationType === "animal_shelter") {
-    return [
-      {
-        value: "__custom__",
-        label: "Animal Shelter / Rescue Receiving Point",
-        helper: "Enter the approved shelter, rescue center, or animal-welfare receiving location.",
-      },
-    ];
-  }
-
-  if (locationType === "approved_public_meeting") {
-    return [
-      {
-        value: "__custom__",
-        label: "LGU-Approved Public Meeting Point",
-        helper: "Use only a safe public meeting point approved by the LGU. Never use a beneficiary home address.",
-      },
-    ];
-  }
-
-  if (locationType === "other") {
-    return [
-      {
-        value: "__custom__",
-        label: "Other Authorized Public Location",
-        helper: "Enter the approved location name and public delivery address below.",
-      },
-    ];
-  }
-
-  return [];
 };
 
 const handoffMapUrl = (name: string, address: string) => {
@@ -616,58 +394,6 @@ const normalizeReference = (value?: string) =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
-const summarizeVerifiedGoods = (items: DonationSubmission[]) => {
-  const groups = new Map<
-    string,
-    {
-      label: string;
-      unit: string;
-      quantity: number;
-    }
-  >();
-
-  items
-    .filter(
-      (item) =>
-        item.status === "received" &&
-        item.donationType === "in_kind" &&
-        Number(item.actualQuantityReceived || 0) > 0,
-    )
-    .forEach((item) => {
-      const label =
-        String(item.itemName || "").trim() ||
-        NEED_CATEGORY_LABELS[String(item.category || "other")] ||
-        "Relief item";
-      const unit = String(item.unit || "unit").trim() || "unit";
-      const key = `${label.toLowerCase()}|${unit.toLowerCase()}`;
-      const current = groups.get(key);
-
-      groups.set(key, {
-        label,
-        unit,
-        quantity:
-          Number(current?.quantity || 0) +
-          Number(item.actualQuantityReceived || 0),
-      });
-    });
-
-  const rows = Array.from(groups.values());
-
-  if (!rows.length) return "None verified yet";
-
-  const visible = rows
-    .slice(0, 4)
-    .map(
-      (item) =>
-        `${item.quantity} ${item.unit} ${item.label}`,
-    )
-    .join(" · ");
-
-  return rows.length > 4
-    ? `${visible} · +${rows.length - 4} more`
-    : visible;
-};
-
 export default function DonationAdministration() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -709,16 +435,11 @@ export default function DonationAdministration() {
   const [assessmentId, setAssessmentId] = useState("");
   const [campaignTitle, setCampaignTitle] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
-  const [allowMonetary, setAllowMonetary] = useState(true);
-  const [allowInKind, setAllowInKind] = useState(true);
+  const allowMonetary = true;
   const [officialChannelLabel, setOfficialChannelLabel] = useState("");
   const [officialChannelInstructions, setOfficialChannelInstructions] = useState("");
   const [monetaryGoal, setMonetaryGoal] = useState("");
-  const [inKindInstructions, setInKindInstructions] = useState("");
 
-  const [handoffMode, setHandoffMode] = useState<HandoffMode>("receiving_point");
-  const [handoffLocationType, setHandoffLocationType] = useState<HandoffLocationType | "">("");
-  const [handoffLocationPreset, setHandoffLocationPreset] = useState("");
   const [handoffLocationName, setHandoffLocationName] = useState("");
   const [handoffAddress, setHandoffAddress] = useState("");
   const [handoffNotes, setHandoffNotes] = useState("");
@@ -735,6 +456,9 @@ export default function DonationAdministration() {
 
   const [verificationForms, setVerificationForms] = useState<
     Record<string, VerificationForm>
+  >({});
+  const [campaignPublicSetupDrafts, setCampaignPublicSetupDrafts] = useState<
+    Record<string, CampaignPublicSetupDraft>
   >({});
 
   const isAdmin =
@@ -781,6 +505,11 @@ export default function DonationAdministration() {
             id: item.id,
             ...(item.data() as Omit<DonationCampaign, "id">),
           }))
+          .filter(
+            (item) =>
+              item.acceptedDonationTypes?.includes("monetary") ||
+              Number(item.monetaryGoal || 0) > 0,
+          )
           .sort(
             (a, b) =>
               (timestampMillis(b.updatedAt) || timestampMillis(b.createdAt)) -
@@ -805,6 +534,7 @@ export default function DonationAdministration() {
             id: item.id,
             ...(item.data() as Omit<DonationSubmission, "id">),
           }))
+          .filter((item) => String(item.donationType || "monetary") === "monetary")
           .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
         setDonations(rows);
         setError("");
@@ -966,11 +696,6 @@ export default function DonationAdministration() {
           ]
         : publicNeedsFromAssessment(selectedAssessment),
     [openedFromAssistance, assistanceSource, selectedAssessment],
-  );
-
-  const handoffLocationOptions = useMemo(
-    () => authorizedLocationOptions(selectedAssessment, handoffLocationType),
-    [selectedAssessment, handoffLocationType],
   );
 
   const handoffMapPreviewUrl = useMemo(
@@ -1211,6 +936,9 @@ export default function DonationAdministration() {
       setPublicIncidentType("Verified relief need");
       setPublicSeverity("LGU assessed");
       setSelectedPublicPhotoUrls([]);
+      setHandoffLocationName("");
+      setHandoffAddress("");
+      setHandoffNotes("");
     }
   }, [isAdmin, requestedAssessmentId, assessments, campaigns]);
 
@@ -1237,12 +965,6 @@ export default function DonationAdministration() {
     setShowCampaignForm(false);
 
     if (!existing && assistanceSourceIsEligible(assistanceSource)) {
-      const preferred = Array.isArray(assistanceSource.preferredAssistanceTypes)
-        ? assistanceSource.preferredAssistanceTypes.map((item) => String(item))
-        : [];
-      const monetary = preferred.includes("monetary") || !preferred.length;
-      const inKind = preferred.includes("in_kind");
-
       setCampaignTitle(defaultCommunityCampaignTitle(assistanceSource));
       setCampaignDescription(defaultCommunityCampaignDescription(assistanceSource));
       setPublicStory(defaultCommunityPublicStory(assistanceSource));
@@ -1254,25 +976,10 @@ export default function DonationAdministration() {
       );
       setPublicSeverity("LGU verified need");
       setSelectedPublicPhotoUrls([]);
-      setAllowMonetary(monetary);
-      setAllowInKind(inKind);
-      setMonetaryGoal(
-        monetary ? String(Number(assistanceSource.remainingAmount || 0)) : "",
-      );
-      setHandoffMode("receiving_point");
-      setHandoffLocationType(
-        mapAssistanceLocationType(assistanceSource.assignedLocationType),
-      );
-      setHandoffLocationPreset("__assistance_source__");
+      setMonetaryGoal(String(Number(assistanceSource.remainingAmount || 0)));
       setHandoffLocationName(assistanceSource.assignedLocationName || "");
       setHandoffAddress(assistanceSource.assignedLocationAddress || "");
       setHandoffNotes(assistanceSource.assignedLocationNotes || "");
-      setInKindInstructions(
-        inKind
-          ? assistanceSource.assignedLocationNotes ||
-              "Coordinate in-kind support through the LGU-approved public receiving point."
-          : "",
-      );
     }
   }, [
     isAdmin,
@@ -1341,15 +1048,9 @@ export default function DonationAdministration() {
     }
     setCampaignTitle("");
     setCampaignDescription("");
-    setAllowMonetary(true);
-    setAllowInKind(true);
     setOfficialChannelLabel("");
     setOfficialChannelInstructions("");
     setMonetaryGoal("");
-    setInKindInstructions("");
-    setHandoffMode("receiving_point");
-    setHandoffLocationType("");
-    setHandoffLocationPreset("");
     setHandoffLocationName("");
     setHandoffAddress("");
     setHandoffNotes("");
@@ -1371,8 +1072,6 @@ export default function DonationAdministration() {
       ...current,
       [donationId]: {
         actualValue: current[donationId]?.actualValue || "",
-        officialReceiptReference:
-          current[donationId]?.officialReceiptReference || "",
         rejectionReason: current[donationId]?.rejectionReason || "",
         [field]: value,
       },
@@ -1542,28 +1241,6 @@ export default function DonationAdministration() {
     }
   };
 
-  const chooseHandoffLocationType = (value: string) => {
-    const next = value as HandoffLocationType;
-    setHandoffLocationType(next);
-    setHandoffLocationPreset("");
-    setHandoffLocationName("");
-    setHandoffAddress("");
-    setHandoffNotes("");
-  };
-
-  const chooseAuthorizedLocation = (value: string) => {
-    setHandoffLocationPreset(value);
-
-    if (value === "__custom__") {
-      setHandoffLocationName("");
-      setHandoffAddress("");
-      return;
-    }
-
-    setHandoffLocationName(value);
-    setHandoffAddress("");
-  };
-
   const secureAdminPost = async (
     path: string,
     payload: Record<string, any> = {},
@@ -1629,7 +1306,7 @@ export default function DonationAdministration() {
       ) {
         Alert.alert(
           "Official Location Required",
-          "Return to Assistance Requests and save the LGU-approved public service or receiving location first.",
+          "Return to Assistance Requests and save the LGU-approved public service location first.",
         );
         return;
       }
@@ -1664,10 +1341,6 @@ export default function DonationAdministration() {
     const moneyLabel = officialChannelLabel.trim();
     const moneyInstructions = officialChannelInstructions.trim();
     const numericMonetaryGoal = Number(monetaryGoal);
-    const goodsInstructions = inKindInstructions.trim();
-    const handoffName = handoffLocationName.trim();
-    const handoffPublicAddress = handoffAddress.trim();
-    const handoffPublicNotes = handoffNotes.trim();
     const story = publicStory.trim();
     const publicLocation = publicLocationLabel.trim();
     const incidentType = publicIncidentType.trim();
@@ -1721,12 +1394,7 @@ export default function DonationAdministration() {
       return;
     }
 
-    if (!allowMonetary && !allowInKind) {
-      Alert.alert("Donation Type", "Enable at least one donation type.");
-      return;
-    }
-
-    if (allowMonetary && (!Number.isFinite(numericMonetaryGoal) || numericMonetaryGoal <= 0)) {
+    if (!Number.isFinite(numericMonetaryGoal) || numericMonetaryGoal <= 0) {
       Alert.alert(
         "Funding Goal Required",
         "Enter the verified monetary amount still needed for this campaign.",
@@ -1736,7 +1404,6 @@ export default function DonationAdministration() {
 
     if (
       openedFromAssistance &&
-      allowMonetary &&
       Math.abs(
         numericMonetaryGoal - Number(assistanceSource?.remainingAmount || 0),
       ) > 0.009
@@ -1750,7 +1417,7 @@ export default function DonationAdministration() {
       return;
     }
 
-    if (allowMonetary && (moneyLabel.length < 3 || moneyInstructions.length < 10)) {
+    if (moneyLabel.length < 3 || moneyInstructions.length < 10) {
       Alert.alert(
         "Official LGU Channel Required",
         "Enter the official LGU monetary channel and clear payment or receipt instructions.",
@@ -1758,49 +1425,18 @@ export default function DonationAdministration() {
       return;
     }
 
-    if (allowInKind && goodsInstructions.length < 10) {
+    if (
+      !openedFromAssistance &&
+      (handoffLocationName.trim().length < 3 || handoffAddress.trim().length < 5)
+    ) {
       Alert.alert(
-        "Receiving Instructions Required",
-        "Enter clear instructions for how the goods will be received or handed over.",
+        "Official Public Location Required",
+        "Set the LGU-approved public service or coordination point before publishing this disaster campaign.",
       );
       return;
     }
 
-    if (allowInKind && !handoffLocationType) {
-      Alert.alert(
-        "Location Type Required",
-        "Select the authorized type of receiving or handover location.",
-      );
-      return;
-    }
-
-    if (allowInKind && !openedFromAssistance && !handoffLocationPreset) {
-      Alert.alert(
-        "Authorized Location Required",
-        "Select the authorized receiving or handover location before publishing.",
-      );
-      return;
-    }
-
-    if (allowInKind && handoffName.length < 3) {
-      Alert.alert(
-        "Location Name Required",
-        "An LGU-approved public receiving or handover location is required for in-kind support.",
-      );
-      return;
-    }
-
-    if (allowInKind && handoffPublicAddress.length < 8) {
-      Alert.alert(
-        "Public Delivery Address Required",
-        "Enter the approved public receiving address. Never use the beneficiary's home address.",
-      );
-      return;
-    }
-
-    const acceptedDonationTypes: DonationType[] = [];
-    if (allowMonetary) acceptedDonationTypes.push("monetary");
-    if (allowInKind) acceptedDonationTypes.push("in_kind");
+    const acceptedDonationTypes: DonationType[] = ["monetary"];
 
     try {
       setBusyKey("create_campaign");
@@ -1824,13 +1460,10 @@ export default function DonationAdministration() {
         acceptedDonationTypes,
         officialChannelLabel: moneyLabel,
         officialChannelInstructions: moneyInstructions,
-        monetaryGoal: allowMonetary ? numericMonetaryGoal : 0,
-        inKindInstructions: goodsInstructions,
-        handoffMode,
-        handoffLocationType,
-        handoffLocationName: handoffName,
-        handoffAddress: handoffPublicAddress,
-        handoffNotes: handoffPublicNotes,
+        monetaryGoal: numericMonetaryGoal,
+        handoffLocationName: handoffLocationName.trim(),
+        handoffAddress: handoffAddress.trim(),
+        handoffNotes: handoffNotes.trim(),
       });
 
       setShowCampaignForm(false);
@@ -1838,13 +1471,95 @@ export default function DonationAdministration() {
         "Campaign Published",
         openedFromAssistance
           ? "The verified Community Assistance campaign is now active. Only privacy-safe campaign information and the LGU-approved public location are exposed to donors."
-          : "The disaster relief campaign is now active. Residents can submit support through the official LGU receiving instructions.",
+          : "The disaster relief campaign is now active. Residents can donate through the official LGU monetary channel.",
       );
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to create the campaign.";
       setError(message);
       Alert.alert("Campaign Failed", message);
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const updateCampaignPublicSetupDraft = (
+    campaign: DonationCampaign,
+    field: keyof CampaignPublicSetupDraft,
+    value: string,
+  ) => {
+    setCampaignPublicSetupDrafts((current) => ({
+      ...current,
+      [campaign.id]: {
+        monetaryGoal:
+          current[campaign.id]?.monetaryGoal ??
+          String(Number(campaign.monetaryGoal || 0) || ""),
+        handoffLocationName:
+          current[campaign.id]?.handoffLocationName ??
+          String(campaign.handoffLocationName || ""),
+        handoffAddress:
+          current[campaign.id]?.handoffAddress ??
+          String(campaign.handoffAddress || ""),
+        handoffNotes:
+          current[campaign.id]?.handoffNotes ??
+          String(campaign.handoffNotes || ""),
+        [field]: value,
+      },
+    }));
+  };
+
+  const saveCampaignPublicSetup = async (campaign: DonationCampaign) => {
+    if (!user || !isAdmin || busyKey) return;
+
+    const draft = campaignPublicSetupDrafts[campaign.id] || {
+      monetaryGoal: String(Number(campaign.monetaryGoal || 0) || ""),
+      handoffLocationName: String(campaign.handoffLocationName || ""),
+      handoffAddress: String(campaign.handoffAddress || ""),
+      handoffNotes: String(campaign.handoffNotes || ""),
+    };
+
+    const numericGoal = Number(draft.monetaryGoal);
+    if (!Number.isFinite(numericGoal) || numericGoal <= 0) {
+      Alert.alert("Funding Goal Required", "Enter the verified monetary goal.");
+      return;
+    }
+
+    if (
+      draft.handoffLocationName.trim().length < 3 ||
+      draft.handoffAddress.trim().length < 5
+    ) {
+      Alert.alert(
+        "Official Public Location Required",
+        "Enter the LGU-approved public service location name and address.",
+      );
+      return;
+    }
+
+    try {
+      setBusyKey(`public_setup_${campaign.id}`);
+      setError("");
+
+      await secureAdminPost(
+        `/api/admin/donations/campaigns/${encodeURIComponent(campaign.id)}/public-setup`,
+        {
+          monetaryGoal: numericGoal,
+          handoffLocationName: draft.handoffLocationName.trim(),
+          handoffAddress: draft.handoffAddress.trim(),
+          handoffNotes: draft.handoffNotes.trim(),
+        },
+      );
+
+      Alert.alert(
+        "Campaign Setup Updated",
+        "The verified goal and LGU-approved public location are now available on the Resident Donation page.",
+      );
+    } catch (problem) {
+      const message =
+        problem instanceof Error
+          ? problem.message
+          : "Unable to update the campaign public setup.";
+      setError(message);
+      Alert.alert("Update Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1877,28 +1592,19 @@ export default function DonationAdministration() {
 
     const form = verificationForms[donation.id] || {
       actualValue: "",
-      officialReceiptReference: "",
       rejectionReason: "",
     };
 
-    const type = String(donation.donationType || "");
     const actual = Number(form.actualValue);
-    const receiptReference = form.officialReceiptReference.trim();
 
     if (!Number.isFinite(actual) || actual <= 0) {
       Alert.alert(
         "Actual Receipt Required",
-        type === "in_kind"
-          ? "Enter the actual quantity physically received by the LGU."
-          : "Enter the actual monetary amount confirmed by the LGU.",
+        "Enter the actual monetary amount confirmed by the LGU.",
       );
       return;
     }
 
-    if (type === "in_kind" && !Number.isInteger(actual)) {
-      Alert.alert("Whole Quantity Required", "In-kind quantity must be a whole number.");
-      return;
-    }
 
     try {
       setBusyKey(`verify_${donation.id}`);
@@ -1906,13 +1612,7 @@ export default function DonationAdministration() {
 
       await secureAdminPost(
         `/api/admin/donations/${encodeURIComponent(donation.id)}/verify`,
-        {
-          actualValue: actual,
-          officialReceiptReference:
-            type === "in_kind"
-              ? receiptReference
-              : "",
-        },
+        { actualValue: actual },
       );
 
       setVerificationForms((current) => {
@@ -1923,9 +1623,7 @@ export default function DonationAdministration() {
 
       Alert.alert(
         "Donation Verified",
-        type === "in_kind"
-          ? "The received goods were verified and added to LGU Relief Inventory."
-          : "The confirmed amount was added to the campaign funding progress.",
+        "The confirmed amount was added to the campaign funding progress.",
       );
     } catch (problem) {
       const message =
@@ -2058,7 +1756,7 @@ export default function DonationAdministration() {
         <FlowStep
           number="3"
           title="Verify Actual Receipt"
-          text="Only money or goods actually confirmed by the LGU are counted."
+          text="Only monetary donations actually confirmed by the LGU are counted."
         />
       </View>
 
@@ -2114,7 +1812,7 @@ export default function DonationAdministration() {
               <Text style={styles.nextActionText}>
                 {openedFromAssistance
                   ? "The Assistance Request is LGU-verified, Donation Support Needed is confirmed, and the public service location is controlled by the LGU. Complete the privacy-safe campaign details below."
-                  : "Relief Operations already selected this exact verified need after the LGU confirmed a resource shortage. Complete the official receiving details below."}
+                  : "Relief Operations already selected this exact verified need after the LGU confirmed a resource shortage. Complete the monetary campaign details below."}
               </Text>
             </>
           ) : selectedPublishedCampaign && selectedPendingDonations.length > 0 ? (
@@ -2124,7 +1822,7 @@ export default function DonationAdministration() {
                 {selectedPendingDonations.length === 1 ? "" : "s"}
               </Text>
               <Text style={styles.nextActionText}>
-                Check each submission against the official LGU transaction record or physical receiving log before counting it as received.
+                Check each submission against the official LGU transaction record before counting it as verified.
               </Text>
             </>
           ) : selectedPublishedCampaign ? (
@@ -2421,7 +2119,7 @@ export default function DonationAdministration() {
                 <View style={styles.activeHandoffStrip}>
                   <Ionicons name="location-outline" size={17} color="#0F766E" />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.activeHandoffLabel}>AUTHORIZED HANDOVER / RECEIVING POINT</Text>
+                    <Text style={styles.activeHandoffLabel}>OFFICIAL LGU SERVICE LOCATION</Text>
                     <Text style={styles.activeHandoffTitle}>
                       {selectedPublishedCampaign.handoffLocationName}
                     </Text>
@@ -2893,26 +2591,13 @@ export default function DonationAdministration() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <Text style={styles.label}>Accepted donation support</Text>
-              <View style={styles.toggleRow}>
-                <ToggleChoice
-                  label="Monetary"
-                  selected={allowMonetary}
-                  onPress={() => {
-                    if (!openedFromAssistance) setAllowMonetary((current) => !current);
-                  }}
-                />
-                <ToggleChoice
-                  label="In-kind Goods"
-                  selected={allowInKind}
-                  onPress={() => {
-                    if (!openedFromAssistance) setAllowInKind((current) => !current);
-                  }}
-                />
+              <Text style={styles.label}>Donation support</Text>
+              <View style={styles.noticeBox}>
+                <Ionicons name="cash-outline" size={18} color="#0F766E" />
+                <Text style={styles.noticeText}>Monetary donations only for the current thesis scope.</Text>
               </View>
 
-              {allowMonetary && (
-                <View style={styles.fundingGoalCard}>
+              <View style={styles.fundingGoalCard}>
                   <View style={styles.fundingGoalHeader}>
                     <View style={styles.fundingGoalIcon}>
                       <Ionicons name="trending-up-outline" size={18} color="#0F766E" />
@@ -2939,7 +2624,6 @@ export default function DonationAdministration() {
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
-              )}
 
               <View style={styles.formDivider} />
 
@@ -2948,15 +2632,14 @@ export default function DonationAdministration() {
                   <Text style={styles.stepBadgeText}>4</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.formTitle}>Official LGU Receiving & Handover Details</Text>
+                  <Text style={styles.formTitle}>Official LGU Monetary Channel</Text>
                   <Text style={styles.formSubtitle}>
-                    The LGU controls the public receiving, service, or handover location. It may be a relief desk, hospital office, veterinary clinic, social-welfare office, shelter, or another approved public point. A beneficiary's home or live GPS is never shown.
+                    Publish only the official LGU-controlled monetary channel. Community Assistance may also show the LGU-approved public service point already assigned during review.
                   </Text>
                 </View>
               </View>
 
-              {allowMonetary && (
-                <View style={styles.subFormCard}>
+              <View style={styles.subFormCard}>
                   <View style={styles.subFormHeader}>
                     <Ionicons name="cash-outline" size={18} color="#0F766E" />
                     <Text style={styles.subFormTitle}>Monetary Donation</Text>
@@ -2968,7 +2651,7 @@ export default function DonationAdministration() {
                     value={officialChannelLabel}
                     onChangeText={setOfficialChannelLabel}
                     maxLength={160}
-                    placeholder="Official City/LGU receiving channel"
+                    placeholder="Official City/LGU monetary channel"
                     placeholderTextColor="#94A3B8"
                   />
 
@@ -2983,6 +2666,62 @@ export default function DonationAdministration() {
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
+
+              {!openedFromAssistance && (
+                <View style={[styles.subFormCard, styles.handoffSetupCard]}>
+                  <View style={styles.subFormHeader}>
+                    <Ionicons name="location-outline" size={18} color="#0F766E" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.subFormTitle}>LGU-Approved Public Service Location</Text>
+                      <Text style={styles.handoffHelper}>
+                        Required for transparency. Donors see only this LGU-approved public point; no household or beneficiary home address is published.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.label}>Location name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={handoffLocationName}
+                    onChangeText={setHandoffLocationName}
+                    maxLength={180}
+                    placeholder="e.g. City Assistance / Donation Desk"
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  <Text style={styles.label}>Public address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={handoffAddress}
+                    onChangeText={setHandoffAddress}
+                    maxLength={320}
+                    placeholder="e.g. City Hall, City of San Jose del Monte, Bulacan"
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  <Text style={styles.label}>Public instructions (optional)</Text>
+                  <TextInput
+                    style={[styles.input, styles.multilineSmall]}
+                    value={handoffNotes}
+                    onChangeText={setHandoffNotes}
+                    maxLength={600}
+                    multiline
+                    placeholder="Office hours or coordination instructions."
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  <View style={styles.handoffMapCard}>
+                    <View style={styles.handoffMiniHeader}>
+                      <Ionicons name="map-outline" size={16} color="#0F766E" />
+                      <Text style={styles.handoffMiniTitle}>Public Map Preview</Text>
+                    </View>
+                    <EmbeddedGoogleMapPreview
+                      url={handoffMapPreviewUrl}
+                      locationName={handoffLocationName}
+                      address={handoffAddress}
+                    />
+                  </View>
+                </View>
               )}
 
               {openedFromAssistance && !!handoffLocationName.trim() && (
@@ -2990,7 +2729,7 @@ export default function DonationAdministration() {
                   <View style={styles.subFormHeader}>
                     <Ionicons name="location-outline" size={18} color="#0F766E" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.subFormTitle}>LGU-Approved Public Service / Receiving Point</Text>
+                      <Text style={styles.subFormTitle}>LGU-Approved Public Service Location</Text>
                       <Text style={styles.handoffHelper}>
                         This location was already assigned in Assistance Review and is locked here. It is the only location donors may see; the Resident's home remains private.
                       </Text>
@@ -3029,144 +2768,6 @@ export default function DonationAdministration() {
                     </View>
                   </View>
 
-                  {allowInKind && (
-                    <>
-                      <Text style={styles.label}>Official receiving / handover instructions</Text>
-                      <TextInput
-                        style={[styles.input, styles.multilineSmall]}
-                        value={inKindInstructions}
-                        onChangeText={setInKindInstructions}
-                        maxLength={1000}
-                        multiline
-                        placeholder="Explain the LGU receiving or handover procedure."
-                        placeholderTextColor="#94A3B8"
-                      />
-                    </>
-                  )}
-                </View>
-              )}
-
-              {allowInKind && !openedFromAssistance && (
-                <View style={[styles.subFormCard, styles.handoffSetupCard]}>
-                  <View style={styles.subFormHeader}>
-                    <Ionicons name="location-outline" size={18} color="#0F766E" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.subFormTitle}>In-kind Donation · Handover & Location</Text>
-                      <Text style={styles.handoffHelper}>
-                        Select where donors may send goods or, when approved, meet the beneficiary at an authorized public location.
-                      </Text>
-                    </View>
-                  </View>
-
-                  <SelectField
-                    label="Handover options"
-                    placeholder="Select how goods may be received"
-                    value={handoffMode}
-                    options={HANDOFF_MODE_OPTIONS}
-                    onSelect={(value) => setHandoffMode(value as HandoffMode)}
-                  />
-
-                  {(handoffMode === "coordinated_handover" || handoffMode === "both") && (
-                    <View style={styles.consentNotice}>
-                      <Ionicons name="people-outline" size={18} color="#9A6700" />
-                      <Text style={styles.consentNoticeText}>
-                        Coordinated beneficiary handover is allowed only when the LGU approves it and the beneficiary agrees. The donor sees only the authorized meeting point.
-                      </Text>
-                    </View>
-                  )}
-
-                  <SelectField
-                    label="Location type"
-                    placeholder="Select authorized location type"
-                    value={handoffLocationType}
-                    options={HANDOFF_LOCATION_TYPE_OPTIONS}
-                    onSelect={chooseHandoffLocationType}
-                  />
-
-                  <SelectField
-                    label="Select authorized location"
-                    placeholder={
-                      handoffLocationType
-                        ? "Select the receiving / meeting point"
-                        : "Select location type first"
-                    }
-                    value={handoffLocationPreset}
-                    options={handoffLocationOptions}
-                    disabled={!handoffLocationType}
-                    onSelect={chooseAuthorizedLocation}
-                  />
-
-                  <View style={styles.handoffGrid}>
-                    <View style={styles.handoffDetailsCard}>
-                      <View style={styles.handoffMiniHeader}>
-                        <Ionicons name="business-outline" size={16} color="#0F766E" />
-                        <Text style={styles.handoffMiniTitle}>Selected Location Details</Text>
-                      </View>
-
-                      <Text style={styles.label}>Location name</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={handoffLocationName}
-                        onChangeText={(value) => setHandoffLocationName(value.slice(0, 180))}
-                        maxLength={180}
-                        placeholder="e.g. Barangay Narra Hall - Relief Receiving Desk"
-                        placeholderTextColor="#94A3B8"
-                      />
-
-                      <Text style={styles.label}>Public delivery / meeting address</Text>
-                      <TextInput
-                        style={[styles.input, styles.multilineSmall]}
-                        value={handoffAddress}
-                        onChangeText={(value) => setHandoffAddress(value.slice(0, 320))}
-                        maxLength={320}
-                        multiline
-                        placeholder="Enter the public address donors can safely use. Never enter the beneficiary's home address."
-                        placeholderTextColor="#94A3B8"
-                      />
-
-                      <Text style={styles.label}>Public handover note (optional)</Text>
-                      <TextInput
-                        style={[styles.input, styles.multilineSmall]}
-                        value={handoffNotes}
-                        onChangeText={(value) => setHandoffNotes(value.slice(0, 600))}
-                        maxLength={600}
-                        multiline
-                        placeholder="Office hours, desk name, contact procedure, or coordination note."
-                        placeholderTextColor="#94A3B8"
-                      />
-                    </View>
-
-                    <View style={styles.handoffMapCard}>
-                      <View style={styles.handoffMiniHeader}>
-                        <Ionicons name="map-outline" size={16} color="#0F766E" />
-                        <Text style={styles.handoffMiniTitle}>Location Preview for Donors</Text>
-                      </View>
-
-                      <EmbeddedGoogleMapPreview
-                        url={handoffMapPreviewUrl}
-                        locationName={handoffLocationName}
-                        address={handoffAddress}
-                      />
-
-                      <View style={styles.mapPrivacyStrip}>
-                        <Ionicons name="shield-checkmark-outline" size={15} color="#0F766E" />
-                        <Text style={styles.mapPrivacyText}>
-                          This map represents the LGU-selected receiving or handover point only. It never exposes the beneficiary's private location.
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Text style={styles.label}>Official receiving / handover instructions</Text>
-                  <TextInput
-                    style={[styles.input, styles.multilineSmall]}
-                    value={inKindInstructions}
-                    onChangeText={setInKindInstructions}
-                    maxLength={1000}
-                    multiline
-                    placeholder="Explain drop-off, courier, receiving verification, or LGU-coordinated handover instructions."
-                    placeholderTextColor="#94A3B8"
-                  />
                 </View>
               )}
 
@@ -3222,7 +2823,7 @@ export default function DonationAdministration() {
                     : `${publicIncidentType || "Verified relief need"} · ${publicSeverity || "LGU assessed"} · ${Number(selectedAssessment.affectedHouseholds || 0)} household${Number(selectedAssessment.affectedHouseholds || 0) === 1 ? "" : "s"} · ${Number(selectedAssessment.affectedPeople || 0)} people`}
                 </Text>
 
-                {allowMonetary && Number(monetaryGoal || 0) > 0 && (
+                {Number(monetaryGoal || 0) > 0 && (
                   <View style={styles.previewFundingBox}>
                     <View>
                       <Text style={styles.previewFundingLabel}>VERIFIED FUNDING GOAL</Text>
@@ -3234,16 +2835,15 @@ export default function DonationAdministration() {
                   </View>
                 )}
 
-                {(openedFromAssistance || allowInKind) && !!handoffLocationName.trim() && (
+                {!!handoffLocationName.trim() && (
                   <View style={styles.previewHandoffBox}>
                     <Ionicons name="location-outline" size={16} color="#0F766E" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.previewHandoffLabel}>DONATION HANDOVER LOCATION</Text>
+                      <Text style={styles.previewHandoffLabel}>LGU PUBLIC SERVICE LOCATION</Text>
                       <Text style={styles.previewHandoffTitle}>{handoffLocationName}</Text>
                       <Text style={styles.previewHandoffAddress}>
                         {handoffAddress || "Public address must be confirmed before publishing."}
                       </Text>
-                      <Text style={styles.previewHandoffMode}>{handoffModeLabel(handoffMode)}</Text>
                     </View>
                   </View>
                 )}
@@ -3252,9 +2852,7 @@ export default function DonationAdministration() {
               <View style={styles.noticeBox}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#0F766E" />
                 <Text style={styles.noticeText}>
-                  {openedFromAssistance
-                    ? "Monetary support is counted only after the LGU confirms the actual receipt or transaction record. The campaign never exposes the Resident's exact home address, contact details, IDs, or private evidence."
-                    : "Monetary support is counted only after the LGU confirms it in the official account or transaction record. In-kind goods enter LGU Relief Inventory only after actual physical receipt is verified. Verified resources are later allocated through Relief Operations."}
+                  Monetary support is counted only after the LGU confirms the actual transaction record. Private Resident identity, exact home address, IDs, and private evidence are never published.
                 </Text>
               </View>
 
@@ -3317,7 +2915,6 @@ export default function DonationAdministration() {
                 const verifiedMoney = receivedCampaignDonations
                   .filter((item) => item.donationType === "monetary")
                   .reduce((sum, item) => sum + Number(item.actualAmountReceived || 0), 0);
-                const verifiedGoods = summarizeVerifiedGoods(receivedCampaignDonations);
 
                 return (
                   <View key={campaign.id} style={styles.campaignCard}>
@@ -3415,10 +3012,110 @@ export default function DonationAdministration() {
                       </View>
                     )}
 
-                    <View style={styles.goodsSummaryBox}>
-                      <Text style={styles.goodsSummaryLabel}>Verified in-kind goods</Text>
-                      <Text style={styles.goodsSummaryText}>{verifiedGoods}</Text>
-                    </View>
+
+                    {campaign.status === "published" &&
+                      String(campaign.sourceType || "") === "disaster_relief_need" &&
+                      (Number(campaign.monetaryGoal || 0) <= 0 ||
+                        !String(campaign.handoffLocationName || "").trim() ||
+                        !String(campaign.handoffAddress || "").trim()) && (
+                        <View style={[styles.subFormCard, styles.handoffSetupCard]}>
+                          <Text style={styles.subFormTitle}>Complete Public Campaign Setup</Text>
+                          <Text style={styles.handoffHelper}>
+                            This older disaster campaign is missing the verified funding goal or LGU-approved public location. Complete these fields before donors can use PayMongo checkout.
+                          </Text>
+
+                          <Text style={styles.label}>Verified funding goal (PHP)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={
+                              campaignPublicSetupDrafts[campaign.id]?.monetaryGoal ??
+                              String(Number(campaign.monetaryGoal || 0) || "")
+                            }
+                            onChangeText={(value) =>
+                              updateCampaignPublicSetupDraft(
+                                campaign,
+                                "monetaryGoal",
+                                sanitizeMoneyInput(value),
+                              )
+                            }
+                            keyboardType="decimal-pad"
+                            placeholder="e.g. 5000"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <Text style={styles.label}>Official public location name</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={
+                              campaignPublicSetupDrafts[campaign.id]?.handoffLocationName ??
+                              String(campaign.handoffLocationName || "")
+                            }
+                            onChangeText={(value) =>
+                              updateCampaignPublicSetupDraft(
+                                campaign,
+                                "handoffLocationName",
+                                value,
+                              )
+                            }
+                            placeholder="e.g. City Assistance / Donation Desk"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <Text style={styles.label}>Official public address</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={
+                              campaignPublicSetupDrafts[campaign.id]?.handoffAddress ??
+                              String(campaign.handoffAddress || "")
+                            }
+                            onChangeText={(value) =>
+                              updateCampaignPublicSetupDraft(
+                                campaign,
+                                "handoffAddress",
+                                value,
+                              )
+                            }
+                            placeholder="e.g. City Hall, City of San Jose del Monte, Bulacan"
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <Text style={styles.label}>Instructions (optional)</Text>
+                          <TextInput
+                            style={[styles.input, styles.multilineSmall]}
+                            value={
+                              campaignPublicSetupDrafts[campaign.id]?.handoffNotes ??
+                              String(campaign.handoffNotes || "")
+                            }
+                            onChangeText={(value) =>
+                              updateCampaignPublicSetupDraft(
+                                campaign,
+                                "handoffNotes",
+                                value,
+                              )
+                            }
+                            multiline
+                            placeholder="Office hours or coordination instructions."
+                            placeholderTextColor="#94A3B8"
+                          />
+
+                          <TouchableOpacity
+                            style={[
+                              styles.publishButton,
+                              busyKey === `public_setup_${campaign.id}` && styles.disabled,
+                            ]}
+                            disabled={busyKey === `public_setup_${campaign.id}`}
+                            onPress={() => void saveCampaignPublicSetup(campaign)}
+                          >
+                            {busyKey === `public_setup_${campaign.id}` ? (
+                              <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                              <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                            )}
+                            <Text style={styles.publishButtonText}>Save Public Setup</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
 
                     <Text style={styles.cardMeta}>Created: {formatDate(campaign.createdAt)}</Text>
 
@@ -3444,7 +3141,7 @@ export default function DonationAdministration() {
               <Text style={styles.sectionEyebrow}>LGU RECEIPT CHECK</Text>
               <Text style={styles.sectionTitle}>Donation Verification</Text>
               <Text style={styles.helperText}>
-                A donor submission is only a claim or pledge until the LGU matches it against the official transaction history or physical receiving log. Uploaded proof is supporting evidence only.
+                PayMongo sandbox payments are confirmed automatically by the signed webhook. This section remains only for older manual submissions that still require LGU review.
               </Text>
             </View>
           </View>
@@ -3481,7 +3178,6 @@ export default function DonationAdministration() {
                   donation={donation}
                   form={verificationForms[donation.id] || {
                     actualValue: "",
-                    officialReceiptReference: "",
                     rejectionReason: "",
                   }}
                   busy={Boolean(busyKey)}
@@ -3564,7 +3260,6 @@ function DonationReviewCard({
   onVerify: () => void;
   onReject: () => void;
 }) {
-  const isInKind = donation.donationType === "in_kind";
   const proofUrls = validProofUrls(donation.proofUrls);
 
   return (
@@ -3582,15 +3277,8 @@ function DonationReviewCard({
       </View>
 
       <View style={styles.donationInfoGrid}>
-        <InfoCell label="Type" value={isInKind ? "In-kind goods" : "Monetary"} />
-        <InfoCell
-          label={isInKind ? "Pledged" : "Amount Submitted"}
-          value={
-            isInKind
-              ? `${Number(donation.quantityPledged || 0)} ${donation.unit || "unit"}`
-              : money(Number(donation.amount || 0))
-          }
-        />
+        <InfoCell label="Type" value="Monetary" />
+        <InfoCell label="Amount Submitted" value={money(Number(donation.amount || 0))} />
         <InfoCell
           label="Barangay"
           value={(donation.campaignBarangays || []).join(" · ") || "—"}
@@ -3598,27 +3286,21 @@ function DonationReviewCard({
         <InfoCell label="Submitted" value={formatDate(donation.createdAt)} />
       </View>
 
-      {isInKind ? (
-        <Text style={styles.detailLine}>
-          {NEED_CATEGORY_LABELS[String(donation.category || "other")] || donation.category || "Other"}
-          {" · "}
-          {donation.itemName || "Item not specified"}
-        </Text>
-      ) : (
-        <Text style={styles.detailLine}>
-          Donor transaction reference: {donation.transactionReference || "—"}
-        </Text>
-      )}
+      <Text style={styles.detailLine}>
+        Donor transaction reference: {donation.transactionReference || "—"}
+      </Text>
 
       <View style={styles.proofBox}>
         <View style={styles.proofHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.proofTitle}>Donor receipt / proof</Text>
             <Text style={styles.proofHint}>
-              Supporting evidence only. Confirm using the official LGU record.
+              Supporting evidence only. Confirm using the official LGU transaction record.
             </Text>
           </View>
-          <Text style={styles.proofCountText}>{proofUrls.length} FILE{proofUrls.length === 1 ? "" : "S"}</Text>
+          <Text style={styles.proofCountText}>
+            {proofUrls.length} FILE{proofUrls.length === 1 ? "" : "S"}
+          </Text>
         </View>
 
         {proofUrls.length ? (
@@ -3636,7 +3318,7 @@ function DonationReviewCard({
           </View>
         ) : (
           <Text style={styles.noProofText}>
-            No proof attached. Verify only if the donation can still be matched independently in the official LGU record.
+            No proof attached. Verify only if the payment can still be matched independently in the official LGU record.
           </Text>
         )}
       </View>
@@ -3646,43 +3328,20 @@ function DonationReviewCard({
       <View style={styles.reviewPanel}>
         <Text style={styles.reviewTitle}>Confirm actual LGU receipt</Text>
         <Text style={styles.reviewHelp}>
-          Enter what the LGU actually received, not only what the donor claimed or pledged.
+          Enter the monetary amount actually confirmed by the LGU.
         </Text>
 
-        <Text style={styles.label}>
-          {isInKind ? "Actual quantity received" : "Actual amount received (PHP)"}
-        </Text>
+        <Text style={styles.label}>Actual amount received (PHP)</Text>
         <TextInput
           style={styles.input}
           value={form.actualValue}
           onChangeText={(value) =>
-            onUpdate(
-              "actualValue",
-              isInKind ? value.replace(/[^0-9]/g, "").slice(0, 9) : value.replace(/[^0-9.]/g, "").slice(0, 14),
-            )
+            onUpdate("actualValue", value.replace(/[^0-9.]/g, "").slice(0, 14))
           }
           keyboardType="numeric"
-          placeholder={isInKind ? "e.g. 50" : "e.g. 5000"}
+          placeholder="e.g. 5000"
           placeholderTextColor="#94A3B8"
         />
-
-        {isInKind && (
-          <>
-            <Text style={styles.label}>Receiving reference (optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={form.officialReceiptReference}
-              onChangeText={(value) =>
-                onUpdate(
-                  "officialReceiptReference",
-                  value.slice(0, 160),
-                )
-              }
-              placeholder="Optional LGU receiving-log reference"
-              placeholderTextColor="#94A3B8"
-            />
-          </>
-        )}
 
         <TouchableOpacity
           style={[styles.verifyButton, busy && styles.disabled]}
@@ -3700,7 +3359,7 @@ function DonationReviewCard({
           multiline
           value={form.rejectionReason}
           onChangeText={(value) => onUpdate("rejectionReason", value.slice(0, 600))}
-          placeholder="Reason the donation cannot be matched or received"
+          placeholder="Reason the donation cannot be matched"
           placeholderTextColor="#94A3B8"
         />
 
@@ -3717,7 +3376,6 @@ function DonationReviewCard({
 }
 
 function ReviewedDonationCard({ donation }: { donation: DonationSubmission }) {
-  const isInKind = donation.donationType === "in_kind";
   const received = donation.status === "received";
 
   return (
@@ -3735,17 +3393,11 @@ function ReviewedDonationCard({ donation }: { donation: DonationSubmission }) {
       </View>
 
       <Text style={styles.detailLine}>
-        {isInKind
-          ? `${Number(donation.actualQuantityReceived || donation.quantityPledged || 0)} ${donation.unit || "unit"} ${donation.itemName || "relief goods"}`
-          : money(Number(donation.actualAmountReceived || donation.amount || 0))}
+        {money(Number(donation.actualAmountReceived || donation.amount || 0))}
       </Text>
 
       {received ? (
-        <Text style={styles.historySuccessText}>
-          {isInKind && donation.officialReceiptReference
-            ? `Receiving reference: ${donation.officialReceiptReference}`
-            : "Verified by LGU"}
-        </Text>
+        <Text style={styles.historySuccessText}>Verified by LGU</Text>
       ) : (
         <Text style={styles.historyRejectedText}>
           Rejected: {donation.rejectionReason || "No reason recorded"}
@@ -3800,140 +3452,6 @@ function CompactMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ToggleChoice({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.toggleChoice, selected && styles.toggleChoiceActive]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={selected ? "checkmark-circle" : "ellipse-outline"}
-        size={17}
-        color={selected ? "#0F766E" : "#64748B"}
-      />
-      <Text style={[styles.toggleChoiceText, selected && styles.toggleChoiceTextActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function SelectField({
-  label,
-  placeholder,
-  value,
-  options,
-  disabled = false,
-  onSelect,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  options: SelectOption[];
-  disabled?: boolean;
-  onSelect: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((item) => item.value === value);
-
-  return (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-
-      <TouchableOpacity
-        style={[styles.selectField, disabled && styles.selectFieldDisabled]}
-        activeOpacity={0.84}
-        disabled={disabled}
-        onPress={() => setOpen(true)}
-      >
-        <View style={{ flex: 1 }}>
-          <Text
-            style={[
-              styles.selectFieldText,
-              !value && styles.selectFieldPlaceholder,
-            ]}
-            numberOfLines={1}
-          >
-            {selected?.label || (value === "__custom__" ? "Other Authorized Public Location" : value) || placeholder}
-          </Text>
-          {!!selected?.helper && (
-            <Text style={styles.selectFieldHelper} numberOfLines={2}>
-              {selected.helper}
-            </Text>
-          )}
-        </View>
-
-        <Ionicons name="chevron-down" size={17} color="#64748B" />
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.selectModal} onPress={() => undefined}>
-            <View style={styles.selectModalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.selectModalEyebrow}>SELECT OPTION</Text>
-                <Text style={styles.selectModalTitle}>{label}</Text>
-              </View>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setOpen(false)}>
-                <Ionicons name="close" size={18} color="#475569" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.selectModalList} showsVerticalScrollIndicator>
-              {options.length === 0 ? (
-                <View style={styles.selectEmptyBox}>
-                  <Text style={styles.selectEmptyText}>No options available yet.</Text>
-                </View>
-              ) : (
-                options.map((item) => {
-                  const active = value === item.value;
-                  return (
-                    <TouchableOpacity
-                      key={item.value}
-                      style={[styles.selectOption, active && styles.selectOptionActive]}
-                      onPress={() => {
-                        onSelect(item.value);
-                        setOpen(false);
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.selectOptionText, active && styles.selectOptionTextActive]}>
-                          {item.label}
-                        </Text>
-                        {!!item.helper && (
-                          <Text style={styles.selectOptionHelper}>{item.helper}</Text>
-                        )}
-                      </View>
-                      <Ionicons
-                        name={active ? "checkmark-circle" : "ellipse-outline"}
-                        size={19}
-                        color={active ? "#0F766E" : "#CBD5E1"}
-                      />
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
-
 function EmbeddedGoogleMapPreview({
   url,
   locationName,
@@ -3951,7 +3469,7 @@ function EmbeddedGoogleMapPreview({
         </View>
         <Text style={styles.mapPreviewPlaceholderTitle}>Map preview appears here</Text>
         <Text style={styles.mapPreviewPlaceholderText}>
-          Select an authorized location, then enter its public delivery or meeting address.
+          The LGU-approved public service location will appear here when available.
         </Text>
       </View>
     );
@@ -3963,9 +3481,9 @@ function EmbeddedGoogleMapPreview({
         <View style={styles.mapPreviewIcon}>
           <Ionicons name="location-outline" size={26} color="#0F766E" />
         </View>
-        <Text style={styles.mapPreviewPlaceholderTitle}>{locationName || "Authorized location"}</Text>
+        <Text style={styles.mapPreviewPlaceholderTitle}>{locationName || "LGU public location"}</Text>
         <Text style={styles.mapPreviewPlaceholderText}>
-          {address || "The public handover address will appear here."}
+          {address || "The approved public service address will appear here."}
         </Text>
       </View>
     );
@@ -3975,7 +3493,7 @@ function EmbeddedGoogleMapPreview({
     <View style={styles.embeddedMapFrame}>
       {React.createElement("iframe" as any, {
         src: url,
-        title: "LGU authorized donation handover location",
+        title: "LGU approved public service location",
         loading: "lazy",
         referrerPolicy: "no-referrer-when-downgrade",
         style: {
@@ -4255,9 +3773,6 @@ const styles = StyleSheet.create({
   compactMetric: { minWidth: 120, padding: 8, borderRadius: 8, backgroundColor: "#F8FAFC" },
   compactMetricLabel: { color: "#94A3B8", fontSize: 7.5, fontWeight: "900", textTransform: "uppercase" },
   compactMetricValue: { marginTop: 2, color: "#334155", fontSize: 10, fontWeight: "900" },
-  goodsSummaryBox: { marginTop: 9, padding: 9, borderRadius: 8, backgroundColor: "#F3FAF8" },
-  goodsSummaryLabel: { color: "#0F766E", fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
-  goodsSummaryText: { marginTop: 3, color: "#49646F", fontSize: 9.5, lineHeight: 14 },
   closeCampaignButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8, backgroundColor: "#F8FAFC" },
   closeCampaignText: { color: "#475569", fontSize: 9.5, fontWeight: "900" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 16 },
@@ -5013,12 +4528,6 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 8.8,
     lineHeight: 13,
-  },
-  previewHandoffMode: {
-    marginTop: 4,
-    color: "#0F766E",
-    fontSize: 8.5,
-    fontWeight: "800",
   },
   activeHandoffStrip: {
     flexDirection: "row",

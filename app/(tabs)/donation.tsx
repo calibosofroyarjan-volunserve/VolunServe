@@ -12,6 +12,7 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -421,11 +422,24 @@ export default function Donation() {
             id: item.id,
             ...(item.data() as Omit<DonationCampaign, "id">),
           }))
-          .filter(
-            (item) =>
+          .filter((item) => {
+            const monetaryReady =
+              item.acceptedDonationTypes?.includes("monetary") ||
+              campaignGoal(item) > 0;
+            const goalReady = campaignGoal(item) > 0;
+            const locationReady =
+              String(item.handoffLocationName || "").trim().length >= 3 &&
+              String(item.handoffAddress || "").trim().length >= 5;
+            const photoReady = validPublicPhotoUrls(item).length > 0;
+
+            return (
               item.status === "published" &&
-              (item.acceptedDonationTypes?.includes("monetary") || campaignGoal(item) > 0),
-          )
+              monetaryReady &&
+              goalReady &&
+              locationReady &&
+              photoReady
+            );
+          })
           .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
 
         setCampaigns(rows);
@@ -671,6 +685,15 @@ export default function Donation() {
       }
 
       setCheckoutProgress("Opening PayMongo Test Checkout...");
+
+      if (Platform.OS === "web") {
+        const browserWindow = (globalThis as any)?.window;
+        if (browserWindow?.location?.assign) {
+          browserWindow.location.assign(checkoutUrl);
+          return;
+        }
+      }
+
       await Linking.openURL(checkoutUrl);
     } catch (problem) {
       const message =
@@ -921,51 +944,43 @@ export default function Donation() {
                       "LGU-verified campaign open for public support."}
                   </Text>
 
-                  {selectedGoal > 0 && (
-                    <View style={styles.webProgressCard}>
-                      <View style={styles.webProgressTop}>
-                        <View>
-                          <Text style={styles.webRaisedAmount}>{money(selectedRaised)}</Text>
-                          <Text style={styles.webProgressLabel}>
-                            raised of {money(selectedGoal)}
-                          </Text>
-                        </View>
-                        <Text style={styles.webProgressPercent}>
-                          {Math.round(selectedPercent)}%
+                  <View style={styles.webProgressCard}>
+                    <View style={styles.webProgressTop}>
+                      <View>
+                        <Text style={styles.webRaisedAmount}>{money(selectedRaised)}</Text>
+                        <Text style={styles.webProgressLabel}>
+                          raised of {money(selectedGoal)}
                         </Text>
                       </View>
-                      <View style={styles.progressTrackLarge}>
-                        <View
-                          style={[
-                            styles.progressFillLarge,
-                            { width: `${selectedPercent}%` as any },
-                          ]}
-                        />
-                      </View>
+                      <Text style={styles.webProgressPercent}>
+                        {Math.round(selectedPercent)}%
+                      </Text>
                     </View>
-                  )}
+                    <View style={styles.progressTrackLarge}>
+                      <View
+                        style={[
+                          styles.progressFillLarge,
+                          { width: `${selectedPercent}%` as any },
+                        ]}
+                      />
+                    </View>
+                  </View>
 
-                  {!!selectedCampaign.handoffLocationName && (
-                    <View style={styles.webLocationCard}>
-                      <View style={styles.webLocationCardCopy}>
-                        <Text style={styles.webLocationCardEyebrow}>OFFICIAL LGU LOCATION</Text>
-                        <Text style={styles.webLocationCardTitle}>
-                          {selectedCampaign.handoffLocationName}
-                        </Text>
-                        {!!selectedCampaign.handoffAddress && (
-                          <Text style={styles.webLocationCardAddress} numberOfLines={2}>
-                            {selectedCampaign.handoffAddress}
-                          </Text>
-                        )}
-                      </View>
-                      {!!selectedCampaign.handoffAddress && (
-                        <HandoffLocationMap
-                          locationName={selectedCampaign.handoffLocationName}
-                          address={selectedCampaign.handoffAddress}
-                        />
-                      )}
+                  <View style={styles.webLocationCard}>
+                    <View style={styles.webLocationCardCopy}>
+                      <Text style={styles.webLocationCardEyebrow}>OFFICIAL LGU LOCATION</Text>
+                      <Text style={styles.webLocationCardTitle}>
+                        {selectedCampaign.handoffLocationName}
+                      </Text>
+                      <Text style={styles.webLocationCardAddress} numberOfLines={2}>
+                        {selectedCampaign.handoffAddress}
+                      </Text>
                     </View>
-                  )}
+                    <HandoffLocationMap
+                      locationName={selectedCampaign.handoffLocationName || "LGU public service point"}
+                      address={selectedCampaign.handoffAddress || ""}
+                    />
+                  </View>
 
                   <View style={styles.webSupportTypesRow}>
                     <View style={styles.webSupportTypeChip}>
@@ -1165,18 +1180,16 @@ function CampaignCard({
           </Text>
         </View>
 
-        {goal > 0 && (
-          <View style={styles.cardProgressWrap}>
-            <View style={styles.cardProgressTop}>
-              <Text style={styles.cardProgressRaised}>{money(raised)} raised</Text>
-              <Text style={styles.cardProgressGoal}>of {money(goal)}</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${percentage}%` as any }]} />
-            </View>
-            <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
+        <View style={styles.cardProgressWrap}>
+          <View style={styles.cardProgressTop}>
+            <Text style={styles.cardProgressRaised}>{money(raised)} raised</Text>
+            <Text style={styles.cardProgressGoal}>of {money(goal)}</Text>
           </View>
-        )}
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${percentage}%` as any }]} />
+          </View>
+          <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
+        </View>
 
         <View style={styles.cardFooter}>
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
