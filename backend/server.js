@@ -1120,6 +1120,20 @@ function normalizeLguCapabilities(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((item) => cleanText(item, 80)).filter(Boolean))].slice(0, 20);
 }
+function lguTimestampIso(value) {
+  try {
+    if (!value) return "";
+    if (typeof value.toDate === "function") return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
 function getManilaDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Manila",
@@ -1166,6 +1180,24 @@ app.post(
       const capabilities = normalizeLguCapabilities(
         request.body?.capabilities,
       );
+      const verificationReference = cleanText(
+        request.body?.verificationReference || "",
+        220,
+      );
+      const verificationNotes = cleanText(
+        request.body?.verificationNotes || "",
+        700,
+      );
+      const verifiedByName = cleanText(
+        request.firebaseUser?.name ||
+          request.firebaseUser?.email ||
+          "LGU/Admin Coordinator",
+        120,
+      );
+      const verifiedByEmail = cleanText(
+        request.firebaseUser?.email || "",
+        160,
+      ).toLowerCase();
 
       if (fullName.length < 2) {
         throw makeHttpError(
@@ -1180,6 +1212,14 @@ app.post(
           400,
           "invalid_lgu_position",
           "Enter the LGU department and position.",
+        );
+      }
+
+      if (verificationReference.length < 3) {
+        throw makeHttpError(
+          400,
+          "lgu_verification_reference_required",
+          "Enter the LGU staff verification reference or source used to confirm this employee.",
         );
       }
 
@@ -1288,8 +1328,12 @@ app.post(
         employmentStatus: "active",
         isTestAccount: false,
         verificationMethod: "admin_lgu_staff_verification",
+        verificationReference,
+        verificationNotes,
         verifiedAt: FieldValue.serverTimestamp(),
         verifiedBy: adminUid,
+        verifiedByName,
+        verifiedByEmail,
         createdAt: FieldValue.serverTimestamp(),
         createdBy: adminUid,
         updatedAt: FieldValue.serverTimestamp(),
@@ -1316,6 +1360,11 @@ app.post(
         email,
         department,
         position,
+        verificationMethod: "admin_lgu_staff_verification",
+        verificationReference,
+        verificationNotes,
+        verifiedByName,
+        verifiedByEmail,
         performedBy: adminUid,
         timestamp: FieldValue.serverTimestamp(),
       });
@@ -2014,6 +2063,13 @@ app.get(
             employeeId: cleanText(personnel.employeeId || "", 80),
             capabilities: Array.isArray(personnel.capabilities) ? personnel.capabilities : [],
             verificationStatus: cleanText(personnel.verificationStatus || "", 40),
+            verificationMethod: cleanText(personnel.verificationMethod || "", 80),
+            verificationReference: cleanText(personnel.verificationReference || "", 220),
+            verificationNotes: cleanText(personnel.verificationNotes || "", 700),
+            verifiedAt: lguTimestampIso(personnel.verifiedAt),
+            verifiedBy: cleanText(personnel.verifiedBy || "", 160),
+            verifiedByName: cleanText(personnel.verifiedByName || "", 120),
+            verifiedByEmail: cleanText(personnel.verifiedByEmail || "", 160),
             employmentStatus: cleanText(personnel.employmentStatus || "", 40),
             isTestAccount: personnel.isTestAccount === true,
             dutyStatus: cleanText(duty.dutyStatus || "off_duty", 40),
