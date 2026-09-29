@@ -1,122 +1,58 @@
 "use strict";
-
 const express = require("express");
-
 const cors = require("cors");
-
 const crypto = require("crypto");
-
 const { v2: cloudinary } = require("cloudinary");
-
 const {
-
   auth,
-
   db,
-
   FieldValue,
-
 } = require("./firebaseAdmin");
-
-
-
 const app = express();
-
-
-
 const DEFAULT_ALLOWED_ORIGINS = [
-
   "http\://localhost:8081",
-
   "http\://localhost:8082",
-
   "http\://localhost:8083",
-
   "http\://localhost:19006",
-
   "http\://localhost:3000",
-
   "http\://127.0.0.1:8081",
-
   "http\://127.0.0.1:8082",
-
   "http\://127.0.0.1:8083",
-
   "http\://127.0.0.1:19006",
-
   "http\://127.0.0.1:3000",
-
 ];
-
-
-
 const IDENTITY_UPLOAD_LIMIT = "20mb";
-
 const IDENTITY_RETRY_DELAY_MS = 8000;
-
-
-
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
-
 const ASSISTANCE_EVIDENCE_MAX_BYTES =
-
   10 * 1024 * 1024;
-
 const ASSISTANCE_EVIDENCE_MAX_STAGED = 12;
-
 const ASSISTANCE_EVIDENCE_URL_TTL_SECONDS = 300;
-
 const ASSISTANCE_PUBLIC_PHOTO_UPLOAD_LIMIT = "10mb";
-
 const ASSISTANCE_PUBLIC_PHOTO_MAX_BYTES =
   10 * 1024 * 1024;
-
 const ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED = 4;
-
-
-
 const ASSISTANCE_EVIDENCE_DOCUMENT_TYPES =
-
   new Set([
-
     "damage_evidence",
-
     "barangay_incident_reference",
-
     "medical_certificate",
-
     "hospital_estimate",
-
     "other_medical_support",
-
     "treatment_estimate",
-
     "other_treatment_support",
-
     "diagnosis_document",
-
     "treatment_plan_or_bill",
-
     "other_illness_support",
-
     "animal_case_photo",
-
     "vet_assessment",
-
     "other_animal_support",
-
     "elderly_need_evidence",
-
     "elderly_supporting_document",
-
     "basic_need_evidence",
-
     "barangay_social_welfare_reference",
-
     "other_supporting_evidence",
-
   ]);
-
 const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
   disaster_recovery: {
     label: "Disaster Recovery",
@@ -130,7 +66,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: false,
   },
-
   medical_health: {
     label: "Medical / Health",
     requestGroup: "community_need",
@@ -145,7 +80,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: true,
   },
-
   surgery_treatment: {
     label: "Surgery / Treatment",
     requestGroup: "community_need",
@@ -160,7 +94,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: true,
   },
-
   cancer_serious_illness: {
     label: "Cancer / Serious Illness",
     requestGroup: "community_need",
@@ -175,7 +108,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: true,
   },
-
   animal_pet_welfare: {
     label: "Animal / Pet Welfare",
     requestGroup: "community_need",
@@ -190,7 +122,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: false,
   },
-
   elderly_assistance: {
     label: "Elderly Assistance",
     requestGroup: "community_need",
@@ -203,7 +134,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: false,
   },
-
   homeless_basic_needs: {
     label: "Homeless / Basic Needs",
     requestGroup: "community_need",
@@ -216,7 +146,6 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     ],
     requiresPositiveAmount: false,
   },
-
   other_community_assistance: {
     label: "Other Community Assistance",
     requestGroup: "community_need",
@@ -229,171 +158,90 @@ const ASSISTANCE_REQUEST_CATEGORY_CONFIG = Object.freeze({
     requiresPositiveAmount: false,
   },
 });
-
 const ASSISTANCE_EVIDENCE_LABELS = Object.freeze({
   damage_evidence:
     "Damage / Recovery Evidence",
-
   barangay_incident_reference:
     "Barangay / Incident Reference",
-
   medical_certificate:
     "Medical Certificate / Recommendation",
-
   hospital_estimate:
     "Hospital Bill / Estimate",
-
   other_medical_support:
     "Other Supporting Document",
-
   treatment_estimate:
     "Surgery / Treatment Estimate",
-
   other_treatment_support:
     "Other Supporting Document",
-
   diagnosis_document:
     "Diagnosis / Medical Certificate",
-
   treatment_plan_or_bill:
     "Treatment Plan / Hospital Bill",
-
   other_illness_support:
     "Other Supporting Document",
-
   animal_case_photo:
     "Animal / Pet Case Photo",
-
   vet_assessment:
     "Veterinary Assessment / Quotation",
-
   other_animal_support:
     "Other Supporting Document",
-
   elderly_need_evidence:
     "Supporting Evidence of Need",
-
   elderly_supporting_document:
     "Medical / Social Welfare Document",
-
   basic_need_evidence:
     "Situation / Need Evidence",
-
   barangay_social_welfare_reference:
     "Barangay / Social Welfare Reference",
-
   other_supporting_evidence:
     "Supporting Evidence",
 });
-
 const ASSISTANCE_PUBLIC_BACKEND_URL =
   "https://volunserve.onrender.com";
-
-
-
-
 function getAllowedOrigins() {
-
   const configured = String(
-
     process.env.ALLOWED_ORIGINS || "",
-
   )
-
     .split(",")
-
     .map((value) => value.trim())
-
     .filter(Boolean);
-
-
-
   return new Set([
-
     ...DEFAULT_ALLOWED_ORIGINS,
-
     ...configured,
-
   ]);
-
 }
-
-
-
 const allowedOrigins =
-
   getAllowedOrigins();
-
-
-
 app.use(
-
   cors({
-
     origin(origin, callback) {
-
       if (
-
         !origin ||
-
         allowedOrigins.has(origin)
-
       ) {
-
         callback(null, true);
-
         return;
-
       }
-
-
-
       callback(
-
         new Error(
-
           "Origin is not allowed by VolunServe backend.",
-
         ),
-
       );
-
     },
-
-
-
     methods: [
-
       "GET",
-
       "POST",
-
       "DELETE",
-
       "OPTIONS",
-
     ],
-
-
-
     allowedHeaders: [
-
       "Content-Type",
-
       "Authorization",
-
       "X-File-Name",
-
       "X-Document-Type",
-
     ],
-
   }),
-
 );
-
-
-
 // =========================================================
 // PAYMONGO TEST CHECKOUT + WEBHOOK
 // =========================================================
@@ -401,34 +249,26 @@ app.use(
 // PayMongo signs the exact raw request body, so parsing JSON first would
 // invalidate the HMAC signature.
 // =========================================================
-
 const PAYMONGO_API_BASE = "https://api.paymongo.com";
-
 const paymongoText = (value, maximumLength = 500) =>
   String(value ?? "")
     .replace(/[\u0000-\u001F\u007F]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maximumLength);
-
 const paymongoMode = () =>
   paymongoText(process.env.PAYMONGO_MODE || "test", 20).toLowerCase() === "live"
     ? "live"
     : "test";
-
 const getPaymongoSecretKey = () =>
   String(process.env.PAYMONGO_SECRET_KEY || "").trim();
-
 const getPaymongoWebhookSecret = () =>
   String(process.env.PAYMONGO_WEBHOOK_SECRET || "").trim();
-
 const maskDonationName = (value) => {
   const parts = paymongoText(value || "Donor", 160)
     .split(/\s+/)
     .filter(Boolean);
-
   if (!parts.length) return "Anonymous Donor";
-
   return parts
     .map((part) => {
       if (part.length <= 1) return `${part}*`;
@@ -437,10 +277,8 @@ const maskDonationName = (value) => {
     .join(" ")
     .slice(0, 160);
 };
-
 const parsePaymongoSignature = (headerValue) => {
   const result = {};
-
   String(headerValue || "")
     .split(",")
     .map((item) => item.trim())
@@ -452,70 +290,55 @@ const parsePaymongoSignature = (headerValue) => {
       const value = item.slice(separator + 1).trim();
       if (key) result[key] = value;
     });
-
   return result;
 };
-
 const verifyPaymongoWebhookSignature = (rawBody, signatureHeader) => {
   const secret = getPaymongoWebhookSecret();
   if (!secret || !Buffer.isBuffer(rawBody)) return false;
-
   const parts = parsePaymongoSignature(signatureHeader);
   const timestamp = String(parts.t || "").trim();
   const signatureKey = paymongoMode() === "live" ? "li" : "te";
   const provided = String(parts[signatureKey] || "").trim().toLowerCase();
-
   if (!timestamp || !/^[a-f0-9]{64}$/i.test(provided)) return false;
-
   const rawText = rawBody.toString("utf8");
   const expected = crypto
     .createHmac("sha256", secret)
     .update(`${timestamp}.${rawText}`)
     .digest("hex");
-
   const expectedBuffer = Buffer.from(expected, "utf8");
   const providedBuffer = Buffer.from(provided, "utf8");
-
   return (
     expectedBuffer.length === providedBuffer.length &&
     crypto.timingSafeEqual(expectedBuffer, providedBuffer)
   );
 };
-
 const finalizePaymongoDonation = async (session) => {
   const sessionId = paymongoText(session?.id || "", 180);
   const attributes = session?.attributes || {};
   const donationId = paymongoText(attributes.reference_number || "", 180);
-
   if (!sessionId || !donationId) {
     const error = new Error("PayMongo checkout session is missing its reference number.");
     error.statusCode = 400;
     error.code = "paymongo_reference_missing";
     throw error;
   }
-
   if (paymongoMode() === "test" && attributes.livemode === true) {
     const error = new Error("Live PayMongo events are disabled while VolunServe is in test mode.");
     error.statusCode = 409;
     error.code = "live_paymongo_event_blocked";
     throw error;
   }
-
   const donationRef = db.collection("donations").doc(donationId);
   const activityRef = db.collection("adminActivityLogs").doc();
-
   return db.runTransaction(async (transaction) => {
     const donationSnapshot = await transaction.get(donationRef);
-
     if (!donationSnapshot.exists) {
       const error = new Error("The PayMongo donation record was not found yet.");
       error.statusCode = 404;
       error.code = "paymongo_donation_not_found";
       throw error;
     }
-
     const donation = donationSnapshot.data() || {};
-
     if (
       paymongoText(donation.paymentProvider || "", 40).toLowerCase() !== "paymongo"
     ) {
@@ -524,19 +347,16 @@ const finalizePaymongoDonation = async (session) => {
       error.code = "paymongo_donation_link_required";
       throw error;
     }
-
     const storedSessionId = paymongoText(
       donation.paymongoCheckoutSessionId || "",
       180,
     );
-
     if (storedSessionId && storedSessionId !== sessionId) {
       const error = new Error("The PayMongo checkout session does not match this donation.");
       error.statusCode = 409;
       error.code = "paymongo_session_mismatch";
       throw error;
     }
-
     if (
       paymongoText(donation.status || "", 40).toLowerCase() === "received" &&
       paymongoText(donation.paymentStatus || "", 40).toLowerCase() === "paid"
@@ -547,7 +367,6 @@ const finalizePaymongoDonation = async (session) => {
         alreadyProcessed: true,
       };
     }
-
     if (
       !["payment_creating", "payment_pending"].includes(
         paymongoText(donation.status || "", 40).toLowerCase(),
@@ -558,7 +377,6 @@ const finalizePaymongoDonation = async (session) => {
       error.code = "paymongo_donation_not_pending";
       throw error;
     }
-
     const amount = Number(donation.amount || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       const error = new Error("The stored PayMongo donation amount is invalid.");
@@ -566,7 +384,6 @@ const finalizePaymongoDonation = async (session) => {
       error.code = "paymongo_amount_invalid";
       throw error;
     }
-
     const campaignId = paymongoText(donation.campaignId || "", 160);
     if (!campaignId) {
       const error = new Error("This PayMongo donation is not linked to a campaign.");
@@ -574,28 +391,23 @@ const finalizePaymongoDonation = async (session) => {
       error.code = "paymongo_campaign_link_required";
       throw error;
     }
-
     const campaignRef = db.collection("donationCampaigns").doc(campaignId);
     const campaignSnapshot = await transaction.get(campaignRef);
-
     if (!campaignSnapshot.exists) {
       const error = new Error("The linked Donation Campaign was not found.");
       error.statusCode = 404;
       error.code = "campaign_not_found";
       throw error;
     }
-
     const campaign = campaignSnapshot.data() || {};
     const currentVerified = Number(campaign.verifiedAmountReceived || 0);
     const nextVerified =
       (Number.isFinite(currentVerified) ? currentVerified : 0) + amount;
-
     transaction.update(campaignRef, {
       verifiedAmountReceived: nextVerified,
       updatedBy: "paymongo_webhook",
       updatedAt: FieldValue.serverTimestamp(),
     });
-
     transaction.update(donationRef, {
       status: "received",
       paymentStatus: "paid",
@@ -612,7 +424,6 @@ const finalizePaymongoDonation = async (session) => {
       updatedAt: FieldValue.serverTimestamp(),
       rejectionReason: "",
     });
-
     transaction.set(activityRef, {
       action: "PayMongo Donation Automatically Verified",
       donationId,
@@ -624,7 +435,6 @@ const finalizePaymongoDonation = async (session) => {
       performedBy: "paymongo_webhook",
       timestamp: FieldValue.serverTimestamp(),
     });
-
     return {
       donationId,
       campaignId,
@@ -633,7 +443,6 @@ const finalizePaymongoDonation = async (session) => {
     };
   });
 };
-
 app.post(
   "/api/paymongo/webhook",
   express.raw({ type: "application/json", limit: "2mb" }),
@@ -643,21 +452,18 @@ app.post(
         request.headers["paymongo-signature"] ||
         request.headers["x-paymongo-signature"] ||
         "";
-
       if (!getPaymongoWebhookSecret()) {
         return response.status(503).json({
           ok: false,
           error: "paymongo_webhook_secret_not_configured",
         });
       }
-
       if (!verifyPaymongoWebhookSignature(request.body, signatureHeader)) {
         return response.status(401).json({
           ok: false,
           error: "invalid_paymongo_signature",
         });
       }
-
       let payload;
       try {
         payload = JSON.parse(request.body.toString("utf8"));
@@ -667,7 +473,6 @@ app.post(
           error: "invalid_paymongo_webhook_json",
         });
       }
-
       // PayMongo webhook payloads use an event envelope:
       // data.type === "event"
       // data.attributes.type === "checkout_session.payment.paid"
@@ -683,7 +488,6 @@ app.post(
           "",
         120,
       );
-
       if (paymongoMode() === "test" && eventAttributes?.livemode === true) {
         return response.status(409).json({
           ok: false,
@@ -691,7 +495,6 @@ app.post(
           message: "Live PayMongo events are disabled while VolunServe is in test mode.",
         });
       }
-
       if (eventType !== "checkout_session.payment.paid") {
         return response.status(200).json({
           ok: true,
@@ -699,13 +502,10 @@ app.post(
           eventType,
         });
       }
-
       const checkoutSession =
         eventAttributes?.data || eventEnvelope?.data || {};
-
       try {
         const result = await finalizePaymongoDonation(checkoutSession);
-
         return response.status(200).json({
           ok: true,
           eventType,
@@ -724,7 +524,6 @@ app.post(
             reason: "unknown_volunserve_reference",
           });
         }
-
         throw error;
       }
     } catch (error) {
@@ -740,1400 +539,1105 @@ app.post(
     }
   },
 );
-
 app.use(
-
   express.json({
-
     limit: "1mb",
-
   }),
-
 );
-
-
-
 function cleanText(
-
   value,
-
   maximumLength = 240,
-
 ) {
-
   return String(
-
     value || "",
-
   )
-
     .replace(
-
       /[\u0000-\u001F\u007F]/g,
-
       " ",
-
     )
-
     .replace(
-
       /\s+/g,
-
       " ",
-
     )
-
     .trim()
-
     .slice(
-
       0,
-
       maximumLength,
-
     );
-
 }
-
-
-
 function normalizeIdentityStatus(
-
   value,
-
 ) {
-
   const status = cleanText(
-
     value,
-
     40,
-
   ).toLowerCase();
-
-
-
   if (
-
     status === "pending" ||
-
     status === "verified" ||
-
     status === "failed"
-
   ) {
-
     return status;
-
   }
-
-
-
   return "basic";
-
 }
-
-
-
 function normalizeAiDecision(
-
   value,
-
 ) {
-
   const decision = cleanText(
-
     value,
-
     80,
-
   )
-
     .toLowerCase()
-
     .replace(
-
       /[\s-]+/g,
-
       "_",
-
     );
-
-
-
   if (
-
     decision === "verified" ||
-
     decision === "approved" ||
-
     decision === "match" ||
-
     decision === "matched"
-
   ) {
-
     return "verified";
-
   }
-
-
-
   if (
-
     decision === "manual_review" ||
-
     decision === "review" ||
-
     decision === "needs_review" ||
-
     decision === "pending"
-
   ) {
-
     return "manual_review";
-
   }
-
-
-
   if (
-
     decision === "failed" ||
-
     decision === "rejected" ||
-
     decision === "no_match" ||
-
     decision === "not_matched"
-
   ) {
-
     // AI-assisted verification does not
-
     // permanently reject a Resident.
-
     // A non-match is sent to LGU/Admin
-
     // manual review.
-
     return "manual_review";
-
   }
-
-
-
   return "manual_review";
-
 }
-
-
-
 function numberOrNull(
-
   value,
-
 ) {
-
   const number = Number(value);
-
-
-
   return Number.isFinite(number)
-
     ? number
-
     : null;
-
 }
-
-
-
 function getBearerToken(
-
   request,
-
 ) {
-
   const authorization = String(
-
     request.headers.authorization || "",
-
   ).trim();
-
-
-
   if (
-
     !authorization.startsWith(
-
       "Bearer ",
-
     )
-
   ) {
-
     return "";
-
   }
-
-
-
   return authorization
-
     .slice(7)
-
     .trim();
-
 }
-
-
-
 async function requireFirebaseUser(
-
   request,
-
   response,
-
   next,
-
 ) {
-
   try {
-
     const token =
-
       getBearerToken(
-
         request,
-
       );
-
-
-
     if (!token) {
-
       response
-
         .status(401)
-
         .json({
-
           error:
-
             "unauthenticated",
-
           message:
-
             "Sign in to continue.",
-
         });
-
-
-
       return;
-
     }
-
-
-
     const decodedToken =
-
       await auth.verifyIdToken(
-
         token,
-
         true,
-
       );
-
-
-
     request.firebaseUser =
-
       decodedToken;
-
-
-
     next();
-
   } catch (error) {
-
     console.error(
-
       "Firebase token verification failed:",
-
       error?.message,
-
     );
-
-
-
     response
-
       .status(401)
-
       .json({
-
         error:
-
           "invalid_token",
-
         message:
-
           "Your sign-in session could not be verified. Please sign in again.",
-
       });
-
   }
-
 }
-
-
-
 function makeHttpError(
-
   statusCode,
-
   code,
-
   message,
-
 ) {
-
   const error =
-
     new Error(message);
-
-
-
   error.statusCode =
-
     statusCode;
-
-
-
   error.code =
-
     code;
-
-
-
   return error;
-
 }
-
-
-
 function getCloudinaryConfig() {
-
   const cloudName =
-
     cleanText(
-
       process.env
-
         .CLOUDINARY_CLOUD_NAME ||
-
         "netjawtz",
-
       120,
-
     );
-
-
-
   const apiKey =
-
     cleanText(
-
       process.env
-
         .CLOUDINARY_API_KEY ||
-
         "",
-
       200,
-
     );
-
-
-
   const apiSecret =
-
     String(
-
       process.env
-
         .CLOUDINARY_API_SECRET ||
-
         "",
-
     ).trim();
-
-
-
   if (
-
     !cloudName ||
-
     !apiKey ||
-
     !apiSecret
-
   ) {
-
     throw makeHttpError(
-
       503,
-
       "cloudinary_not_configured",
-
       "Secure assistance evidence storage is not configured on the backend yet.",
-
     );
-
   }
-
-
-
   return {
-
     cloudName,
-
     apiKey,
-
     apiSecret,
-
   };
-
 }
-
-
-
 function configureCloudinary() {
-
   const {
-
     cloudName,
-
     apiKey,
-
     apiSecret,
-
   } =
-
     getCloudinaryConfig();
-
-
-
   cloudinary.config({
-
     cloud_name:
-
       cloudName,
-
     api_key:
-
       apiKey,
-
     api_secret:
-
       apiSecret,
-
     secure:
-
       true,
-
   });
-
-
-
   return {
-
     cloudName,
-
     apiKey,
-
     apiSecret,
-
   };
-
 }
-
-
-
 function sanitizeFileName(
-
   value,
-
 ) {
-
   const cleaned =
-
     cleanText(
-
       value,
-
       180,
-
     )
-
       .replace(
-
         /[^A-Za-z0-9._ -]/g,
-
         "_",
-
       )
-
       .replace(
-
         /\s+/g,
-
         " ",
-
       )
-
       .trim();
-
-
-
   return (
-
     cleaned ||
-
     `evidence-${Date.now()}.jpg`
-
   );
-
 }
-
-
-
 function detectAssistanceImage(
-
   buffer,
-
 ) {
-
   if (
-
     !Buffer.isBuffer(
-
       buffer,
-
     ) ||
-
     buffer.length < 12
-
   ) {
-
     return null;
-
   }
-
-
-
   if (
-
     buffer[0] === 0xff &&
-
     buffer[1] === 0xd8 &&
-
     buffer[2] === 0xff
-
   ) {
-
     return {
-
       mimeType:
-
         "image/jpeg",
-
       extension:
-
         "jpg",
-
     };
-
   }
-
-
-
   if (
-
     buffer[0] === 0x89 &&
-
     buffer[1] === 0x50 &&
-
     buffer[2] === 0x4e &&
-
     buffer[3] === 0x47 &&
-
     buffer[4] === 0x0d &&
-
     buffer[5] === 0x0a &&
-
     buffer[6] === 0x1a &&
-
     buffer[7] === 0x0a
-
   ) {
-
     return {
-
       mimeType:
-
         "image/png",
-
       extension:
-
         "png",
-
     };
-
   }
-
-
-
   if (
-
     buffer
-
       .subarray(
-
         0,
-
         4,
-
       )
-
       .toString(
-
         "ascii",
-
       ) === "RIFF" &&
-
     buffer
-
       .subarray(
-
         8,
-
         12,
-
       )
-
       .toString(
-
         "ascii",
-
       ) === "WEBP"
-
   ) {
-
     return {
-
       mimeType:
-
         "image/webp",
-
       extension:
-
         "webp",
-
     };
-
   }
-
-
-
   return null;
-
 }
-
-
-
 function getProfileRole(
-
   profile,
-
 ) {
-
   return cleanText(
-
     profile?.primaryRole ||
-
       profile?.role ||
-
       "",
-
     40,
-
   ).toLowerCase();
-
 }
-
-
-
 function isApprovedAccount(
-
   profile,
-
 ) {
-
   return (
-
     cleanText(
-
       profile?.status ||
-
         "",
-
       40,
-
     ).toLowerCase() ===
-
     "approved"
-
   );
-
 }
-
-
-
 function isVerifiedResidentProfile(
-
   profile,
-
 ) {
-
   return (
-
     isApprovedAccount(
-
       profile,
-
     ) &&
-
     profile?.residentAccess ===
-
       true &&
-
     (
-
       profile
-
         ?.identityVerified ===
-
         true ||
-
       normalizeIdentityStatus(
-
         profile
-
           ?.identityStatus,
-
       ) === "verified"
-
     )
-
   );
-
 }
-
-
-
 function isOperationalAdminProfile(
-
   profile,
-
 ) {
-
   return (
-
     isApprovedAccount(
-
       profile,
-
     ) &&
-
     getProfileRole(
-
       profile,
-
     ) === "admin"
-
   );
-
 }
-
-
-
 async function loadUserProfile(
-
   uid,
-
 ) {
-
   const snapshot =
-
     await db
-
       .collection(
-
         "users",
-
       )
-
       .doc(uid)
-
       .get();
-
-
-
   if (
-
     !snapshot.exists
-
   ) {
-
     throw makeHttpError(
-
       404,
-
       "profile_not_found",
-
       "Your VolunServe profile was not found.",
-
     );
-
   }
-
-
-
   return (
-
     snapshot.data() ||
-
     {}
-
   );
-
 }
-
-
-
 async function requireVerifiedResident(
-
   request,
-
   response,
-
   next,
-
 ) {
-
   try {
-
     const profile =
-
       await loadUserProfile(
-
         request
-
           .firebaseUser
-
           .uid,
-
       );
-
-
-
     if (
-
       !isVerifiedResidentProfile(
-
         profile,
-
       )
-
     ) {
-
       response
-
         .status(403)
-
         .json({
-
           error:
-
             "verified_resident_required",
-
           message:
-
             "Only a Verified Resident can upload Request Assistance evidence.",
-
         });
-
-
-
       return;
-
     }
-
-
-
     request
-
       .volunServeProfile =
-
       profile;
-
-
-
     next();
-
   } catch (error) {
-
     response
-
       .status(
-
         Number(
-
           error
-
             ?.statusCode,
-
         ) || 500,
-
       )
-
       .json({
-
         error:
-
           cleanText(
-
             error?.code ||
-
               "profile_check_failed",
-
             100,
-
           ),
-
         message:
-
           cleanText(
-
             error?.message ||
-
               "Unable to verify the Resident account.",
-
             500,
-
           ),
-
       });
-
   }
-
 }
-
-
-
 async function requireOperationalAdmin(
-
   request,
-
   response,
-
   next,
-
 ) {
-
   try {
-
     const profile =
-
       await loadUserProfile(
-
         request
-
           .firebaseUser
-
           .uid,
-
       );
-
-
-
     if (
-
       !isOperationalAdminProfile(
-
         profile,
-
       )
-
     ) {
-
       response
-
         .status(403)
-
         .json({
-
           error:
-
             "operational_admin_required",
-
           message:
-
             "Only an approved operational Admin can manage Assistance Request reviews.",
-
         });
-
-
-
       return;
-
     }
-
-
-
     request
-
       .volunServeProfile =
-
       profile;
-
-
-
     next();
-
   } catch (error) {
-
     response
-
       .status(
-
         Number(
-
           error
-
             ?.statusCode,
-
         ) || 500,
-
       )
-
       .json({
-
         error:
-
           cleanText(
-
             error?.code ||
-
               "admin_profile_check_failed",
-
             100,
-
           ),
-
         message:
-
           cleanText(
-
             error?.message ||
-
               "Unable to verify the Admin account.",
-
             500,
-
           ),
-
       });
-
   }
-
 }
-
-
-async function uploadAssistanceEvidenceToCloudinary({
-
-  buffer,
-
-  mimeType,
-
-  extension,
-
-  uid,
-
-}) {
-
-  configureCloudinary();
-
-
-
-  if (
-
-    !Buffer.isBuffer(
-
-      buffer,
-
-    ) ||
-
-    buffer.length === 0
-
-  ) {
-
-    throw makeHttpError(
-
-      400,
-
-      "evidence_file_required",
-
-      "A valid evidence image is required.",
-
-    );
-
-  }
-
-
-
-  const uniqueId =
-
-    typeof crypto.randomUUID ===
-
-    "function"
-
-      ? crypto.randomUUID()
-
-      : crypto
-
-          .randomBytes(18)
-
-          .toString(
-
-            "hex",
-
-          );
-
-
-
-  const publicId =
-
-    `volunserve/assistance-evidence/${uid}/${uniqueId}`;
-
-
-
+function isAdminOrSuperAdminProfile(profile) {
+  if (!isApprovedAccount(profile)) return false;
+  return ["admin", "superadmin"].includes(getProfileRole(profile));
+}
+function isVerifiedLguPersonnelProfile(profile) {
+  return (
+    isApprovedAccount(profile) &&
+    getProfileRole(profile) === "lgu_personnel" &&
+    profile?.lguVerified === true &&
+    cleanText(profile?.employmentStatus || "", 40).toLowerCase() === "active"
+  );
+}
+async function requireAdminOrSuperAdmin(request, response, next) {
   try {
-
-    const result =
-
-      await new Promise(
-
-        (
-
-          resolve,
-
-          reject,
-
-        ) => {
-
-          const uploadStream =
-
-            cloudinary
-
-              .uploader
-
-              .upload_stream(
-
-                {
-
-                  resource_type:
-
-                    "image",
-
-                  type:
-
-                    "authenticated",
-
-                  public_id:
-
-                    publicId,
-
-                  overwrite:
-
-                    false,
-
-                  unique_filename:
-
-                    false,
-
-                  use_filename:
-
-                    false,
-
-                },
-
-                (
-
-                  error,
-
-                  uploadResult,
-
-                ) => {
-
-                  if (
-
-                    error
-
-                  ) {
-
-                    reject(
-
-                      error,
-
-                    );
-
-                    return;
-
-                  }
-
-
-
-                  resolve(
-
-                    uploadResult,
-
-                  );
-
-                },
-
-              );
-
-
-
-          uploadStream.on(
-
-            "error",
-
-            reject,
-
-          );
-
-
-
-          uploadStream.end(
-
-            buffer,
-
-          );
-
-        },
-
-      );
-
-
-
-    if (
-
-      !result?.asset_id ||
-
-      !result?.public_id
-
-    ) {
-
-      throw makeHttpError(
-
-        502,
-
-        "secure_cloudinary_upload_failed",
-
-        "Cloudinary did not return a complete secure upload result.",
-
-      );
-
+    const profile = await loadUserProfile(request.firebaseUser.uid);
+    if (!isAdminOrSuperAdminProfile(profile)) {
+      response.status(403).json({
+        error: "admin_or_superadmin_required",
+        message: "Only an approved Admin or Super Admin can manage LGU test personnel.",
+      });
+      return;
     }
-
-
-
-    return result;
-
+    request.volunServeProfile = profile;
+    next();
   } catch (error) {
-
-    if (
-
-      error?.code ===
-
-      "secure_cloudinary_upload_failed"
-
-    ) {
-
-      throw error;
-
-    }
-
-
-
-    const statusCode =
-
-      Number(
-
-        error?.http_code ||
-
-          error?.statusCode ||
-
-          error?.status ||
-
-          502,
-
-      );
-
-
-
-    throw makeHttpError(
-
-      statusCode >= 400 &&
-
-        statusCode <= 599
-
-        ? statusCode
-
-        : 502,
-
-      "secure_cloudinary_upload_failed",
-
-      cleanText(
-
-        error?.message ||
-
-          "Cloudinary could not securely store the assistance evidence.",
-
-        500,
-
-      ),
-
-    );
-
+    response.status(Number(error?.statusCode) || 500).json({
+      error: cleanText(error?.code || "admin_profile_check_failed", 100),
+      message: cleanText(error?.message || "Unable to verify the Admin account.", 500),
+    });
   }
-
 }
-
-
-
+async function requireVerifiedLguPersonnel(request, response, next) {
+  try {
+    const uid = request.firebaseUser.uid;
+    const [profile, personnelSnapshot] = await Promise.all([
+      loadUserProfile(uid),
+      db.collection("lguPersonnel").doc(uid).get(),
+    ]);
+    if (!isVerifiedLguPersonnelProfile(profile) || !personnelSnapshot.exists) {
+      response.status(403).json({
+        error: "verified_lgu_personnel_required",
+        message: "Only verified active LGU Personnel can use LGU duty functions.",
+      });
+      return;
+    }
+    const personnel = personnelSnapshot.data() || {};
+    if (
+      cleanText(personnel.verificationStatus || "", 40).toLowerCase() !== "verified" ||
+      cleanText(personnel.employmentStatus || "", 40).toLowerCase() !== "active"
+    ) {
+      response.status(403).json({
+        error: "lgu_personnel_not_active",
+        message: "This LGU Personnel record is not currently active and verified.",
+      });
+      return;
+    }
+    request.volunServeProfile = profile;
+    request.lguPersonnelRecord = personnel;
+    next();
+  } catch (error) {
+    response.status(Number(error?.statusCode) || 500).json({
+      error: cleanText(error?.code || "lgu_profile_check_failed", 100),
+      message: cleanText(error?.message || "Unable to verify the LGU Personnel account.", 500),
+    });
+  }
+}
+function makeTestLguPassword() {
+  return `${crypto.randomBytes(18).toString("base64url")}Aa1!`;
+}
+function normalizeLguCapabilities(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => cleanText(item, 80)).filter(Boolean))].slice(0, 20);
+}
+function getManilaDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = {};
+  for (const part of parts) {
+    if (part.type !== "literal") values[part.type] = part.value;
+  }
+  return `${values.year}-${values.month}-${values.day}`;
+}
+function testLguEmailFromEmployeeId(employeeId) {
+  const localPart = cleanText(employeeId, 80)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "") || `lgu.${Date.now()}`;
+  return `${localPart}@volunserve.test`;
+}
+app.post(
+  "/api/admin/lgu/test-personnel",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    let createdAuthUser = null;
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const fullName = cleanText(request.body?.fullName || "", 120);
+      const department = cleanText(request.body?.department || "", 120);
+      const position = cleanText(request.body?.position || "", 120);
+      const employeeId = cleanText(request.body?.employeeId || "", 80).toUpperCase();
+      const phoneNumber = cleanText(request.body?.phoneNumber || "", 40);
+      const capabilities = normalizeLguCapabilities(request.body?.capabilities);
+      const requestedEmail = cleanText(request.body?.email || "", 160).toLowerCase();
+      const email = requestedEmail || testLguEmailFromEmployeeId(employeeId);
+      if (fullName.length < 2) {
+        throw makeHttpError(400, "invalid_lgu_name", "Enter the TEST LGU Personnel full name.");
+      }
+      if (department.length < 2 || position.length < 2) {
+        throw makeHttpError(400, "invalid_lgu_position", "Enter the LGU department and position.");
+      }
+      if (!/^TEST-LGU-[A-Z0-9_-]{1,60}$/.test(employeeId)) {
+        throw makeHttpError(
+          400,
+          "invalid_test_lgu_employee_id",
+          "Test LGU employee IDs must start with TEST-LGU- so they cannot be mistaken for real personnel.",
+        );
+      }
+      if (!/^[^\s@]+@volunserve[.]test$/i.test(email)) {
+        throw makeHttpError(
+          400,
+          "invalid_test_lgu_email",
+          "Test LGU accounts must use the reserved @volunserve.test email domain.",
+        );
+      }
+      const duplicatePersonnel = await db
+        .collection("lguPersonnel")
+        .where("employeeId", "==", employeeId)
+        .limit(1)
+        .get();
+      if (!duplicatePersonnel.empty) {
+        throw makeHttpError(409, "test_lgu_employee_id_exists", "This TEST LGU employee ID already exists.");
+      }
+      try {
+        await auth.getUserByEmail(email);
+        throw makeHttpError(409, "test_lgu_email_exists", "This TEST LGU email already exists.");
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") throw error;
+      }
+      const password = makeTestLguPassword();
+      createdAuthUser = await auth.createUser({
+        email,
+        password,
+        displayName: fullName,
+        emailVerified: true,
+        disabled: false,
+      });
+      const uid = createdAuthUser.uid;
+      const userRef = db.collection("users").doc(uid);
+      const personnelRef = db.collection("lguPersonnel").doc(uid);
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      const activityRef = db.collection("adminActivityLogs").doc();
+      const batch = db.batch();
+      batch.set(userRef, {
+        uid,
+        fullName,
+        email,
+        phoneNumber,
+        role: "lgu_personnel",
+        requestedRole: "lgu_personnel",
+        primaryRole: "lgu_personnel",
+        residentAccess: false,
+        volunteerAccess: false,
+        volunteerStatus: "not_applied",
+        activeMode: "lgu_personnel",
+        status: "approved",
+        lguVerified: true,
+        employmentStatus: "active",
+        department,
+        position,
+        employeeId,
+        isTestAccount: true,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: adminUid,
+        reviewedBy: adminUid,
+      });
+      batch.set(personnelRef, {
+        uid,
+        fullName,
+        email,
+        phoneNumber,
+        department,
+        position,
+        employeeId,
+        capabilities,
+        verificationStatus: "verified",
+        employmentStatus: "active",
+        isTestAccount: true,
+        verifiedAt: FieldValue.serverTimestamp(),
+        verifiedBy: adminUid,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: adminUid,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      });
+      batch.set(dutyRef, {
+        uid,
+        dutyStatus: "off_duty",
+        availabilityStatus: "unavailable",
+        activeCaseId: "",
+        activeAssignmentId: "",
+        shiftDate: "",
+        timeInAt: null,
+        timeOutAt: null,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      });
+      batch.set(activityRef, {
+        action: "Test LGU Personnel Created",
+        personnelUid: uid,
+        employeeId,
+        department,
+        position,
+        performedBy: adminUid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+      try {
+        await batch.commit();
+      } catch (error) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (rollbackError) {
+          console.error("TEST LGU Auth rollback failed:", rollbackError);
+        }
+        createdAuthUser = null;
+        throw error;
+      }
+      response.status(201).json({
+        ok: true,
+        testAccount: true,
+        uid,
+        fullName,
+        email,
+        temporaryPassword: password,
+        employeeId,
+        department,
+        position,
+        dutyStatus: "off_duty",
+        availabilityStatus: "unavailable",
+        message: "TEST LGU Personnel created. Save the temporary password now because it is returned only in this response.",
+      });
+    } catch (error) {
+      if (createdAuthUser?.uid) {
+        try {
+          await auth.deleteUser(createdAuthUser.uid);
+        } catch (rollbackError) {
+          console.error("TEST LGU Auth cleanup failed:", rollbackError);
+        }
+      }
+      const authCode = cleanText(error?.code || "", 120);
+      const statusCode = authCode === "auth/email-already-exists" ? 409 : Number(error?.statusCode) || 500;
+      response.status(statusCode).json({
+        error: authCode || "test_lgu_creation_failed",
+        message: cleanText(error?.message || "Unable to create the TEST LGU Personnel account.", 700),
+      });
+    }
+  },
+);
+app.get(
+  "/api/admin/lgu/personnel",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const snapshot = await db.collection("lguPersonnel").limit(200).get();
+      const people = await Promise.all(
+        snapshot.docs.map(async (document) => {
+          const personnel = document.data() || {};
+          const dutySnapshot = await db.collection("lguDutyStatus").doc(document.id).get();
+          const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
+          return {
+            uid: document.id,
+            fullName: cleanText(personnel.fullName || "", 120),
+            email: cleanText(personnel.email || "", 160),
+            phoneNumber: cleanText(personnel.phoneNumber || "", 40),
+            department: cleanText(personnel.department || "", 120),
+            position: cleanText(personnel.position || "", 120),
+            employeeId: cleanText(personnel.employeeId || "", 80),
+            capabilities: Array.isArray(personnel.capabilities) ? personnel.capabilities : [],
+            verificationStatus: cleanText(personnel.verificationStatus || "", 40),
+            employmentStatus: cleanText(personnel.employmentStatus || "", 40),
+            isTestAccount: personnel.isTestAccount === true,
+            dutyStatus: cleanText(duty.dutyStatus || "off_duty", 40),
+            availabilityStatus: cleanText(duty.availabilityStatus || "unavailable", 40),
+            activeCaseId: cleanText(duty.activeCaseId || "", 160),
+            activeAssignmentId: cleanText(duty.activeAssignmentId || "", 180),
+            shiftDate: cleanText(duty.shiftDate || "", 20),
+          };
+        }),
+      );
+      people.sort((a, b) => a.fullName.localeCompare(b.fullName));
+      response.json({ ok: true, personnel: people });
+    } catch (error) {
+      console.error("LGU Personnel list failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_personnel_list_failed", 120),
+        message: cleanText(error?.message || "Unable to load LGU Personnel.", 700),
+      });
+    }
+  },
+);
+app.get(
+  "/api/lgu/me",
+  requireFirebaseUser,
+  requireVerifiedLguPersonnel,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const dutySnapshot = await db.collection("lguDutyStatus").doc(uid).get();
+      const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
+      const personnel = request.lguPersonnelRecord || {};
+      response.json({
+        ok: true,
+        personnel: {
+          uid,
+          fullName: cleanText(personnel.fullName || request.volunServeProfile?.fullName || "", 120),
+          email: cleanText(personnel.email || request.volunServeProfile?.email || "", 160),
+          department: cleanText(personnel.department || "", 120),
+          position: cleanText(personnel.position || "", 120),
+          employeeId: cleanText(personnel.employeeId || "", 80),
+          capabilities: Array.isArray(personnel.capabilities) ? personnel.capabilities : [],
+          isTestAccount: personnel.isTestAccount === true,
+        },
+        duty: {
+          dutyStatus: cleanText(duty.dutyStatus || "off_duty", 40),
+          availabilityStatus: cleanText(duty.availabilityStatus || "unavailable", 40),
+          activeCaseId: cleanText(duty.activeCaseId || "", 160),
+          activeAssignmentId: cleanText(duty.activeAssignmentId || "", 180),
+          shiftDate: cleanText(duty.shiftDate || "", 20),
+        },
+      });
+    } catch (error) {
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_profile_load_failed", 120),
+        message: cleanText(error?.message || "Unable to load the LGU Personnel profile.", 700),
+      });
+    }
+  },
+);
+app.post(
+  "/api/lgu/duty/time-in",
+  requireFirebaseUser,
+  requireVerifiedLguPersonnel,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const personnel = request.lguPersonnelRecord || {};
+      const shiftDate = getManilaDateKey();
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      const attendanceRef = db.collection("lguAttendance").doc(`${uid}_${shiftDate}`);
+      await db.runTransaction(async (transaction) => {
+        const [dutySnapshot, attendanceSnapshot] = await Promise.all([
+          transaction.get(dutyRef),
+          transaction.get(attendanceRef),
+        ]);
+        const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
+        if (cleanText(duty.dutyStatus || "off_duty", 40) === "on_duty") {
+          throw makeHttpError(409, "already_on_duty", "You are already timed in for LGU duty.");
+        }
+        if (["assigned", "responding", "on_site"].includes(cleanText(duty.availabilityStatus || "", 40))) {
+          throw makeHttpError(409, "active_lgu_assignment", "You cannot Time In while an emergency assignment is still active.");
+        }
+        if (attendanceSnapshot.exists) {
+          throw makeHttpError(409, "attendance_already_recorded", "Today already has an LGU attendance record for this account.");
+        }
+        transaction.set(dutyRef, {
+          uid,
+          dutyStatus: "on_duty",
+          availabilityStatus: "available",
+          activeCaseId: "",
+          activeAssignmentId: "",
+          shiftDate,
+          timeInAt: FieldValue.serverTimestamp(),
+          timeOutAt: null,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: uid,
+        });
+        transaction.set(attendanceRef, {
+          uid,
+          fullName: cleanText(personnel.fullName || "", 120),
+          department: cleanText(personnel.department || "", 120),
+          position: cleanText(personnel.position || "", 120),
+          shiftDate,
+          status: "on_duty",
+          timeInAt: FieldValue.serverTimestamp(),
+          timeOutAt: null,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      response.json({
+        ok: true,
+        dutyStatus: "on_duty",
+        availabilityStatus: "available",
+        shiftDate,
+      });
+    } catch (error) {
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_time_in_failed", 120),
+        message: cleanText(error?.message || "Unable to Time In for LGU duty.", 700),
+      });
+    }
+  },
+);
+app.post(
+  "/api/lgu/duty/time-out",
+  requireFirebaseUser,
+  requireVerifiedLguPersonnel,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      let completedShiftDate = "";
+      await db.runTransaction(async (transaction) => {
+        const dutySnapshot = await transaction.get(dutyRef);
+        if (!dutySnapshot.exists) {
+          throw makeHttpError(409, "not_on_duty", "Time In before attempting to Time Out.");
+        }
+        const duty = dutySnapshot.data() || {};
+        const dutyStatus = cleanText(duty.dutyStatus || "", 40);
+        const availabilityStatus = cleanText(duty.availabilityStatus || "", 40);
+        const shiftDate = cleanText(duty.shiftDate || "", 20);
+        if (dutyStatus !== "on_duty") {
+          throw makeHttpError(409, "not_on_duty", "This LGU Personnel account is not currently on duty.");
+        }
+        if (availabilityStatus !== "available") {
+          throw makeHttpError(409, "active_lgu_assignment", "Complete or release the active emergency assignment before Time Out.");
+        }
+        if (!shiftDate) {
+          throw makeHttpError(409, "attendance_shift_missing", "The active LGU duty record is missing its shift date.");
+        }
+        const attendanceRef = db.collection("lguAttendance").doc(`${uid}_${shiftDate}`);
+        const attendanceSnapshot = await transaction.get(attendanceRef);
+        if (!attendanceSnapshot.exists) {
+          throw makeHttpError(409, "attendance_record_missing", "The active LGU attendance record was not found.");
+        }
+        completedShiftDate = shiftDate;
+        transaction.update(dutyRef, {
+          dutyStatus: "off_duty",
+          availabilityStatus: "unavailable",
+          activeCaseId: "",
+          activeAssignmentId: "",
+          timeOutAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: uid,
+        });
+        transaction.update(attendanceRef, {
+          status: "completed",
+          timeOutAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      response.json({
+        ok: true,
+        dutyStatus: "off_duty",
+        availabilityStatus: "unavailable",
+        shiftDate: completedShiftDate,
+      });
+    } catch (error) {
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_time_out_failed", 120),
+        message: cleanText(error?.message || "Unable to Time Out from LGU duty.", 700),
+      });
+    }
+  },
+);
+async function uploadAssistanceEvidenceToCloudinary({
+  buffer,
+  mimeType,
+  extension,
+  uid,
+}) {
+  configureCloudinary();
+  if (
+    !Buffer.isBuffer(
+      buffer,
+    ) ||
+    buffer.length === 0
+  ) {
+    throw makeHttpError(
+      400,
+      "evidence_file_required",
+      "A valid evidence image is required.",
+    );
+  }
+  const uniqueId =
+    typeof crypto.randomUUID ===
+    "function"
+      ? crypto.randomUUID()
+      : crypto
+          .randomBytes(18)
+          .toString(
+            "hex",
+          );
+  const publicId =
+    `volunserve/assistance-evidence/${uid}/${uniqueId}`;
+  try {
+    const result =
+      await new Promise(
+        (
+          resolve,
+          reject,
+        ) => {
+          const uploadStream =
+            cloudinary
+              .uploader
+              .upload_stream(
+                {
+                  resource_type:
+                    "image",
+                  type:
+                    "authenticated",
+                  public_id:
+                    publicId,
+                  overwrite:
+                    false,
+                  unique_filename:
+                    false,
+                  use_filename:
+                    false,
+                },
+                (
+                  error,
+                  uploadResult,
+                ) => {
+                  if (
+                    error
+                  ) {
+                    reject(
+                      error,
+                    );
+                    return;
+                  }
+                  resolve(
+                    uploadResult,
+                  );
+                },
+              );
+          uploadStream.on(
+            "error",
+            reject,
+          );
+          uploadStream.end(
+            buffer,
+          );
+        },
+      );
+    if (
+      !result?.asset_id ||
+      !result?.public_id
+    ) {
+      throw makeHttpError(
+        502,
+        "secure_cloudinary_upload_failed",
+        "Cloudinary did not return a complete secure upload result.",
+      );
+    }
+    return result;
+  } catch (error) {
+    if (
+      error?.code ===
+      "secure_cloudinary_upload_failed"
+    ) {
+      throw error;
+    }
+    const statusCode =
+      Number(
+        error?.http_code ||
+          error?.statusCode ||
+          error?.status ||
+          502,
+      );
+    throw makeHttpError(
+      statusCode >= 400 &&
+        statusCode <= 599
+        ? statusCode
+        : 502,
+      "secure_cloudinary_upload_failed",
+      cleanText(
+        error?.message ||
+          "Cloudinary could not securely store the assistance evidence.",
+        500,
+      ),
+    );
+  }
+}
 async function uploadAssistancePublicPhotoToCloudinary({
   buffer,
   uid,
 }) {
   configureCloudinary();
-
   if (
     !Buffer.isBuffer(buffer) ||
     buffer.length === 0
@@ -2144,15 +1648,12 @@ async function uploadAssistancePublicPhotoToCloudinary({
       "A valid public campaign photo is required.",
     );
   }
-
   const uniqueId =
     typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : crypto.randomBytes(18).toString("hex");
-
   const publicId =
     `volunserve/public-campaign-photos/${uid}/${uniqueId}`;
-
   try {
     const result = await new Promise(
       (resolve, reject) => {
@@ -2171,16 +1672,13 @@ async function uploadAssistancePublicPhotoToCloudinary({
                 reject(error);
                 return;
               }
-
               resolve(uploadResult);
             },
           );
-
         uploadStream.on("error", reject);
         uploadStream.end(buffer);
       },
     );
-
     if (
       !result?.asset_id ||
       !result?.public_id ||
@@ -2192,13 +1690,11 @@ async function uploadAssistancePublicPhotoToCloudinary({
         "Cloudinary did not return a complete public photo upload result.",
       );
     }
-
     return result;
   } catch (error) {
     if (error?.code === "public_photo_upload_failed") {
       throw error;
     }
-
     const statusCode =
       Number(
         error?.http_code ||
@@ -2206,7 +1702,6 @@ async function uploadAssistancePublicPhotoToCloudinary({
           error?.status ||
           502,
       );
-
     throw makeHttpError(
       statusCode >= 400 && statusCode <= 599
         ? statusCode
@@ -2220,408 +1715,192 @@ async function uploadAssistancePublicPhotoToCloudinary({
     );
   }
 }
-
-
 function createCloudinaryPrivateDownloadUrl({
-
   publicId,
-
   format,
-
   resourceType = "image",
-
   deliveryType = "authenticated",
-
 }) {
-
   configureCloudinary();
-
-
-
   const safePublicId =
-
     cleanText(
-
       publicId,
-
       500,
-
     );
-
-
-
   const safeFormat =
-
     cleanText(
-
       format,
-
       30,
-
     )
-
       .toLowerCase()
-
       .replace(
-
         /[^a-z0-9]/g,
-
         "",
-
       );
-
-
-
   const safeResourceType =
-
     cleanText(
-
       resourceType,
-
       30,
-
     ).toLowerCase();
-
-
-
   const safeDeliveryType =
-
     cleanText(
-
       deliveryType,
-
       40,
-
     ).toLowerCase();
-
-
-
   if (
-
     !safePublicId ||
-
     !safeFormat
-
   ) {
-
     throw makeHttpError(
-
       409,
-
       "evidence_storage_reference_missing",
-
       "This evidence record is missing the protected Cloudinary public ID or format.",
-
     );
-
   }
-
-
-
   if (
-
     safeResourceType !==
-
     "image"
-
   ) {
-
     throw makeHttpError(
-
       409,
-
       "unsupported_evidence_resource_type",
-
       "This assistance evidence resource type is not supported.",
-
     );
-
   }
-
-
-
   if (
-
     safeDeliveryType !==
-
     "authenticated"
-
   ) {
-
     throw makeHttpError(
-
       409,
-
       "evidence_not_protected",
-
       "This assistance evidence is not stored using authenticated Cloudinary delivery.",
-
     );
-
   }
-
-
-
   const expiresAt =
-
     Math.floor(
-
       Date.now() /
-
         1000,
-
     ) +
-
     ASSISTANCE_EVIDENCE_URL_TTL_SECONDS;
-
-
-
   try {
-
     const url =
-
       cloudinary
-
         .utils
-
         .private_download_url(
-
           safePublicId,
-
           safeFormat,
-
           {
-
             resource_type:
-
               safeResourceType,
-
             type:
-
               safeDeliveryType,
-
             expires_at:
-
               expiresAt,
-
           },
-
         );
-
-
-
     return {
-
       url,
-
       expiresAt,
-
     };
-
   } catch (error) {
-
     throw makeHttpError(
-
       502,
-
       "secure_cloudinary_access_url_failed",
-
       cleanText(
-
         error?.message ||
-
           "Cloudinary could not create a temporary private evidence URL.",
-
         500,
-
       ),
-
     );
-
   }
-
 }
-
-
-
 async function destroyAssistanceEvidenceFromCloudinary(
-
   publicId,
-
 ) {
-
   configureCloudinary();
-
-
-
   const safePublicId =
-
     cleanText(
-
       publicId,
-
       500,
-
     );
-
-
-
   if (
-
     !safePublicId
-
   ) {
-
     return {
-
       result:
-
         "not found",
-
     };
-
   }
-
-
-
   try {
-
     const result =
-
       await cloudinary
-
         .uploader
-
         .destroy(
-
           safePublicId,
-
           {
-
             resource_type:
-
               "image",
-
             type:
-
               "authenticated",
-
             invalidate:
-
               true,
-
           },
-
         );
-
-
-
     if (
-
       result?.result !==
-
         "ok" &&
-
       result?.result !==
-
         "not found"
-
     ) {
-
       throw makeHttpError(
-
         502,
-
         "secure_cloudinary_delete_failed",
-
         "Cloudinary could not delete the staged evidence.",
-
       );
-
     }
-
-
-
     return result;
-
   } catch (error) {
-
     if (
-
       error?.code ===
-
       "secure_cloudinary_delete_failed"
-
     ) {
-
       throw error;
-
     }
-
-
-
     const statusCode =
-
       Number(
-
         error?.http_code ||
-
           error?.statusCode ||
-
           error?.status ||
-
           502,
-
       );
-
-
-
     throw makeHttpError(
-
       statusCode >= 400 &&
-
         statusCode <= 599
-
         ? statusCode
-
         : 502,
-
       "secure_cloudinary_delete_failed",
-
       cleanText(
-
         error?.message ||
-
           "Cloudinary could not delete the staged evidence.",
-
         500,
-
       ),
-
     );
-
   }
-
 }
-
-
-
 async function destroyAssistancePublicPhotoFromCloudinary(
   publicId,
 ) {
   configureCloudinary();
-
   const safePublicId = cleanText(
     publicId,
     500,
   );
-
   if (!safePublicId) {
     return {
       result: "not found",
     };
   }
-
   try {
     const result =
       await cloudinary.uploader.destroy(
@@ -2632,7 +1911,6 @@ async function destroyAssistancePublicPhotoFromCloudinary(
           invalidate: true,
         },
       );
-
     if (
       result?.result !== "ok" &&
       result?.result !== "not found"
@@ -2643,7 +1921,6 @@ async function destroyAssistancePublicPhotoFromCloudinary(
         "Cloudinary could not delete the staged public campaign photo.",
       );
     }
-
     return result;
   } catch (error) {
     if (
@@ -2652,7 +1929,6 @@ async function destroyAssistancePublicPhotoFromCloudinary(
     ) {
       throw error;
     }
-
     const statusCode =
       Number(
         error?.http_code ||
@@ -2660,7 +1936,6 @@ async function destroyAssistancePublicPhotoFromCloudinary(
           error?.status ||
           502,
       );
-
     throw makeHttpError(
       statusCode >= 400 &&
         statusCode <= 599
@@ -2675,2763 +1950,1184 @@ async function destroyAssistancePublicPhotoFromCloudinary(
     );
   }
 }
-
-
 async function getEvidenceAccessContext(
-
   uid,
-
   evidenceData,
-
 ) {
-
   if (
-
     evidenceData?.ownerUid ===
-
     uid
-
   ) {
-
     return {
-
       owner:
-
         true,
-
       admin:
-
         false,
-
     };
-
   }
-
-
-
   const profile =
-
     await loadUserProfile(
-
       uid,
-
     );
-
-
-
   if (
-
     isOperationalAdminProfile(
-
       profile,
-
     )
-
   ) {
-
     return {
-
       owner:
-
         false,
-
       admin:
-
         true,
-
     };
-
   }
-
-
-
   throw makeHttpError(
-
     403,
-
     "evidence_access_denied",
-
     "You are not authorized to access this private assistance evidence.",
-
   );
-
 }
-
-
-
 function getIdentityAiEndpoint() {
-
   const configured =
-
     cleanText(
-
       process.env
-
         .IDENTITY_AI_SERVICE_URL ||
-
         "",
-
       1000,
-
     );
-
-
-
   if (!configured) {
-
     return "";
-
   }
-
-
-
   const baseUrl =
-
     configured.replace(
-
       /\/+$/,
-
       "",
-
     );
-
-
-
   if (
-
     baseUrl.endsWith(
-
       "/verify",
-
     )
-
   ) {
-
     return baseUrl;
-
   }
-
-
-
   return `${baseUrl}/verify`;
-
 }
-
-
-
 function getIdentityAiHeaders(
-
   request,
-
 ) {
-
   const headers = {
-
     "Content-Type":
-
       request.headers[
-
         "content-type"
-
       ],
-
-
-
     "X-VolunServe-User-Id":
-
       request
-
         .firebaseUser
-
         .uid,
-
   };
-
-
-
   const internalKey =
-
     String(
-
       process.env
-
         .IDENTITY_AI_INTERNAL_KEY ||
-
         "",
-
     ).trim();
-
-
-
   if (
-
     internalKey
-
   ) {
-
     headers[
-
       "X-VolunServe-Internal-Key"
-
     ] =
-
       internalKey;
-
   }
-
-
-
   return headers;
-
 }
-
-
-
 async function readJsonResponse(
-
   response,
-
 ) {
-
   const text =
-
     await response.text();
-
-
-
   if (!text) {
-
     return {};
-
   }
-
-
-
   try {
-
     return JSON.parse(
-
       text,
-
     );
-
   } catch {
-
     return {
-
       message:
-
         cleanText(
-
           text,
-
           500,
-
         ),
-
     };
-
   }
-
 }
-
-
-
 async function callIdentityAiService(
-
   request,
-
 ) {
-
   const endpoint =
-
     getIdentityAiEndpoint();
-
-
-
   if (!endpoint) {
-
     const error =
-
       new Error(
-
         "The VolunServe AI identity service is not configured yet.",
-
       );
-
-
-
     error.code =
-
       "identity_ai_not_configured";
-
-
-
     error.statusCode =
-
       503;
-
-
-
     throw error;
-
   }
-
-
-
   if (
-
     !Buffer.isBuffer(
-
       request.body,
-
     ) ||
-
     request.body.length ===
-
       0
-
   ) {
-
     const error =
-
       new Error(
-
         "Government ID and selfie files are required.",
-
       );
-
-
-
     error.code =
-
       "missing_identity_media";
-
-
-
     error.statusCode =
-
       400;
-
-
-
     throw error;
-
   }
-
-
-
   const contentType =
-
     String(
-
       request.headers[
-
         "content-type"
-
       ] || "",
-
     ).toLowerCase();
-
-
-
   if (
-
     !contentType.startsWith(
-
       "multipart/form-data",
-
     )
-
   ) {
-
     const error =
-
       new Error(
-
         "Identity verification must be submitted as multipart form data.",
-
       );
-
-
-
     error.code =
-
       "invalid_content_type";
-
-
-
     error.statusCode =
-
       415;
-
-
-
     throw error;
-
   }
-
-
-
   if (
-
     typeof fetch !==
-
     "function"
-
   ) {
-
     const error =
-
       new Error(
-
         "This backend runtime does not provide the fetch API required by the AI verification proxy.",
-
       );
-
-
-
     error.code =
-
       "fetch_unavailable";
-
-
-
     error.statusCode =
-
       500;
-
-
-
     throw error;
-
   }
-
-
-
   const aiResponse =
-
     await fetch(
-
       endpoint,
-
       {
-
         method:
-
           "POST",
-
-
-
         headers:
-
           getIdentityAiHeaders(
-
             request,
-
           ),
-
-
-
         body:
-
           request.body,
-
       },
-
     );
-
-
-
   const body =
-
     await readJsonResponse(
-
       aiResponse,
-
     );
-
-
-
   if (
-
     !aiResponse.ok
-
   ) {
-
     const error =
-
       new Error(
-
         cleanText(
-
           body?.message ||
-
             body?.detail ||
-
             body?.error ||
-
             "The VolunServe AI identity service could not process the submission.",
-
           500,
-
         ),
-
       );
-
-
-
     error.code =
-
       cleanText(
-
         body?.error ||
-
           "identity_ai_failed",
-
         100,
-
       );
-
-
-
     error.statusCode =
-
       aiResponse.status >=
-
         400 &&
-
       aiResponse.status <=
-
         599
-
         ? aiResponse.status
-
         : 502;
-
-
-
     throw error;
-
   }
-
-
-
   return body;
-
 }
-
-
-
 function diditCleanupFields() {
-
   return {
-
     provider:
-
       FieldValue.delete(),
-
-
-
     providerStatus:
-
       FieldValue.delete(),
-
-
-
     sessionId:
-
       FieldValue.delete(),
-
-
-
     sessionNumber:
-
       FieldValue.delete(),
-
-
-
     workflowId:
-
       FieldValue.delete(),
-
-
-
     workflowVersion:
-
       FieldValue.delete(),
-
-
-
     lastEventId:
-
       FieldValue.delete(),
-
-
-
     webhookType:
-
       FieldValue.delete(),
-
-
-
     environment:
-
       FieldValue.delete(),
-
-
-
     lastWebhookAt:
-
       FieldValue.delete(),
-
-
-
     sessionRequestedAt:
-
       FieldValue.delete(),
-
   };
-
 }
-
-
-
 app.get(
-
   "/health",
-
   (
-
     request,
-
     response,
-
   ) => {
-
     response.json({
-
       ok:
-
         true,
-
-
-
       service:
-
         "volunserve-backend",
-
-
-
       identityEngine:
-
         getIdentityAiEndpoint()
-
           ? "volunserve_ai_configured"
-
           : "volunserve_ai_not_configured",
-
-
-
       assistanceEvidenceStorage:
-
         process.env
-
           .CLOUDINARY_API_KEY &&
-
         process.env
-
           .CLOUDINARY_API_SECRET
-
           ? "secure_cloudinary_configured"
-
           : "secure_cloudinary_not_configured",
-
-
-
       assistanceEvidenceViewer:
-
         "time_limited_private_download_v1",
-
-
-
       paymongoMode:
-
         paymongoMode(),
-
-
-
       paymongoCheckout:
-
         getPaymongoSecretKey()
-
           ? "configured"
-
           : "not_configured",
-
-
-
       paymongoWebhook:
-
         getPaymongoWebhookSecret()
-
           ? "configured"
-
           : "not_configured",
-
-
-
       time:
-
         new Date()
-
           .toISOString(),
-
     });
-
   },
-
 );
-
-
-
 app.get(
-
   "/api/identity/status",
-
-
-
   requireFirebaseUser,
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     try {
-
       const uid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       const [
-
         userSnapshot,
-
         verificationSnapshot,
-
       ] =
-
         await Promise.all([
-
           db
-
             .collection(
-
               "users",
-
             )
-
             .doc(
-
               uid,
-
             )
-
             .get(),
-
-
-
           db
-
             .collection(
-
               "identityVerifications",
-
             )
-
             .doc(
-
               uid,
-
             )
-
             .get(),
-
         ]);
-
-
-
       if (
-
         !userSnapshot.exists
-
       ) {
-
         response
-
           .status(
-
             404,
-
           )
-
           .json({
-
             error:
-
               "profile_not_found",
-
-
-
             message:
-
               "Your VolunServe profile was not found.",
-
           });
-
-
-
         return;
-
       }
-
-
-
       const profile =
-
         userSnapshot.data() ||
-
         {};
-
-
-
       const verification =
-
         verificationSnapshot.exists
-
           ? verificationSnapshot.data() ||
-
             {}
-
           : {};
-
-
-
       const identityStatus =
-
         normalizeIdentityStatus(
-
           profile
-
             .identityStatus ||
-
             verification.status ||
-
             "basic",
-
         );
-
-
-
       response.json({
-
         ok:
-
           true,
-
-
-
         identityStatus,
-
-
-
         identityVerified:
-
           profile
-
             .identityVerified ===
-
             true ||
-
           identityStatus ===
-
             "verified",
-
-
-
         verificationId:
-
           cleanText(
-
             verification
-
               .verificationId ||
-
               "",
-
             200,
-
           ),
-
-
-
         decision:
-
           cleanText(
-
             verification
-
               .aiDecision ||
-
               verification
-
                 .decision ||
-
               "",
-
             80,
-
           ),
-
-
-
         matchScore:
-
           numberOrNull(
-
             verification
-
               .matchScore,
-
           ),
-
-
-
         livenessScore:
-
           numberOrNull(
-
             verification
-
               .livenessScore,
-
           ),
-
-
-
         message:
-
           cleanText(
-
             verification
-
               .message ||
-
               "",
-
             500,
-
           ),
-
       });
-
     } catch (error) {
-
       console.error(
-
         "Identity status failed:",
-
         error,
-
       );
-
-
-
       response
-
         .status(500)
-
         .json({
-
           error:
-
             "status_failed",
-
-
-
           message:
-
             "Unable to load identity verification status.",
-
         });
-
     }
-
   },
-
 );
-
-
-
 app.post(
-
   "/api/identity/verify",
-
-
-
   requireFirebaseUser,
-
-
-
   express.raw({
-
     type:
-
       "multipart/form-data",
-
-
-
     limit:
-
       IDENTITY_UPLOAD_LIMIT,
-
   }),
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     const uid =
-
       request
-
         .firebaseUser
-
         .uid;
-
-
-
     try {
-
       const userRef =
-
         db
-
           .collection(
-
             "users",
-
           )
-
           .doc(
-
             uid,
-
           );
-
-
-
       const verificationRef =
-
         db
-
           .collection(
-
             "identityVerifications",
-
           )
-
           .doc(
-
             uid,
-
           );
-
-
-
       const [
-
         userSnapshot,
-
         verificationSnapshot,
-
       ] =
-
         await Promise.all([
-
           userRef.get(),
-
           verificationRef.get(),
-
         ]);
-
-
-
       if (
-
         !userSnapshot.exists
-
       ) {
-
         response
-
           .status(
-
             404,
-
           )
-
           .json({
-
             error:
-
               "profile_not_found",
-
-
-
             message:
-
               "Your VolunServe profile was not found.",
-
           });
-
-
-
         return;
-
       }
-
-
-
       const profile =
-
         userSnapshot.data() ||
-
         {};
-
-
-
       const accountStatus =
-
         cleanText(
-
           profile.status ||
-
             "approved",
-
           40,
-
         ).toLowerCase();
-
-
-
       if (
-
         accountStatus !==
-
         "approved"
-
       ) {
-
         response
-
           .status(
-
             403,
-
           )
-
           .json({
-
             error:
-
               "account_not_active",
-
-
-
             message:
-
               "This VolunServe account is not active.",
-
           });
-
-
-
         return;
-
       }
-
-
-
       const currentIdentityStatus =
-
         normalizeIdentityStatus(
-
           profile
-
             .identityStatus ||
-
             "basic",
-
         );
-
-
-
       if (
-
         profile
-
           .identityVerified ===
-
           true ||
-
         currentIdentityStatus ===
-
           "verified"
-
       ) {
-
         response
-
           .status(
-
             409,
-
           )
-
           .json({
-
             error:
-
               "already_verified",
-
-
-
             message:
-
               "Your identity is already verified.",
-
           });
-
-
-
         return;
-
       }
-
-
-
       const verificationData =
-
         verificationSnapshot.exists
-
           ? verificationSnapshot.data() ||
-
             {}
-
           : {};
-
-
-
       const lastSubmissionTime =
-
         verificationData
-
           .lastSubmissionAt
-
           ?.toMillis?.() ||
-
         0;
-
-
-
       if (
-
         Date.now() -
-
           lastSubmissionTime <
-
         IDENTITY_RETRY_DELAY_MS
-
       ) {
-
         response
-
           .status(
-
             429,
-
           )
-
           .json({
-
             error:
-
               "too_many_requests",
-
-
-
             message:
-
               "Please wait a few seconds before submitting another identity verification.",
-
           });
-
-
-
         return;
-
       }
-
-
-
       const aiResult =
-
         await callIdentityAiService(
-
           request,
-
         );
-
-
-
       const decision =
-
         normalizeAiDecision(
-
           aiResult?.decision ||
-
             aiResult?.status,
-
         );
-
-
-
       const matchScore =
-
         numberOrNull(
-
           aiResult
-
             ?.matchScore,
-
         );
-
-
-
       const livenessScore =
-
         numberOrNull(
-
           aiResult
-
             ?.livenessScore,
-
         );
-
-
-
       const verificationId =
-
         cleanText(
-
           aiResult
-
             ?.verificationId ||
-
             `identity_${uid}_${Date.now()}`,
-
           200,
-
         );
-
-
-
       const resultMessage =
-
         cleanText(
-
           aiResult?.message ||
-
             (
-
               decision ===
-
               "verified"
-
                 ? "Identity verification completed successfully."
-
                 : "The submission requires LGU/Admin manual review."
-
             ),
-
           500,
-
         );
-
-
-
       const batch =
-
         db.batch();
-
-
-
       batch.set(
-
         verificationRef,
-
         {
-
           ...diditCleanupFields(),
-
-
-
           uid,
-
-
-
           verificationId,
-
-
-
           verificationMethod:
-
             "volunserve_ai",
-
-
-
           status:
-
             decision ===
-
             "verified"
-
               ? "verified"
-
               : "pending",
-
-
-
           aiDecision:
-
             decision,
-
-
-
           matchScore,
-
-
-
           livenessScore,
-
-
-
           message:
-
             resultMessage,
-
-
-
           requiresManualReview:
-
             decision !==
-
             "verified",
-
-
-
           lastSubmissionAt:
-
             FieldValue
-
               .serverTimestamp(),
-
-
-
           updatedAt:
-
             FieldValue
-
               .serverTimestamp(),
-
-
-
           createdAt:
-
             verificationData
-
               .createdAt ||
-
             FieldValue
-
               .serverTimestamp(),
-
         },
-
         {
-
           merge:
-
             true,
-
         },
-
       );
-
-
-
       if (
-
         decision ===
-
         "verified"
-
       ) {
-
         batch.set(
-
           userRef,
-
           {
-
             identityStatus:
-
               "verified",
-
-
-
             identityVerified:
-
               true,
-
-
-
             identityVerificationProvider:
-
               FieldValue.delete(),
-
-
-
             identityVerificationSessionId:
-
               FieldValue.delete(),
-
-
-
             identityVerificationMethod:
-
               "volunserve_ai",
-
-
-
             identityVerificationStartedAt:
-
               FieldValue
-
                 .serverTimestamp(),
-
-
-
             identityVerifiedAt:
-
               FieldValue
-
                 .serverTimestamp(),
-
-
-
             identityVerifiedBy:
-
               "volunserve_ai",
-
-
-
             identityFailureReason:
-
               FieldValue.delete(),
-
-
-
             updatedAt:
-
               FieldValue
-
                 .serverTimestamp(),
-
           },
-
           {
-
             merge:
-
               true,
-
           },
-
         );
-
       } else {
-
         batch.set(
-
           userRef,
-
           {
-
             identityStatus:
-
               "pending",
-
-
-
             identityVerified:
-
               false,
-
-
-
             identityVerificationProvider:
-
               FieldValue.delete(),
-
-
-
             identityVerificationSessionId:
-
               FieldValue.delete(),
-
-
-
             identityVerificationMethod:
-
               "volunserve_ai",
-
-
-
             identityVerificationStartedAt:
-
               FieldValue
-
                 .serverTimestamp(),
-
-
-
             identityFailureReason:
-
               FieldValue.delete(),
-
-
-
             updatedAt:
-
               FieldValue
-
                 .serverTimestamp(),
-
           },
-
           {
-
             merge:
-
               true,
-
           },
-
         );
-
       }
-
-
-
       await batch.commit();
-
-
-
       response
-
         .status(
-
           200,
-
         )
-
         .json({
-
           ok:
-
             true,
-
-
-
           status:
-
             decision ===
-
             "verified"
-
               ? "verified"
-
               : "pending",
-
-
-
           verificationId,
-
-
-
           decision,
-
-
-
           matchScore,
-
-
-
           livenessScore,
-
-
-
           message:
-
             resultMessage,
-
         });
-
     } catch (error) {
-
       console.error(
-
         "Identity verification failed:",
-
         error,
-
       );
-
-
-
       const statusCode =
-
         Number(
-
           error
-
             ?.statusCode,
-
         );
-
-
-
       response
-
         .status(
-
           statusCode >= 400 &&
-
           statusCode <= 599
-
             ? statusCode
-
             : 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "identity_verification_failed",
-
               100,
-
             ),
-
-
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to process identity verification.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
-
 app.post(
-
   "/api/admin/assistance/requests/:requestId/start-review",
-
-
-
   requireFirebaseUser,
-
-
-
   requireOperationalAdmin,
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     try {
-
       const adminUid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       const requestId =
-
         cleanText(
-
           request.params
-
             ?.requestId ||
-
             "",
-
           120,
-
         );
-
-
-
       if (
-
         !requestId ||
-
         !/^[A-Za-z0-9_-]{10,120}$/.test(
-
           requestId,
-
         )
-
       ) {
-
         throw makeHttpError(
-
           400,
-
           "invalid_assistance_request_id",
-
           "The Request Assistance ID is invalid.",
-
         );
-
       }
-
-
-
       const assistanceRef =
-
         db
-
           .collection(
-
             "assistanceRequests",
-
           )
-
           .doc(
-
             requestId,
-
           );
-
-
-
       const reviewRef =
-
         db
-
           .collection(
-
             "assistanceVerificationReviews",
-
           )
-
           .doc(
-
             requestId,
-
           );
-
-
-
       const result =
-
         await db
-
           .runTransaction(
-
             async (
-
               transaction,
-
             ) => {
-
               const [
-
                 assistanceSnapshot,
-
                 reviewSnapshot,
-
               ] =
-
                 await Promise.all([
-
                   transaction.get(
-
                     assistanceRef,
-
                   ),
-
                   transaction.get(
-
                     reviewRef,
-
                   ),
-
                 ]);
-
-
-
               if (
-
                 !assistanceSnapshot
-
                   .exists
-
               ) {
-
                 throw makeHttpError(
-
                   404,
-
                   "assistance_request_not_found",
-
                   "The Assistance Request was not found.",
-
                 );
-
               }
-
-
-
               const assistanceData =
-
                 assistanceSnapshot
-
                   .data() ||
-
                 {};
-
-
-
               const currentStatus =
-
                 cleanText(
-
                   assistanceData
-
                     .status ||
-
                     "pending",
-
                   40,
-
                 ).toLowerCase();
-
-
-
               const currentVerificationStatus =
-
                 cleanText(
-
                   assistanceData
-
                     .verificationStatus ||
-
                     "pending_review",
-
                   40,
-
                 ).toLowerCase();
-
-
-
               if (
-
                 ![
-
                   "pending",
-
                   "under_review",
-
                 ].includes(
-
                   currentStatus,
-
                 ) ||
-
                 ![
-
                   "pending_review",
-
                   "under_review",
-
                 ].includes(
-
                   currentVerificationStatus,
-
                 )
-
               ) {
-
                 throw makeHttpError(
-
                   409,
-
                   "assistance_review_cannot_start",
-
                   "This Assistance Request is no longer eligible to start a new LGU review.",
-
                 );
-
               }
-
-
-
               const requesterUid =
-
                 cleanText(
-
                   assistanceData
-
                     .requesterUid ||
-
                     "",
-
                   200,
-
                 );
-
-
-
               const category =
-
                 cleanText(
-
                   assistanceData
-
                     .category ||
-
                     "",
-
                   80,
-
                 )
-
                   .toLowerCase()
-
                   .replace(
-
                     /[^a-z0-9_]/g,
-
                     "",
-
                   );
-
-
-
               if (
-
                 !requesterUid ||
-
                 !ASSISTANCE_REQUEST_CATEGORY_CONFIG[
-
                   category
-
                 ]
-
               ) {
-
                 throw makeHttpError(
-
                   409,
-
                   "assistance_request_invalid_for_review",
-
                   "This Assistance Request is missing required review data.",
-
                 );
-
               }
-
-
-
               let alreadyCreated =
-
                 false;
-
-
-
               if (
-
                 reviewSnapshot
-
                   .exists
-
               ) {
-
                 const existingReview =
-
                   reviewSnapshot
-
                     .data() ||
-
                   {};
-
-
-
                 const sameRequest =
-
                   cleanText(
-
                     existingReview
-
                       .requestId ||
-
                       "",
-
                     120,
-
                   ) ===
-
                     requestId &&
-
                   cleanText(
-
                     existingReview
-
                       .requesterUid ||
-
                       "",
-
                     200,
-
                   ) ===
-
                     requesterUid &&
-
                   cleanText(
-
                     existingReview
-
                       .category ||
-
                       "",
-
                     80,
-
                   ) ===
-
                     category;
-
-
-
                 const reviewStillOpen =
-
                   cleanText(
-
                     existingReview
-
                       .reviewStatus ||
-
                       "",
-
                     60,
-
                   ) ===
-
                     "in_progress" &&
-
                   cleanText(
-
                     existingReview
-
                       .finalDecision ||
-
                       "",
-
                     60,
-
                   ) ===
-
                     "pending";
-
-
-
                 if (
-
                   !sameRequest ||
-
                   !reviewStillOpen
-
                 ) {
-
                   throw makeHttpError(
-
                     409,
-
                     "assistance_review_conflict",
-
                     "A protected review record already exists and cannot be restarted.",
-
                   );
-
                 }
-
-
-
                 alreadyCreated =
-
                   true;
-
               } else {
-
                 const facilityRequired =
-
                   [
-
                     "medical_health",
-
                     "surgery_treatment",
-
                     "cancer_serious_illness",
-
                     "animal_pet_welfare",
-
                   ].includes(
-
                     category,
-
                   );
-
-
-
                 const residentEstimatedAmount =
-
                   Number(
-
                     assistanceData
-
                       .estimatedAmount ||
-
                       0,
-
                   );
-
-
-
                 const costRequired =
-
                   Number.isFinite(
-
                     residentEstimatedAmount,
-
                   ) &&
-
                   residentEstimatedAmount >
-
                     0;
-
-
-
                 transaction.set(
-
                   reviewRef,
-
                   {
-
                     requestId,
-
                     requesterUid,
-
                     category,
-
-
-
                     reviewStatus:
-
                       "in_progress",
-
-
-
                     documentConsistencyStatus:
-
                       "pending",
-
                     documentConsistencyNotes:
-
                       "",
-
-
-
                     duplicateCheckStatus:
-
                       "pending",
-
                     duplicateRequestIds:
-
                       [],
-
                     duplicateCheckNotes:
-
                       "",
-
-
-
                     beneficiaryCheckStatus:
-
                       "pending",
-
                     beneficiaryCheckNotes:
-
                       "",
-
-
-
                     facilityVerificationRequired:
-
                       facilityRequired,
-
                     facilityVerificationStatus:
-
                       facilityRequired
-
                         ? "pending"
-
                         : "not_required",
-
                     facilityName:
-
                       "",
-
                     facilityType:
-
                       "",
-
                     facilityDepartment:
-
                       "",
-
                     professionalName:
-
                       "",
-
                     facilityReferenceNumber:
-
                       "",
-
                     facilityVerificationMethod:
-
                       "not_applicable",
-
                     facilityVerifiedWith:
-
                       "",
-
                     facilityVerifiedAt:
-
                       null,
-
                     facilityNotes:
-
                       "",
-
-
-
                     costVerificationRequired:
-
                       costRequired,
-
                     residentEstimatedAmount:
-
                       Number.isFinite(
-
                         residentEstimatedAmount,
-
                       )
-
                         ? Math.max(
-
                             0,
-
                             residentEstimatedAmount,
-
                           )
-
                         : 0,
-
                     verifiedGrossCost:
-
                       0,
-
                     confirmedExistingAssistanceAmount:
-
                       0,
-
                     verifiedUncoveredAmount:
-
                       0,
-
                     costVerificationStatus:
-
                       costRequired
-
                         ? "pending"
-
                         : "not_required",
-
                     costReferenceNumber:
-
                       "",
-
                     costNotes:
-
                       "",
-
-
-
                     residencyVerificationStatus:
-
                       "pending",
-
                     residencyVerificationMethod:
-
                       "profile_address",
-
                     privateAddressSnapshot:
-
                       cleanText(
-
                         assistanceData
-
                           .requesterAddress ||
-
                           "",
-
                         300,
-
                       ),
-
                     privateLatitude:
-
                       null,
-
                     privateLongitude:
-
                       null,
-
                     locationVerifiedAt:
-
                       null,
-
                     locationVerifiedBy:
-
                       "",
-
                     residencyNotes:
-
                       "",
-
-
-
                     videoVerificationRequired:
-
                       false,
-
                     videoVerificationStatus:
-
                       "not_required",
-
                     videoVerificationAt:
-
                       null,
-
                     videoVerificationNotes:
-
                       "",
-
-
-
                     siteVisitRequired:
-
                       false,
-
                     siteVisitStatus:
-
                       "not_required",
-
                     siteVisitAt:
-
                       null,
-
                     siteVisitBy:
-
                       "",
-
                     siteVisitNotes:
-
                       "",
-
-
-
                     riskFlags:
-
                       [],
-
                     internalNotes:
-
                       "",
-
-
-
                     finalDecision:
-
                       "pending",
-
                     finalDecisionReason:
-
                       "",
-
                     finalDecisionAt:
-
                       null,
-
                     finalDecisionBy:
-
                       "",
-
-
-
                     createdAt:
-
                       FieldValue
-
                         .serverTimestamp(),
-
                     createdBy:
-
                       adminUid,
-
                     updatedAt:
-
                       FieldValue
-
                         .serverTimestamp(),
-
                     updatedBy:
-
                       adminUid,
-
                   },
-
                 );
-
               }
-
-
-
               transaction.update(
-
                 assistanceRef,
-
                 {
-
                   status:
-
                     "under_review",
-
                   verificationStatus:
-
                     "under_review",
-
                   reviewedAt:
-
                     FieldValue
-
                       .serverTimestamp(),
-
                   reviewedBy:
-
                     adminUid,
-
                   updatedAt:
-
                     FieldValue
-
                       .serverTimestamp(),
-
                 },
-
               );
-
-
-
               return {
-
                 alreadyCreated,
-
               };
-
             },
-
           );
-
-
-
       response
-
         .status(200)
-
         .json({
-
           ok:
-
             true,
-
           requestId,
-
           status:
-
             "under_review",
-
           verificationStatus:
-
             "under_review",
-
           reviewRecord:
-
             result
-
               .alreadyCreated
-
               ? "existing"
-
               : "created",
-
         });
-
     } catch (error) {
-
       console.error(
-
         "Assistance Start Review failed:",
-
         error,
-
       );
-
-
-
       response
-
         .status(
-
           Number(
-
             error
-
               ?.statusCode,
-
           ) || 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "assistance_start_review_failed",
-
               100,
-
             ),
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to start the LGU Assistance Request review.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
 function normalizeReviewChoice(
   value,
   allowed,
@@ -5447,15 +3143,12 @@ function normalizeReviewChoice(
         /[\s-]+/g,
         "_",
       );
-
   return allowed.includes(
     normalized,
   )
     ? normalized
     : fallback;
 }
-
-
 function splitReviewList(
   value,
   maximumItems = 20,
@@ -5469,7 +3162,6 @@ function splitReviewList(
         ).split(
           /[\n,]/,
         );
-
   return Array.from(
     new Set(
       values
@@ -5486,8 +3178,6 @@ function splitReviewList(
     maximumItems,
   );
 }
-
-
 function parseOptionalCoordinate(
   value,
   minimum,
@@ -5500,10 +3190,8 @@ function parseOptionalCoordinate(
   ) {
     return null;
   }
-
   const parsed =
     Number(value);
-
   if (
     !Number.isFinite(parsed) ||
     parsed < minimum ||
@@ -5515,11 +3203,8 @@ function parseOptionalCoordinate(
       "The private verification coordinates are invalid.",
     );
   }
-
   return parsed;
 }
-
-
 function buildAssistanceReviewPayload({
   requestId,
   assistanceData,
@@ -5541,7 +3226,6 @@ function buildAssistanceReviewPayload({
         /[^a-z0-9_]/g,
         "",
       );
-
   const requesterUid =
     cleanText(
       assistanceData
@@ -5549,7 +3233,6 @@ function buildAssistanceReviewPayload({
         "",
       200,
     );
-
   if (
     !requesterUid ||
     !ASSISTANCE_REQUEST_CATEGORY_CONFIG[
@@ -5562,7 +3245,6 @@ function buildAssistanceReviewPayload({
       "This Assistance Request is missing required review data.",
     );
   }
-
   const documentConsistencyStatus =
     normalizeReviewChoice(
       reviewInput
@@ -5575,7 +3257,6 @@ function buildAssistanceReviewPayload({
       ],
       "pending",
     );
-
   const duplicateCheckStatus =
     normalizeReviewChoice(
       reviewInput
@@ -5588,7 +3269,6 @@ function buildAssistanceReviewPayload({
       ],
       "pending",
     );
-
   const beneficiaryCheckStatus =
     normalizeReviewChoice(
       reviewInput
@@ -5601,7 +3281,6 @@ function buildAssistanceReviewPayload({
       ],
       "pending",
     );
-
   const facilityRequired =
     [
       "medical_health",
@@ -5611,7 +3290,6 @@ function buildAssistanceReviewPayload({
     ].includes(
       category,
     );
-
   const facilityVerificationStatus =
     facilityRequired
       ? normalizeReviewChoice(
@@ -5626,7 +3304,6 @@ function buildAssistanceReviewPayload({
           "pending",
         )
       : "not_required";
-
   const facilityVerificationMethod =
     facilityRequired
       ? normalizeReviewChoice(
@@ -5642,14 +3319,12 @@ function buildAssistanceReviewPayload({
           "not_applicable",
         )
       : "not_applicable";
-
   const residentEstimatedAmount =
     Number(
       assistanceData
         ?.estimatedAmount ||
         0,
     );
-
   const safeResidentEstimatedAmount =
     Number.isFinite(
       residentEstimatedAmount,
@@ -5660,11 +3335,9 @@ function buildAssistanceReviewPayload({
           100000000,
         )
       : 0;
-
   const costRequired =
     safeResidentEstimatedAmount >
     0;
-
   const verifiedGrossCost =
     costRequired
       ? Number(
@@ -5673,7 +3346,6 @@ function buildAssistanceReviewPayload({
             0,
         )
       : 0;
-
   const confirmedExistingAssistanceAmount =
     costRequired
       ? Number(
@@ -5682,7 +3354,6 @@ function buildAssistanceReviewPayload({
             0,
         )
       : 0;
-
   if (
     !Number.isFinite(
       verifiedGrossCost,
@@ -5707,7 +3378,6 @@ function buildAssistanceReviewPayload({
       "The verified cost and existing assistance amounts are invalid.",
     );
   }
-
   const verifiedUncoveredAmount =
     costRequired
       ? Math.max(
@@ -5716,7 +3386,6 @@ function buildAssistanceReviewPayload({
             confirmedExistingAssistanceAmount,
         )
       : 0;
-
   const costVerificationStatus =
     costRequired
       ? normalizeReviewChoice(
@@ -5730,7 +3399,6 @@ function buildAssistanceReviewPayload({
           "pending",
         )
       : "not_required";
-
   const residencyVerificationStatus =
     normalizeReviewChoice(
       reviewInput
@@ -5744,7 +3412,6 @@ function buildAssistanceReviewPayload({
       ],
       "pending",
     );
-
   const residencyVerificationMethod =
     normalizeReviewChoice(
       reviewInput
@@ -5759,7 +3426,6 @@ function buildAssistanceReviewPayload({
       ],
       "profile_address",
     );
-
   const privateLatitude =
     parseOptionalCoordinate(
       reviewInput
@@ -5767,7 +3433,6 @@ function buildAssistanceReviewPayload({
       -90,
       90,
     );
-
   const privateLongitude =
     parseOptionalCoordinate(
       reviewInput
@@ -5775,7 +3440,6 @@ function buildAssistanceReviewPayload({
       -180,
       180,
     );
-
   if (
     (privateLatitude === null) !==
     (privateLongitude === null)
@@ -5786,12 +3450,10 @@ function buildAssistanceReviewPayload({
       "Enter both private latitude and longitude, or leave both blank.",
     );
   }
-
   const videoVerificationRequired =
     reviewInput
       ?.videoVerificationRequired ===
     true;
-
   const videoVerificationStatus =
     videoVerificationRequired
       ? normalizeReviewChoice(
@@ -5806,12 +3468,10 @@ function buildAssistanceReviewPayload({
           "pending",
         )
       : "not_required";
-
   const siteVisitRequired =
     reviewInput
       ?.siteVisitRequired ===
     true;
-
   const siteVisitStatus =
     siteVisitRequired
       ? normalizeReviewChoice(
@@ -5826,7 +3486,6 @@ function buildAssistanceReviewPayload({
           "pending",
         )
       : "not_required";
-
   const riskFlags =
     splitReviewList(
       reviewInput
@@ -5834,7 +3493,6 @@ function buildAssistanceReviewPayload({
       20,
       160,
     );
-
   const duplicateRequestIds =
     splitReviewList(
       reviewInput
@@ -5842,7 +3500,6 @@ function buildAssistanceReviewPayload({
       20,
       200,
     );
-
   const finalDecision =
     action ===
       "verify"
@@ -5854,7 +3511,6 @@ function buildAssistanceReviewPayload({
             "more_information"
           ? "needs_more_information"
           : "pending";
-
   const reviewStatus =
     finalDecision ===
       "verified"
@@ -5866,7 +3522,6 @@ function buildAssistanceReviewPayload({
             "needs_more_information"
           ? "needs_more_information"
           : "in_progress";
-
   const cleanDecisionReason =
     finalDecision ===
       "pending"
@@ -5875,7 +3530,6 @@ function buildAssistanceReviewPayload({
           decisionReason,
           2000,
         );
-
   if (
     finalDecision ===
       "needs_more_information" &&
@@ -5888,7 +3542,6 @@ function buildAssistanceReviewPayload({
       "Explain exactly what information or evidence the Resident must clarify or provide.",
     );
   }
-
   if (
     finalDecision ===
       "rejected" &&
@@ -5901,7 +3554,6 @@ function buildAssistanceReviewPayload({
       "Enter a clear evidence-based reason for rejecting the Assistance Request.",
     );
   }
-
   if (
     finalDecision ===
     "verified"
@@ -5939,7 +3591,6 @@ function buildAssistanceReviewPayload({
       ) &&
       riskFlags.length ===
         0;
-
     if (!ready) {
       throw makeHttpError(
         409,
@@ -5948,7 +3599,6 @@ function buildAssistanceReviewPayload({
       );
     }
   }
-
   if (
     facilityVerificationStatus ===
       "confirmed" &&
@@ -5969,7 +3619,6 @@ function buildAssistanceReviewPayload({
       "Enter the facility name and an independent verification method before confirming the facility.",
     );
   }
-
   if (
     costVerificationStatus ===
       "confirmed" &&
@@ -5982,7 +3631,6 @@ function buildAssistanceReviewPayload({
       "Enter a verified gross cost greater than zero before confirming the cost.",
     );
   }
-
   if (
     residencyVerificationStatus ===
       "verified" &&
@@ -5995,11 +3643,9 @@ function buildAssistanceReviewPayload({
       "Choose how the Resident's address or residency was verified.",
     );
   }
-
   const now =
     FieldValue
       .serverTimestamp();
-
   const preserveOrStamp = (
     existingValue,
     shouldStamp,
@@ -6008,14 +3654,11 @@ function buildAssistanceReviewPayload({
       ? existingValue ||
         now
       : null;
-
   return {
     requestId,
     requesterUid,
     category,
-
     reviewStatus,
-
     documentConsistencyStatus,
     documentConsistencyNotes:
       cleanText(
@@ -6023,7 +3666,6 @@ function buildAssistanceReviewPayload({
           ?.documentConsistencyNotes,
         2000,
       ),
-
     duplicateCheckStatus,
     duplicateRequestIds,
     duplicateCheckNotes:
@@ -6032,7 +3674,6 @@ function buildAssistanceReviewPayload({
           ?.duplicateCheckNotes,
         2000,
       ),
-
     beneficiaryCheckStatus,
     beneficiaryCheckNotes:
       cleanText(
@@ -6040,7 +3681,6 @@ function buildAssistanceReviewPayload({
           ?.beneficiaryCheckNotes,
         2000,
       ),
-
     facilityVerificationRequired:
       facilityRequired,
     facilityVerificationStatus,
@@ -6095,7 +3735,6 @@ function buildAssistanceReviewPayload({
           ?.facilityNotes,
         2000,
       ),
-
     costVerificationRequired:
       costRequired,
     residentEstimatedAmount:
@@ -6116,7 +3755,6 @@ function buildAssistanceReviewPayload({
           ?.costNotes,
         2000,
       ),
-
     residencyVerificationStatus,
     residencyVerificationMethod,
     privateAddressSnapshot:
@@ -6148,7 +3786,6 @@ function buildAssistanceReviewPayload({
           ?.residencyNotes,
         2000,
       ),
-
     videoVerificationRequired,
     videoVerificationStatus,
     videoVerificationAt:
@@ -6165,7 +3802,6 @@ function buildAssistanceReviewPayload({
           ?.videoVerificationNotes,
         2000,
       ),
-
     siteVisitRequired,
     siteVisitStatus,
     siteVisitAt:
@@ -6188,7 +3824,6 @@ function buildAssistanceReviewPayload({
           ?.siteVisitNotes,
         2000,
       ),
-
     riskFlags,
     internalNotes:
       cleanText(
@@ -6196,7 +3831,6 @@ function buildAssistanceReviewPayload({
           ?.internalNotes,
         3000,
       ),
-
     finalDecision,
     finalDecisionReason:
       cleanDecisionReason,
@@ -6210,7 +3844,6 @@ function buildAssistanceReviewPayload({
         "pending"
         ? ""
         : adminUid,
-
     createdAt:
       existingReview
         ?.createdAt ||
@@ -6228,16 +3861,10 @@ function buildAssistanceReviewPayload({
       adminUid,
   };
 }
-
-
 app.post(
-
   "/api/admin/assistance/requests/:requestId/review",
-
   requireFirebaseUser,
-
   requireOperationalAdmin,
-
   async (
     request,
     response,
@@ -6247,7 +3874,6 @@ app.post(
         request
           .firebaseUser
           .uid;
-
       const requestId =
         cleanText(
           request.params
@@ -6255,7 +3881,6 @@ app.post(
             "",
           120,
         );
-
       if (
         !requestId ||
         !/^[A-Za-z0-9_-]{10,120}$/.test(
@@ -6268,7 +3893,6 @@ app.post(
           "The Request Assistance ID is invalid.",
         );
       }
-
       const action =
         normalizeReviewChoice(
           request.body
@@ -6281,7 +3905,6 @@ app.post(
           ],
           "",
         );
-
       if (!action) {
         throw makeHttpError(
           400,
@@ -6289,7 +3912,6 @@ app.post(
           "Choose a valid LGU review action.",
         );
       }
-
       const reviewInput =
         request.body
           ?.review &&
@@ -6299,7 +3921,6 @@ app.post(
           ? request.body
               .review
           : {};
-
       const decisionReason =
         cleanText(
           request.body
@@ -6307,7 +3928,6 @@ app.post(
             "",
           2000,
         );
-
       const adminNote =
         cleanText(
           request.body
@@ -6315,7 +3935,6 @@ app.post(
             "",
           2000,
         );
-
       const assistanceRef =
         db
           .collection(
@@ -6324,7 +3943,6 @@ app.post(
           .doc(
             requestId,
           );
-
       const reviewRef =
         db
           .collection(
@@ -6333,7 +3951,6 @@ app.post(
           .doc(
             requestId,
           );
-
       const result =
         await db
           .runTransaction(
@@ -6352,7 +3969,6 @@ app.post(
                     reviewRef,
                   ),
                 ]);
-
               if (
                 !assistanceSnapshot
                   .exists
@@ -6363,7 +3979,6 @@ app.post(
                   "The Assistance Request was not found.",
                 );
               }
-
               if (
                 !reviewSnapshot
                   .exists
@@ -6374,17 +3989,14 @@ app.post(
                   "Start Review before saving verification progress.",
                 );
               }
-
               const assistanceData =
                 assistanceSnapshot
                   .data() ||
                 {};
-
               const existingReview =
                 reviewSnapshot
                   .data() ||
                 {};
-
               const existingFinalDecision =
                 cleanText(
                   existingReview
@@ -6392,7 +4004,6 @@ app.post(
                     "pending",
                   60,
                 ).toLowerCase();
-
               if (
                 ![
                   "pending",
@@ -6407,7 +4018,6 @@ app.post(
                   "This Assistance Request review is already finalized.",
                 );
               }
-
               const sameRequest =
                 cleanText(
                   existingReview
@@ -6440,7 +4050,6 @@ app.post(
                       "",
                     80,
                   );
-
               if (
                 !sameRequest
               ) {
@@ -6450,7 +4059,6 @@ app.post(
                   "The protected review record does not match this Assistance Request.",
                 );
               }
-
               const reviewPayload =
                 buildAssistanceReviewPayload({
                   requestId,
@@ -6461,7 +4069,6 @@ app.post(
                   decisionReason,
                   adminUid,
                 });
-
               transaction.set(
                 reviewRef,
                 reviewPayload,
@@ -6470,7 +4077,6 @@ app.post(
                     false,
                 },
               );
-
               const requestUpdate = {
                 reviewedAt:
                   FieldValue
@@ -6481,7 +4087,6 @@ app.post(
                   FieldValue
                     .serverTimestamp(),
               };
-
               if (
                 action ===
                 "save_progress"
@@ -6491,7 +4096,6 @@ app.post(
                 requestUpdate.verificationStatus =
                   "under_review";
               }
-
               if (
                 action ===
                 "more_information"
@@ -6517,7 +4121,6 @@ app.post(
                       2000,
                     );
               }
-
               if (
                 action ===
                 "verify"
@@ -6542,7 +4145,6 @@ app.post(
                 requestUpdate.rejectionReason =
                   "";
               }
-
               if (
                 action ===
                 "reject"
@@ -6571,18 +4173,15 @@ app.post(
                       1000,
                     );
               }
-
               transaction.update(
                 assistanceRef,
                 requestUpdate,
               );
-
               return {
                 reviewPayload,
               };
             },
           );
-
       response
         .status(200)
         .json({
@@ -6620,7 +4219,6 @@ app.post(
         "Assistance Review action failed:",
         error,
       );
-
       response
         .status(
           Number(
@@ -6644,18 +4242,11 @@ app.post(
         });
     }
   },
-
 );
-
-
 app.post(
-
   "/api/admin/assistance/requests/:requestId/operation",
-
   requireFirebaseUser,
-
   requireOperationalAdmin,
-
   async (
     request,
     response,
@@ -6665,7 +4256,6 @@ app.post(
         request
           .firebaseUser
           .uid;
-
       const requestId =
         cleanText(
           request.params
@@ -6673,7 +4263,6 @@ app.post(
             "",
           120,
         );
-
       if (
         !requestId ||
         !/^[A-Za-z0-9_-]{10,120}$/.test(
@@ -6686,7 +4275,6 @@ app.post(
           "The Request Assistance ID is invalid.",
         );
       }
-
       const action =
         cleanText(
           request.body
@@ -6694,7 +4282,6 @@ app.post(
             "",
           60,
         ).toLowerCase();
-
       if (
         ![
           "resource_assessment",
@@ -6709,7 +4296,6 @@ app.post(
           "Choose a valid Assistance Request operation.",
         );
       }
-
       const assistanceRef =
         db
           .collection(
@@ -6718,7 +4304,6 @@ app.post(
           .doc(
             requestId,
           );
-
       const reviewRef =
         db
           .collection(
@@ -6727,7 +4312,6 @@ app.post(
           .doc(
             requestId,
           );
-
       const result =
         await db
           .runTransaction(
@@ -6746,7 +4330,6 @@ app.post(
                     reviewRef,
                   ),
                 ]);
-
               if (
                 !assistanceSnapshot
                   .exists
@@ -6757,7 +4340,6 @@ app.post(
                   "The Assistance Request was not found.",
                 );
               }
-
               if (
                 !reviewSnapshot
                   .exists
@@ -6768,17 +4350,14 @@ app.post(
                   "The protected LGU verification review was not found.",
                 );
               }
-
               const assistanceData =
                 assistanceSnapshot
                   .data() ||
                 {};
-
               const reviewData =
                 reviewSnapshot
                   .data() ||
                 {};
-
               const verificationStatus =
                 cleanText(
                   assistanceData
@@ -6786,7 +4365,6 @@ app.post(
                     "",
                   60,
                 ).toLowerCase();
-
               const finalDecision =
                 cleanText(
                   reviewData
@@ -6794,7 +4372,6 @@ app.post(
                     "",
                   60,
                 ).toLowerCase();
-
               if (
                 verificationStatus !==
                   "verified" ||
@@ -6807,7 +4384,6 @@ app.post(
                   "Complete final LGU verification before recording post-verification assistance actions.",
                 );
               }
-
               const commonUpdate = {
                 reviewedAt:
                   FieldValue
@@ -6818,7 +4394,6 @@ app.post(
                   FieldValue
                     .serverTimestamp(),
               };
-
               if (
                 action ===
                 "resource_assessment"
@@ -6830,7 +4405,6 @@ app.post(
                       "",
                     60,
                   ).toLowerCase();
-
                 if (
                   ![
                     "internal_support",
@@ -6846,14 +4420,12 @@ app.post(
                     "Select how the verified need will be supported.",
                   );
                 }
-
                 const requestedAmount =
                   Number(
                     request.body
                       ?.remainingAmount ??
                       0,
                   );
-
                 if (
                   !Number.isFinite(
                     requestedAmount,
@@ -6866,14 +4438,12 @@ app.post(
                     "Enter a valid verified remaining unmet amount.",
                   );
                 }
-
                 const verifiedCap =
                   Number(
                     reviewData
                       .verifiedUncoveredAmount ||
                       0,
                   );
-
                 if (
                   supportDecision ===
                     "donation_support" &&
@@ -6886,7 +4456,6 @@ app.post(
                     `Donation support cannot exceed the LGU-verified uncovered amount of PHP ${verifiedCap.toLocaleString("en-PH")}.`,
                   );
                 }
-
                 if (
                   supportDecision ===
                     "donation_support" &&
@@ -6898,13 +4467,11 @@ app.post(
                     "For a monetary shortage, enter the verified remaining unmet amount before opening Donation Support.",
                   );
                 }
-
                 const remainingAmount =
                   supportDecision ===
                     "donation_support"
                     ? requestedAmount
                     : 0;
-
                 transaction.update(
                   assistanceRef,
                   {
@@ -6926,13 +4493,11 @@ app.post(
                       ),
                   },
                 );
-
                 return {
                   supportDecision,
                   remainingAmount,
                 };
               }
-
               if (
                 action ===
                 "assistance_provided"
@@ -6946,7 +4511,6 @@ app.post(
                       "",
                     60,
                   ).toLowerCase();
-
                 if (
                   ![
                     "internal_support",
@@ -6961,7 +4525,6 @@ app.post(
                     "Mark Assistance Provided only when LGU/partner support is available or no additional support is required.",
                   );
                 }
-
                 transaction.update(
                   assistanceRef,
                   {
@@ -6985,7 +4548,6 @@ app.post(
                       ),
                   },
                 );
-
                 return {
                   supportDecision:
                     requestedDecision,
@@ -6993,7 +4555,6 @@ app.post(
                     0,
                 };
               }
-
               if (
                 action ===
                 "save_location"
@@ -7005,7 +4566,6 @@ app.post(
                       "",
                     80,
                   ).toLowerCase();
-
                 const allowedLocationTypes = [
                   "barangay_hall",
                   "lgu_office",
@@ -7014,7 +4574,6 @@ app.post(
                   "vet_clinic",
                   "authorized_public_point",
                 ];
-
                 const locationName =
                   cleanText(
                     request.body
@@ -7022,7 +4581,6 @@ app.post(
                       "",
                     160,
                   );
-
                 const locationAddress =
                   cleanText(
                     request.body
@@ -7030,7 +4588,6 @@ app.post(
                       "",
                     300,
                   );
-
                 if (
                   !allowedLocationTypes
                     .includes(
@@ -7047,7 +4604,6 @@ app.post(
                     "Select a valid public location type and enter the official location name and address.",
                   );
                 }
-
                 transaction.update(
                   assistanceRef,
                   {
@@ -7081,7 +4637,6 @@ app.post(
                       ),
                   },
                 );
-
                 return {
                   assignedLocationType:
                     locationType,
@@ -7091,7 +4646,6 @@ app.post(
                     locationAddress,
                 };
               }
-
               transaction.update(
                 assistanceRef,
                 {
@@ -7119,7 +4673,6 @@ app.post(
                     ),
                 },
               );
-
               return {
                 assignedLocationType:
                   "",
@@ -7130,7 +4683,6 @@ app.post(
               };
             },
           );
-
       response
         .status(200)
         .json({
@@ -7145,7 +4697,6 @@ app.post(
         "Assistance post-verification operation failed:",
         error,
       );
-
       response
         .status(
           Number(
@@ -7169,17 +4720,11 @@ app.post(
         });
     }
   },
-
 );
-
-
 app.post(
   "/api/assistance/public-photo/upload",
-
   requireFirebaseUser,
-
   requireVerifiedResident,
-
   express.raw({
     type: [
       "image/jpeg",
@@ -7190,13 +4735,10 @@ app.post(
     ],
     limit: ASSISTANCE_PUBLIC_PHOTO_UPLOAD_LIMIT,
   }),
-
   async (request, response) => {
     let uploadedCloudinaryAsset = null;
-
     try {
       const uid = request.firebaseUser.uid;
-
       if (
         !Buffer.isBuffer(request.body) ||
         request.body.length === 0
@@ -7207,7 +4749,6 @@ app.post(
           "Choose a JPG, PNG, or WebP public campaign photo before uploading.",
         );
       }
-
       if (
         request.body.length >
         ASSISTANCE_PUBLIC_PHOTO_MAX_BYTES
@@ -7218,12 +4759,10 @@ app.post(
           "Public campaign photo must be 10 MB or smaller.",
         );
       }
-
       const detected =
         detectAssistanceImage(
           request.body,
         );
-
       if (!detected) {
         throw makeHttpError(
           415,
@@ -7231,7 +4770,6 @@ app.post(
           "Only valid JPG, PNG, and WebP images are accepted as a public campaign photo.",
         );
       }
-
       const stagedSnapshot =
         await db
           .collection(
@@ -7251,7 +4789,6 @@ app.post(
             ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED,
           )
           .get();
-
       if (
         stagedSnapshot.size >=
         ASSISTANCE_PUBLIC_PHOTO_MAX_STAGED
@@ -7262,7 +4799,6 @@ app.post(
           "You already have unfinished public photo uploads. Finish or remove them before uploading another one.",
         );
       }
-
       const fileName =
         sanitizeFileName(
           request.headers[
@@ -7270,19 +4806,16 @@ app.post(
           ] ||
             `public-campaign-photo.${detected.extension}`,
         );
-
       const contentSha256 =
         crypto
           .createHash("sha256")
           .update(request.body)
           .digest("hex");
-
       uploadedCloudinaryAsset =
         await uploadAssistancePublicPhotoToCloudinary({
           buffer: request.body,
           uid,
         });
-
       const assetId =
         `publicphoto_${
           typeof crypto.randomUUID ===
@@ -7294,14 +4827,12 @@ app.post(
                 .randomBytes(18)
                 .toString("hex")
         }`;
-
       const publicUrl =
         cleanText(
           uploadedCloudinaryAsset.secure_url ||
             "",
           1000,
         );
-
       if (
         !publicUrl.startsWith(
           "https://",
@@ -7313,7 +4844,6 @@ app.post(
           "The public campaign photo did not return a secure public URL.",
         );
       }
-
       await db
         .collection(
           "assistancePublicPhotoAssets",
@@ -7372,7 +4902,6 @@ app.post(
           attachedAt: null,
           deletedAt: null,
         });
-
       response
         .status(201)
         .json({
@@ -7399,12 +4928,10 @@ app.post(
           );
         }
       }
-
       console.error(
         "Assistance public campaign photo upload failed:",
         error,
       );
-
       response
         .status(
           Number(
@@ -7428,27 +4955,20 @@ app.post(
     }
   },
 );
-
-
 app.delete(
   "/api/assistance/public-photo/:assetId",
-
   requireFirebaseUser,
-
   requireVerifiedResident,
-
   async (request, response) => {
     try {
       const uid =
         request.firebaseUser.uid;
-
       const assetId =
         cleanText(
           request.params?.assetId ||
             "",
           200,
         );
-
       if (!assetId) {
         throw makeHttpError(
           400,
@@ -7456,17 +4976,14 @@ app.delete(
           "A public campaign photo asset ID is required.",
         );
       }
-
       const photoRef =
         db
           .collection(
             "assistancePublicPhotoAssets",
           )
           .doc(assetId);
-
       const photoSnapshot =
         await photoRef.get();
-
       if (!photoSnapshot.exists) {
         response
           .status(404)
@@ -7479,11 +4996,9 @@ app.delete(
           });
         return;
       }
-
       const photo =
         photoSnapshot.data() ||
         {};
-
       if (
         photo.ownerUid !== uid
       ) {
@@ -7493,7 +5008,6 @@ app.delete(
           "You are not authorized to remove this public campaign photo.",
         );
       }
-
       if (
         photo.status !==
         "staged"
@@ -7504,13 +5018,10 @@ app.delete(
           "A public campaign photo already attached to a Request Assistance record cannot be deleted from the staging endpoint.",
         );
       }
-
       await destroyAssistancePublicPhotoFromCloudinary(
         photo.cloudinaryPublicId,
       );
-
       await photoRef.delete();
-
       response.json({
         ok: true,
         assetId,
@@ -7520,7 +5031,6 @@ app.delete(
         "Assistance public campaign photo delete failed:",
         error,
       );
-
       response
         .status(
           Number(
@@ -7544,750 +5054,323 @@ app.delete(
     }
   },
 );
-
-
 app.post(
-
   "/api/assistance/evidence/upload",
-
-
-
   requireFirebaseUser,
-
-
-
   requireVerifiedResident,
-
-
-
   express.raw({
-
     type: [
-
       "image/jpeg",
-
       "image/jpg",
-
       "image/png",
-
       "image/webp",
-
       "application/octet-stream",
-
     ],
-
-
-
     limit:
-
       ASSISTANCE_EVIDENCE_UPLOAD_LIMIT,
-
   }),
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     let uploadedCloudinaryAsset =
-
       null;
-
-
-
     try {
-
       const uid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       if (
-
         !Buffer.isBuffer(
-
           request.body,
-
         ) ||
-
         request.body.length ===
-
           0
-
       ) {
-
         throw makeHttpError(
-
           400,
-
           "evidence_file_required",
-
           "Choose a JPG, PNG, or WebP image before uploading.",
-
         );
-
       }
-
-
-
       if (
-
         request.body.length >
-
         ASSISTANCE_EVIDENCE_MAX_BYTES
-
       ) {
-
         throw makeHttpError(
-
           413,
-
           "evidence_upload_too_large",
-
           "Assistance evidence must be 10 MB or smaller.",
-
         );
-
       }
-
-
-
       const detected =
-
         detectAssistanceImage(
-
           request.body,
-
         );
-
-
-
       if (!detected) {
-
         throw makeHttpError(
-
           415,
-
           "unsupported_evidence_file",
-
           "Only valid JPG, PNG, and WebP images are accepted for assistance evidence.",
-
         );
-
       }
-
-
-
       const documentType =
-
         cleanText(
-
           request.headers[
-
             "x-document-type"
-
           ] || "",
-
           100,
-
         )
-
           .toLowerCase()
-
           .replace(
-
             /[^a-z0-9_]/g,
-
             "",
-
           );
-
-
-
       if (
-
         !ASSISTANCE_EVIDENCE_DOCUMENT_TYPES.has(
-
           documentType,
-
         )
-
       ) {
-
         throw makeHttpError(
-
           400,
-
           "invalid_document_type",
-
           "The supporting document type is not valid for Request Assistance.",
-
         );
-
       }
-
-
-
       const stagedSnapshot =
-
         await db
-
           .collection(
-
             "assistanceEvidenceAssets",
-
           )
-
           .where(
-
             "ownerUid",
-
             "==",
-
             uid,
-
           )
-
           .where(
-
             "status",
-
             "==",
-
             "staged",
-
           )
-
           .limit(
-
             ASSISTANCE_EVIDENCE_MAX_STAGED,
-
           )
-
           .get();
-
-
-
       const stagedCount =
-
         stagedSnapshot.size;
-
-
-
       if (
-
         stagedCount >=
-
         ASSISTANCE_EVIDENCE_MAX_STAGED
-
       ) {
-
         throw makeHttpError(
-
           429,
-
           "too_many_staged_evidence_files",
-
           "You already have several unfinished assistance evidence uploads. Finish or remove them before uploading more.",
-
         );
-
       }
-
-
-
       const fileName =
-
         sanitizeFileName(
-
           request.headers[
-
             "x-file-name"
-
           ] ||
-
             `evidence.${detected.extension}`,
-
         );
-
-
-
       const contentSha256 =
-
         crypto
-
           .createHash(
-
             "sha256",
-
           )
-
           .update(
-
             request.body,
-
           )
-
           .digest(
-
             "hex",
-
           );
-
-
-
       uploadedCloudinaryAsset =
-
         await uploadAssistanceEvidenceToCloudinary(
-
           {
-
             buffer:
-
               request.body,
-
-
-
             mimeType:
-
               detected.mimeType,
-
-
-
             extension:
-
               detected.extension,
-
-
-
             uid,
-
           },
-
         );
-
-
-
       const evidenceId =
-
         `evidence_${
-
           typeof crypto.randomUUID ===
-
           "function"
-
             ? crypto
-
                 .randomUUID()
-
                 .replace(
-
                   /-/g,
-
                   "",
-
                 )
-
             : crypto
-
                 .randomBytes(
-
                   18,
-
                 )
-
                 .toString(
-
                   "hex",
-
                 )
-
         }`;
-
-
-
       await db
-
         .collection(
-
           "assistanceEvidenceAssets",
-
         )
-
         .doc(
-
           evidenceId,
-
         )
-
         .set({
-
           evidenceId,
-
-
-
           ownerUid:
-
             uid,
-
-
-
           requestId:
-
             "",
-
-
-
           status:
-
             "staged",
-
-
-
           documentType,
-
-
-
           originalFileName:
-
             fileName,
-
-
-
           mimeType:
-
             detected.mimeType,
-
-
-
           bytes:
-
             Number(
-
               uploadedCloudinaryAsset
-
                 .bytes ||
-
                 request.body
-
                   .length,
-
             ),
-
-
-
           contentSha256,
-
-
-
           cloudinaryAssetId:
-
             cleanText(
-
               uploadedCloudinaryAsset
-
                 .asset_id,
-
               300,
-
             ),
-
-
-
           cloudinaryPublicId:
-
             cleanText(
-
               uploadedCloudinaryAsset
-
                 .public_id,
-
               500,
-
             ),
-
-
-
           cloudinaryVersion:
-
             Number(
-
               uploadedCloudinaryAsset
-
                 .version ||
-
                 0,
-
             ),
-
-
-
           cloudinaryFormat:
-
             cleanText(
-
               uploadedCloudinaryAsset
-
                 .format ||
-
                 detected
-
                   .extension,
-
               30,
-
             ),
-
-
-
           cloudinaryResourceType:
-
             "image",
-
-
-
           cloudinaryDeliveryType:
-
             "authenticated",
-
-
-
           width:
-
             numberOrNull(
-
               uploadedCloudinaryAsset
-
                 .width,
-
             ),
-
-
-
           height:
-
             numberOrNull(
-
               uploadedCloudinaryAsset
-
                 .height,
-
             ),
-
-
-
           createdAt:
-
             FieldValue
-
               .serverTimestamp(),
-
-
-
           updatedAt:
-
             FieldValue
-
               .serverTimestamp(),
-
-
-
           attachedAt:
-
             null,
-
-
-
           deletedAt:
-
             null,
-
         });
-
-
-
       response
-
         .status(
-
           201,
-
         )
-
         .json({
-
           ok:
-
             true,
-
-
-
           evidence: {
-
             evidenceId,
-
-
-
             documentType,
-
-
-
             fileName,
-
-
-
             mimeType:
-
               detected
-
                 .mimeType,
-
-
-
             bytes:
-
               Number(
-
                 uploadedCloudinaryAsset
-
                   .bytes ||
-
                   request.body
-
                     .length,
-
               ),
-
-
-
             status:
-
               "staged",
-
           },
-
         });
-
     } catch (error) {
-
       console.error(
-
         "Assistance evidence upload failed:",
-
         error,
-
       );
-
-
-
       if (
-
         uploadedCloudinaryAsset
-
           ?.public_id
-
       ) {
-
         try {
-
           await destroyAssistanceEvidenceFromCloudinary(
-
             uploadedCloudinaryAsset
-
               .public_id,
-
           );
-
         } catch (
-
           cleanupError
-
         ) {
-
           console.error(
-
             "Cloudinary rollback failed after evidence metadata error:",
-
             cleanupError,
-
           );
-
         }
-
       }
-
-
-
       response
-
         .status(
-
           Number(
-
             error
-
               ?.statusCode,
-
           ) || 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "assistance_evidence_upload_failed",
-
               100,
-
             ),
-
-
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to securely upload the assistance evidence.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
-
-
 app.post(
   "/api/assistance/requests",
-
   requireFirebaseUser,
-
   requireVerifiedResident,
-
   async (
     request,
     response,
@@ -8295,18 +5378,15 @@ app.post(
     try {
       const uid =
         request.firebaseUser.uid;
-
       const profile =
         request.volunServeProfile ||
         {};
-
       const requestId =
         cleanText(
           request.body?.requestId ||
             "",
           120,
         );
-
       if (
         !requestId ||
         !/^[A-Za-z0-9_-]{10,120}$/.test(
@@ -8319,7 +5399,6 @@ app.post(
           "The Request Assistance ID is invalid.",
         );
       }
-
       const assistanceRef =
         db
           .collection(
@@ -8328,17 +5407,14 @@ app.post(
           .doc(
             requestId,
           );
-
       const existingSnapshot =
         await assistanceRef.get();
-
       if (
         existingSnapshot.exists
       ) {
         const existingData =
           existingSnapshot.data() ||
           {};
-
         if (
           existingData.requesterUid !==
           uid
@@ -8349,7 +5425,6 @@ app.post(
             "This Request Assistance ID is already in use.",
           );
         }
-
         response.json({
           ok: true,
           requestId,
@@ -8363,10 +5438,8 @@ app.post(
           alreadyCreated:
             true,
         });
-
         return;
       }
-
       const category =
         cleanText(
           request.body?.category ||
@@ -8378,12 +5451,10 @@ app.post(
             /[^a-z0-9_]/g,
             "",
           );
-
       const categoryConfig =
         ASSISTANCE_REQUEST_CATEGORY_CONFIG[
           category
         ];
-
       if (!categoryConfig) {
         throw makeHttpError(
           400,
@@ -8391,7 +5462,6 @@ app.post(
           "Choose a valid Request Assistance category.",
         );
       }
-
       const beneficiaryType =
         cleanText(
           request.body
@@ -8404,7 +5474,6 @@ app.post(
             /[^a-z_]/g,
             "",
           );
-
       if (
         beneficiaryType !==
           "self" &&
@@ -8417,7 +5486,6 @@ app.post(
           "Choose who needs assistance.",
         );
       }
-
       const requesterName =
         cleanText(
           profile?.fullName ||
@@ -8427,7 +5495,6 @@ app.post(
           160,
         ) ||
         "Resident";
-
       const requesterEmail =
         cleanText(
           profile?.email ||
@@ -8436,7 +5503,6 @@ app.post(
             "",
           160,
         );
-
       const requesterBarangay =
         cleanText(
           profile?.barangay ||
@@ -8445,7 +5511,6 @@ app.post(
             "",
           120,
         );
-
       if (!requesterBarangay) {
         throw makeHttpError(
           400,
@@ -8453,14 +5518,12 @@ app.post(
           "Your VolunServe account has no barangay information. Update your account before submitting a Request Assistance.",
         );
       }
-
       const requesterAddress =
         cleanText(
           profile?.address ||
             "",
           240,
         );
-
       const contactNumber =
         cleanText(
           profile?.phoneNumber ||
@@ -8468,7 +5531,6 @@ app.post(
             "",
           30,
         );
-
       if (
         contactNumber.length < 8
       ) {
@@ -8478,7 +5540,6 @@ app.post(
           "Add a valid contact number to your VolunServe account before submitting a Request Assistance.",
         );
       }
-
       const beneficiaryName =
         beneficiaryType ===
         "self"
@@ -8489,7 +5550,6 @@ app.post(
                 "",
               160,
             );
-
       const relationshipToBeneficiary =
         beneficiaryType ===
         "self"
@@ -8500,7 +5560,6 @@ app.post(
                 "",
               120,
             );
-
       if (
         beneficiaryName.length < 1
       ) {
@@ -8510,7 +5569,6 @@ app.post(
           "Enter the beneficiary name.",
         );
       }
-
       if (
         relationshipToBeneficiary
           .length < 1
@@ -8521,14 +5579,12 @@ app.post(
           "Enter your relationship to the beneficiary.",
         );
       }
-
       const title =
         cleanText(
           request.body?.title ||
             "",
           160,
         );
-
       if (title.length < 5) {
         throw makeHttpError(
           400,
@@ -8536,7 +5592,6 @@ app.post(
           "Enter a clear request title using at least 5 characters.",
         );
       }
-
       const description =
         cleanText(
           request.body
@@ -8544,7 +5599,6 @@ app.post(
             "",
           2000,
         );
-
       if (
         description.length < 20
       ) {
@@ -8554,14 +5608,12 @@ app.post(
           "Describe the current need using at least 20 characters.",
         );
       }
-
       const estimatedAmount =
         Number(
           request.body
             ?.estimatedAmount ??
             0,
         );
-
       if (
         !Number.isFinite(
           estimatedAmount,
@@ -8576,7 +5628,6 @@ app.post(
           "Enter a valid estimated amount.",
         );
       }
-
       if (
         categoryConfig
           .requiresPositiveAmount &&
@@ -8588,7 +5639,6 @@ app.post(
           "Enter the estimated amount needed for this medical request.",
         );
       }
-
       const currentSituation =
         cleanText(
           request.body
@@ -8596,7 +5646,6 @@ app.post(
             "",
           240,
         );
-
       if (
         currentSituation.length <
         2
@@ -8607,9 +5656,7 @@ app.post(
           "Select or describe the current situation.",
         );
       }
-
       const preferredAssistanceTypes = ["monetary"];
-
       const publicCampaignPhotoAssetId =
         cleanText(
           request.body
@@ -8617,12 +5664,10 @@ app.post(
             "",
           200,
         );
-
       const publicCampaignPhotoConsent =
         request.body
           ?.publicCampaignPhotoConsent ===
         true;
-
       if (
         !publicCampaignPhotoAssetId
       ) {
@@ -8632,7 +5677,6 @@ app.post(
           "Upload the required public campaign photo before submitting the Request Assistance.",
         );
       }
-
       if (
         !publicCampaignPhotoConsent
       ) {
@@ -8642,7 +5686,6 @@ app.post(
           "Confirm public photo consent before submitting the Request Assistance.",
         );
       }
-
       const publicPhotoRef =
         db
           .collection(
@@ -8651,10 +5694,8 @@ app.post(
           .doc(
             publicCampaignPhotoAssetId,
           );
-
       const publicPhotoSnapshot =
         await publicPhotoRef.get();
-
       if (
         !publicPhotoSnapshot.exists
       ) {
@@ -8664,11 +5705,9 @@ app.post(
           "The required public campaign photo could not be found.",
         );
       }
-
       const publicPhotoData =
         publicPhotoSnapshot.data() ||
         {};
-
       if (
         publicPhotoData.ownerUid !==
         uid
@@ -8679,7 +5718,6 @@ app.post(
           "The public campaign photo belongs to another account.",
         );
       }
-
       if (
         publicPhotoData.status !==
         "staged"
@@ -8690,14 +5728,12 @@ app.post(
           "The public campaign photo is no longer available for this request.",
         );
       }
-
       const publicCampaignPhotoUrl =
         cleanText(
           publicPhotoData.publicUrl ||
             "",
           1000,
         );
-
       if (
         !publicCampaignPhotoUrl.startsWith(
           "https://",
@@ -8709,7 +5745,6 @@ app.post(
           "The public campaign photo is missing a valid secure URL.",
         );
       }
-
       const evidenceIds =
         Array.from(
           new Set(
@@ -8732,7 +5767,6 @@ app.post(
               : [],
           ),
         );
-
       if (
         evidenceIds.length < 1 ||
         evidenceIds.length > 8
@@ -8743,7 +5777,6 @@ app.post(
           "Attach between 1 and 8 supporting evidence files.",
         );
       }
-
       const evidenceRefs =
         evidenceIds.map(
           (evidenceId) =>
@@ -8755,7 +5788,6 @@ app.post(
                 evidenceId,
               ),
         );
-
       const evidenceSnapshots =
         await Promise.all(
           evidenceRefs.map(
@@ -8763,11 +5795,9 @@ app.post(
               ref.get(),
           ),
         );
-
       const documents = [];
       const submittedDocumentTypes =
         new Set();
-
       for (
         let index = 0;
         index <
@@ -8778,13 +5808,11 @@ app.post(
           evidenceSnapshots[
             index
           ];
-
         const data =
           snapshot.exists
             ? snapshot.data() ||
               {}
             : null;
-
         if (!data) {
           throw makeHttpError(
             404,
@@ -8792,7 +5820,6 @@ app.post(
             "One of the supporting evidence files could not be found.",
           );
         }
-
         if (
           data.ownerUid !==
           uid
@@ -8803,7 +5830,6 @@ app.post(
             "One of the supporting evidence files belongs to another account.",
           );
         }
-
         if (
           data.status !==
           "staged"
@@ -8814,7 +5840,6 @@ app.post(
             "One of the supporting evidence files is no longer available for this request.",
           );
         }
-
         const documentType =
           cleanText(
             data.documentType ||
@@ -8826,7 +5851,6 @@ app.post(
               /[^a-z0-9_]/g,
               "",
             );
-
         if (
           !ASSISTANCE_EVIDENCE_DOCUMENT_TYPES
             .has(
@@ -8844,36 +5868,29 @@ app.post(
             "One of the supporting evidence files does not match the selected assistance category.",
           );
         }
-
         submittedDocumentTypes
           .add(
             documentType,
           );
-
         const fileName =
           sanitizeFileName(
             data.originalFileName ||
               "Supporting image",
           );
-
         documents.push({
           documentType,
-
           label:
             ASSISTANCE_EVIDENCE_LABELS[
               documentType
             ] ||
             "Supporting Evidence",
-
           url:
             `${ASSISTANCE_PUBLIC_BACKEND_URL}/api/assistance/evidence/${encodeURIComponent(
               evidenceIds[index],
             )}/access`,
-
           fileName,
         });
       }
-
       const missingRequiredType =
         categoryConfig
           .requiredDocumentTypes
@@ -8884,7 +5901,6 @@ app.post(
                   documentType,
                 ),
           );
-
       if (
         missingRequiredType
       ) {
@@ -8899,135 +5915,89 @@ app.post(
           }.`,
         );
       }
-
       const assistanceData = {
         requestId,
-
         requesterUid:
           uid,
-
         requesterName,
-
         requesterEmail,
-
         requesterBarangay,
-
         requesterAddress,
-
         contactNumber,
-
         beneficiaryType,
-
         beneficiaryName,
-
         relationshipToBeneficiary,
-
         requestGroup:
           categoryConfig
             .requestGroup,
-
         category,
-
         categoryLabel:
           categoryConfig.label,
-
         title,
-
         description,
-
         estimatedAmount,
-
         currentSituation,
-
         preferredAssistanceTypes,
-
         documents,
-
         publicCampaignPhotoUrl,
-
         publicCampaignPhotoConsent:
           true,
-
         publicCampaignPhotoFileName:
           sanitizeFileName(
             publicPhotoData.originalFileName ||
               "Public Campaign Photo",
           ),
-
         publicCampaignPhotoSetAt:
           FieldValue.serverTimestamp(),
-
         status:
           "pending",
-
         verificationStatus:
           "pending_review",
-
         supportDecision:
           "pending",
-
         remainingAmount:
           0,
-
         assignedLocationType:
           "",
-
         assignedLocationName:
           "",
-
         assignedLocationAddress:
           "",
-
         assignedLocationNotes:
           "",
-
         assignedLocationSetBy:
           "",
-
         assignedLocationSetAt:
           null,
-
         donationCampaignId:
           "",
-
         adminNote:
           "",
-
         reviewedAt:
           null,
-
         reviewedBy:
           "",
-
         verifiedAt:
           null,
-
         verifiedBy:
           "",
-
         rejectedAt:
           null,
-
         rejectionReason:
           "",
-
         createdAt:
           FieldValue
             .serverTimestamp(),
-
         updatedAt:
           FieldValue
             .serverTimestamp(),
       };
-
       const batch =
         db.batch();
-
       batch.set(
         assistanceRef,
         assistanceData,
       );
-
       batch.set(
         publicPhotoRef,
         {
@@ -9046,7 +6016,6 @@ app.post(
             true,
         },
       );
-
       evidenceRefs.forEach(
         (ref) => {
           batch.set(
@@ -9054,13 +6023,10 @@ app.post(
             {
               status:
                 "attached",
-
               requestId,
-
               attachedAt:
                 FieldValue
                   .serverTimestamp(),
-
               updatedAt:
                 FieldValue
                   .serverTimestamp(),
@@ -9072,22 +6038,16 @@ app.post(
           );
         },
       );
-
       await batch.commit();
-
       response
         .status(201)
         .json({
           ok: true,
-
           requestId,
-
           status:
             "pending",
-
           attachedEvidenceCount:
             evidenceIds.length,
-
           publicCampaignPhotoAttached:
             true,
         });
@@ -9096,7 +6056,6 @@ app.post(
         "Assistance request creation failed:",
         error,
       );
-
       response
         .status(
           Number(
@@ -9110,7 +6069,6 @@ app.post(
                 "assistance_request_creation_failed",
               100,
             ),
-
           message:
             cleanText(
               error?.message ||
@@ -9121,1574 +6079,681 @@ app.post(
     }
   },
 );
-
-
-
 app.post(
-
   "/api/assistance/evidence/attach",
-
-
-
   requireFirebaseUser,
-
-
-
   requireVerifiedResident,
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     try {
-
       const uid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       const requestId =
-
         cleanText(
-
           request.body
-
             ?.requestId ||
-
             "",
-
           200,
-
         );
-
-
-
       const evidenceIds =
-
         Array.from(
-
           new Set(
-
             Array.isArray(
-
               request.body
-
                 ?.evidenceIds,
-
             )
-
               ? request.body
-
                   .evidenceIds
-
                   .map(
-
                     (
-
                       value,
-
                     ) =>
-
                       cleanText(
-
                         value,
-
                         200,
-
                       ),
-
                   )
-
                   .filter(
-
                     Boolean,
-
                   )
-
               : [],
-
           ),
-
         );
-
-
-
       if (
-
         !requestId ||
-
         evidenceIds.length ===
-
           0 ||
-
         evidenceIds.length >
-
           8
-
       ) {
-
         throw makeHttpError(
-
           400,
-
           "invalid_evidence_attachment",
-
           "A valid Request Assistance ID and 1 to 8 evidence files are required.",
-
         );
-
       }
-
-
-
       const assistanceRef =
-
         db
-
           .collection(
-
             "assistanceRequests",
-
           )
-
           .doc(
-
             requestId,
-
           );
-
-
-
       const assistanceSnapshot =
-
         await assistanceRef.get();
-
-
-
       if (
-
         !assistanceSnapshot
-
           .exists
-
       ) {
-
         throw makeHttpError(
-
           404,
-
           "assistance_request_not_found",
-
           "The Request Assistance record was not found.",
-
         );
-
       }
-
-
-
       const assistanceData =
-
         assistanceSnapshot.data() ||
-
         {};
-
-
-
       if (
-
         assistanceData
-
           .requesterUid !==
-
         uid
-
       ) {
-
         throw makeHttpError(
-
           403,
-
           "assistance_request_owner_mismatch",
-
           "You cannot attach evidence to another Resident's request.",
-
         );
-
       }
-
-
-
       const evidenceRefs =
-
         evidenceIds.map(
-
           (
-
             evidenceId,
-
           ) =>
-
             db
-
               .collection(
-
                 "assistanceEvidenceAssets",
-
               )
-
               .doc(
-
                 evidenceId,
-
               ),
-
         );
-
-
-
       const evidenceSnapshots =
-
         await Promise.all(
-
           evidenceRefs.map(
-
             (
-
               ref,
-
             ) =>
-
               ref.get(),
-
           ),
-
         );
-
-
-
       for (
-
         let index = 0;
-
         index <
-
         evidenceSnapshots.length;
-
         index += 1
-
       ) {
-
         const snapshot =
-
           evidenceSnapshots[
-
             index
-
           ];
-
-
-
         const data =
-
           snapshot.exists
-
             ? snapshot.data() ||
-
               {}
-
             : null;
-
-
-
         if (!data) {
-
           throw makeHttpError(
-
             404,
-
             "evidence_not_found",
-
             "One of the evidence files could not be found.",
-
           );
-
         }
-
-
-
         if (
-
           data.ownerUid !==
-
           uid
-
         ) {
-
           throw makeHttpError(
-
             403,
-
             "evidence_owner_mismatch",
-
             "One of the evidence files belongs to another account.",
-
           );
-
         }
-
-
-
         if (
-
           data.status !==
-
             "staged" &&
-
           !(
-
             data.status ===
-
               "attached" &&
-
             data.requestId ===
-
               requestId
-
           )
-
         ) {
-
           throw makeHttpError(
-
             409,
-
             "evidence_already_attached",
-
             "One of the evidence files is already attached to another request.",
-
           );
-
         }
-
       }
-
-
-
       const batch =
-
         db.batch();
-
-
-
       evidenceRefs.forEach(
-
         (
-
           ref,
-
         ) => {
-
           batch.set(
-
             ref,
-
             {
-
               status:
-
                 "attached",
-
-
-
               requestId,
-
-
-
               attachedAt:
-
                 FieldValue
-
                   .serverTimestamp(),
-
-
-
               updatedAt:
-
                 FieldValue
-
                   .serverTimestamp(),
-
             },
-
             {
-
               merge:
-
                 true,
-
             },
-
           );
-
         },
-
       );
-
-
-
       await batch.commit();
-
-
-
       response.json({
-
         ok:
-
           true,
-
-
-
         requestId,
-
-
-
         attachedEvidenceCount:
-
           evidenceIds.length,
-
       });
-
     } catch (error) {
-
       console.error(
-
         "Assistance evidence attach failed:",
-
         error,
-
       );
-
-
-
       response
-
         .status(
-
           Number(
-
             error
-
               ?.statusCode,
-
           ) || 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "assistance_evidence_attach_failed",
-
               100,
-
             ),
-
-
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to attach the private evidence to the assistance request.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
-
 app.get(
-
   "/api/assistance/evidence/:evidenceId/access",
-
-
-
   requireFirebaseUser,
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     try {
-
       response.set(
-
         "Cache-Control",
-
         "no-store, no-cache, must-revalidate, private",
-
       );
-
-
-
       response.set(
-
         "Pragma",
-
         "no-cache",
-
       );
-
-
-
       response.set(
-
         "X-Robots-Tag",
-
         "noindex, nofollow, noarchive",
-
       );
-
-
-
       const uid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       const evidenceId =
-
         cleanText(
-
           request.params
-
             .evidenceId ||
-
             "",
-
           200,
-
         );
-
-
-
       if (!evidenceId) {
-
         throw makeHttpError(
-
           400,
-
           "evidence_id_required",
-
           "An evidence ID is required.",
-
         );
-
       }
-
-
-
       const evidenceSnapshot =
-
         await db
-
           .collection(
-
             "assistanceEvidenceAssets",
-
           )
-
           .doc(
-
             evidenceId,
-
           )
-
           .get();
-
-
-
       if (
-
         !evidenceSnapshot
-
           .exists
-
       ) {
-
         throw makeHttpError(
-
           404,
-
           "evidence_not_found",
-
           "The private assistance evidence was not found.",
-
         );
-
       }
-
-
-
       const evidenceData =
-
         evidenceSnapshot.data() ||
-
         {};
-
-
-
       const accessContext =
-
         await getEvidenceAccessContext(
-
           uid,
-
           evidenceData,
-
         );
-
-
-
       const evidenceStatus =
-
         cleanText(
-
           evidenceData
-
             .status ||
-
             "",
-
           40,
-
         ).toLowerCase();
-
-
-
       const requestId =
-
         cleanText(
-
           evidenceData
-
             .requestId ||
-
             "",
-
           200,
-
         );
-
-
-
       if (
-
         accessContext.admin
-
       ) {
-
         if (
-
           evidenceStatus !==
-
             "attached" ||
-
           !requestId
-
         ) {
-
           throw makeHttpError(
-
             403,
-
             "admin_evidence_not_attached",
-
             "LGU/Admin access is available only after evidence is attached to a submitted assistance request.",
-
           );
-
         }
-
-
-
         const assistanceSnapshot =
-
           await db
-
             .collection(
-
               "assistanceRequests",
-
             )
-
             .doc(
-
               requestId,
-
             )
-
             .get();
-
-
-
         if (
-
           !assistanceSnapshot
-
             .exists
-
         ) {
-
           throw makeHttpError(
-
             404,
-
             "assistance_request_not_found",
-
             "The Request Assistance record linked to this evidence was not found.",
-
           );
-
         }
-
-
-
         const assistanceData =
-
           assistanceSnapshot.data() ||
-
           {};
-
-
-
         if (
-
           cleanText(
-
             assistanceData
-
               .requesterUid ||
-
               "",
-
             200,
-
           ) !==
-
           cleanText(
-
             evidenceData
-
               .ownerUid ||
-
               "",
-
             200,
-
           )
-
         ) {
-
           throw makeHttpError(
-
             409,
-
             "evidence_request_owner_mismatch",
-
             "The evidence owner does not match the linked Request Assistance record.",
-
           );
-
         }
-
       }
-
-
-
       const cloudinaryPublicId =
-
         cleanText(
-
           evidenceData
-
             .cloudinaryPublicId ||
-
             "",
-
           500,
-
         );
-
-
-
       const cloudinaryFormat =
-
         cleanText(
-
           evidenceData
-
             .cloudinaryFormat ||
-
             "",
-
           30,
-
         );
-
-
-
       const cloudinaryResourceType =
-
         cleanText(
-
           evidenceData
-
             .cloudinaryResourceType ||
-
             "image",
-
           30,
-
         );
-
-
-
       const cloudinaryDeliveryType =
-
         cleanText(
-
           evidenceData
-
             .cloudinaryDeliveryType ||
-
             "",
-
           40,
-
         );
-
-
-
       const signedAccess =
-
         createCloudinaryPrivateDownloadUrl({
-
           publicId:
-
             cloudinaryPublicId,
-
-
-
           format:
-
             cloudinaryFormat,
-
-
-
           resourceType:
-
             cloudinaryResourceType,
-
-
-
           deliveryType:
-
             cloudinaryDeliveryType,
-
         });
-
-
-
       if (
-
         accessContext.admin
-
       ) {
-
         const accessLogRef =
-
           db
-
             .collection(
-
               "assistanceEvidenceAccessLogs",
-
             )
-
             .doc();
-
-
-
         await accessLogRef.set({
-
           accessLogId:
-
             accessLogRef.id,
-
-
-
           evidenceId,
-
-
-
           requestId,
-
-
-
           ownerUid:
-
             cleanText(
-
               evidenceData
-
                 .ownerUid ||
-
                 "",
-
               200,
-
             ),
-
-
-
           accessedBy:
-
             uid,
-
-
-
           accessedByRole:
-
             "admin",
-
-
-
           action:
-
             "temporary_view_url_issued",
-
-
-
           createdAt:
-
             FieldValue
-
               .serverTimestamp(),
-
         });
-
       }
-
-
-
       response.json({
-
         ok:
-
           true,
-
-
-
         evidence: {
-
           evidenceId,
-
-
-
           requestId,
-
-
-
           documentType:
-
             cleanText(
-
               evidenceData
-
                 .documentType ||
-
                 "",
-
               100,
-
             ),
-
-
-
           fileName:
-
             sanitizeFileName(
-
               evidenceData
-
                 .originalFileName ||
-
                 "evidence",
-
             ),
-
-
-
           mimeType:
-
             cleanText(
-
               evidenceData
-
                 .mimeType ||
-
                 "image/jpeg",
-
               100,
-
             ),
-
-
-
           status:
-
             evidenceStatus,
-
         },
-
-
-
         accessUrl:
-
           signedAccess.url,
-
-
-
         expiresAt:
-
           signedAccess
-
             .expiresAt,
-
-
-
         expiresInSeconds:
-
           ASSISTANCE_EVIDENCE_URL_TTL_SECONDS,
-
       });
-
     } catch (error) {
-
       console.error(
-
         "Assistance evidence access failed:",
-
         error,
-
       );
-
-
-
       response
-
         .status(
-
           Number(
-
             error
-
               ?.statusCode,
-
           ) || 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "assistance_evidence_access_failed",
-
               100,
-
             ),
-
-
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to open the private assistance evidence.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
-
 app.delete(
-
   "/api/assistance/evidence/:evidenceId",
-
-
-
   requireFirebaseUser,
-
-
-
   async (
-
     request,
-
     response,
-
   ) => {
-
     try {
-
       const uid =
-
         request
-
           .firebaseUser
-
           .uid;
-
-
-
       const evidenceId =
-
         cleanText(
-
           request.params
-
             .evidenceId ||
-
             "",
-
           200,
-
         );
-
-
-
       if (!evidenceId) {
-
         throw makeHttpError(
-
           400,
-
           "evidence_id_required",
-
           "An evidence ID is required.",
-
         );
-
       }
-
-
-
       const evidenceRef =
-
         db
-
           .collection(
-
             "assistanceEvidenceAssets",
-
           )
-
           .doc(
-
             evidenceId,
-
           );
-
-
-
       const evidenceSnapshot =
-
         await evidenceRef.get();
-
-
-
       if (
-
         !evidenceSnapshot
-
           .exists
-
       ) {
-
         response.json({
-
           ok:
-
             true,
-
-
-
           deleted:
-
             false,
-
-
-
           message:
-
             "The staged evidence was already removed.",
-
         });
-
-
-
         return;
-
       }
-
-
-
       const evidenceData =
-
         evidenceSnapshot.data() ||
-
         {};
-
-
-
       const access =
-
         await getEvidenceAccessContext(
-
           uid,
-
           evidenceData,
-
         );
-
-
-
       if (
-
         evidenceData.status !==
-
         "staged"
-
       ) {
-
         throw makeHttpError(
-
           409,
-
           "attached_evidence_cannot_be_deleted",
-
           "Evidence attached to a submitted assistance request is preserved for the LGU audit trail.",
-
         );
-
       }
-
-
-
       if (
-
         !access.owner &&
-
         !access.admin
-
       ) {
-
         throw makeHttpError(
-
           403,
-
           "evidence_delete_denied",
-
           "You are not authorized to remove this staged evidence.",
-
         );
-
       }
-
-
-
       const publicId =
-
         cleanText(
-
           evidenceData
-
             .cloudinaryPublicId ||
-
             "",
-
           500,
-
         );
-
-
-
       if (publicId) {
-
         await destroyAssistanceEvidenceFromCloudinary(
-
           publicId,
-
         );
-
       }
-
-
-
       await evidenceRef.delete();
-
-
-
       response.json({
-
         ok:
-
           true,
-
-
-
         deleted:
-
           true,
-
-
-
         evidenceId,
-
       });
-
     } catch (error) {
-
       console.error(
-
         "Assistance evidence delete failed:",
-
         error,
-
       );
-
-
-
       response
-
         .status(
-
           Number(
-
             error
-
               ?.statusCode,
-
           ) || 500,
-
         )
-
         .json({
-
           error:
-
             cleanText(
-
               error?.code ||
-
                 "assistance_evidence_delete_failed",
-
               100,
-
             ),
-
-
-
           message:
-
             cleanText(
-
               error?.message ||
-
                 "Unable to remove the staged assistance evidence.",
-
               500,
-
             ),
-
         });
-
     }
-
   },
-
 );
-
-
-
 app.use(
-
   (
-
     error,
-
     request,
-
     response,
-
     next,
-
   ) => {
-
     console.error(
-
       "Unhandled backend error:",
-
       error,
-
     );
-
-
-
     if (
-
       error?.type ===
-
       "entity.too.large"
-
     ) {
-
       const assistanceEvidenceRequest =
-
         String(
-
           request?.path ||
-
             "",
-
         ).startsWith(
-
           "/api/assistance/evidence/",
-
         );
-
-
-
       response
-
         .status(
-
           413,
-
         )
-
         .json({
-
           error:
-
             assistanceEvidenceRequest
-
               ? "evidence_upload_too_large"
-
               : "identity_upload_too_large",
-
-
-
           message:
-
             assistanceEvidenceRequest
-
               ? "Assistance evidence must be 10 MB or smaller."
-
               : "The identity verification upload is too large.",
-
         });
-
-
-
       return;
-
     }
-
-
-
     response
-
       .status(
-
         500,
-
       )
-
       .json({
-
         error:
-
           "server_error",
-
-
-
         message:
-
           "The VolunServe backend encountered an error.",
-
       });
-
   },
-
 );
-
-
 // =========================================================
 // PAYMONGO HOSTED CHECKOUT — TEST MODE
 // =========================================================
@@ -10696,10 +6761,8 @@ app.use(
 // browser never receives the secret API key. Payment is counted ONLY after the
 // signed checkout_session.payment.paid webhook is processed above.
 // =========================================================
-
 const validatedPaymongoReturnBaseUrl = (value) => {
   const raw = cleanText(value || "", 700);
-
   let parsed;
   try {
     parsed = new URL(raw);
@@ -10710,7 +6773,6 @@ const validatedPaymongoReturnBaseUrl = (value) => {
       "The Donation page return URL is invalid.",
     );
   }
-
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw makeHttpError(
       400,
@@ -10718,7 +6780,6 @@ const validatedPaymongoReturnBaseUrl = (value) => {
       "The Donation page return URL must use HTTP or HTTPS.",
     );
   }
-
   if (!allowedOrigins.has(parsed.origin)) {
     throw makeHttpError(
       403,
@@ -10726,12 +6787,10 @@ const validatedPaymongoReturnBaseUrl = (value) => {
       "This Donation page origin is not allowed by the VolunServe backend.",
     );
   }
-
   parsed.hash = "";
   parsed.search = "";
   return parsed;
 };
-
 const paymongoCheckoutErrorMessage = (payload, fallback) => {
   const firstError = Array.isArray(payload?.errors) ? payload.errors[0] : null;
   return cleanText(
@@ -10743,13 +6802,11 @@ const paymongoCheckoutErrorMessage = (payload, fallback) => {
     700,
   );
 };
-
 app.post(
   "/api/paymongo/checkout-session",
   requireFirebaseUser,
   async (request, response) => {
     let donationRef = null;
-
     try {
       if (paymongoMode() !== "test") {
         throw makeHttpError(
@@ -10758,7 +6815,6 @@ app.post(
           "VolunServe payment integration is currently locked to PayMongo Test Mode.",
         );
       }
-
       const secretKey = getPaymongoSecretKey();
       if (!secretKey || !secretKey.startsWith("sk_test_")) {
         throw makeHttpError(
@@ -10767,7 +6823,6 @@ app.post(
           "Configure a PayMongo Secret Test key on the backend before starting checkout.",
         );
       }
-
       if (typeof fetch !== "function") {
         throw makeHttpError(
           500,
@@ -10775,11 +6830,9 @@ app.post(
           "The backend runtime cannot connect to PayMongo.",
         );
       }
-
       const uid = request.firebaseUser.uid;
       const profile = await loadUserProfile(uid);
       const role = getProfileRole(profile);
-
       if (
         !isApprovedAccount(profile) ||
         profile?.residentAccess !== true ||
@@ -10791,10 +6844,8 @@ app.post(
           "Only an approved Resident account can start a Donation checkout.",
         );
       }
-
       const campaignId = cleanText(request.body?.campaignId || "", 160);
       const amount = Number(request.body?.amount ?? 0);
-
       if (!campaignId || !/^[A-Za-z0-9_-]{6,160}$/.test(campaignId)) {
         throw makeHttpError(
           400,
@@ -10802,7 +6853,6 @@ app.post(
           "Choose a valid Donation Campaign.",
         );
       }
-
       if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) {
         throw makeHttpError(
           400,
@@ -10810,7 +6860,6 @@ app.post(
           "Enter a valid donation amount greater than zero.",
         );
       }
-
       const amountCentavos = Math.round(amount * 100);
       if (!Number.isSafeInteger(amountCentavos) || amountCentavos <= 0) {
         throw makeHttpError(
@@ -10819,14 +6868,11 @@ app.post(
           "The donation amount could not be converted to PHP centavos.",
         );
       }
-
       const returnBaseUrl = validatedPaymongoReturnBaseUrl(
         request.body?.returnBaseUrl,
       );
-
       const campaignRef = db.collection("donationCampaigns").doc(campaignId);
       const campaignSnapshot = await campaignRef.get();
-
       if (!campaignSnapshot.exists) {
         throw makeHttpError(
           404,
@@ -10834,7 +6880,6 @@ app.post(
           "The selected Donation Campaign was not found.",
         );
       }
-
       const campaign = campaignSnapshot.data() || {};
       if (cleanText(campaign.status || "", 40).toLowerCase() !== "published") {
         throw makeHttpError(
@@ -10843,7 +6888,6 @@ app.post(
           "This Donation Campaign is no longer open.",
         );
       }
-
       const acceptedTypes = cleanDonationTypes(campaign.acceptedDonationTypes);
       if (!acceptedTypes.includes("monetary")) {
         throw makeHttpError(
@@ -10852,7 +6896,6 @@ app.post(
           "This campaign is not accepting monetary donations.",
         );
       }
-
       const goal = Number(campaign.monetaryGoal || 0);
       const raised = Number(campaign.verifiedAmountReceived || 0);
       const publicLocationName = cleanText(
@@ -10863,7 +6906,6 @@ app.post(
         campaign.handoffAddress || "",
         320,
       );
-
       if (!Number.isFinite(goal) || goal <= 0) {
         throw makeHttpError(
           409,
@@ -10871,7 +6913,6 @@ app.post(
           "This campaign is missing its verified monetary goal. Ask the LGU/Admin to complete the campaign setup first.",
         );
       }
-
       if (!publicLocationName || !publicLocationAddress) {
         throw makeHttpError(
           409,
@@ -10879,10 +6920,8 @@ app.post(
           "This campaign is missing its LGU-approved public service location. Ask the LGU/Admin to complete the campaign setup first.",
         );
       }
-
       const safeRaised = Number.isFinite(raised) ? Math.max(0, raised) : 0;
       const remaining = Math.max(0, goal - safeRaised);
-
       if (remaining <= 0) {
         throw makeHttpError(
           409,
@@ -10890,7 +6929,6 @@ app.post(
           "This campaign has already reached its verified funding goal.",
         );
       }
-
       if (amount - remaining > 0.009) {
         throw makeHttpError(
           409,
@@ -10898,7 +6936,6 @@ app.post(
           `The remaining verified funding need is PHP ${remaining.toFixed(2)}. Enter an amount that does not exceed the remaining goal.`,
         );
       }
-
       donationRef = db.collection("donations").doc();
       const donationId = donationRef.id;
       const donorName = cleanText(
@@ -10908,15 +6945,12 @@ app.post(
           "Donor",
         160,
       );
-
       const successUrl = new URL(returnBaseUrl.toString());
       successUrl.searchParams.set("payment", "success");
       successUrl.searchParams.set("donationId", donationId);
-
       const cancelUrl = new URL(returnBaseUrl.toString());
       cancelUrl.searchParams.set("payment", "cancelled");
       cancelUrl.searchParams.set("donationId", donationId);
-
       await donationRef.set({
         donationId,
         source: "campaign_submission",
@@ -10948,7 +6982,6 @@ app.post(
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-
       const checkoutResponse = await fetch(
         `${PAYMONGO_API_BASE}/v2/checkout_sessions`,
         {
@@ -10985,15 +7018,12 @@ app.post(
           }),
         },
       );
-
       const checkoutPayload = await checkoutResponse.json().catch(() => null);
-
       if (!checkoutResponse.ok) {
         const message = paymongoCheckoutErrorMessage(
           checkoutPayload,
           `PayMongo checkout failed with HTTP ${checkoutResponse.status}.`,
         );
-
         await donationRef.set(
           {
             status: "payment_failed",
@@ -11003,7 +7033,6 @@ app.post(
           },
           { merge: true },
         );
-
         throw makeHttpError(
           checkoutResponse.status >= 400 && checkoutResponse.status < 500
             ? 400
@@ -11012,14 +7041,12 @@ app.post(
           message,
         );
       }
-
       const session = checkoutPayload?.data || {};
       const sessionId = cleanText(session?.id || "", 180);
       const checkoutUrl = cleanText(
         session?.attributes?.checkout_url || "",
         1200,
       );
-
       if (!sessionId || !checkoutUrl.startsWith("https://checkout.paymongo.com/")) {
         await donationRef.set(
           {
@@ -11029,14 +7056,12 @@ app.post(
           },
           { merge: true },
         );
-
         throw makeHttpError(
           502,
           "invalid_paymongo_checkout_response",
           "PayMongo did not return a valid hosted checkout URL.",
         );
       }
-
       await donationRef.set(
         {
           status: "payment_pending",
@@ -11048,7 +7073,6 @@ app.post(
         },
         { merge: true },
       );
-
       return response.status(200).json({
         ok: true,
         mode: "test",
@@ -11058,7 +7082,6 @@ app.post(
       });
     } catch (error) {
       console.error("PayMongo checkout creation failed:", error);
-
       if (donationRef && error?.code !== "paymongo_checkout_creation_failed") {
         try {
           await donationRef.set(
@@ -11074,7 +7097,6 @@ app.post(
           console.error("Unable to record PayMongo checkout failure:", writeError);
         }
       }
-
       return response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(error?.code || "paymongo_checkout_creation_failed", 120),
         message: cleanText(
@@ -11085,7 +7107,6 @@ app.post(
     }
   },
 );
-
 // =========================================================
 // SECURE ADMIN DONATION OPERATIONS
 // =========================================================
@@ -11093,31 +7114,25 @@ app.post(
 // Client apps may keep Firestore listeners for allowed reads, but campaign
 // publication/closure and receipt verification/rejection are backend-gated.
 // =========================================================
-
 const normalizeDonationReference = (value) =>
   cleanText(value || "", 160)
     .toLowerCase()
     .replace(/\s+/g, "");
-
 const normalizePrivacyComparableText = (value) =>
   String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
-
 const publicCopyContainsPrivateAssistanceValue = (publicCopy, privateValue) => {
   const publicComparable = normalizePrivacyComparableText(publicCopy);
   const privateComparable = normalizePrivacyComparableText(privateValue);
-
   return (
     privateComparable.length >= 6 &&
     publicComparable.includes(privateComparable)
   );
 };
-
 const assistanceCategoryToPublicCategory = (value) => {
   const category = cleanText(value || "", 80).toLowerCase();
-
   if (
     [
       "medical_health",
@@ -11127,17 +7142,14 @@ const assistanceCategoryToPublicCategory = (value) => {
   ) {
     return "medical";
   }
-
   if (category === "disaster_recovery") return "other";
   if (category === "homeless_basic_needs") return "other";
   if (category === "elderly_assistance") return "other";
   if (category === "animal_pet_welfare") return "other";
   return "other";
 };
-
 const assistanceLocationToDonationLocationType = (value) => {
   const type = cleanText(value || "", 80).toLowerCase();
-
   const mapping = {
     barangay_hall: "barangay_relief_desk",
     lgu_office: "city_hall",
@@ -11146,20 +7158,16 @@ const assistanceLocationToDonationLocationType = (value) => {
     vet_clinic: "veterinary_clinic",
     authorized_public_point: "other",
   };
-
   return mapping[type] || "other";
 };
-
 const cleanDonationTypes = (value) => {
   if (!Array.isArray(value)) return ["monetary"];
-
   return value
     .map((item) => cleanText(item || "", 30).toLowerCase())
     .includes("monetary")
     ? ["monetary"]
     : [];
 };
-
 app.post(
   "/api/admin/donations/campaigns",
   requireFirebaseUser,
@@ -11169,7 +7177,6 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const sourceType = cleanText(request.body?.sourceType || "", 80).toLowerCase();
       const sourceId = cleanText(request.body?.sourceId || "", 160);
-
       if (
         ![
           "disaster_relief_need",
@@ -11182,7 +7189,6 @@ app.post(
           "Choose a valid verified Donation Campaign source.",
         );
       }
-
       if (!sourceId || !/^[A-Za-z0-9_-]{6,160}$/.test(sourceId)) {
         throw makeHttpError(
           400,
@@ -11190,7 +7196,6 @@ app.post(
           "The verified Donation Campaign source ID is invalid.",
         );
       }
-
       const title = cleanText(request.body?.title || "", 160);
       const description = cleanText(request.body?.description || "", 1200);
       const story = cleanText(request.body?.publicStory || "", 1200);
@@ -11230,7 +7235,6 @@ app.post(
             .filter((item) => item.startsWith("https://"))
             .slice(0, 5)
         : [];
-
       if (requestedPhotoUrls.length < 1) {
         throw makeHttpError(
           400,
@@ -11238,11 +7242,9 @@ app.post(
           "Add at least one LGU-approved public campaign photo before publishing.",
         );
       }
-
       if (title.length < 5) {
         throw makeHttpError(400, "campaign_title_required", "Enter a clear campaign title.");
       }
-
       if (description.length < 15) {
         throw makeHttpError(
           400,
@@ -11250,7 +7252,6 @@ app.post(
           "Enter a clear privacy-safe campaign description.",
         );
       }
-
       if (story.length < 30) {
         throw makeHttpError(
           400,
@@ -11258,7 +7259,6 @@ app.post(
           "Enter a privacy-safe public situation summary before publishing.",
         );
       }
-
       if (incidentType.length < 2 || severity.length < 2) {
         throw makeHttpError(
           400,
@@ -11266,7 +7266,6 @@ app.post(
           "Confirm the public case category and LGU-assessed priority.",
         );
       }
-
       if (acceptedDonationTypes.length !== 1 || acceptedDonationTypes[0] !== "monetary") {
         throw makeHttpError(
           400,
@@ -11274,7 +7273,6 @@ app.post(
           "Donation campaigns currently accept monetary support only.",
         );
       }
-
       if (!Number.isFinite(requestedGoal) || requestedGoal <= 0) {
         throw makeHttpError(
           400,
@@ -11282,7 +7280,6 @@ app.post(
           "Enter the verified monetary amount still needed.",
         );
       }
-
       if (officialChannelLabel.length < 3 || officialChannelInstructions.length < 10) {
         throw makeHttpError(
           400,
@@ -11290,23 +7287,17 @@ app.post(
           "Enter the official LGU monetary channel and clear payment or receipt instructions.",
         );
       }
-
-
       const campaignRef = db.collection("donationCampaigns").doc();
       const activityRef = db.collection("adminActivityLogs").doc();
-
       let sourceSummary = null;
-
       if (sourceType === "community_assistance_request") {
         const assistanceRef = db.collection("assistanceRequests").doc(sourceId);
         const reviewRef = db.collection("assistanceVerificationReviews").doc(sourceId);
-
         sourceSummary = await db.runTransaction(async (transaction) => {
           const [assistanceSnapshot, reviewSnapshot] = await Promise.all([
             transaction.get(assistanceRef),
             transaction.get(reviewRef),
           ]);
-
           if (!assistanceSnapshot.exists) {
             throw makeHttpError(
               404,
@@ -11314,7 +7305,6 @@ app.post(
               "The verified Assistance Request was not found.",
             );
           }
-
           if (!reviewSnapshot.exists) {
             throw makeHttpError(
               409,
@@ -11322,10 +7312,8 @@ app.post(
               "The protected LGU verification record was not found.",
             );
           }
-
           const assistance = assistanceSnapshot.data() || {};
           const review = reviewSnapshot.data() || {};
-
           if (
             cleanText(assistance.verificationStatus || "", 60).toLowerCase() !== "verified" ||
             cleanText(review.finalDecision || "", 60).toLowerCase() !== "verified"
@@ -11336,7 +7324,6 @@ app.post(
               "Only a final LGU-verified Assistance Request can open Donation Support.",
             );
           }
-
           if (
             cleanText(assistance.supportDecision || "", 60).toLowerCase() !==
             "donation_support"
@@ -11347,13 +7334,11 @@ app.post(
               "LGU Resource Assessment must confirm Donation Support Needed first.",
             );
           }
-
           const sourcePublicPhotoUrl =
             cleanText(
               assistance.publicCampaignPhotoUrl || "",
               1000,
             );
-
           if (
             assistance.publicCampaignPhotoConsent !== true ||
             !sourcePublicPhotoUrl.startsWith("https://")
@@ -11364,7 +7349,6 @@ app.post(
               "The Assistance Request must include the Resident-consented public campaign photo before Donation Support can be published.",
             );
           }
-
           const remainingAmount = Number(assistance.remainingAmount || 0);
           if (!Number.isFinite(remainingAmount) || remainingAmount <= 0) {
             throw makeHttpError(
@@ -11373,7 +7357,6 @@ app.post(
               "A verified remaining unmet amount is required before publishing Donation Support.",
             );
           }
-
           const locationName = cleanText(assistance.assignedLocationName || "", 180);
           const locationAddress = cleanText(assistance.assignedLocationAddress || "", 320);
           const locationNotes = cleanText(assistance.assignedLocationNotes || "", 600);
@@ -11381,7 +7364,6 @@ app.post(
             assistance.assignedLocationType || "",
             80,
           ).toLowerCase();
-
           if (locationName.length < 3 || locationAddress.length < 5) {
             throw makeHttpError(
               409,
@@ -11389,13 +7371,11 @@ app.post(
               "Save the LGU-approved public service location before publishing a community campaign.",
             );
           }
-
           const preferredTypes = Array.isArray(assistance.preferredAssistanceTypes)
             ? assistance.preferredAssistanceTypes
                 .map((item) => cleanText(item || "", 30).toLowerCase())
                 .filter((item) => item === "monetary")
             : [];
-
           if (
             acceptedDonationTypes.some(
               (item) => preferredTypes.length && !preferredTypes.includes(item),
@@ -11407,7 +7387,6 @@ app.post(
               "The selected donation type was not part of the verified Assistance Request.",
             );
           }
-
           if (
             acceptedDonationTypes.includes("monetary") &&
             Math.abs(requestedGoal - remainingAmount) > 0.009
@@ -11418,12 +7397,10 @@ app.post(
               `The public funding goal must match the verified remaining unmet amount of PHP ${remainingAmount.toLocaleString("en-PH")}.`,
             );
           }
-
           const linkedCampaignId = cleanText(assistance.donationCampaignId || "", 160);
           if (linkedCampaignId) {
             const linkedCampaignRef = db.collection("donationCampaigns").doc(linkedCampaignId);
             const linkedCampaignSnapshot = await transaction.get(linkedCampaignRef);
-
             if (
               linkedCampaignSnapshot.exists &&
               cleanText(linkedCampaignSnapshot.data()?.status || "", 40).toLowerCase() ===
@@ -11436,7 +7413,6 @@ app.post(
               );
             }
           }
-
           const barangay =
             cleanText(assistance.requesterBarangay || "", 120) ||
             "San Jose del Monte";
@@ -11453,7 +7429,6 @@ app.post(
               assistance.categoryLabel || assistance.category || "Community Assistance",
               120,
             ) || "Community Assistance";
-
           // Community Assistance campaigns are intentionally privacy-safe.
           // Do not allow public copy to repeat private source values from the
           // Assistance Request, even though those private fields are never
@@ -11466,7 +7441,6 @@ app.post(
             assistance.requesterName,
             assistance.beneficiaryName,
           ];
-
           if (
             privateSourceValues.some((value) =>
               publicCopyContainsPrivateAssistanceValue(publicCopy, value),
@@ -11478,7 +7452,6 @@ app.post(
               "Remove private Resident identity, contact, or home-address details from the public campaign text.",
             );
           }
-
           const publicCategory = assistanceCategoryToPublicCategory(category);
           const publicNeeds = [
             {
@@ -11488,7 +7461,6 @@ app.post(
               unit: "PHP",
             },
           ];
-
           const campaignPayload = {
             campaignId: campaignRef.id,
             title,
@@ -11526,7 +7498,6 @@ app.post(
             updatedBy: adminUid,
             updatedAt: FieldValue.serverTimestamp(),
           };
-
           transaction.set(campaignRef, campaignPayload);
           // Link the campaign without rewriting the original LGU review
           // timestamp/person. The activity log below records who published it.
@@ -11541,7 +7512,6 @@ app.post(
             performedBy: adminUid,
             timestamp: FieldValue.serverTimestamp(),
           });
-
           return {
             campaignId: campaignRef.id,
             campaignGroup: "community_needs_help",
@@ -11551,17 +7521,14 @@ app.post(
         });
       } else {
         const assessmentRef = db.collection("barangayNeedAssessments").doc(sourceId);
-
         const existingCampaignsSnapshot = await db
           .collection("donationCampaigns")
           .where("status", "==", "published")
           .get();
-
         const duplicate = existingCampaignsSnapshot.docs.some((item) => {
           const ids = item.data()?.sourceNeedAssessmentIds;
           return Array.isArray(ids) && ids.includes(sourceId);
         });
-
         if (duplicate) {
           throw makeHttpError(
             409,
@@ -11569,10 +7536,8 @@ app.post(
             "This verified relief need already has an active Donation Campaign.",
           );
         }
-
         sourceSummary = await db.runTransaction(async (transaction) => {
           const assessmentSnapshot = await transaction.get(assessmentRef);
-
           if (!assessmentSnapshot.exists) {
             throw makeHttpError(
               404,
@@ -11580,10 +7545,8 @@ app.post(
               "The selected verified relief need no longer exists.",
             );
           }
-
           const assessment = assessmentSnapshot.data() || {};
           const status = cleanText(assessment.status || "", 60).toLowerCase();
-
           if (!["verified", "partially_allocated"].includes(status)) {
             throw makeHttpError(
               409,
@@ -11591,7 +7554,6 @@ app.post(
               "Only an active verified relief need can open Donation Support.",
             );
           }
-
           if (requestedPublicLocation.length < 3) {
             throw makeHttpError(
               400,
@@ -11599,7 +7561,6 @@ app.post(
               "Enter a privacy-safe public area before publishing.",
             );
           }
-
           if (
             requestedHandoffLocationName.length < 3 ||
             requestedHandoffAddress.length < 5
@@ -11610,7 +7571,6 @@ app.post(
               "Set the LGU-approved public service or coordination point before publishing the disaster campaign.",
             );
           }
-
           const barangay = cleanText(assessment.barangay || "", 120);
           const categoryPairs = [
             ["food", Number(assessment.peopleNeedingFood || 0), "Food support", "people"],
@@ -11639,7 +7599,6 @@ app.post(
               label: otherNeedDescription,
             });
           }
-
           const campaignCategory =
             cleanText(request.body?.campaignCategory || incidentType || "disaster_relief", 80)
               .toLowerCase()
@@ -11653,7 +7612,6 @@ app.post(
             1,
             Math.trunc(Number(assessment.affectedPeople || 1)),
           );
-
           const campaignPayload = {
             campaignId: campaignRef.id,
             title,
@@ -11690,7 +7648,6 @@ app.post(
             updatedBy: adminUid,
             updatedAt: FieldValue.serverTimestamp(),
           };
-
           transaction.set(campaignRef, campaignPayload);
           transaction.set(activityRef, {
             action: "Donation Campaign Published",
@@ -11700,7 +7657,6 @@ app.post(
             performedBy: adminUid,
             timestamp: FieldValue.serverTimestamp(),
           });
-
           return {
             campaignId: campaignRef.id,
             campaignGroup: "disaster_affected",
@@ -11709,7 +7665,6 @@ app.post(
           };
         });
       }
-
       response.status(201).json({
         ok: true,
         ...sourceSummary,
@@ -11726,7 +7681,6 @@ app.post(
     }
   },
 );
-
 // Complete or repair a published disaster campaign that predates the
 // monetary-only public-location requirements. Community Assistance locations
 // remain locked to their verified Assistance Request source.
@@ -11751,11 +7705,9 @@ app.post(
         request.body?.handoffNotes || "",
         600,
       );
-
       if (!campaignId || !/^[A-Za-z0-9_-]{6,160}$/.test(campaignId)) {
         throw makeHttpError(400, "invalid_campaign_id", "Choose a valid Donation Campaign.");
       }
-
       if (!Number.isFinite(monetaryGoal) || monetaryGoal <= 0) {
         throw makeHttpError(
           400,
@@ -11763,7 +7715,6 @@ app.post(
           "Enter the verified monetary goal for this campaign.",
         );
       }
-
       if (handoffLocationName.length < 3 || handoffAddress.length < 5) {
         throw makeHttpError(
           400,
@@ -11771,22 +7722,17 @@ app.post(
           "Enter the LGU-approved public service location name and address.",
         );
       }
-
       const campaignRef = db.collection("donationCampaigns").doc(campaignId);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       const result = await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(campaignRef);
-
         if (!snapshot.exists) {
           throw makeHttpError(404, "campaign_not_found", "The Donation Campaign was not found.");
         }
-
         const campaign = snapshot.data() || {};
         const sourceType = cleanText(campaign.sourceType || "", 80).toLowerCase();
         const status = cleanText(campaign.status || "", 40).toLowerCase();
         const verifiedAmountReceived = Number(campaign.verifiedAmountReceived || 0);
-
         if (sourceType !== "disaster_relief_need") {
           throw makeHttpError(
             409,
@@ -11794,7 +7740,6 @@ app.post(
             "Community Assistance campaign locations must remain linked to the verified Assistance Request.",
           );
         }
-
         if (status !== "published") {
           throw makeHttpError(
             409,
@@ -11802,7 +7747,6 @@ app.post(
             "Only a currently published disaster campaign can be completed from this screen.",
           );
         }
-
         if (
           Number.isFinite(verifiedAmountReceived) &&
           monetaryGoal + 0.009 < Math.max(0, verifiedAmountReceived)
@@ -11813,7 +7757,6 @@ app.post(
             "The funding goal cannot be lower than the amount already verified for this campaign.",
           );
         }
-
         transaction.update(campaignRef, {
           monetaryGoal,
           handoffLocationType: "lgu_public_service_point",
@@ -11823,7 +7766,6 @@ app.post(
           updatedBy: adminUid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.set(activityRef, {
           action: "Donation Campaign Public Setup Completed",
           campaignId,
@@ -11832,7 +7774,6 @@ app.post(
           performedBy: adminUid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         return {
           campaignId,
           monetaryGoal,
@@ -11840,7 +7781,6 @@ app.post(
           handoffAddress,
         };
       });
-
       response.json({ ok: true, ...result });
     } catch (error) {
       console.error("Donation campaign public setup update failed:", error);
@@ -11854,7 +7794,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/admin/donations/campaigns/:campaignId/public-photos",
   requireFirebaseUser,
@@ -11864,7 +7803,6 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const campaignId = cleanText(request.params?.campaignId || "", 160);
       const rawPhotoUrls = request.body?.publicPhotoUrls;
-
       if (!campaignId) {
         throw makeHttpError(
           400,
@@ -11872,7 +7810,6 @@ app.post(
           "The Donation Campaign ID is invalid.",
         );
       }
-
       if (!Array.isArray(rawPhotoUrls)) {
         throw makeHttpError(
           400,
@@ -11880,7 +7817,6 @@ app.post(
           "Public campaign photos must be submitted as a list.",
         );
       }
-
       if (rawPhotoUrls.length > 5) {
         throw makeHttpError(
           400,
@@ -11888,7 +7824,6 @@ app.post(
           "A Donation Campaign may publish up to 5 public photos.",
         );
       }
-
       const publicPhotoUrls = Array.from(
         new Set(
           rawPhotoUrls
@@ -11896,7 +7831,6 @@ app.post(
             .filter((item) => item.startsWith("https://")),
         ),
       ).slice(0, 5);
-
       if (publicPhotoUrls.length !== rawPhotoUrls.length) {
         throw makeHttpError(
           400,
@@ -11904,13 +7838,10 @@ app.post(
           "Every public campaign photo must use a valid HTTPS URL.",
         );
       }
-
       const campaignRef = db.collection("donationCampaigns").doc(campaignId);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(campaignRef);
-
         if (!snapshot.exists) {
           throw makeHttpError(
             404,
@@ -11918,9 +7849,7 @@ app.post(
             "The Donation Campaign no longer exists.",
           );
         }
-
         const campaign = snapshot.data() || {};
-
         if (String(campaign.status || "") !== "published") {
           throw makeHttpError(
             409,
@@ -11928,13 +7857,11 @@ app.post(
             "Only a published Donation Campaign can update public photos.",
           );
         }
-
         transaction.update(campaignRef, {
           publicPhotoUrls,
           updatedBy: adminUid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.set(activityRef, {
           action: "Donation Campaign Public Photos Updated",
           campaignId,
@@ -11943,7 +7870,6 @@ app.post(
           timestamp: FieldValue.serverTimestamp(),
         });
       });
-
       response.json({
         ok: true,
         campaignId,
@@ -11961,7 +7887,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/admin/donations/campaigns/:campaignId/close",
   requireFirebaseUser,
@@ -11970,24 +7895,19 @@ app.post(
     try {
       const adminUid = request.firebaseUser.uid;
       const campaignId = cleanText(request.params?.campaignId || "", 160);
-
       if (!campaignId) {
         throw makeHttpError(400, "invalid_campaign_id", "The Donation Campaign ID is invalid.");
       }
-
       const campaignRef = db.collection("donationCampaigns").doc(campaignId);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(campaignRef);
         if (!snapshot.exists) {
           throw makeHttpError(404, "campaign_not_found", "The Donation Campaign was not found.");
         }
-
         if (cleanText(snapshot.data()?.status || "", 40).toLowerCase() !== "published") {
           throw makeHttpError(409, "campaign_not_active", "Only a published campaign can be closed.");
         }
-
         transaction.update(campaignRef, {
           status: "closed",
           closedBy: adminUid,
@@ -12002,7 +7922,6 @@ app.post(
           timestamp: FieldValue.serverTimestamp(),
         });
       });
-
       response.status(200).json({ ok: true, campaignId, status: "closed" });
     } catch (error) {
       console.error("Donation campaign close failed:", error);
@@ -12013,7 +7932,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/admin/donations/:donationId/verify",
   requireFirebaseUser,
@@ -12023,11 +7941,9 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const donationId = cleanText(request.params?.donationId || "", 160);
       const actual = Number(request.body?.actualValue ?? 0);
-
       if (!donationId) {
         throw makeHttpError(400, "invalid_donation_id", "The Donation submission ID is invalid.");
       }
-
       if (!Number.isFinite(actual) || actual <= 0) {
         throw makeHttpError(
           400,
@@ -12035,18 +7951,14 @@ app.post(
           "Enter the actual monetary amount confirmed by the LGU.",
         );
       }
-
       const donationRef = db.collection("donations").doc(donationId);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       const existingSnapshot = await donationRef.get();
       if (!existingSnapshot.exists) {
         throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
       }
-
       const existing = existingSnapshot.data() || {};
       const donationType = cleanText(existing.donationType || "", 40).toLowerCase();
-
       if (donationType !== "monetary") {
         throw makeHttpError(
           409,
@@ -12054,9 +7966,7 @@ app.post(
           "Only monetary donation submissions are supported in the current thesis scope.",
         );
       }
-
       let monetaryReferenceRegistryRef = null;
-
       {
         const normalizedReference = normalizeDonationReference(existing.transactionReference);
         if (normalizedReference.length < 4) {
@@ -12066,7 +7976,6 @@ app.post(
             "This monetary submission does not contain a valid donor transaction reference.",
           );
         }
-
         // Use a single-field query so this backend path does not require a
         // new composite Firestore index just to check older verified records.
         // The hashed registry below is the atomic guard for new verifications.
@@ -12074,7 +7983,6 @@ app.post(
           .collection("donations")
           .where("status", "==", "received")
           .get();
-
         const duplicate = receivedSnapshot.docs.find(
           (item) =>
             item.id !== donationId &&
@@ -12083,7 +7991,6 @@ app.post(
             normalizeDonationReference(item.data()?.transactionReference) ===
               normalizedReference,
         );
-
         if (duplicate) {
           throw makeHttpError(
             409,
@@ -12091,7 +7998,6 @@ app.post(
             "This donor transaction reference is already linked to another verified donation.",
           );
         }
-
         const referenceHash = crypto
           .createHash("sha256")
           .update(normalizedReference)
@@ -12100,18 +8006,15 @@ app.post(
           .collection("donationTransactionReferences")
           .doc(referenceHash);
       }
-
       const result = await db.runTransaction(async (transaction) => {
         const donationSnapshot = await transaction.get(donationRef);
         if (!donationSnapshot.exists) {
           throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
         }
-
         const current = donationSnapshot.data() || {};
         if (cleanText(current.status || "", 40).toLowerCase() !== "submitted") {
           throw makeHttpError(409, "donation_already_reviewed", "This donation has already been reviewed.");
         }
-
         const currentType = cleanText(current.donationType || "", 40).toLowerCase();
         if (currentType !== "monetary") {
           throw makeHttpError(
@@ -12120,10 +8023,8 @@ app.post(
             "Only monetary donation submissions are supported in the current thesis scope.",
           );
         }
-
         let nextVerifiedAmountReceived = 0;
         let campaignRef = null;
-
         {
           if (monetaryReferenceRegistryRef) {
             const registrySnapshot = await transaction.get(monetaryReferenceRegistryRef);
@@ -12135,7 +8036,6 @@ app.post(
               );
             }
           }
-
           const campaignId = cleanText(current.campaignId || "", 160);
           if (!campaignId) {
             throw makeHttpError(
@@ -12144,7 +8044,6 @@ app.post(
               "This monetary donation is not linked to a Donation Campaign.",
             );
           }
-
           campaignRef = db.collection("donationCampaigns").doc(campaignId);
           const campaignSnapshot = await transaction.get(campaignRef);
           if (!campaignSnapshot.exists) {
@@ -12154,21 +8053,18 @@ app.post(
               "The linked Donation Campaign was not found.",
             );
           }
-
           const currentVerifiedAmount = Number(
             campaignSnapshot.data()?.verifiedAmountReceived || 0,
           );
           nextVerifiedAmountReceived =
             (Number.isFinite(currentVerifiedAmount) ? currentVerifiedAmount : 0) + actual;
         }
-
         if (campaignRef) {
           transaction.update(campaignRef, {
             verifiedAmountReceived: nextVerifiedAmountReceived,
             updatedBy: adminUid,
             updatedAt: FieldValue.serverTimestamp(),
           });
-
           if (monetaryReferenceRegistryRef) {
             transaction.set(monetaryReferenceRegistryRef, {
               donationId,
@@ -12178,7 +8074,6 @@ app.post(
             });
           }
         }
-
         transaction.update(donationRef, {
           status: "received",
           actualAmountReceived: actual,
@@ -12189,7 +8084,6 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           rejectionReason: "",
         });
-
         transaction.set(activityRef, {
           action: "Donation Verified as Received",
           donationId,
@@ -12199,13 +8093,11 @@ app.post(
           performedBy: adminUid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         return {
           donationType: "monetary",
           verifiedAmountReceived: nextVerifiedAmountReceived,
         };
       });
-
       response.status(200).json({ ok: true, donationId, ...result });
     } catch (error) {
       console.error("Donation verification failed:", error);
@@ -12216,7 +8108,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/admin/donations/:donationId/reject",
   requireFirebaseUser,
@@ -12226,28 +8117,22 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const donationId = cleanText(request.params?.donationId || "", 160);
       const reason = cleanText(request.body?.rejectionReason || "", 600);
-
       if (!donationId) {
         throw makeHttpError(400, "invalid_donation_id", "The Donation submission ID is invalid.");
       }
-
       if (reason.length < 5) {
         throw makeHttpError(400, "rejection_reason_required", "Enter a clear rejection reason.");
       }
-
       const donationRef = db.collection("donations").doc(donationId);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(donationRef);
         if (!snapshot.exists) {
           throw makeHttpError(404, "donation_not_found", "The Donation submission was not found.");
         }
-
         if (cleanText(snapshot.data()?.status || "", 40).toLowerCase() !== "submitted") {
           throw makeHttpError(409, "donation_already_reviewed", "This donation has already been reviewed.");
         }
-
         transaction.update(donationRef, {
           status: "rejected",
           rejectionReason: reason,
@@ -12264,7 +8149,6 @@ app.post(
           timestamp: FieldValue.serverTimestamp(),
         });
       });
-
       response.status(200).json({ ok: true, donationId, status: "rejected" });
     } catch (error) {
       console.error("Donation rejection failed:", error);
@@ -12275,34 +8159,17 @@ app.post(
     }
   },
 );
-
-
 const port =
-
   Number(
-
     process.env.PORT ||
-
       10000,
-
   );
-
-
-
 app.listen(
-
   port,
-
   "0.0.0.0",
-
   () => {
-
     console.log(
-
       `VolunServe backend listening on port ${port}`,
-
     );
-
   },
-
 );
