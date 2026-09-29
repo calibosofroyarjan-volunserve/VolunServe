@@ -1614,6 +1614,383 @@ app.post(
     }
   },
 );
+app.patch(
+  "/api/admin/lgu/personnel/:uid",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const targetUid = cleanText(request.params?.uid || "", 160);
+
+      if (!targetUid) {
+        throw makeHttpError(
+          400,
+          "lgu_uid_required",
+          "The LGU Personnel account ID is required.",
+        );
+      }
+
+      const [profile, personnelSnapshot] = await Promise.all([
+        loadUserProfile(targetUid),
+        db.collection("lguPersonnel").doc(targetUid).get(),
+      ]);
+
+      if (!profile || !personnelSnapshot.exists) {
+        throw makeHttpError(
+          404,
+          "lgu_personnel_not_found",
+          "The LGU Personnel account was not found.",
+        );
+      }
+
+      const personnel = personnelSnapshot.data() || {};
+
+      if (
+        getProfileRole(profile) !== "lgu_personnel" ||
+        personnel.isTestAccount === true ||
+        profile.isTestAccount === true
+      ) {
+        throw makeHttpError(
+          403,
+          "real_lgu_personnel_required",
+          "This management action is available only for real LGU Personnel accounts.",
+        );
+      }
+
+      const fullName = cleanText(
+        request.body?.fullName ?? personnel.fullName ?? profile.fullName ?? "",
+        120,
+      );
+      const phoneNumber = cleanText(
+        request.body?.phoneNumber ?? personnel.phoneNumber ?? profile.phoneNumber ?? "",
+        40,
+      );
+      const department = cleanText(
+        request.body?.department ?? personnel.department ?? profile.department ?? "",
+        120,
+      );
+      const position = cleanText(
+        request.body?.position ?? personnel.position ?? profile.position ?? "",
+        120,
+      );
+      const capabilities = normalizeLguCapabilities(
+        request.body?.capabilities ?? personnel.capabilities ?? [],
+      );
+
+      if (fullName.length < 2) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_name",
+          "Enter the LGU Personnel full name.",
+        );
+      }
+
+      if (department.length < 2 || position.length < 2) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_position",
+          "Enter the LGU department and position.",
+        );
+      }
+
+      await auth.updateUser(targetUid, {
+        displayName: fullName,
+      });
+
+      const batch = db.batch();
+      const userRef = db.collection("users").doc(targetUid);
+      const personnelRef = db.collection("lguPersonnel").doc(targetUid);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      batch.set(
+        userRef,
+        {
+          fullName,
+          phoneNumber,
+          department,
+          position,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        personnelRef,
+        {
+          fullName,
+          phoneNumber,
+          department,
+          position,
+          capabilities,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+      batch.set(activityRef, {
+        action: "LGU Personnel Profile Updated",
+        personnelUid: targetUid,
+        employeeId: cleanText(personnel.employeeId || "", 80),
+        department,
+        position,
+        performedBy: adminUid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      response.json({
+        ok: true,
+        uid: targetUid,
+        fullName,
+        phoneNumber,
+        department,
+        position,
+        capabilities,
+        message: "LGU Personnel information updated successfully.",
+      });
+    } catch (error) {
+      console.error("LGU Personnel profile update failed:", error);
+
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "lgu_personnel_update_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to update the LGU Personnel account.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/lgu/personnel/:uid/status",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const targetUid = cleanText(request.params?.uid || "", 160);
+      const nextStatus = cleanText(
+        request.body?.employmentStatus || "",
+        40,
+      ).toLowerCase();
+      const reason = cleanText(request.body?.reason || "", 700);
+
+      if (!targetUid) {
+        throw makeHttpError(
+          400,
+          "lgu_uid_required",
+          "The LGU Personnel account ID is required.",
+        );
+      }
+
+      if (!["active", "suspended", "inactive"].includes(nextStatus)) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_employment_status",
+          "Employment status must be active, suspended, or inactive.",
+        );
+      }
+
+      if (
+        ["suspended", "inactive"].includes(nextStatus) &&
+        reason.length < 3
+      ) {
+        throw makeHttpError(
+          400,
+          "lgu_status_reason_required",
+          "Enter a short reason for suspending or deactivating this LGU Personnel account.",
+        );
+      }
+
+      const [profile, personnelSnapshot, dutySnapshot] = await Promise.all([
+        loadUserProfile(targetUid),
+        db.collection("lguPersonnel").doc(targetUid).get(),
+        db.collection("lguDutyStatus").doc(targetUid).get(),
+      ]);
+
+      if (!profile || !personnelSnapshot.exists) {
+        throw makeHttpError(
+          404,
+          "lgu_personnel_not_found",
+          "The LGU Personnel account was not found.",
+        );
+      }
+
+      const personnel = personnelSnapshot.data() || {};
+      const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
+
+      if (
+        getProfileRole(profile) !== "lgu_personnel" ||
+        personnel.isTestAccount === true ||
+        profile.isTestAccount === true
+      ) {
+        throw makeHttpError(
+          403,
+          "real_lgu_personnel_required",
+          "Employment access management is available only for real LGU Personnel accounts.",
+        );
+      }
+
+      const currentStatus = cleanText(
+        personnel.employmentStatus || profile.employmentStatus || "active",
+        40,
+      ).toLowerCase();
+
+      if (currentStatus === nextStatus) {
+        response.json({
+          ok: true,
+          uid: targetUid,
+          employmentStatus: nextStatus,
+          message: `LGU Personnel is already ${nextStatus}.`,
+        });
+        return;
+      }
+
+      const dutyStatus = cleanText(
+        duty.dutyStatus || "off_duty",
+        40,
+      ).toLowerCase();
+      const availabilityStatus = cleanText(
+        duty.availabilityStatus || "unavailable",
+        40,
+      ).toLowerCase();
+      const activeCaseId = cleanText(duty.activeCaseId || "", 160);
+      const activeAssignmentId = cleanText(
+        duty.activeAssignmentId || "",
+        180,
+      );
+
+      if (
+        nextStatus !== "active" &&
+        (
+          dutyStatus === "on_duty" ||
+          ["assigned", "responding", "on_site"].includes(
+            availabilityStatus,
+          ) ||
+          activeCaseId ||
+          activeAssignmentId
+        )
+      ) {
+        throw makeHttpError(
+          409,
+          "lgu_personnel_currently_on_duty",
+          "This LGU Personnel account cannot be suspended or deactivated while On Duty or handling an active emergency. Complete the response and Time Out first.",
+        );
+      }
+
+      if (nextStatus === "active") {
+        await auth.updateUser(targetUid, {
+          disabled: false,
+        });
+      } else {
+        await auth.updateUser(targetUid, {
+          disabled: true,
+        });
+        await auth.revokeRefreshTokens(targetUid);
+      }
+
+      const userRef = db.collection("users").doc(targetUid);
+      const personnelRef = db.collection("lguPersonnel").doc(targetUid);
+      const dutyRef = db.collection("lguDutyStatus").doc(targetUid);
+      const activityRef = db.collection("adminActivityLogs").doc();
+      const batch = db.batch();
+
+      batch.set(
+        userRef,
+        {
+          status:
+            nextStatus === "active"
+              ? "approved"
+              : nextStatus,
+          employmentStatus: nextStatus,
+          lguVerified: true,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        personnelRef,
+        {
+          employmentStatus: nextStatus,
+          verificationStatus: "verified",
+          statusReason: nextStatus === "active" ? "" : reason,
+          statusUpdatedAt: FieldValue.serverTimestamp(),
+          statusUpdatedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        dutyRef,
+        {
+          uid: targetUid,
+          dutyStatus: "off_duty",
+          availabilityStatus: "unavailable",
+          activeCaseId: "",
+          activeAssignmentId: "",
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        },
+        { merge: true },
+      );
+
+      batch.set(activityRef, {
+        action:
+          nextStatus === "active"
+            ? "LGU Personnel Reactivated"
+            : nextStatus === "suspended"
+              ? "LGU Personnel Suspended"
+              : "LGU Personnel Deactivated",
+        personnelUid: targetUid,
+        employeeId: cleanText(personnel.employeeId || "", 80),
+        previousEmploymentStatus: currentStatus,
+        employmentStatus: nextStatus,
+        reason,
+        performedBy: adminUid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      response.json({
+        ok: true,
+        uid: targetUid,
+        employmentStatus: nextStatus,
+        message:
+          nextStatus === "active"
+            ? "LGU Personnel access reactivated successfully."
+            : nextStatus === "suspended"
+              ? "LGU Personnel access suspended successfully."
+              : "LGU Personnel account deactivated successfully. Historical attendance and emergency records were preserved.",
+      });
+    } catch (error) {
+      console.error("LGU Personnel status update failed:", error);
+
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "lgu_personnel_status_update_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to update LGU Personnel access status.",
+          700,
+        ),
+      });
+    }
+  },
+);
 app.get(
   "/api/admin/lgu/personnel",
   requireFirebaseUser,
