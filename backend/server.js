@@ -1401,6 +1401,8 @@ app.get(
             activeCaseId: cleanText(duty.activeCaseId || "", 160),
             activeAssignmentId: cleanText(duty.activeAssignmentId || "", 180),
             shiftDate: cleanText(duty.shiftDate || "", 20),
+            timeInAt: duty.timeInAt || null,
+            timeOutAt: duty.timeOutAt || null,
           };
         }),
       );
@@ -1411,6 +1413,108 @@ app.get(
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(error?.code || "lgu_personnel_list_failed", 120),
         message: cleanText(error?.message || "Unable to load LGU Personnel.", 700),
+      });
+    }
+  },
+);
+app.get(
+  "/api/admin/lgu/attendance",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const requestedLimit = Number(request.query?.limit);
+      const safeLimit =
+        Number.isFinite(requestedLimit) && requestedLimit > 0
+          ? Math.min(Math.floor(requestedLimit), 500)
+          : 200;
+
+      const [attendanceSnapshot, personnelSnapshot] = await Promise.all([
+        db.collection("lguAttendance").limit(500).get(),
+        db.collection("lguPersonnel").limit(200).get(),
+      ]);
+
+      const personnelByUid = new Map();
+
+      personnelSnapshot.docs.forEach((document) => {
+        const data = document.data() || {};
+
+        personnelByUid.set(document.id, {
+          employeeId: cleanText(data.employeeId || "", 80),
+          isTestAccount: data.isTestAccount === true,
+          email: cleanText(data.email || "", 160),
+        });
+      });
+
+      const timestampIso = (value) => {
+        try {
+          if (!value) return "";
+
+          if (typeof value.toDate === "function") {
+            return value.toDate().toISOString();
+          }
+
+          if (value instanceof Date) {
+            return value.toISOString();
+          }
+
+          return "";
+        } catch {
+          return "";
+        }
+      };
+
+      const records = attendanceSnapshot.docs
+        .map((document) => {
+          const data = document.data() || {};
+          const uid = cleanText(data.uid || "", 160);
+          const personnelMeta = personnelByUid.get(uid) || {};
+
+          return {
+            id: document.id,
+            uid,
+            fullName: cleanText(data.fullName || "", 120),
+            department: cleanText(data.department || "", 120),
+            position: cleanText(data.position || "", 120),
+            employeeId: cleanText(personnelMeta.employeeId || "", 80),
+            email: cleanText(personnelMeta.email || "", 160),
+            isTestAccount: personnelMeta.isTestAccount === true,
+            shiftDate: cleanText(data.shiftDate || "", 20),
+            status: cleanText(data.status || "", 40),
+            timeInAt: timestampIso(data.timeInAt),
+            timeOutAt: timestampIso(data.timeOutAt),
+            createdAt: timestampIso(data.createdAt),
+            updatedAt: timestampIso(data.updatedAt),
+          };
+        })
+        .sort((a, b) => {
+          const aTime = a.timeInAt
+            ? new Date(a.timeInAt).getTime()
+            : 0;
+          const bTime = b.timeInAt
+            ? new Date(b.timeInAt).getTime()
+            : 0;
+
+          return bTime - aTime;
+        })
+        .slice(0, safeLimit);
+
+      response.json({
+        ok: true,
+        records,
+      });
+    } catch (error) {
+      console.error("LGU attendance history load failed:", error);
+
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "lgu_attendance_history_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to load LGU attendance history.",
+          700,
+        ),
       });
     }
   },
