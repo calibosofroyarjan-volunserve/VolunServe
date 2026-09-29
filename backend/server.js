@@ -1305,6 +1305,73 @@ app.post(
     }
   },
 );
+app.post(
+  "/api/admin/lgu/test-personnel/:uid/reset-password",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const targetUid = cleanText(request.params?.uid || "", 160);
+      if (!targetUid) {
+        throw makeHttpError(400, "lgu_uid_required", "The TEST LGU Personnel account ID is required.");
+      }
+      const [profile, personnelSnapshot] = await Promise.all([
+        loadUserProfile(targetUid),
+        db.collection("lguPersonnel").doc(targetUid).get(),
+      ]);
+      if (!profile || !personnelSnapshot.exists) {
+        throw makeHttpError(404, "test_lgu_not_found", "The TEST LGU Personnel account was not found.");
+      }
+      const personnel = personnelSnapshot.data() || {};
+      const employeeId = cleanText(personnel.employeeId || profile.employeeId || "", 80).toUpperCase();
+      const email = cleanText(personnel.email || profile.email || "", 160).toLowerCase();
+      const fullName = cleanText(personnel.fullName || profile.fullName || "", 120);
+      const isSafeTestAccount =
+        profile.role === "lgu_personnel" &&
+        profile.isTestAccount === true &&
+        personnel.isTestAccount === true &&
+        employeeId.startsWith("TEST-LGU-") &&
+        /^[^\s@]+@volunserve[.]test$/i.test(email);
+      if (!isSafeTestAccount) {
+        throw makeHttpError(
+          403,
+          "test_lgu_reset_only",
+          "Password reset from this endpoint is allowed only for clearly marked TEST LGU Personnel accounts.",
+        );
+      }
+      const temporaryPassword = makeTestLguPassword();
+      await auth.updateUser(targetUid, {
+        password: temporaryPassword,
+        disabled: false,
+      });
+      await auth.revokeRefreshTokens(targetUid);
+      await db.collection("adminActivityLogs").add({
+        action: "Test LGU Personnel Password Reset",
+        personnelUid: targetUid,
+        employeeId,
+        email,
+        performedBy: adminUid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+      response.json({
+        ok: true,
+        uid: targetUid,
+        fullName,
+        email,
+        employeeId,
+        temporaryPassword,
+        message: "TEST LGU password reset successfully. Save the new temporary password now because it is returned only in this response.",
+      });
+    } catch (error) {
+      console.error("TEST LGU password reset failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "test_lgu_password_reset_failed", 120),
+        message: cleanText(error?.message || "Unable to reset the TEST LGU Personnel password.", 700),
+      });
+    }
+  },
+);
 app.get(
   "/api/admin/lgu/personnel",
   requireFirebaseUser,
