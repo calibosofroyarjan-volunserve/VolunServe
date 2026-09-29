@@ -2080,6 +2080,216 @@ app.post(
     }
   },
 );
+app.post(
+  "/api/lgu/assignments/:assignmentId/arrive",
+  requireFirebaseUser,
+  requireVerifiedLguPersonnel,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const assignmentId = cleanText(request.params?.assignmentId || "", 180);
+
+      if (!assignmentId) {
+        throw makeHttpError(
+          400,
+          "assignment_id_required",
+          "The LGU assignment ID is required.",
+        );
+      }
+
+      const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      const residentNotificationRef = db.collection("notifications").doc();
+      const activityLogRef = db.collection("adminActivityLogs").doc();
+
+      let arrivalResult = null;
+
+      await db.runTransaction(async (transaction) => {
+        const [assignmentSnapshot, dutySnapshot] = await Promise.all([
+          transaction.get(assignmentRef),
+          transaction.get(dutyRef),
+        ]);
+
+        if (!assignmentSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "lgu_assignment_not_found",
+            "This LGU assignment no longer exists.",
+          );
+        }
+
+        if (!dutySnapshot.exists) {
+          throw makeHttpError(
+            409,
+            "lgu_duty_not_found",
+            "Your LGU duty record could not be found.",
+          );
+        }
+
+        const assignment = assignmentSnapshot.data() || {};
+        const duty = dutySnapshot.data() || {};
+        const caseId = cleanText(assignment.caseId || "", 160);
+
+        if (cleanText(assignment.personnelUid || "", 160) !== uid) {
+          throw makeHttpError(
+            403,
+            "lgu_assignment_forbidden",
+            "This emergency assignment does not belong to your LGU account.",
+          );
+        }
+
+        if (!caseId) {
+          throw makeHttpError(
+            409,
+            "lgu_assignment_case_missing",
+            "This LGU assignment is not linked to a valid emergency case.",
+          );
+        }
+
+        const assignmentStatus = cleanText(
+          assignment.status || "",
+          40,
+        ).toLowerCase();
+
+        if (assignmentStatus !== "responding") {
+          throw makeHttpError(
+            409,
+            "lgu_assignment_not_ready_for_arrival",
+            assignmentStatus === "on_site"
+              ? "You have already marked this emergency response as On Site."
+              : "Start the official response before marking arrival.",
+          );
+        }
+
+        if (
+          cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
+          cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "responding" ||
+          cleanText(duty.activeAssignmentId || "", 180) !== assignmentId ||
+          cleanText(duty.activeCaseId || "", 160) !== caseId
+        ) {
+          throw makeHttpError(
+            409,
+            "lgu_duty_assignment_mismatch",
+            "Your active duty record no longer matches this responding emergency assignment.",
+          );
+        }
+
+        const caseRef = db.collection("disasterCases").doc(caseId);
+        const caseSnapshot = await transaction.get(caseRef);
+
+        if (!caseSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "emergency_case_not_found",
+            "The linked emergency case no longer exists.",
+          );
+        }
+
+        const emergencyCase = caseSnapshot.data() || {};
+        const caseStatus = cleanText(
+          emergencyCase.status || "",
+          40,
+        ).toLowerCase();
+
+        if (caseStatus !== "in_progress") {
+          throw makeHttpError(
+            409,
+            "emergency_case_not_in_progress",
+            "The emergency case must be In Progress before arrival can be recorded.",
+          );
+        }
+
+        if (
+          cleanText(emergencyCase.activeLguResponderUid || "", 160) !== uid
+        ) {
+          throw makeHttpError(
+            409,
+            "official_lgu_responder_mismatch",
+            "You are no longer the active official LGU responder for this case.",
+          );
+        }
+
+        transaction.update(assignmentRef, {
+          status: "on_site",
+          arrivedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(dutyRef, {
+          availabilityStatus: "on_site",
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: uid,
+        });
+
+        transaction.update(caseRef, {
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const reporterUid = cleanText(emergencyCase.reporterUid || "", 160);
+
+        if (reporterUid) {
+          transaction.set(residentNotificationRef, {
+            userId: reporterUid,
+            audience: "resident",
+            type: "official_lgu_on_site",
+            caseId,
+            assignmentId,
+            responderId: uid,
+            responderName: cleanText(
+              assignment.personnelName || "LGU Responder",
+              120,
+            ),
+            title: "Official LGU responder arrived",
+            message: `${cleanText(
+              assignment.personnelName || "Your assigned LGU responder",
+              120,
+            )} has arrived at the emergency location.`,
+            read: false,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        transaction.set(activityLogRef, {
+          action: "Official LGU Responder Arrived On Site",
+          caseId,
+          assignmentId,
+          personnelUid: uid,
+          personnelName: cleanText(
+            assignment.personnelName || "LGU Responder",
+            120,
+          ),
+          performedBy: uid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        arrivalResult = {
+          id: assignmentId,
+          caseId,
+          personnelUid: uid,
+          status: "on_site",
+        };
+      });
+
+      response.json({
+        ok: true,
+        assignment: arrivalResult,
+        dutyStatus: "on_duty",
+        availabilityStatus: "on_site",
+        caseStatus: "in_progress",
+        message: "Arrival recorded. You are now On Site.",
+      });
+    } catch (error) {
+      console.error("LGU mark arrival failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_arrival_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to mark the LGU responder as On Site.",
+          700,
+        ),
+      });
+    }
+  },
+);
 app.get(
   "/api/lgu/me",
   requireFirebaseUser,
