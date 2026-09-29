@@ -1511,6 +1511,19 @@ app.post(
           );
         }
 
+        if (
+          cleanText(
+            emergencyCase.officialLguResponseStatus || "",
+            80,
+          ).toLowerCase() === "completed_pending_admin_review"
+        ) {
+          throw makeHttpError(
+            409,
+            "lgu_field_report_review_required",
+            "Review the completed official LGU field report before assigning another official responder.",
+          );
+        }
+
         if (cleanText(emergencyCase.reporterUid || "", 160) === personnelUid) {
           throw makeHttpError(
             409,
@@ -2634,6 +2647,259 @@ app.post(
         error: cleanText(error?.code || "lgu_complete_response_failed", 120),
         message: cleanText(
           error?.message || "Unable to complete the official LGU field response.",
+          700,
+        ),
+      });
+    }
+  },
+);
+app.get(
+  "/api/admin/lgu/field-reports",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const caseId = cleanText(request.query?.caseId || "", 160);
+
+      if (!caseId) {
+        throw makeHttpError(
+          400,
+          "case_id_required",
+          "The emergency case ID is required.",
+        );
+      }
+
+      const snapshot = await db
+        .collection("lguFieldReports")
+        .where("caseId", "==", caseId)
+        .get();
+
+      const timestampIso = (value) => {
+        try {
+          if (!value) return "";
+          if (typeof value.toDate === "function") {
+            return value.toDate().toISOString();
+          }
+          if (value instanceof Date) {
+            return value.toISOString();
+          }
+          return "";
+        } catch {
+          return "";
+        }
+      };
+
+      const reports = snapshot.docs
+        .map((documentSnapshot) => {
+          const data = documentSnapshot.data() || {};
+
+          return {
+            id: documentSnapshot.id,
+            assignmentId: cleanText(
+              data.assignmentId || documentSnapshot.id,
+              180,
+            ),
+            caseId: cleanText(data.caseId || "", 160),
+            personnelUid: cleanText(data.personnelUid || "", 160),
+            personnelName: cleanText(
+              data.personnelName || "LGU Responder",
+              120,
+            ),
+            department: cleanText(data.department || "", 120),
+            position: cleanText(data.position || "", 120),
+            caseTitle: cleanText(data.caseTitle || "Emergency Case", 180),
+            caseCategory: cleanText(data.caseCategory || "Emergency", 120),
+            caseSeverity: cleanText(data.caseSeverity || "", 40),
+            responseLocation: cleanText(data.responseLocation || "", 320),
+            situationSummary: cleanText(data.situationSummary || "", 1000),
+            actionsTaken: cleanText(data.actionsTaken || "", 1500),
+            peopleAssisted: Number(data.peopleAssisted || 0),
+            outcome: cleanText(data.outcome || "", 80),
+            remainingNeeds: cleanText(data.remainingNeeds || "", 1000),
+            notes: cleanText(data.notes || "", 1000),
+            adminReviewStatus: cleanText(
+              data.adminReviewStatus || "pending",
+              40,
+            ),
+            adminReviewNote: cleanText(
+              data.adminReviewNote || "",
+              1500,
+            ),
+            submittedAt: timestampIso(data.submittedAt || data.createdAt),
+            reviewedAt: timestampIso(data.reviewedAt),
+            reviewedBy: cleanText(data.reviewedBy || "", 160),
+          };
+        })
+        .sort((a, b) => {
+          const aTime = a.submittedAt
+            ? new Date(a.submittedAt).getTime()
+            : 0;
+          const bTime = b.submittedAt
+            ? new Date(b.submittedAt).getTime()
+            : 0;
+          return bTime - aTime;
+        });
+
+      response.json({
+        ok: true,
+        caseId,
+        reports,
+      });
+    } catch (error) {
+      console.error("Admin LGU field report load failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "admin_lgu_field_report_load_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to load official LGU field reports.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/lgu/field-reports/:reportId/review",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const reportId = cleanText(request.params?.reportId || "", 180);
+      const adminReviewNote = cleanText(
+        request.body?.adminReviewNote || "",
+        1500,
+      );
+
+      if (!reportId) {
+        throw makeHttpError(
+          400,
+          "report_id_required",
+          "The official LGU field report ID is required.",
+        );
+      }
+
+      const reportRef = db.collection("lguFieldReports").doc(reportId);
+      const activityLogRef = db.collection("adminActivityLogs").doc();
+
+      let reviewResult = null;
+
+      await db.runTransaction(async (transaction) => {
+        const reportSnapshot = await transaction.get(reportRef);
+
+        if (!reportSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "lgu_field_report_not_found",
+            "The official LGU field report no longer exists.",
+          );
+        }
+
+        const report = reportSnapshot.data() || {};
+        const caseId = cleanText(report.caseId || "", 160);
+
+        if (!caseId) {
+          throw makeHttpError(
+            409,
+            "lgu_field_report_case_missing",
+            "This LGU field report is not linked to a valid emergency case.",
+          );
+        }
+
+        const currentReviewStatus = cleanText(
+          report.adminReviewStatus || "pending",
+          40,
+        ).toLowerCase();
+
+        if (currentReviewStatus === "reviewed") {
+          throw makeHttpError(
+            409,
+            "lgu_field_report_already_reviewed",
+            "This official LGU field report has already been reviewed.",
+          );
+        }
+
+        const caseRef = db.collection("disasterCases").doc(caseId);
+        const caseSnapshot = await transaction.get(caseRef);
+
+        if (!caseSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "emergency_case_not_found",
+            "The linked emergency case no longer exists.",
+          );
+        }
+
+        const emergencyCase = caseSnapshot.data() || {};
+        const latestReportId = cleanText(
+          emergencyCase.latestLguFieldReportId || "",
+          180,
+        );
+
+        if (latestReportId && latestReportId !== reportId) {
+          throw makeHttpError(
+            409,
+            "newer_lgu_field_report_exists",
+            "A newer official LGU field report exists for this case. Review the latest report instead.",
+          );
+        }
+
+        transaction.update(reportRef, {
+          adminReviewStatus: "reviewed",
+          adminReviewNote,
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(caseRef, {
+          officialLguResponseStatus: "reviewed",
+          latestLguFieldReportId: reportId,
+          lguFieldReportReviewedAt: FieldValue.serverTimestamp(),
+          lguFieldReportReviewedBy: adminUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(activityLogRef, {
+          action: "Official LGU Field Report Reviewed",
+          caseId,
+          assignmentId: cleanText(report.assignmentId || reportId, 180),
+          reportId,
+          personnelUid: cleanText(report.personnelUid || "", 160),
+          personnelName: cleanText(
+            report.personnelName || "LGU Responder",
+            120,
+          ),
+          adminReviewNote,
+          performedBy: adminUid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        reviewResult = {
+          reportId,
+          caseId,
+          status: "reviewed",
+        };
+      });
+
+      response.json({
+        ok: true,
+        review: reviewResult,
+        message:
+          "Official LGU field report reviewed. The Admin may now decide whether to resolve the emergency or continue follow-up.",
+      });
+    } catch (error) {
+      console.error("Admin LGU field report review failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "admin_lgu_field_report_review_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to review the official LGU field report.",
           700,
         ),
       });
