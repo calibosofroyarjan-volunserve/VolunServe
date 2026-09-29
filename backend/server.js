@@ -231,6 +231,7 @@ app.use(
     methods: [
       "GET",
       "POST",
+      "PATCH",
       "DELETE",
       "OPTIONS",
     ],
