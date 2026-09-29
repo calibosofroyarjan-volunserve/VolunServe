@@ -1729,6 +1729,132 @@ app.post(
     }
   },
 );
+app.post(
+  "/api/lgu/assignments/:assignmentId/acknowledge",
+  requireFirebaseUser,
+  requireVerifiedLguPersonnel,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const assignmentId = cleanText(request.params?.assignmentId || "", 180);
+
+      if (!assignmentId) {
+        throw makeHttpError(
+          400,
+          "assignment_id_required",
+          "The LGU assignment ID is required.",
+        );
+      }
+
+      const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      const activityLogRef = db.collection("adminActivityLogs").doc();
+
+      let acknowledgedAssignment = null;
+
+      await db.runTransaction(async (transaction) => {
+        const [assignmentSnapshot, dutySnapshot] = await Promise.all([
+          transaction.get(assignmentRef),
+          transaction.get(dutyRef),
+        ]);
+
+        if (!assignmentSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "lgu_assignment_not_found",
+            "This LGU assignment no longer exists.",
+          );
+        }
+
+        if (!dutySnapshot.exists) {
+          throw makeHttpError(
+            409,
+            "lgu_duty_not_found",
+            "Your LGU duty record could not be found.",
+          );
+        }
+
+        const assignment = assignmentSnapshot.data() || {};
+        const duty = dutySnapshot.data() || {};
+
+        if (cleanText(assignment.personnelUid || "", 160) !== uid) {
+          throw makeHttpError(
+            403,
+            "lgu_assignment_forbidden",
+            "This emergency assignment does not belong to your LGU account.",
+          );
+        }
+
+        const assignmentStatus = cleanText(
+          assignment.status || "",
+          40,
+        ).toLowerCase();
+
+        if (assignmentStatus !== "assigned") {
+          throw makeHttpError(
+            409,
+            "lgu_assignment_not_acknowledgeable",
+            assignmentStatus === "acknowledged"
+              ? "This emergency assignment has already been acknowledged."
+              : "This emergency assignment already changed. Refresh and check its latest status.",
+          );
+        }
+
+        if (
+          cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
+          cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "assigned" ||
+          cleanText(duty.activeAssignmentId || "", 180) !== assignmentId ||
+          cleanText(duty.activeCaseId || "", 160) !==
+            cleanText(assignment.caseId || "", 160)
+        ) {
+          throw makeHttpError(
+            409,
+            "lgu_duty_assignment_mismatch",
+            "Your active duty record no longer matches this emergency assignment.",
+          );
+        }
+
+        transaction.update(assignmentRef, {
+          status: "acknowledged",
+          acknowledgedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(activityLogRef, {
+          action: "Official LGU Assignment Acknowledged",
+          caseId: cleanText(assignment.caseId || "", 160),
+          assignmentId,
+          personnelUid: uid,
+          personnelName: cleanText(assignment.personnelName || "LGU Responder", 120),
+          performedBy: uid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        acknowledgedAssignment = {
+          id: assignmentId,
+          caseId: cleanText(assignment.caseId || "", 160),
+          personnelUid: uid,
+          status: "acknowledged",
+        };
+      });
+
+      response.json({
+        ok: true,
+        assignment: acknowledgedAssignment,
+        message: "Emergency assignment acknowledged successfully.",
+      });
+    } catch (error) {
+      console.error("LGU acknowledge assignment failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "lgu_acknowledge_failed", 120),
+        message: cleanText(
+          error?.message || "Unable to acknowledge the emergency assignment.",
+          700,
+        ),
+      });
+    }
+  },
+);
 app.get(
   "/api/lgu/me",
   requireFirebaseUser,
