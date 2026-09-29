@@ -1112,6 +1112,9 @@ async function requireVerifiedLguPersonnel(request, response, next) {
 function makeTestLguPassword() {
   return `${crypto.randomBytes(18).toString("base64url")}Aa1!`;
 }
+function makeLguTemporaryPassword() {
+  return `${crypto.randomBytes(18).toString("base64url")}Aa1!`;
+}
 function normalizeLguCapabilities(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((item) => cleanText(item, 80)).filter(Boolean))].slice(0, 20);
@@ -1136,6 +1139,245 @@ function testLguEmailFromEmployeeId(employeeId) {
     .replace(/^\.+|\.+$/g, "") || `lgu.${Date.now()}`;
   return `${localPart}@volunserve.test`;
 }
+app.post(
+  "/api/admin/lgu/personnel",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    let createdAuthUser = null;
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const fullName = cleanText(request.body?.fullName || "", 120);
+      const department = cleanText(request.body?.department || "", 120);
+      const position = cleanText(request.body?.position || "", 120);
+      const employeeId = cleanText(
+        request.body?.employeeId || "",
+        80,
+      ).toUpperCase();
+      const email = cleanText(
+        request.body?.email || "",
+        160,
+      ).toLowerCase();
+      const phoneNumber = cleanText(
+        request.body?.phoneNumber || "",
+        40,
+      );
+      const capabilities = normalizeLguCapabilities(
+        request.body?.capabilities,
+      );
+
+      if (fullName.length < 2) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_name",
+          "Enter the LGU Personnel full name.",
+        );
+      }
+
+      if (department.length < 2 || position.length < 2) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_position",
+          "Enter the LGU department and position.",
+        );
+      }
+
+      if (
+        employeeId.length < 2 ||
+        employeeId.startsWith("TEST-LGU-")
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_employee_id",
+          "Enter the real LGU employee ID. TEST-LGU- IDs are reserved for development accounts.",
+        );
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        /@volunserve[.]test$/i.test(email)
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_lgu_email",
+          "Enter the staff member's real working email address. @volunserve.test is reserved for TEST accounts.",
+        );
+      }
+
+      const duplicatePersonnel = await db
+        .collection("lguPersonnel")
+        .where("employeeId", "==", employeeId)
+        .limit(1)
+        .get();
+
+      if (!duplicatePersonnel.empty) {
+        throw makeHttpError(
+          409,
+          "lgu_employee_id_exists",
+          "This LGU employee ID is already registered.",
+        );
+      }
+
+      try {
+        await auth.getUserByEmail(email);
+        throw makeHttpError(
+          409,
+          "lgu_email_exists",
+          "This email address is already used by another VolunServe account.",
+        );
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") {
+          throw error;
+        }
+      }
+
+      const password = makeLguTemporaryPassword();
+
+      createdAuthUser = await auth.createUser({
+        email,
+        password,
+        displayName: fullName,
+        emailVerified: false,
+        disabled: false,
+      });
+
+      const uid = createdAuthUser.uid;
+      const userRef = db.collection("users").doc(uid);
+      const personnelRef = db.collection("lguPersonnel").doc(uid);
+      const dutyRef = db.collection("lguDutyStatus").doc(uid);
+      const activityRef = db.collection("adminActivityLogs").doc();
+      const batch = db.batch();
+
+      batch.set(userRef, {
+        uid,
+        fullName,
+        email,
+        phoneNumber,
+        role: "lgu_personnel",
+        requestedRole: "lgu_personnel",
+        primaryRole: "lgu_personnel",
+        residentAccess: false,
+        volunteerAccess: false,
+        volunteerStatus: "not_applied",
+        activeMode: "lgu_personnel",
+        status: "approved",
+        lguVerified: true,
+        employmentStatus: "active",
+        department,
+        position,
+        employeeId,
+        isTestAccount: false,
+        accountSource: "admin_verified_lgu_staff",
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: adminUid,
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedBy: adminUid,
+      });
+
+      batch.set(personnelRef, {
+        uid,
+        fullName,
+        email,
+        phoneNumber,
+        department,
+        position,
+        employeeId,
+        capabilities,
+        verificationStatus: "verified",
+        employmentStatus: "active",
+        isTestAccount: false,
+        verificationMethod: "admin_lgu_staff_verification",
+        verifiedAt: FieldValue.serverTimestamp(),
+        verifiedBy: adminUid,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: adminUid,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      });
+
+      batch.set(dutyRef, {
+        uid,
+        dutyStatus: "off_duty",
+        availabilityStatus: "unavailable",
+        activeCaseId: "",
+        activeAssignmentId: "",
+        shiftDate: "",
+        timeInAt: null,
+        timeOutAt: null,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      });
+
+      batch.set(activityRef, {
+        action: "LGU Personnel Created",
+        personnelUid: uid,
+        employeeId,
+        email,
+        department,
+        position,
+        performedBy: adminUid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      try {
+        await batch.commit();
+      } catch (error) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (rollbackError) {
+          console.error(
+            "LGU Personnel Auth rollback failed:",
+            rollbackError,
+          );
+        }
+        createdAuthUser = null;
+        throw error;
+      }
+
+      response.status(201).json({
+        ok: true,
+        testAccount: false,
+        uid,
+        fullName,
+        email,
+        temporaryPassword: password,
+        employeeId,
+        department,
+        position,
+        dutyStatus: "off_duty",
+        availabilityStatus: "unavailable",
+        message:
+          "Verified LGU Personnel account created. Save the temporary password now and share it securely with the staff member.",
+      });
+    } catch (error) {
+      if (createdAuthUser?.uid) {
+        try {
+          await auth.deleteUser(createdAuthUser.uid);
+        } catch (rollbackError) {
+          console.error(
+            "LGU Personnel Auth cleanup failed:",
+            rollbackError,
+          );
+        }
+      }
+
+      const authCode = cleanText(error?.code || "", 120);
+      const statusCode =
+        authCode === "auth/email-already-exists"
+          ? 409
+          : Number(error?.statusCode) || 500;
+
+      response.status(statusCode).json({
+        error: authCode || "lgu_personnel_creation_failed",
+        message: cleanText(
+          error?.message ||
+            "Unable to create the verified LGU Personnel account.",
+          700,
+        ),
+      });
+    }
+  },
+);
 app.post(
   "/api/admin/lgu/test-personnel",
   requireFirebaseUser,
