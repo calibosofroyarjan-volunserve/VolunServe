@@ -3734,34 +3734,49 @@ app.post(
       const personnel = request.lguPersonnelRecord || {};
       const shiftDate = getManilaDateKey();
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
-      const attendanceRef = db.collection("lguAttendance").doc(`${uid}_${shiftDate}`);
+
+      // Each Time In creates a new attendance session so an LGU Personnel
+      // account can safely Time In again later on the same Manila date.
+      const attendanceRef = db.collection("lguAttendance").doc();
+
       await db.runTransaction(async (transaction) => {
-        const [dutySnapshot, attendanceSnapshot] = await Promise.all([
-          transaction.get(dutyRef),
-          transaction.get(attendanceRef),
-        ]);
+        const dutySnapshot = await transaction.get(dutyRef);
         const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
+
         if (cleanText(duty.dutyStatus || "off_duty", 40) === "on_duty") {
-          throw makeHttpError(409, "already_on_duty", "You are already timed in for LGU duty.");
+          throw makeHttpError(
+            409,
+            "already_on_duty",
+            "You are already timed in for LGU duty.",
+          );
         }
-        if (["assigned", "responding", "on_site"].includes(cleanText(duty.availabilityStatus || "", 40))) {
-          throw makeHttpError(409, "active_lgu_assignment", "You cannot Time In while an emergency assignment is still active.");
+
+        if (
+          ["assigned", "responding", "on_site"].includes(
+            cleanText(duty.availabilityStatus || "", 40),
+          )
+        ) {
+          throw makeHttpError(
+            409,
+            "active_lgu_assignment",
+            "You cannot Time In while an emergency assignment is still active.",
+          );
         }
-        if (attendanceSnapshot.exists) {
-          throw makeHttpError(409, "attendance_already_recorded", "Today already has an LGU attendance record for this account.");
-        }
+
         transaction.set(dutyRef, {
           uid,
           dutyStatus: "on_duty",
           availabilityStatus: "available",
           activeCaseId: "",
           activeAssignmentId: "",
+          activeAttendanceId: attendanceRef.id,
           shiftDate,
           timeInAt: FieldValue.serverTimestamp(),
           timeOutAt: null,
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
+
         transaction.set(attendanceRef, {
           uid,
           fullName: cleanText(personnel.fullName || "", 120),
@@ -3775,20 +3790,26 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
+
       response.json({
         ok: true,
         dutyStatus: "on_duty",
         availabilityStatus: "available",
         shiftDate,
+        attendanceId: attendanceRef.id,
       });
     } catch (error) {
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(error?.code || "lgu_time_in_failed", 120),
-        message: cleanText(error?.message || "Unable to Time In for LGU duty.", 700),
+        message: cleanText(
+          error?.message || "Unable to Time In for LGU duty.",
+          700,
+        ),
       });
     }
   },
 );
+
 app.post(
   "/api/lgu/duty/time-out",
   requireFirebaseUser,
@@ -3798,55 +3819,107 @@ app.post(
       const uid = request.firebaseUser.uid;
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       let completedShiftDate = "";
+      let completedAttendanceId = "";
+
       await db.runTransaction(async (transaction) => {
         const dutySnapshot = await transaction.get(dutyRef);
+
         if (!dutySnapshot.exists) {
-          throw makeHttpError(409, "not_on_duty", "Time In before attempting to Time Out.");
+          throw makeHttpError(
+            409,
+            "not_on_duty",
+            "Time In before attempting to Time Out.",
+          );
         }
+
         const duty = dutySnapshot.data() || {};
         const dutyStatus = cleanText(duty.dutyStatus || "", 40);
-        const availabilityStatus = cleanText(duty.availabilityStatus || "", 40);
+        const availabilityStatus = cleanText(
+          duty.availabilityStatus || "",
+          40,
+        );
         const shiftDate = cleanText(duty.shiftDate || "", 20);
+        const activeAttendanceId = cleanText(
+          duty.activeAttendanceId || "",
+          180,
+        );
+
         if (dutyStatus !== "on_duty") {
-          throw makeHttpError(409, "not_on_duty", "This LGU Personnel account is not currently on duty.");
+          throw makeHttpError(
+            409,
+            "not_on_duty",
+            "This LGU Personnel account is not currently on duty.",
+          );
         }
+
         if (availabilityStatus !== "available") {
-          throw makeHttpError(409, "active_lgu_assignment", "Complete or release the active emergency assignment before Time Out.");
+          throw makeHttpError(
+            409,
+            "active_lgu_assignment",
+            "Complete or release the active emergency assignment before Time Out.",
+          );
         }
+
         if (!shiftDate) {
-          throw makeHttpError(409, "attendance_shift_missing", "The active LGU duty record is missing its shift date.");
+          throw makeHttpError(
+            409,
+            "attendance_shift_missing",
+            "The active LGU duty record is missing its shift date.",
+          );
         }
-        const attendanceRef = db.collection("lguAttendance").doc(`${uid}_${shiftDate}`);
+
+        // Backward compatibility:
+        // older active duty records used `${uid}_${shiftDate}` as the
+        // attendance document ID and therefore have no activeAttendanceId.
+        const attendanceRef = db
+          .collection("lguAttendance")
+          .doc(activeAttendanceId || `${uid}_${shiftDate}`);
+
         const attendanceSnapshot = await transaction.get(attendanceRef);
+
         if (!attendanceSnapshot.exists) {
-          throw makeHttpError(409, "attendance_record_missing", "The active LGU attendance record was not found.");
+          throw makeHttpError(
+            409,
+            "attendance_record_missing",
+            "The active LGU attendance record was not found.",
+          );
         }
+
         completedShiftDate = shiftDate;
+        completedAttendanceId = attendanceRef.id;
+
         transaction.update(dutyRef, {
           dutyStatus: "off_duty",
           availabilityStatus: "unavailable",
           activeCaseId: "",
           activeAssignmentId: "",
+          activeAttendanceId: "",
           timeOutAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
+
         transaction.update(attendanceRef, {
           status: "completed",
           timeOutAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
+
       response.json({
         ok: true,
         dutyStatus: "off_duty",
         availabilityStatus: "unavailable",
         shiftDate: completedShiftDate,
+        attendanceId: completedAttendanceId,
       });
     } catch (error) {
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(error?.code || "lgu_time_out_failed", 120),
-        message: cleanText(error?.message || "Unable to Time Out from LGU duty.", 700),
+        message: cleanText(
+          error?.message || "Unable to Time Out from LGU duty.",
+          700,
+        ),
       });
     }
   },
