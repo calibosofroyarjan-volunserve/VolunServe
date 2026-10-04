@@ -2440,6 +2440,13 @@ app.post(
           activeLguResponderUid: personnelUid,
           activeLguResponderName: personnelName,
           activeLguHeartbeatAt: null,
+          officialLguResponseStatus: "assigned",
+          lguArrivalConfirmationStatus: "not_reported",
+          lguArrivalReportedAt: null,
+          lguArrivalConfirmedAt: null,
+          lguArrivalConfirmedBy: "",
+          lguArrivalAssignmentId: assignmentRef.id,
+          lguArrivalResponderUid: personnelUid,
           assignedLguPersonnelIds: FieldValue.arrayUnion(personnelUid),
           updatedAt: FieldValue.serverTimestamp(),
         };
@@ -2799,6 +2806,7 @@ app.post(
             assignment.personnelName || "LGU Responder",
             120,
           ),
+          officialLguResponseStatus: "responding",
           updatedAt: FieldValue.serverTimestamp(),
         };
 
@@ -3005,6 +3013,9 @@ app.post(
         transaction.update(assignmentRef, {
           status: "on_site",
           arrivedAt: FieldValue.serverTimestamp(),
+          residentArrivalConfirmationStatus: "pending",
+          residentArrivalConfirmedAt: null,
+          residentArrivalConfirmedBy: "",
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -3015,6 +3026,13 @@ app.post(
         });
 
         transaction.update(caseRef, {
+          officialLguResponseStatus: "on_site",
+          lguArrivalConfirmationStatus: "pending",
+          lguArrivalReportedAt: FieldValue.serverTimestamp(),
+          lguArrivalConfirmedAt: null,
+          lguArrivalConfirmedBy: "",
+          lguArrivalAssignmentId: assignmentId,
+          lguArrivalResponderUid: uid,
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -3032,11 +3050,11 @@ app.post(
               assignment.personnelName || "LGU Responder",
               120,
             ),
-            title: "Official LGU responder arrived",
+            title: "Confirm LGU arrival",
             message: `${cleanText(
               assignment.personnelName || "Your assigned LGU responder",
               120,
-            )} has arrived at the emergency location.`,
+            )} reported arrival at your emergency location. Open Map Tracking to confirm the arrival.`,
             read: false,
             createdAt: FieldValue.serverTimestamp(),
           });
@@ -3069,7 +3087,8 @@ app.post(
         dutyStatus: "on_duty",
         availabilityStatus: "on_site",
         caseStatus: "in_progress",
-        message: "Arrival recorded. You are now On Site.",
+        message:
+          "Arrival recorded. You are now On Site and Resident confirmation is pending.",
       });
     } catch (error) {
       console.error("LGU mark arrival failed:", error);
@@ -3077,6 +3096,243 @@ app.post(
         error: cleanText(error?.code || "lgu_arrival_failed", 120),
         message: cleanText(
           error?.message || "Unable to mark the LGU responder as On Site.",
+          700,
+        ),
+      });
+    }
+  },
+);
+app.post(
+  "/api/resident/emergency-cases/:caseId/confirm-lgu-arrival",
+  requireFirebaseUser,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const caseId = cleanText(request.params?.caseId || "", 160);
+
+      if (!caseId) {
+        throw makeHttpError(
+          400,
+          "case_id_required",
+          "The emergency case ID is required.",
+        );
+      }
+
+      const profile = await loadUserProfile(uid);
+
+      if (
+        !isApprovedAccount(profile) ||
+        profile?.residentAccess !== true
+      ) {
+        throw makeHttpError(
+          403,
+          "resident_access_required",
+          "An approved Resident account is required to confirm LGU arrival.",
+        );
+      }
+
+      const caseRef = db.collection("disasterCases").doc(caseId);
+      const activityLogRef = db.collection("adminActivityLogs").doc();
+
+      let confirmationResult = null;
+
+      await db.runTransaction(async (transaction) => {
+        const caseSnapshot = await transaction.get(caseRef);
+
+        if (!caseSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "emergency_case_not_found",
+            "The emergency case no longer exists.",
+          );
+        }
+
+        const emergencyCase = caseSnapshot.data() || {};
+
+        if (cleanText(emergencyCase.reporterUid || "", 160) !== uid) {
+          throw makeHttpError(
+            403,
+            "arrival_confirmation_forbidden",
+            "Only the Resident who reported this emergency can confirm the official LGU arrival.",
+          );
+        }
+
+        const caseStatus = cleanText(
+          emergencyCase.status || "",
+          40,
+        ).toLowerCase();
+
+        if (!["in_progress", "resolved"].includes(caseStatus)) {
+          throw makeHttpError(
+            409,
+            "emergency_case_not_confirmable",
+            "This emergency case is not in a state where LGU arrival can be confirmed.",
+          );
+        }
+
+        const confirmationStatus = cleanText(
+          emergencyCase.lguArrivalConfirmationStatus || "",
+          40,
+        ).toLowerCase();
+
+        if (confirmationStatus === "confirmed") {
+          confirmationResult = {
+            caseId,
+            assignmentId: cleanText(
+              emergencyCase.lguArrivalAssignmentId || "",
+              180,
+            ),
+            responderUid: cleanText(
+              emergencyCase.lguArrivalResponderUid || "",
+              160,
+            ),
+            status: "confirmed",
+            alreadyConfirmed: true,
+          };
+          return;
+        }
+
+        if (confirmationStatus !== "pending") {
+          throw makeHttpError(
+            409,
+            "lgu_arrival_not_pending",
+            "The official LGU responder has not reported an arrival that is waiting for confirmation.",
+          );
+        }
+
+        const assignmentId = cleanText(
+          emergencyCase.lguArrivalAssignmentId ||
+            emergencyCase.activeResponderAssignmentId ||
+            "",
+          180,
+        );
+        const responderUid = cleanText(
+          emergencyCase.lguArrivalResponderUid ||
+            emergencyCase.activeLguResponderUid ||
+            "",
+          160,
+        );
+
+        if (!assignmentId || !responderUid) {
+          throw makeHttpError(
+            409,
+            "lgu_arrival_reference_missing",
+            "The LGU arrival record is missing its responder or assignment reference.",
+          );
+        }
+
+        const assignmentRef = db
+          .collection("lguAssignments")
+          .doc(assignmentId);
+        const assignmentSnapshot =
+          await transaction.get(assignmentRef);
+
+        if (!assignmentSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "lgu_assignment_not_found",
+            "The official LGU assignment linked to this arrival no longer exists.",
+          );
+        }
+
+        const assignment = assignmentSnapshot.data() || {};
+        const assignmentStatus = cleanText(
+          assignment.status || "",
+          40,
+        ).toLowerCase();
+
+        if (
+          cleanText(assignment.caseId || "", 160) !== caseId ||
+          cleanText(assignment.personnelUid || "", 160) !== responderUid
+        ) {
+          throw makeHttpError(
+            409,
+            "lgu_arrival_reference_mismatch",
+            "The stored LGU arrival no longer matches the official response assignment.",
+          );
+        }
+
+        if (!["on_site", "completed"].includes(assignmentStatus)) {
+          throw makeHttpError(
+            409,
+            "lgu_assignment_not_on_site",
+            "The official LGU assignment is not recorded as On Site.",
+          );
+        }
+
+        transaction.update(caseRef, {
+          lguArrivalConfirmationStatus: "confirmed",
+          lguArrivalConfirmedAt: FieldValue.serverTimestamp(),
+          lguArrivalConfirmedBy: uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(assignmentRef, {
+          residentArrivalConfirmationStatus: "confirmed",
+          residentArrivalConfirmedAt: FieldValue.serverTimestamp(),
+          residentArrivalConfirmedBy: uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const responderNotificationRef =
+          db.collection("notifications").doc();
+
+        transaction.set(responderNotificationRef, {
+          userId: responderUid,
+          audience: "lgu_personnel",
+          type: "official_lgu_arrival_confirmed",
+          caseId,
+          assignmentId,
+          responderId: responderUid,
+          residentId: uid,
+          title: "Resident confirmed your arrival",
+          message:
+            "The Resident confirmed that the official LGU responder reached the emergency location.",
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(activityLogRef, {
+          action: "Resident Confirmed Official LGU Arrival",
+          caseId,
+          assignmentId,
+          personnelUid: responderUid,
+          residentUid: uid,
+          residentName: cleanText(
+            profile.fullName ||
+              profile.email ||
+              "Resident",
+            120,
+          ),
+          performedBy: uid,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        confirmationResult = {
+          caseId,
+          assignmentId,
+          responderUid,
+          status: "confirmed",
+          alreadyConfirmed: false,
+        };
+      });
+
+      response.json({
+        ok: true,
+        confirmation: confirmationResult,
+        message: confirmationResult?.alreadyConfirmed
+          ? "LGU arrival was already confirmed."
+          : "LGU arrival confirmed successfully.",
+      });
+    } catch (error) {
+      console.error("Resident LGU arrival confirmation failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "lgu_arrival_confirmation_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message || "Unable to confirm the official LGU arrival.",
           700,
         ),
       });
