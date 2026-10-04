@@ -6,6 +6,7 @@ import {
   doc,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -62,6 +63,22 @@ type CaseRow = {
   longitude?: number | null;
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
+  activeLguResponderUid?: string;
+  activeLguResponderName?: string;
+  officialLguResponseStatus?: string;
+  lguArrivalConfirmationStatus?: string;
+  lguArrivalReportedAt?: any;
+  lguArrivalConfirmedAt?: any;
+  lguArrivalConfirmedBy?: string;
+  lguArrivalAssignmentId?: string;
+  lguArrivalResponderUid?: string;
+  activeVolunteerSupportUid?: string;
+  activeVolunteerSupportName?: string;
+  activeVolunteerSupportAssignmentId?: string;
+  activeResponderAssignmentId?: string;
+  assignedLguPersonnelIds?: string[];
+  activeLguHeartbeatAt?: any;
+  activeLguStartedAt?: any;
   createdAt?: any;
 };
 
@@ -114,11 +131,23 @@ type RoadRoute = {
 type SelectedMapItem =
   | { kind: "incident"; id: string }
   | { kind: "center"; id: string }
+  | { kind: "volunteer"; id: string }
   | null;
+
+const BACKEND_URL = "https://volunserve.onrender.com";
 
 const SJDM_CENTER = {
   latitude: 14.813,
   longitude: 121.045,
+};
+
+const LGU_BASE = {
+  id: "csjdm-lgu-base",
+  name: "LGU Base / CDRRMO",
+  address:
+    "Del Monte Road, Sapang Palay Proper, San Jose del Monte, 3023 Bulacan, Philippines",
+  latitude: 14.838344,
+  longitude: 121.046243,
 };
 
 const mapDocument = `
@@ -176,7 +205,7 @@ const mapDocument = `
     }
 
     .center-pin {
-      background: #2563eb;
+      background: #64748b;
     }
 
     .user-marker {
@@ -233,6 +262,35 @@ const mapDocument = `
       color: #b42318;
     }
 
+    .lgu-base-marker {
+      position: relative;
+      width: 32px;
+      height: 32px;
+    }
+
+    .lgu-base-marker .pin {
+      position: absolute;
+      inset: 0;
+      background: #dc2626;
+    }
+
+    .lgu-base-label {
+      position: absolute;
+      left: 50%;
+      bottom: 39px;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 5px 18px rgba(15,23,42,.16);
+      color: #0f2740;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      pointer-events: none;
+    }
+
     .maplibregl-popup-content {
       border-radius: 10px;
       box-shadow: 0 8px 24px rgba(15,23,42,.16);
@@ -273,6 +331,7 @@ const mapDocument = `
 
       let incidentMarkers = [];
       let centerMarkers = [];
+      let baseMarkers = [];
       let responderMarkers = new Map();
       let residentMarkers = [];
       let userMarker = null;
@@ -297,21 +356,26 @@ const mapDocument = `
       }
 
       function makeIncidentElement(item) {
-        if (item.destination) {
+        if (item.destination || item.residentPin) {
           const wrapper = document.createElement("div");
           wrapper.className = "destination-marker";
 
           const pin = document.createElement("div");
           pin.className = "pin";
-          pin.style.background = "#ef4444";
-          pin.innerHTML = "<span>⌂</span>";
+          pin.style.background = "#16a34a";
+          pin.innerHTML = "<span>R</span>";
 
-          const label = document.createElement("div");
-          label.className = "destination-label";
-          label.textContent = "RESIDENT DESTINATION";
+          if (item.destination || item.residentSelf) {
+            const label = document.createElement("div");
+            label.className = "destination-label";
+            label.textContent = item.residentSelf
+              ? "RESIDENT · YOU"
+              : "RESIDENT DESTINATION";
+            label.style.color = "#15803d";
+            wrapper.appendChild(label);
+          }
 
           wrapper.appendChild(pin);
-          wrapper.appendChild(label);
           return wrapper;
         }
 
@@ -332,7 +396,24 @@ const mapDocument = `
         return element;
       }
 
-      function makeUserElement() {
+      function makeLguBaseElement() {
+        const wrapper = document.createElement("div");
+        wrapper.className = "lgu-base-marker";
+
+        const label = document.createElement("div");
+        label.className = "lgu-base-label";
+        label.textContent = "LGU BASE";
+
+        const pin = document.createElement("div");
+        pin.className = "pin";
+        pin.innerHTML = "<span>⌂</span>";
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(pin);
+        return wrapper;
+      }
+
+      function makeUserElement(role) {
         const wrapper = document.createElement("div");
         wrapper.className = "user-marker";
 
@@ -341,7 +422,23 @@ const mapDocument = `
 
         const label = document.createElement("div");
         label.className = "user-label";
-        label.textContent = "YOU · START";
+
+        if (role === "admin") {
+          dot.style.background = "#dc2626";
+          dot.style.boxShadow =
+            "0 0 0 8px rgba(220,38,38,.16), 0 5px 16px rgba(15,23,42,.25)";
+          label.textContent = "LGU · YOU";
+          label.style.color = "#b91c1c";
+        } else if (role === "resident") {
+          dot.style.background = "#16a34a";
+          dot.style.boxShadow =
+            "0 0 0 8px rgba(22,163,74,.16), 0 5px 16px rgba(15,23,42,.25)";
+          label.textContent = "RESIDENT · YOU";
+          label.style.color = "#15803d";
+        } else {
+          dot.style.background = "#2563eb";
+          label.textContent = "VOLUNTEER · YOU";
+        }
 
         wrapper.appendChild(dot);
         wrapper.appendChild(label);
@@ -351,16 +448,31 @@ const mapDocument = `
       function makeResidentElement() {
         const element = document.createElement("div");
         element.className = "pin";
-        element.style.background = "#0f9f85";
+        element.style.background = "#16a34a";
         element.innerHTML = "<span>R</span>";
         return element;
       }
 
-      function makeResponderElement(stale) {
+      function responderRoleOf(person) {
+        return person?.role === "lgu" || person?.responderRole === "lgu"
+          ? "lgu"
+          : "volunteer";
+      }
+
+      function responderColor(stale, role) {
+        // Keep role colors stable even when a reading becomes old.
+        // STALE is communicated by status text/popup, not by changing pin color.
+        if (role === "lgu") return "#dc2626";
+        return "#2563eb";
+      }
+
+      function makeResponderElement(stale, role) {
         const element = document.createElement("div");
         element.className = "pin";
-        element.style.background = stale ? "#64748b" : "#7c3aed";
-        element.innerHTML = "<span>V</span>";
+        element.style.background = responderColor(stale, role);
+        element.innerHTML = role === "lgu"
+          ? "<span>L</span>"
+          : "<span>V</span>";
         return element;
       }
 
@@ -404,7 +516,47 @@ const mapDocument = `
         marker.__volunserveAnimation = requestAnimationFrame(step);
       }
 
-      function syncResponderMarkers(people, bounds) {
+      function pointDistanceMeters(a, b) {
+        if (
+          !a ||
+          !b ||
+          !validPoint(a.latitude, a.longitude) ||
+          !validPoint(b.latitude, b.longitude)
+        ) {
+          return Infinity;
+        }
+
+        const toRad = (value) => value * Math.PI / 180;
+        const earthRadius = 6371000;
+        const lat1 = toRad(a.latitude);
+        const lat2 = toRad(b.latitude);
+        const dLat = toRad(b.latitude - a.latitude);
+        const dLng = toRad(b.longitude - a.longitude);
+        const h =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1) * Math.cos(lat2) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+        return earthRadius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+      }
+
+      function responderVisualOffset(person, incidentPoints) {
+        const nearResident = (incidentPoints || []).some(
+          (point) => pointDistanceMeters(person, point) <= 20
+        );
+
+        if (!nearResident) {
+          return [0, 0];
+        }
+
+        const role = responderRoleOf(person);
+
+        // Display-only separation. Real GPS coordinates, route calculations,
+        // distance, ETA, and Firestore data remain untouched.
+        return role === "lgu" ? [-20, 0] : [20, 0];
+      }
+
+      function syncResponderMarkers(people, bounds, incidentPoints = []) {
         const activeIds = new Set();
         let count = 0;
 
@@ -422,13 +574,30 @@ const mapDocument = `
 
           activeIds.add(id);
 
+          const responderRole = responderRoleOf(person);
+          const visualOffset = responderVisualOffset(person, incidentPoints);
           let marker = responderMarkers.get(id);
 
           if (!marker) {
-            const element = makeResponderElement(person.stale);
+            const element = makeResponderElement(person.stale, responderRole);
+            element.style.zIndex = responderRole === "lgu" ? "40" : "35";
+
+            if (person.selectable !== false) {
+              element.addEventListener("click", () => {
+                parent.postMessage(
+                  {
+                    kind: "select-map-item",
+                    entityType: "volunteer",
+                    id,
+                  },
+                  "*"
+                );
+              });
+            }
 
             marker = new maplibregl.Marker({ element })
               .setLngLat([person.longitude, person.latitude])
+              .setOffset(visualOffset)
               .setPopup(
                 new maplibregl.Popup({ offset: 22 })
               )
@@ -437,9 +606,15 @@ const mapDocument = `
             responderMarkers.set(id, marker);
           } else {
             const element = marker.getElement();
-            element.style.background = person.stale
-              ? "#64748b"
-              : "#7c3aed";
+            element.style.background = responderColor(
+              person.stale,
+              responderRole,
+            );
+            element.style.zIndex = responderRole === "lgu" ? "40" : "35";
+            element.innerHTML = responderRole === "lgu"
+              ? "<span>L</span>"
+              : "<span>V</span>";
+            marker.setOffset(visualOffset);
 
             animateResponderMarker(
               marker,
@@ -449,7 +624,8 @@ const mapDocument = `
           }
 
           marker.getPopup()?.setText(
-            (person.name || "Assigned responder") +
+            (person.name || (responderRole === "lgu" ? "LGU responder" : "Assigned responder")) +
+            (responderRole === "lgu" ? " · LGU" : " · Volunteer") +
             (person.stale ? " · older reading · " : " · live · ") +
             new Date(person.lastShared).toLocaleTimeString()
           );
@@ -480,12 +656,17 @@ const mapDocument = `
           marker.remove();
         }
 
+        for (const marker of baseMarkers) {
+          marker.remove();
+        }
+
         for (const marker of residentMarkers) {
           marker.remove();
         }
 
         incidentMarkers = [];
         centerMarkers = [];
+        baseMarkers = [];
         residentMarkers = [];
       }
 
@@ -542,7 +723,7 @@ const mapDocument = `
         };
       }
 
-      function updateLocation(location, follow) {
+      function updateLocation(location, follow, role) {
         lastLocation = location;
 
         if (
@@ -565,7 +746,7 @@ const mapDocument = `
 
         if (!userMarker) {
           userMarker = new maplibregl.Marker({
-            element: makeUserElement(),
+            element: makeUserElement(role),
           })
             .setLngLat([
               location.longitude,
@@ -603,6 +784,7 @@ const mapDocument = `
         clearMarkers();
 
         const bounds = new maplibregl.LngLatBounds();
+        const incidentPoints = [];
         let pointCount = 0;
 
         for (const item of payload.incidents || []) {
@@ -627,7 +809,9 @@ const mapDocument = `
             offset: 22,
             closeButton: false,
           }).setText(
-            (item.title || "Disaster case") +
+            (item.reporterName || "Resident") +
+            " · " +
+            (item.title || "Emergency case") +
             " · " +
             String(item.status || "reported")
               .replaceAll("_", " ")
@@ -642,11 +826,53 @@ const mapDocument = `
             .addTo(map);
 
           incidentMarkers.push(marker);
+          incidentPoints.push({
+            latitude: item.latitude,
+            longitude: item.longitude,
+          });
           bounds.extend([
             item.longitude,
             item.latitude
           ]);
           pointCount += 1;
+        }
+
+        for (const item of payload.bases || []) {
+          if (!validPoint(item.latitude, item.longitude)) {
+            continue;
+          }
+
+          const element = makeLguBaseElement();
+
+          const popup = new maplibregl.Popup({
+            offset: 22,
+            closeButton: false,
+          }).setText(
+            [item.name || "LGU Base", item.address || ""]
+              .filter(Boolean)
+              .join(" · ")
+          );
+
+          const marker = new maplibregl.Marker({ element })
+            .setLngLat([
+              item.longitude,
+              item.latitude
+            ])
+            .setPopup(popup)
+            .addTo(map);
+
+          baseMarkers.push(marker);
+
+          // In Volunteer navigation mode the fixed LGU base remains visible,
+          // but it must not force the camera to zoom away from the active
+          // Volunteer -> Resident route. The responder can still pan/zoom to it.
+          if (!payload.navigationView) {
+            bounds.extend([
+              item.longitude,
+              item.latitude
+            ]);
+            pointCount += 1;
+          }
         }
 
         for (const item of payload.centers || []) {
@@ -688,10 +914,23 @@ const mapDocument = `
           pointCount += 1;
         }
 
-        pointCount += syncResponderMarkers(
-          payload.responders || [],
-          bounds
-        );
+        if (payload.navigationView) {
+          // Keep LGU/Volunteer responder pins rendered, but do not let an old
+          // or distant responder reading stretch the active navigation camera.
+          // The route + destination + this device GPS define the mission view.
+          const responderDisplayBounds = new maplibregl.LngLatBounds();
+          syncResponderMarkers(
+            payload.responders || [],
+            responderDisplayBounds,
+            incidentPoints
+          );
+        } else {
+          pointCount += syncResponderMarkers(
+            payload.responders || [],
+            bounds,
+            incidentPoints
+          );
+        }
 
         const routeSource = map.getSource("response-route");
         if (routeSource) {
@@ -797,7 +1036,8 @@ const mapDocument = `
         ) {
           updateLocation(
             data.location,
-            data.follow === true
+            data.follow === true,
+            data.role || "volunteer"
           );
         }
       });
@@ -835,7 +1075,7 @@ const mapDocument = `
             "line-cap": "round",
           },
           paint: {
-            "line-color": "#2563eb",
+            "line-color": "#7c3aed",
             "line-width": 6,
             "line-opacity": 0.96,
           },
@@ -1145,15 +1385,35 @@ export default function WebMapTracking() {
 
   const currentMode = activeModeForProfile(profile);
 
+  const accountRole = String(profile?.role || "").trim().toLowerCase();
+
+  const isAdministrator = ["admin", "superadmin"].includes(accountRole);
+
+  const isLguPersonnel = accountRole === "lgu_personnel";
+
+  const isOperationalLgu = isAdministrator || isLguPersonnel;
+
   const isVolunteerMode =
+    !isAdministrator &&
+    !isLguPersonnel &&
     currentMode === "volunteer" &&
     hasVolunteerAccess(profile);
 
   const isResidentMode =
+    !isAdministrator &&
+    !isLguPersonnel &&
     currentMode === "resident";
 
   const missionMode =
     !!focusedCaseId && isVolunteerMode;
+
+  // Reuse the proven LGU navigation experience for two official roles:
+  // Admin direct-response and the specifically assigned LGU Personnel account.
+  const adminMissionMode =
+    !!focusedCaseId && isOperationalLgu;
+
+  const lguPersonnelMissionMode =
+    !!focusedCaseId && isLguPersonnel;
 
   const volunteerOverviewMode =
     isVolunteerMode && !missionMode;
@@ -1186,17 +1446,34 @@ export default function WebMapTracking() {
     useState<SelectedMapItem>(null);
 
   const [error, setError] = useState("");
+  const [lguAssignmentStatus, setLguAssignmentStatus] = useState("");
+  const [lguArrivalBusy, setLguArrivalBusy] = useState(false);
+  const [lguArrivalMessage, setLguArrivalMessage] = useState("");
+  const [lguArrivalError, setLguArrivalError] = useState("");
+  const [residentArrivalBusy, setResidentArrivalBusy] = useState(false);
+  const [residentArrivalMessage, setResidentArrivalMessage] = useState("");
+  const [residentArrivalError, setResidentArrivalError] = useState("");
+
+  const [adminAssignments, setAdminAssignments] = useState<any[]>([]);
+  const [adminResponderLocations, setAdminResponderLocations] = useState<any[]>([]);
 
   const [residentAssignments, setResidentAssignments] =
     useState<any[]>([]);
   const [residentResponderLocations, setResidentResponderLocations] =
     useState<any[]>([]);
+  const [residentLguLocation, setResidentLguLocation] =
+    useState<any | null>(null);
+  const [adminLguLocation, setAdminLguLocation] =
+    useState<any | null>(null);
+  const [volunteerLguLocation, setVolunteerLguLocation] =
+    useState<any | null>(null);
   const [residentSharedLocations, setResidentSharedLocations] =
     useState<any[]>([]);
   const [residentShareCaseId, setResidentShareCaseId] =
     useState("");
   const [residentShareSentAt, setResidentShareSentAt] =
     useState(0);
+
   const [liveNow, setLiveNow] = useState(Date.now());
   const [roadRoute, setRoadRoute] = useState<RoadRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -1206,6 +1483,9 @@ export default function WebMapTracking() {
   const latestUserLocation = useRef<BrowserLocation | null>(null);
   const routeCache = useRef<RoadRoute | null>(null);
   const residentWriteQueue = useRef<Promise<unknown>>(
+    Promise.resolve(),
+  );
+  const lguWriteQueue = useRef<Promise<unknown>>(
     Promise.resolve(),
   );
 
@@ -1306,7 +1586,8 @@ export default function WebMapTracking() {
         data?.kind === "select-map-item" &&
         (
           data.entityType === "incident" ||
-          data.entityType === "center"
+          data.entityType === "center" ||
+          data.entityType === "volunteer"
         ) &&
         typeof data.id === "string"
       ) {
@@ -1331,6 +1612,95 @@ export default function WebMapTracking() {
     ) {
       setCases([]);
       setError("");
+      return;
+    }
+
+    // Authorized LGU/Admin sees active emergency cases on the command map.
+    // Navigation can be opened for a focused case even when no volunteer is available.
+    if (isAdministrator) {
+      return onSnapshot(
+        collection(db, "disasterCases"),
+        (snapshot) => {
+          const next = snapshot.docs
+            .map((item) => ({
+              id: item.id,
+              ...(item.data() as Omit<CaseRow, "id">),
+            }))
+            .sort(
+              (a, b) =>
+                (b.createdAt?.toMillis?.() || 0) -
+                (a.createdAt?.toMillis?.() || 0),
+            );
+
+          setCases(next);
+          setError("");
+        },
+        (cause) => {
+          console.error("admin disasterCases map listener", cause);
+          setCases([]);
+          setError(
+            "Could not load emergency cases. Check Admin Firestore permissions and your connection.",
+          );
+        },
+      );
+    }
+
+    // Dedicated LGU Personnel may open only the exact case assigned to them.
+    // Firestore independently verifies assignedLguPersonnelIds for this read.
+    if (lguPersonnelMissionMode) {
+      const caseRef = doc(db, "disasterCases", focusedCaseId);
+
+      return onSnapshot(
+        caseRef,
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            setCases([]);
+            setError("Assigned LGU emergency case was not found.");
+            return;
+          }
+
+          const data = snapshot.data() as Omit<CaseRow, "id">;
+          const assignedIds = Array.isArray((data as any).assignedLguPersonnelIds)
+            ? (data as any).assignedLguPersonnelIds.map(String)
+            : [];
+
+          if (
+            !user?.uid ||
+            !assignedIds.includes(user.uid)
+          ) {
+            setCases([]);
+            setError(
+              "This emergency is not assigned to your LGU Personnel account."
+            );
+            return;
+          }
+
+          setCases([
+            {
+              id: snapshot.id,
+              ...data,
+            },
+          ]);
+          setError("");
+        },
+        (cause) => {
+          console.error("assigned LGU disaster case listener", cause);
+          setCases([]);
+          setError(
+            "Could not open this assigned LGU incident. Check the active assignment and Firestore permissions."
+          );
+        },
+      );
+    }
+
+    // A dedicated LGU Personnel account never browses unrelated emergency cases.
+    if (isLguPersonnel) {
+      setCases([]);
+      setError(
+        focusedCaseId
+          ? ""
+          : "Open Map & Route from your active LGU emergency assignment."
+      );
       return;
     }
 
@@ -1408,13 +1778,16 @@ export default function WebMapTracking() {
   }, [
     profile,
     user,
+    isAdministrator,
+    isLguPersonnel,
     isVolunteerMode,
+    lguPersonnelMissionMode,
     missionMode,
     focusedCaseId,
   ]);
 
   useEffect(() => {
-    if (missionMode) {
+    if (missionMode || adminMissionMode || isResidentMode) {
       setCenters([]);
       return;
     }
@@ -1440,10 +1813,10 @@ export default function WebMapTracking() {
         );
       },
     );
-  }, [missionMode]);
+  }, [missionMode, adminMissionMode, isResidentMode]);
 
   const visibleCases = useMemo(() => {
-    if (missionMode) {
+    if (missionMode || adminMissionMode) {
       return cases.filter(
         (item) =>
           item.id === focusedCaseId &&
@@ -1490,11 +1863,12 @@ export default function WebMapTracking() {
     showIncidents,
     showResolved,
     missionMode,
+    adminMissionMode,
     focusedCaseId,
   ]);
 
   const visibleCenters = useMemo(() => {
-    if (missionMode || !showCenters) return [];
+    if (missionMode || adminMissionMode || isResidentMode || !showCenters) return [];
 
     const needle = normalize(search);
 
@@ -1511,7 +1885,27 @@ export default function WebMapTracking() {
         .map(normalize)
         .some((value) => value.includes(needle));
     });
-  }, [centers, search, showCenters, missionMode]);
+  }, [centers, search, showCenters, missionMode, adminMissionMode, isResidentMode]);
+
+  const residentActiveCases = useMemo(
+    () =>
+      isResidentMode
+        ? cases.filter((item) =>
+            ["reported", "validated", "assigned", "in_progress"].includes(
+              normalize(item.status),
+            ),
+          )
+        : [],
+    [cases, isResidentMode],
+  );
+
+  const residentBoundCase = useMemo(
+    () =>
+      isResidentMode && focusedCaseId
+        ? residentActiveCases.find((item) => item.id === focusedCaseId) || null
+        : null,
+    [isResidentMode, focusedCaseId, residentActiveCases],
+  );
 
   const missionCase = useMemo(
     () =>
@@ -1521,18 +1915,81 @@ export default function WebMapTracking() {
     [cases, missionMode, focusedCaseId],
   );
 
+  const adminCase = useMemo(
+    () =>
+      adminMissionMode
+        ? cases.find((item) => item.id === focusedCaseId) || null
+        : null,
+    [cases, adminMissionMode, focusedCaseId],
+  );
+
   useEffect(() => {
-    if (missionMode && missionCase) {
+    if (
+      !lguPersonnelMissionMode ||
+      !adminCase?.activeResponderAssignmentId ||
+      !user?.uid
+    ) {
+      setLguAssignmentStatus("");
+      return;
+    }
+
+    return onSnapshot(
+      doc(
+        db,
+        "lguAssignments",
+        adminCase.activeResponderAssignmentId,
+      ),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setLguAssignmentStatus("");
+          return;
+        }
+
+        const data: any = snapshot.data();
+
+        if (String(data.personnelUid || "") !== user.uid) {
+          setLguAssignmentStatus("");
+          return;
+        }
+
+        setLguAssignmentStatus(
+          String(data.status || "").trim().toLowerCase(),
+        );
+      },
+      (cause) => {
+        console.error("LGU assignment status listener", cause);
+        setLguArrivalError(
+          "Could not refresh the current LGU assignment status.",
+        );
+      },
+    );
+  }, [
+    adminCase?.activeResponderAssignmentId,
+    lguPersonnelMissionMode,
+    user?.uid,
+  ]);
+
+  useEffect(() => {
+    const focusedCase = missionCase || adminCase;
+    if ((missionMode || adminMissionMode) && focusedCase) {
       setSelected({
         kind: "incident",
-        id: missionCase.id,
+        id: focusedCase.id,
       });
     }
-  }, [missionMode, missionCase?.id]);
+  }, [missionMode, adminMissionMode, missionCase?.id, adminCase?.id]);
 
   const selectedCase = useMemo(() => {
     if (missionMode) {
       return missionCase;
+    }
+
+    if (adminMissionMode) {
+      return adminCase;
+    }
+
+    if (isResidentMode) {
+      return residentBoundCase;
     }
 
     if (volunteerOverviewMode) {
@@ -1553,6 +2010,10 @@ export default function WebMapTracking() {
     selected,
     missionMode,
     missionCase,
+    adminMissionMode,
+    adminCase,
+    isResidentMode,
+    residentBoundCase,
     volunteerOverviewMode,
   ]);
 
@@ -1568,56 +2029,143 @@ export default function WebMapTracking() {
     );
   }, [centers, selected]);
 
-  // Resident convenience: open the most relevant active request automatically
-  // so the assigned responder status and live location are immediately visible.
+  const selectedAdminVolunteer = useMemo(() => {
+    if (!isAdministrator || selected?.kind !== "volunteer") {
+      return null;
+    }
+
+    const point = adminResponderLocations.find((item) => {
+      const id = String(
+        item.id || item.volunteerId || item.assignmentId || "",
+      );
+      return id === selected.id;
+    });
+
+    if (!point) return null;
+
+    const assignment = adminAssignments.find(
+      (item) =>
+        item.volunteerId === point.volunteerId &&
+        (!point.caseId || item.caseId === point.caseId) &&
+        ["accepted", "responding", "on_site"].includes(
+          normalize(item.status),
+        ),
+    );
+
+    return {
+      ...point,
+      name: assignment?.volunteerName || point.volunteerName || "Volunteer",
+      status: assignment?.status || point.status || "responding",
+      caseId: point.caseId || assignment?.caseId || "",
+      assignmentId: assignment?.id || point.assignmentId || "",
+    };
+  }, [
+    isAdministrator,
+    selected,
+    adminResponderLocations,
+    adminAssignments,
+  ]);
+
+  // Admin command-map data. This stays separate from Volunteer mission sharing,
+  // so the LGU can still respond even when no volunteer is available.
   useEffect(() => {
-    if (!isResidentMode || selected || cases.length === 0) {
+    setAdminAssignments([]);
+    setAdminResponderLocations([]);
+
+    if (!isAdministrator || !user || !profile || !isApprovedProfile(profile)) {
       return;
     }
 
-    const active =
-      cases.find((item) =>
-        ["assigned", "in_progress"].includes(
-          normalize(item.status),
-        ),
-      ) ||
-      cases.find((item) =>
-        ["validated", "reported"].includes(
-          normalize(item.status),
-        ),
-      );
+    const disposeAssignments = onSnapshot(
+      collection(db, "responseAssignments"),
+      (snapshot) => {
+        setAdminAssignments(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          })),
+        );
+      },
+      (cause) => {
+        console.error("admin response assignments", cause);
+      },
+    );
 
-    if (active) {
+    const disposeLocations = onSnapshot(
+      collection(db, "responseLocations"),
+      (snapshot) => {
+        setAdminResponderLocations(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          })),
+        );
+      },
+      (cause) => {
+        console.error("admin responder locations", cause);
+      },
+    );
+
+    return () => {
+      disposeAssignments();
+      disposeLocations();
+    };
+  }, [isAdministrator, user?.uid, profile]);
+
+  // Resident response tracking is case-bound. If there is exactly one active
+  // emergency, open it automatically. If there are two or more, do not guess:
+  // the Resident explicitly chooses which emergency to track.
+  useEffect(() => {
+    if (!isResidentMode) {
+      return;
+    }
+
+    if (residentBoundCase) {
+      if (
+        selected?.kind !== "incident" ||
+        selected.id !== residentBoundCase.id
+      ) {
+        setSelected({
+          kind: "incident",
+          id: residentBoundCase.id,
+        });
+      }
+      return;
+    }
+
+    if (!focusedCaseId && residentActiveCases.length === 1) {
+      const onlyCase = residentActiveCases[0];
+
       setSelected({
         kind: "incident",
-        id: active.id,
+        id: onlyCase.id,
       });
+
+      router.replace(
+        `/map-tracking?caseId=${encodeURIComponent(onlyCase.id)}` as any,
+      );
+      return;
     }
-  }, [isResidentMode, cases, selected]);
 
-  const residentPreferredCase = useMemo(() => {
-    if (!isResidentMode) return null;
+    if (!focusedCaseId && selected?.kind === "incident") {
+      setSelected(null);
+    }
+  }, [
+    isResidentMode,
+    focusedCaseId,
+    residentActiveCases,
+    residentBoundCase?.id,
+    selected,
+    router,
+  ]);
 
-    if (selectedCase) return selectedCase;
-
-    return (
-      cases.find((item) =>
-        ["assigned", "in_progress"].includes(
-          normalize(item.status),
-        ),
-      ) ||
-      cases.find((item) =>
-        ["validated", "reported"].includes(
-          normalize(item.status),
-        ),
-      ) ||
-      cases[0] ||
-      null
-    );
-  }, [isResidentMode, selectedCase, cases]);
+  const residentPreferredCase = useMemo(
+    () => (isResidentMode ? residentBoundCase : null),
+    [isResidentMode, residentBoundCase],
+  );
 
   const residentCoordinationCaseId = isResidentMode
-    ? residentShareCaseId || residentPreferredCase?.id || ""
+    ? residentPreferredCase?.id || ""
     : "";
 
   const residentCoordinationCase = useMemo(
@@ -1629,6 +2177,11 @@ export default function WebMapTracking() {
         : null,
     [cases, residentCoordinationCaseId],
   );
+
+  useEffect(() => {
+    setResidentArrivalMessage("");
+    setResidentArrivalError("");
+  }, [residentCoordinationCaseId]);
 
   const residentAssignmentVolunteerIds = useMemo(
     () =>
@@ -1716,50 +2269,43 @@ export default function WebMapTracking() {
     residentAssignmentVolunteerIds.join("|"),
   ]);
 
+  const residentVolunteerSupportAssignmentId = String(
+    residentCoordinationCase?.activeVolunteerSupportAssignmentId || "",
+  ).trim();
+
+  // Only the case's explicitly selected optional Volunteer support assignment
+  // is allowed to appear in the Resident response view. Historical/test
+  // responseAssignments can no longer replace the official LGU responder.
   const residentPrimaryAssignment = useMemo(() => {
-    if (!residentCoordinationCaseId) return null;
-
-    const rows = residentAssignments.filter(
-      (assignment) =>
-        assignment.caseId === residentCoordinationCaseId,
-    );
-
-    for (const status of [
-      "on_site",
-      "responding",
-      "accepted",
-      "completed",
-      "offered",
-      "declined",
-      "cancelled",
-    ]) {
-      const match = rows.find(
-        (assignment) =>
-          normalize(assignment.status) === status,
-      );
-
-      if (match) return match;
+    if (
+      !residentCoordinationCaseId ||
+      !residentVolunteerSupportAssignmentId
+    ) {
+      return null;
     }
 
-    return rows[0] || null;
+    return (
+      residentAssignments.find(
+        (assignment) =>
+          assignment.id === residentVolunteerSupportAssignmentId &&
+          assignment.caseId === residentCoordinationCaseId,
+      ) || null
+    );
   }, [
     residentAssignments,
     residentCoordinationCaseId,
+    residentVolunteerSupportAssignmentId,
   ]);
 
   const residentShareAssignment = useMemo(
     () =>
-      residentAssignments.find(
-        (assignment) =>
-          assignment.caseId === residentCoordinationCaseId &&
-          ["accepted", "responding", "on_site"].includes(
-            normalize(assignment.status),
-          ),
-      ) || null,
-    [
-      residentAssignments,
-      residentCoordinationCaseId,
-    ],
+      residentPrimaryAssignment &&
+      ["accepted", "responding", "on_site"].includes(
+        normalize(residentPrimaryAssignment.status),
+      )
+        ? residentPrimaryAssignment
+        : null,
+    [residentPrimaryAssignment],
   );
 
   // Resident sees only the live GPS documents of responders actively assigned
@@ -1771,15 +2317,15 @@ export default function WebMapTracking() {
       return;
     }
 
-    const activeAssignments = residentAssignments.filter(
-      (assignment) =>
-        assignment.caseId === residentCoordinationCaseId &&
-        ["responding", "on_site"].includes(
-          normalize(assignment.status),
-        ) &&
-        typeof assignment.volunteerId === "string" &&
-        assignment.volunteerId,
-    );
+    const activeAssignments =
+      residentShareAssignment &&
+      ["responding", "on_site"].includes(
+        normalize(residentShareAssignment.status),
+      ) &&
+      typeof residentShareAssignment.volunteerId === "string" &&
+      residentShareAssignment.volunteerId
+        ? [residentShareAssignment]
+        : [];
 
     if (activeAssignments.length === 0) {
       return;
@@ -1836,8 +2382,287 @@ export default function WebMapTracking() {
     };
   }, [
     isResidentMode,
-    residentAssignments,
+    residentShareAssignment?.id,
+    residentShareAssignment?.status,
+    residentShareAssignment?.volunteerId,
     residentCoordinationCaseId,
+  ]);
+
+  // Resident sees the private live location of the official LGU responder
+  // for their currently coordinated emergency only.
+  useEffect(() => {
+    setResidentLguLocation(null);
+
+    if (!isResidentMode || !residentCoordinationCaseId) {
+      return;
+    }
+
+    return onSnapshot(
+      doc(
+        db,
+        "lguResponseLocations",
+        residentCoordinationCaseId,
+      ),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setResidentLguLocation(null);
+          return;
+        }
+
+        const data = snapshot.data();
+
+        if (
+          data.caseId !== residentCoordinationCaseId ||
+          data.responderRole !== "lgu"
+        ) {
+          setResidentLguLocation(null);
+          return;
+        }
+
+        setResidentLguLocation({
+          id: snapshot.id,
+          ...data,
+        });
+      },
+      (cause) => {
+        console.error("resident LGU live location", cause);
+        setResidentLguLocation(null);
+      },
+    );
+  }, [
+    isResidentMode,
+    residentCoordinationCaseId,
+  ]);
+
+  const residentLguPin = useMemo(() => {
+    if (
+      !residentLguLocation ||
+      !residentCoordinationCase?.activeLguResponderUid
+    ) {
+      return null;
+    }
+
+    const lastShared = timestampMillis(
+      residentLguLocation.updatedAt,
+    );
+
+    if (
+      !Number.isFinite(residentLguLocation.latitude) ||
+      !Number.isFinite(residentLguLocation.longitude) ||
+      lastShared <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      ...residentLguLocation,
+      id: `lgu-${residentCoordinationCaseId}`,
+      role: "lgu",
+      responderRole: "lgu",
+      name:
+        String(residentLguLocation.responderName || "").trim() ||
+        String(residentCoordinationCase?.activeLguResponderName || "").trim() ||
+        "LGU Emergency Response",
+      lastShared,
+      stale: liveNow - lastShared > 30000,
+    };
+  }, [
+    residentLguLocation,
+    residentCoordinationCaseId,
+    residentCoordinationCase?.activeLguResponderUid,
+    residentCoordinationCase?.activeLguResponderName,
+    liveNow,
+  ]);
+
+  // Admin observes the official LGU responder location for the focused case.
+  // This is read-only: Admin never publishes responder GPS from this screen.
+  useEffect(() => {
+    setAdminLguLocation(null);
+
+    if (!isAdministrator || !focusedCaseId) {
+      return;
+    }
+
+    return onSnapshot(
+      doc(
+        db,
+        "lguResponseLocations",
+        focusedCaseId,
+      ),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setAdminLguLocation(null);
+          return;
+        }
+
+        const data = snapshot.data();
+
+        if (
+          data.caseId !== focusedCaseId ||
+          data.responderRole !== "lgu"
+        ) {
+          setAdminLguLocation(null);
+          return;
+        }
+
+        setAdminLguLocation({
+          id: snapshot.id,
+          ...data,
+        });
+      },
+      (cause) => {
+        console.error(
+          "admin observed LGU live location",
+          cause,
+        );
+        setAdminLguLocation(null);
+      },
+    );
+  }, [
+    isAdministrator,
+    focusedCaseId,
+  ]);
+
+  const adminLguPin = useMemo(() => {
+    if (
+      !adminLguLocation ||
+      !focusedCaseId ||
+      !adminCase?.activeLguResponderUid
+    ) {
+      return null;
+    }
+
+    const lastShared = timestampMillis(
+      adminLguLocation.updatedAt,
+    );
+
+    if (
+      !Number.isFinite(adminLguLocation.latitude) ||
+      !Number.isFinite(adminLguLocation.longitude) ||
+      lastShared <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      ...adminLguLocation,
+      id: `lgu-${focusedCaseId}`,
+      role: "lgu",
+      responderRole: "lgu",
+      selectable: false,
+      name:
+        String(adminLguLocation.responderName || "").trim() ||
+        String(adminCase?.activeLguResponderName || "").trim() ||
+        "LGU Emergency Response",
+      lastShared,
+      stale: liveNow - lastShared > 30000,
+    };
+  }, [
+    adminLguLocation,
+    focusedCaseId,
+    adminCase?.activeLguResponderUid,
+    adminCase?.activeLguResponderName,
+    liveNow,
+  ]);
+
+  // An accepted/active Volunteer may observe only the official LGU responder
+  // for the same focused emergency. This is view-only coordination data.
+  useEffect(() => {
+    setVolunteerLguLocation(null);
+
+    if (
+      !missionMode ||
+      !focusedCaseId ||
+      !missionAssignment ||
+      !["accepted", "responding", "on_site"].includes(
+        missionAssignmentStatus,
+      )
+    ) {
+      return;
+    }
+
+    return onSnapshot(
+      doc(
+        db,
+        "lguResponseLocations",
+        focusedCaseId,
+      ),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setVolunteerLguLocation(null);
+          return;
+        }
+
+        const data = snapshot.data();
+
+        if (
+          data.caseId !== focusedCaseId ||
+          data.responderRole !== "lgu"
+        ) {
+          setVolunteerLguLocation(null);
+          return;
+        }
+
+        setVolunteerLguLocation({
+          id: snapshot.id,
+          ...data,
+        });
+      },
+      (cause) => {
+        console.error(
+          "volunteer observed LGU live location",
+          cause,
+        );
+        setVolunteerLguLocation(null);
+      },
+    );
+  }, [
+    missionMode,
+    focusedCaseId,
+    missionAssignment?.id,
+    missionAssignmentStatus,
+  ]);
+
+  const volunteerLguPin = useMemo(() => {
+    if (
+      !volunteerLguLocation ||
+      !focusedCaseId ||
+      !missionCase?.activeLguResponderUid
+    ) {
+      return null;
+    }
+
+    const lastShared = timestampMillis(
+      volunteerLguLocation.updatedAt,
+    );
+
+    if (
+      !Number.isFinite(volunteerLguLocation.latitude) ||
+      !Number.isFinite(volunteerLguLocation.longitude) ||
+      lastShared <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      ...volunteerLguLocation,
+      id: `lgu-${focusedCaseId}`,
+      role: "lgu",
+      responderRole: "lgu",
+      selectable: false,
+      name:
+        String(volunteerLguLocation.responderName || "").trim() ||
+        String(missionCase?.activeLguResponderName || "").trim() ||
+        "LGU Emergency Response",
+      lastShared,
+      stale: liveNow - lastShared > 30000,
+    };
+  }, [
+    volunteerLguLocation,
+    focusedCaseId,
+    missionCase?.activeLguResponderUid,
+    missionCase?.activeLguResponderName,
+    liveNow,
   ]);
 
   const residentResponderPins = useMemo(
@@ -1870,8 +2695,7 @@ export default function WebMapTracking() {
             point.caseId === residentCoordinationCaseId &&
             Number.isFinite(point.latitude) &&
             Number.isFinite(point.longitude) &&
-            point.lastShared > 0 &&
-            liveNow - point.lastShared < 120000,
+            point.lastShared > 0,
         ),
     [
       residentResponderLocations,
@@ -1892,6 +2716,67 @@ export default function WebMapTracking() {
       !isApprovedProfile(profile)
     ) {
       return;
+    }
+
+    if (isAdministrator) {
+      return onSnapshot(
+        collection(db, "residentResponseLocations"),
+        (snapshot) => {
+          setResidentSharedLocations(
+            snapshot.docs.map((item) => ({
+              id: item.id,
+              ...item.data(),
+            })),
+          );
+        },
+        (cause) => {
+          console.error("admin resident live locations", cause);
+          setResidentSharedLocations([]);
+        },
+      );
+    }
+
+    if (
+      lguPersonnelMissionMode &&
+      adminCase?.reporterUid
+    ) {
+      return onSnapshot(
+        doc(
+          db,
+          "residentResponseLocations",
+          adminCase.reporterUid,
+        ),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            setResidentSharedLocations([]);
+            return;
+          }
+
+          const data = snapshot.data();
+
+          if (
+            data.caseId !== focusedCaseId ||
+            data.residentId !== adminCase.reporterUid
+          ) {
+            setResidentSharedLocations([]);
+            return;
+          }
+
+          setResidentSharedLocations([
+            {
+              id: snapshot.id,
+              ...data,
+            },
+          ]);
+        },
+        (cause) => {
+          console.error(
+            "LGU Personnel resident live location",
+            cause,
+          );
+          setResidentSharedLocations([]);
+        },
+      );
     }
 
     if (
@@ -1943,6 +2828,10 @@ export default function WebMapTracking() {
   }, [
     user?.uid,
     profile,
+    isAdministrator,
+    isLguPersonnel,
+    lguPersonnelMissionMode,
+    adminCase?.reporterUid,
     missionMode,
     missionCase?.reporterUid,
     missionAssignment?.id,
@@ -1989,35 +2878,128 @@ export default function WebMapTracking() {
     ],
   );
 
-  const mapResponderPins = isResidentMode
+  const adminVolunteerPins = useMemo(
+    () =>
+      adminResponderLocations
+        .flatMap((point) => {
+          const assignment = adminAssignments.find(
+            (item) =>
+              item.volunteerId === point.volunteerId &&
+              (!point.caseId || item.caseId === point.caseId) &&
+              ["accepted", "responding", "on_site"].includes(
+                normalize(item.status),
+              ),
+          );
+
+          // Never show a blue Volunteer pin from a stray/stale location
+          // document unless that Volunteer has actually accepted or is
+          // actively responding to the matching emergency case.
+          if (!assignment) {
+            return [];
+          }
+
+          if (
+            focusedCaseId &&
+            String(assignment.caseId || "") !== focusedCaseId
+          ) {
+            return [];
+          }
+
+          const lastShared = timestampMillis(point.updatedAt);
+
+          return [
+            {
+              ...point,
+              id: String(point.id || point.volunteerId || ""),
+              name:
+                assignment.volunteerName ||
+                point.volunteerName ||
+                "Volunteer",
+              assignmentId: assignment.id || point.assignmentId || "",
+              caseId: assignment.caseId || point.caseId || "",
+              status: assignment.status,
+              lastShared,
+              stale:
+                lastShared > 0 &&
+                liveNow - lastShared > 30000,
+            },
+          ];
+        })
+        .filter(
+          (point) =>
+            Number.isFinite(point.latitude) &&
+            Number.isFinite(point.longitude) &&
+            point.lastShared > 0 &&
+            liveNow - point.lastShared < 120000,
+        ),
+    [
+      adminResponderLocations,
+      adminAssignments,
+      liveNow,
+      focusedCaseId,
+    ],
+  );
+
+  // Resident map keeps the official LGU responder primary at all times.
+  // An accepted/active Volunteer is optional additional support and may appear
+  // beside the LGU; it never replaces the LGU responder.
+  const residentActiveVolunteerAssignment =
+    isResidentMode && residentShareAssignment
+      ? residentShareAssignment
+      : null;
+
+  const residentActiveVolunteerPins = residentActiveVolunteerAssignment
     ? residentResponderPins
-    : missionMode
-      ? flow.responders
-      : [];
+        .filter(
+          (point) =>
+            point.volunteerId ===
+            residentActiveVolunteerAssignment.volunteerId,
+        )
+        .map((point) => ({
+          ...point,
+          selectable: false,
+        }))
+    : [];
+
+  const mapResponderPins = isAdministrator
+    ? [
+        ...(adminLguPin ? [adminLguPin] : []),
+        ...adminVolunteerPins,
+      ]
+    : isResidentMode
+      ? [
+          ...(residentLguPin
+            ? [{ ...residentLguPin, selectable: false }]
+            : []),
+          ...residentActiveVolunteerPins,
+        ]
+      : missionMode
+        ? [
+            ...(volunteerLguPin
+              ? [{ ...volunteerLguPin, selectable: false }]
+              : []),
+            ...flow.responders,
+          ]
+        : [];
+
+  const residentShareMode: "lgu" | "volunteer" =
+    residentShareAssignment ? "volunteer" : "lgu";
 
   const residentShareCanPublish =
     isResidentMode &&
     !!user &&
     !!residentShareCaseId &&
     !!residentCoordinationCase &&
-    !!residentShareAssignment &&
     tracking &&
     isFocused &&
-    ["assigned", "in_progress"].includes(
+    ["reported", "validated", "assigned", "in_progress"].includes(
       normalize(residentCoordinationCase.status),
-    ) &&
-    ["accepted", "responding", "on_site"].includes(
-      normalize(residentShareAssignment.status),
     );
 
   // Optional resident live GPS. This is separate from the fixed emergency pin
   // and is written only after the resident explicitly enables sharing.
   useEffect(() => {
-    if (
-      !residentShareCanPublish ||
-      !user ||
-      !residentShareAssignment
-    ) {
+    if (!residentShareCanPublish || !user) {
       return;
     }
 
@@ -2030,7 +3012,11 @@ export default function WebMapTracking() {
       user.uid,
     );
 
-    const assignmentId = residentShareAssignment.id;
+    // When there is no accepted/responding Volunteer, the Resident may still
+    // explicitly share live GPS with the LGU. If a Volunteer later becomes
+    // active, this same document switches to volunteer mode automatically.
+    const assignmentId = residentShareAssignment?.id || "";
+    const responseMode = residentShareMode;
     const caseId = residentShareCaseId;
 
     setResidentShareSentAt(0);
@@ -2057,6 +3043,7 @@ export default function WebMapTracking() {
 
             await setDoc(locationRef, {
               residentId: user.uid,
+              responseMode,
               assignmentId,
               caseId,
               latitude: point.latitude,
@@ -2110,6 +3097,7 @@ export default function WebMapTracking() {
     residentShareCanPublish,
     user?.uid,
     residentShareAssignment?.id,
+    residentShareMode,
     residentShareCaseId,
   ]);
 
@@ -2132,17 +3120,11 @@ export default function WebMapTracking() {
 
     const validCase =
       residentCoordinationCase &&
-      ["assigned", "in_progress"].includes(
+      ["reported", "validated", "assigned", "in_progress"].includes(
         normalize(residentCoordinationCase.status),
       );
 
-    const validAssignment =
-      residentShareAssignment &&
-      ["accepted", "responding", "on_site"].includes(
-        normalize(residentShareAssignment.status),
-      );
-
-    if (!validCase || !validAssignment || !isFocused) {
+    if (!validCase || !isFocused) {
       setResidentShareCaseId("");
       setTracking(false);
       setUserLocation(null);
@@ -2150,7 +3132,6 @@ export default function WebMapTracking() {
   }, [
     residentShareCaseId,
     residentCoordinationCase?.status,
-    residentShareAssignment?.status,
     isFocused,
   ]);
 
@@ -2158,8 +3139,7 @@ export default function WebMapTracking() {
     if (
       !isResidentMode ||
       !selectedCase ||
-      !residentShareAssignment ||
-      !["assigned", "in_progress"].includes(
+      !["reported", "validated", "assigned", "in_progress"].includes(
         normalize(selectedCase.status),
       )
     ) {
@@ -2191,43 +3171,100 @@ export default function WebMapTracking() {
     }
   };
 
-  const residentResponderLastShared =
+  const chooseResidentCase = (caseId: string) => {
+    const nextCase = residentActiveCases.find(
+      (item) => item.id === caseId,
+    );
+
+    if (!nextCase) return;
+
+    if (
+      residentShareCaseId &&
+      residentShareCaseId !== caseId
+    ) {
+      stopResidentSharing();
+    }
+
+    routeCache.current = null;
+    setRoadRoute(null);
+    setRouteError("");
+    setSelected({
+      kind: "incident",
+      id: caseId,
+    });
+
+    router.replace(
+      `/map-tracking?caseId=${encodeURIComponent(caseId)}` as any,
+    );
+  };
+
+  const openResidentCaseChooser = () => {
+    if (residentShareCaseId) {
+      stopResidentSharing();
+    }
+
+    routeCache.current = null;
+    setRoadRoute(null);
+    setRouteError("");
+    setSelected(null);
+
+    router.replace("/map-tracking" as any);
+  };
+
+  const residentResponderLastShared = Math.max(
+    residentLguPin?.lastShared || 0,
     residentResponderPins.reduce(
       (latest, point) =>
         Math.max(latest, point.lastShared || 0),
       0,
-    );
+    ),
+  );
 
   const residentDisplayedAssignment =
-    isResidentMode ? residentPrimaryAssignment : null;
+    isResidentMode &&
+    residentPrimaryAssignment &&
+    ["accepted", "responding", "on_site", "completed"].includes(
+      normalize(residentPrimaryAssignment.status),
+    )
+      ? residentPrimaryAssignment
+      : null;
 
   const residentCanStartShare =
     isResidentMode &&
     !!selectedCase &&
     selectedCase.id === residentCoordinationCaseId &&
-    !!residentShareAssignment &&
-    ["assigned", "in_progress"].includes(
+    ["reported", "validated", "assigned", "in_progress"].includes(
       normalize(selectedCase.status),
     );
 
   const routeResponderPoint = useMemo(() => {
-    if (!isResidentMode || !residentDisplayedAssignment) {
+    if (!isResidentMode) {
       return null;
     }
 
-    return (
-      residentResponderPins.find(
-        (point) =>
-          point.volunteerId ===
-          residentDisplayedAssignment.volunteerId,
-      ) ||
-      residentResponderPins[0] ||
-      null
-    );
+    // Official LGU is always the Resident's primary route source.
+    // Optional Volunteer GPS is only a fallback when no LGU GPS has ever been
+    // published yet for the assigned case.
+    if (residentLguPin) {
+      return residentLguPin;
+    }
+
+    if (residentActiveVolunteerAssignment) {
+      return (
+        residentResponderPins.find(
+          (point) =>
+            point.volunteerId ===
+            residentActiveVolunteerAssignment.volunteerId,
+        ) || null
+      );
+    }
+
+    return null;
   }, [
     isResidentMode,
-    residentDisplayedAssignment?.volunteerId,
+    residentActiveVolunteerAssignment?.volunteerId,
     residentResponderPins,
+    residentLguPin,
   ]);
 
   const routeOrigin = useMemo<RouteCoordinate | null>(() => {
@@ -2238,7 +3275,18 @@ export default function WebMapTracking() {
       };
     }
 
-    if (missionMode && userLocation) {
+    if (
+      isAdministrator &&
+      adminMissionMode &&
+      adminLguPin
+    ) {
+      return {
+        latitude: Number(adminLguPin.latitude),
+        longitude: Number(adminLguPin.longitude),
+      };
+    }
+
+    if ((missionMode || adminMissionMode) && userLocation) {
       return {
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
@@ -2250,6 +3298,10 @@ export default function WebMapTracking() {
     isResidentMode,
     routeResponderPoint?.latitude,
     routeResponderPoint?.longitude,
+    isAdministrator,
+    adminMissionMode,
+    adminLguPin?.latitude,
+    adminLguPin?.longitude,
     missionMode,
     userLocation?.latitude,
     userLocation?.longitude,
@@ -2259,6 +3311,27 @@ export default function WebMapTracking() {
     // If the resident explicitly shares a fresh moving location for this
     // mission, use it as the live destination. Otherwise, fall back to the
     // fixed emergency GPS pin saved with the report.
+    if (adminMissionMode) {
+      const liveResident =
+        residentLivePins.find(
+          (point) => point.caseId === focusedCaseId,
+        ) || null;
+
+      if (liveResident) {
+        return {
+          latitude: Number(liveResident.latitude),
+          longitude: Number(liveResident.longitude),
+        };
+      }
+
+      if (adminCase && hasCoordinates(adminCase)) {
+        return {
+          latitude: Number(adminCase.latitude),
+          longitude: Number(adminCase.longitude),
+        };
+      }
+    }
+
     if (missionMode) {
       const liveResident =
         residentLivePins.find(
@@ -2302,6 +3375,10 @@ export default function WebMapTracking() {
 
     return null;
   }, [
+    adminMissionMode,
+    adminCase?.id,
+    adminCase?.latitude,
+    adminCase?.longitude,
     missionMode,
     focusedCaseId,
     residentLivePins,
@@ -2319,7 +3396,7 @@ export default function WebMapTracking() {
   ]);
 
   const usingResidentLiveDestination =
-    missionMode &&
+    (missionMode || adminMissionMode) &&
     residentLivePins.some(
       (point) => point.caseId === focusedCaseId,
     );
@@ -2332,13 +3409,27 @@ export default function WebMapTracking() {
     Date.now() - userLocation.timestamp < 60000;
 
   const routeStatus = normalize(
-    missionMode
-      ? missionAssignment?.status
-      : residentDisplayedAssignment?.status,
+    adminMissionMode
+      ? adminCase?.status
+      : missionMode
+        ? missionAssignment?.status
+        : residentCoordinationCase?.status,
   );
 
   const routeShouldBeLive =
-    ["responding", "on_site"].includes(routeStatus) &&
+    (
+      adminMissionMode
+        ? ["reported", "validated", "assigned", "in_progress"].includes(routeStatus)
+        : missionMode
+          ? ["responding", "on_site"].includes(
+              normalize(missionAssignment?.status),
+            )
+          : isResidentMode
+            ? ["reported", "validated", "assigned", "in_progress"].includes(
+                routeStatus,
+              )
+            : false
+    ) &&
     validRouteCoordinate(routeOrigin) &&
     validRouteCoordinate(routeDestination);
 
@@ -2508,8 +3599,17 @@ export default function WebMapTracking() {
   }, [roadRoute, currentNavigationStep]);
 
   const canStartInAppNavigation =
-    missionMode &&
-    ["responding", "on_site"].includes(missionAssignmentStatus) &&
+    (
+      (
+        missionMode &&
+        ["responding", "on_site"].includes(missionAssignmentStatus)
+      ) ||
+      (
+        adminMissionMode &&
+        !!adminCase &&
+        normalize(adminCase.status) !== "closed"
+      )
+    ) &&
     tracking &&
     !!userLocation &&
     validRouteCoordinate(routeDestination);
@@ -2544,12 +3644,39 @@ export default function WebMapTracking() {
   const caseChatViewerRole: "resident" | "volunteer" =
     missionMode ? "volunteer" : "resident";
 
+  // Resident response view always keeps exactly one green Resident pin.
+  // While live sharing is active, it follows the Resident device GPS. When
+  // live sharing is off, it falls back to the original emergency location.
+  // Other old/test emergency pins stay hidden in this active-response view.
+  const mapIncidentCases = useMemo(() => {
+    // Active Resident/Volunteer/LGU mission maps should show only the focused
+    // emergency destination. Rendering unrelated cases here also lets their
+    // coordinates stretch fitBounds and can zoom the map out across Luzon.
+    if (
+      isResidentMode ||
+      missionMode ||
+      lguPersonnelMissionMode ||
+      adminMissionMode
+    ) {
+      return selectedCase ? [selectedCase] : [];
+    }
+
+    return visibleCases;
+  }, [
+    visibleCases,
+    isResidentMode,
+    missionMode,
+    lguPersonnelMissionMode,
+    adminMissionMode,
+    selectedCase,
+  ]);
+
   const postMapData = (fit: boolean) => {
     frame.current?.contentWindow?.postMessage(
       {
         kind: "set-map-data",
         responders: mapResponderPins,
-        residents: residentLivePins,
+        residents: isResidentMode ? [] : residentLivePins,
         route: roadRoute
           ? {
               type: "Feature",
@@ -2561,24 +3688,56 @@ export default function WebMapTracking() {
               features: [],
             },
 
-        incidents: visibleCases.map((item) => ({
-          id: item.id,
-          title: item.title || "Disaster case",
-          status: item.status || "reported",
-          severity: item.severity || "medium",
-          latitude: numericCoordinate(item.latitude),
-          longitude: numericCoordinate(item.longitude),
-          destination:
-            (missionMode || isResidentMode) &&
-            selectedCase?.id === item.id,
-        })),
+        incidents: mapIncidentCases.map((item) => {
+          const residentSelfLive =
+            isResidentMode &&
+            selectedCase?.id === item.id &&
+            residentUsingOwnLiveDestination &&
+            !!userLocation;
 
-        centers: visibleCenters.map((item) => ({
-          id: item.id,
-          name: item.name || "Evacuation center",
-          latitude: numericCoordinate(item.latitude),
-          longitude: numericCoordinate(item.longitude),
-        })),
+          return {
+            id: item.id,
+            title: item.title || "Disaster case",
+            status: item.status || "reported",
+            severity: item.severity || "medium",
+            latitude: residentSelfLive
+              ? userLocation!.latitude
+              : numericCoordinate(item.latitude),
+            longitude: residentSelfLive
+              ? userLocation!.longitude
+              : numericCoordinate(item.longitude),
+            destination:
+              (missionMode || adminMissionMode) &&
+              selectedCase?.id === item.id,
+            residentPin:
+              isOperationalLgu || missionMode || isResidentMode,
+            residentSelf: isResidentMode,
+            reporterName: item.reporterName || "Resident",
+          };
+        }),
+
+        bases:
+          missionMode || adminMissionMode || isResidentMode
+            ? [LGU_BASE]
+            : [],
+
+        // Volunteer mission camera follows the active route/destination.
+        // LGU Base and LGU responder pins stay rendered as coordination
+        // references, but they no longer stretch fitBounds across the map.
+        navigationView: missionMode,
+
+        // Keep active response navigation focused on the mission. Evacuation
+        // centers remain available on overview maps, but they are intentionally
+        // hidden from the focused Volunteer mission map so unrelated locations
+        // cannot clutter or stretch the camera.
+        centers: missionMode
+          ? []
+          : visibleCenters.map((item) => ({
+              id: item.id,
+              name: item.name || "Evacuation center",
+              latitude: numericCoordinate(item.latitude),
+              longitude: numericCoordinate(item.longitude),
+            })),
 
         fit,
       },
@@ -2610,11 +3769,17 @@ export default function WebMapTracking() {
     }
   }, [
     mapReady,
-    visibleCases,
+    mapIncidentCases,
     visibleCenters,
     mapResponderPins,
     residentLivePins,
     roadRoute,
+    isAdministrator,
+    isResidentMode,
+    missionMode,
+    adminMissionMode,
+    residentUsingOwnLiveDestination,
+    selectedCase?.id,
   ]);
 
   useEffect(() => {
@@ -2623,8 +3788,21 @@ export default function WebMapTracking() {
     frame.current?.contentWindow?.postMessage(
       {
         kind: "update-user-location",
-        location: userLocation,
-        follow: tracking && followMe && !roadRoute,
+        location:
+          isAdministrator || isResidentMode
+            ? null
+            : userLocation,
+        follow:
+          !isAdministrator &&
+          !isResidentMode &&
+          tracking &&
+          followMe &&
+          !roadRoute,
+        role: isOperationalLgu
+          ? "admin"
+          : isResidentMode
+            ? "resident"
+            : "volunteer",
       },
       "*",
     );
@@ -2634,6 +3812,9 @@ export default function WebMapTracking() {
     tracking,
     followMe,
     roadRoute,
+    isResidentMode,
+    isAdministrator,
+    isOperationalLgu,
   ]);
 
   useEffect(() => {
@@ -2813,6 +3994,433 @@ export default function WebMapTracking() {
     profile?.status,
   ]);
 
+  const callLguBackend = async (
+    path: string,
+    method = "POST",
+  ) => {
+    if (!user) {
+      throw new Error("Your LGU session has expired. Sign in again.");
+    }
+
+    const token = await user.getIdToken(true);
+
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        payload?.message ||
+          payload?.error ||
+          "The LGU response action could not be completed.",
+      );
+    }
+
+    return payload;
+  };
+
+  const callResidentBackend = async (
+    path: string,
+    method = "POST",
+  ) => {
+    if (!user) {
+      throw new Error("Your Resident session has expired. Sign in again.");
+    }
+
+    const token = await user.getIdToken(true);
+
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        payload?.message ||
+          payload?.error ||
+          "The Resident response action could not be completed.",
+      );
+    }
+
+    return payload;
+  };
+
+  const confirmResidentLguArrival = async () => {
+    if (
+      !isResidentMode ||
+      !residentCoordinationCase?.id ||
+      residentArrivalBusy
+    ) {
+      return;
+    }
+
+    const currentStatus = normalize(
+      residentCoordinationCase.lguArrivalConfirmationStatus,
+    );
+
+    if (currentStatus === "confirmed") {
+      setResidentArrivalError("");
+      setResidentArrivalMessage("LGU arrival is already confirmed.");
+      return;
+    }
+
+    if (currentStatus !== "pending") {
+      setResidentArrivalMessage("");
+      setResidentArrivalError(
+        "LGU arrival is not waiting for confirmation yet.",
+      );
+      return;
+    }
+
+    setResidentArrivalBusy(true);
+    setResidentArrivalMessage("");
+    setResidentArrivalError("");
+
+    try {
+      const payload = await callResidentBackend(
+        `/api/resident/emergency-cases/${encodeURIComponent(
+          residentCoordinationCase.id,
+        )}/confirm-lgu-arrival`,
+      );
+
+      setResidentArrivalMessage(
+        payload?.message || "LGU arrival confirmed.",
+      );
+    } catch (cause: any) {
+      setResidentArrivalError(
+        cause?.message || "Unable to confirm LGU arrival.",
+      );
+    } finally {
+      setResidentArrivalBusy(false);
+    }
+  };
+
+  const markLguArrived = async () => {
+    if (
+      !isLguPersonnel ||
+      !adminCase?.activeResponderAssignmentId ||
+      lguArrivalBusy
+    ) {
+      return;
+    }
+
+    if (!tracking || !userLocation) {
+      setLguArrivalError(
+        "Start LGU GPS before marking the responder as arrived.",
+      );
+      return;
+    }
+
+    setLguArrivalBusy(true);
+    setLguArrivalError("");
+    setLguArrivalMessage("");
+
+    try {
+      await callLguBackend(
+        `/api/lgu/assignments/${encodeURIComponent(
+          adminCase.activeResponderAssignmentId,
+        )}/arrive`,
+      );
+
+      setLguAssignmentStatus("on_site");
+      setLguArrivalMessage(
+        "Arrival recorded. Resident confirmation is pending. Keep GPS active while handling the emergency.",
+      );
+    } catch (cause: any) {
+      setLguArrivalError(
+        cause?.message || "Unable to mark arrival.",
+      );
+    } finally {
+      setLguArrivalBusy(false);
+    }
+  };
+
+  const claimLguResponse = async () => {
+    if (!user || !adminCase || !focusedCaseId) return false;
+
+    // Dedicated LGU Personnel never self-claims a case. Admin assignment already
+    // selected the official responder through the trusted backend.
+    if (isLguPersonnel) {
+      const ownerUid = String(adminCase.activeLguResponderUid || "").trim();
+      const assignedIds = Array.isArray((adminCase as any).assignedLguPersonnelIds)
+        ? (adminCase as any).assignedLguPersonnelIds.map(String)
+        : [];
+
+      if (
+        ownerUid !== user.uid ||
+        !assignedIds.includes(user.uid)
+      ) {
+        setGpsError(
+          "This emergency is no longer assigned to your LGU Personnel account. Refresh your duty dashboard."
+        );
+        return false;
+      }
+
+      return true;
+    }
+
+    const caseRef = doc(db, "disasterCases", focusedCaseId);
+    const responderName =
+      String((profile as any)?.fullName || "").trim() ||
+      "LGU Emergency Response";
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(caseRef);
+        if (!snapshot.exists()) {
+          throw new Error("This emergency case is no longer available.");
+        }
+
+        const current: any = snapshot.data();
+        const status = normalize(current.status || "reported");
+        if (["resolved", "closed"].includes(status)) {
+          throw new Error("This emergency case is already closed for live response.");
+        }
+
+        const ownerUid = String(current.activeLguResponderUid || "").trim();
+        const ownerName = String(
+          current.activeLguResponderName || "another LGU responder",
+        ).trim();
+        const heartbeatMs = timestampMillis(current.activeLguHeartbeatAt);
+        const ownerIsFresh =
+          !!ownerUid &&
+          heartbeatMs > 0 &&
+          Date.now() - heartbeatMs < 120000;
+
+        if (ownerUid && ownerUid !== user.uid && ownerIsFresh) {
+          throw new Error(
+            `This case is already being handled by ${ownerName}. The live-response lock becomes available if that responder disconnects for about 2 minutes.`,
+          );
+        }
+
+        const patch: any = {
+          activeLguResponderUid: user.uid,
+          activeLguResponderName: responderName,
+          activeLguHeartbeatAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        if (ownerUid !== user.uid) {
+          patch.activeLguStartedAt = serverTimestamp();
+        }
+
+        transaction.update(caseRef, patch);
+      });
+
+      return true;
+    } catch (problem) {
+      setGpsError(
+        problem instanceof Error
+          ? problem.message
+          : "Unable to claim this LGU response. Please refresh and try again.",
+      );
+      return false;
+    }
+  };
+
+  const releaseLguResponse = async () => {
+    if (!user || !focusedCaseId) return;
+
+    // Stopping GPS is not the same as cancelling the official LGU assignment.
+    // Dedicated personnel keep ownership until the response lifecycle changes.
+    if (isLguPersonnel) return;
+
+    const caseRef = doc(db, "disasterCases", focusedCaseId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(caseRef);
+        if (!snapshot.exists()) return;
+
+        const current: any = snapshot.data();
+        if (String(current.activeLguResponderUid || "") !== user.uid) return;
+
+        transaction.update(caseRef, {
+          activeLguResponderUid: "",
+          activeLguResponderName: "",
+          activeLguHeartbeatAt: null,
+          updatedAt: serverTimestamp(),
+        });
+      });
+    } catch {
+      // If release cannot reach Firestore, the 2-minute heartbeat lease allows
+      // another authorized LGU responder to take over without a permanent lock.
+    }
+  };
+
+  const startAdminTracking = async () => {
+    if (!adminMissionMode) {
+      setTracking(true);
+      return;
+    }
+
+    setGpsError("");
+    const claimed = await claimLguResponse();
+    if (!claimed) return;
+
+    setUserLocation(null);
+    setFollowMe(false);
+    setTracking(true);
+  };
+
+  // While an Admin/LGU is actively navigating an emergency, publish one
+  // private official responder location for the matching Resident. Updates are
+  // throttled to the same 10-second live cycle used by the Resident stream.
+  useEffect(() => {
+    if (
+      !adminMissionMode ||
+      !user ||
+      !adminCase ||
+      !tracking ||
+      !isFocused ||
+      !["reported", "validated", "assigned", "in_progress"].includes(
+        normalize(adminCase.status),
+      )
+    ) {
+      return;
+    }
+
+    let stopped = false;
+    let pending = false;
+
+    const locationRef = doc(
+      db,
+      "lguResponseLocations",
+      focusedCaseId,
+    );
+
+    const responderName =
+      String((profile as any)?.fullName || "").trim() ||
+      "LGU Emergency Response";
+
+    const publish = () => {
+      const point = latestUserLocation.current;
+
+      if (
+        stopped ||
+        pending ||
+        !point ||
+        Date.now() - point.timestamp > 30000
+      ) {
+        return;
+      }
+
+      pending = true;
+
+      lguWriteQueue.current = lguWriteQueue.current
+        .catch(() => {})
+        .then(async () => {
+          if (stopped) return;
+
+          const locationPayload = {
+            caseId: focusedCaseId,
+            responderUid: user.uid,
+            responderName,
+            responderRole: "lgu",
+            latitude: point.latitude,
+            longitude: point.longitude,
+            accuracy: point.accuracy,
+            updatedAt: serverTimestamp(),
+          };
+
+          if (isLguPersonnel) {
+            if (
+              String(adminCase.activeLguResponderUid || "").trim() !== user.uid
+            ) {
+              throw new Error(
+                "LGU response ownership changed. Stop this GPS session and refresh the case."
+              );
+            }
+
+            // Current rules intentionally allow assigned LGU Personnel to publish
+            // only this case-scoped operational GPS document.
+            await setDoc(locationRef, locationPayload);
+            return;
+          }
+
+          const caseRef = doc(db, "disasterCases", focusedCaseId);
+
+          await runTransaction(db, async (transaction) => {
+            const caseSnapshot = await transaction.get(caseRef);
+            if (!caseSnapshot.exists()) {
+              throw new Error("Emergency case unavailable.");
+            }
+
+            const current: any = caseSnapshot.data();
+            if (String(current.activeLguResponderUid || "") !== user.uid) {
+              throw new Error(
+                "LGU response ownership changed. Stop this GPS session and refresh the case.",
+              );
+            }
+
+            transaction.update(caseRef, {
+              activeLguHeartbeatAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+
+            transaction.set(locationRef, locationPayload);
+          });
+        })
+        .catch((cause) => {
+          console.error("LGU live location publish", cause);
+
+          if (!stopped) {
+            setGpsError(
+              "LGU GPS is active, but the live responder location could not be shared with the Resident.",
+            );
+          }
+        })
+        .finally(() => {
+          pending = false;
+        });
+    };
+
+    publish();
+
+    const timer = window.setInterval(
+      publish,
+      10000,
+    );
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+
+      // Preserve the last known LGU point when the responder loses signal,
+      // closes the map, or logs out. Readers mark it STALE after 30 seconds.
+      // Case close/resolution performs the explicit location cleanup.
+      lguWriteQueue.current = lguWriteQueue.current
+        .catch(() => {})
+        .then(async () => {
+          await releaseLguResponse();
+        })
+        .catch(() => {
+          // If cleanup is offline, the heartbeat lease expires automatically.
+        });
+    };
+  }, [
+    adminMissionMode,
+    user?.uid,
+    focusedCaseId,
+    adminCase?.status,
+    tracking,
+    isFocused,
+    profile,
+    isLguPersonnel,
+    adminCase?.activeLguResponderUid,
+  ]);
+
   const toggleTracking = () => {
     if (tracking) {
       if (residentShareCaseId) {
@@ -2823,6 +4431,12 @@ export default function WebMapTracking() {
       setTracking(false);
       setLocating(false);
       setGpsError("");
+
+      if (adminMissionMode) {
+        void releaseLguResponse();
+      }
+    } else if (adminMissionMode) {
+      void startAdminTracking();
     } else {
       setUserLocation(null);
       setFollowMe(true);
@@ -2881,37 +4495,77 @@ export default function WebMapTracking() {
     residentDisplayedAssignment?.status,
   );
 
+  const residentLguResponseStatus = normalize(
+    residentCoordinationCase?.officialLguResponseStatus,
+  );
+
+  const residentLguArrivalStatus = normalize(
+    residentCoordinationCase?.lguArrivalConfirmationStatus,
+  );
+
   const residentFlowIndex =
-    residentAssignmentStatus === "completed"
+    [
+      "completed",
+      "completed_pending_admin_review",
+      "reviewed",
+    ].includes(residentLguResponseStatus)
       ? 4
-      : residentAssignmentStatus === "on_site"
+      : residentLguResponseStatus === "on_site" ||
+          ["pending", "confirmed"].includes(residentLguArrivalStatus)
         ? 3
-        : residentAssignmentStatus === "responding"
+        : ["responding", "acknowledged"].includes(residentLguResponseStatus)
           ? 2
-          : residentAssignmentStatus === "accepted"
+          : residentLguResponseStatus === "assigned"
             ? 1
-            : residentDisplayedAssignment
-              ? 1
-              : 0;
+            : normalize(residentCoordinationCase?.status) === "resolved"
+              ? 4
+              : residentLguPin && roadRoute && roadRoute.distanceMeters < 20
+                ? 3
+                : residentLguPin
+                  ? 2
+                  : ["validated", "assigned", "in_progress"].includes(
+                        normalize(residentCoordinationCase?.status),
+                      )
+                    ? 1
+                    : 0;
 
-  const pageTitle = missionMode
-    ? "Volunteer Response Map"
-    : isResidentMode
-      ? "Resident Map Tracking"
-      : "Volunteer Response Map";
+  const residentNeedsCaseSelection =
+    isResidentMode && !residentCoordinationCase;
 
-  const pageSubtitle = missionMode
-    ? "Respond, navigate, arrive, and complete the mission in one clear flow."
-    : isResidentMode
-      ? "Track your assigned responder, road distance, and estimated arrival in real time."
-      : "View evacuation centers here. Open an assigned emergency from Volunteer Tasks to start live response navigation.";
+  const pageTitle =
+    adminMissionMode && isAdministrator
+      ? "LGU Response Monitoring"
+      : adminMissionMode
+        ? "LGU Emergency Navigation"
+    : isAdministrator
+      ? "LGU Emergency Command Map"
+      : missionMode
+        ? "Volunteer Response Map"
+        : isResidentMode
+          ? "Resident Map Tracking"
+          : "Volunteer Response Map";
+
+  const pageSubtitle =
+    adminMissionMode && isAdministrator
+      ? "View the assigned LGU responder, Resident destination, route, ETA, and live response status. Admin does not control responder GPS."
+      : adminMissionMode
+        ? "Navigate from the LGU's current GPS position to the Resident's active emergency location."
+    : isAdministrator
+      ? "Monitor Resident emergency locations and active Volunteer responders from one clean command map."
+      : missionMode
+        ? "Respond, navigate, arrive, and complete the mission in one clear flow."
+        : isResidentMode
+          ? "Track the official LGU response and any accepted Volunteer support in real time."
+          : "View evacuation centers here. Open an assigned emergency from Volunteer Tasks to start live response navigation.";
 
   return (
     <main
       className={`response-map-page ${
-        missionMode || volunteerOverviewMode
-          ? "volunteer-map-mode"
-          : "resident-map-mode"
+        isOperationalLgu
+          ? "admin-map-mode"
+          : missionMode || volunteerOverviewMode
+            ? "volunteer-map-mode"
+            : "resident-map-mode"
       }`}
     >
       <style>{css}</style>
@@ -2919,9 +4573,13 @@ export default function WebMapTracking() {
       <header className="map-header clean-map-header">
         <div>
           <span className="eyebrow">
-            {isVolunteerMode
-              ? "VOLUNSERVE · VOLUNTEER MODE"
-              : "VOLUNSERVE · RESIDENT MODE"}
+            {isAdministrator
+              ? "VOLUNSERVE · LGU COMMAND"
+              : isLguPersonnel
+                ? "VOLUNSERVE · LGU RESPONDER"
+                : isVolunteerMode
+                  ? "VOLUNSERVE · VOLUNTEER MODE"
+                  : "VOLUNSERVE · RESIDENT MODE"}
           </span>
           <h1>{pageTitle}</h1>
           <p>{pageSubtitle}</p>
@@ -2929,27 +4587,47 @@ export default function WebMapTracking() {
 
         <div
           className={`clean-live-badge ${
-            missionMode
-              ? tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
-                ? "active"
-                : ""
-              : isResidentMode && residentResponderLastShared
-                ? "active"
-                : ""
+            adminMissionMode
+              ? isAdministrator
+                ? adminLguPin
+                  ? "active"
+                  : ""
+                : tracking
+                  ? "active"
+                  : ""
+              : missionMode
+                ? tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
+                  ? "active"
+                  : ""
+                : isResidentMode && residentResponderLastShared
+                  ? "active"
+                  : ""
           }`}
         >
           <span />
-          {missionMode
-            ? missionAssignmentStatus === "completed"
-              ? "MISSION COMPLETE"
-              : tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
-                ? "LIVE RESPONSE"
-                : statusLabel(missionAssignmentStatus || "accepted")
-            : isResidentMode
-              ? residentResponderLastShared
-                ? "RESPONDER LIVE"
-                : "RESPONSE STATUS"
-              : "READY"}
+          {adminMissionMode
+            ? isAdministrator
+              ? adminLguPin
+                ? adminLguPin.stale
+                  ? "LGU GPS · STALE"
+                  : "LGU RESPONSE · GPS LIVE"
+                : "WAITING FOR LGU GPS"
+              : tracking
+                ? "LGU RESPONSE · GPS LIVE"
+                : "READY TO NAVIGATE"
+            : isAdministrator
+              ? "COMMAND MAP"
+              : missionMode
+                ? missionAssignmentStatus === "completed"
+                  ? "MISSION COMPLETE"
+                  : tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
+                    ? "LIVE RESPONSE"
+                    : statusLabel(missionAssignmentStatus || "accepted")
+                : isResidentMode
+                  ? residentResponderLastShared
+                    ? "RESPONDER LIVE"
+                    : "RESPONSE STATUS"
+                  : "READY"}
         </div>
       </header>
 
@@ -2961,6 +4639,124 @@ export default function WebMapTracking() {
         <div className="clean-alert" role="alert">
           {error || gpsError}
         </div>
+      )}
+
+      {residentNeedsCaseSelection && (
+        <section
+          className="resident-case-picker"
+          aria-label="Choose emergency response to track"
+        >
+          <div className="resident-case-picker-heading">
+            <span className="clean-kicker">CASE-SPECIFIC TRACKING</span>
+            <h2>
+              {residentActiveCases.length > 0
+                ? "Choose the emergency you want to track"
+                : "No active emergency to track"}
+            </h2>
+            <p>
+              {residentActiveCases.length > 1
+                ? "You have multiple active emergencies. Select one so the Resident, LGU, Volunteer, route, distance, ETA, and live GPS all stay linked to the same case."
+                : residentActiveCases.length === 1
+                  ? "Opening your active emergency response…"
+                  : "When you have an active emergency, its official response tracking will appear here."}
+            </p>
+          </div>
+
+          {residentActiveCases.length > 0 && (
+            <div className="resident-case-picker-list">
+              {residentActiveCases.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="resident-case-option"
+                  onClick={() => chooseResidentCase(item.id)}
+                >
+                  <span className="resident-case-option-main">
+                    <strong>{item.title || "Emergency report"}</strong>
+                    <small>
+                      {item.location ||
+                        item.reporterAddress ||
+                        "Emergency location recorded"}
+                    </small>
+                  </span>
+
+                  <span className="resident-case-option-side">
+                    <i className={`clean-status-pill status-${normalize(item.status || "reported")}`}>
+                      {statusLabel(item.status || "reported")}
+                    </i>
+                    <b>Track response →</b>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {adminMissionMode && adminCase && (
+        <section
+          className="admin-response-overview"
+          aria-label="LGU direct response overview"
+        >
+          <div className="admin-response-overview-main">
+            <span className="clean-kicker">
+              {isAdministrator
+                ? "LGU RESPONSE MONITORING"
+                : "LGU DIRECT RESPONSE"}
+            </span>
+            <strong>{adminCase.title || "Emergency response"}</strong>
+            <small>
+              Destination:{" "}
+              {usingResidentLiveDestination
+                ? "Resident live shared location"
+                : adminCase.location ||
+                  adminCase.reporterAddress ||
+                  "Saved emergency GPS pin"}
+            </small>
+          </div>
+
+          <div className="admin-response-overview-status">
+            <span>Route status</span>
+            <strong>
+              {isAdministrator
+                ? adminLguPin
+                  ? roadRoute
+                    ? roadRoute.distanceMeters < 20
+                      ? "LGU at resident destination"
+                      : `${formatRoadDistance(roadRoute.distanceMeters)} · ${formatDriveTime(
+                          roadRoute.durationSeconds,
+                        )}`
+                    : routeLoading
+                      ? "Calculating LGU route…"
+                      : adminLguPin.stale
+                        ? "LGU GPS reading is stale"
+                        : "LGU GPS received · waiting for route"
+                  : "Waiting for assigned LGU GPS"
+                : tracking
+                  ? roadRoute
+                    ? roadRoute.distanceMeters < 20
+                      ? "At resident destination"
+                      : `${formatRoadDistance(roadRoute.distanceMeters)} · ${formatDriveTime(
+                          roadRoute.durationSeconds,
+                        )}`
+                    : routeLoading || locating
+                      ? "Calculating route…"
+                      : "GPS active · waiting for route"
+                  : "Ready to navigate"}
+            </strong>
+            <small>
+              {isAdministrator
+                ? adminLguPin
+                  ? `Red LGU responder → green Resident destination · last GPS ${new Date(
+                      adminLguPin.lastShared,
+                    ).toLocaleTimeString()}`
+                  : "Admin is view-only. The route appears when the assigned LGU Personnel shares GPS."
+                : tracking
+                  ? "Red LGU pin → green Resident destination"
+                  : "Start navigation from the Resident panel on the right."}
+            </small>
+          </div>
+        </section>
       )}
 
       {missionMode && missionCase && (
@@ -3026,20 +4822,36 @@ export default function WebMapTracking() {
                     residentCoordinationCase.reporterAddress ||
                     "Saved emergency location"}
               </p>
+              {residentActiveCases.length > 1 && (
+                <button
+                  type="button"
+                  className="resident-change-case-button"
+                  onClick={openResidentCaseChooser}
+                >
+                  Change emergency
+                </button>
+              )}
             </div>
 
             <div className="clean-summary-person">
-              <span>Assigned responder</span>
+              <span>Active responder</span>
               <strong>
-                {residentDisplayedAssignment
-                  ? residentDisplayedAssignment.volunteerName || "Assigned responder"
-                  : "Waiting for assignment"}
+                {residentLguPin?.name ||
+                  residentCoordinationCase?.activeLguResponderName ||
+                  "LGU coordinating response"}
               </strong>
               <small>
-                {residentDisplayedAssignment
-                  ? statusLabel(residentDisplayedAssignment.status)
-                  : "Admin is coordinating your request"}
+                {residentLguPin
+                  ? `Official LGU responder · ${residentLguPin.stale ? "STALE" : "LIVE"}`
+                  : residentCoordinationCase?.activeLguResponderUid
+                    ? "Official LGU responder · WAITING GPS"
+                    : "Waiting for official LGU responder"}
               </small>
+              {residentActiveVolunteerAssignment && (
+                <small>
+                  Optional Volunteer support · {residentActiveVolunteerAssignment.volunteerName || "Volunteer"} · {statusLabel(residentActiveVolunteerAssignment.status)}
+                </small>
+              )}
             </div>
 
             <div className="clean-summary-metric">
@@ -3066,7 +4878,7 @@ export default function WebMapTracking() {
           </div>
 
           <div className="clean-flow-steps">
-            {["Assigned", "On the way", "Arrived", "Complete"].map(
+            {["Coordinating", "On the way", "Arrived", "Response complete"].map(
               (label, index) => {
                 const step = index + 1;
                 const complete = residentFlowIndex > step;
@@ -3085,6 +4897,37 @@ export default function WebMapTracking() {
                 );
               },
             )}
+          </div>
+        </section>
+      )}
+
+      {isAdministrator && !adminMissionMode && (
+        <section className="toolbar volunteer-map-toolbar" aria-label="LGU command map controls">
+          <label className="search-box">
+            <span>⌕</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search emergency, resident, barangay or center…"
+              aria-label="Search emergency map"
+            />
+          </label>
+
+          <div className="filter-group">
+            <button
+              type="button"
+              className={showIncidents ? "chip active danger" : "chip"}
+              onClick={() => setShowIncidents((value) => !value)}
+            >
+              ● Residents / Emergencies
+            </button>
+            <button
+              type="button"
+              className={showCenters ? "chip active" : "chip"}
+              onClick={() => setShowCenters((value) => !value)}
+            >
+              ◆ Evacuation centers
+            </button>
           </div>
         </section>
       )}
@@ -3113,6 +4956,7 @@ export default function WebMapTracking() {
         </section>
       )}
 
+      {!residentNeedsCaseSelection && (
       <section className="map-layout clean-map-layout">
         <div className="map-card clean-map-card">
           <iframe
@@ -3122,9 +4966,9 @@ export default function WebMapTracking() {
             sandbox="allow-scripts allow-same-origin"
           />
 
-          {missionMode &&
+          {(missionMode || adminMissionMode) &&
             navigationActive &&
-            ["responding", "on_site"].includes(missionAssignmentStatus) && (
+            (adminMissionMode || ["responding", "on_site"].includes(missionAssignmentStatus)) && (
               <div className="navigation-hud clean-navigation-hud" role="status">
                 <div className="navigation-hud-turn">
                   <span className="navigation-arrow">
@@ -3163,26 +5007,489 @@ export default function WebMapTracking() {
             )}
 
           <div className="clean-map-legend">
+            {isAdministrator && (
+              <>
+                <span><i className="legend-dot resident-role-dot" /> Resident</span>
+                {adminMissionMode && (
+                  <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
+                )}
+                {!!adminLguPin && (
+                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
+                )}
+                {adminVolunteerPins.length > 0 && (
+                  <span><i className="legend-dot responder-dot" /> Accepted Volunteer</span>
+                )}
+              </>
+            )}
+            {isLguPersonnel && (
+              <>
+                <span><i className="legend-dot resident-role-dot" /> Resident</span>
+                <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
+                <span><i className="legend-dot lgu-role-dot" /> LGU / You</span>
+              </>
+            )}
             {isResidentMode && (
-              <span><i className="legend-dot responder-dot" /> Volunteer</span>
+              <>
+                <span><i className="legend-dot resident-role-dot" /> Resident / You</span>
+                <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
+                {residentLguPin && (
+                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
+                )}
+                {residentActiveVolunteerAssignment && (
+                  <span><i className="legend-dot responder-dot" /> Optional Volunteer support</span>
+                )}
+              </>
             )}
             {missionMode && (
-              <span><i className="legend-dot me" /> You</span>
+              <>
+                <span><i className="legend-dot responder-dot" /> Volunteer / You</span>
+                <span><i className="legend-dot resident-role-dot" /> Resident</span>
+                <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
+                {volunteerLguPin && (
+                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
+                )}
+              </>
             )}
-            {(missionMode || isResidentMode) && (
-              <span><i className="legend-dot incident" /> Resident / incident</span>
-            )}
-            {(missionMode || isResidentMode) && roadRoute && (
+            {(missionMode || adminMissionMode || isResidentMode) && roadRoute && (
               <span><i className="legend-route-line" /> Road route</span>
             )}
-            {volunteerOverviewMode && (
+            {(volunteerOverviewMode || (isAdministrator && !adminMissionMode)) && (
               <span><i className="legend-dot center" /> Evacuation center</span>
             )}
           </div>
         </div>
 
         <aside className="details-card clean-details-card">
-          {missionMode && selectedCase ? (
+          {isAdministrator && selectedAdminVolunteer ? (
+            <>
+              <div className="clean-side-heading">
+                <div>
+                  <span className="clean-kicker">VOLUNTEER PROFILE</span>
+                  <h2>{selectedAdminVolunteer.name || "Volunteer"}</h2>
+                </div>
+                <span className={`clean-status-pill status-${normalize(selectedAdminVolunteer.status || "responding")}`}>
+                  {statusLabel(selectedAdminVolunteer.status || "responding")}
+                </span>
+              </div>
+
+              <div className="resident-identity-card">
+                <div className="resident-avatar" aria-hidden="true">
+                  <span>{initialsFor(selectedAdminVolunteer.name || "Volunteer")}</span>
+                </div>
+                <div>
+                  <span>Approved responder</span>
+                  <strong>{selectedAdminVolunteer.name || "Volunteer"}</strong>
+                  <small>Blue pin · live response location</small>
+                </div>
+              </div>
+
+              <div className="clean-info-block">
+                <strong>Assigned case</strong>
+                <p>
+                  {cases.find((item) => item.id === selectedAdminVolunteer.caseId)?.title ||
+                    selectedAdminVolunteer.caseId ||
+                    "No active case recorded"}
+                </p>
+              </div>
+            </>
+          ) : isOperationalLgu && selectedCase ? (
+            <>
+              <div className="admin-case-panel">
+                <div className="admin-case-heading">
+                  <div>
+                    <span className="clean-kicker">RESIDENT EMERGENCY</span>
+                    <h2>{selectedCase.title || "Emergency case"}</h2>
+                  </div>
+
+                  <span
+                    className={`clean-status-pill status-${normalize(
+                      selectedCase.status || "reported",
+                    )}`}
+                  >
+                    {statusLabel(selectedCase.status || "reported")}
+                  </span>
+                </div>
+
+                <div className="admin-resident-profile">
+                  <div className="resident-avatar admin-resident-avatar" aria-hidden="true">
+                    {safeHttpUrl(
+                      selectedCase.reporterProfilePictureUrl ||
+                        selectedCase.profilePictureUrl,
+                    ) ? (
+                      <img
+                        src={safeHttpUrl(
+                          selectedCase.reporterProfilePictureUrl ||
+                            selectedCase.profilePictureUrl,
+                        )}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span>{initialsFor(selectedCase.reporterName)}</span>
+                    )}
+                  </div>
+
+                  <div className="admin-resident-copy">
+                    <span className="admin-verified-badge">✓ VERIFIED RESIDENT</span>
+                    <strong className="admin-resident-name">
+                      {selectedCase.reporterName || "Resident"}
+                    </strong>
+
+                    <div className="admin-contact-row">
+                      <span>Contact</span>
+                      <b>{selectedCase.contactNumber || "Not provided"}</b>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="admin-case-info-grid">
+                  <div className="admin-case-info-card">
+                    <span>Emergency location</span>
+                    <strong>
+                      {selectedCase.location ||
+                        selectedCase.reporterAddress ||
+                        "GPS-tagged emergency location"}
+                    </strong>
+                    <small>
+                      This is the response destination saved with the emergency report.
+                    </small>
+                  </div>
+
+                  <div className="admin-case-info-card">
+                    <span>Incident details</span>
+                    <strong>
+                      {selectedCase.details || "No additional description"}
+                    </strong>
+                    <small>
+                      {isLguPersonnel
+                        ? "Review the Resident emergency details before navigating to the response location."
+                        : "Review the report before dispatching the LGU or assigning a Volunteer."}
+                    </small>
+                  </div>
+                </div>
+
+                {["pending", "confirmed"].includes(
+                  normalize(selectedCase.lguArrivalConfirmationStatus),
+                ) && (
+                  <div
+                    className={`lgu-arrival-confirmation-strip ${
+                      normalize(selectedCase.lguArrivalConfirmationStatus) ===
+                      "confirmed"
+                        ? "confirmed"
+                        : "pending"
+                    }`}
+                  >
+                    <span>Arrival confirmation</span>
+                    <strong>
+                      {normalize(selectedCase.lguArrivalConfirmationStatus) ===
+                      "confirmed"
+                        ? "Confirmed by Resident"
+                        : "Waiting for Resident"}
+                    </strong>
+                  </div>
+                )}
+
+                {hasCoordinates(selectedCase) ? (
+                  <div
+                    className={`admin-route-card ${
+                      adminMissionMode &&
+                      selectedCase.id === focusedCaseId &&
+                      tracking
+                        ? "active"
+                        : ""
+                    }`}
+                  >
+                    <div className="admin-route-heading">
+                      <div>
+                        <span>LGU → RESIDENT ROUTE</span>
+                        <strong>
+                          {adminMissionMode &&
+                          selectedCase.id === focusedCaseId
+                            ? isAdministrator
+                              ? adminLguPin
+                                ? roadRoute
+                                  ? roadRoute.distanceMeters < 20
+                                    ? "LGU is at the Resident destination"
+                                    : "LGU route active"
+                                  : routeLoading
+                                    ? "Preparing LGU route"
+                                    : adminLguPin.stale
+                                      ? "LGU GPS reading is stale"
+                                      : "LGU GPS received"
+                                : "Waiting for assigned LGU GPS"
+                              : tracking
+                                ? roadRoute
+                                  ? roadRoute.distanceMeters < 20
+                                    ? "You are at the Resident destination"
+                                    : "Driving route active"
+                                  : routeLoading || locating
+                                    ? "Preparing navigation"
+                                    : "LGU GPS active"
+                                : "Direct LGU response"
+                            : "Direct LGU response"}
+                        </strong>
+                      </div>
+
+                      <span
+                        className={`admin-route-state ${
+                          adminMissionMode &&
+                          selectedCase.id === focusedCaseId &&
+                          (isAdministrator
+                            ? !!adminLguPin
+                            : tracking)
+                            ? "active"
+                            : ""
+                        }`}
+                      >
+                        {adminMissionMode &&
+                        selectedCase.id === focusedCaseId
+                          ? isAdministrator
+                            ? adminLguPin
+                              ? adminLguPin.stale
+                                ? "STALE"
+                                : "LIVE"
+                              : "WAITING"
+                            : tracking
+                              ? "LIVE"
+                              : "READY"
+                          : "READY"}
+                      </span>
+                    </div>
+
+                    <p className="admin-route-explainer">
+                      {isAdministrator
+                        ? "Admin view only: the route starts from the assigned LGU Personnel live GPS and ends at the Resident emergency location. Admin does not start, stop, or publish responder GPS."
+                        : "The route starts from this LGU device's current GPS and ends at the Resident's emergency location. If a fresh Resident live location is shared, that location becomes the destination automatically."}
+                    </p>
+
+                    <div className="admin-route-metrics">
+                      <div>
+                        <span>Distance</span>
+                        <strong>
+                          {adminMissionMode &&
+                          selectedCase.id === focusedCaseId &&
+                          (isAdministrator ? !!adminLguPin : tracking)
+                            ? roadRoute
+                              ? roadRoute.distanceMeters < 20
+                                ? "At destination"
+                                : formatRoadDistance(roadRoute.distanceMeters)
+                              : routeLoading || locating
+                                ? "…"
+                                : "—"
+                            : "—"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>ETA</span>
+                        <strong>
+                          {adminMissionMode &&
+                          selectedCase.id === focusedCaseId &&
+                          (isAdministrator ? !!adminLguPin : tracking)
+                            ? roadRoute
+                              ? roadRoute.distanceMeters < 20
+                                ? "Arrived"
+                                : formatDriveTime(roadRoute.durationSeconds)
+                              : routeLoading || locating
+                                ? "…"
+                                : "—"
+                            : "—"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {adminMissionMode &&
+                      selectedCase.id === focusedCaseId &&
+                      (isAdministrator
+                        ? !!adminLguPin
+                        : tracking) && (
+                        <div
+                          className={`admin-route-message ${
+                            roadRoute && roadRoute.distanceMeters < 20
+                              ? "arrived"
+                              : ""
+                          }`}
+                        >
+                          {roadRoute
+                            ? roadRoute.distanceMeters < 20
+                              ? "The LGU device is already at or extremely near the Resident destination."
+                              : "Route ready. Follow the blue road line from the red LGU pin to the green Resident pin."
+                            : routeLoading || (!isAdministrator && locating)
+                              ? isAdministrator
+                                ? "Calculating the road route from the assigned LGU responder to the Resident…"
+                                : "Getting the LGU device location and calculating the road route…"
+                              : isAdministrator
+                                ? routeError ||
+                                  (adminLguPin.stale
+                                    ? "The last LGU GPS reading is old. Waiting for a fresh responder update."
+                                    : "Waiting for a valid LGU route…")
+                                : gpsError ||
+                                  routeError ||
+                                  "Waiting for a valid GPS route…"}
+                        </div>
+                      )}
+
+                    {lguPersonnelMissionMode &&
+                      lguAssignmentStatus === "on_site" && (
+                        <div className="lgu-on-site-banner">
+                          <strong>On Site</strong>
+                          <span>
+                            {normalize(selectedCase.lguArrivalConfirmationStatus) ===
+                            "confirmed"
+                              ? "Resident confirmed your arrival. Keep official GPS active while the field response is ongoing."
+                              : "Arrival recorded. Resident confirmation is pending. Keep official GPS active while the field response is ongoing."}
+                          </span>
+                        </div>
+                      )}
+
+                    {!!lguArrivalMessage && (
+                      <div className="lgu-arrival-feedback success">
+                        {lguArrivalMessage}
+                      </div>
+                    )}
+
+                    {!!lguArrivalError && (
+                      <div className="lgu-arrival-feedback error">
+                        {lguArrivalError}
+                      </div>
+                    )}
+
+                    <div className="admin-route-actions">
+                      {lguPersonnelMissionMode &&
+                        lguAssignmentStatus === "responding" && (
+                          <button
+                            type="button"
+                            className="lgu-arrived-button"
+                            disabled={
+                              lguArrivalBusy ||
+                              !tracking ||
+                              !userLocation
+                            }
+                            onClick={() => {
+                              void markLguArrived();
+                            }}
+                          >
+                            {lguArrivalBusy
+                              ? "Recording Arrival…"
+                              : tracking && userLocation
+                                ? "✓ Mark Arrived / On Site"
+                                : "Start GPS Before Arrival"}
+                          </button>
+                        )}
+
+                      <button
+                        type="button"
+                        className="primary-button admin-route-primary"
+                        disabled={
+                          ["resolved", "closed"].includes(
+                            normalize(selectedCase.status || "reported"),
+                          ) ||
+                          (
+                            isAdministrator &&
+                            adminMissionMode &&
+                            selectedCase.id === focusedCaseId &&
+                            !adminLguPin
+                          )
+                        }
+                        onClick={() => {
+                          const terminal = ["resolved", "closed"].includes(
+                            normalize(selectedCase.status || "reported"),
+                          );
+
+                          if (terminal) return;
+
+                          if (
+                            adminMissionMode &&
+                            selectedCase.id === focusedCaseId
+                          ) {
+                            if (isAdministrator) {
+                              setFollowMe(false);
+                              window.setTimeout(() => postMapData(true), 0);
+                              return;
+                            }
+
+                            if (!tracking) {
+                              void startAdminTracking();
+                            } else {
+                              setFollowMe(false);
+                              window.setTimeout(() => postMapData(true), 0);
+                            }
+                            return;
+                          }
+
+                          router.push(
+                            `/(admin)/admin-live-map?caseId=${encodeURIComponent(
+                              selectedCase.id,
+                            )}` as any,
+                          );
+                        }}
+                      >
+                        {["resolved", "closed"].includes(
+                          normalize(selectedCase.status || "reported"),
+                        )
+                          ? "Case Closed · Navigation Unavailable"
+                          : adminMissionMode &&
+                              selectedCase.id === focusedCaseId &&
+                              tracking
+                            ? roadRoute
+                              ? roadRoute.distanceMeters < 20
+                                ? "Center Resident on Map"
+                                : "Center Full Route on Map"
+                              : routeLoading || locating
+                                ? "Preparing Route…"
+                                : "Refresh Route"
+                            : adminMissionMode
+                              ? isAdministrator
+                                ? adminLguPin
+                                  ? "Center LGU Response on Map"
+                                  : "Waiting for LGU GPS"
+                                : "Start GPS & Navigate"
+                              : isAdministrator
+                                ? "View LGU Response"
+                                : "Navigate to Resident"}
+                      </button>
+
+                      {adminMissionMode &&
+                        selectedCase.id === focusedCaseId &&
+                        tracking && (
+                          <button
+                            type="button"
+                            className="secondary-button admin-stop-route"
+                            onClick={toggleTracking}
+                          >
+                            Stop LGU GPS
+                          </button>
+                        )}
+
+                      {validRouteCoordinate(routeDestination) && (
+                        <a
+                          className="google-navigation-button admin-google-route"
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${routeDestination.latitude},${routeDestination.longitude}&travelmode=driving`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open in Google Maps
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="admin-route-card unavailable">
+                    <div className="admin-route-heading">
+                      <div>
+                        <span>LGU → RESIDENT ROUTE</span>
+                        <strong>Emergency GPS unavailable</strong>
+                      </div>
+                    </div>
+                    <p className="admin-route-explainer">
+                      This report does not have valid coordinates, so navigation
+                      cannot start until the emergency location is confirmed.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : missionMode && selectedCase ? (
             <>
               <div className="clean-side-heading">
                 <div>
@@ -3328,77 +5635,141 @@ export default function WebMapTracking() {
             <>
               <div className="clean-side-heading">
                 <div>
-                  <span className="clean-kicker">RESPONDER STATUS</span>
+                  <span className="clean-kicker">ACTIVE RESPONDER</span>
                   <h2>
-                    {residentDisplayedAssignment
-                      ? residentDisplayedAssignment.volunteerName || "Assigned responder"
-                      : "Waiting for responder"}
+                    {residentLguPin?.name ||
+                      residentCoordinationCase?.activeLguResponderName ||
+                      "LGU coordinating response"}
                   </h2>
                 </div>
-                {residentDisplayedAssignment && (
-                  <span className={`clean-status-pill status-${residentAssignmentStatus}`}>
-                    {statusLabel(residentDisplayedAssignment.status)}
-                  </span>
-                )}
+                <span
+                  className={`clean-status-pill ${
+                    routeResponderPoint ? "status-responding" : ""
+                  }`}
+                >
+                  {residentLguPin
+                    ? residentLguPin.stale
+                      ? "LGU STALE"
+                      : "LGU LIVE"
+                    : residentCoordinationCase?.activeLguResponderUid
+                      ? "WAITING GPS"
+                      : "WAITING"}
+                </span>
               </div>
 
-              {residentDisplayedAssignment &&
-                ["responding", "on_site"].includes(residentAssignmentStatus) && (
-                  <div className="clean-metrics-grid">
-                    <div>
-                      <span>Distance</span>
-                      <strong>
-                        {roadRoute
-                          ? formatRoadDistance(roadRoute.distanceMeters)
-                          : routeLoading
-                            ? "…"
-                            : "—"}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>ETA</span>
-                      <strong>
-                        {roadRoute
-                          ? formatDriveTime(roadRoute.durationSeconds)
-                          : routeLoading
-                            ? "…"
-                            : "—"}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Volunteer GPS</span>
-                      <strong>{residentResponderLastShared ? "LIVE" : "WAITING"}</strong>
-                    </div>
-                  </div>
-                )}
+              <div className="clean-metrics-grid">
+                <div>
+                  <span>Distance</span>
+                  <strong>
+                    {roadRoute
+                      ? formatRoadDistance(roadRoute.distanceMeters)
+                      : routeLoading
+                        ? "…"
+                        : "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span>ETA</span>
+                  <strong>
+                    {roadRoute
+                      ? formatDriveTime(roadRoute.durationSeconds)
+                      : routeLoading
+                        ? "…"
+                        : "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Responder GPS</span>
+                  <strong>
+                    {routeResponderPoint
+                      ? routeResponderPoint.stale
+                        ? "STALE"
+                        : "LIVE"
+                      : "WAITING"}
+                  </strong>
+                </div>
+              </div>
 
               <div className="clean-resident-message">
-                {residentAssignmentStatus === "completed"
-                  ? "The volunteer marked the mission complete. Confirm the assistance from My Reports."
-                  : residentAssignmentStatus === "on_site"
-                    ? "Your volunteer has arrived at your location."
-                    : residentAssignmentStatus === "responding"
-                      ? residentResponderLastShared
-                        ? "Your volunteer is on the way. The map and ETA update from their live GPS."
-                        : "Your volunteer is on the way. Waiting for a fresh GPS update."
-                      : residentAssignmentStatus === "accepted"
-                        ? "Your volunteer accepted the assignment and will appear on the map when the response starts."
-                        : "Admin is coordinating your emergency response."}
+                {residentLguPin
+                  ? residentLguPin.stale
+                    ? "The official LGU response is still assigned. The red LGU pin shows the responder's last known location while VolunServe waits for a fresh GPS update."
+                    : "The official LGU response is active. The green pin is your location and the red LGU pin shows the responder in real time."
+                  : residentCoordinationCase?.activeLguResponderUid
+                    ? "An official LGU responder is assigned. Waiting for the responder's first or next GPS update."
+                    : "Your green Resident pin stays visible while VolunServe waits for the official LGU response."}
               </div>
 
-              {routeError && residentAssignmentStatus === "responding" && (
+              {residentLguArrivalStatus === "pending" && (
+                <div className="resident-arrival-confirm-card">
+                  <div>
+                    <span>LGU ARRIVAL</span>
+                    <strong>Responder reports they are on site</strong>
+                    <small>
+                      Confirm only if the official LGU responder has reached your emergency location.
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="primary-button resident-confirm-arrival-button"
+                    disabled={residentArrivalBusy}
+                    onClick={() => {
+                      void confirmResidentLguArrival();
+                    }}
+                  >
+                    {residentArrivalBusy
+                      ? "Confirming…"
+                      : "Confirm Arrival"}
+                  </button>
+                </div>
+              )}
+
+              {residentLguArrivalStatus === "confirmed" && (
+                <div className="resident-arrival-confirmed-card">
+                  <strong>✓ LGU arrival confirmed</strong>
+                  <span>Confirmation recorded for this emergency response.</span>
+                </div>
+              )}
+
+              {!!residentArrivalMessage && (
+                <div className="resident-arrival-feedback success">
+                  {residentArrivalMessage}
+                </div>
+              )}
+
+              {!!residentArrivalError && (
+                <div className="resident-arrival-feedback error">
+                  {residentArrivalError}
+                </div>
+              )}
+
+              {residentActiveVolunteerAssignment && (
+                <div className="clean-info-block">
+                  <strong>Optional Volunteer support</strong>
+                  <p>
+                    {residentActiveVolunteerAssignment.volunteerName || "Volunteer"} · {statusLabel(residentActiveVolunteerAssignment.status)}. This support is additional and does not replace the official LGU responder.
+                  </p>
+                </div>
+              )}
+
+              {residentAssignmentStatus === "completed" && (
+                <div className="clean-info-block">
+                  <strong>Volunteer support completed</strong>
+                  <p>Confirm the assistance from My Reports when requested.</p>
+                </div>
+              )}
+
+              {routeError && routeResponderPoint && (
                 <p className="route-warning">{routeError}</p>
               )}
 
-              {residentCanStartShare &&
-                ["accepted", "responding", "on_site"].includes(
-                  normalize(residentShareAssignment?.status),
-                ) && (
+              {residentCanStartShare && (
                   <div className="clean-optional-share">
                     <div>
                       <strong>Share my moving location</strong>
                       <small>
-                        Optional. If you move away from the original emergency pin, sharing updates the responder's route to your fresh location.
+                        Optional. Share your live GPS with the LGU during an active emergency. If a Volunteer is actively responding, the same live location is shared only with that assigned responder.
                       </small>
                     </div>
                     {residentShareCaseId === selectedCase.id ? (
@@ -3480,6 +5851,7 @@ export default function WebMapTracking() {
           )}
         </aside>
       </section>
+      )}
 
       {caseChatAvailable && selectedCase && caseChatAssignment && (
         <details className="clean-chat-card">
@@ -3503,6 +5875,131 @@ export default function WebMapTracking() {
 }
 
 const css = `
+.resident-case-picker {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #dbe6ef;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(15, 39, 64, 0.08);
+}
+
+.resident-case-picker-heading {
+  max-width: 860px;
+}
+
+.resident-case-picker-heading h2 {
+  margin: 5px 0 7px;
+  color: #0f2740;
+  font-size: clamp(22px, 2.2vw, 30px);
+  line-height: 1.15;
+}
+
+.resident-case-picker-heading p {
+  margin: 0;
+  color: #60758a;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.resident-case-picker-list {
+  display: grid;
+  gap: 12px;
+}
+
+.resident-case-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  border: 1px solid #dbe6ef;
+  border-radius: 16px;
+  background: #fbfdff;
+  color: #0f2740;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.resident-case-option:hover {
+  transform: translateY(-1px);
+  border-color: #9fd8cc;
+  background: #f4fcf9;
+  box-shadow: 0 8px 22px rgba(15, 159, 133, 0.1);
+}
+
+.resident-case-option-main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.resident-case-option-main strong {
+  color: #0f2740;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.resident-case-option-main small {
+  color: #71859a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.resident-case-option-side {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resident-case-option-side .clean-status-pill {
+  font-style: normal;
+}
+
+.resident-case-option-side b {
+  color: #0f8f79;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.resident-change-case-button {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 1px solid #cfdce7;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #36536f;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.resident-change-case-button:hover {
+  border-color: #9fcfc5;
+  color: #0f8f79;
+  background: #f6fcfa;
+}
+
+@media (max-width: 760px) {
+  .resident-case-option {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resident-case-option-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 .mission-toolbar {
   justify-content: space-between;
   align-items: center;
@@ -5038,6 +7535,10 @@ const css = `
   background: #7c3aed !important;
 }
 
+.lgu-base-dot {
+  background: #dc2626 !important;
+}
+
 .clean-details-card {
   min-height: 620px;
   padding: 18px;
@@ -5399,4 +7900,750 @@ const css = `
   }
 }
 
+.lgu-navigation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.google-navigation-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f766e;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.google-navigation-button:hover {
+  background: #f8fafc;
+}
+
+.resident-role-dot {
+  background: #16a34a !important;
+}
+
+.responder-dot {
+  background: #2563eb !important;
+}
+
+.lgu-role-dot {
+  background: #dc2626 !important;
+}
+
+.full-width-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+
+/* =========================================================
+   ADMIN / LGU NAVIGATION POLISH
+   ========================================================= */
+
+.admin-response-overview {
+  width: min(1380px, 100%);
+  margin: 0 auto 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  align-items: center;
+  gap: 18px;
+  padding: 15px 18px;
+  border: 1px solid #d7e6ef;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbfd 100%);
+  box-shadow: 0 8px 24px rgba(15,39,64,.05);
+}
+
+.admin-response-overview-main,
+.admin-response-overview-status {
+  min-width: 0;
+}
+
+.admin-response-overview-main > strong,
+.admin-response-overview-main > small,
+.admin-response-overview-status > span,
+.admin-response-overview-status > strong,
+.admin-response-overview-status > small {
+  display: block;
+}
+
+.admin-response-overview-main > strong {
+  margin-top: 3px;
+  color: var(--vs-navy);
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.admin-response-overview-main > small {
+  margin-top: 5px;
+  color: #657b8f;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.admin-response-overview-status {
+  padding-left: 18px;
+  border-left: 1px solid #dfe9ef;
+}
+
+.admin-response-overview-status > span {
+  color: #7a8da0;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.admin-response-overview-status > strong {
+  margin-top: 4px;
+  color: #0f766e;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.admin-response-overview-status > small {
+  margin-top: 4px;
+  color: #718499;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* Keep the navigation HUD fully inside the map.
+   The base HUD is centered with translateX(-50%); this reset prevents clipping. */
+.clean-navigation-hud {
+  top: 16px !important;
+  left: 16px !important;
+  right: auto !important;
+  width: min(390px, calc(100% - 32px)) !important;
+  max-width: calc(100% - 32px) !important;
+  transform: none !important;
+  overflow: hidden !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 32px rgba(15,23,42,.16) !important;
+}
+
+.clean-navigation-hud .navigation-hud-turn {
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.clean-navigation-hud .navigation-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: #2563eb;
+  font-size: 25px;
+}
+
+.clean-navigation-hud .navigation-hud-turn strong {
+  overflow-wrap: anywhere;
+}
+
+.clean-navigation-hud .navigation-hud-progress {
+  padding: 10px 14px 12px;
+  border-top: 1px solid #e7edf3;
+  background: #f8fbff;
+}
+
+.legend-route-line {
+  background: #7c3aed !important;
+}
+
+/* Give the Resident / route panel enough width to remain readable. */
+.clean-map-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+
+.clean-map-card {
+  height: clamp(620px, 72vh, 760px);
+  min-height: 620px;
+}
+
+.clean-map-card iframe {
+  height: 100%;
+  min-height: 100%;
+}
+
+.clean-details-card {
+  position: sticky;
+  top: 16px;
+  height: clamp(620px, 72vh, 760px);
+  min-height: 620px;
+  max-height: 760px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.clean-details-card > * {
+  min-width: 0;
+}
+
+.admin-case-panel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd8e2 transparent;
+}
+
+.admin-case-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-case-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-case-panel::-webkit-scrollbar-thumb {
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #cbd8e2;
+}
+
+.admin-case-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e8eef2;
+}
+
+.admin-case-heading > div {
+  min-width: 0;
+}
+
+.admin-case-heading h2 {
+  margin: 4px 0 0;
+  color: var(--vs-navy);
+  font-size: 20px;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.admin-resident-profile {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #dfe8ee;
+  border-radius: 14px;
+  background: #fbfdfe;
+}
+
+.admin-resident-avatar {
+  width: 72px;
+  height: 72px;
+  border-width: 2px;
+}
+
+.admin-resident-copy {
+  min-width: 0;
+}
+
+.admin-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #e9f8f1;
+  color: #087963;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .04em;
+}
+
+.admin-resident-name {
+  display: block;
+  margin-top: 7px;
+  color: var(--vs-navy);
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.admin-contact-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 5px;
+}
+
+.admin-contact-row span {
+  color: #7b8da0;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-contact-row b {
+  min-width: 0;
+  color: #4f6478;
+  font-size: 11px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.admin-case-info-grid {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.admin-case-info-card {
+  padding: 12px 13px;
+  border: 1px solid #e2eaf0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-case-info-card > span,
+.admin-case-info-card > strong,
+.admin-case-info-card > small {
+  display: block;
+}
+
+.admin-case-info-card > span {
+  color: #73879a;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.admin-case-info-card > strong {
+  margin-top: 5px;
+  color: #243f5a;
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.admin-case-info-card > small {
+  margin-top: 5px;
+  color: #8293a3;
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.admin-route-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #d8e3ea;
+  border-radius: 14px;
+  background: #f9fcfd;
+}
+
+.admin-route-card.active {
+  border-color: #b9d7d1;
+  background: linear-gradient(180deg, #f5fcfa 0%, #ffffff 100%);
+  box-shadow: 0 8px 22px rgba(15,118,110,.07);
+}
+
+.admin-route-card.unavailable {
+  border-color: #f2d5d5;
+  background: #fffafa;
+}
+
+.admin-route-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-route-heading > div {
+  min-width: 0;
+}
+
+.admin-route-heading span,
+.admin-route-heading strong {
+  display: block;
+}
+
+.admin-route-heading > div > span {
+  color: #72879b;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .07em;
+}
+
+.admin-route-heading > div > strong {
+  margin-top: 4px;
+  color: var(--vs-navy);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.admin-route-state {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #edf3f6;
+  color: #607589;
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.admin-route-state.active {
+  background: #e5f8f1;
+  color: #087963;
+}
+
+.admin-route-explainer {
+  margin: 9px 0 0;
+  color: #607589;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.admin-route-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.admin-route-metrics > div {
+  padding: 10px 11px;
+  border: 1px solid #e0e8ee;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.admin-route-metrics span,
+.admin-route-metrics strong {
+  display: block;
+}
+
+.admin-route-metrics span {
+  color: #7a8da0;
+  font-size: 8.5px;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.admin-route-metrics strong {
+  margin-top: 4px;
+  color: #173d5e;
+  font-size: 15px;
+}
+
+.admin-route-message {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid #d9e6ef;
+  border-radius: 10px;
+  background: #f5f9fc;
+  color: #536b80;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.admin-route-message.arrived {
+  border-color: #c8e7d7;
+  background: #effaf4;
+  color: #24704e;
+}
+
+.lgu-on-site-banner {
+  display: grid;
+  gap: 4px;
+  margin-top: 11px;
+  padding: 11px 12px;
+  border: 1px solid #a7e0c2;
+  border-radius: 10px;
+  background: #ecfdf3;
+}
+
+.lgu-on-site-banner strong {
+  color: #067647;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lgu-on-site-banner span {
+  color: #24704e;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.lgu-arrival-feedback {
+  margin-top: 9px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.lgu-arrival-feedback.success {
+  border: 1px solid #a7e0c2;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.lgu-arrival-feedback.error {
+  border: 1px solid #f5b7b1;
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.lgu-arrived-button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: #175cd3;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lgu-arrived-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-route-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.admin-route-actions .primary-button,
+.admin-route-actions .secondary-button,
+.admin-route-actions .google-navigation-button {
+  width: 100%;
+  min-height: 42px;
+}
+
+.admin-route-primary {
+  font-weight: 850;
+}
+
+.admin-stop-route {
+  border-color: #d8e3ea;
+  background: #fff;
+}
+
+.admin-google-route {
+  min-height: 42px;
+  border-color: #cddde4;
+  background: #fff;
+}
+
+/* Keep non-admin detail modes padded even though the shared card itself
+   no longer owns the padding. */
+.clean-details-card > :not(.admin-case-panel) {
+  margin-left: 18px;
+  margin-right: 18px;
+}
+
+.clean-details-card > :first-child:not(.admin-case-panel) {
+  margin-top: 18px;
+}
+
+.clean-details-card > :last-child:not(.admin-case-panel) {
+  margin-bottom: 18px;
+}
+
+
+.lgu-arrival-confirmation-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9e5ec;
+  border-radius: 12px;
+  background: #f8fbfd;
+}
+
+.lgu-arrival-confirmation-strip span {
+  color: #60758a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.lgu-arrival-confirmation-strip strong {
+  color: #7a4d00;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.lgu-arrival-confirmation-strip.confirmed {
+  border-color: #b9dfc8;
+  background: #f0fbf4;
+}
+
+.lgu-arrival-confirmation-strip.confirmed strong {
+  color: #067647;
+}
+
+.resident-arrival-confirm-card {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid #b8d5ff;
+  border-radius: 14px;
+  background: #f5f9ff;
+}
+
+.resident-arrival-confirm-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.resident-arrival-confirm-card span {
+  color: #175cd3;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+
+.resident-arrival-confirm-card strong {
+  color: #0f2740;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.resident-arrival-confirm-card small {
+  color: #60758a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.resident-confirm-arrival-button {
+  width: 100%;
+  min-height: 42px;
+}
+
+.resident-arrival-confirmed-card {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #b9dfc8;
+  border-radius: 14px;
+  background: #f0fbf4;
+}
+
+.resident-arrival-confirmed-card strong {
+  color: #067647;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.resident-arrival-confirmed-card span {
+  color: #52705f;
+  font-size: 12px;
+}
+
+.resident-arrival-feedback {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.resident-arrival-feedback.success {
+  border: 1px solid #a7e0c2;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.resident-arrival-feedback.error {
+  border: 1px solid #f5b7b1;
+  background: #fff1f0;
+  color: #b42318;
+}
+
+@media (max-width: 1260px) {
+  .clean-map-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 380px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .admin-response-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-response-overview-status {
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 1px solid #dfe9ef;
+    border-left: 0;
+  }
+
+  .clean-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clean-details-card {
+    position: static;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .admin-case-panel {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-response-overview {
+    padding: 13px;
+  }
+
+  .admin-case-panel {
+    padding: 14px;
+  }
+
+  .admin-resident-profile {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .admin-resident-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .admin-route-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .clean-navigation-hud {
+    top: 10px !important;
+    left: 10px !important;
+    width: calc(100% - 20px) !important;
+    max-width: calc(100% - 20px) !important;
+  }
+}
 `
