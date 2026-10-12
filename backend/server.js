@@ -616,17 +616,18 @@ function normalizeAiDecision(
     decision === "no_match" ||
     decision === "not_matched"
   ) {
-    // AI-assisted verification does not
-    // permanently reject a Resident.
-    // A non-match is sent to LGU/Admin
-    // manual review.
-    return "manual_review";
+    // Failed verification attempts may be retried.
+    // This does not ban or disable the Resident account.
+    return "failed";
   }
   return "manual_review";
 }
 function numberOrNull(
   value,
 ) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
   const number = Number(value);
   return Number.isFinite(number)
     ? number
@@ -5200,10 +5201,11 @@ app.post(
         cleanText(
           aiResult?.message ||
             (
-              decision ===
-              "verified"
+              decision === "verified"
                 ? "Identity verification completed successfully."
-                : "The submission requires LGU/Admin manual review."
+                : decision === "failed"
+                  ? "Identity verification attempt failed. Please retry with valid, clear images."
+                  : "The submission requires LGU/Admin manual review."
             ),
           500,
         );
@@ -5218,19 +5220,28 @@ app.post(
           verificationMethod:
             "volunserve_ai",
           status:
-            decision ===
-            "verified"
+            decision === "verified"
               ? "verified"
-              : "pending",
+              : decision === "failed"
+                ? "failed"
+                : "pending",
           aiDecision:
             decision,
+          // This is a new attempt: clear decisions and audit fields
+          // inherited from any previous LGU/Admin review.
+          decision: FieldValue.delete(),
+          manualReviewDecision: FieldValue.delete(),
+          manualValidationMethod: FieldValue.delete(),
+          manualReviewNotes: FieldValue.delete(),
+          reviewedAt: FieldValue.delete(),
+          reviewedBy: FieldValue.delete(),
+          reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
           message:
             resultMessage,
           requiresManualReview:
-            decision !==
-            "verified",
+            decision === "manual_review",
           lastSubmissionAt:
             FieldValue
               .serverTimestamp(),
@@ -5289,7 +5300,7 @@ app.post(
           userRef,
           {
             identityStatus:
-              "pending",
+              decision === "failed" ? "failed" : "pending",
             identityVerified:
               false,
             identityVerificationProvider:
@@ -5302,7 +5313,9 @@ app.post(
               FieldValue
                 .serverTimestamp(),
             identityFailureReason:
-              FieldValue.delete(),
+              decision === "failed"
+                ? resultMessage
+                : FieldValue.delete(),
             updatedAt:
               FieldValue
                 .serverTimestamp(),
@@ -5322,10 +5335,11 @@ app.post(
           ok:
             true,
           status:
-            decision ===
-            "verified"
+            decision === "verified"
               ? "verified"
-              : "pending",
+              : decision === "failed"
+                ? "failed"
+                : "pending",
           verificationId,
           decision,
           matchScore,
@@ -5451,6 +5465,9 @@ app.get(
     try {
       const verificationSnapshot = await db
         .collection("identityVerifications")
+        // Sort in Firestore BEFORE the cap, so recent submissions
+        // are not arbitrarily excluded from the Admin list.
+        .orderBy("updatedAt", "desc")
         .limit(250)
         .get();
 

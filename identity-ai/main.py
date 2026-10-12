@@ -5,7 +5,6 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
-
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -13,48 +12,39 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
-
-
 app = FastAPI(
     title="VolunServe Identity AI",
-    version="2.0.0",
+    version="2.1.0",
     description=(
         "VolunServe custom AI-assisted 1-to-1 identity verification service. "
         "This service is called only by the VolunServe backend."
     ),
 )
-
-
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:8081",
     "http://localhost:8084",
     "http://localhost:19006",
     "http://localhost:3000",
 ]
-
 ACCEPTED_ID_TYPES = {
     "national_id",
     "drivers_license",
     "passport",
     "other_government_id",
 }
-
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/webp",
 }
-
 MAX_ID_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_SELFIE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_EDGE = 1800
-
 # This matcher intentionally uses a strict default and sends uncertain cases
 # to LGU/Admin manual review instead of automatically rejecting a Resident.
 DEFAULT_MATCH_THRESHOLD = 0.78
 DEFAULT_MIN_IMAGE_QUALITY = 0.34
-
 # Stable-ish MediaPipe facial landmarks used for 1-to-1 facial geometry
 # comparison. Expression-heavy interior lip points are intentionally limited.
 MATCH_LANDMARKS = [
@@ -67,7 +57,6 @@ MATCH_LANDMARKS = [
     172, 136, 150, 149, 176, 148,
     377, 400, 378, 379, 365, 397,
 ]
-
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
 
@@ -77,10 +66,8 @@ def get_allowed_origins():
         "ALLOWED_ORIGINS",
         "",
     ).strip()
-
     if not raw:
         return DEFAULT_ALLOWED_ORIGINS
-
     return [
         value.strip()
         for value in raw.split(",")
@@ -130,15 +117,12 @@ def env_float(
     maximum,
 ):
     raw = os.getenv(name, "").strip()
-
     if not raw:
         return default_value
-
     try:
         value = float(raw)
     except ValueError:
         return default_value
-
     return max(
         minimum,
         min(maximum, value),
@@ -171,7 +155,6 @@ def require_internal_backend(
     ),
 ):
     configured_key = get_internal_key()
-
     if not configured_key:
         raise HTTPException(
             status_code=503,
@@ -180,12 +163,10 @@ def require_internal_backend(
                 "on the AI service."
             ),
         )
-
     received_key = str(
         x_volunserve_internal_key
         or ""
     ).strip()
-
     if not received_key:
         raise HTTPException(
             status_code=401,
@@ -194,7 +175,6 @@ def require_internal_backend(
                 "is required."
             ),
         )
-
     if not secrets.compare_digest(
         configured_key,
         received_key,
@@ -215,7 +195,6 @@ def validate_forwarded_user(
         value,
         200,
     )
-
     if not uid:
         raise HTTPException(
             status_code=400,
@@ -224,7 +203,6 @@ def validate_forwarded_user(
                 "was not forwarded."
             ),
         )
-
     return uid
 
 
@@ -236,7 +214,6 @@ def verification_id_for(
         for character in uid
         if character.isalnum()
     )[:28]
-
     return (
         f"identity_{safe_uid}_"
         f"{uuid.uuid4().hex[:18]}"
@@ -257,12 +234,10 @@ async def read_upload(
             status_code=400,
             detail=f"{label} is required.",
         )
-
     content_type = clean_text(
         upload.content_type,
         80,
     ).lower()
-
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=415,
@@ -271,15 +246,12 @@ async def read_upload(
                 "or WebP image."
             ),
         )
-
     data = await upload.read()
-
     if not data:
         raise HTTPException(
             status_code=400,
             detail=f"{label} is empty.",
         )
-
     if len(data) > maximum_bytes:
         raise HTTPException(
             status_code=413,
@@ -288,7 +260,6 @@ async def read_upload(
                 f"{maximum_bytes // (1024 * 1024)} MB limit."
             ),
         )
-
     return data
 
 
@@ -303,7 +274,6 @@ def decode_image(
             image = ImageOps.exif_transpose(
                 image
             ).convert("RGB")
-
             if (
                 image.width < 120
                 or image.height < 120
@@ -311,18 +281,15 @@ def decode_image(
                 raise ValueError(
                     "image_too_small"
                 )
-
             longest = max(
                 image.width,
                 image.height,
             )
-
             if longest > MAX_IMAGE_EDGE:
                 ratio = (
                     MAX_IMAGE_EDGE
                     / float(longest)
                 )
-
                 image = image.resize(
                     (
                         max(
@@ -346,12 +313,10 @@ def decode_image(
                     ),
                     Image.Resampling.LANCZOS,
                 )
-
             rgb = np.asarray(
                 image,
                 dtype=np.uint8,
             )
-
         return cv2.cvtColor(
             rgb,
             cv2.COLOR_RGB2BGR,
@@ -365,7 +330,6 @@ def decode_image(
                     "reliable face verification."
                 ),
             ) from error
-
         raise
     except Exception as error:
         raise HTTPException(
@@ -384,18 +348,15 @@ def image_quality(
         image,
         cv2.COLOR_BGR2GRAY,
     )
-
     blur_variance = float(
         cv2.Laplacian(
             gray,
             cv2.CV_64F,
         ).var()
     )
-
     brightness = float(
         np.mean(gray)
     )
-
     blur_score = min(
         1.0,
         max(
@@ -403,7 +364,6 @@ def image_quality(
             blur_variance / 170.0,
         ),
     )
-
     if brightness < 35.0:
         brightness_score = max(
             0.0,
@@ -417,12 +377,10 @@ def image_quality(
         )
     else:
         brightness_score = 1.0
-
     score = (
         0.68 * blur_score
         + 0.32 * brightness_score
     )
-
     return {
         "score": float(
             max(
@@ -442,40 +400,33 @@ def largest_face_crop(
         image,
         cv2.COLOR_BGR2GRAY,
     )
-
     cascade_path = (
         cv2.data.haarcascades
         + "haarcascade_frontalface_default.xml"
     )
-
     detector = cv2.CascadeClassifier(
         cascade_path
     )
-
     faces = detector.detectMultiScale(
         gray,
         scaleFactor=1.08,
         minNeighbors=5,
         minSize=(60, 60),
     )
-
     if len(faces) == 0:
         return image, 0
-
     x, y, width, height = max(
         faces,
         key=lambda item: (
             item[2] * item[3]
         ),
     )
-
     margin_x = int(
         round(width * 0.35)
     )
     margin_y = int(
         round(height * 0.45)
     )
-
     x0 = max(
         0,
         x - margin_x,
@@ -492,7 +443,6 @@ def largest_face_crop(
         image.shape[0],
         y + height + margin_y,
     )
-
     return (
         image[y0:y1, x0:x1].copy(),
         len(faces),
@@ -507,16 +457,19 @@ def face_landmarks(
             image
         )
     )
-
+    # Preserve the full-image multiple-face finding before cropping.
+    if detected_count > 1:
+        return None, {
+            "faceCount": detected_count,
+            "reason": "multiple_faces",
+        }
     rgb = cv2.cvtColor(
         face_crop,
         cv2.COLOR_BGR2RGB,
     )
-
     face_mesh_module = (
         mp.solutions.face_mesh
     )
-
     with face_mesh_module.FaceMesh(
         static_image_mode=True,
         max_num_faces=2,
@@ -526,19 +479,16 @@ def face_landmarks(
         result = face_mesh.process(
             rgb
         )
-
     face_landmark_sets = (
         result.multi_face_landmarks
         if result
         else None
     )
-
     if not face_landmark_sets:
         return None, {
             "faceCount": detected_count,
             "reason": "face_not_detected",
         }
-
     if len(face_landmark_sets) > 1:
         return None, {
             "faceCount": len(
@@ -546,12 +496,10 @@ def face_landmarks(
             ),
             "reason": "multiple_faces",
         }
-
     landmarks = (
         face_landmark_sets[0]
         .landmark
     )
-
     points = np.array(
         [
             [
@@ -562,7 +510,6 @@ def face_landmarks(
         ],
         dtype=np.float64,
     )
-
     if (
         points.shape[0]
         <= max(MATCH_LANDMARKS)
@@ -573,7 +520,6 @@ def face_landmarks(
                 "insufficient_landmarks"
             ),
         }
-
     return points, {
         "faceCount": 1,
         "reason": "",
@@ -589,40 +535,33 @@ def normalize_landmarks(
     right_eye = points[
         RIGHT_EYE_OUTER
     ]
-
     eye_vector = (
         right_eye
         - left_eye
     )
-
     eye_distance = float(
         np.linalg.norm(
             eye_vector
         )
     )
-
     if eye_distance < 1e-5:
         raise ValueError(
             "invalid_eye_geometry"
         )
-
     center = (
         left_eye
         + right_eye
     ) / 2.0
-
     angle = math.atan2(
         eye_vector[1],
         eye_vector[0],
     )
-
     cos_value = math.cos(
         -angle
     )
     sin_value = math.sin(
         -angle
     )
-
     rotation = np.array(
         [
             [
@@ -636,21 +575,17 @@ def normalize_landmarks(
         ],
         dtype=np.float64,
     )
-
     aligned = (
         points
         - center
     ) @ rotation.T
-
     aligned = (
         aligned
         / eye_distance
     )
-
     selected = aligned[
         MATCH_LANDMARKS
     ]
-
     return selected
 
 
@@ -666,7 +601,6 @@ def procrustes_distance(
         second,
         dtype=np.float64,
     )
-
     a = a - np.mean(
         a,
         axis=0,
@@ -677,49 +611,40 @@ def procrustes_distance(
         axis=0,
         keepdims=True,
     )
-
     norm_a = float(
         np.linalg.norm(a)
     )
     norm_b = float(
         np.linalg.norm(b)
     )
-
     if (
         norm_a < 1e-8
         or norm_b < 1e-8
     ):
         return 1.0
-
     a = a / norm_a
     b = b / norm_b
-
     matrix = (
         b.T
         @ a
     )
-
     u, _, vt = (
         np.linalg.svd(
             matrix
         )
     )
-
     rotation = (
         u
         @ vt
     )
-
     aligned_b = (
         b
         @ rotation
     )
-
     point_error = (
         a
         - aligned_b
     )
-
     return float(
         np.sqrt(
             np.mean(
@@ -741,7 +666,6 @@ def pairwise_shape_distance(
         points,
     ):
         values = []
-
         for left_index in range(
             len(points)
         ):
@@ -761,34 +685,27 @@ def pairwise_shape_distance(
                         )
                     )
                 )
-
         vector = np.asarray(
             values,
             dtype=np.float64,
         )
-
         median = float(
             np.median(vector)
         )
-
         if median < 1e-8:
             return vector
-
         return vector / median
-
     first_vector = descriptor(
         first
     )
     second_vector = descriptor(
         second
     )
-
     if (
         first_vector.size == 0
         or second_vector.size == 0
     ):
         return 1.0
-
     return float(
         np.sqrt(
             np.mean(
@@ -812,14 +729,12 @@ def similarity_score(
             selfie_points,
         )
     )
-
     shape_distance = (
         pairwise_shape_distance(
             id_points,
             selfie_points,
         )
     )
-
     combined_distance = (
         0.64
         * geometric_distance
@@ -829,14 +744,12 @@ def similarity_score(
             shape_distance,
         )
     )
-
     # Converts a lower geometry distance to an intuitive 0..1 similarity.
     # Threshold remains environment-configurable for local calibration.
     score = math.exp(
         -5.0
         * combined_distance
     )
-
     return {
         "score": float(
             max(
@@ -866,12 +779,10 @@ def manual_review_result(
     warning=None,
 ):
     warnings = []
-
     if warning:
         warnings.append(
             warning
         )
-
     return {
         "ok": True,
         "verificationId":
@@ -907,6 +818,32 @@ def manual_review_result(
     }
 
 
+def failed_attempt_result(
+    *,
+    uid,
+    message,
+    id_quality=None,
+    selfie_quality=None,
+    warning=None,
+    match_score=None,
+):
+    """Attempt failed; the Resident account is not banned or deactivated."""
+    return {
+        "ok": True,
+        "verificationId": verification_id_for(uid),
+        "status": "failed",
+        "decision": "failed",
+        "matchScore": match_score,
+        "livenessScore": None,
+        "selfieQualityScore": (selfie_quality or {}).get("score"),
+        "idImageQualityScore": (id_quality or {}).get("score"),
+        "message": message,
+        "warnings": [warning] if warning else [],
+        "engine": "mediapipe-landmark-1to1-v1",
+        "livenessImplemented": False,
+    }
+
+
 def run_face_verification(
     *,
     uid,
@@ -917,101 +854,75 @@ def run_face_verification(
         id_document_bytes,
         "Government ID image",
     )
-
     selfie_image = decode_image(
         selfie_bytes,
         "Selfie image",
     )
-
     id_quality = image_quality(
         id_image
     )
-
     selfie_quality = image_quality(
         selfie_image
     )
-
     id_landmarks, id_meta = (
         face_landmarks(
             id_image
         )
     )
-
     selfie_landmarks, selfie_meta = (
         face_landmarks(
             selfie_image
         )
     )
-
     if id_landmarks is None:
-        reason = id_meta.get(
-            "reason"
+        reason = id_meta.get("reason") or "face_not_detected"
+        message = (
+            "More than one face was found in the government ID photo. "
+            "Please retry with only the ID holder's face visible."
+            if reason == "multiple_faces"
+            else "No usable face was detected in the government ID photo. "
+                 "Please upload a clearer photo ID and retry."
         )
-
-        if reason == "multiple_faces":
-            message = (
-                "More than one face was detected in the "
-                "government ID image. LGU/Admin review is required."
-            )
-        else:
-            message = (
-                "A clear face could not be detected in the "
-                "government ID image. LGU/Admin review is required."
-            )
-
-        return manual_review_result(
+        return failed_attempt_result(
             uid=uid,
             message=message,
             id_quality=id_quality,
             selfie_quality=selfie_quality,
-            warning=reason,
+            warning=f"id_{reason}",
         )
-
     if selfie_landmarks is None:
-        reason = selfie_meta.get(
-            "reason"
+        reason = selfie_meta.get("reason") or "face_not_detected"
+        message = (
+            "More than one face was found in the selfie. "
+            "Please retry with only your face visible."
+            if reason == "multiple_faces"
+            else "No usable face was detected in the selfie. "
+                 "Please retake your face scan and retry."
         )
-
-        if reason == "multiple_faces":
-            message = (
-                "More than one face was detected in the selfie. "
-                "LGU/Admin review is required."
-            )
-        else:
-            message = (
-                "A clear face could not be detected in the selfie. "
-                "LGU/Admin review is required."
-            )
-
-        return manual_review_result(
+        return failed_attempt_result(
             uid=uid,
             message=message,
             id_quality=id_quality,
             selfie_quality=selfie_quality,
-            warning=reason,
+            warning=f"selfie_{reason}",
         )
-
     min_quality = (
         get_min_quality_threshold()
     )
-
     if (
-        id_quality["score"]
-        < min_quality
-        or selfie_quality["score"]
-        < min_quality
+        id_quality["score"] < min_quality
+        or selfie_quality["score"] < min_quality
     ):
-        return manual_review_result(
+        return failed_attempt_result(
             uid=uid,
             message=(
-                "The submitted images are not clear enough for "
-                "automatic face verification. LGU/Admin review is required."
+                "The ID or selfie is too blurry or poorly lit for reliable "
+                "verification. Please capture clearer images and retry."
             ),
             id_quality=id_quality,
             selfie_quality=selfie_quality,
             warning="low_image_quality",
         )
-
     try:
         normalized_id = (
             normalize_landmarks(
@@ -1036,27 +947,22 @@ def run_face_verification(
                 "face_geometry_unreliable"
             ),
         )
-
     similarity = similarity_score(
         normalized_id,
         normalized_selfie,
     )
-
     match_score = round(
         similarity["score"],
         4,
     )
-
     threshold = (
         get_match_threshold()
     )
-
     verification_id = (
         verification_id_for(
             uid
         )
     )
-
     if match_score >= threshold:
         return {
             "ok": True,
@@ -1087,7 +993,8 @@ def run_face_verification(
                 threshold,
             "message": (
                 "The government ID face and submitted selfie "
-                "passed the VolunServe 1-to-1 face comparison."
+                "passed the VolunServe 1-to-1 landmark comparison. "
+                "This does not prove liveness or government ID authenticity."
             ),
             "warnings": [
                 (
@@ -1101,7 +1008,6 @@ def run_face_verification(
             "livenessImplemented":
                 False,
         }
-
     return manual_review_result(
         uid=uid,
         message=(
@@ -1112,13 +1018,15 @@ def run_face_verification(
         match_score=match_score,
         id_quality=id_quality,
         selfie_quality=selfie_quality,
-        warning="face_match_uncertain",
+        warning="face_match_uncertain_uncalibrated",
     )
 
 
 @app.get(
     "/health"
 )
+
+
 def health():
     return {
         "ok": True,
@@ -1144,6 +1052,8 @@ def health():
 @app.get(
     "/api/identity/capabilities"
 )
+
+
 def capabilities():
     return {
         "ok": True,
@@ -1190,6 +1100,8 @@ def capabilities():
 @app.post(
     "/verify"
 )
+
+
 async def verify_identity(
     request: Request,
     x_volunserve_user_id: str
@@ -1206,11 +1118,9 @@ async def verify_identity(
     require_internal_backend(
         x_volunserve_internal_key
     )
-
     uid = validate_forwarded_user(
         x_volunserve_user_id
     )
-
     content_type = clean_text(
         request.headers.get(
             "content-type",
@@ -1218,7 +1128,6 @@ async def verify_identity(
         ),
         200,
     ).lower()
-
     if not content_type.startswith(
         "multipart/form-data"
     ):
@@ -1229,14 +1138,11 @@ async def verify_identity(
                 "submitted as multipart form data."
             ),
         )
-
     form = await request.form()
-
     id_type = clean_text(
         form.get("idType"),
         60,
     ).lower()
-
     if id_type not in ACCEPTED_ID_TYPES:
         raise HTTPException(
             status_code=400,
@@ -1244,14 +1150,12 @@ async def verify_identity(
                 "Select a supported government ID type."
             ),
         )
-
     id_upload = form.get(
         "idDocument"
     )
     selfie_upload = form.get(
         "selfie"
     )
-
     try:
         id_document_bytes = (
             await read_upload(
@@ -1264,7 +1168,6 @@ async def verify_identity(
                 ),
             )
         )
-
         selfie_bytes = (
             await read_upload(
                 selfie_upload,
@@ -1280,13 +1183,11 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await id_upload.close()
-
         if isinstance(
             selfie_upload,
             StarletteUploadFile,
         ):
             await selfie_upload.close()
-
     result = await asyncio.to_thread(
         run_face_verification,
         uid=uid,
@@ -1295,7 +1196,6 @@ async def verify_identity(
         ),
         selfie_bytes=selfie_bytes,
     )
-
     return {
         **result,
         "idType": id_type,
