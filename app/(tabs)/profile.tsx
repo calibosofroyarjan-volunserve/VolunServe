@@ -1057,7 +1057,7 @@ export default function Profile() {
             styles.pageSubtitle
           }
         >
-          View your profile, identity verification, and account access.
+          Manage your account and personal information.
         </Text>
       </View>
 
@@ -1145,27 +1145,74 @@ export default function Profile() {
               </Text>
 
               <View
-                style={
-                  styles.modeBadge
-                }
+                style={[
+                  styles.modeBadge,
+                  {
+                    backgroundColor:
+                      currentMode === "volunteer"
+                        ? "#EEF2FF"
+                        : identityStatus === "verified"
+                          ? "#DCFCE7"
+                          : identityStatus === "pending"
+                            ? "#FEF3C7"
+                            : identityStatus === "failed"
+                              ? "#FEE2E2"
+                              : "#FFF7ED",
+                  },
+                ]}
               >
                 <Ionicons
                   name={
-                    currentMode ===
-                    "volunteer"
+                    currentMode === "volunteer"
                       ? "people-outline"
-                      : "person-outline"
+                      : identityStatus === "verified"
+                        ? "shield-checkmark-outline"
+                        : identityStatus === "pending"
+                          ? "time-outline"
+                          : identityStatus === "failed"
+                            ? "alert-circle-outline"
+                            : "person-outline"
                   }
                   size={15}
-                  color="#4338CA"
+                  color={
+                    currentMode === "volunteer"
+                      ? "#4338CA"
+                      : identityStatus === "verified"
+                        ? "#166534"
+                        : identityStatus === "pending"
+                          ? "#92400E"
+                          : identityStatus === "failed"
+                            ? "#B91C1C"
+                            : "#C2410C"
+                  }
                 />
 
                 <Text
-                  style={
-                    styles.modeBadgeText
-                  }
+                  style={[
+                    styles.modeBadgeText,
+                    {
+                      color:
+                        currentMode === "volunteer"
+                          ? "#4338CA"
+                          : identityStatus === "verified"
+                            ? "#166534"
+                            : identityStatus === "pending"
+                              ? "#92400E"
+                              : identityStatus === "failed"
+                                ? "#B91C1C"
+                                : "#C2410C",
+                    },
+                  ]}
                 >
-                  {displayRole}
+                  {currentMode === "volunteer"
+                    ? "Volunteer"
+                    : identityStatus === "verified"
+                      ? "Verified Resident"
+                      : identityStatus === "pending"
+                        ? "Verification Pending"
+                        : identityStatus === "failed"
+                          ? "Verification Required"
+                          : "Basic Resident"}
                 </Text>
               </View>
             </View>
@@ -1799,399 +1846,438 @@ function IdentityAccessCard({
   onVerify: () => void;
   onApplyVolunteer: () => void;
 }) {
-  const verified =
-    identityStatus ===
-    "verified";
-
-  const pending =
-    identityStatus ===
-    "pending";
-
-  const failed =
-    identityStatus ===
-    "failed";
-
-  const title = verified
-    ? "Identity Verified"
-    : pending
-      ? "Identity Verification Pending"
-      : failed
-        ? "Verification Needs Resubmission"
-        : "Basic Resident Account";
-
-  const statusText = verified
-    ? "Verified"
-    : pending
-      ? "Pending"
-      : failed
-        ? "Failed"
-        : "Not Verified";
-
-  const description = verified
-    ? "Your identity has been verified. You are eligible to apply for Volunteer access."
-    : pending
-      ? "Your government ID and live identity submission are being reviewed. Resident access remains available while verification is pending."
-      : failed
-        ? "Your previous identity verification could not be completed. You can submit a new government ID and live identity check."
-        : "Your Resident account is active. Verify your identity using a supported government ID and live selfie to become eligible for Volunteer access.";
-
-  const badgeBackground = verified
-    ? "#DCFCE7"
-    : pending
-      ? "#FEF3C7"
-      : failed
-        ? "#FEE2E2"
-        : "#EEF2FF";
-
-  const badgeColor = verified
-    ? "#166534"
-    : pending
-      ? "#92400E"
-      : failed
-        ? "#B91C1C"
-        : "#4338CA";
-
-  const iconName = (
-    verified
-      ? "shield-checkmark-outline"
-      : pending
-        ? "time-outline"
-        : failed
-          ? "alert-circle-outline"
-          : "shield-outline"
-  ) as React.ComponentProps<
-    typeof Ionicons
-  >["name"];
+  const verified = identityStatus === "verified";
+  const pending = identityStatus === "pending";
+  const failed = identityStatus === "failed";
 
   const normalizedVolunteerStatus =
-    volunteerStatus ||
-    "not_applied";
+    volunteerStatus || "not_applied";
 
   const volunteerPending =
-    normalizedVolunteerStatus ===
-    "pending";
+    normalizedVolunteerStatus === "pending";
 
   const canApply =
     verified &&
     !volunteerAccess &&
-    normalizedVolunteerStatus ===
-      "not_applied";
+    normalizedVolunteerStatus === "not_applied";
 
-  return (
-    <View
-      style={
-        styles.identityCard
-      }
-    >
+  if (verified) {
+    return (
       <View
-        style={
-          styles.identityCardTop
-        }
+        style={[
+          styles.verifyStateCard,
+          {
+            backgroundColor: "#F0FDF4",
+            borderColor: "#BBF7D0",
+          },
+        ]}
       >
-        <View
-          style={
-            styles.identityCardIcon
-          }
-        >
+        <View style={styles.verifyStateIconSuccess}>
           <Ionicons
-            name={iconName}
-            size={24}
-            color="#4338CA"
+            name="checkmark"
+            size={28}
+            color="#FFFFFF"
           />
         </View>
 
-        <View
-          style={
-            styles.identityCardCopy
-          }
-        >
-          <Text
-            style={
-              styles.identityCardEyebrow
-            }
-          >
-            IDENTITY & ACCESS
-          </Text>
-
-          <Text
-            style={
-              styles.identityCardTitle
-            }
-          >
-            {title}
-          </Text>
-
-          <Text
-            style={
-              styles.identityCardText
-            }
-          >
-            {description}
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.identityStatusBadge,
-            {
-              backgroundColor:
-                badgeBackground,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.identityStatusBadgeText,
-              {
-                color:
-                  badgeColor,
-              },
-            ]}
-          >
-            {statusText}
-          </Text>
-        </View>
-      </View>
-
-      <View
-        style={
-          styles.identityAccessRow
-        }
-      >
-        <View
-          style={
-            styles.accessItem
-          }
-        >
-          <Text
-            style={
-              styles.accessLabel
-            }
-          >
-            Resident Access
-          </Text>
-
-          <Text
-            style={
-              styles.accessValue
-            }
-          >
-            Active
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.accessItem
-          }
-        >
-          <Text
-            style={
-              styles.accessLabel
-            }
-          >
-            Identity
-          </Text>
-
-          <Text
-            style={
-              styles.accessValue
-            }
-          >
-            {statusText}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.accessItem
-          }
-        >
-          <Text
-            style={
-              styles.accessLabel
-            }
-          >
-            Volunteer Access
-          </Text>
-
-          <Text
-            style={
-              styles.accessValue
-            }
-          >
-            {volunteerAccess
-              ? "Enabled"
-              : volunteerPending
-                ? "Pending"
-                : "Not Enabled"}
-          </Text>
-        </View>
-      </View>
-
-      {!verified &&
-      !pending ? (
-        <View
-          style={
-            styles.identityActions
-          }
-        >
-          <TouchableOpacity
-            style={
-              styles.identityPrimaryButton
-            }
-            activeOpacity={0.84}
-            onPress={
-              onVerify
-            }
-          >
-            <Ionicons
-              name="scan-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-
-            <Text
-              style={
-                styles.identityPrimaryButtonText
-              }
-            >
-              {failed
-                ? "Try Verification Again"
-                : "Verify Identity"}
+        <View style={styles.verifyStateCopy}>
+          <View style={styles.verifyStateTitleRow}>
+            <Text style={styles.verifyStateTitle}>
+              Verified Resident
             </Text>
-          </TouchableOpacity>
 
-          <Text
-            style={
-              styles.identityActionHint
-            }
-          >
-            Government ID + live selfie/liveness check
+            <View
+              style={[
+                styles.verifyStateBadge,
+                {
+                  backgroundColor: "#DCFCE7",
+                },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={13}
+                color="#166534"
+              />
+              <Text
+                style={[
+                  styles.verifyStateBadgeText,
+                  {
+                    color: "#166534",
+                  },
+                ]}
+              >
+                Verified
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.verifyStateText}>
+            Your identity has been successfully verified. You now have
+            access to verified resident features and can apply as a
+            volunteer.
           </Text>
+
+          {volunteerAccess ? (
+            <View style={styles.verifyStateNoticeSuccess}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color="#15803D"
+              />
+              <Text style={styles.verifyStateNoticeSuccessText}>
+                Volunteer access is already enabled on this account.
+              </Text>
+            </View>
+          ) : volunteerPending ? (
+            <View style={styles.verifyStateNoticeWarning}>
+              <Ionicons
+                name="hourglass-outline"
+                size={18}
+                color="#92400E"
+              />
+              <Text style={styles.verifyStateNoticeWarningText}>
+                Your Volunteer application is pending Admin review.
+              </Text>
+            </View>
+          ) : canApply ? (
+            <TouchableOpacity
+              style={styles.verifyVolunteerButton}
+              activeOpacity={0.84}
+              onPress={onApplyVolunteer}
+            >
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+              <Text style={styles.verifyVolunteerButtonText}>
+                Become a Volunteer
+              </Text>
+              <Ionicons
+                name="arrow-forward"
+                size={17}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+          ) : null}
         </View>
-      ) : null}
+      </View>
+    );
+  }
 
-      {pending ? (
-        <View
-          style={
-            styles.identityNotice
-          }
-        >
-          <Ionicons
-            name="time-outline"
-            size={18}
-            color="#92400E"
-          />
-
-          <Text
-            style={[
-              styles.identityNoticeText,
-              {
-                color:
-                  "#92400E",
-              },
-            ]}
-          >
-            Verification is pending. You can continue using Resident services while waiting for the result.
-          </Text>
-        </View>
-      ) : null}
-
-      {verified &&
-      volunteerAccess ? (
-        <View
-          style={
-            styles.identityNotice
-          }
-        >
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={18}
-            color="#166534"
-          />
-
-          <Text
-            style={[
-              styles.identityNoticeText,
-              {
-                color:
-                  "#166534",
-              },
-            ]}
-          >
-            Volunteer access is enabled on this account. You can use Volunteer Mode without creating another account.
-          </Text>
-        </View>
-      ) : null}
-
-      {verified &&
-      volunteerPending &&
-      !volunteerAccess ? (
-        <View
-          style={
-            styles.identityNotice
-          }
-        >
+  if (pending) {
+    return (
+      <View
+        style={[
+          styles.verifyStateCard,
+          {
+            backgroundColor: "#FFFBEB",
+            borderColor: "#FDE68A",
+          },
+        ]}
+      >
+        <View style={styles.verifyStateIconPending}>
           <Ionicons
             name="hourglass-outline"
-            size={18}
-            color="#92400E"
+            size={28}
+            color="#B45309"
           />
-
-          <Text
-            style={[
-              styles.identityNoticeText,
-              {
-                color:
-                  "#92400E",
-              },
-            ]}
-          >
-            Your Volunteer application is pending Admin review.
-          </Text>
         </View>
-      ) : null}
 
-      {canApply ? (
-        <View
-          style={
-            styles.identityActions
-          }
-        >
+        <View style={styles.verifyStateCopy}>
+          <View style={styles.verifyStateTitleRow}>
+            <Text style={styles.verifyStateTitle}>
+              Verification in Review
+            </Text>
+
+            <View
+              style={[
+                styles.verifyStateBadge,
+                {
+                  backgroundColor: "#FEF3C7",
+                },
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color="#92400E"
+              />
+              <Text
+                style={[
+                  styles.verifyStateBadgeText,
+                  {
+                    color: "#92400E",
+                  },
+                ]}
+              >
+                Pending
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.verifyStateText}>
+            Your identity verification has been submitted and is
+            currently under review. You can continue using normal
+            Resident services while waiting for the result.
+          </Text>
+
+          <View style={styles.verifyStateNoticeWarning}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color="#92400E"
+            />
+            <Text style={styles.verifyStateNoticeWarningText}>
+              You will be able to continue once the AI result or
+              LGU/Admin review is complete.
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (failed) {
+    return (
+      <View
+        style={[
+          styles.verifyStateCard,
+          {
+            backgroundColor: "#FEF2F2",
+            borderColor: "#FECACA",
+          },
+        ]}
+      >
+        <View style={styles.verifyStateIconFailed}>
+          <Ionicons
+            name="alert"
+            size={27}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <View style={styles.verifyStateCopy}>
+          <View style={styles.verifyStateTitleRow}>
+            <Text style={styles.verifyStateTitle}>
+              Verification Failed
+            </Text>
+
+            <View
+              style={[
+                styles.verifyStateBadge,
+                {
+                  backgroundColor: "#FEE2E2",
+                },
+              ]}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={13}
+                color="#B91C1C"
+              />
+              <Text
+                style={[
+                  styles.verifyStateBadgeText,
+                  {
+                    color: "#B91C1C",
+                  },
+                ]}
+              >
+                Failed
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.verifyStateText}>
+            We could not confidently verify your identity from the
+            submitted ID and face scan. Please try again using clearer
+            images and good lighting.
+          </Text>
+
           <TouchableOpacity
-            style={
-              styles.identityPrimaryButton
-            }
+            style={styles.verifyRetryButton}
             activeOpacity={0.84}
-            onPress={
-              onApplyVolunteer
-            }
+            onPress={onVerify}
           >
             <Ionicons
-              name="people-outline"
+              name="refresh-outline"
               size={18}
-              color="#FFFFFF"
+              color="#B91C1C"
             />
-
-            <Text
-              style={
-                styles.identityPrimaryButtonText
-              }
-            >
-              Become a Volunteer
+            <Text style={styles.verifyRetryButtonText}>
+              Retry Verification
             </Text>
+            <Ionicons
+              name="arrow-forward"
+              size={17}
+              color="#B91C1C"
+            />
           </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
-          <Text
-            style={
-              styles.identityActionHint
-            }
-          >
-            Submit your skills and availability for Admin review.
+  return (
+    <View style={styles.verifyResidentCard}>
+      <View style={styles.verifyResidentTop}>
+        <View style={styles.verifyResidentIcon}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={30}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <View style={styles.verifyResidentHeading}>
+          <Text style={styles.verifyResidentTitle}>
+            Be a Verified Resident
+          </Text>
+          <Text style={styles.verifyResidentSubtitle}>
+            Verify your identity to unlock trusted resident features
+            and volunteer application access.
           </Text>
         </View>
-      ) : null}
+
+        <View style={styles.verifyBasicBadge}>
+          <Ionicons
+            name="person-outline"
+            size={13}
+            color="#C2410C"
+          />
+          <Text style={styles.verifyBasicBadgeText}>
+            Basic Resident
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.verifyResidentGrid}>
+        <View style={styles.verifyResidentMiniCard}>
+          <Text style={styles.verifyResidentMiniTitle}>
+            Why verify?
+          </Text>
+
+          <VerificationBenefit
+            icon="shield-checkmark-outline"
+            text="Access trusted resident features"
+          />
+          <VerificationBenefit
+            icon="people-outline"
+            text="Apply as a volunteer"
+          />
+          <VerificationBenefit
+            icon="flash-outline"
+            text="Faster assistance validation"
+          />
+        </View>
+
+        <View style={styles.verifyResidentMiniCard}>
+          <Text style={styles.verifyResidentMiniTitle}>
+            Verification steps
+          </Text>
+
+          <VerificationStepMini
+            number="1"
+            text="Upload a valid government ID"
+          />
+          <VerificationStepMini
+            number="2"
+            text="Complete Face Scan"
+          />
+          <VerificationStepMini
+            number="3"
+            text="Wait for verification result"
+          />
+        </View>
+      </View>
+
+      <View style={styles.verifyResidentActions}>
+        <TouchableOpacity
+          style={styles.verifyStartButton}
+          activeOpacity={0.84}
+          onPress={onVerify}
+        >
+          <Ionicons
+            name="scan-outline"
+            size={18}
+            color="#FFFFFF"
+          />
+          <Text style={styles.verifyStartButtonText}>
+            Start Verification
+          </Text>
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.verifyLearnButton}
+          activeOpacity={0.84}
+          onPress={() =>
+            Alert.alert(
+              "Identity Verification",
+              "VolunServe compares the face from your government ID with your face scan using AI-assisted 1-to-1 verification. Uncertain results are sent to LGU/Admin manual review.",
+            )
+          }
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color="#2563EB"
+          />
+          <Text style={styles.verifyLearnButtonText}>
+            Learn More
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function VerificationBenefit({
+  icon,
+  text,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  text: string;
+}) {
+  return (
+    <View style={styles.verifyBenefitRow}>
+      <View style={styles.verifyBenefitIcon}>
+        <Ionicons
+          name={icon}
+          size={17}
+          color="#2563EB"
+        />
+      </View>
+      <Text style={styles.verifyBenefitText}>
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+function VerificationStepMini({
+  number,
+  text,
+}: {
+  number: string;
+  text: string;
+}) {
+  return (
+    <View style={styles.verifyStepMiniRow}>
+      <View style={styles.verifyStepMiniNumber}>
+        <Text style={styles.verifyStepMiniNumberText}>
+          {number}
+        </Text>
+      </View>
+      <Text style={styles.verifyStepMiniText}>
+        {text}
+      </Text>
     </View>
   );
 }
@@ -3535,4 +3621,350 @@ const styles =
       fontSize: 13,
       fontWeight: "900",
     },
+
+    verifyResidentCard: {
+      width: "100%",
+      marginBottom: 14,
+      padding: 20,
+      borderRadius: 18,
+      backgroundColor: "#F0FDFA",
+      borderWidth: 1,
+      borderColor: "#99F6E4",
+      shadowColor: "#0F766E",
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
+      shadowOffset: {
+        width: 0,
+        height: 7,
+      },
+      elevation: 2,
+    },
+
+    verifyResidentTop: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 14,
+      flexWrap: "wrap",
+    },
+
+    verifyResidentIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#0F9F8F",
+    },
+
+    verifyResidentHeading: {
+      flex: 1,
+      minWidth: 230,
+    },
+
+    verifyResidentTitle: {
+      color: "#0F2F5A",
+      fontSize: 20,
+      fontWeight: "900",
+    },
+
+    verifyResidentSubtitle: {
+      marginTop: 5,
+      color: "#475569",
+      fontSize: 12.5,
+      lineHeight: 19,
+      maxWidth: 640,
+    },
+
+    verifyBasicBadge: {
+      minHeight: 31,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 11,
+      borderRadius: 999,
+      backgroundColor: "#FFEDD5",
+    },
+
+    verifyBasicBadgeText: {
+      color: "#C2410C",
+      fontSize: 11,
+      fontWeight: "900",
+    },
+
+    verifyResidentGrid: {
+      marginTop: 18,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+
+    verifyResidentMiniCard: {
+      flex: 1,
+      minWidth: 260,
+      padding: 15,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.78)",
+      borderWidth: 1,
+      borderColor: "#D6F4EE",
+    },
+
+    verifyResidentMiniTitle: {
+      marginBottom: 9,
+      color: "#0F2F5A",
+      fontSize: 12.5,
+      fontWeight: "900",
+    },
+
+    verifyBenefitRow: {
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+    },
+
+    verifyBenefitIcon: {
+      width: 27,
+      height: 27,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#EFF6FF",
+    },
+
+    verifyBenefitText: {
+      flex: 1,
+      color: "#334155",
+      fontSize: 11.5,
+      fontWeight: "700",
+    },
+
+    verifyStepMiniRow: {
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+    },
+
+    verifyStepMiniNumber: {
+      width: 27,
+      height: 27,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#2563EB",
+    },
+
+    verifyStepMiniNumberText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "900",
+    },
+
+    verifyStepMiniText: {
+      flex: 1,
+      color: "#334155",
+      fontSize: 11.5,
+      fontWeight: "700",
+    },
+
+    verifyResidentActions: {
+      marginTop: 17,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+
+    verifyStartButton: {
+      minHeight: 48,
+      flex: 1,
+      minWidth: 240,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      backgroundColor: "#0F9F8F",
+    },
+
+    verifyStartButtonText: {
+      color: "#FFFFFF",
+      fontSize: 12.5,
+      fontWeight: "900",
+    },
+
+    verifyLearnButton: {
+      minHeight: 48,
+      flex: 1,
+      minWidth: 190,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#93C5FD",
+      backgroundColor: "#FFFFFF",
+    },
+
+    verifyLearnButtonText: {
+      color: "#2563EB",
+      fontSize: 12.5,
+      fontWeight: "900",
+    },
+
+    verifyStateCard: {
+      width: "100%",
+      marginBottom: 14,
+      padding: 20,
+      borderRadius: 18,
+      borderWidth: 1,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 14,
+    },
+
+    verifyStateIconSuccess: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#16A34A",
+    },
+
+    verifyStateIconPending: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#FEF3C7",
+    },
+
+    verifyStateIconFailed: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#EF4444",
+    },
+
+    verifyStateCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+
+    verifyStateTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 9,
+    },
+
+    verifyStateTitle: {
+      flexShrink: 1,
+      color: "#0F2F5A",
+      fontSize: 18,
+      fontWeight: "900",
+    },
+
+    verifyStateBadge: {
+      minHeight: 28,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 9,
+      borderRadius: 999,
+    },
+
+    verifyStateBadgeText: {
+      fontSize: 10.5,
+      fontWeight: "900",
+    },
+
+    verifyStateText: {
+      marginTop: 6,
+      color: "#475569",
+      fontSize: 12,
+      lineHeight: 18,
+      maxWidth: 760,
+    },
+
+    verifyStateNoticeSuccess: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: 11,
+      borderRadius: 11,
+      backgroundColor: "#DCFCE7",
+    },
+
+    verifyStateNoticeSuccessText: {
+      flex: 1,
+      color: "#166534",
+      fontSize: 11.5,
+      fontWeight: "700",
+    },
+
+    verifyStateNoticeWarning: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: 11,
+      borderRadius: 11,
+      backgroundColor: "#FEF3C7",
+    },
+
+    verifyStateNoticeWarningText: {
+      flex: 1,
+      color: "#92400E",
+      fontSize: 11.5,
+      fontWeight: "700",
+    },
+
+    verifyVolunteerButton: {
+      alignSelf: "flex-start",
+      minHeight: 43,
+      marginTop: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      paddingHorizontal: 15,
+      borderRadius: 11,
+      backgroundColor: "#16A34A",
+    },
+
+    verifyVolunteerButtonText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
+    verifyRetryButton: {
+      alignSelf: "flex-start",
+      minHeight: 43,
+      marginTop: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      paddingHorizontal: 15,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: "#FCA5A5",
+      backgroundColor: "#FFFFFF",
+    },
+
+    verifyRetryButtonText: {
+      color: "#B91C1C",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
   });
