@@ -1,32 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    serverTimestamp,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
 } from "firebase/firestore";
 import React, {
-    useEffect,
-    useMemo,
-    useState,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 import { db } from "../../lib/firebase";
@@ -1405,9 +1405,9 @@ export default function AssistanceRequestsAdmin() {
         assistance_provided:
           "Assistance has been marked as provided.",
         save_location:
-          "Official public service / receiving location has been saved.",
+          "Official public service location has been saved.",
         clear_location:
-          "Official public service / receiving location has been cleared.",
+          "Official public service location has been cleared.",
       };
 
       const message =
@@ -1684,14 +1684,10 @@ This still does not automatically create a Donation Campaign.`,
       return;
     }
 
-    if (
-      supportDecision === "donation_support" &&
-      amount <= 0 &&
-      selected.preferredAssistanceTypes?.includes("monetary")
-    ) {
+    if (supportDecision === "donation_support" && amount <= 0) {
       Alert.alert(
         "Remaining Need Required",
-        "For a monetary shortage, enter the verified remaining unmet amount before opening Donation Support.",
+        "Enter the verified remaining unmet amount before opening Donation Support.",
       );
       return;
     }
@@ -1764,7 +1760,7 @@ This still does not automatically create a Donation Campaign.`,
       ) {
         Alert.alert(
           "Verified Need Required",
-          "Set the official service or receiving location only after the request is verified.",
+          "Set the official public service location only after the request is verified.",
         );
         return;
       }
@@ -2117,7 +2113,7 @@ This still does not automatically create a Donation Campaign.`,
             onPress={() => setReviewTab("resident")}
           />
           <ReviewTabButton
-            label="Evaluation"
+            label="Review & Decision"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
             onPress={() => setReviewTab("decision")}
@@ -2147,11 +2143,10 @@ This still does not automatically create a Donation Campaign.`,
                 </Text>
 
                 <Text style={styles.pageSubtitle}>
-                  Review verified Resident requests
-                  for non-emergency community
-                  assistance. Emergency Cases remain
-                  in their separate LGU response
-                  workflow.
+                  Review non-emergency Resident assistance requests.
+                  Emergency incidents stay in Emergency Cases, while
+                  barangay or multi-household distribution stays in
+                  Relief Operations.
                 </Text>
               </View>
             </View>
@@ -2385,7 +2380,7 @@ This still does not automatically create a Donation Campaign.`,
                           ? "Supporting Documents"
                           : reviewTab === "resident"
                             ? "Resident Information"
-                            : "Verification Summary"
+                            : "Review & Decision"
                     }
                   </Text>
                 </View>
@@ -2968,27 +2963,6 @@ function CaseReviewTab({
             "No description was recorded."}
         </BodyText>
 
-        <View style={styles.inlineBadges}>
-          {(
-            request.preferredAssistanceTypes ||
-            []
-          ).map((item) => (
-            <View
-              key={item}
-              style={styles.softBadge}
-            >
-              <Text
-                style={styles.softBadgeText}
-              >
-                {item === "monetary"
-                  ? "Monetary Support"
-                  : item === "in_kind"
-                    ? "In-kind Support"
-                    : item}
-              </Text>
-            </View>
-          ))}
-        </View>
       </SectionCard>
 
       <SectionCard
@@ -3695,15 +3669,15 @@ function DecisionTab({
   return (
     <View style={styles.tabContent}>
       <SectionCard
-        title="Private Anti-Scam Verification"
-        subtitle="Evidence-based LGU verification only. This is not an automatic fraud score and these private fields are never published to donors."
+        title="Private Verification"
+        subtitle="Check the evidence, duplicate history, beneficiary, residency, and any required facility or cost details before making a decision."
         icon="shield-checkmark-outline"
       >
         {!reviewRecord && !verified && !rejected && (
           <View style={styles.infoNotice}>
             <Ionicons name="information-circle-outline" size={18} color="#0369A1" />
             <Text style={styles.infoNoticeText}>
-              Start Review creates the protected assistanceVerificationReviews record required by Firestore before Verify Need can succeed.
+              Start Review opens the protected verification record. Complete the required checks before Verify Need becomes available.
             </Text>
           </View>
         )}
@@ -4101,7 +4075,7 @@ function DecisionTab({
           <View style={styles.addressPrivacyNotice}>
             <Ionicons name="lock-closed-outline" size={17} color="#0F766E" />
             <Text style={styles.addressPrivacyNoticeText}>
-              The Resident's exact home address stays inside authorized LGU review. Donation campaigns may display only a separate LGU-approved public receiving or service point.
+              The Resident's exact home address stays inside authorized LGU review. Donation campaigns may display only a separate LGU-approved public service location.
             </Text>
           </View>
         </View>
@@ -4223,14 +4197,14 @@ function DecisionTab({
       </SectionCard>
 
       <SectionCard
-        title="LGU Verification Notes"
-        subtitle="This summary may also be stored on the Assistance Request record. Do not put secrets or unnecessary sensitive data here."
+        title="Case Notes"
+        subtitle="Add a short LGU note or resident-facing clarification. Keep unnecessary sensitive information out of this field."
         icon="create-outline"
       >
         <TextInput
           value={adminNote}
           onChangeText={setAdminNote}
-          placeholder="Short LGU case note / resident-facing clarification summary"
+          placeholder="Short case note or resident-facing clarification"
           placeholderTextColor="#94A3B8"
           multiline
           maxLength={1800}
@@ -4242,7 +4216,7 @@ function DecisionTab({
       {!verified && !rejected && (
         <SectionCard
           title="Review Decision"
-          subtitle="Verify Need is unlocked only by the protected Firestore verification record. Verification still does not create a Donation Campaign automatically."
+          subtitle="Complete the required checks, then request more information, verify the need, or reject the request. Verification does not automatically create a Donation Campaign."
           icon="shield-checkmark-outline"
         >
           {request.status === "pending" && (
@@ -4279,7 +4253,7 @@ function DecisionTab({
               <View style={styles.noteCopy}>
                 <Text style={styles.warningTitle}>Verify Need is locked</Text>
                 <Text style={styles.warningText}>
-                  Complete every required rule-backed verification and clear all unresolved risk flags first.
+                  Complete all required verification checks and clear unresolved risk flags first.
                 </Text>
               </View>
             </View>
@@ -4308,26 +4282,18 @@ function DecisionTab({
       {verified && (
         <>
           <SectionCard
-            title="LGU Resource Assessment"
-            subtitle={`Public donation support may use at most the verified uncovered amount: ${money(Number(reviewRecord?.verifiedUncoveredAmount || 0))}.`}
+            title="Choose Support"
+            subtitle={`Choose LGU/partner support, Donation Support, or no additional support. Donation Support cannot exceed the verified uncovered amount: ${money(Number(reviewRecord?.verifiedUncoveredAmount || 0))}.`}
             icon="layers-outline"
           >
-            <View style={styles.optionGrid}>
-              {SUPPORT_OPTIONS.map((option) => {
-                const active = supportDecision === option.value;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.optionCard, active && styles.optionCardActive]}
-                    onPress={() => setSupportDecision(option.value)}
-                    activeOpacity={0.82}
-                  >
-                    <Ionicons name={option.icon} size={20} color={active ? "#4338CA" : "#64748B"} />
-                    <Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <LabelText>How will this need be handled?</LabelText>
+            <StatusChoiceRow
+              value={supportDecision}
+              options={SUPPORT_OPTIONS.map(
+                (option) => [option.value, option.label] as [string, string],
+              )}
+              onChange={setSupportDecision}
+            />
 
             {supportDecision === "donation_support" && (
               <>
@@ -4344,7 +4310,7 @@ function DecisionTab({
             )}
 
             <ActionButton
-              label="Save Resource Assessment"
+              label="Save Support Decision"
               icon="save-outline"
               variant="primary"
               loading={savingAction === "resource_assessment"}
@@ -4361,10 +4327,10 @@ function DecisionTab({
                 <View style={{ flex: 1, gap: 10 }}>
                   <Text style={styles.donationNoticeText}>
                     {request.donationCampaignId
-                      ? "A Community Need Donation Campaign is already linked to this verified Assistance Request."
+                      ? "A Donation Campaign is already linked to this verified Assistance Request."
                       : donationCampaignReady
-                        ? "The verified shortage and LGU-approved public service location are saved. The Admin may now explicitly continue to Community Need Donation Campaign setup."
-                        : "Save the Donation Support resource assessment and the LGU-approved public service / receiving location first. Campaign creation never happens automatically."}
+                        ? "The verified shortage and public service location are ready. You may now create the Donation Campaign."
+                        : "Save the Donation Support decision and the public service location first. A campaign is never created automatically."}
                   </Text>
 
                   {(donationCampaignReady || request.donationCampaignId) && (
@@ -4392,24 +4358,18 @@ function DecisionTab({
           </SectionCard>
 
           <SectionCard
-            title="Official Public Service / Receiving Location"
-            subtitle="This is the public coordination point after verification. It is separate from the private Resident address above."
+            title="Service / Coordination Location"
+            subtitle="Set a public LGU-approved place only when assistance or donation coordination needs one. The Resident's home address stays private."
             icon="location-outline"
           >
-            <View style={styles.locationOptions}>
-              {LOCATION_TYPES.map((option) => {
-                const active = locationType === option.value;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.locationChip, active && styles.locationChipActive]}
-                    onPress={() => setLocationType(option.value)}
-                  >
-                    <Text style={[styles.locationChipText, active && styles.locationChipTextActive]}>{option.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <LabelText>Location type</LabelText>
+            <StatusChoiceRow
+              value={locationType}
+              options={LOCATION_TYPES.map(
+                (option) => [option.value, option.label] as [string, string],
+              )}
+              onChange={setLocationType}
+            />
 
             <LabelText>Official location name</LabelText>
             <TextInput
@@ -4423,24 +4383,24 @@ function DecisionTab({
             <TextInput
               value={locationAddress}
               onChangeText={setLocationAddress}
-              placeholder="Public receiving/service point address"
+              placeholder="Public service location address"
               placeholderTextColor="#94A3B8"
               style={styles.input}
             />
 
             <EmbeddedGoogleMap
-              title="LGU-Approved Public Service Point"
+              title="LGU-Approved Coordination Point"
               query={publicMapQuery}
-              badge="PUBLIC SERVICE LOCATION"
-              emptyText="Enter the official location name and public address to preview the map inside VolunServe."
-              privacyText="Only this LGU-approved public receiving/service point may be shown to Residents or donors. The beneficiary home address remains private."
+              badge="PUBLIC COORDINATION POINT"
+              emptyText="Enter the public coordination location and address to preview it inside VolunServe."
+              privacyText="Only this LGU-approved public coordination point may be shown to Residents or donors. The beneficiary home address remains private."
             />
 
             <LabelText>Instructions / schedule</LabelText>
             <TextInput
               value={locationNotes}
               onChangeText={setLocationNotes}
-              placeholder="Public handover instructions, office hours, schedule..."
+              placeholder="Public office hours or coordination instructions..."
               placeholderTextColor="#94A3B8"
               multiline
               maxLength={1000}
@@ -4638,23 +4598,108 @@ function StatusChoiceRow({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel =
+    options.find(([optionValue]) => optionValue === value)?.[1] || "";
+
   return (
-    <View style={styles.locationOptions}>
-      {options.map(([optionValue, label]) => {
-        const active = value === optionValue;
-        return (
-          <TouchableOpacity
-            key={optionValue}
-            style={[styles.locationChip, active && styles.locationChipActive, disabled && { opacity: 0.65 }]}
-            onPress={() => !disabled && onChange(optionValue)}
-            disabled={disabled}
-            activeOpacity={0.8}
+    <>
+      <TouchableOpacity
+        style={[
+          styles.adminDropdownButton,
+          disabled && styles.adminDropdownButtonDisabled,
+        ]}
+        onPress={() => {
+          if (!disabled) setOpen(true);
+        }}
+        disabled={disabled}
+        activeOpacity={0.82}
+      >
+        <Text
+          style={[
+            styles.adminDropdownButtonText,
+            !selectedLabel && styles.adminDropdownPlaceholder,
+          ]}
+          numberOfLines={1}
+        >
+          {selectedLabel || "Select an option"}
+        </Text>
+        <Ionicons
+          name="chevron-down"
+          size={18}
+          color={disabled ? "#94A3B8" : "#475569"}
+        />
+      </TouchableOpacity>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable
+          style={styles.adminDropdownOverlay}
+          onPress={() => setOpen(false)}
+        >
+          <Pressable
+            style={styles.adminDropdownModal}
+            onPress={(event) => event.stopPropagation()}
           >
-            <Text style={[styles.locationChipText, active && styles.locationChipTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+            <View style={styles.adminDropdownModalHeader}>
+              <Text style={styles.adminDropdownModalTitle}>Select an option</Text>
+              <TouchableOpacity
+                style={styles.adminDropdownCloseButton}
+                onPress={() => setOpen(false)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={19} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.adminDropdownOptionList}
+              contentContainerStyle={styles.adminDropdownOptionListContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {options.map(([optionValue, label]) => {
+                const active = value === optionValue;
+
+                return (
+                  <TouchableOpacity
+                    key={optionValue}
+                    style={[
+                      styles.adminDropdownOption,
+                      active && styles.adminDropdownOptionActive,
+                    ]}
+                    onPress={() => {
+                      onChange(optionValue);
+                      setOpen(false);
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <Text
+                      style={[
+                        styles.adminDropdownOptionText,
+                        active && styles.adminDropdownOptionTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                    {active && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={19}
+                        color="#4338CA"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -4670,19 +4715,18 @@ function ToggleChoice({
   disabled?: boolean;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.optionCard, value && styles.optionCardActive, disabled && { opacity: 0.65 }]}
-      onPress={() => !disabled && onChange(!value)}
-      disabled={disabled}
-      activeOpacity={0.82}
-    >
-      <Ionicons
-        name={value ? "checkmark-circle" : "ellipse-outline"}
-        size={20}
-        color={value ? "#4338CA" : "#64748B"}
+    <View>
+      <LabelText>{label}</LabelText>
+      <StatusChoiceRow
+        value={value ? "yes" : "no"}
+        options={[
+          ["no", "No"],
+          ["yes", "Yes"],
+        ]}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue === "yes")}
       />
-      <Text style={[styles.optionText, value && styles.optionTextActive]}>{label}</Text>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -7106,6 +7150,123 @@ const styles = StyleSheet.create({
     color: "#475569",
     fontSize: 9,
     fontWeight: "800",
+  },
+
+
+  adminDropdownButton: {
+    minHeight: 46,
+    marginTop: 7,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  adminDropdownButtonDisabled: {
+    backgroundColor: "#F8FAFC",
+    opacity: 0.7,
+  },
+
+  adminDropdownButtonText: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  adminDropdownPlaceholder: {
+    color: "#94A3B8",
+    fontWeight: "600",
+  },
+
+  adminDropdownOverlay: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  adminDropdownModal: {
+    width: "100%",
+    maxWidth: 440,
+    maxHeight: "72%",
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+
+  adminDropdownModalHeader: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  adminDropdownModalTitle: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  adminDropdownCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+  },
+
+  adminDropdownOptionList: {
+    maxHeight: 360,
+  },
+
+  adminDropdownOptionListContent: {
+    padding: 8,
+  },
+
+  adminDropdownOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  adminDropdownOptionActive: {
+    backgroundColor: "#EEF2FF",
+  },
+
+  adminDropdownOptionText: {
+    flex: 1,
+    color: "#334155",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  adminDropdownOptionTextActive: {
+    color: "#4338CA",
+    fontWeight: "900",
   },
 
 });
