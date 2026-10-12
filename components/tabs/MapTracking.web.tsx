@@ -1450,6 +1450,16 @@ export default function WebMapTracking() {
   const [lguArrivalBusy, setLguArrivalBusy] = useState(false);
   const [lguArrivalMessage, setLguArrivalMessage] = useState("");
   const [lguArrivalError, setLguArrivalError] = useState("");
+  const [lguCompletionOpen, setLguCompletionOpen] = useState(false);
+  const [lguCompletionBusy, setLguCompletionBusy] = useState(false);
+  const [lguCompletionMessage, setLguCompletionMessage] = useState("");
+  const [lguCompletionError, setLguCompletionError] = useState("");
+  const [lguSituationSummary, setLguSituationSummary] = useState("");
+  const [lguActionsTaken, setLguActionsTaken] = useState("");
+  const [lguPeopleAssisted, setLguPeopleAssisted] = useState("1");
+  const [lguOutcome, setLguOutcome] = useState("");
+  const [lguRemainingNeeds, setLguRemainingNeeds] = useState("");
+  const [lguCompletionNotes, setLguCompletionNotes] = useState("");
   const [residentArrivalBusy, setResidentArrivalBusy] = useState(false);
   const [residentArrivalMessage, setResidentArrivalMessage] = useState("");
   const [residentArrivalError, setResidentArrivalError] = useState("");
@@ -1967,6 +1977,18 @@ export default function WebMapTracking() {
     adminCase?.activeResponderAssignmentId,
     lguPersonnelMissionMode,
     user?.uid,
+  ]);
+
+  useEffect(() => {
+    if (
+      normalize(adminCase?.lguArrivalConfirmationStatus) === "confirmed" &&
+      lguArrivalMessage.toLowerCase().includes("confirmation is pending")
+    ) {
+      setLguArrivalMessage("");
+    }
+  }, [
+    adminCase?.lguArrivalConfirmationStatus,
+    lguArrivalMessage,
   ]);
 
   useEffect(() => {
@@ -3997,19 +4019,28 @@ export default function WebMapTracking() {
   const callLguBackend = async (
     path: string,
     method = "POST",
+    body?: Record<string, unknown>,
   ) => {
     if (!user) {
       throw new Error("Your LGU session has expired. Sign in again.");
     }
 
     const token = await user.getIdToken(true);
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    };
+
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
 
     const response = await fetch(`${BACKEND_URL}${path}`, {
       method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
+      ...(body !== undefined
+        ? { body: JSON.stringify(body) }
+        : {}),
     });
 
     const payload = await response.json().catch(() => ({}));
@@ -4143,6 +4174,145 @@ export default function WebMapTracking() {
       );
     } finally {
       setLguArrivalBusy(false);
+    }
+  };
+
+  const resetLguCompletionForm = () => {
+    setLguCompletionOpen(false);
+    setLguSituationSummary("");
+    setLguActionsTaken("");
+    setLguPeopleAssisted("1");
+    setLguOutcome("");
+    setLguRemainingNeeds("");
+    setLguCompletionNotes("");
+    setLguCompletionError("");
+  };
+
+  const openLguCompletionForm = () => {
+    const affected = Number(adminCase?.affectedPeople);
+    const defaultCount =
+      Number.isFinite(affected) && affected >= 0
+        ? Math.min(999, Math.trunc(affected))
+        : 1;
+
+    setLguPeopleAssisted(String(defaultCount));
+    setLguCompletionMessage("");
+    setLguCompletionError("");
+    setLguCompletionOpen(true);
+  };
+
+  const completeLguResponse = async () => {
+    if (
+      !isLguPersonnel ||
+      !adminCase?.activeResponderAssignmentId ||
+      lguCompletionBusy
+    ) {
+      return;
+    }
+
+    if (lguAssignmentStatus !== "on_site") {
+      setLguCompletionError(
+        "The official LGU response must be On Site before it can be completed.",
+      );
+      return;
+    }
+
+    if (normalize(adminCase.lguArrivalConfirmationStatus) !== "confirmed") {
+      setLguCompletionError(
+        "Wait for the Resident to confirm the LGU arrival before completing the response.",
+      );
+      return;
+    }
+
+    const situationSummary = lguSituationSummary.trim();
+    const actionsTaken = lguActionsTaken.trim();
+    const peopleAssisted = Number(lguPeopleAssisted);
+    const remainingNeeds = lguRemainingNeeds.trim();
+    const notes = lguCompletionNotes.trim();
+
+    if (situationSummary.length < 10) {
+      setLguCompletionError(
+        "Enter a situation summary of at least 10 characters.",
+      );
+      return;
+    }
+
+    if (actionsTaken.length < 10) {
+      setLguCompletionError(
+        "Describe the response actions taken using at least 10 characters.",
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(peopleAssisted) ||
+      peopleAssisted < 0 ||
+      peopleAssisted > 999
+    ) {
+      setLguCompletionError(
+        "People assisted must be a whole number from 0 to 999.",
+      );
+      return;
+    }
+
+    if (
+      ![
+        "resolved_on_site",
+        "stabilized",
+        "referred",
+        "needs_follow_up",
+      ].includes(lguOutcome)
+    ) {
+      setLguCompletionError("Select the field response outcome.");
+      return;
+    }
+
+    if (
+      ["referred", "needs_follow_up"].includes(lguOutcome) &&
+      remainingNeeds.length < 3
+    ) {
+      setLguCompletionError(
+        "Describe the remaining need or referral before completing the response.",
+      );
+      return;
+    }
+
+    setLguCompletionBusy(true);
+    setLguCompletionMessage("");
+    setLguCompletionError("");
+
+    try {
+      const payload = await callLguBackend(
+        `/api/lgu/assignments/${encodeURIComponent(
+          adminCase.activeResponderAssignmentId,
+        )}/complete`,
+        "POST",
+        {
+          situationSummary,
+          actionsTaken,
+          peopleAssisted,
+          outcome: lguOutcome,
+          remainingNeeds,
+          notes,
+        },
+      );
+
+      setLguAssignmentStatus("completed");
+      setTracking(false);
+      setNavigationActive(false);
+      setFollowMe(false);
+      setLguArrivalMessage("");
+      setLguCompletionOpen(false);
+      setLguCompletionMessage(
+        payload?.message ||
+          "Field response completed. The case is awaiting LGU/Admin review.",
+      );
+    } catch (cause: any) {
+      setLguCompletionError(
+        cause?.message || "Unable to complete the official LGU response.",
+      );
+    } finally {
+      setLguCompletionBusy(false);
     }
   };
 
@@ -5353,6 +5523,173 @@ export default function WebMapTracking() {
                         {lguArrivalError}
                       </div>
                     )}
+
+                    {!!lguCompletionMessage && (
+                      <div className="lgu-completion-feedback success">
+                        {lguCompletionMessage}
+                      </div>
+                    )}
+
+                    {!!lguCompletionError && (
+                      <div className="lgu-completion-feedback error">
+                        {lguCompletionError}
+                      </div>
+                    )}
+
+                    {lguPersonnelMissionMode &&
+                      lguAssignmentStatus === "on_site" &&
+                      normalize(selectedCase.lguArrivalConfirmationStatus) !==
+                        "confirmed" && (
+                        <div className="lgu-completion-waiting">
+                          <strong>Completion locked</strong>
+                          <span>
+                            Resident arrival confirmation is required before the
+                            official field response can be completed.
+                          </span>
+                        </div>
+                      )}
+
+                    {lguPersonnelMissionMode &&
+                      lguAssignmentStatus === "on_site" &&
+                      normalize(selectedCase.lguArrivalConfirmationStatus) ===
+                        "confirmed" && (
+                        <div className="lgu-completion-section">
+                          {!lguCompletionOpen ? (
+                            <button
+                              type="button"
+                              className="lgu-complete-response-button"
+                              disabled={lguCompletionBusy}
+                              onClick={openLguCompletionForm}
+                            >
+                              Complete Response
+                            </button>
+                          ) : (
+                            <div className="lgu-completion-card">
+                              <div className="lgu-completion-heading">
+                                <div>
+                                  <span>FIELD RESPONSE REPORT</span>
+                                  <strong>Complete official response</strong>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="lgu-completion-cancel"
+                                  disabled={lguCompletionBusy}
+                                  onClick={resetLguCompletionForm}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+
+                              <label className="lgu-completion-field">
+                                <span>Situation Summary *</span>
+                                <textarea
+                                  rows={3}
+                                  maxLength={1000}
+                                  value={lguSituationSummary}
+                                  disabled={lguCompletionBusy}
+                                  placeholder="Briefly describe the situation on site."
+                                  onChange={(event) =>
+                                    setLguSituationSummary(event.target.value)
+                                  }
+                                />
+                              </label>
+
+                              <label className="lgu-completion-field">
+                                <span>Actions Taken *</span>
+                                <textarea
+                                  rows={3}
+                                  maxLength={1500}
+                                  value={lguActionsTaken}
+                                  disabled={lguCompletionBusy}
+                                  placeholder="Record the official response actions performed."
+                                  onChange={(event) =>
+                                    setLguActionsTaken(event.target.value)
+                                  }
+                                />
+                              </label>
+
+                              <div className="lgu-completion-grid">
+                                <label className="lgu-completion-field">
+                                  <span>People Assisted *</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="999"
+                                    step="1"
+                                    value={lguPeopleAssisted}
+                                    disabled={lguCompletionBusy}
+                                    onChange={(event) =>
+                                      setLguPeopleAssisted(event.target.value)
+                                    }
+                                  />
+                                </label>
+
+                                <label className="lgu-completion-field">
+                                  <span>Outcome *</span>
+                                  <select
+                                    value={lguOutcome}
+                                    disabled={lguCompletionBusy}
+                                    onChange={(event) =>
+                                      setLguOutcome(event.target.value)
+                                    }
+                                  >
+                                    <option value="">Select outcome</option>
+                                    <option value="resolved_on_site">
+                                      Resolved on site
+                                    </option>
+                                    <option value="stabilized">Stabilized</option>
+                                    <option value="referred">Referred</option>
+                                    <option value="needs_follow_up">
+                                      Needs follow-up
+                                    </option>
+                                  </select>
+                                </label>
+                              </div>
+
+                              <label className="lgu-completion-field">
+                                <span>Remaining Needs</span>
+                                <textarea
+                                  rows={2}
+                                  maxLength={1000}
+                                  value={lguRemainingNeeds}
+                                  disabled={lguCompletionBusy}
+                                  placeholder="Required for referral or follow-up outcomes."
+                                  onChange={(event) =>
+                                    setLguRemainingNeeds(event.target.value)
+                                  }
+                                />
+                              </label>
+
+                              <label className="lgu-completion-field">
+                                <span>Additional Notes</span>
+                                <textarea
+                                  rows={2}
+                                  maxLength={1000}
+                                  value={lguCompletionNotes}
+                                  disabled={lguCompletionBusy}
+                                  placeholder="Optional field notes."
+                                  onChange={(event) =>
+                                    setLguCompletionNotes(event.target.value)
+                                  }
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                className="lgu-submit-completion-button"
+                                disabled={lguCompletionBusy}
+                                onClick={() => {
+                                  void completeLguResponse();
+                                }}
+                              >
+                                {lguCompletionBusy
+                                  ? "Submitting…"
+                                  : "Submit & Complete Response"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                     <div className="admin-route-actions">
                       {lguPersonnelMissionMode &&
@@ -8467,6 +8804,159 @@ const css = `
 }
 
 
+.lgu-completion-section {
+  display: grid;
+  gap: 10px;
+}
+
+.lgu-complete-response-button,
+.lgu-submit-completion-button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: #0f8578;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lgu-complete-response-button:disabled,
+.lgu-submit-completion-button:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+.lgu-completion-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #cfe2df;
+  border-radius: 14px;
+  background: #fbfefd;
+}
+
+.lgu-completion-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lgu-completion-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.lgu-completion-heading span {
+  color: #0f8578;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+
+.lgu-completion-heading strong {
+  color: #0f2740;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.lgu-completion-cancel {
+  border: 1px solid #d9e5ec;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #51677c;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lgu-completion-field {
+  display: grid;
+  gap: 6px;
+}
+
+.lgu-completion-field > span {
+  color: #425b70;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lgu-completion-field input,
+.lgu-completion-field select,
+.lgu-completion-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d6e2ea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f2740;
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.lgu-completion-field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.lgu-completion-field input:focus,
+.lgu-completion-field select:focus,
+.lgu-completion-field textarea:focus {
+  border-color: #69b5aa;
+  box-shadow: 0 0 0 3px rgba(15,133,120,.10);
+}
+
+.lgu-completion-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
+.lgu-completion-waiting {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid #f0d6a4;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.lgu-completion-waiting strong {
+  color: #8a5b00;
+  font-size: 12px;
+}
+
+.lgu-completion-waiting span {
+  color: #765f35;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.lgu-completion-feedback {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.lgu-completion-feedback.success {
+  border: 1px solid #a7e0c2;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.lgu-completion-feedback.error {
+  border: 1px solid #f5b7b1;
+  background: #fff1f0;
+  color: #b42318;
+}
+
 .lgu-arrival-confirmation-strip {
   display: flex;
   align-items: center;
@@ -8636,6 +9126,10 @@ const css = `
   }
 
   .admin-route-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .lgu-completion-grid {
     grid-template-columns: 1fr;
   }
 
