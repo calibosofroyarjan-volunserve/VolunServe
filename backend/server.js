@@ -5367,6 +5367,414 @@ app.post(
     }
   },
 );
+
+function identityAdminTimestampIso(value) {
+  try {
+    if (!value) return "";
+    if (typeof value.toDate === "function") return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
+  const verification = verificationSnapshot?.data?.() || {};
+  const profile = userSnapshot?.data?.() || {};
+  const uid = cleanText(
+    verificationSnapshot?.id || profile?.uid || "",
+    200,
+  );
+
+  return {
+    uid,
+    verificationId: cleanText(verification.verificationId || "", 200),
+    verificationMethod: cleanText(verification.verificationMethod || "", 80),
+    status: normalizeIdentityStatus(
+      verification.status || profile.identityStatus || "basic",
+    ),
+    identityStatus: normalizeIdentityStatus(
+      profile.identityStatus || verification.status || "basic",
+    ),
+    identityVerified: profile.identityVerified === true,
+    aiDecision: cleanText(verification.aiDecision || "", 80),
+    decision: cleanText(verification.decision || "", 80),
+    matchScore: numberOrNull(verification.matchScore),
+    livenessScore: numberOrNull(verification.livenessScore),
+    message: cleanText(verification.message || "", 500),
+    requiresManualReview: verification.requiresManualReview === true,
+    manualReviewDecision: cleanText(
+      verification.manualReviewDecision || "",
+      80,
+    ),
+    manualValidationMethod: cleanText(
+      verification.manualValidationMethod || "",
+      120,
+    ),
+    manualReviewNotes: cleanText(
+      verification.manualReviewNotes || "",
+      1000,
+    ),
+    reviewedBy: cleanText(verification.reviewedBy || "", 200),
+    reviewedByName: cleanText(verification.reviewedByName || "", 160),
+    reviewedAt: identityAdminTimestampIso(verification.reviewedAt),
+    createdAt: identityAdminTimestampIso(verification.createdAt),
+    updatedAt: identityAdminTimestampIso(verification.updatedAt),
+    lastSubmissionAt: identityAdminTimestampIso(verification.lastSubmissionAt),
+    resident: {
+      fullName: cleanText(
+        profile.fullName ||
+          [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+          "",
+        160,
+      ),
+      email: cleanText(profile.email || "", 180),
+      phoneNumber: cleanText(profile.phoneNumber || "", 60),
+      barangay: cleanText(profile.barangay || "", 160),
+      address: cleanText(profile.address || "", 300),
+      accountStatus: cleanText(profile.status || "", 40),
+      residentAccess: profile.residentAccess === true,
+    },
+  };
+}
+
+app.get(
+  "/api/admin/identity/reviews",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const verificationSnapshot = await db
+        .collection("identityVerifications")
+        .limit(250)
+        .get();
+
+      const items = await Promise.all(
+        verificationSnapshot.docs.map(async (verificationDoc) => {
+          const userSnapshot = await db
+            .collection("users")
+            .doc(verificationDoc.id)
+            .get();
+
+          return identityAdminReviewPayload(
+            verificationDoc,
+            userSnapshot,
+          );
+        }),
+      );
+
+      items.sort((first, second) => {
+        const firstTime =
+          Date.parse(
+            first.updatedAt ||
+              first.lastSubmissionAt ||
+              first.createdAt ||
+              "",
+          ) || 0;
+        const secondTime =
+          Date.parse(
+            second.updatedAt ||
+              second.lastSubmissionAt ||
+              second.createdAt ||
+              "",
+          ) || 0;
+        return secondTime - firstTime;
+      });
+
+      response.json({
+        ok: true,
+        items,
+      });
+    } catch (error) {
+      console.error("Identity review queue failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "identity_review_queue_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message ||
+            "Unable to load identity verification reviews.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/identity/reviews/:uid/decision",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    try {
+      const adminUid = request.firebaseUser.uid;
+      const targetUid = cleanText(request.params?.uid || "", 200);
+      const action = cleanText(request.body?.action || "", 40).toLowerCase();
+      const notes = cleanText(request.body?.notes || "", 1000);
+      const validationMethod = cleanText(
+        request.body?.validationMethod || "",
+        120,
+      );
+      const reviewedByName = cleanText(
+        request.volunServeProfile?.fullName ||
+          request.firebaseUser?.name ||
+          request.firebaseUser?.email ||
+          "LGU/Admin Reviewer",
+        160,
+      );
+
+      if (
+        !targetUid ||
+        !/^[A-Za-z0-9_-]{8,200}$/.test(targetUid)
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_identity_review_uid",
+          "The Resident identity review ID is invalid.",
+        );
+      }
+
+      if (
+        action !== "verify" &&
+        action !== "require_retry"
+      ) {
+        throw makeHttpError(
+          400,
+          "invalid_identity_review_action",
+          "Choose Verify Resident or Require Retry.",
+        );
+      }
+
+      if (
+        action === "verify" &&
+        validationMethod.length < 3
+      ) {
+        throw makeHttpError(
+          400,
+          "manual_validation_method_required",
+          "Select the LGU validation method used before manually verifying this Resident.",
+        );
+      }
+
+      if (
+        action === "require_retry" &&
+        notes.length < 5
+      ) {
+        throw makeHttpError(
+          400,
+          "identity_retry_reason_required",
+          "Enter a clear reason before requiring the Resident to retry identity verification.",
+        );
+      }
+
+      const userRef = db.collection("users").doc(targetUid);
+      const verificationRef = db
+        .collection("identityVerifications")
+        .doc(targetUid);
+      const activityRef = db.collection("adminActivityLogs").doc();
+
+      const result = await db.runTransaction(async (transaction) => {
+        const [userSnapshot, verificationSnapshot] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(verificationRef),
+        ]);
+
+        if (!userSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "identity_resident_not_found",
+            "The Resident account was not found.",
+          );
+        }
+
+        if (!verificationSnapshot.exists) {
+          throw makeHttpError(
+            404,
+            "identity_verification_not_found",
+            "The identity verification record was not found.",
+          );
+        }
+
+        const profile = userSnapshot.data() || {};
+        const verification = verificationSnapshot.data() || {};
+        const currentStatus = normalizeIdentityStatus(
+          profile.identityStatus ||
+            verification.status ||
+            "basic",
+        );
+
+        if (
+          profile.identityVerified === true ||
+          currentStatus === "verified"
+        ) {
+          throw makeHttpError(
+            409,
+            "identity_already_verified",
+            "This Resident is already identity verified.",
+          );
+        }
+
+        if (
+          verification.requiresManualReview !== true ||
+          normalizeIdentityStatus(
+            verification.status || "basic",
+          ) !== "pending"
+        ) {
+          throw makeHttpError(
+            409,
+            "identity_review_not_pending",
+            "This identity verification is no longer waiting for manual review.",
+          );
+        }
+
+        const commonReviewFields = {
+          requiresManualReview: false,
+          manualReviewDecision:
+            action === "verify"
+              ? "verified"
+              : "retry_required",
+          manualValidationMethod:
+            action === "verify"
+              ? validationMethod
+              : "",
+          manualReviewNotes: notes,
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedBy: adminUid,
+          reviewedByName,
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        if (action === "verify") {
+          transaction.set(
+            verificationRef,
+            {
+              ...commonReviewFields,
+              status: "verified",
+              decision: "verified",
+              message:
+                "Identity manually verified after independent LGU/Admin validation.",
+            },
+            { merge: true },
+          );
+
+          transaction.set(
+            userRef,
+            {
+              identityStatus: "verified",
+              identityVerified: true,
+              identityVerificationMethod:
+                "volunserve_ai_lgu_manual_review",
+              identityVerifiedAt: FieldValue.serverTimestamp(),
+              identityVerifiedBy: adminUid,
+              identityFailureReason: FieldValue.delete(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+
+          transaction.set(activityRef, {
+            action: "Resident Identity Manually Verified",
+            residentUid: targetUid,
+            verificationId: cleanText(
+              verification.verificationId || "",
+              200,
+            ),
+            aiDecision: cleanText(
+              verification.aiDecision || "",
+              80,
+            ),
+            matchScore: numberOrNull(verification.matchScore),
+            validationMethod,
+            notes,
+            performedBy: adminUid,
+            performedByName: reviewedByName,
+            timestamp: FieldValue.serverTimestamp(),
+          });
+
+          return {
+            status: "verified",
+            identityVerified: true,
+          };
+        }
+
+        transaction.set(
+          verificationRef,
+          {
+            ...commonReviewFields,
+            status: "failed",
+            decision: "retry_required",
+            message: notes,
+          },
+          { merge: true },
+        );
+
+        transaction.set(
+          userRef,
+          {
+            identityStatus: "failed",
+            identityVerified: false,
+            identityFailureReason: notes,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        transaction.set(activityRef, {
+          action: "Resident Identity Retry Required",
+          residentUid: targetUid,
+          verificationId: cleanText(
+            verification.verificationId || "",
+            200,
+          ),
+          aiDecision: cleanText(
+            verification.aiDecision || "",
+            80,
+          ),
+          matchScore: numberOrNull(verification.matchScore),
+          reason: notes,
+          performedBy: adminUid,
+          performedByName: reviewedByName,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        return {
+          status: "failed",
+          identityVerified: false,
+        };
+      });
+
+      response.json({
+        ok: true,
+        uid: targetUid,
+        ...result,
+        message:
+          action === "verify"
+            ? "Resident identity verified after manual LGU/Admin validation."
+            : "The Resident must retry identity verification with clearer or corrected information.",
+      });
+    } catch (error) {
+      console.error("Identity review decision failed:", error);
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(
+          error?.code || "identity_review_decision_failed",
+          120,
+        ),
+        message: cleanText(
+          error?.message ||
+            "Unable to save the identity review decision.",
+          700,
+        ),
+      });
+    }
+  },
+);
+
 app.post(
   "/api/admin/assistance/requests/:requestId/start-review",
   requireFirebaseUser,

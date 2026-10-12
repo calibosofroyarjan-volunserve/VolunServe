@@ -24,22 +24,16 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-
 import {
   isApprovedProfile,
   logoutUser,
-  setActiveUserMode,
-  UserMode,
 } from "../../lib/firebaseAuth";
 import {
   useUserSession,
 } from "../../lib/useUserSession";
-
 const WEB_PORTAL_URL =
   "https://volunserve-3aa5b.web.app";
-
 const SIDEBAR_WIDTH = 280;
-
 type NavItem = {
   label: string;
   icon: React.ComponentProps<
@@ -47,7 +41,6 @@ type NavItem = {
   >["name"];
   route: string;
 };
-
 const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
@@ -62,10 +55,34 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/account-approvals",
   },
   {
+    label: "Identity Reviews",
+    icon: "shield-checkmark-outline",
+    route:
+      "/(admin)/identity-reviews",
+  },
+  {
     label: "Emergency Cases",
     icon: "warning-outline",
     route:
       "/(admin)/admin-cases",
+  },
+  {
+    label: "Assistance Requests",
+    icon: "hand-left-outline",
+    route:
+      "/(admin)/assistance-requests",
+  },
+  {
+    label: "LGU Personnel",
+    icon: "business-outline",
+    route:
+      "/(admin)/lgu-members",
+  },
+  {
+    label: "LGU Attendance",
+    icon: "time-outline",
+    route:
+      "/(admin)/lgu-attendance",
   },
   {
     label: "Events",
@@ -74,9 +91,10 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/admin-events",
   },
   {
-    label: "Donations",
-    icon: "heart-outline",
-    route: "/donation-list",
+    label: "Relief Operations",
+    icon: "cube-outline",
+    route:
+      "/(admin)/relief-operations",
   },
   {
     label: "Announcements",
@@ -104,16 +122,15 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/admin-disputes",
   },
 ];
-
 const initialsFor = (
   value: string,
 ) => {
-  const parts = value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
+  const parts =
+    value
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2);
   return (
     parts
       .map((item) =>
@@ -124,43 +141,35 @@ const initialsFor = (
       .join("") || "AD"
   );
 };
-
 export default function AdminLayout() {
   const {
     loading,
     user,
     profile,
   } = useUserSession();
-
   const {
     width,
   } = useWindowDimensions();
-
   const pathname =
     usePathname();
-
   const [
     mobileMenuOpen,
     setMobileMenuOpen,
   ] = useState(false);
-
   const desktop =
     Platform.OS === "web" &&
     width >= 980;
-
   const role =
     typeof profile?.role ===
     "string"
       ? profile.role.toLowerCase()
       : "";
-
   const fullName =
     String(
       profile?.fullName ||
         profile?.email ||
         "Administrator",
     ).trim();
-
   const initials =
     useMemo(
       () =>
@@ -169,55 +178,23 @@ export default function AdminLayout() {
         ),
       [fullName],
     );
-
   const openRoute = (
     route: string,
   ) => {
     setMobileMenuOpen(
       false,
     );
-
     router.push(
       route as Href,
     );
   };
-
-  const switchMode =
-    async (
-      mode: UserMode,
-    ) => {
-      try {
-        await setActiveUserMode(
-          mode,
-        );
-
-        setMobileMenuOpen(
-          false,
-        );
-
-        router.replace(
-          "/(tabs)",
-        );
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Mode Switch Failed",
-          error?.message ||
-            "Unable to switch account mode.",
-        );
-      }
-    };
-
   const signOut =
     async () => {
       try {
         setMobileMenuOpen(
           false,
         );
-
         await logoutUser();
-
         router.replace(
           "/login",
         );
@@ -231,7 +208,6 @@ export default function AdminLayout() {
         );
       }
     };
-
   if (loading) {
     return (
       <View
@@ -243,7 +219,6 @@ export default function AdminLayout() {
           size="large"
           color="#4F46E5"
         />
-
         <Text
           style={
             styles.message
@@ -254,38 +229,44 @@ export default function AdminLayout() {
       </View>
     );
   }
-
   if (!user) {
     return (
-      <Redirect href="/login" />
+      <Redirect
+        href="/login"
+      />
     );
   }
-
   if (
     !isApprovedProfile(
       profile,
     )
   ) {
     return (
-      <Redirect href="/login" />
+      <Redirect
+        href="/login"
+      />
     );
   }
-
   if (
     role ===
     "superadmin"
   ) {
     return (
-      <Redirect href="/(superadmin)" />
+      <Redirect
+        href="/(superadmin)"
+      />
     );
   }
-
-  if (role !== "admin") {
+  if (
+    role !==
+    "admin"
+  ) {
     return (
-      <Redirect href="/(tabs)" />
+      <Redirect
+        href="/(tabs)"
+      />
     );
   }
-
   if (
     Platform.OS !==
     "web"
@@ -314,7 +295,6 @@ export default function AdminLayout() {
               VS
             </Text>
           </View>
-
           <Text
             style={
               styles.blockedEyebrow
@@ -322,7 +302,6 @@ export default function AdminLayout() {
           >
             VOLUNSERVE ADMINISTRATION
           </Text>
-
           <Text
             style={
               styles.blockedTitle
@@ -330,7 +309,6 @@ export default function AdminLayout() {
           >
             Web Portal Required
           </Text>
-
           <Text
             style={
               styles.blockedDescription
@@ -338,7 +316,6 @@ export default function AdminLayout() {
           >
             Operational Admin management is available through the VolunServe web portal.
           </Text>
-
           <Text
             style={
               styles.blockedDescription
@@ -346,7 +323,6 @@ export default function AdminLayout() {
           >
             Please use a web browser on your phone, tablet, laptop, or desktop computer to continue.
           </Text>
-
           <TouchableOpacity
             style={
               styles.webButton
@@ -355,16 +331,18 @@ export default function AdminLayout() {
               0.85
             }
             onPress={() => {
-              Linking.openURL(
-                WEB_PORTAL_URL,
-              ).catch(
-                (error) => {
-                  console.log(
-                    "open web portal error",
-                    error,
-                  );
-                },
-              );
+              Linking
+                .openURL(
+                  WEB_PORTAL_URL,
+                )
+                .catch(
+                  (error) => {
+                    console.log(
+                      "open web portal error",
+                      error,
+                    );
+                  },
+                );
             }}
           >
             <Text
@@ -375,7 +353,6 @@ export default function AdminLayout() {
               Open Web Portal
             </Text>
           </TouchableOpacity>
-
           <Text
             style={
               styles.webAddress
@@ -387,7 +364,6 @@ export default function AdminLayout() {
       </View>
     );
   }
-
   const sidebar = (
     <View
       style={
@@ -410,7 +386,6 @@ export default function AdminLayout() {
             color="#FFFFFF"
           />
         </View>
-
         <View>
           <Text
             style={
@@ -419,7 +394,6 @@ export default function AdminLayout() {
           >
             VolunServe
           </Text>
-
           <Text
             style={
               styles.brandTagline
@@ -429,7 +403,6 @@ export default function AdminLayout() {
           </Text>
         </View>
       </View>
-
       <ScrollView
         style={
           styles.sidebarScroll
@@ -448,7 +421,6 @@ export default function AdminLayout() {
         >
           ADMIN PORTAL
         </Text>
-
         {NAV_ITEMS.map(
           (item) => {
             const active =
@@ -467,10 +439,10 @@ export default function AdminLayout() {
                 pathname.endsWith(
                   item.route
                     .split("/")
-                    .pop() || "",
+                    .pop() ||
+                    "",
                 )
               );
-
             return (
               <TouchableOpacity
                 key={
@@ -501,7 +473,6 @@ export default function AdminLayout() {
                       : "#B9C7DA"
                   }
                 />
-
                 <Text
                   style={[
                     styles.navLabel,
@@ -515,83 +486,11 @@ export default function AdminLayout() {
             );
           },
         )}
-
         <View
           style={
             styles.divider
           }
         />
-
-        <Text
-          style={
-            styles.sidebarSection
-          }
-        >
-          SWITCH MODE
-        </Text>
-
-        <TouchableOpacity
-          style={
-            styles.navItem
-          }
-          activeOpacity={
-            0.82
-          }
-          onPress={() =>
-            void switchMode(
-              "resident",
-            )
-          }
-        >
-          <Ionicons
-            name="person-outline"
-            size={20}
-            color="#B9C7DA"
-          />
-
-          <Text
-            style={
-              styles.navLabel
-            }
-          >
-            Use as Resident
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={
-            styles.navItem
-          }
-          activeOpacity={
-            0.82
-          }
-          onPress={() =>
-            void switchMode(
-              "volunteer",
-            )
-          }
-        >
-          <Ionicons
-            name="people-outline"
-            size={20}
-            color="#B9C7DA"
-          />
-
-          <Text
-            style={
-              styles.navLabel
-            }
-          >
-            Use as Volunteer
-          </Text>
-        </TouchableOpacity>
-
-        <View
-          style={
-            styles.divider
-          }
-        />
-
         <TouchableOpacity
           style={
             styles.navItem
@@ -608,7 +507,6 @@ export default function AdminLayout() {
             size={20}
             color="#D6DEEA"
           />
-
           <Text
             style={[
               styles.navLabel,
@@ -619,7 +517,6 @@ export default function AdminLayout() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-
       <View
         style={
           styles.sidebarFooter
@@ -638,7 +535,6 @@ export default function AdminLayout() {
       </View>
     </View>
   );
-
   return (
     <View
       style={
@@ -647,7 +543,6 @@ export default function AdminLayout() {
     >
       {desktop &&
         sidebar}
-
       <View
         style={
           styles.main
@@ -676,13 +571,11 @@ export default function AdminLayout() {
               />
             </TouchableOpacity>
           )}
-
           <View
             style={
               styles.topBarSpacer
             }
           />
-
           <View
             style={
               styles.profileArea
@@ -701,7 +594,6 @@ export default function AdminLayout() {
                 {initials}
               </Text>
             </View>
-
             <View
               style={
                 styles.profileText
@@ -717,7 +609,6 @@ export default function AdminLayout() {
               >
                 {fullName}
               </Text>
-
               <Text
                 style={
                   styles.profileRole
@@ -728,7 +619,6 @@ export default function AdminLayout() {
             </View>
           </View>
         </View>
-
         <View
           style={
             styles.stackArea
@@ -746,7 +636,6 @@ export default function AdminLayout() {
           />
         </View>
       </View>
-
       <Modal
         visible={
           !desktop &&
@@ -775,7 +664,6 @@ export default function AdminLayout() {
               )
             }
           />
-
           <View
             style={
               styles.mobileSidebar
@@ -788,339 +676,439 @@ export default function AdminLayout() {
     </View>
   );
 }
-
 const styles =
   StyleSheet.create({
     shell: {
       flex: 1,
-      flexDirection: "row",
+      flexDirection:
+        "row",
       backgroundColor:
         "#F5F7FB",
     },
-
     center: {
       flex: 1,
-      alignItems: "center",
+      alignItems:
+        "center",
       justifyContent:
         "center",
       backgroundColor:
         "#F8FAFC",
     },
-
     message: {
       marginTop: 10,
-      color: "#64748B",
-      fontWeight: "600",
+      color:
+        "#64748B",
+      fontWeight:
+        "600",
     },
-
     sidebar: {
       width:
         SIDEBAR_WIDTH,
-      height: "100%",
+      height:
+        "100%",
       backgroundColor:
         "#142A45",
     },
-
     brand: {
-      minHeight: 92,
-      paddingHorizontal: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 11,
+      minHeight:
+        92,
+      paddingHorizontal:
+        24,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        11,
     },
-
     brandMark: {
-      width: 38,
-      height: 38,
-      borderRadius: 10,
+      width:
+        38,
+      height:
+        38,
+      borderRadius:
+        10,
       backgroundColor:
         "#635BDE",
-      alignItems: "center",
+      alignItems:
+        "center",
       justifyContent:
         "center",
     },
-
     brandName: {
-      color: "#FFFFFF",
-      fontSize: 21,
-      fontWeight: "900",
+      color:
+        "#FFFFFF",
+      fontSize:
+        21,
+      fontWeight:
+        "900",
     },
-
     brandTagline: {
-      marginTop: 2,
-      color: "#8FA7C3",
-      fontSize: 8.5,
-      fontWeight: "600",
+      marginTop:
+        2,
+      color:
+        "#8FA7C3",
+      fontSize:
+        8.5,
+      fontWeight:
+        "600",
     },
-
     sidebarScroll: {
-      flex: 1,
+      flex:
+        1,
     },
-
     sidebarContent: {
-      paddingHorizontal: 16,
-      paddingBottom: 24,
+      paddingHorizontal:
+        16,
+      paddingBottom:
+        24,
     },
-
     sidebarSection: {
-      marginTop: 12,
-      marginBottom: 8,
-      paddingHorizontal: 11,
-      color: "#718AA8",
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 1.2,
+      marginTop:
+        12,
+      marginBottom:
+        8,
+      paddingHorizontal:
+        11,
+      color:
+        "#718AA8",
+      fontSize:
+        10,
+      fontWeight:
+        "900",
+      letterSpacing:
+        1.2,
     },
-
     navItem: {
-      minHeight: 45,
-      marginBottom: 3,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 11,
+      minHeight:
+        45,
+      marginBottom:
+        3,
+      paddingHorizontal:
+        12,
+      borderRadius:
+        10,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        11,
     },
-
     navItemActive: {
       backgroundColor:
         "#5548B9",
     },
-
     navLabel: {
-      color: "#D6DEEA",
-      fontSize: 13,
-      fontWeight: "700",
+      color:
+        "#D6DEEA",
+      fontSize:
+        13,
+      fontWeight:
+        "700",
     },
-
     navLabelActive: {
-      color: "#FFFFFF",
-      fontWeight: "900",
+      color:
+        "#FFFFFF",
+      fontWeight:
+        "900",
     },
-
     divider: {
-      height: 1,
-      marginVertical: 14,
-      marginHorizontal: 10,
+      height:
+        1,
+      marginVertical:
+        14,
+      marginHorizontal:
+        10,
       backgroundColor:
         "#29415E",
     },
-
     signOutLabel: {
-      color: "#F1F5F9",
+      color:
+        "#F1F5F9",
     },
-
     sidebarFooter: {
-      paddingHorizontal: 30,
-      paddingBottom: 26,
+      paddingHorizontal:
+        30,
+      paddingBottom:
+        26,
     },
-
     sidebarFooterText: {
-      color: "#67A5CA",
-      fontSize: 10,
-      lineHeight: 16,
-      fontWeight: "800",
-      letterSpacing: 1,
+      color:
+        "#67A5CA",
+      fontSize:
+        10,
+      lineHeight:
+        16,
+      fontWeight:
+        "800",
+      letterSpacing:
+        1,
     },
-
     main: {
-      flex: 1,
-      minWidth: 0,
+      flex:
+        1,
+      minWidth:
+        0,
       backgroundColor:
         "#F5F7FB",
     },
-
     topBar: {
-      minHeight: 72,
-      paddingHorizontal: 28,
-      flexDirection: "row",
-      alignItems: "center",
-      borderBottomWidth: 1,
+      minHeight:
+        72,
+      paddingHorizontal:
+        28,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      borderBottomWidth:
+        1,
       borderBottomColor:
         "#E5E7EB",
       backgroundColor:
         "#FFFFFF",
     },
-
     topBarSpacer: {
-      flex: 1,
+      flex:
+        1,
     },
-
     mobileMenuButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 10,
-      alignItems: "center",
+      width:
+        40,
+      height:
+        40,
+      borderRadius:
+        10,
+      alignItems:
+        "center",
       justifyContent:
         "center",
-      borderWidth: 1,
+      borderWidth:
+        1,
       borderColor:
         "#E2E8F0",
       backgroundColor:
         "#FFFFFF",
     },
-
     profileArea: {
-      maxWidth: 300,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
+      maxWidth:
+        300,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap:
+        10,
     },
-
     profileAvatar: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      alignItems: "center",
+      width:
+        38,
+      height:
+        38,
+      borderRadius:
+        19,
+      alignItems:
+        "center",
       justifyContent:
         "center",
       backgroundColor:
         "#64748B",
     },
-
     profileAvatarText: {
-      color: "#FFFFFF",
-      fontSize: 12,
-      fontWeight: "900",
+      color:
+        "#FFFFFF",
+      fontSize:
+        12,
+      fontWeight:
+        "900",
     },
-
     profileText: {
-      minWidth: 0,
+      minWidth:
+        0,
     },
-
     profileName: {
-      color: "#0F172A",
-      fontSize: 13,
-      fontWeight: "900",
+      color:
+        "#0F172A",
+      fontSize:
+        13,
+      fontWeight:
+        "900",
     },
-
     profileRole: {
-      marginTop: 2,
-      color: "#64748B",
-      fontSize: 10.5,
+      marginTop:
+        2,
+      color:
+        "#64748B",
+      fontSize:
+        10.5,
     },
-
     stackArea: {
-      flex: 1,
-      minHeight: 0,
+      flex:
+        1,
+      minHeight:
+        0,
     },
-
     mobileOverlay: {
-      flex: 1,
-      flexDirection: "row",
+      flex:
+        1,
+      flexDirection:
+        "row",
       backgroundColor:
         "rgba(15,23,42,0.35)",
     },
-
     mobileBackdrop: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet
+        .absoluteFillObject,
     },
-
     mobileSidebar: {
       width:
         SIDEBAR_WIDTH,
-      height: "100%",
-      zIndex: 2,
+      height:
+        "100%",
+      zIndex:
+        2,
     },
-
     blockedContainer: {
-      flex: 1,
-      padding: 24,
-      alignItems: "center",
+      flex:
+        1,
+      padding:
+        24,
+      alignItems:
+        "center",
       justifyContent:
         "center",
       backgroundColor:
         "#F1F5F9",
     },
-
     blockedCard: {
-      width: "100%",
-      maxWidth: 460,
+      width:
+        "100%",
+      maxWidth:
+        460,
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 22,
-      padding: 28,
-      alignItems: "center",
-      borderWidth: 1,
+      borderRadius:
+        22,
+      padding:
+        28,
+      alignItems:
+        "center",
+      borderWidth:
+        1,
       borderColor:
         "#E2E8F0",
       shadowColor:
         "#000000",
       shadowOffset: {
-        width: 0,
-        height: 5,
+        width:
+          0,
+        height:
+          5,
       },
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      elevation: 4,
+      shadowOpacity:
+        0.08,
+      shadowRadius:
+        16,
+      elevation:
+        4,
     },
-
     iconCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      alignItems: "center",
+      width:
+        72,
+      height:
+        72,
+      borderRadius:
+        36,
+      alignItems:
+        "center",
       justifyContent:
         "center",
       backgroundColor:
         "#CCFBF1",
-      marginBottom: 18,
+      marginBottom:
+        18,
     },
-
     iconText: {
-      color: "#0F766E",
-      fontWeight: "900",
-      fontSize: 22,
+      color:
+        "#0F766E",
+      fontWeight:
+        "900",
+      fontSize:
+        22,
     },
-
     blockedEyebrow: {
-      color: "#0F766E",
-      fontWeight: "900",
-      fontSize: 10,
-      letterSpacing: 1.4,
-      marginBottom: 8,
-      textAlign: "center",
+      color:
+        "#0F766E",
+      fontWeight:
+        "900",
+      fontSize:
+        10,
+      letterSpacing:
+        1.4,
+      marginBottom:
+        8,
+      textAlign:
+        "center",
     },
-
     blockedTitle: {
-      color: "#0F172A",
-      fontSize: 25,
-      fontWeight: "900",
-      textAlign: "center",
+      color:
+        "#0F172A",
+      fontSize:
+        25,
+      fontWeight:
+        "900",
+      textAlign:
+        "center",
     },
-
     blockedDescription: {
-      marginTop: 10,
-      color: "#64748B",
-      fontSize: 14,
-      lineHeight: 21,
-      textAlign: "center",
-      maxWidth: 360,
+      marginTop:
+        10,
+      color:
+        "#64748B",
+      fontSize:
+        14,
+      lineHeight:
+        21,
+      textAlign:
+        "center",
+      maxWidth:
+        360,
     },
-
     webButton: {
-      width: "100%",
-      minHeight: 48,
-      marginTop: 22,
-      borderRadius: 12,
+      width:
+        "100%",
+      minHeight:
+        48,
+      marginTop:
+        22,
+      borderRadius:
+        12,
       backgroundColor:
         "#0F766E",
-      alignItems: "center",
+      alignItems:
+        "center",
       justifyContent:
         "center",
-      paddingHorizontal: 18,
+      paddingHorizontal:
+        18,
     },
-
     webButtonText: {
-      color: "#FFFFFF",
-      fontWeight: "900",
-      fontSize: 14,
+      color:
+        "#FFFFFF",
+      fontWeight:
+        "900",
+      fontSize:
+        14,
     },
-
     webAddress: {
-      marginTop: 12,
-      color: "#94A3B8",
-      fontSize: 11,
-      fontWeight: "600",
+      marginTop:
+        12,
+      color:
+        "#94A3B8",
+      fontSize:
+        11,
+      fontWeight:
+        "600",
     },
   });
