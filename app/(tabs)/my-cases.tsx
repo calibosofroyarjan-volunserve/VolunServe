@@ -1,3 +1,4 @@
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
   collection,
@@ -15,6 +16,8 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,6 +58,82 @@ type ConfirmationOutcome =
   | "partially_helped"
   | "not_helped";
 
+type EvidenceAsset = {
+  uri: string;
+  kind: "image" | "video";
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  file?: any;
+};
+
+type EvidenceAttachment = {
+  url: string;
+  path: string;
+  type: "image" | "video";
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+  provider?: "cloudinary";
+  publicId?: string;
+  assetId?: string;
+  resourceType?: string;
+};
+
+type EvidenceDraft = {
+  photos: EvidenceAsset[];
+  video: EvidenceAsset | null;
+};
+
+const CLOUDINARY_CLOUD_NAME = "netjawtz";
+const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
+const CLOUDINARY_UPLOAD_URL =
+  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+
+const fileNameFromUri = (uri: string) =>
+  uri.split("/").pop()?.split("?")[0] || "evidence";
+
+const normalizePickerAsset = (
+  asset: ImagePicker.ImagePickerAsset,
+  kind: "image" | "video",
+): EvidenceAsset => ({
+  uri: asset.uri,
+  kind,
+  fileName:
+    asset.fileName ||
+    fileNameFromUri(asset.uri) ||
+    `${kind}-${Date.now()}`,
+  fileSize:
+    typeof asset.fileSize === "number"
+      ? asset.fileSize
+      : null,
+  mimeType: asset.mimeType || null,
+  file: (asset as any).file,
+});
+
+const contentTypeForEvidence = (asset: EvidenceAsset) => {
+  if (asset.mimeType) {
+    return asset.mimeType;
+  }
+
+  return asset.kind === "image"
+    ? "image/jpeg"
+    : "video/mp4";
+};
+
+const extensionForEvidence = (asset: EvidenceAsset) => {
+  const name = String(asset.fileName || "");
+  const extension = name.includes(".")
+    ? name.split(".").pop()
+    : "";
+
+  if (extension) {
+    return extension;
+  }
+
+  return asset.kind === "image" ? "jpg" : "mp4";
+};
+
 type DisasterCase = {
   id: string;
 
@@ -68,6 +147,12 @@ type DisasterCase = {
 
   verificationStatus?: string;
   evidenceReviewStatus?: string;
+  evidenceRequestReason?: string;
+  evidenceRequestedAt?: any;
+
+  attachments?: EvidenceAttachment[];
+  photoEvidenceCount?: number;
+  videoEvidenceCount?: number;
 
   location?: string;
   details?: string;
@@ -379,6 +464,28 @@ export default function MyCases() {
     setReviewError,
   ] =
     useState("");
+
+  const [
+    evidenceDrafts,
+    setEvidenceDrafts,
+  ] = useState<
+    Record<string, EvidenceDraft>
+  >({});
+
+  const [
+    evidenceBusyCaseId,
+    setEvidenceBusyCaseId,
+  ] = useState("");
+
+  const [
+    evidenceProgressByCase,
+    setEvidenceProgressByCase,
+  ] = useState<Record<string, string>>({});
+
+  const [
+    evidenceErrorByCase,
+    setEvidenceErrorByCase,
+  ] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!user) {
@@ -844,6 +951,393 @@ export default function MyCases() {
   }, [
     user?.uid,
   ]);
+
+  const draftForCase = (caseId: string): EvidenceDraft =>
+    evidenceDrafts[caseId] || {
+      photos: [],
+      video: null,
+    };
+
+  const updateEvidenceDraft = (
+    caseId: string,
+    updater: (draft: EvidenceDraft) => EvidenceDraft,
+  ) => {
+    setEvidenceDrafts((current) => ({
+      ...current,
+      [caseId]: updater(
+        current[caseId] || {
+          photos: [],
+          video: null,
+        },
+      ),
+    }));
+
+    setEvidenceErrorByCase((current) => ({
+      ...current,
+      [caseId]: "",
+    }));
+  };
+
+  const chooseAdditionalPhoto = async (incident: DisasterCase) => {
+    if (evidenceBusyCaseId) {
+      return;
+    }
+
+    const existingCount = Number(incident.photoEvidenceCount || 0);
+    const draft = draftForCase(incident.id);
+
+    if (existingCount + draft.photos.length >= 10) {
+      Alert.alert(
+        "Photo Limit",
+        "This emergency already has the maximum number of evidence photos.",
+      );
+      return;
+    }
+
+    const permission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Gallery Permission",
+        "Allow photo library access to attach the additional evidence requested by the LGU.",
+      );
+      return;
+    }
+
+    const result =
+      await ImagePicker.launchImageLibraryAsync({
+        mediaTypes:
+          ImagePicker.MediaTypeOptions.Images,
+        quality: 0.75,
+      });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const asset = normalizePickerAsset(
+      result.assets[0],
+      "image",
+    );
+
+    if (
+      typeof asset.fileSize === "number" &&
+      asset.fileSize >= 10 * 1024 * 1024
+    ) {
+      Alert.alert(
+        "Photo Too Large",
+        "Each additional evidence photo must be under 10 MB.",
+      );
+      return;
+    }
+
+    updateEvidenceDraft(incident.id, (current) => ({
+      ...current,
+      photos: [...current.photos, asset],
+    }));
+  };
+
+  const chooseAdditionalVideo = async (incident: DisasterCase) => {
+    if (evidenceBusyCaseId) {
+      return;
+    }
+
+    const existingCount = Number(incident.videoEvidenceCount || 0);
+    const draft = draftForCase(incident.id);
+
+    if (existingCount >= 2 && !draft.video) {
+      Alert.alert(
+        "Video Limit",
+        "This emergency already has the maximum number of optional evidence videos.",
+      );
+      return;
+    }
+
+    const permission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Gallery Permission",
+        "Allow photo library access to attach an optional evidence video.",
+      );
+      return;
+    }
+
+    const result =
+      await ImagePicker.launchImageLibraryAsync({
+        mediaTypes:
+          ImagePicker.MediaTypeOptions.Videos,
+      });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const asset = normalizePickerAsset(
+      result.assets[0],
+      "video",
+    );
+
+    if (
+      typeof asset.fileSize === "number" &&
+      asset.fileSize >= 50 * 1024 * 1024
+    ) {
+      Alert.alert(
+        "Video Too Large",
+        "The optional additional evidence video must be under 50 MB.",
+      );
+      return;
+    }
+
+    updateEvidenceDraft(incident.id, (current) => ({
+      ...current,
+      video: asset,
+    }));
+  };
+
+  const removeAdditionalPhoto = (
+    caseId: string,
+    photoIndex: number,
+  ) => {
+    updateEvidenceDraft(caseId, (current) => ({
+      ...current,
+      photos: current.photos.filter(
+        (_, index) => index !== photoIndex,
+      ),
+    }));
+  };
+
+  const clearAdditionalVideo = (caseId: string) => {
+    updateEvidenceDraft(caseId, (current) => ({
+      ...current,
+      video: null,
+    }));
+  };
+
+  const uploadAdditionalEvidence = async (
+    caseId: string,
+    assets: EvidenceAsset[],
+  ): Promise<EvidenceAttachment[]> => {
+    const attachments: EvidenceAttachment[] = [];
+
+    for (let index = 0; index < assets.length; index += 1) {
+      const asset = assets[index];
+      const contentType = contentTypeForEvidence(asset);
+      const extension = extensionForEvidence(asset);
+      const fileName =
+        asset.fileName ||
+        `additional-evidence-${Date.now()}-${index}.${extension}`;
+
+      setEvidenceProgressByCase((current) => ({
+        ...current,
+        [caseId]:
+          `Uploading ${asset.kind === "image" ? "photo" : "video"} ${index + 1} of ${assets.length}…`,
+      }));
+
+      const body = new FormData();
+
+      if (asset.file) {
+        body.append("file", asset.file);
+      } else {
+        body.append(
+          "file",
+          {
+            uri: asset.uri,
+            name: fileName,
+            type: contentType,
+          } as any,
+        );
+      }
+
+      body.append(
+        "upload_preset",
+        CLOUDINARY_UPLOAD_PRESET,
+      );
+
+      const response = await fetch(
+        CLOUDINARY_UPLOAD_URL,
+        {
+          method: "POST",
+          body,
+        },
+      );
+
+      const result = await response
+        .json()
+        .catch(() => null);
+
+      if (
+        !response.ok ||
+        !result ||
+        typeof result.secure_url !== "string" ||
+        typeof result.public_id !== "string"
+      ) {
+        throw new Error(
+          result?.error?.message ||
+            "Cloudinary evidence upload failed.",
+        );
+      }
+
+      attachments.push({
+        path: result.public_id,
+        url: result.secure_url,
+        type: asset.kind,
+        name: fileName,
+        contentType,
+        sizeBytes:
+          typeof result.bytes === "number"
+            ? result.bytes
+            : asset.fileSize || 0,
+        provider: "cloudinary",
+        publicId: result.public_id,
+        assetId:
+          typeof result.asset_id === "string"
+            ? result.asset_id
+            : undefined,
+        resourceType:
+          typeof result.resource_type === "string"
+            ? result.resource_type
+            : asset.kind,
+      });
+    }
+
+    return attachments;
+  };
+
+  const submitAdditionalEvidence = async (incident: DisasterCase) => {
+    if (!user || evidenceBusyCaseId) {
+      return;
+    }
+
+    if (
+      incident.reporterUid !== user.uid ||
+      incident.verificationStatus !== "needs_more_evidence"
+    ) {
+      setEvidenceErrorByCase((current) => ({
+        ...current,
+        [incident.id]:
+          "This case is no longer waiting for additional evidence.",
+      }));
+      return;
+    }
+
+    const draft = draftForCase(incident.id);
+
+    if (draft.photos.length < 1) {
+      setEvidenceErrorByCase((current) => ({
+        ...current,
+        [incident.id]:
+          "Add at least one new photo requested by the LGU before submitting.",
+      }));
+      return;
+    }
+
+    const existingAttachments = Array.isArray(incident.attachments)
+      ? incident.attachments
+      : [];
+
+    const existingPhotos = Number(incident.photoEvidenceCount || 0);
+    const existingVideos = Number(incident.videoEvidenceCount || 0);
+
+    if (existingPhotos + draft.photos.length > 10) {
+      setEvidenceErrorByCase((current) => ({
+        ...current,
+        [incident.id]:
+          "This case would exceed the evidence photo limit. Remove a selected photo and try again.",
+      }));
+      return;
+    }
+
+    if (existingVideos + (draft.video ? 1 : 0) > 2) {
+      setEvidenceErrorByCase((current) => ({
+        ...current,
+        [incident.id]:
+          "This case would exceed the optional evidence video limit.",
+      }));
+      return;
+    }
+
+    setEvidenceBusyCaseId(incident.id);
+    setEvidenceErrorByCase((current) => ({
+      ...current,
+      [incident.id]: "",
+    }));
+
+    try {
+      const newAttachments =
+        await uploadAdditionalEvidence(
+          incident.id,
+          [
+            ...draft.photos,
+            ...(draft.video ? [draft.video] : []),
+          ],
+        );
+
+      setEvidenceProgressByCase((current) => ({
+        ...current,
+        [incident.id]: "Saving evidence to your existing case…",
+      }));
+
+      const batch = writeBatch(db);
+      const caseRef = doc(
+        db,
+        "disasterCases",
+        incident.id,
+      );
+
+      batch.update(caseRef, {
+        attachments: [
+          ...existingAttachments,
+          ...newAttachments,
+        ],
+        photoEvidenceCount:
+          existingPhotos + draft.photos.length,
+        videoEvidenceCount:
+          existingVideos + (draft.video ? 1 : 0),
+        evidenceReviewStatus: "resubmitted",
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      setEvidenceDrafts((current) => {
+        const next = { ...current };
+        delete next[incident.id];
+        return next;
+      });
+
+      Alert.alert(
+        "Evidence Submitted",
+        "Your new evidence was added to the same emergency case. The LGU can now review it again.",
+      );
+    } catch (problem: any) {
+      const message = String(
+        problem?.message ||
+          problem?.code ||
+          "",
+      );
+
+      setEvidenceErrorByCase((current) => ({
+        ...current,
+        [incident.id]:
+          message.includes("permission") ||
+          message.includes("unauthorized")
+            ? "The evidence update was blocked by Firestore rules. Deploy the current Emergency rules and try again."
+            : message.includes("Cloudinary") ||
+                message.includes("cloudinary")
+              ? "The evidence upload failed. Check your connection and try again; your selected files were kept."
+              : "Could not submit the additional evidence. Your selected files were kept so you can retry.",
+      }));
+    } finally {
+      setEvidenceBusyCaseId("");
+      setEvidenceProgressByCase((current) => ({
+        ...current,
+        [incident.id]: "",
+      }));
+    }
+  };
 
   const resetReview =
     () => {
@@ -1639,6 +2133,233 @@ export default function MyCases() {
                   </View>
                 )}
 
+                {incident.verificationStatus ===
+                  "needs_more_evidence" && (
+                  <View
+                    style={
+                      incident.evidenceReviewStatus ===
+                      "resubmitted"
+                        ? styles.evidenceWaitingCard
+                        : styles.evidenceRequestCard
+                    }
+                  >
+                    <View style={styles.evidenceRequestHeader}>
+                      <View style={styles.evidenceRequestCopy}>
+                        <Text style={styles.evidenceRequestEyebrow}>
+                          {incident.evidenceReviewStatus ===
+                          "resubmitted"
+                            ? "EVIDENCE RESUBMITTED"
+                            : "ACTION REQUIRED"}
+                        </Text>
+
+                        <Text style={styles.evidenceRequestTitle}>
+                          {incident.evidenceReviewStatus ===
+                          "resubmitted"
+                            ? "Additional evidence sent for LGU review"
+                            : "Additional evidence required"}
+                        </Text>
+
+                        <Text style={styles.evidenceRequestText}>
+                          {incident.evidenceReviewStatus ===
+                          "resubmitted"
+                            ? "Your new evidence was added to this same emergency case. Wait for the LGU to review it before sending anything else."
+                            : "The LGU needs clearer or additional proof before normal dispatch can continue. Add at least one new photo to this existing case; do not create another emergency report."}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {!!incident.evidenceRequestReason && (
+                      <View style={styles.evidenceReasonBox}>
+                        <Text style={styles.evidenceReasonLabel}>
+                          LGU REQUEST
+                        </Text>
+                        <Text style={styles.evidenceReasonText}>
+                          {incident.evidenceRequestReason}
+                        </Text>
+                      </View>
+                    )}
+
+                    {incident.evidenceReviewStatus !==
+                      "resubmitted" && (() => {
+                      const draft = draftForCase(incident.id);
+                      const evidenceError =
+                        evidenceErrorByCase[incident.id] || "";
+                      const evidenceProgress =
+                        evidenceProgressByCase[incident.id] || "";
+                      const evidenceBusy =
+                        evidenceBusyCaseId === incident.id;
+
+                      return (
+                        <View style={styles.evidenceForm}>
+                          <View style={styles.evidenceFieldHeader}>
+                            <View>
+                              <Text style={styles.evidenceFieldTitle}>
+                                New photo evidence
+                              </Text>
+                              <Text style={styles.evidenceFieldHelper}>
+                                Required · at least 1 new clear photo · under 10 MB each
+                              </Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={styles.evidenceAddButton}
+                              disabled={evidenceBusy}
+                              onPress={() =>
+                                chooseAdditionalPhoto(incident)
+                              }
+                            >
+                              <Text style={styles.evidenceAddButtonText}>
+                                + Add photo
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {draft.photos.length > 0 ? (
+                            <View style={styles.evidencePreviewGrid}>
+                              {draft.photos.map((photo, index) => (
+                                <View
+                                  key={`${photo.uri}-${index}`}
+                                  style={styles.evidencePreviewCard}
+                                >
+                                  <Image
+                                    source={{ uri: photo.uri }}
+                                    style={styles.evidencePreviewImage}
+                                  />
+
+                                  <View style={styles.evidencePreviewFooter}>
+                                    <Text
+                                      style={styles.evidencePreviewName}
+                                      numberOfLines={1}
+                                    >
+                                      {photo.fileName ||
+                                        `Photo ${index + 1}`}
+                                    </Text>
+
+                                    <TouchableOpacity
+                                      disabled={evidenceBusy}
+                                      onPress={() =>
+                                        removeAdditionalPhoto(
+                                          incident.id,
+                                          index,
+                                        )
+                                      }
+                                    >
+                                      <Text style={styles.evidenceRemoveText}>
+                                        Remove
+                                      </Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          ) : (
+                            <View style={styles.evidenceEmptyBox}>
+                              <Text style={styles.evidenceEmptyText}>
+                                No new photo selected yet.
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.evidenceVideoRow}>
+                            <View style={styles.evidenceVideoCopy}>
+                              <Text style={styles.evidenceFieldTitle}>
+                                Additional video
+                              </Text>
+                              <Text style={styles.evidenceFieldHelper}>
+                                Optional · under 50 MB
+                              </Text>
+                              {!!draft.video && (
+                                <Text
+                                  style={styles.evidenceSelectedVideo}
+                                  numberOfLines={1}
+                                >
+                                  {draft.video.fileName ||
+                                    "Video selected"}
+                                </Text>
+                              )}
+                            </View>
+
+                            <View style={styles.evidenceVideoActions}>
+                              <TouchableOpacity
+                                style={styles.evidenceSecondaryButton}
+                                disabled={evidenceBusy}
+                                onPress={() =>
+                                  chooseAdditionalVideo(incident)
+                                }
+                              >
+                                <Text style={styles.evidenceSecondaryButtonText}>
+                                  {draft.video
+                                    ? "Replace video"
+                                    : "Add video"}
+                                </Text>
+                              </TouchableOpacity>
+
+                              {!!draft.video && (
+                                <TouchableOpacity
+                                  style={styles.evidenceTextButton}
+                                  disabled={evidenceBusy}
+                                  onPress={() =>
+                                    clearAdditionalVideo(incident.id)
+                                  }
+                                >
+                                  <Text style={styles.evidenceRemoveText}>
+                                    Remove
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {!!evidenceError && (
+                            <Text style={styles.evidenceErrorText}>
+                              {evidenceError}
+                            </Text>
+                          )}
+
+                          {!!evidenceProgress && (
+                            <Text style={styles.evidenceProgressText}>
+                              {evidenceProgress}
+                            </Text>
+                          )}
+
+                          <View style={styles.evidenceSubmitRow}>
+                            <Text style={styles.evidencePrivacyText}>
+                              Evidence remains attached to this case and is limited to authorized LGU/Admin and assigned response personnel.
+                            </Text>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.evidenceSubmitButton,
+                                (evidenceBusy ||
+                                  draft.photos.length < 1) &&
+                                  styles.evidenceSubmitButtonDisabled,
+                              ]}
+                              disabled={
+                                evidenceBusy ||
+                                draft.photos.length < 1
+                              }
+                              onPress={() =>
+                                submitAdditionalEvidence(incident)
+                              }
+                            >
+                              {evidenceBusy ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
+                              ) : (
+                                <Text style={styles.evidenceSubmitButtonText}>
+                                  Submit additional evidence
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                )}
+
                 <View
                   style={
                     styles.responderSection
@@ -2421,6 +3142,285 @@ const styles =
       color: "#36515F",
       fontSize: 11,
       lineHeight: 17,
+    },
+
+    evidenceRequestCard: {
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 14,
+      backgroundColor: "#FFF9ED",
+      borderWidth: 1,
+      borderColor: "#E8C875",
+    },
+
+    evidenceWaitingCard: {
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 14,
+      backgroundColor: "#EEF8F6",
+      borderWidth: 1,
+      borderColor: "#BFDCD6",
+    },
+
+    evidenceRequestHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+
+    evidenceRequestCopy: {
+      flex: 1,
+    },
+
+    evidenceRequestEyebrow: {
+      color: "#9A6700",
+      fontSize: 9,
+      fontWeight: "900",
+      letterSpacing: 1,
+    },
+
+    evidenceRequestTitle: {
+      marginTop: 4,
+      color: "#3F3314",
+      fontSize: 16,
+      lineHeight: 22,
+      fontWeight: "900",
+    },
+
+    evidenceRequestText: {
+      marginTop: 5,
+      color: "#6F6033",
+      fontSize: 11.5,
+      lineHeight: 18,
+    },
+
+    evidenceReasonBox: {
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E9D89F",
+    },
+
+    evidenceReasonLabel: {
+      color: "#9A6700",
+      fontSize: 8.5,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+    },
+
+    evidenceReasonText: {
+      marginTop: 4,
+      color: "#4F4529",
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: "700",
+    },
+
+    evidenceForm: {
+      marginTop: 14,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: "#E9DDAE",
+    },
+
+    evidenceFieldHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      flexWrap: "wrap",
+    },
+
+    evidenceFieldTitle: {
+      color: "#263E4B",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
+    evidenceFieldHelper: {
+      marginTop: 3,
+      color: "#778A95",
+      fontSize: 10,
+      lineHeight: 15,
+    },
+
+    evidenceAddButton: {
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      borderRadius: 9,
+      backgroundColor: "#0B8178",
+    },
+
+    evidenceAddButtonText: {
+      color: "#FFFFFF",
+      fontSize: 10.5,
+      fontWeight: "900",
+    },
+
+    evidencePreviewGrid: {
+      marginTop: 10,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+
+    evidencePreviewCard: {
+      width: 180,
+      maxWidth: "100%",
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#DCE5EA",
+    },
+
+    evidencePreviewImage: {
+      width: "100%",
+      height: 108,
+      backgroundColor: "#E8EEF1",
+    },
+
+    evidencePreviewFooter: {
+      paddingHorizontal: 9,
+      paddingVertical: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+
+    evidencePreviewName: {
+      flex: 1,
+      color: "#4D6370",
+      fontSize: 9.5,
+      fontWeight: "700",
+    },
+
+    evidenceRemoveText: {
+      color: "#B42318",
+      fontSize: 9.5,
+      fontWeight: "900",
+    },
+
+    evidenceEmptyBox: {
+      marginTop: 10,
+      padding: 11,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor: "#D1DDE2",
+      backgroundColor: "#FFFFFF",
+    },
+
+    evidenceEmptyText: {
+      color: "#83939D",
+      fontSize: 10.5,
+    },
+
+    evidenceVideoRow: {
+      marginTop: 14,
+      paddingTop: 13,
+      borderTopWidth: 1,
+      borderTopColor: "#EFE5BF",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      flexWrap: "wrap",
+    },
+
+    evidenceVideoCopy: {
+      flex: 1,
+      minWidth: 220,
+    },
+
+    evidenceSelectedVideo: {
+      marginTop: 5,
+      color: "#0B756E",
+      fontSize: 10,
+      fontWeight: "800",
+    },
+
+    evidenceVideoActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    evidenceSecondaryButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: "#BFD9D5",
+      backgroundColor: "#FFFFFF",
+    },
+
+    evidenceSecondaryButtonText: {
+      color: "#0A726B",
+      fontSize: 10,
+      fontWeight: "900",
+    },
+
+    evidenceTextButton: {
+      paddingHorizontal: 5,
+      paddingVertical: 8,
+    },
+
+    evidenceErrorText: {
+      marginTop: 11,
+      color: "#B42318",
+      fontSize: 10.5,
+      lineHeight: 16,
+      fontWeight: "700",
+    },
+
+    evidenceProgressText: {
+      marginTop: 11,
+      color: "#0B756E",
+      fontSize: 10.5,
+      lineHeight: 16,
+      fontWeight: "800",
+    },
+
+    evidenceSubmitRow: {
+      marginTop: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 14,
+      flexWrap: "wrap",
+    },
+
+    evidencePrivacyText: {
+      flex: 1,
+      minWidth: 240,
+      color: "#71838E",
+      fontSize: 9.5,
+      lineHeight: 15,
+    },
+
+    evidenceSubmitButton: {
+      minHeight: 40,
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      borderRadius: 9,
+      backgroundColor: "#0A7D75",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    evidenceSubmitButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    evidenceSubmitButtonText: {
+      color: "#FFFFFF",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     responderSection: {

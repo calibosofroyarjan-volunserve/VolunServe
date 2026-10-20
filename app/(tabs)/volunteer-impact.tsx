@@ -1,1725 +1,767 @@
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 import {
   collection,
-  doc,
   onSnapshot,
   query,
   where,
 } from "firebase/firestore";
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
 import { db } from "../../lib/firebase";
-import {
-  isApprovedProfile,
-} from "../../lib/firebaseAuth";
-import {
-  useUserSession,
-} from "../../lib/useUserSession";
+import { isApprovedProfile } from "../../lib/firebaseAuth";
+import { useUserSession } from "../../lib/useUserSession";
 
-type Contribution = {
+type VerifiedContribution = {
   id: string;
-
-  assignmentId?: string;
-  caseId?: string;
-
   volunteerId?: string;
-  volunteerName?: string;
-
-  residentId?: string;
-
-  outcome?:
-    | "fully_helped"
-    | "partially_helped"
-    | string;
-
+  status?: string;
+  outcome?: string;
   contributionType?: string;
   contributionSummary?: string;
-
-  peopleHelped?: number;
   completionNotes?: string;
+  peopleHelped?: number;
+  responseStartedAt?: unknown;
+  completedAt?: unknown;
+  verifiedAt?: unknown;
+};
 
-  responseStartedAt?: any;
-  arrivedAt?: any;
-  completedAt?: any;
-
-  residentConfirmedAt?: any;
-
-  verificationSource?: string;
+type CommunityParticipation = {
+  id: string;
+  uid?: string;
+  eventId?: string;
   status?: string;
-
-  createdAt?: any;
-  verifiedAt?: any;
+  attendanceVerified?: boolean;
+  checkedInAt?: unknown;
+  checkedOutAt?: unknown;
+  attendanceVerifiedAt?: unknown;
 };
 
-type EventStats = {
-  totalHours?: number;
-  totalEventsCompleted?: number;
-  totalCheckIns?: number;
+type CommunityEvent = {
+  id: string;
+  title?: string;
+  category?: string;
+  date?: string;
+  location?: string;
+  barangay?: string;
+  status?: string;
+  publicationStatus?: string;
 };
 
-const toMillis = (
-  value: any,
-) => {
-  if (!value) {
-    return 0;
-  }
-
-  if (
-    typeof value?.toMillis ===
-    "function"
-  ) {
-    return value.toMillis();
-  }
-
-  if (
-    value instanceof Date
-  ) {
-    return value.getTime();
-  }
-
-  const parsed =
-    new Date(value).getTime();
-
-  return Number.isFinite(parsed)
-    ? parsed
-    : 0;
+type CertificateRecord = {
+  id: string;
+  certificateId?: string;
+  userId?: string;
+  certificateType?: string;
+  eventId?: string;
+  eventTitle?: string;
+  verifiedServiceMinutes?: number;
+  verificationStatus?: string;
+  issuedAt?: unknown;
+  createdAt?: unknown;
 };
 
-const calculateServiceMinutes = (
-  item: Contribution,
-) => {
-  const started =
-    toMillis(
-      item.responseStartedAt,
-    );
+type Source = "contributions" | "participations" | "events" | "certificates";
+type LoadFlags = Record<Source, boolean>;
+type SourceErrors = Partial<Record<Source, string>>;
 
-  const completed =
-    toMillis(
-      item.completedAt,
-    );
+type EventProgress = {
+  participation: CommunityParticipation;
+  event: CommunityEvent;
+  verifiedMinutes: number;
+  completedAndVerified: boolean;
+  hasIssuedCertificate: boolean;
+};
 
-  if (
-    !started ||
-    !completed ||
-    completed < started
-  ) {
-    return 0;
+const GREEN = "#078F82";
+const NAVY = "#102D48";
+const MUTED = "#668094";
+const BORDER = "#DDE9E7";
+const EMPTY_LOADING: LoadFlags = {
+  contributions: true,
+  participations: true,
+  events: true,
+  certificates: true,
+};
+const FINISHED_LOADING: LoadFlags = {
+  contributions: false,
+  participations: false,
+  events: false,
+  certificates: false,
+};
+
+function toMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
   }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
 
-  const minutes =
-    Math.round(
-      (
-        completed -
-        started
-      ) /
-        60000,
-    );
+// This is the same whole-minute rule as the Community Event certificate
+// backend. Never round a 29m 30s attendance up to 30 minutes.
+function verifiedEventMinutes(participation: CommunityParticipation): number {
+  if (participation.status !== "joined" || participation.attendanceVerified !== true) return 0;
+  const timeIn = toMillis(participation.checkedInAt);
+  const timeOut = toMillis(participation.checkedOutAt);
+  const span = timeOut - timeIn;
+  if (!timeIn || !timeOut || span < 0 || span > 24 * 60 * 60 * 1000) return 0;
+  return Math.floor(span / 60000);
+}
 
-  // Same safety cap used in
-  // the original server design:
-  // maximum 24 hours per response.
-  return Math.min(
-    24 * 60,
-    Math.max(
-      0,
-      minutes,
-    ),
+// Preserve the original emergency contribution calculation and its 24h cap.
+function verifiedEmergencyMinutes(contribution: VerifiedContribution): number {
+  const start = toMillis(contribution.responseStartedAt);
+  const end = toMillis(contribution.completedAt);
+  if (!start || !end || end < start) return 0;
+  return Math.min(24 * 60, Math.max(0, Math.round((end - start) / 60000)));
+}
+
+function nonnegativeInteger(value: unknown): number {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
+}
+
+function formatDuration(totalMinutes: number): string {
+  const minutes = nonnegativeInteger(totalMinutes);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (!hours) return `${remainder}m`;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+}
+
+function formatDate(value: unknown): string {
+  const milliseconds = toMillis(value);
+  if (!milliseconds) return "Not recorded";
+  return new Date(milliseconds).toLocaleDateString("en-PH", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
+
+function formatEventDate(value?: string): string {
+  if (!value) return "Date not recorded";
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return value;
+  const date = new Date(+parts[1], +parts[2] - 1, +parts[3]);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleDateString("en-PH", {month: "short", day: "numeric", year: "numeric"})
+    : value;
+}
+
+function sourceErrorText(source: Source, problem: unknown): string {
+  console.error(`My Progress ${source} listener failed:`, problem);
+  const code = (problem as {code?: string})?.code;
+  return code === "permission-denied"
+    ? `${source}: Firestore permission denied. Check your existing rules and account access.`
+    : `${source}: could not load live records. Please check your connection.`;
+}
+
+function HeaderIcon({name, tint = GREEN}: {name: React.ComponentProps<typeof Ionicons>["name"]; tint?: string}) {
+  return (
+    <View style={styles.sectionIcon}>
+      <Ionicons name={name} size={20} color={tint} />
+    </View>
   );
-};
+}
 
-const formatDuration = (
-  totalMinutes: number,
-) => {
-  const safeMinutes =
-    Math.max(
-      0,
-      Math.round(
-        Number(
-          totalMinutes || 0,
-        ),
-      ),
-    );
-
-  const hours =
-    Math.floor(
-      safeMinutes / 60,
-    );
-
-  const minutes =
-    safeMinutes % 60;
-
-  if (
-    hours === 0
-  ) {
-    return `${minutes} min`;
-  }
-
-  if (
-    minutes === 0
-  ) {
-    return `${hours} hr${
-      hours === 1
-        ? ""
-        : "s"
-    }`;
-  }
-
-  return `${hours} hr${
-    hours === 1
-      ? ""
-      : "s"
-  } ${minutes} min`;
-};
-
-const formatDate = (
-  value: any,
-) => {
-  const milliseconds =
-    toMillis(value);
-
-  if (!milliseconds) {
-    return "—";
-  }
-
-  return new Date(
-    milliseconds,
-  ).toLocaleString(
-    undefined,
-    {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    },
+function StatCard({
+  label,
+  value,
+  subtitle,
+  icon,
+  tint,
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  tint: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrap, {backgroundColor: tint === GREEN ? "#E5F7F2" : tint === "#2479C6" ? "#E9F3FE" : tint === "#C28A1A" ? "#FFF6DD" : "#F0EDFB"}]}>
+        <Ionicons name={icon} size={23} color={tint} />
+      </View>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statHint}>{subtitle}</Text>
+    </View>
   );
-};
+}
 
-const outcomeLabel = (
-  outcome?: string,
-) => {
-  if (
-    outcome ===
-    "fully_helped"
-  ) {
-    return "FULLY HELPED";
-  }
+function SectionHeading({
+  title,
+  subtitle,
+  icon,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  action?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.sectionHeading}>
+      <HeaderIcon name={icon} />
+      <View style={styles.sectionHeadingCopy}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+      </View>
+      {action}
+    </View>
+  );
+}
 
-  if (
-    outcome ===
-    "partially_helped"
-  ) {
-    return "PARTIALLY HELPED";
-  }
-
-  return "VERIFIED";
-};
+function StatusPill({
+  label,
+  kind,
+}: {
+  label: string;
+  kind: "good" | "waiting" | "neutral";
+}) {
+  return (
+    <View style={[
+      styles.pill,
+      kind === "good" ? styles.pillGood : kind === "waiting" ? styles.pillWaiting : styles.pillNeutral,
+    ]}>
+      <Text style={[
+        styles.pillText,
+        kind === "good" ? styles.pillTextGood : kind === "waiting" ? styles.pillTextWaiting : styles.pillTextNeutral,
+      ]}>{label}</Text>
+    </View>
+  );
+}
 
 export default function VolunteerImpact() {
-  const {
-    user,
-    profile,
-    loading,
-  } =
-    useUserSession();
+  const router = useRouter();
+  const {width} = useWindowDimensions();
+  const mobile = width < 700;
+  const {user, profile, loading} = useUserSession();
+  const userId = user && profile && isApprovedProfile(profile) ? user.uid : "";
 
-  const [
-    contributions,
-    setContributions,
-  ] =
-    useState<
-      Contribution[]
-    >([]);
-
-  const [
-    eventStats,
-    setEventStats,
-  ] =
-    useState<
-      EventStats
-    >({});
-
-  const [
-    contributionsLoading,
-    setContributionsLoading,
-  ] =
-    useState(true);
-
-  const [
-    eventStatsLoading,
-    setEventStatsLoading,
-  ] =
-    useState(true);
-
-  const [
-    error,
-    setError,
-  ] =
-    useState("");
+  const [contributions, setContributions] = useState<VerifiedContribution[]>([]);
+  const [participations, setParticipations] = useState<CommunityParticipation[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+  const [sourceLoading, setSourceLoading] = useState<LoadFlags>(EMPTY_LOADING);
+  const [sourceErrors, setSourceErrors] = useState<SourceErrors>({});
 
   useEffect(() => {
-    if (!user) {
-      setContributions(
-        [],
-      );
-
-      setContributionsLoading(
-        false,
-      );
-
+    if (!userId) {
+      setContributions([]);
+      setParticipations([]);
+      setEvents([]);
+      setCertificates([]);
+      setSourceLoading(FINISHED_LOADING);
+      setSourceErrors({});
       return;
     }
 
-    setContributionsLoading(
-      true,
+    setContributions([]);
+    setParticipations([]);
+    setEvents([]);
+    setCertificates([]);
+    setSourceLoading({...EMPTY_LOADING});
+    setSourceErrors({});
+
+    const finish = (source: Source, message?: string) => {
+      setSourceLoading((previous) => ({...previous, [source]: false}));
+      setSourceErrors((previous) => {
+        const next = {...previous};
+        if (message) next[source] = message;
+        else delete next[source];
+        return next;
+      });
+    };
+
+    // Resident-confirmed verified emergency contributions (unchanged source).
+    const stopContributions = onSnapshot(
+      query(collection(db, "verifiedContributions"), where("volunteerId", "==", userId)),
+      (snapshot) => {
+        setContributions(snapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as Omit<VerifiedContribution, "id">),
+        })).filter((entry) => entry.status === "verified"));
+        finish("contributions");
+      },
+      (problem) => finish("contributions", sourceErrorText("contributions", problem)),
     );
 
-    const contributionQuery =
-      query(
-        collection(
-          db,
-          "verifiedContributions",
-        ),
-
-        where(
-          "volunteerId",
-          "==",
-          user.uid,
-        ),
-      );
-
-    return onSnapshot(
-      contributionQuery,
-
-      (
-        snapshot,
-      ) => {
-        const rows =
-          snapshot.docs
-            .map(
-              (
-                contributionDoc,
-              ) => ({
-                id:
-                  contributionDoc.id,
-
-                ...(contributionDoc.data() as Omit<
-                  Contribution,
-                  "id"
-                >),
-              }),
-            )
-
-            .filter(
-              (
-                item,
-              ) =>
-                item.status ===
-                "verified",
-            )
-
-            .sort(
-              (
-                left,
-                right,
-              ) =>
-                toMillis(
-                  right.verifiedAt,
-                ) -
-                toMillis(
-                  left.verifiedAt,
-                ),
-            );
-
-        setContributions(
-          rows,
-        );
-
-        setContributionsLoading(
-          false,
-        );
+    // The same participant query used by Community Events itself.
+    const stopParticipations = onSnapshot(
+      query(collection(db, "communityEventParticipants"), where("uid", "==", userId)),
+      (snapshot) => {
+        setParticipations(snapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as Omit<CommunityParticipation, "id">),
+        })));
+        finish("participations");
       },
-
-      (
-        problem,
-      ) => {
-        console.error(
-          "verifiedContributions listener failed",
-          problem,
-        );
-
-        setError(
-          "Verified contribution records could not be loaded. Check the deployed Firestore rules.",
-        );
-
-        setContributionsLoading(
-          false,
-        );
-      },
+      (problem) => finish("participations", sourceErrorText("participations", problem)),
     );
-  }, [
-    user?.uid,
-  ]);
 
-  // Existing volunteerStats is kept only for
-  // community-event attendance/service hours.
-  // Emergency impact below is computed directly
-  // from verifiedContributions.
-  useEffect(() => {
-    if (!user) {
-      setEventStats(
-        {},
-      );
+    // The same published-event query used by the Volunteer Community Events page.
+    const stopEvents = onSnapshot(
+      query(collection(db, "communityEvents"), where("publicationStatus", "==", "published")),
+      (snapshot) => {
+        setEvents(snapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as Omit<CommunityEvent, "id">),
+        })));
+        finish("events");
+      },
+      (problem) => finish("events", sourceErrorText("events", problem)),
+    );
 
-      setEventStatsLoading(
-        false,
-      );
+    // Exact same certificate query and types as app/(tabs)/certificate.tsx.
+    const stopCertificates = onSnapshot(
+      query(collection(db, "certificates"), where("userId", "==", userId)),
+      (snapshot) => {
+        setCertificates(snapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as Omit<CertificateRecord, "id">),
+        })));
+        finish("certificates");
+      },
+      (problem) => finish("certificates", sourceErrorText("certificates", problem)),
+    );
 
-      return;
+    return () => {
+      stopContributions();
+      stopParticipations();
+      stopEvents();
+      stopCertificates();
+    };
+  }, [userId]);
+
+  const emergency = useMemo(() => {
+    let fullyHelped = 0;
+    let partiallyHelped = 0;
+    let peopleAssisted = 0;
+    let minutes = 0;
+    const byType = new Map<string, number>();
+
+    const ordered = [...contributions].sort(
+      (left, right) => toMillis(right.verifiedAt) - toMillis(left.verifiedAt),
+    );
+
+    for (const contribution of ordered) {
+      if (contribution.outcome === "fully_helped") fullyHelped++;
+      if (contribution.outcome === "partially_helped") partiallyHelped++;
+      peopleAssisted += nonnegativeInteger(contribution.peopleHelped);
+      minutes += verifiedEmergencyMinutes(contribution);
+      const kind = (contribution.contributionType || "General Volunteer Assistance").trim();
+      byType.set(kind, (byType.get(kind) || 0) + 1);
     }
 
-    const statsRef =
-      doc(
-        db,
-        "volunteerStats",
-        user.uid,
-      );
+    return {
+      verifiedHelps: fullyHelped + partiallyHelped,
+      fullyHelped,
+      partiallyHelped,
+      peopleAssisted,
+      minutes,
+      ordered,
+      breakdown: [...byType.entries()].sort((a, b) => b[1] - a[1]),
+    };
+  }, [contributions]);
 
-    return onSnapshot(
-      statsRef,
+  const issuedCertificates = useMemo(() => certificates
+    .filter((item) => item.verificationStatus === "issued" && (
+      item.certificateType === "community_event_participation" ||
+      item.certificateType === "verified_volunteer_service"
+    ))
+    .sort((a, b) => toMillis(b.issuedAt || b.createdAt) - toMillis(a.issuedAt || a.createdAt)),
+  [certificates]);
 
-      (
-        snapshot,
-      ) => {
-        if (
-          snapshot.exists()
-        ) {
-          setEventStats(
-            snapshot.data() as EventStats,
-          );
-        } else {
-          setEventStats(
-            {},
-          );
-        }
+  const eventProgress = useMemo(() => {
+    const byId = new Map(events.map((item) => [item.id, item]));
+    const earned = new Set(issuedCertificates
+      .filter((item) => item.certificateType === "community_event_participation" && item.eventId)
+      .map((item) => item.eventId));
 
-        setEventStatsLoading(
-          false,
-        );
-      },
+    // One event is counted only once, even if an old dataset contains duplicates.
+    const seen = new Set<string>();
+    const result: EventProgress[] = [];
+    for (const participation of participations) {
+      if (participation.status !== "joined" || !participation.eventId || seen.has(participation.eventId)) continue;
+      const event = byId.get(participation.eventId);
+      if (!event || event.publicationStatus !== "published") continue;
+      seen.add(participation.eventId);
+      const minutes = verifiedEventMinutes(participation);
+      const completedAndVerified = event.status === "completed" && participation.attendanceVerified === true;
+      result.push({
+        participation,
+        event,
+        verifiedMinutes: minutes,
+        completedAndVerified,
+        hasIssuedCertificate: earned.has(event.id),
+      });
+    }
+    return result.sort((a, b) => (b.event.date || "").localeCompare(a.event.date || ""));
+  }, [events, participations, issuedCertificates]);
 
-      (
-        problem,
-      ) => {
-        console.error(
-          "volunteerStats listener failed",
-          problem,
-        );
+  const community = useMemo(() => ({
+    joinedEvents: eventProgress.length,
+    completedEvents: eventProgress.filter((item) => item.completedAndVerified).length,
+    verifiedMinutes: eventProgress.reduce((sum, item) => sum + item.verifiedMinutes, 0),
+    communityCertificates: issuedCertificates.filter((item) => item.certificateType === "community_event_participation").length,
+    emergencyCertificates: issuedCertificates.filter((item) => item.certificateType === "verified_volunteer_service").length,
+  }), [eventProgress, issuedCertificates]);
 
-        // Event statistics are secondary.
-        // Emergency impact can still render.
-        setEventStats(
-          {},
-        );
-
-        setEventStatsLoading(
-          false,
-        );
-      },
-    );
-  }, [
-    user?.uid,
-  ]);
-
-  const impact =
-    useMemo(
-      () => {
-        let fullVerifiedHelps =
-          0;
-
-        let partialVerifiedHelps =
-          0;
-
-        let peopleHelped =
-          0;
-
-        let verifiedServiceMinutes =
-          0;
-
-        const typeCounts =
-          new Map<
-            string,
-            number
-          >();
-
-        contributions.forEach(
-          (
-            contribution,
-          ) => {
-            if (
-              contribution.outcome ===
-              "fully_helped"
-            ) {
-              fullVerifiedHelps +=
-                1;
-            }
-
-            if (
-              contribution.outcome ===
-              "partially_helped"
-            ) {
-              partialVerifiedHelps +=
-                1;
-            }
-
-            peopleHelped +=
-              Math.max(
-                0,
-
-                Math.round(
-                  Number(
-                    contribution.peopleHelped ||
-                      0,
-                  ),
-                ),
-              );
-
-            verifiedServiceMinutes +=
-              calculateServiceMinutes(
-                contribution,
-              );
-
-            const type =
-              String(
-                contribution.contributionType ||
-                  "General Volunteer Assistance",
-              ).trim();
-
-            typeCounts.set(
-              type,
-
-              (
-                typeCounts.get(
-                  type,
-                ) || 0
-              ) + 1,
-            );
-          },
-        );
-
-        const contributionTypes =
-          [
-            ...typeCounts.entries(),
-          ]
-
-            .map(
-              (
-                [
-                  type,
-                  count,
-                ],
-              ) => ({
-                type,
-                count,
-              }),
-            )
-
-            .sort(
-              (
-                left,
-                right,
-              ) => {
-                if (
-                  right.count !==
-                  left.count
-                ) {
-                  return (
-                    right.count -
-                    left.count
-                  );
-                }
-
-                return left.type.localeCompare(
-                  right.type,
-                );
-              },
-            );
-
-        return {
-          verifiedHelps:
-            fullVerifiedHelps +
-            partialVerifiedHelps,
-
-          fullVerifiedHelps,
-
-          partialVerifiedHelps,
-
-          peopleHelped,
-
-          verifiedServiceMinutes,
-
-          contributionTypes,
-        };
-      },
-
-      [
-        contributions,
-      ],
-    );
-
-  if (
-    loading ||
-    contributionsLoading ||
-    eventStatsLoading
-  ) {
+  if (loading || (userId && Object.values(sourceLoading).some(Boolean))) {
     return (
-      <View
-        style={
-          styles.loadingScreen
-        }
-      >
-        <ActivityIndicator
-          size="large"
-          color="#087F78"
-        />
-
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Loading your verified
-          volunteer impact…
-        </Text>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color={GREEN} />
+        <Text style={styles.loadingText}>Loading your volunteer progress…</Text>
       </View>
     );
   }
 
-  if (
-    !user ||
-    !profile ||
-    !isApprovedProfile(
-      profile,
-    )
-  ) {
+  if (!user || !profile || !isApprovedProfile(profile)) {
     return (
-      <View
-        style={
-          styles.centerCard
-        }
-      >
-        <Text
-          style={
-            styles.centerTitle
-          }
-        >
-          Approved account required
-        </Text>
-
-        <Text
-          style={
-            styles.centerText
-          }
-        >
-          Sign in with an approved
-          VolunServe account to view
-          your volunteer impact.
-        </Text>
+      <View style={styles.accessCard}>
+        <Text style={styles.accessTitle}>Approved account required</Text>
+        <Text style={styles.accessText}>Sign in with an approved VolunServe account to view your verified volunteer progress.</Text>
       </View>
     );
   }
+
+  const eventDataAvailable = !sourceErrors.events && !sourceErrors.participations;
+  const certificatesAvailable = !sourceErrors.certificates;
+  const emergencyAvailable = !sourceErrors.contributions;
+  const errors = Object.values(sourceErrors).filter(Boolean);
 
   return (
-    <ScrollView
-      style={
-        styles.screen
-      }
-      contentContainerStyle={
-        styles.container
-      }
-    >
-      <View
-        style={
-          styles.header
-        }
-      >
-        <Text
-          style={
-            styles.eyebrow
-          }
-        >
-          VERIFIED SERVICE RECORD
-        </Text>
-
-        <Text
-          style={
-            styles.title
-          }
-        >
-          My Volunteer Impact
-        </Text>
-
-        <Text
-          style={
-            styles.subtitle
-          }
-        >
-          Emergency contributions
-          appear here only after the
-          resident confirms that
-          assistance was actually
-          provided.
-        </Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, mobile && styles.containerMobile]}>
+      <View style={styles.hero}>
+        <View style={styles.heroCopy}>
+          <View style={styles.eyebrowRow}>
+            <Ionicons name="ribbon-outline" size={16} color={GREEN} />
+            <Text style={styles.eyebrow}>VOLUNSERVE · VERIFIED SERVICE RECORD</Text>
+          </View>
+          <Text style={[styles.heroTitle, mobile && styles.heroTitleMobile]}>My Progress</Text>
+          <Text style={styles.heroDescription}>
+            See the difference you make. Attendance, service hours, completed activities and earned certificates update from your verified VolunServe records.
+          </Text>
+        </View>
+        <View style={styles.heroSymbol}>
+          <Ionicons name="medal-outline" size={49} color={GREEN} />
+        </View>
       </View>
 
-      {!!error && (
-        <View
-          style={
-            styles.errorBox
-          }
-        >
-          <Text
-            style={
-              styles.errorText
-            }
-          >
-            {error}
-          </Text>
+      {errors.length > 0 && (
+        <View style={styles.errorPanel}>
+          <Text style={styles.errorHeading}>Some records could not be loaded</Text>
+          {errors.map((error, index) => <Text key={`${index}-${error}`} style={styles.errorText}>{error}</Text>)}
+          <Text style={styles.errorNote}>Unavailable figures are shown as —, not as zero. Your Firestore data has not been changed.</Text>
         </View>
       )}
 
-      <View
-        style={
-          styles.statsGrid
-        }
-      >
-        <View
-          style={
-            styles.statCard
-          }
-        >
-          <Text
-            style={
-              styles.statLabel
-            }
-          >
-            VERIFIED HELPS
-          </Text>
-
-          <Text
-            style={
-              styles.statValue
-            }
-          >
-            {
-              impact.verifiedHelps
-            }
-          </Text>
-
-          <Text
-            style={
-              styles.statHint
-            }
-          >
-            {
-              impact.fullVerifiedHelps
-            }{" "}
-            full ·{" "}
-            {
-              impact.partialVerifiedHelps
-            }{" "}
-            partial
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.statCard
-          }
-        >
-          <Text
-            style={
-              styles.statLabel
-            }
-          >
-            EMERGENCY SERVICE
-          </Text>
-
-          <Text
-            style={
-              styles.statValue
-            }
-          >
-            {formatDuration(
-              impact.verifiedServiceMinutes,
-            )}
-          </Text>
-
-          <Text
-            style={
-              styles.statHint
-            }
-          >
-            Based on verified response
-            activity
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.statCard
-          }
-        >
-          <Text
-            style={
-              styles.statLabel
-            }
-          >
-            PEOPLE ASSISTED
-          </Text>
-
-          <Text
-            style={
-              styles.statValue
-            }
-          >
-            {
-              impact.peopleHelped
-            }
-          </Text>
-
-          <Text
-            style={
-              styles.statHint
-            }
-          >
-            From resident-confirmed
-            missions
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.statCard
-          }
-        >
-          <Text
-            style={
-              styles.statLabel
-            }
-          >
-            EVENT SERVICE
-          </Text>
-
-          <Text
-            style={
-              styles.statValue
-            }
-          >
-            {Number(
-              eventStats.totalHours ||
-                0,
-            ).toFixed(
-              1,
-            )}{" "}
-            hrs
-          </Text>
-
-          <Text
-            style={
-              styles.statHint
-            }
-          >
-            {Number(
-              eventStats.totalEventsCompleted ||
-                0,
-            )}{" "}
-            completed community
-            event(s)
-          </Text>
-        </View>
+      <View style={styles.statsGrid}>
+        <StatCard
+          icon="time-outline" tint={GREEN} label="Community Service"
+          value={eventDataAvailable ? formatDuration(community.verifiedMinutes) : "—"}
+          subtitle="Admin-verified event attendance"
+        />
+        <StatCard
+          icon="checkmark-circle-outline" tint="#2479C6" label="Completed Events"
+          value={eventDataAvailable ? String(community.completedEvents) : "—"}
+          subtitle="Joined events with verified attendance"
+        />
+        <StatCard
+          icon="ribbon-outline" tint="#C28A1A" label="Certificates Earned"
+          value={certificatesAvailable ? String(issuedCertificates.length) : "—"}
+          subtitle="Issued, non-revoked certificates"
+        />
+        <StatCard
+          icon="heart-outline" tint="#8062BB" label="Verified Emergency Helps"
+          value={emergencyAvailable ? String(emergency.verifiedHelps) : "—"}
+          subtitle="Confirmed full or partial assistance"
+        />
       </View>
 
-      <View
-        style={
-          styles.infoNotice
-        }
-      >
-        <Text
-          style={
-            styles.infoNoticeTitle
-          }
-        >
-          Verified Contribution
-        </Text>
-
-        <Text
-          style={
-            styles.infoNoticeText
-          }
-        >
-          Completing an emergency
-          response does not
-          automatically count as
-          verified service. Full or
-          Partial resident
-          confirmation is required.
-          A Not Helped response goes
-          to Admin review instead.
-        </Text>
-      </View>
-
-      <View
-        style={
-          styles.card
-        }
-      >
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <View>
-            <Text
-              style={
-                styles.sectionTitle
-              }
-            >
-              Contribution breakdown
-            </Text>
-
-            <Text
-              style={
-                styles.sectionSubtitle
-              }
-            >
-              Verified emergency
-              assistance grouped by
-              service type.
-            </Text>
-          </View>
-        </View>
-
-        {impact.contributionTypes
-          .length === 0 ? (
-          <View
-            style={
-              styles.emptyState
-            }
-          >
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              No verified emergency
-              contributions yet
-            </Text>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              A completed emergency
-              response will appear
-              here after resident
-              confirmation.
-            </Text>
-          </View>
-        ) : (
-          impact.contributionTypes.map(
-            (
-              item,
-            ) => (
-              <View
-                key={
-                  item.type
-                }
-                style={
-                  styles.typeRow
-                }
-              >
-                <View
-                  style={
-                    styles.typeCopy
-                  }
-                >
-                  <Text
-                    style={
-                      styles.typeName
-                    }
-                  >
-                    {
-                      item.type
-                    }
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.typeHint
-                    }
-                  >
-                    Verified response
-                    contribution
-                  </Text>
-                </View>
-
-                <View
-                  style={
-                    styles.countBadge
-                  }
-                >
-                  <Text
-                    style={
-                      styles.countBadgeText
-                    }
-                  >
-                    {
-                      item.count
-                    }
-                  </Text>
-                </View>
+      <View style={styles.card}>
+        <SectionHeading
+          title="Community Event Progress"
+          subtitle="Verified hours and the events you took part in."
+          icon="calendar-outline"
+          action={<TouchableOpacity style={styles.tertiaryButton} onPress={() => router.push("/(tabs)/community-events" as any)} accessibilityRole="button">
+            <Text style={styles.tertiaryText}>Browse Events</Text>
+            <Ionicons name="arrow-forward" size={15} color={GREEN} />
+          </TouchableOpacity>}
+        />
+        {eventDataAvailable ? (
+          <>
+            <View style={styles.communitySummary}>
+              <View style={styles.summaryMetric}>
+                <Text style={styles.summaryNumber}>{community.joinedEvents}</Text>
+                <Text style={styles.summaryLabel}>Joined Events</Text>
               </View>
-            ),
-          )
-        )}
-      </View>
-
-      <View
-        style={
-          styles.card
-        }
-      >
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <View>
-            <Text
-              style={
-                styles.sectionTitle
-              }
-            >
-              Verified contribution
-              history
-            </Text>
-
-            <Text
-              style={
-                styles.sectionSubtitle
-              }
-            >
-              Resident-confirmed
-              emergency assistance
-              records.
-            </Text>
-          </View>
-
-          <Text
-            style={
-              styles.recordCount
-            }
-          >
-            {
-              contributions.length
-            }{" "}
-            record
-            {contributions.length ===
-            1
-              ? ""
-              : "s"}
-          </Text>
-        </View>
-
-        {contributions.length ===
-        0 ? (
-          <View
-            style={
-              styles.emptyState
-            }
-          >
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              No history yet
-            </Text>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              Verified responses will
-              automatically appear in
-              this history after the
-              resident confirms
-              assistance.
-            </Text>
-          </View>
-        ) : (
-          contributions.map(
-            (
-              contribution,
-            ) => {
-              const serviceMinutes =
-                calculateServiceMinutes(
-                  contribution,
-                );
-
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryMetric}>
+                <Text style={styles.summaryNumber}>{community.completedEvents}</Text>
+                <Text style={styles.summaryLabel}>Verified Completions</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryMetric}>
+                <Text style={styles.summaryNumber}>{formatDuration(community.verifiedMinutes)}</Text>
+                <Text style={styles.summaryLabel}>Verified Attendance</Text>
+              </View>
+            </View>
+            {eventProgress.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="calendar-clear-outline" size={28} color="#9AB1B8" />
+                <Text style={styles.emptyTitle}>No joined community events yet</Text>
+                <Text style={styles.emptyDescription}>Join a published event to start building your participation history.</Text>
+              </View>
+            ) : eventProgress.map((item) => {
+              const verified = item.participation.attendanceVerified === true;
+              const status = item.hasIssuedCertificate
+                ? {label: "CERTIFICATE ISSUED", kind: "good" as const}
+                : item.completedAndVerified && item.verifiedMinutes < 30
+                  ? {label: "UNDER 30 MINUTES", kind: "waiting" as const}
+                  : item.completedAndVerified
+                    ? {label: "CERTIFICATE PENDING", kind: "waiting" as const}
+                    : verified
+                      ? {label: "ATTENDANCE VERIFIED", kind: "good" as const}
+                      : item.participation.checkedOutAt
+                        ? {label: "FOR VERIFICATION", kind: "waiting" as const}
+                        : item.participation.checkedInAt
+                          ? {label: "CHECKED IN", kind: "neutral" as const}
+                          : {label: "JOINED", kind: "neutral" as const};
               return (
-                <View
-                  key={
-                    contribution.id
-                  }
-                  style={
-                    styles.contributionCard
-                  }
-                >
-                  <View
-                    style={
-                      styles.contributionTop
-                    }
-                  >
-                    <View
-                      style={
-                        styles.contributionTitleBlock
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.contributionType
-                        }
-                      >
-                        {contribution.contributionType ||
-                          "General Volunteer Assistance"}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.verifiedDate
-                        }
-                      >
-                        Verified{" "}
-                        {formatDate(
-                          contribution.verifiedAt,
-                        )}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.outcomeBadge,
-
-                        contribution.outcome ===
-                          "partially_helped" &&
-                          styles.partialBadge,
-                      ]}
-                    >
-                      <Text
-                        style={
-                          styles.outcomeText
-                        }
-                      >
-                        {outcomeLabel(
-                          contribution.outcome,
-                        )}
-                      </Text>
-                    </View>
+                <View key={item.event.id} style={styles.historyRow}>
+                  <View style={styles.historyIcon}>
+                    <Ionicons name="leaf-outline" size={20} color={GREEN} />
                   </View>
-
-                  <Text
-                    style={
-                      styles.summary
-                    }
-                  >
-                    {contribution.contributionSummary ||
-                      "Verified assistance provided."}
-                  </Text>
-
-                  <View
-                    style={
-                      styles.metricsRow
-                    }
-                  >
-                    <View
-                      style={
-                        styles.metric
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.metricLabel
-                        }
-                      >
-                        PEOPLE ASSISTED
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.metricValue
-                        }
-                      >
-                        {Math.max(
-                          0,
-
-                          Number(
-                            contribution.peopleHelped ||
-                              0,
-                          ),
-                        )}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.metric
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.metricLabel
-                        }
-                      >
-                        SERVICE TIME
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.metricValue
-                        }
-                      >
-                        {formatDuration(
-                          serviceMinutes,
-                        )}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.metric
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.metricLabel
-                        }
-                      >
-                        CONFIRMATION
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.metricValue
-                        }
-                      >
-                        Resident
-                        verified
-                      </Text>
-                    </View>
+                  <View style={styles.historyCopy}>
+                    <Text style={styles.historyTitle}>{item.event.title || "Community Event"}</Text>
+                    <Text style={styles.historySub}>{formatEventDate(item.event.date)} · {item.event.barangay || item.event.location || "San Jose del Monte"}</Text>
+                    <Text style={styles.historyDetail}>{verified
+                      ? `${formatDuration(item.verifiedMinutes)} verified attendance${item.event.status === "completed" ? " · Event completed" : ""}`
+                      : "Attendance not verified yet"}</Text>
                   </View>
-
-                  {!!contribution.completionNotes && (
-                    <View
-                      style={
-                        styles.notesBox
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.notesLabel
-                        }
-                      >
-                        COMPLETION NOTE
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.notesText
-                        }
-                      >
-                        {
-                          contribution.completionNotes
-                        }
-                      </Text>
-                    </View>
-                  )}
-
-                  <Text
-                    style={
-                      styles.reference
-                    }
-                  >
-                    Contribution ID:{" "}
-                    {
-                      contribution.id
-                    }
-                  </Text>
+                  <StatusPill label={status.label} kind={status.kind} />
                 </View>
               );
-            },
-          )
-        )}
+            })}
+          </>
+        ) : <Text style={styles.dataUnavailable}>Community event progress is temporarily unavailable.</Text>}
+        <Text style={styles.sectionFootnote}>
+          Hours come from Admin-verified Time In/Out records only. Event completion and at least 30 verified minutes are required for automatic Community Event certificates. Verified service and certificate counts are kept separate to avoid double-counting.
+        </Text>
       </View>
 
-      <View
-        style={
-          styles.footerNotice
-        }
-      >
-        <Text
-          style={
-            styles.footerNoticeTitle
-          }
-        >
-          Certificate record
-        </Text>
+      <View style={styles.card}>
+        <SectionHeading
+          title="Certificates Earned"
+          subtitle="Automatically reflects the same records shown in My Certificates."
+          icon="ribbon-outline"
+          action={<TouchableOpacity style={styles.tertiaryButton} onPress={() => router.push("/(tabs)/certificate" as any)} accessibilityRole="button">
+            <Text style={styles.tertiaryText}>My Certificates</Text>
+            <Ionicons name="arrow-forward" size={15} color={GREEN} />
+          </TouchableOpacity>}
+        />
+        {certificatesAvailable ? (
+          <>
+            <View style={styles.certificateSummary}>
+              <View style={styles.certificateSummaryItem}>
+                <Ionicons name="calendar-outline" size={18} color={GREEN} />
+                <Text style={styles.certificateSummaryValue}>{community.communityCertificates}</Text>
+                <Text style={styles.certificateSummaryLabel}>Community Event</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.certificateSummaryItem}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#2479C6" />
+                <Text style={styles.certificateSummaryValue}>{community.emergencyCertificates}</Text>
+                <Text style={styles.certificateSummaryLabel}>Emergency Response</Text>
+              </View>
+            </View>
+            {issuedCertificates.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="ribbon-outline" size={28} color="#9AB1B8" />
+                <Text style={styles.emptyTitle}>No certificates issued yet</Text>
+                <Text style={styles.emptyDescription}>Eligible Community Event certificates will appear automatically after event completion and verified attendance.</Text>
+              </View>
+            ) : issuedCertificates.slice(0, 5).map((certificate) => (
+              <View key={certificate.id} style={styles.certificateRow}>
+                <View style={styles.historyIcon}><Ionicons name="document-text-outline" size={20} color={GREEN} /></View>
+                <View style={styles.historyCopy}>
+                  <Text style={styles.historyTitle}>{certificate.certificateType === "community_event_participation"
+                    ? certificate.eventTitle || "Community Event Certificate"
+                    : "Volunteer Service Certificate"}</Text>
+                  <Text style={styles.historySub}>Issued {formatDate(certificate.issuedAt || certificate.createdAt)}</Text>
+                  <Text style={styles.recordId} numberOfLines={1}>ID: {certificate.certificateId || certificate.id}</Text>
+                </View>
+                <StatusPill label="ISSUED" kind="good" />
+              </View>
+            ))}
+            {issuedCertificates.length > 5 && <Text style={styles.moreText}>Plus {issuedCertificates.length - 5} more certificate(s) in My Certificates.</Text>}
+          </>
+        ) : <Text style={styles.dataUnavailable}>Certificate records are temporarily unavailable.</Text>}
+      </View>
 
-        <Text
-          style={
-            styles.footerNoticeText
-          }
-        >
-          These verified contributions
-          will be used by the Admin
-          when reviewing and issuing
-          your Volunteer Service
-          Certificate.
+      <View style={styles.card}>
+        <SectionHeading
+          title="Verified Emergency Contributions"
+          subtitle="Resident-confirmed help is tracked separately from Community Events."
+          icon="heart-outline"
+        />
+        {emergencyAvailable ? (
+          <>
+            <View style={styles.emergencyStats}>
+              <View style={styles.emergencyStat}>
+                <Text style={styles.emergencyValue}>{emergency.verifiedHelps}</Text>
+                <Text style={styles.emergencyLabel}>Verified Helps</Text>
+                <Text style={styles.emergencyHint}>{emergency.fullyHelped} full · {emergency.partiallyHelped} partial</Text>
+              </View>
+              <View style={styles.emergencyStat}>
+                <Text style={styles.emergencyValue}>{formatDuration(emergency.minutes)}</Text>
+                <Text style={styles.emergencyLabel}>Response Service</Text>
+                <Text style={styles.emergencyHint}>Verified contributions only</Text>
+              </View>
+              <View style={styles.emergencyStat}>
+                <Text style={styles.emergencyValue}>{emergency.peopleAssisted}</Text>
+                <Text style={styles.emergencyLabel}>People Assisted</Text>
+                <Text style={styles.emergencyHint}>Resident-confirmed</Text>
+              </View>
+            </View>
+            <Text style={styles.smallSectionTitle}>Contribution Breakdown</Text>
+            {emergency.breakdown.length === 0 ? (
+              <Text style={styles.emptyInline}>No verified emergency contributions yet.</Text>
+            ) : emergency.breakdown.map(([name, count]) => (
+              <View key={name} style={styles.breakdownRow}>
+                <Text style={styles.breakdownName}>{name}</Text>
+                <Text style={styles.breakdownCount}>{count}</Text>
+              </View>
+            ))}
+            <Text style={[styles.smallSectionTitle, {marginTop: 22}]}>Verified Contribution History</Text>
+            {emergency.ordered.length === 0 ? (
+              <Text style={styles.emptyInline}>Your history will appear after a resident confirms that help was provided.</Text>
+            ) : emergency.ordered.map((contribution) => (
+              <View key={contribution.id} style={styles.contributionCard}>
+                <View style={styles.contributionHeading}>
+                  <View style={styles.historyCopy}>
+                    <Text style={styles.historyTitle}>{contribution.contributionType || "General Volunteer Assistance"}</Text>
+                    <Text style={styles.historySub}>Verified {formatDate(contribution.verifiedAt)}</Text>
+                  </View>
+                  <StatusPill label={contribution.outcome === "fully_helped" ? "FULLY HELPED" : contribution.outcome === "partially_helped" ? "PARTIALLY HELPED" : "VERIFIED"} kind="good" />
+                </View>
+                <Text style={styles.contributionDescription}>{contribution.contributionSummary || "Verified assistance provided."}</Text>
+                <View style={styles.contributionMetrics}>
+                  <Text style={styles.metricText}><Text style={styles.metricEmphasis}>{nonnegativeInteger(contribution.peopleHelped)}</Text> people assisted</Text>
+                  <Text style={styles.metricText}><Text style={styles.metricEmphasis}>{formatDuration(verifiedEmergencyMinutes(contribution))}</Text> response time</Text>
+                </View>
+                {!!contribution.completionNotes && <Text style={styles.noteText}>Completion note: {contribution.completionNotes}</Text>}
+                <Text style={styles.recordId} numberOfLines={1}>Contribution ID: {contribution.id}</Text>
+              </View>
+            ))}
+          </>
+        ) : <Text style={styles.dataUnavailable}>Emergency contribution records are temporarily unavailable.</Text>}
+        <Text style={styles.sectionFootnote}>
+          Emergency response work counts only when verified through the resident-confirmation process. Certificates for emergency service follow their separate issuance workflow.
         </Text>
       </View>
     </ScrollView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor:
-        "#F4F7FA",
-    },
-
-    container: {
-      width: "100%",
-      maxWidth: 1120,
-      alignSelf: "center",
-      padding: 24,
-      paddingBottom: 60,
-    },
-
-    loadingScreen: {
-      flex: 1,
-      justifyContent:
-        "center",
-      alignItems: "center",
-      backgroundColor:
-        "#F4F7FA",
-      gap: 10,
-    },
-
-    loadingText: {
-      color: "#64748B",
-      fontSize: 13,
-    },
-
-    centerCard: {
-      margin: 24,
-      padding: 24,
-      borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#DCE5EA",
-    },
-
-    centerTitle: {
-      color: "#102A3A",
-      fontSize: 20,
-      fontWeight: "900",
-    },
-
-    centerText: {
-      marginTop: 7,
-      color: "#64748B",
-      lineHeight: 20,
-    },
-
-    header: {
-      marginBottom: 18,
-    },
-
-    eyebrow: {
-      color: "#087F78",
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 1.3,
-    },
-
-    title: {
-      marginTop: 5,
-      color: "#102A3A",
-      fontSize: 30,
-      lineHeight: 36,
-      fontWeight: "900",
-    },
-
-    subtitle: {
-      marginTop: 6,
-      maxWidth: 760,
-      color: "#64748B",
-      fontSize: 13,
-      lineHeight: 20,
-    },
-
-    errorBox: {
-      marginBottom: 14,
-      padding: 12,
-      borderRadius: 11,
-      backgroundColor:
-        "#FFF1F1",
-      borderWidth: 1,
-      borderColor:
-        "#F1BEBE",
-    },
-
-    errorText: {
-      color: "#A83232",
-      fontSize: 11.5,
-      fontWeight: "700",
-      lineHeight: 18,
-    },
-
-    statsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 12,
-      marginBottom: 16,
-    },
-
-    statCard: {
-      flexGrow: 1,
-      flexBasis: 220,
-      minWidth: 205,
-      padding: 16,
-      borderRadius: 15,
-      borderWidth: 1,
-      borderColor:
-        "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
-    },
-
-    statLabel: {
-      color: "#7D919D",
-      fontSize: 9,
-      fontWeight: "900",
-      letterSpacing: 0.8,
-    },
-
-    statValue: {
-      marginTop: 7,
-      color: "#102A3A",
-      fontSize: 25,
-      fontWeight: "900",
-    },
-
-    statHint: {
-      marginTop: 4,
-      color: "#64748B",
-      fontSize: 10.5,
-      lineHeight: 16,
-    },
-
-    infoNotice: {
-      marginBottom: 16,
-      padding: 14,
-      borderRadius: 13,
-      backgroundColor:
-        "#EDF8F5",
-      borderWidth: 1,
-      borderColor:
-        "#CAE5DE",
-    },
-
-    infoNoticeTitle: {
-      color: "#08786F",
-      fontSize: 13,
-      fontWeight: "900",
-    },
-
-    infoNoticeText: {
-      marginTop: 5,
-      color: "#4F6D70",
-      fontSize: 11.5,
-      lineHeight: 18,
-    },
-
-    card: {
-      marginBottom: 16,
-      padding: 18,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor:
-        "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
-    },
-
-    sectionHeader: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "flex-start",
-      gap: 10,
-      marginBottom: 12,
-    },
-
-    sectionTitle: {
-      color: "#173748",
-      fontSize: 16,
-      fontWeight: "900",
-    },
-
-    sectionSubtitle: {
-      marginTop: 3,
-      color: "#7A8E99",
-      fontSize: 10.5,
-      lineHeight: 16,
-    },
-
-    recordCount: {
-      color: "#08786F",
-      fontSize: 10.5,
-      fontWeight: "900",
-    },
-
-    emptyState: {
-      paddingVertical: 18,
-      alignItems: "center",
-    },
-
-    emptyTitle: {
-      color: "#405965",
-      fontSize: 13,
-      fontWeight: "800",
-    },
-
-    emptyText: {
-      marginTop: 5,
-      maxWidth: 500,
-      textAlign: "center",
-      color: "#7A8E99",
-      fontSize: 11,
-      lineHeight: 17,
-    },
-
-    typeRow: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "center",
-      paddingVertical: 11,
-      borderBottomWidth:
-        StyleSheet.hairlineWidth,
-      borderBottomColor:
-        "#E5ECEF",
-    },
-
-    typeCopy: {
-      flex: 1,
-    },
-
-    typeName: {
-      color: "#334E5C",
-      fontSize: 12,
-      fontWeight: "800",
-    },
-
-    typeHint: {
-      marginTop: 2,
-      color: "#899AA4",
-      fontSize: 9.5,
-    },
-
-    countBadge: {
-      minWidth: 34,
-      paddingHorizontal: 9,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor:
-        "#E7F5F2",
-      alignItems: "center",
-    },
-
-    countBadgeText: {
-      color: "#08786F",
-      fontSize: 11,
-      fontWeight: "900",
-    },
-
-    contributionCard: {
-      marginTop: 10,
-      padding: 14,
-      borderRadius: 13,
-      backgroundColor:
-        "#F9FBFC",
-      borderWidth: 1,
-      borderColor:
-        "#DFE8EC",
-    },
-
-    contributionTop: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "flex-start",
-      gap: 12,
-    },
-
-    contributionTitleBlock: {
-      flex: 1,
-    },
-
-    contributionType: {
-      color: "#173748",
-      fontSize: 14,
-      fontWeight: "900",
-    },
-
-    verifiedDate: {
-      marginTop: 3,
-      color: "#84959F",
-      fontSize: 9.5,
-    },
-
-    outcomeBadge: {
-      paddingHorizontal: 9,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor:
-        "#E7F6F2",
-    },
-
-    partialBadge: {
-      backgroundColor:
-        "#FFF3CF",
-    },
-
-    outcomeText: {
-      color: "#08786F",
-      fontSize: 8.5,
-      fontWeight: "900",
-      letterSpacing: 0.4,
-    },
-
-    summary: {
-      marginTop: 10,
-      color: "#405D6A",
-      fontSize: 12,
-      lineHeight: 18,
-    },
-
-    metricsRow: {
-      marginTop: 12,
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-    },
-
-    metric: {
-      flexGrow: 1,
-      flexBasis: 130,
-      minWidth: 125,
-      padding: 10,
-      borderRadius: 9,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E4EAED",
-    },
-
-    metricLabel: {
-      color: "#91A0A9",
-      fontSize: 8,
-      fontWeight: "900",
-      letterSpacing: 0.5,
-    },
-
-    metricValue: {
-      marginTop: 3,
-      color: "#334E5C",
-      fontSize: 11,
-      fontWeight: "800",
-    },
-
-    notesBox: {
-      marginTop: 10,
-      padding: 10,
-      borderRadius: 9,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E5ECEF",
-    },
-
-    notesLabel: {
-      color: "#8799A3",
-      fontSize: 8,
-      fontWeight: "900",
-      letterSpacing: 0.5,
-    },
-
-    notesText: {
-      marginTop: 4,
-      color: "#526B79",
-      fontSize: 10.5,
-      lineHeight: 16,
-    },
-
-    reference: {
-      marginTop: 10,
-      color: "#95A4AD",
-      fontSize: 8.5,
-    },
-
-    footerNotice: {
-      padding: 15,
-      borderRadius: 14,
-      backgroundColor:
-        "#F4F8FA",
-      borderWidth: 1,
-      borderColor:
-        "#DCE5EA",
-    },
-
-    footerNoticeTitle: {
-      color: "#173748",
-      fontSize: 12.5,
-      fontWeight: "900",
-    },
-
-    footerNoticeText: {
-      marginTop: 4,
-      color: "#64748B",
-      fontSize: 11,
-      lineHeight: 17,
-    },
-  });
+const styles = StyleSheet.create({
+  screen: {flex: 1, backgroundColor: "#F4F9F8"},
+  container: {width: "100%", maxWidth: 1250, alignSelf: "center", padding: 24, paddingBottom: 72},
+  containerMobile: {padding: 12, paddingBottom: 44},
+  loadingScreen: {flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#F4F9F8"},
+  loadingText: {fontSize: 13, color: MUTED},
+  accessCard: {margin: 24, backgroundColor: "#FFFFFF", borderRadius: 15, padding: 24, borderColor: BORDER, borderWidth: 1},
+  accessTitle: {fontSize: 20, color: NAVY, fontWeight: "900"},
+  accessText: {fontSize: 13, color: MUTED, lineHeight: 21, marginTop: 8},
+  hero: {backgroundColor: "#E9F8F4", borderWidth: 1, borderColor: "#D0EBE3", borderRadius: 20, padding: 25, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, overflow: "hidden"},
+  heroCopy: {flex: 1},
+  eyebrowRow: {flexDirection: "row", gap: 7, alignItems: "center"},
+  eyebrow: {fontWeight: "900", fontSize: 10, letterSpacing: 1, color: "#07776D"},
+  heroTitle: {fontSize: 32, fontWeight: "900", color: NAVY, marginTop: 13},
+  heroTitleMobile: {fontSize: 26},
+  heroDescription: {color: "#53747D", lineHeight: 21, fontSize: 12.5, marginTop: 7, maxWidth: 735},
+  heroSymbol: {width: 90, height: 90, borderRadius: 45, backgroundColor: "#D2EFE6", alignItems: "center", justifyContent: "center", marginLeft: 10},
+  errorPanel: {borderRadius: 14, backgroundColor: "#FFF4F0", padding: 16, borderWidth: 1, borderColor: "#F4CCC1", marginBottom: 16},
+  errorHeading: {fontWeight: "900", fontSize: 13, color: "#A53C28", marginBottom: 6},
+  errorText: {fontSize: 11, color: "#A53C28", lineHeight: 17},
+  errorNote: {fontSize: 10, color: "#9A5A4B", marginTop: 6},
+  statsGrid: {flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16},
+  statCard: {backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: BORDER, flexGrow: 1, flexBasis: 215, minWidth: 167, padding: 17},
+  statIconWrap: {width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 13, marginBottom: 12},
+  statValue: {fontSize: 25, fontWeight: "900", color: NAVY},
+  statLabel: {fontSize: 12.5, fontWeight: "900", color: NAVY, marginTop: 3},
+  statHint: {color: MUTED, fontSize: 10, lineHeight: 15, marginTop: 5},
+  card: {padding: 20, borderRadius: 18, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: BORDER, marginBottom: 17},
+  sectionHeading: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 17},
+  sectionIcon: {height: 42, width: 42, borderRadius: 12, backgroundColor: "#E7F6F2", alignItems: "center", justifyContent: "center"},
+  sectionHeadingCopy: {flex: 1, minWidth: 145},
+  sectionTitle: {fontWeight: "900", color: NAVY, fontSize: 18},
+  sectionSubtitle: {color: MUTED, fontSize: 10.5, marginTop: 4, lineHeight: 15},
+  tertiaryButton: {flexDirection: "row", alignItems: "center", paddingHorizontal: 9, paddingVertical: 9, gap: 6, borderRadius: 9, backgroundColor: "#EDF8F5"},
+  tertiaryText: {color: GREEN, fontWeight: "900", fontSize: 10.5},
+  communitySummary: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", backgroundColor: "#F1FAF7", padding: 15, borderRadius: 13, marginBottom: 14, gap: 6},
+  summaryMetric: {flex: 1, minWidth: 95, alignItems: "center"},
+  summaryNumber: {fontSize: 20, fontWeight: "900", color: GREEN},
+  summaryLabel: {fontSize: 10, color: "#5B7480", textAlign: "center", marginTop: 4},
+  summaryDivider: {width: 1, height: 37, backgroundColor: "#D4E9E3", marginHorizontal: 5},
+  historyRow: {flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER, flexWrap: "wrap"},
+  historyIcon: {width: 46, height: 46, borderRadius: 12, backgroundColor: "#E7F6F2", justifyContent: "center", alignItems: "center"},
+  historyCopy: {flex: 1, minWidth: 150},
+  historyTitle: {fontWeight: "900", color: NAVY, fontSize: 13},
+  historySub: {fontSize: 10.5, color: MUTED, lineHeight: 16, marginTop: 4},
+  historyDetail: {fontSize: 10.5, fontWeight: "700", color: GREEN, marginTop: 4},
+  pill: {borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, alignSelf: "flex-start"},
+  pillGood: {backgroundColor: "#DDF6E9"},
+  pillWaiting: {backgroundColor: "#FFF2D6"},
+  pillNeutral: {backgroundColor: "#EEF3F7"},
+  pillText: {fontSize: 9, fontWeight: "900", letterSpacing: 0.2},
+  pillTextGood: {color: "#078566"},
+  pillTextWaiting: {color: "#987018"},
+  pillTextNeutral: {color: "#5B7891"},
+  sectionFootnote: {color: "#718996", fontSize: 10.5, lineHeight: 17, marginTop: 15},
+  emptyState: {alignItems: "center", paddingVertical: 22, paddingHorizontal: 13},
+  emptyTitle: {fontSize: 13, fontWeight: "900", color: NAVY, marginTop: 11},
+  emptyDescription: {fontSize: 11, lineHeight: 17, textAlign: "center", color: MUTED, marginTop: 6},
+  dataUnavailable: {color: MUTED, paddingVertical: 14, textAlign: "center", fontSize: 12},
+  certificateSummary: {flexDirection: "row", alignItems: "center", flexWrap: "wrap", backgroundColor: "#F1FAF7", borderRadius: 13, padding: 13, marginBottom: 12},
+  certificateSummaryItem: {flexGrow: 1, flexBasis: 125, alignItems: "center", gap: 3},
+  certificateSummaryValue: {fontSize: 19, fontWeight: "900", color: NAVY},
+  certificateSummaryLabel: {fontSize: 10, textAlign: "center", color: MUTED},
+  certificateRow: {flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER, flexWrap: "wrap"},
+  recordId: {fontSize: 9.5, color: "#8799A4", marginTop: 5},
+  moreText: {fontSize: 10.5, color: GREEN, fontWeight: "700", marginTop: 12},
+  emergencyStats: {flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20},
+  emergencyStat: {flexGrow: 1, flexBasis: 170, padding: 15, borderRadius: 12, borderWidth: 1, borderColor: BORDER, backgroundColor: "#F8FBFA"},
+  emergencyValue: {fontSize: 20, fontWeight: "900", color: NAVY},
+  emergencyLabel: {fontSize: 12, fontWeight: "900", color: NAVY, marginTop: 5},
+  emergencyHint: {fontSize: 10, color: MUTED, marginTop: 4},
+  smallSectionTitle: {fontSize: 14, fontWeight: "900", color: NAVY, marginBottom: 10},
+  emptyInline: {fontSize: 11, color: MUTED, lineHeight: 18, marginBottom: 6},
+  breakdownRow: {flexDirection: "row", justifyContent: "space-between", gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER},
+  breakdownName: {fontSize: 11.5, color: "#385363", flex: 1},
+  breakdownCount: {fontSize: 11.5, fontWeight: "900", color: GREEN},
+  contributionCard: {padding: 15, borderRadius: 12, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: BORDER, marginBottom: 11},
+  contributionHeading: {flexDirection: "row", gap: 10, flexWrap: "wrap", alignItems: "center"},
+  contributionDescription: {fontSize: 11.5, color: "#526C79", marginTop: 11, lineHeight: 19},
+  contributionMetrics: {flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 10},
+  metricText: {fontSize: 10.5, color: MUTED},
+  metricEmphasis: {fontWeight: "900", color: NAVY},
+  noteText: {fontSize: 10, color: "#526C79", marginTop: 10, lineHeight: 16},
+});

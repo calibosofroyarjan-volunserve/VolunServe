@@ -2,14 +2,17 @@ import {
   collection,
   doc,
   getDocFromServer,
+  getDocs,
+  query,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 import React, { useEffect, useRef, useState } from "react";
 
-import { db } from "../../lib/firebase";
-import { isApprovedProfile } from "../../lib/firebaseAuth";
-import { useUserSession } from "../../lib/useUserSession";
+import { db } from "../lib/firebase";
+import { isApprovedProfile } from "../lib/firebaseAuth";
+import { useUserSession } from "../lib/useUserSession";
 
 type Pin = {
   latitude: number;
@@ -234,38 +237,12 @@ const assistanceOptions = [
   "Transport / Vehicle",
   "Medical Assistance",
   "Search and Rescue",
-  "Home Repair",
   "Clearing / Heavy Lifting",
   "Relief / Goods Delivery",
   "Safety / Welfare Check",
   "Other",
 ];
 
-const skillOptions = [
-  "General Volunteer Assistance",
-  "Driver / Transport",
-  "First Aid",
-  "Medical Assistance",
-  "Search and Rescue",
-  "Carpentry",
-  "Electrical",
-  "Plumbing",
-  "Clearing / Heavy Lifting",
-  "Community Coordination",
-  "Other",
-];
-
-const goodsOptions = [
-  "No Goods Needed",
-  "Drinking Water",
-  "Food Packs",
-  "Medicine / First Aid Supplies",
-  "Blankets / Clothing",
-  "Hygiene Kits",
-  "Baby Supplies",
-  "Construction / Repair Materials",
-  "Other",
-];
 
 const categoryOptions = [
   "Flood",
@@ -294,12 +271,150 @@ const toggleValue = (
   );
 };
 
+const deriveRequiredSkills = (
+  assistanceTypes: string[]
+) => {
+  const skills = new Set<string>();
+
+  assistanceTypes.forEach((item) => {
+    switch (item) {
+      case "Evacuation":
+        skills.add("Community Coordination");
+        skills.add("General Volunteer Assistance");
+        break;
+
+      case "Transport / Vehicle":
+        skills.add("Driver / Transport");
+        break;
+
+      case "Medical Assistance":
+        skills.add("First Aid");
+        skills.add("Medical Assistance");
+        break;
+
+      case "Search and Rescue":
+        skills.add("Search and Rescue");
+        break;
+
+      case "Clearing / Heavy Lifting":
+        skills.add("Clearing / Heavy Lifting");
+        break;
+
+      case "Relief / Goods Delivery":
+        skills.add("Community Coordination");
+        skills.add("General Volunteer Assistance");
+        break;
+
+      case "Safety / Welfare Check":
+        skills.add("General Volunteer Assistance");
+        break;
+
+      default:
+        skills.add("General Volunteer Assistance");
+        break;
+    }
+  });
+
+  if (skills.size === 0) {
+    skills.add("General Volunteer Assistance");
+  }
+
+  return Array.from(skills);
+};
+
+const safeText = (
+  value: unknown,
+  maxLength: number
+) =>
+  String(value || "")
+    .trim()
+    .slice(0, maxLength);
+
 const evidenceType = (file: File): "image" | "video" =>
   file.type.startsWith("video/") ? "video" : "image";
+
+type DuplicateBlock = {
+  caseId: string;
+  status: string;
+  category: string;
+  reason: "active" | "cooldown";
+  remainingMs: number;
+};
+
+const PRODUCTION_DUPLICATE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const DEVELOPMENT_DUPLICATE_COOLDOWN_MS = 2 * 60 * 1000;
+const LOCAL_DEVELOPMENT =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const DUPLICATE_COOLDOWN_MS = LOCAL_DEVELOPMENT
+  ? DEVELOPMENT_DUPLICATE_COOLDOWN_MS
+  : PRODUCTION_DUPLICATE_COOLDOWN_MS;
+const DUPLICATE_COOLDOWN_LABEL = LOCAL_DEVELOPMENT
+  ? "2-minute testing cooldown"
+  : "24-hour cooldown";
+const DUPLICATE_RADIUS_METERS = 500;
+const ACTIVE_CASE_STATUSES = new Set([
+  "reported",
+  "under_review",
+  "validated",
+  "assigned",
+  "accepted",
+  "responding",
+  "in_progress",
+  "on_site",
+]);
+
+const normalizeIncidentText = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const timestampToMillis = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return value;
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  return 0;
+};
+
+const distanceMetersBetween = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+) => {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+const formatRemainingCooldown = (remainingMs: number) => {
+  const totalMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes} min`;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+};
 
 export default function WebDisasterReport() {
   const { user, profile, loading } = useUserSession();
   const profileData: any = profile || {};
+
+  const identityVerified =
+    profileData.identityVerified === true ||
+    profileData.identityStatus === "verified";
+
+  const reporterLabel =
+    identityVerified
+      ? "Verified Resident"
+      : "Basic Account · Unverified Reporter";
 
   const [pin, setPin] = useState<Pin | null>(null);
   const [latitude, setLatitude] = useState("");
@@ -310,14 +425,13 @@ export default function WebDisasterReport() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
 
   const [assistanceTypes, setAssistanceTypes] = useState<string[]>([]);
-  const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
-  const [neededGoods, setNeededGoods] = useState<string[]>([]);
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [progress, setProgress] = useState("");
   const [success, setSuccess] = useState("");
+  const [duplicateBlock, setDuplicateBlock] = useState<DuplicateBlock | null>(null);
 
   const frame = useRef<HTMLIFrameElement>(null);
   const lock = useRef(false);
@@ -524,7 +638,7 @@ export default function WebDisasterReport() {
 
     if (!user || !profile || !isApprovedProfile(profile)) {
       setError(
-        "Sign in with an approved resident account before requesting assistance."
+        "Sign in with your VolunServe account before submitting an emergency report."
       );
       return;
     }
@@ -548,21 +662,15 @@ export default function WebDisasterReport() {
       return;
     }
 
-    if (requiredSkills.length === 0) {
-      setError(
-        "Select at least one required responder skill or General Volunteer Assistance."
-      );
-      return;
-    }
-
     const form = new FormData(event.currentTarget);
     const value = (key: string) =>
       String(form.get(key) || "").trim();
 
     const affectedPeople = Number(value("affectedPeople"));
+    const category = value("category");
 
     if (
-      value("title").length < 3 ||
+      category.length < 2 ||
       value("details").length < 10 ||
       value("location").length < 3 ||
       !Number.isInteger(affectedPeople) ||
@@ -582,53 +690,161 @@ export default function WebDisasterReport() {
     }
 
     const contactNumber =
-      String(profileData.phoneNumber || profileData.phone || "").trim();
+      safeText(
+        profileData.phoneNumber ||
+          profileData.phone ||
+          user.phoneNumber ||
+          "",
+        30
+      );
 
-    if (!contactNumber) {
+    if (contactNumber.length < 8) {
       setError(
         "Your account has no saved contact number. Update it in Account Settings before requesting assistance."
       );
       return;
     }
 
-    const allGoods =
-      neededGoods.length > 0 ? neededGoods : ["No Goods Needed"];
-
     const otherAssistance = value("otherAssistance");
-    const otherSkill = value("otherSkill");
-    const otherGoods = value("otherGoods");
+
+    if (
+      assistanceTypes.includes("Other") &&
+      otherAssistance.length < 2
+    ) {
+      setError("Briefly describe the other assistance needed.");
+      return;
+    }
 
     const finalAssistanceTypes = assistanceTypes.map((item) =>
-      item === "Other" && otherAssistance
+      item === "Other"
         ? `Other: ${otherAssistance}`
         : item
     );
 
-    const finalRequiredSkills = requiredSkills.map((item) =>
-      item === "Other" && otherSkill
-        ? `Other: ${otherSkill}`
-        : item
-    );
+    const finalRequiredSkills =
+      deriveRequiredSkills(finalAssistanceTypes);
 
-    const finalNeededGoods = allGoods.map((item) =>
-      item === "Other" && otherGoods
-        ? `Other: ${otherGoods}`
-        : item
-    );
+    /*
+     * Current Firestore schema still requires neededGoods.
+     * Emergency reporting intentionally does not ask the resident
+     * for a detailed goods/material list. Admin can assess that later.
+     */
+    const finalNeededGoods = [
+      "To Be Assessed By Admin",
+    ];
 
     const needsSummary = [
       `Help: ${finalAssistanceTypes.join(", ")}`,
       `Skills: ${finalRequiredSkills.join(", ")}`,
-      `Goods: ${finalNeededGoods.join(", ")}`,
       value("needsNote")
         ? `Notes: ${value("needsNote")}`
         : "",
     ]
       .filter(Boolean)
-      .join(" | ");
+      .join(" | ")
+      .slice(0, 2500);
 
     lock.current = true;
     setBusy(true);
+    setDuplicateBlock(null);
+
+    // Anti-duplicate guard: do this BEFORE uploading evidence so the resident
+    // does not waste time/data on a report that should reuse an existing case.
+    try {
+      setProgress("Checking for an existing emergency report…");
+
+      const existingSnapshot = await getDocs(
+        query(
+          collection(db, "disasterCases"),
+          where("reporterUid", "==", user.uid)
+        )
+      );
+
+      const now = Date.now();
+      const currentAddress = normalizeIncidentText(value("location"));
+      let block: DuplicateBlock | null = null;
+
+      for (const existingDoc of existingSnapshot.docs) {
+        const data: any = existingDoc.data();
+        const existingCategory = normalizeIncidentText(data.category);
+        if (existingCategory !== normalizeIncidentText(category)) continue;
+
+        const existingLat = Number(data.latitude);
+        const existingLng = Number(data.longitude);
+        const hasExistingCoords =
+          Number.isFinite(existingLat) && Number.isFinite(existingLng);
+        const distance = hasExistingCoords
+          ? distanceMetersBetween(
+              { latitude: pin.latitude, longitude: pin.longitude },
+              { latitude: existingLat, longitude: existingLng }
+            )
+          : Number.POSITIVE_INFINITY;
+
+        const sameAddress =
+          currentAddress.length >= 3 &&
+          normalizeIncidentText(data.location) === currentAddress;
+        const sameIncidentArea =
+          sameAddress || distance <= DUPLICATE_RADIUS_METERS;
+
+        if (!sameIncidentArea) continue;
+
+        const status = normalizeIncidentText(data.status || "reported");
+
+        if (ACTIVE_CASE_STATUSES.has(status)) {
+          block = {
+            caseId: existingDoc.id,
+            status,
+            category: String(data.category || category),
+            reason: "active",
+            remainingMs: 0,
+          };
+          break;
+        }
+
+        if (["resolved", "closed", "cancelled"].includes(status)) {
+          const terminalAt =
+            timestampToMillis(data.closedAt) ||
+            timestampToMillis(data.resolvedAt) ||
+            timestampToMillis(data.updatedAt) ||
+            timestampToMillis(data.createdAt);
+          const elapsed = terminalAt > 0 ? now - terminalAt : Number.POSITIVE_INFINITY;
+          const remaining = DUPLICATE_COOLDOWN_MS - elapsed;
+
+          if (remaining > 0) {
+            block = {
+              caseId: existingDoc.id,
+              status,
+              category: String(data.category || category),
+              reason: "cooldown",
+              remainingMs: remaining,
+            };
+            break;
+          }
+        }
+      }
+
+      if (block) {
+        setDuplicateBlock(block);
+        setError(
+          block.reason === "active"
+            ? `You already have an active ${block.category} report for this area. Use the existing case instead of creating a duplicate.`
+            : `A similar ${block.category} report in this area is still within the ${DUPLICATE_COOLDOWN_LABEL} (${formatRemainingCooldown(block.remainingMs)} remaining).`
+        );
+        setProgress("");
+        lock.current = false;
+        setBusy(false);
+        return;
+      }
+    } catch (duplicateCheckError) {
+      console.error("duplicate emergency check", duplicateCheckError);
+      setError(
+        "VolunServe could not verify duplicate-report protection right now. Please check your connection and try again before submitting."
+      );
+      setProgress("");
+      lock.current = false;
+      setBusy(false);
+      return;
+    }
 
     if (
       !attempt.current ||
@@ -661,33 +877,48 @@ export default function WebDisasterReport() {
       await setDoc(caseRef, {
         reporterUid: user.uid,
         reporterName:
-          profileData.fullName ||
-          user.displayName ||
-          "Resident",
-        reporterEmail: user.email || "",
-        reporterBarangay: profileData.barangay || "",
+          safeText(
+            profileData.fullName ||
+              user.displayName ||
+              "Resident",
+            120
+          ),
+        reporterEmail:
+          safeText(user.email || "", 160),
+        reporterBarangay:
+          safeText(profileData.barangay || "", 120),
         reporterAddress:
-          profileData.address ||
-          profileData.fullAddress ||
-          "",
+          safeText(
+            profileData.address ||
+              profileData.fullAddress ||
+              "",
+            240
+          ),
         contactNumber,
         emergencyContact:
-          profileData.emergencyContact ||
-          profileData.emergencyContactNumber ||
-          "",
+          safeText(
+            profileData.emergencyContact ||
+              profileData.emergencyContactNumber ||
+              "",
+            30
+          ),
         reporterProfilePictureUrl:
-          profileData.reporterProfilePictureUrl ||
-          profileData.profilePictureUrl ||
-          profileData.profilePhotoUrl ||
-          profileData.photoURL ||
-          user.photoURL ||
-          "",
+          safeText(
+            profileData.reporterProfilePictureUrl ||
+              profileData.profilePictureUrl ||
+              profileData.profilePhotoUrl ||
+              profileData.photoURL ||
+              user.photoURL ||
+              "",
+            2048
+          ),
 
         source: "resident_emergency_assistance",
         requestKind: "emergency_assistance",
 
-        title: value("title"),
-        category: value("category"),
+        title:
+          `${category} emergency report`.slice(0, 120),
+        category,
         severity: value("severity"),
 
         // Keep the existing operational case pipeline compatible.
@@ -720,6 +951,13 @@ export default function WebDisasterReport() {
 
         verification: {
           accountApproved: true,
+          reporterTrust:
+            identityVerified
+              ? "verified_resident"
+              : "basic_account",
+          identityVerified,
+          identityStatus:
+            profileData.identityStatus || "basic",
           emailVerified: Boolean(user.emailVerified),
           phoneOnFile: Boolean(contactNumber),
           gpsProvided: true,
@@ -794,48 +1032,71 @@ export default function WebDisasterReport() {
     <main className="vs-report">
       <style>{css}</style>
 
-      <header className="page-head">
+      <header className="page-head premium-head">
         <div>
           <span className="eyebrow">
-            COMMUNITY RESPONSE · SAN JOSE DEL MONTE
+            VOLUNSERVE · EMERGENCY RESPONSE
           </span>
-          <h1>Request emergency assistance</h1>
+          <h1>Report an Emergency</h1>
           <p>
-            Tell the response team what happened, what help is needed,
-            and where responders should go.
+            Submit the incident, exact response location, and evidence so the
+            LGU can verify and coordinate the appropriate response.
           </p>
         </div>
 
         <div className="verification-badge">
-          <strong>Admin verification required</strong>
+          <strong>LGU response verification</strong>
           <span>
-            No volunteer is dispatched until the request is reviewed.
+            Reports are reviewed for severity, evidence, and responder matching.
+            Critical incidents remain visible to the LGU while verification continues.
           </span>
         </div>
       </header>
+
+      {!success && user && isApprovedProfile(profile) && (
+        <section className="workflow-strip" aria-label="Emergency report workflow">
+          <div className="workflow-step active">
+            <i>1</i>
+            <span><strong>Emergency details</strong><small>Type, urgency, situation</small></span>
+          </div>
+          <div className="workflow-line" />
+          <div className="workflow-step">
+            <i>2</i>
+            <span><strong>Location & evidence</strong><small>GPS, photo, optional video</small></span>
+          </div>
+          <div className="workflow-line" />
+          <div className="workflow-step">
+            <i>3</i>
+            <span><strong>Review & submit</strong><small>Confirm accurate information</small></span>
+          </div>
+        </section>
+      )}
 
       {success ? (
         <section className="card success-card" role="status">
           <div className="success-icon">✓</div>
           <div>
-            <h2>Request submitted for verification</h2>
+            <h2>Emergency report received</h2>
             <p>
-              Admin will review your location, assistance details and
-              evidence before assigning a responder. You will be notified
-              when an assigned responder accepts the request.
+              The LGU can now review your severity, exact location, and evidence.
+              Keep the same case for updates and live tracking instead of submitting
+              a duplicate report.
             </p>
             <p>
               Reference: <strong>{success}</strong>
             </p>
-            <a href="/">Return to dashboard</a>
+            <div className="success-actions">
+              <a href={`/map-tracking?caseId=${encodeURIComponent(success)}`}>Track response</a>
+              <a href="/my-cases" className="secondary-link">View My Reports</a>
+            </div>
           </div>
         </section>
       ) : !user || !isApprovedProfile(profile) ? (
         <section className="card">
-          <h2>Approved account required</h2>
+          <h2>Sign in required</h2>
           <p>
-            Sign in and complete account approval before requesting
-            emergency assistance.
+            Basic Accounts and Verified Residents can submit emergency reports.
+            Sign in with your VolunServe account to continue.
           </p>
           <a href="/login">Go to sign in</a>
         </section>
@@ -848,6 +1109,7 @@ export default function WebDisasterReport() {
                 <strong>
                   {profileData.fullName || user.displayName || "Resident"}
                 </strong>
+                <span className="summary-trust">{reporterLabel}</span>
               </div>
               <div>
                 <span className="summary-label">CONTACT</span>
@@ -867,19 +1129,8 @@ export default function WebDisasterReport() {
             <div className="grid">
               <section className="card">
                 <h2>
-                  <span>01</span> What happened?
+                  <span>01</span> Emergency details
                 </h2>
-
-                <label>
-                  Request title
-                  <input
-                    name="title"
-                    required
-                    minLength={3}
-                    maxLength={120}
-                    placeholder="Example: Family needs evacuation after flooding"
-                  />
-                </label>
 
                 <div className="pair">
                   <label>
@@ -900,18 +1151,30 @@ export default function WebDisasterReport() {
                     </select>
                   </label>
 
-                  <label>
-                    Urgency
-                    <select
-                      name="severity"
-                      defaultValue="medium"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </label>
+                  <div className="severity-field">
+                    <span className="field-title">How urgent does it feel?</span>
+                    <div className="severity-grid">
+                      <label className="severity-option critical">
+                        <input type="radio" name="severity" value="critical" />
+                        <span><strong>Critical</strong><small>Immediate threat to life or safety</small></span>
+                      </label>
+                      <label className="severity-option urgent">
+                        <input type="radio" name="severity" value="medium" defaultChecked />
+                        <span><strong>Urgent</strong><small>Serious and needs quick response</small></span>
+                      </label>
+                      <label className="severity-option high">
+                        <input type="radio" name="severity" value="high" />
+                        <span><strong>High</strong><small>Important and time-sensitive</small></span>
+                      </label>
+                      <label className="severity-option standard">
+                        <input type="radio" name="severity" value="low" />
+                        <span><strong>Standard</strong><small>Non-critical response need</small></span>
+                      </label>
+                    </div>
+                    <small className="field-hint">
+                      The LGU verifies the final operational priority.
+                    </small>
+                  </div>
                 </div>
 
                 <label>
@@ -932,7 +1195,7 @@ export default function WebDisasterReport() {
                     name="details"
                     required
                     minLength={10}
-                    maxLength={4000}
+                    maxLength={2000}
                     rows={5}
                     placeholder="Describe what is happening, who is affected, and any immediate safety concern."
                   />
@@ -944,8 +1207,8 @@ export default function WebDisasterReport() {
                   <span>02</span> Exact response location
                 </h2>
                 <p className="section-copy">
-                  Pin the exact place where help is needed. This
-                  location is for Admin and the assigned responder.
+                  Use GPS or select the exact incident point. Exact coordinates stay
+                  private to the LGU and the authorized responder for this case.
                 </p>
 
                 <button
@@ -1049,7 +1312,7 @@ export default function WebDisasterReport() {
                     name="location"
                     required
                     minLength={3}
-                    maxLength={300}
+                    maxLength={240}
                     placeholder="Example: Block 4, Brgy. Muzon, near ..."
                   />
                 </label>
@@ -1058,7 +1321,7 @@ export default function WebDisasterReport() {
 
             <section className="card help-card">
               <h2>
-                <span>03</span> What help is needed?
+                <span>03</span> Response needs
               </h2>
 
               <div className="help-grid">
@@ -1101,105 +1364,27 @@ export default function WebDisasterReport() {
                   )}
                 </div>
 
-                <div>
-                  <h3>Required responder skills / service</h3>
+                <div className="auto-match-card">
+                  <h3>Responder matching</h3>
                   <p>
-                    This helps Admin choose the right volunteer.
+                    VolunServe derives the responder skills from the help
+                    you select. Admin reviews the final responder requirements.
                   </p>
-                  <div className="chip-grid">
-                    {skillOptions.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        className={
-                          requiredSkills.includes(item)
-                            ? "choice active"
-                            : "choice"
-                        }
-                        aria-pressed={requiredSkills.includes(item)}
-                        onClick={() =>
-                          toggleValue(
-                            requiredSkills,
-                            item,
-                            setRequiredSkills
-                          )
-                        }
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-
-                  {requiredSkills.includes("Other") && (
-                    <label>
-                      Other skill / service
-                      <input
-                        name="otherSkill"
-                        maxLength={150}
-                        placeholder="Example: Roofing technician"
-                      />
-                    </label>
-                  )}
+                  <strong>
+                    {deriveRequiredSkills(assistanceTypes).join(" · ")}
+                  </strong>
+                  <span>
+                    Detailed goods or materials are assessed by Admin after
+                    reviewing the emergency.
+                  </span>
                 </div>
-              </div>
-
-              <div className="goods-block">
-                <h3>Goods / supplies needed</h3>
-                <p>
-                  Select required supplies, or choose No Goods Needed.
-                </p>
-
-                <div className="chip-grid">
-                  {goodsOptions.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={
-                        neededGoods.includes(item)
-                          ? "choice active"
-                          : "choice"
-                      }
-                      aria-pressed={neededGoods.includes(item)}
-                      onClick={() => {
-                        if (item === "No Goods Needed") {
-                          setNeededGoods(
-                            neededGoods.includes(item) ? [] : [item]
-                          );
-                          return;
-                        }
-
-                        const withoutNone = neededGoods.filter(
-                          (value) => value !== "No Goods Needed"
-                        );
-                        toggleValue(
-                          withoutNone,
-                          item,
-                          setNeededGoods
-                        );
-                      }}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-
-                {neededGoods.includes("Other") && (
-                  <label>
-                    Other goods / supplies
-                    <input
-                      name="otherGoods"
-                      maxLength={180}
-                      placeholder="Specify the needed items"
-                    />
-                  </label>
-                )}
               </div>
 
               <label>
                 Additional response instructions
                 <textarea
                   name="needsNote"
-                  maxLength={1200}
+                  maxLength={1500}
                   rows={3}
                   placeholder="Example: Two senior citizens are inside; road access is narrow."
                 />
@@ -1348,7 +1533,7 @@ export default function WebDisasterReport() {
                 </div>
 
                 <div className="upload-box">
-                  <h3>Optional verification video</h3>
+                  <h3>Video evidence <span className="optional-mark">Optional</span></h3>
                   <p>
                     One MP4, WebM or MOV video · under 50 MB.
                   </p>
@@ -1412,7 +1597,7 @@ export default function WebDisasterReport() {
 
             <section className="card confirmation-card">
               <h2>
-                <span>05</span> Confirm before submitting
+                <span>05</span> Review & confirm
               </h2>
 
               <label className="confirm-row">
@@ -1426,8 +1611,8 @@ export default function WebDisasterReport() {
                   I confirm that this request and the attached evidence
                   are accurate to the best of my knowledge. I understand
                   that the exact location and necessary contact details
-                  may be shown to authorized Admins and the volunteer
-                  assigned to this request.
+                  may be shown only to authorized Admins and the responder
+                  assigned to this case.
                 </span>
               </label>
 
@@ -1440,6 +1625,30 @@ export default function WebDisasterReport() {
             </section>
           </fieldset>
 
+          {duplicateBlock && (
+            <div className="duplicate-guard" role="alert">
+              <div>
+                <strong>Existing emergency protected from duplicates</strong>
+                <span>
+                  {duplicateBlock.reason === "active"
+                    ? "This incident already has an active case. Continue using the same case for updates and live response tracking."
+                    : `A similar incident is in its ${DUPLICATE_COOLDOWN_LABEL}. Try again after ${formatRemainingCooldown(duplicateBlock.remainingMs)} if this is still the same incident.`}
+                </span>
+              </div>
+              <div className="duplicate-actions">
+                <a href="/my-cases">View existing report</a>
+                {duplicateBlock.reason === "active" && (
+                  <a
+                    href={`/map-tracking?caseId=${encodeURIComponent(duplicateBlock.caseId)}`}
+                    className="duplicate-track"
+                  >
+                    Track response
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="error" role="alert">
               {error}
@@ -1448,10 +1657,10 @@ export default function WebDisasterReport() {
 
           <footer>
             <div>
-              <strong>Submit for Admin verification</strong>
+              <strong>Submit emergency report</strong>
               <p aria-live="polite">
                 {progress ||
-                  "A responder will not be dispatched until Admin validates the request."}
+                  `LGU review protects against duplicate or unreliable reports. ${DUPLICATE_COOLDOWN_LABEL} applies to similar completed incidents.`}
               </p>
             </div>
 
@@ -1461,7 +1670,7 @@ export default function WebDisasterReport() {
             >
               {busy
                 ? "Submitting…"
-                : "Submit assistance request →"}
+                : "Submit Emergency Report →"}
             </button>
           </footer>
         </form>
@@ -1471,6 +1680,86 @@ export default function WebDisasterReport() {
 }
 
 const css = `
+.premium-head {
+  align-items: stretch;
+}
+.workflow-strip {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 15px 18px;
+  background: rgba(255,255,255,.92);
+  border: 1px solid #d9e6ea;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .045);
+}
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #60758a;
+  min-width: 0;
+}
+.workflow-step i {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-weight: 900;
+  background: #edf3f6;
+  color: #496075;
+}
+.workflow-step.active i {
+  background: #0f766e;
+  color: white;
+}
+.workflow-step strong, .workflow-step small { display:block; }
+.workflow-step strong { color:#102a43; font-size:12px; letter-spacing:.01em; }
+.workflow-step small { margin-top:2px; font-size:10px; color:#7b8da0; }
+.workflow-line { height:1px; background:#d9e3e8; min-width:32px; }
+.severity-field { display:flex; flex-direction:column; gap:8px; }
+.field-title { font-weight:800; color:#102a43; font-size:13px; }
+.severity-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.severity-option { cursor:pointer; }
+.severity-option input { position:absolute; opacity:0; pointer-events:none; }
+.severity-option > span {
+  display:block;
+  min-height:66px;
+  padding:10px 12px;
+  border:1px solid #d8e3e9;
+  border-radius:12px;
+  background:#fff;
+  transition:.16s ease;
+}
+.severity-option strong, .severity-option small { display:block; }
+.severity-option strong { font-size:13px; color:#17324a; }
+.severity-option small { margin-top:4px; font-size:10px; line-height:1.35; color:#708399; }
+.severity-option input:checked + span { box-shadow:0 0 0 2px rgba(15,118,110,.12); transform:translateY(-1px); }
+.severity-option.critical input:checked + span { border-color:#ef4444; background:#fff5f5; }
+.severity-option.critical input:checked + span strong { color:#c62828; }
+.severity-option.urgent input:checked + span { border-color:#f59e0b; background:#fff9ed; }
+.severity-option.urgent input:checked + span strong { color:#b76a00; }
+.severity-option.high input:checked + span { border-color:#eab308; background:#fffceb; }
+.severity-option.high input:checked + span strong { color:#8a6a00; }
+.severity-option.standard input:checked + span { border-color:#3b82f6; background:#f3f8ff; }
+.severity-option.standard input:checked + span strong { color:#1d5fbf; }
+.required-mark, .optional-mark {
+  display:inline-flex; margin-left:6px; padding:2px 7px; border-radius:999px; font-size:9px; letter-spacing:.04em; vertical-align:middle;
+}
+.required-mark { color:#b91c1c; background:#fff1f2; }
+.optional-mark { color:#456078; background:#eef4f7; }
+.success-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+.success-actions a { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-radius:10px; text-decoration:none; font-weight:800; background:#0f766e; color:white; }
+.success-actions a.secondary-link { background:#f5f8fa; color:#18354f; border:1px solid #d8e3e9; }
+@media (max-width: 900px) {
+  .workflow-strip { grid-template-columns:1fr; gap:8px; }
+  .workflow-line { display:none; }
+  .severity-grid { grid-template-columns:1fr; }
+}
 .vs-report {
   width: 100%;
   height: 100vh;
@@ -1587,6 +1876,14 @@ const css = `
   overflow-wrap: anywhere;
   font-size: 11.5px;
 }
+.vs-report .summary-trust {
+  display: block;
+  margin-top: 3px;
+  color: #07857c;
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .vs-report .summary-label {
   color: #91a1ad;
   font-size: 8px;
@@ -1649,6 +1946,13 @@ const css = `
   font: inherit;
 }
 .vs-report textarea { resize: vertical; }
+.vs-report .field-hint {
+  display: block;
+  margin-top: 5px;
+  color: #6b7f8b;
+  font-size: 9.5px;
+  font-weight: 600;
+}
 .vs-report :is(input,select,textarea,button,a):focus-visible {
   outline: 3px solid #65c7bd;
   outline-offset: 2px;
@@ -1709,6 +2013,29 @@ const css = `
   grid-template-columns: 1fr 1fr;
   gap: 20px;
 }
+.vs-report .auto-match-card {
+  border: 1px solid #cde4df;
+  border-radius: 12px;
+  background: #edf9f6;
+  padding: 14px;
+}
+.vs-report .auto-match-card strong,
+.vs-report .auto-match-card span {
+  display: block;
+}
+.vs-report .auto-match-card strong {
+  margin-top: 10px;
+  color: #08786f;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.vs-report .auto-match-card span {
+  margin-top: 8px;
+  color: #607481;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .vs-report .help-grid p,
 .vs-report .goods-block p {
   font-size: 10.5px;
@@ -1874,6 +2201,58 @@ const css = `
   color: #607481;
   font-size: 10.5px;
 }
+.vs-report .duplicate-guard {
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border: 1px solid #f2c66d;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #5f4307;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.vs-report .duplicate-guard > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.vs-report .duplicate-guard strong {
+  color: #513600;
+  font-size: 14px;
+}
+
+.vs-report .duplicate-guard span {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.vs-report .duplicate-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vs-report .duplicate-actions a {
+  text-decoration: none;
+  border: 1px solid #d8aa49;
+  color: #634600;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.vs-report .duplicate-actions a.duplicate-track {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+
 .vs-report .error {
   max-width: 1180px;
   margin: 14px auto 0;

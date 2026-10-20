@@ -12,6 +12,7 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -931,10 +932,16 @@ export default function Donation() {
                     {selectedCampaign.title || "Donation Campaign"}
                   </Text>
 
-                  <View style={styles.webLocationLine}>
-                    <Ionicons name="location-outline" size={15} color="#0F766E" />
-                    <Text style={styles.webLocationText} numberOfLines={1}>
-                      {campaignAreaLabel(selectedCampaign)}
+                  <View style={styles.webGeneralAreaCard}>
+                    <Text style={styles.webGeneralAreaEyebrow}>BENEFICIARY GENERAL AREA</Text>
+                    <View style={styles.webLocationLine}>
+                      <Ionicons name="location-outline" size={15} color="#0F766E" />
+                      <Text style={styles.webLocationText} numberOfLines={2}>
+                        {campaignAreaLabel(selectedCampaign)}
+                      </Text>
+                    </View>
+                    <Text style={styles.webGeneralAreaNote}>
+                      General barangay/city area only. Exact beneficiary location is coordinated privately with the LGU when needed.
                     </Text>
                   </View>
 
@@ -1436,16 +1443,73 @@ function HandoffLocationMap({
   locationName: string;
   address: string;
 }) {
-  const cleanName = String(locationName || "Authorized donation location").trim();
+  const cleanName = String(locationName || "LGU public service point").trim();
   const cleanAddress = String(address || "").trim();
-  const mapQuery = [cleanName, cleanAddress].filter(Boolean).join(", ");
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`;
+  const normalizedAddress = cleanAddress.toLowerCase();
+  const genericAddresses = new Set([
+    "public service address",
+    "official public service address",
+    "lgu public service address",
+    "barangay address",
+    "address pending",
+    "to be confirmed",
+  ]);
+  const hasSpecificPublicAddress =
+    cleanAddress.length >= 8 && !genericAddresses.has(normalizedAddress);
 
-  const openMap = async () => {
+  if (!hasSpecificPublicAddress) {
+    return (
+      <View style={styles.webMapUnavailableNote}>
+        <Ionicons name="information-circle-outline" size={15} color="#64748B" />
+        <Text style={styles.webMapUnavailableText}>
+          Google Maps will be available after the LGU saves the verified public address for this donation point.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <LocationMapButton
+      eyebrow="OFFICIAL LGU DONATION LOCATION"
+      title={cleanName || "LGU public service point"}
+      address={cleanAddress}
+      mapQuery={[cleanName, cleanAddress].filter(Boolean).join(", ")}
+      buttonLabel="View Map"
+      privacyText="This is the LGU-approved public coordination or service point for the campaign. It is separate from the beneficiary's home and private verification location."
+    />
+  );
+}
+
+function LocationMapButton({
+  eyebrow,
+  title,
+  address,
+  mapQuery,
+  buttonLabel,
+  privacyText,
+}: {
+  eyebrow: string;
+  title: string;
+  address: string;
+  mapQuery: string;
+  buttonLabel: string;
+  privacyText: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const { height } = useWindowDimensions();
+
+  const cleanQuery = String(mapQuery || "").trim();
+  const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQuery)}`;
+  const embeddedMapUrl = `https://www.google.com/maps?q=${encodeURIComponent(cleanQuery)}&output=embed`;
+  const mapHeight = Math.max(280, Math.min(560, height - 280));
+
+  const openGoogleMaps = async () => {
+    if (!cleanQuery) return;
+
     try {
-      const supported = await Linking.canOpenURL(mapUrl);
+      const supported = await Linking.canOpenURL(externalMapUrl);
       if (!supported) throw new Error("Google Maps is not available on this device.");
-      await Linking.openURL(mapUrl);
+      await Linking.openURL(externalMapUrl);
     } catch (problem) {
       Alert.alert(
         "Unable to Open Map",
@@ -1455,15 +1519,104 @@ function HandoffLocationMap({
   };
 
   return (
-    <TouchableOpacity
-      style={styles.webOpenMapButton}
-      activeOpacity={0.84}
-      onPress={() => void openMap()}
-    >
-      <Ionicons name="map-outline" size={16} color="#0F766E" />
-      <Text style={styles.webOpenMapButtonText}>Open in Google Maps</Text>
-      <Ionicons name="open-outline" size={14} color="#0F766E" />
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity
+        style={styles.webOpenMapButton}
+        activeOpacity={0.84}
+        disabled={!cleanQuery}
+        onPress={() => setVisible(true)}
+      >
+        <Ionicons name="map-outline" size={16} color="#0F766E" />
+        <Text style={styles.webOpenMapButtonText}>{buttonLabel}</Text>
+        <Ionicons name="chevron-forward" size={14} color="#0F766E" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setVisible(false)}
+      >
+        <View style={styles.mapModalOverlay}>
+          <View style={styles.mapModalCard}>
+            <View style={styles.mapModalHeader}>
+              <View style={styles.mapModalHeaderIcon}>
+                <Ionicons name="map-outline" size={18} color="#0F766E" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.mapModalEyebrow}>{eyebrow}</Text>
+                <Text style={styles.mapModalTitle}>{title}</Text>
+                {!!address && <Text style={styles.mapModalAddress}>{address}</Text>}
+              </View>
+
+              <TouchableOpacity
+                style={styles.mapModalClose}
+                activeOpacity={0.82}
+                onPress={() => setVisible(false)}
+              >
+                <Ionicons name="close" size={19} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            {Platform.OS === "web" ? (
+              <View style={[styles.mapModalFrame, { height: mapHeight }]}> 
+                {React.createElement(
+                  "iframe",
+                  {
+                    title: `${title} map`,
+                    src: embeddedMapUrl,
+                    loading: "lazy",
+                    allowFullScreen: true,
+                    referrerPolicy: "no-referrer-when-downgrade",
+                    style: {
+                      width: "100%",
+                      height: "100%",
+                      border: 0,
+                      display: "block",
+                    },
+                  } as any,
+                )}
+              </View>
+            ) : (
+              <View style={[styles.embeddedMapNativeFallback, { minHeight: mapHeight }]}> 
+                <Ionicons name="map-outline" size={34} color="#0F766E" />
+                <Text style={styles.embeddedMapNativeTitle}>Map preview</Text>
+                <Text style={styles.embeddedMapNativeText}>
+                  The map details are shown inside VolunServe. Use Google Maps below only when you need turn-by-turn directions.
+                </Text>
+                <Text style={styles.embeddedMapLocationName}>{title}</Text>
+                {!!address && <Text style={styles.embeddedMapLocationText}>{address}</Text>}
+              </View>
+            )}
+
+            <View style={styles.mapModalPrivacy}>
+              <Ionicons name="shield-checkmark-outline" size={17} color="#0F766E" />
+              <Text style={styles.mapModalPrivacyText}>{privacyText}</Text>
+            </View>
+
+            <View style={styles.mapModalFooter}>
+              <TouchableOpacity
+                style={styles.mapModalSecondaryButton}
+                activeOpacity={0.82}
+                onPress={() => setVisible(false)}
+              >
+                <Text style={styles.mapModalSecondaryButtonText}>Close</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.mapModalPrimaryButton}
+                activeOpacity={0.84}
+                onPress={() => void openGoogleMaps()}
+              >
+                <Ionicons name="navigate-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.mapModalPrimaryButtonText}>Open in Google Maps</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -2888,6 +3041,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E7EDF1",
   },
+  mapModalHeaderIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "#ECFDF5",
+  },
   mapModalEyebrow: {
     color: "#0F766E",
     fontSize: 8,
@@ -2914,6 +3075,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   mapModalFrame: {
+    width: "100%",
     backgroundColor: "#E2E8F0",
   },
   mapModalPrivacy: {
@@ -2928,6 +3090,44 @@ const styles = StyleSheet.create({
     color: "#49646F",
     fontSize: 9,
     lineHeight: 14,
+  },
+  mapModalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E7EDF1",
+    backgroundColor: "#FFFFFF",
+  },
+  mapModalSecondaryButton: {
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+  mapModalSecondaryButtonText: {
+    color: "#475569",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  mapModalPrimaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 9,
+    backgroundColor: "#0F766E",
+  },
+  mapModalPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "900",
   },
 
   supportSection: {
@@ -3750,6 +3950,26 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: "900",
   },
+  webGeneralAreaCard: {
+    marginTop: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+  },
+  webGeneralAreaEyebrow: {
+    color: "#0F766E",
+    fontSize: 7.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  webGeneralAreaNote: {
+    marginTop: 5,
+    color: "#64748B",
+    fontSize: 8.4,
+    lineHeight: 12,
+  },
   webLocationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -3824,6 +4044,21 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9,
     lineHeight: 13,
+  },
+  webMapUnavailableNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 9,
+    padding: 9,
+    borderRadius: 9,
+    backgroundColor: "#F8FAFC",
+  },
+  webMapUnavailableText: {
+    flex: 1,
+    color: "#64748B",
+    fontSize: 8.5,
+    lineHeight: 12,
   },
   webOpenMapButton: {
     alignSelf: "flex-start",

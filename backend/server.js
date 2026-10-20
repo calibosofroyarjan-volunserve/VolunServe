@@ -8,6 +8,7 @@ const {
   db,
   FieldValue,
 } = require("./firebaseAdmin");
+const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
   "http\://localhost:8081",
@@ -474,11 +475,7 @@ app.post(
           error: "invalid_paymongo_webhook_json",
         });
       }
-      // PayMongo webhook payloads use an event envelope:
-      // data.type === "event"
-      // data.attributes.type === "checkout_session.payment.paid"
-      // data.attributes.data === the Checkout Session resource.
-      // Keep a small compatibility fallback for older/simplified examples.
+     
       const eventEnvelope = payload?.data || {};
       const eventAttributes = eventEnvelope?.attributes || {};
       const eventType = paymongoText(
@@ -513,10 +510,7 @@ app.post(
           ...result,
         });
       } catch (error) {
-        // PayMongo's dashboard test event uses a sample checkout reference
-        // that does not exist in VolunServe. A valid signed event with an
-        // unknown merchant reference can be acknowledged without creating or
-        // changing any donation record.
+        
         if (error?.code === "paymongo_donation_not_found") {
           return response.status(200).json({
             ok: true,
@@ -10521,10 +10515,7 @@ app.post(
               assistance.categoryLabel || assistance.category || "Community Assistance",
               120,
             ) || "Community Assistance";
-          // Community Assistance campaigns are intentionally privacy-safe.
-          // Do not allow public copy to repeat private source values from the
-          // Assistance Request, even though those private fields are never
-          // copied into the public campaign document itself.
+         
           const publicCopy = [title, description, story].join(" ");
           const privateSourceValues = [
             assistance.requesterAddress,
@@ -11251,6 +11242,48 @@ app.post(
     }
   },
 );
+// Community Event certificate reconciliation for Spark + Render.
+// Firebase Admin is the only writer: all existing Firestore rules and
+// existing certificate records remain unchanged.
+// Preview/read-only by default. Call execute:true only AFTER the
+// Admin completion or attendance-verification Firestore write succeeds.
+app.post(
+  "/api/admin/community-certificates/reconcile",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const eventId = cleanText(request.body?.eventId, 160);
+      const participantId = cleanText(request.body?.participantId, 320);
+      const execute = request.body?.execute === true;
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(eventId)) {
+        throw makeHttpError(400, "invalid_event_id", "A valid Community Event ID is required.");
+      }
+      if (participantId && !/^[A-Za-z0-9_-]{1,320}$/.test(participantId)) {
+        throw makeHttpError(400, "invalid_participant_id", "A valid participant ID is required.");
+      }
+      if (request.body?.execute != null && typeof request.body.execute !== "boolean") {
+        throw makeHttpError(400, "invalid_execute", "execute must be a boolean.");
+      }
+      const result = await reconcileCommunityEventCertificates({
+        eventId, participantId, execute,
+      });
+      const status = result.ok ? 200 : (
+        result.reason === "event_not_found" ? 404 :
+        result.reason === "some_certificates_failed_retry_safely" ? 207 : 409
+      );
+      response.status(status).json(result);
+    } catch (error) {
+      console.error("Community certificate reconciliation failed:", error?.message);
+      response.status(Number(error?.statusCode) || 500).json({
+        ok: false,
+        error: cleanText(error?.code || "community_certificate_sync_failed", 120),
+        message: cleanText(error?.message || "Could not process Community Event certificates.", 500),
+      });
+    }
+  },
+);
+
 const port =
   Number(
     process.env.PORT ||

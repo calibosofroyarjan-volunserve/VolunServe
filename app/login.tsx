@@ -1,6 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as AuthSession from "expo-auth-session";
+import * as Google from "expo-auth-session/providers/google";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import {
+  signOut as firebaseSignOut,
+  GoogleAuthProvider,
+  sendPasswordResetEmail,
+  signInWithCredential,
+} from "firebase/auth";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,12 +27,21 @@ import {
   View,
 } from "react-native";
 
+import { auth } from "../lib/firebase";
 import {
+  getUserProfile,
   homeRouteForProfile,
+  isApprovedProfile,
   loginUser,
 } from "../lib/firebaseAuth";
 
+WebBrowser.maybeCompleteAuthSession();
+
 const { width, height } = Dimensions.get("window");
+
+const redirectUri = AuthSession.makeRedirectUri({
+  scheme: "com.froyarjan123.volunserve",
+});
 
 const SLIDES = [
   {
@@ -59,7 +77,15 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+
+  const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
+    webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
+    androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
+    redirectUri,
+    scopes: ["openid", "profile", "email"],
+  });
 
   useEffect(() => {
     heroIndexRef.current = heroIndex;
@@ -115,6 +141,45 @@ export default function Login() {
     heroIndexRef.current = index;
   };
 
+  const routeSignedInProfile = async (uid: string) => {
+    let profile;
+
+    try {
+      profile = await getUserProfile(uid);
+    } catch {
+      await firebaseSignOut(auth);
+
+      throw new Error(
+        "No VolunServe profile was found for this account. Please register first."
+      );
+    }
+
+    if (!isApprovedProfile(profile)) {
+      await firebaseSignOut(auth);
+
+      if (profile.status === "rejected") {
+        throw new Error(
+          profile.rejectedReason
+            ? `Registration rejected: ${profile.rejectedReason}`
+            : "Your registration was rejected. Please contact an administrator."
+        );
+      }
+
+      if (profile.status === "suspended") {
+        throw new Error(
+          "Your account is suspended. Please contact an administrator."
+        );
+      }
+
+      throw new Error(
+        "This legacy account is still pending administrative review."
+      );
+    }
+
+    const destination = homeRouteForProfile(profile);
+    router.replace(destination as any);
+  };
+
   const handleLogin = async () => {
     const cleanEmail = email.trim();
 
@@ -125,7 +190,7 @@ export default function Login() {
       return;
     }
 
-    if (loading) {
+    if (loading || googleLoading) {
       return;
     }
 
@@ -145,6 +210,96 @@ export default function Login() {
       alert(error?.message || "Login failed.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (loading || googleLoading) {
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      alert("Enter your email address first, then select Forgot password.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await sendPasswordResetEmail(
+        auth,
+        cleanEmail
+      );
+
+      alert(
+        "Password reset email sent. Check your inbox and spam folder for the reset link."
+      );
+    } catch (error: any) {
+      const code = String(error?.code || "");
+
+      if (code === "auth/invalid-email") {
+        alert("Please enter a valid email address.");
+      } else if (code === "auth/too-many-requests") {
+        alert("Too many reset attempts. Please wait and try again later.");
+      } else {
+        alert(
+          error?.message ||
+            "Unable to send the password reset email."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (!googleRequest || loading || googleLoading) {
+      return;
+    }
+
+    try {
+      setGoogleLoading(true);
+
+      const result = await promptGoogleAsync();
+
+      if (result.type !== "success") {
+        if (result.type !== "dismiss" && result.type !== "cancel") {
+          alert("Google sign-in was not completed. Please try again.");
+        }
+        return;
+      }
+
+      const idToken = result.params?.id_token;
+
+      if (!idToken) {
+        throw new Error(
+          "Google did not return a valid sign-in token. Please try again."
+        );
+      }
+
+      const credential =
+        GoogleAuthProvider.credential(idToken);
+
+      const userCredential =
+        await signInWithCredential(
+          auth,
+          credential
+        );
+
+      await routeSignedInProfile(
+        userCredential.user.uid
+      );
+    } catch (error: any) {
+      await firebaseSignOut(auth).catch(() => undefined);
+
+      alert(
+        error?.message ||
+          "Google sign-in failed. Please try again."
+      );
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -373,7 +528,7 @@ export default function Login() {
                   autoCorrect={false}
                   keyboardType="email-address"
                   textContentType="emailAddress"
-                  editable={!loading}
+                  editable={!loading && !googleLoading}
                   returnKeyType="next"
                   onFocus={() => setFocused("email")}
                   onBlur={() => setFocused(null)}
@@ -407,7 +562,7 @@ export default function Login() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   textContentType="password"
-                  editable={!loading}
+                  editable={!loading && !googleLoading}
                   returnKeyType="done"
                   onSubmitEditing={handleLogin}
                   onFocus={() =>
@@ -417,7 +572,7 @@ export default function Login() {
                 />
 
                 <TouchableOpacity
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   accessibilityRole="button"
                   accessibilityLabel={
                     showPassword
@@ -440,11 +595,21 @@ export default function Login() {
                 </TouchableOpacity>
               </View>
 
+              <TouchableOpacity
+                disabled={loading || googleLoading}
+                onPress={handleForgotPassword}
+                style={styles.forgotPasswordButton}
+              >
+                <Text style={styles.forgotPasswordText}>
+                  Forgot password?
+                </Text>
+              </TouchableOpacity>
+
               <Pressable
-                disabled={loading}
+                disabled={loading || googleLoading}
                 style={({ pressed }) => [
                   styles.primaryButton,
-                  (pressed || loading) &&
+                  (pressed || loading || googleLoading) &&
                     styles.buttonDisabled,
                 ]}
                 onPress={handleLogin}
@@ -471,10 +636,37 @@ export default function Login() {
               </View>
 
               <TouchableOpacity
-                disabled={loading}
+                disabled={!googleRequest || loading || googleLoading}
+                style={[
+                  styles.googleButton,
+                  (!googleRequest || loading || googleLoading) &&
+                    styles.buttonDisabled,
+                ]}
+                onPress={handleGoogleLogin}
+              >
+                {googleLoading ? (
+                  <ActivityIndicator color="#0f172a" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="logo-google"
+                      size={18}
+                      color="#2563eb"
+                    />
+
+                    <Text style={styles.googleText}>
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={loading || googleLoading}
                 style={[
                   styles.guestButton,
-                  loading && styles.buttonDisabled,
+                  (loading || googleLoading) &&
+                    styles.buttonDisabled,
                 ]}
                 onPress={() =>
                   router.replace("/public")
@@ -497,7 +689,7 @@ export default function Login() {
                 </Text>
 
                 <TouchableOpacity
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   onPress={() =>
                     router.push("/signup")
                   }
@@ -739,6 +931,17 @@ const styles = StyleSheet.create({
     color: "#0f172a",
   },
 
+  forgotPasswordButton: {
+    alignSelf: "flex-end",
+    marginTop: 12,
+  },
+
+  forgotPasswordText: {
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
   primaryButton: {
     backgroundColor: "#064e3b",
     marginTop: 28,
@@ -772,6 +975,24 @@ const styles = StyleSheet.create({
   orText: {
     marginHorizontal: 10,
     color: "#64748b",
+  },
+
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    marginBottom: 12,
+  },
+
+  googleText: {
+    marginLeft: 8,
+    fontWeight: "700",
+    color: "#0f172a",
   },
 
   guestButton: {

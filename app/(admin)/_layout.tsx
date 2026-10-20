@@ -1,3 +1,4 @@
+
 import { Ionicons } from "@expo/vector-icons";
 import {
   Href,
@@ -31,9 +32,12 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+
 const WEB_PORTAL_URL =
   "https://volunserve-3aa5b.web.app";
+
 const SIDEBAR_WIDTH = 280;
+
 type NavItem = {
   label: string;
   icon: React.ComponentProps<
@@ -41,6 +45,7 @@ type NavItem = {
   >["name"];
   route: string;
 };
+
 const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
@@ -91,6 +96,18 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/admin-events",
   },
   {
+    label: "Community Events",
+    icon: "leaf-outline",
+    route:
+      "/(admin)/community-events",
+  },
+  {
+    label: "Event Attendance",
+    icon: "checkmark-done-outline",
+    route:
+      "/(admin)/community-attendance",
+  },
+  {
     label: "Relief Operations",
     icon: "cube-outline",
     route:
@@ -112,7 +129,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Certificates",
     icon: "ribbon-outline",
     route:
-      "/(admin)/admin-certificates",
+      "/(admin)/certificates",
   },
   {
     label: "Disputes",
@@ -122,6 +139,7 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/admin-disputes",
   },
 ];
+
 const initialsFor = (
   value: string,
 ) => {
@@ -131,6 +149,7 @@ const initialsFor = (
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2);
+
   return (
     parts
       .map((item) =>
@@ -141,35 +160,43 @@ const initialsFor = (
       .join("") || "AD"
   );
 };
+
 export default function AdminLayout() {
   const {
     loading,
     user,
     profile,
   } = useUserSession();
+
   const {
     width,
   } = useWindowDimensions();
+
   const pathname =
     usePathname();
+
   const [
     mobileMenuOpen,
     setMobileMenuOpen,
   ] = useState(false);
+
   const desktop =
     Platform.OS === "web" &&
     width >= 980;
+
   const role =
     typeof profile?.role ===
     "string"
       ? profile.role.toLowerCase()
       : "";
+
   const fullName =
     String(
       profile?.fullName ||
         profile?.email ||
         "Administrator",
     ).trim();
+
   const initials =
     useMemo(
       () =>
@@ -178,23 +205,28 @@ export default function AdminLayout() {
         ),
       [fullName],
     );
+
   const openRoute = (
     route: string,
   ) => {
     setMobileMenuOpen(
       false,
     );
+
     router.push(
       route as Href,
     );
   };
+
   const signOut =
     async () => {
       try {
         setMobileMenuOpen(
           false,
         );
+
         await logoutUser();
+
         router.replace(
           "/login",
         );
@@ -208,6 +240,7 @@ export default function AdminLayout() {
         );
       }
     };
+
   if (loading) {
     return (
       <View
@@ -219,6 +252,7 @@ export default function AdminLayout() {
           size="large"
           color="#4F46E5"
         />
+
         <Text
           style={
             styles.message
@@ -229,6 +263,7 @@ export default function AdminLayout() {
       </View>
     );
   }
+
   if (!user) {
     return (
       <Redirect
@@ -236,6 +271,7 @@ export default function AdminLayout() {
       />
     );
   }
+
   if (
     !isApprovedProfile(
       profile,
@@ -247,6 +283,7 @@ export default function AdminLayout() {
       />
     );
   }
+
   if (
     role ===
     "superadmin"
@@ -257,6 +294,7 @@ export default function AdminLayout() {
       />
     );
   }
+
   if (
     role !==
     "admin"
@@ -267,6 +305,7 @@ export default function AdminLayout() {
       />
     );
   }
+
   if (
     Platform.OS !==
     "web"
@@ -295,6 +334,7 @@ export default function AdminLayout() {
               VS
             </Text>
           </View>
+
           <Text
             style={
               styles.blockedEyebrow
@@ -302,6 +342,7 @@ export default function AdminLayout() {
           >
             VOLUNSERVE ADMINISTRATION
           </Text>
+
           <Text
             style={
               styles.blockedTitle
@@ -309,6 +350,7 @@ export default function AdminLayout() {
           >
             Web Portal Required
           </Text>
+
           <Text
             style={
               styles.blockedDescription
@@ -316,6 +358,7 @@ export default function AdminLayout() {
           >
             Operational Admin management is available through the VolunServe web portal.
           </Text>
+
           <Text
             style={
               styles.blockedDescription
@@ -323,6 +366,7 @@ export default function AdminLayout() {
           >
             Please use a web browser on your phone, tablet, laptop, or desktop computer to continue.
           </Text>
+
           <TouchableOpacity
             style={
               styles.webButton
@@ -353,6 +397,7 @@ export default function AdminLayout() {
               Open Web Portal
             </Text>
           </TouchableOpacity>
+
           <Text
             style={
               styles.webAddress
@@ -364,6 +409,7 @@ export default function AdminLayout() {
       </View>
     );
   }
+
   const sidebar = (
     <View
       style={
@@ -386,6 +432,7 @@ export default function AdminLayout() {
             color="#FFFFFF"
           />
         </View>
+
         <View>
           <Text
             style={
@@ -394,6 +441,7 @@ export default function AdminLayout() {
           >
             VolunServe
           </Text>
+
           <Text
             style={
               styles.brandTagline
@@ -403,6 +451,7 @@ export default function AdminLayout() {
           </Text>
         </View>
       </View>
+
       <ScrollView
         style={
           styles.sidebarScroll
@@ -421,6 +470,7 @@ export default function AdminLayout() {
         >
           ADMIN PORTAL
         </Text>
+
         {NAV_ITEMS.map(
           (item) => {
             const active =
@@ -443,6 +493,7 @@ export default function AdminLayout() {
                     "",
                 )
               );
+
             return (
               <TouchableOpacity
                 key={
@@ -473,6 +524,7 @@ export default function AdminLayout() {
                       : "#B9C7DA"
                   }
                 />
+
                 <Text
                   style={[
                     styles.navLabel,
@@ -486,11 +538,13 @@ export default function AdminLayout() {
             );
           },
         )}
+
         <View
           style={
             styles.divider
           }
         />
+
         <TouchableOpacity
           style={
             styles.navItem
@@ -507,6 +561,7 @@ export default function AdminLayout() {
             size={20}
             color="#D6DEEA"
           />
+
           <Text
             style={[
               styles.navLabel,
@@ -517,6 +572,7 @@ export default function AdminLayout() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
       <View
         style={
           styles.sidebarFooter
@@ -535,6 +591,7 @@ export default function AdminLayout() {
       </View>
     </View>
   );
+
   return (
     <View
       style={
@@ -543,6 +600,7 @@ export default function AdminLayout() {
     >
       {desktop &&
         sidebar}
+
       <View
         style={
           styles.main
@@ -571,11 +629,13 @@ export default function AdminLayout() {
               />
             </TouchableOpacity>
           )}
+
           <View
             style={
               styles.topBarSpacer
             }
           />
+
           <View
             style={
               styles.profileArea
@@ -594,6 +654,7 @@ export default function AdminLayout() {
                 {initials}
               </Text>
             </View>
+
             <View
               style={
                 styles.profileText
@@ -609,6 +670,7 @@ export default function AdminLayout() {
               >
                 {fullName}
               </Text>
+
               <Text
                 style={
                   styles.profileRole
@@ -619,6 +681,7 @@ export default function AdminLayout() {
             </View>
           </View>
         </View>
+
         <View
           style={
             styles.stackArea
@@ -636,6 +699,7 @@ export default function AdminLayout() {
           />
         </View>
       </View>
+
       <Modal
         visible={
           !desktop &&
@@ -664,6 +728,7 @@ export default function AdminLayout() {
               )
             }
           />
+
           <View
             style={
               styles.mobileSidebar
@@ -676,6 +741,7 @@ export default function AdminLayout() {
     </View>
   );
 }
+
 const styles =
   StyleSheet.create({
     shell: {
@@ -685,6 +751,7 @@ const styles =
       backgroundColor:
         "#F5F7FB",
     },
+
     center: {
       flex: 1,
       alignItems:
@@ -694,6 +761,7 @@ const styles =
       backgroundColor:
         "#F8FAFC",
     },
+
     message: {
       marginTop: 10,
       color:
@@ -701,6 +769,7 @@ const styles =
       fontWeight:
         "600",
     },
+
     sidebar: {
       width:
         SIDEBAR_WIDTH,
@@ -709,6 +778,7 @@ const styles =
       backgroundColor:
         "#142A45",
     },
+
     brand: {
       minHeight:
         92,
@@ -721,6 +791,7 @@ const styles =
       gap:
         11,
     },
+
     brandMark: {
       width:
         38,
@@ -735,6 +806,7 @@ const styles =
       justifyContent:
         "center",
     },
+
     brandName: {
       color:
         "#FFFFFF",
@@ -743,6 +815,7 @@ const styles =
       fontWeight:
         "900",
     },
+
     brandTagline: {
       marginTop:
         2,
@@ -753,16 +826,19 @@ const styles =
       fontWeight:
         "600",
     },
+
     sidebarScroll: {
       flex:
         1,
     },
+
     sidebarContent: {
       paddingHorizontal:
         16,
       paddingBottom:
         24,
     },
+
     sidebarSection: {
       marginTop:
         12,
@@ -779,6 +855,7 @@ const styles =
       letterSpacing:
         1.2,
     },
+
     navItem: {
       minHeight:
         45,
@@ -795,10 +872,12 @@ const styles =
       gap:
         11,
     },
+
     navItemActive: {
       backgroundColor:
         "#5548B9",
     },
+
     navLabel: {
       color:
         "#D6DEEA",
@@ -807,12 +886,14 @@ const styles =
       fontWeight:
         "700",
     },
+
     navLabelActive: {
       color:
         "#FFFFFF",
       fontWeight:
         "900",
     },
+
     divider: {
       height:
         1,
@@ -823,16 +904,19 @@ const styles =
       backgroundColor:
         "#29415E",
     },
+
     signOutLabel: {
       color:
         "#F1F5F9",
     },
+
     sidebarFooter: {
       paddingHorizontal:
         30,
       paddingBottom:
         26,
     },
+
     sidebarFooterText: {
       color:
         "#67A5CA",
@@ -845,6 +929,7 @@ const styles =
       letterSpacing:
         1,
     },
+
     main: {
       flex:
         1,
@@ -853,6 +938,7 @@ const styles =
       backgroundColor:
         "#F5F7FB",
     },
+
     topBar: {
       minHeight:
         72,
@@ -869,10 +955,12 @@ const styles =
       backgroundColor:
         "#FFFFFF",
     },
+
     topBarSpacer: {
       flex:
         1,
     },
+
     mobileMenuButton: {
       width:
         40,
@@ -891,6 +979,7 @@ const styles =
       backgroundColor:
         "#FFFFFF",
     },
+
     profileArea: {
       maxWidth:
         300,
@@ -901,6 +990,7 @@ const styles =
       gap:
         10,
     },
+
     profileAvatar: {
       width:
         38,
@@ -915,6 +1005,7 @@ const styles =
       backgroundColor:
         "#64748B",
     },
+
     profileAvatarText: {
       color:
         "#FFFFFF",
@@ -923,10 +1014,12 @@ const styles =
       fontWeight:
         "900",
     },
+
     profileText: {
       minWidth:
         0,
     },
+
     profileName: {
       color:
         "#0F172A",
@@ -935,6 +1028,7 @@ const styles =
       fontWeight:
         "900",
     },
+
     profileRole: {
       marginTop:
         2,
@@ -943,12 +1037,14 @@ const styles =
       fontSize:
         10.5,
     },
+
     stackArea: {
       flex:
         1,
       minHeight:
         0,
     },
+
     mobileOverlay: {
       flex:
         1,
@@ -957,10 +1053,12 @@ const styles =
       backgroundColor:
         "rgba(15,23,42,0.35)",
     },
+
     mobileBackdrop: {
       ...StyleSheet
         .absoluteFillObject,
     },
+
     mobileSidebar: {
       width:
         SIDEBAR_WIDTH,
@@ -969,6 +1067,7 @@ const styles =
       zIndex:
         2,
     },
+
     blockedContainer: {
       flex:
         1,
@@ -981,6 +1080,7 @@ const styles =
       backgroundColor:
         "#F1F5F9",
     },
+
     blockedCard: {
       width:
         "100%",
@@ -1013,6 +1113,7 @@ const styles =
       elevation:
         4,
     },
+
     iconCircle: {
       width:
         72,
@@ -1029,6 +1130,7 @@ const styles =
       marginBottom:
         18,
     },
+
     iconText: {
       color:
         "#0F766E",
@@ -1037,6 +1139,7 @@ const styles =
       fontSize:
         22,
     },
+
     blockedEyebrow: {
       color:
         "#0F766E",
@@ -1051,6 +1154,7 @@ const styles =
       textAlign:
         "center",
     },
+
     blockedTitle: {
       color:
         "#0F172A",
@@ -1061,6 +1165,7 @@ const styles =
       textAlign:
         "center",
     },
+
     blockedDescription: {
       marginTop:
         10,
@@ -1075,6 +1180,7 @@ const styles =
       maxWidth:
         360,
     },
+
     webButton: {
       width:
         "100%",
@@ -1093,6 +1199,7 @@ const styles =
       paddingHorizontal:
         18,
     },
+
     webButtonText: {
       color:
         "#FFFFFF",
@@ -1101,6 +1208,7 @@ const styles =
       fontSize:
         14,
     },
+
     webAddress: {
       marginTop:
         12,

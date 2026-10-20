@@ -1,13 +1,15 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
+  linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updatePassword,
   User,
 } from "firebase/auth";
-
 import {
   doc,
   getDoc,
@@ -15,31 +17,92 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-
 import { auth, db } from "./firebase";
 
 export const connectGoogleAccountWeb = async () => {
   try {
     const provider = new GoogleAuthProvider();
-
     provider.setCustomParameters({
       prompt: "select_account",
     });
-
     const result = await signInWithPopup(auth, provider);
     return result.user;
   } catch (err: any) {
     if (err?.code === "auth/popup-closed-by-user") {
       throw new Error("Google sign-in was cancelled.");
     }
-
     if (err?.code === "auth/popup-blocked") {
       throw new Error(
         "The Google sign-in popup was blocked. Allow popups for localhost and try again."
       );
     }
-
     throw new Error(friendlyAuthError(err));
+  }
+};
+
+export const hasPasswordSignInProvider = (
+  user: User | null | undefined
+) => {
+  return Boolean(
+    user?.providerData.some(
+      (provider) => provider.providerId === EmailAuthProvider.PROVIDER_ID
+    )
+  );
+};
+
+export const setVolunServePasswordForCurrentGoogleUser = async (
+  password: string
+) => {
+  try {
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Sign in with Google again before setting your VolunServe password."
+      );
+    }
+
+    const email = user.email?.trim().toLowerCase();
+
+    if (!email) {
+      throw new Error(
+        "Your Google account does not have an email address available for VolunServe sign-in."
+      );
+    }
+
+    const hasGoogleProvider = user.providerData.some(
+      (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
+    );
+
+    if (!hasGoogleProvider) {
+      throw new Error(
+        "Sign in with Google first so VolunServe can securely verify account ownership."
+      );
+    }
+
+    if (!password || password.length < 8) {
+      throw new Error(
+        "Create a VolunServe password with at least 8 characters."
+      );
+    }
+
+    if (hasPasswordSignInProvider(user)) {
+      await updatePassword(user, password);
+      await user.reload();
+      return auth.currentUser || user;
+    }
+
+    const credential = EmailAuthProvider.credential(email, password);
+    const linkedCredential = await linkWithCredential(user, credential);
+    await linkedCredential.user.reload();
+
+    return auth.currentUser || linkedCredential.user;
+  } catch (err: any) {
+    const message = err?.code?.startsWith("auth/")
+      ? friendlyAuthError(err)
+      : err?.message || "Unable to set the VolunServe password.";
+
+    throw new Error(message);
   }
 };
 
@@ -47,8 +110,14 @@ export type Role =
   | "applicant"
   | "volunteer"
   | "resident"
+  | "lgu_personnel"
   | "admin"
   | "superadmin";
+
+/**
+ * Kept for compatibility with existing profile/application code.
+ * Public signup itself always creates a Resident account.
+ */
 
 export type PublicRole =
   | "resident"
@@ -78,57 +147,50 @@ export type UserMode =
 
 export interface UserProfile {
   uid: string;
-
   fullName: string;
   lastName?: string;
   firstName?: string;
   middleName?: string;
-
   age: number;
-
   email: string;
   phoneNumber: string;
-
   region?: string;
   province?: string;
   city?: string;
   barangay?: string;
   address?: string;
-
   occupationCategory?: string;
   occupationSpecialization?: string;
   occupationOther?: string;
   occupation?: string;
-
   skills?: string[];
   skillOther?: string;
   availability?: string[];
-
   role: Role;
-
-  requestedRole?: PublicRole;
-
-  primaryRole?: PublicRole;
+  requestedRole?: PublicRole | "lgu_personnel";
+  primaryRole?: PublicRole | "lgu_personnel";
   residentAccess?: boolean;
   volunteerAccess?: boolean;
   volunteerStatus?: VolunteerStatus;
-  activeMode?: UserMode;
-
+  activeMode?: UserMode | "lgu_personnel";
+  lguVerified?: boolean;
+  employmentStatus?: string;
+  department?: string;
+  position?: string;
+  employeeId?: string;
+  isTestAccount?: boolean;
   status?: AccountStatus;
   reviewedAt?: any;
   reviewedBy?: string;
   rejectedReason?: string;
-
   identityStatus?: IdentityStatus;
   identityVerified?: boolean;
   identitySubmittedAt?: any;
   identityVerifiedAt?: any;
   identityVerifiedBy?: string;
   identityFailureReason?: string;
-
   profilePictureUrl?: string;
   createdAt: any;
-
   points?: number;
   joined?: number;
   completed?: number;
@@ -136,30 +198,32 @@ export interface UserProfile {
 }
 
 export interface SignupData {
-  role: PublicRole;
-
+  /**
+   * Kept optional only so older/current signup screens can keep passing it.
+   * signUpUser intentionally ignores Volunteer signup intent and always
+   * creates a Basic Resident account.
+   */
+  role?: PublicRole;
   lastName: string;
   firstName: string;
   middleName?: string;
-
   age: number;
-
   email: string;
   password: string;
-
   authProvider?: "email" | "google";
-
   phoneNumber: string;
-
   region: string;
   province: string;
   city: string;
   barangay: string;
-
   occupationCategory: string;
   occupationSpecialization?: string;
   occupationOther?: string;
-
+  /**
+   * Legacy compatibility only.
+   * Volunteer skills and availability are intentionally not saved at signup.
+   * They belong to the Volunteer Application after Resident verification.
+   */
   skills?: string[];
   skillOther?: string;
   availability?: string[];
@@ -171,7 +235,6 @@ export const isApprovedProfile = (
   if (!profile) {
     return false;
   }
-
   return (
     profile.status === "approved" ||
     (
@@ -186,10 +249,36 @@ export const isAdminProfile = (
 ) => {
   return (
     isApprovedProfile(profile) &&
-    (
-      profile?.role === "admin" ||
-      profile?.role === "superadmin"
-    )
+    profile?.role === "admin"
+  );
+};
+
+export const isSuperAdminProfile = (
+  profile: UserProfile | null | undefined
+) => {
+  return (
+    isApprovedProfile(profile) &&
+    profile?.role === "superadmin"
+  );
+};
+
+export const isAdminOrSuperAdminProfile = (
+  profile: UserProfile | null | undefined
+) => {
+  return (
+    isAdminProfile(profile) ||
+    isSuperAdminProfile(profile)
+  );
+};
+
+export const isLguPersonnelProfile = (
+  profile: UserProfile | null | undefined
+) => {
+  return (
+    isApprovedProfile(profile) &&
+    profile?.role === "lgu_personnel" &&
+    profile?.lguVerified === true &&
+    String(profile?.employmentStatus || "").toLowerCase() === "active"
   );
 };
 
@@ -199,14 +288,12 @@ export const getIdentityStatus = (
   if (!profile) {
     return "basic";
   }
-
   if (
     profile.identityVerified === true ||
     profile.identityStatus === "verified"
   ) {
     return "verified";
   }
-
   return profile.identityStatus || "basic";
 };
 
@@ -222,62 +309,64 @@ export const isIdentityVerified = (
 export const hasResidentAccess = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile || !isApprovedProfile(profile)) return false;
-
+  if (!profile || !isApprovedProfile(profile)) {
+    return false;
+  }
+  // Admin and Super Admin are system roles, not community Resident roles.
   if (
     profile.role === "admin" ||
-    profile.role === "superadmin"
+    profile.role === "superadmin" ||
+    profile.role === "lgu_personnel" ||
+    profile.role === "applicant"
   ) {
-    return true;
+    return false;
   }
+  // New architecture requires explicit Resident access.
+  return profile.residentAccess === true;
+};
 
-  if (typeof profile.residentAccess === "boolean") {
-    return profile.residentAccess;
-  }
-
+export const isVerifiedResidentProfile = (
+  profile: UserProfile | null | undefined
+) => {
   return (
-    profile.role === "resident" ||
-    profile.role === "volunteer"
+    hasResidentAccess(profile) &&
+    isIdentityVerified(profile)
   );
 };
 
 export const hasVolunteerAccess = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile || !isApprovedProfile(profile)) return false;
-
+  if (!profile || !isApprovedProfile(profile)) {
+    return false;
+  }
+  // Admin and Super Admin must never inherit Volunteer privileges.
   if (
     profile.role === "admin" ||
-    profile.role === "superadmin"
+    profile.role === "superadmin" ||
+    profile.role === "lgu_personnel" ||
+    profile.role === "applicant"
   ) {
-    return true;
+    return false;
   }
-
-  if (typeof profile.volunteerAccess === "boolean") {
-    return (
-      profile.volunteerAccess &&
-      (
-        !profile.volunteerStatus ||
-        profile.volunteerStatus === "approved"
-      )
-    );
-  }
-
-  return profile.role === "volunteer";
+  return (
+    profile.volunteerAccess === true &&
+    profile.volunteerStatus === "approved"
+  );
 };
 
 export const getActiveMode = (
   profile: UserProfile | null | undefined
 ): UserMode => {
-  if (!profile) return "resident";
-
+  if (!profile) {
+    return "resident";
+  }
   if (
     profile.activeMode === "volunteer" &&
     hasVolunteerAccess(profile)
   ) {
     return "volunteer";
   }
-
   return "resident";
 };
 
@@ -287,16 +376,22 @@ export const administrativeRouteForProfile = (
   if (!profile || !isApprovedProfile(profile)) {
     return null;
   }
-
   if (profile.role === "superadmin") {
     return "/(superadmin)" as const;
   }
-
   if (profile.role === "admin") {
     return "/(admin)/command-center" as const;
   }
-
   return null;
+};
+
+export const lguRouteForProfile = (
+  profile: UserProfile | null | undefined
+) => {
+  if (!isLguPersonnelProfile(profile)) {
+    return null;
+  }
+  return "/(lgu)" as const;
 };
 
 export const homeRouteForProfile = (
@@ -304,51 +399,51 @@ export const homeRouteForProfile = (
 ) => {
   return (
     administrativeRouteForProfile(profile) ||
+    lguRouteForProfile(profile) ||
     ("/(tabs)" as const)
   );
 };
 
 function friendlyAuthError(err: any) {
   const code = err?.code;
-
   if (code === "auth/email-already-in-use") {
     return "Email already registered.";
   }
-
   if (code === "auth/weak-password") {
     return "Password too weak (minimum 6 characters).";
   }
-
   if (code === "auth/invalid-email") {
     return "Invalid email.";
   }
-
   if (code === "auth/user-not-found") {
     return "No account with this email.";
   }
-
   if (code === "auth/wrong-password") {
     return "Incorrect password.";
   }
-
   if (code === "auth/invalid-credential") {
     return "Invalid email or password.";
   }
-
+  if (code === "auth/credential-already-in-use") {
+    return "This sign-in credential is already linked to another account.";
+  }
+  if (code === "auth/provider-already-linked") {
+    return "This sign-in method is already connected to your account.";
+  }
+  if (code === "auth/requires-recent-login") {
+    return "For security, sign in with Google again before changing your VolunServe password.";
+  }
   if (code === "auth/too-many-requests") {
     return "Too many login attempts. Please try again later.";
   }
-
   return err?.message || "Something went wrong.";
 }
 
 function friendlyFirestoreError(err: any) {
   const code = err?.code;
-
   if (code === "permission-denied") {
     return "Firestore permission denied. Check Firestore Rules.";
   }
-
   return err?.message || "Firestore error.";
 }
 
@@ -357,54 +452,69 @@ export const signUpUser = async (
 ) => {
   try {
     let user;
-
     const submittedEmail = data.email.trim().toLowerCase();
     const usesGoogle = data.authProvider === "google";
-
     if (usesGoogle) {
-
       if (!auth.currentUser) {
         throw new Error(
           "Your Google registration session expired. Connect your Google account again."
         );
       }
-
       const authenticatedEmail =
         auth.currentUser.email?.trim().toLowerCase();
-
-      if (!authenticatedEmail || authenticatedEmail !== submittedEmail) {
+      if (
+        !authenticatedEmail ||
+        authenticatedEmail !== submittedEmail
+      ) {
         throw new Error(
           "The connected Google account does not match the email in the registration form."
         );
       }
-
       user = auth.currentUser;
     } else {
- 
       if (auth.currentUser) {
         await signOut(auth);
       }
-
       const userCredential =
         await createUserWithEmailAndPassword(
           auth,
           submittedEmail,
           data.password
         );
-
       user = userCredential.user;
     }
-
     const uid = user.uid;
     const profileRef = doc(db, "users", uid);
     const existing = await getDoc(profileRef);
-
     if (existing.exists()) {
       throw new Error(
         "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
       );
     }
-
+    // Google registration must also have an Email/Password credential linked
+    // to the SAME Firebase UID. This keeps one VolunServe profile while
+    // allowing the resident to sign in either with Google or manually.
+    if (usesGoogle) {
+      const hasPasswordProvider = user.providerData.some(
+        (provider) => provider.providerId === EmailAuthProvider.PROVIDER_ID
+      );
+      if (!hasPasswordProvider) {
+        if (!data.password) {
+          throw new Error(
+            "Create a VolunServe password so this account can use both Google and email/password sign-in."
+          );
+        }
+        const emailPasswordCredential = EmailAuthProvider.credential(
+          submittedEmail,
+          data.password
+        );
+        const linkedCredential = await linkWithCredential(
+          user,
+          emailPasswordCredential
+        );
+        user = linkedCredential.user;
+      }
+    }
     const fullName = [
       data.lastName,
       data.firstName,
@@ -414,7 +524,6 @@ export const signUpUser = async (
       .join(", ")
       .replace(", ,", ",")
       .trim();
-
     const occupation =
       (
         data.occupationOther &&
@@ -425,102 +534,73 @@ export const signUpUser = async (
         data.occupationSpecialization.trim()
       ) ||
       data.occupationCategory;
-
-    const hadVolunteerSignupIntent =
-      data.role === "volunteer";
-
     const batch = writeBatch(db);
-
+    /**
+     * FINAL PUBLIC SIGNUP RULE:
+     * Every registration creates one Basic Resident account.
+     * Volunteer access can only be requested later by a Verified Resident.
+     */
     batch.set(profileRef, {
       uid,
-
       fullName,
-
       lastName: data.lastName.trim(),
       firstName: data.firstName.trim(),
       middleName:
         (data.middleName || "").trim(),
-
       age: data.age,
-
-      email:
-        data.email.trim().toLowerCase(),
-
+      email: submittedEmail,
       phoneNumber:
         data.phoneNumber.trim(),
-
       region: data.region,
       province: data.province,
       city: data.city,
       barangay: data.barangay,
-
       address:
         `${data.barangay}, ${data.city}, ${data.province}, ${data.region}`,
-
       occupationCategory:
         data.occupationCategory,
-
       occupationSpecialization:
         (
           data.occupationSpecialization ||
           ""
         ).trim(),
-
       occupationOther:
         (
           data.occupationOther ||
           ""
         ).trim(),
-
       occupation,
-
-      skills:
-        hadVolunteerSignupIntent
-          ? (data.skills || [])
-          : [],
-
-      skillOther:
-        hadVolunteerSignupIntent
-          ? (data.skillOther || "").trim()
-          : "",
-
-      availability:
-        hadVolunteerSignupIntent
-          ? (data.availability || [])
-          : [],
-
+      // Volunteer qualifications are collected later in the
+      // Verified Resident -> Volunteer Application flow.
+      skills: [],
+      skillOther: "",
+      availability: [],
       role: "resident" as Role,
-      requestedRole: data.role,
-
-      primaryRole: "resident",
+      requestedRole: "resident" as PublicRole,
+      primaryRole: "resident" as PublicRole,
       residentAccess: true,
       volunteerAccess: false,
       volunteerStatus:
         "not_applied" as VolunteerStatus,
       activeMode: "resident" as UserMode,
-
+      // Basic accounts are immediately active for safe/basic Resident use.
+      // Identity verification controls protected Verified Resident features.
       status: "approved" as AccountStatus,
-
       identityStatus:
         "basic" as IdentityStatus,
       identityVerified: false,
-
       profilePictureUrl:
         user.photoURL || "",
-
       createdAt:
         serverTimestamp(),
     });
-
     await batch.commit();
-
     return user;
   } catch (err: any) {
     const message =
       err?.code?.startsWith("auth/")
         ? friendlyAuthError(err)
         : friendlyFirestoreError(err);
-
     throw new Error(message);
   }
 };
@@ -536,30 +616,27 @@ export const loginUser = async (
         email.trim().toLowerCase(),
         password
       );
-
     const user = userCredential.user;
     const profileRef =
       doc(db, "users", user.uid);
-
     const profileSnapshot =
       await getDoc(profileRef);
-
     if (!profileSnapshot.exists()) {
       await signOut(auth);
-
       throw new Error(
         "No VolunServe profile was found for this account. Please register first."
       );
     }
-
     const profile =
       profileSnapshot.data() as UserProfile;
-
     const status = profile.status;
-
+    /**
+     * Basic Accounts are valid active accounts because their status is
+     * "approved". They do NOT need identity verification just to sign in.
+     * Verification only unlocks protected Verified Resident functions.
+     */
     if (!isApprovedProfile(profile)) {
       await signOut(auth);
-
       if (status === "rejected") {
         throw new Error(
           profile.rejectedReason
@@ -567,18 +644,15 @@ export const loginUser = async (
             : "Your registration was rejected. Please contact an administrator."
         );
       }
-
       if (status === "suspended") {
         throw new Error(
           "Your account is suspended. Please contact an administrator."
         );
       }
-
       throw new Error(
         "This legacy account is still pending administrative review."
       );
     }
-
     return {
       user,
       profile,
@@ -588,7 +662,6 @@ export const loginUser = async (
       err?.code?.startsWith("auth/")
         ? friendlyAuthError(err)
         : friendlyFirestoreError(err);
-
     throw new Error(message);
   }
 };
@@ -602,11 +675,9 @@ export const getUserProfile = async (
 ) => {
   const snapshot =
     await getDoc(doc(db, "users", uid));
-
   if (!snapshot.exists()) {
     throw new Error("Profile not found.");
   }
-
   return snapshot.data() as UserProfile;
 };
 
@@ -614,35 +685,40 @@ export const updateUserProfile = async (
   uid: string,
   updates: Partial<UserProfile>
 ) => {
+  /**
+   * Community users may update profile details only.
+   * Trust/access fields are controlled by the dedicated verification,
+   * Volunteer approval, Admin, and Super Admin workflows.
+   */
   const {
     uid: _uid,
     email: _email,
     createdAt: _createdAt,
-
     role: _role,
     requestedRole: _requestedRole,
     primaryRole: _primaryRole,
-
     residentAccess: _residentAccess,
     volunteerAccess: _volunteerAccess,
     volunteerStatus: _volunteerStatus,
     activeMode: _activeMode,
-
+    lguVerified: _lguVerified,
+    employmentStatus: _employmentStatus,
+    department: _department,
+    position: _position,
+    employeeId: _employeeId,
+    isTestAccount: _isTestAccount,
     status: _status,
     reviewedAt: _reviewedAt,
     reviewedBy: _reviewedBy,
     rejectedReason: _rejectedReason,
-
     identityStatus: _identityStatus,
     identityVerified: _identityVerified,
     identitySubmittedAt: _identitySubmittedAt,
     identityVerifiedAt: _identityVerifiedAt,
     identityVerifiedBy: _identityVerifiedBy,
     identityFailureReason: _identityFailureReason,
-
     ...safeUpdates
   } = updates as any;
-
   await updateDoc(
     doc(db, "users", uid),
     safeUpdates
@@ -655,23 +731,27 @@ export const setActiveMode = async (
 ) => {
   const profileRef =
     doc(db, "users", uid);
-
   const snapshot =
     await getDoc(profileRef);
-
   if (!snapshot.exists()) {
     throw new Error("Profile not found.");
   }
-
   const profile =
     snapshot.data() as UserProfile;
-
   if (!isApprovedProfile(profile)) {
     throw new Error(
       "Your account must be active before changing modes."
     );
   }
-
+  if (
+    profile.role === "admin" ||
+    profile.role === "superadmin" ||
+    profile.role === "lgu_personnel"
+  ) {
+    throw new Error(
+      "Administrative and LGU Personnel accounts do not use Resident or Volunteer mode."
+    );
+  }
   if (
     requestedMode === "resident" &&
     !hasResidentAccess(profile)
@@ -680,7 +760,6 @@ export const setActiveMode = async (
       "Resident mode is not available for this account."
     );
   }
-
   if (
     requestedMode === "volunteer" &&
     !hasVolunteerAccess(profile)
@@ -689,17 +768,14 @@ export const setActiveMode = async (
       "Volunteer mode is available only after administrator approval."
     );
   }
-
   await updateDoc(
     profileRef,
     {
       activeMode: requestedMode,
     }
   );
-
   return requestedMode;
 };
-
 
 export const activeModeForProfile = (
   profile: UserProfile | null | undefined
@@ -711,11 +787,9 @@ export const setActiveUserMode = async (
   mode: UserMode
 ) => {
   const user = auth.currentUser;
-
   if (!user) {
     throw new Error("Please sign in again.");
   }
-
   return setActiveMode(user.uid, mode);
 };
 

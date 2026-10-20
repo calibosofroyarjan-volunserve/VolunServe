@@ -1,28 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    setDoc,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 import { db } from "../../lib/firebase";
 import {
-    hasVolunteerAccess,
-    setActiveUserMode,
+  hasVolunteerAccess,
+  setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -47,14 +47,16 @@ type VolunteerApplication = {
 };
 
 const SKILLS = [
+  "General Volunteer Assistance",
+  "Driver / Transport",
   "First Aid",
   "Medical Assistance",
   "Search and Rescue",
-  "Driving",
+  "Clearing / Heavy Lifting",
+  "Community Coordination",
   "Logistics",
   "IT / Technology",
   "Relief Distribution",
-  "Community Coordination",
 ];
 
 const AVAILABILITY = [
@@ -80,7 +82,7 @@ function toggle(list: string[], value: string) {
     : [...list, value];
 }
 
-export default function VolunteerApplicationWeb() {
+export default function VolunteerApplication() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
@@ -97,15 +99,30 @@ export default function VolunteerApplicationWeb() {
   const [motivation, setMotivation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [editingRejected, setEditingRejected] = useState(false);
 
   const compact = width < 900;
 
   const approvedVolunteer = hasVolunteerAccess(profile);
 
+  const identityVerified =
+    profile?.identityVerified === true ||
+    profile?.identityStatus === "verified";
+
+  const profileVolunteerStatus =
+    String(profile?.volunteerStatus || "")
+      .trim()
+      .toLowerCase();
+
   const applicationStatus: ApplicationStatus =
     approvedVolunteer
       ? "approved"
-      : application?.status || null;
+      : application?.status ||
+        (profileVolunteerStatus === "pending"
+          ? "pending"
+          : profileVolunteerStatus === "rejected"
+            ? "rejected"
+            : null);
 
   const fullName =
     profile?.fullName?.trim() ||
@@ -170,15 +187,29 @@ export default function VolunteerApplicationWeb() {
   }, [user]);
 
   const formValid = useMemo(() => {
+    const experienceLength =
+      experienceTraining.trim().length;
+    const motivationLength =
+      motivation.trim().length;
+    const emergencyContactLength =
+      emergencyContact.trim().length;
+
     return (
       skills.length > 0 &&
+      skills.length <= 20 &&
       availability.length > 0 &&
+      availability.length <= 20 &&
       preferredActivity.length > 0 &&
-      experienceTraining.trim().length >= 5 &&
-      motivation.trim().length >= 15
+      preferredActivity.length <= 160 &&
+      experienceLength >= 5 &&
+      experienceLength <= 1500 &&
+      motivationLength >= 15 &&
+      motivationLength <= 2000 &&
+      emergencyContactLength <= 60
     );
   }, [
     availability,
+    emergencyContact,
     experienceTraining,
     motivation,
     preferredActivity,
@@ -202,7 +233,18 @@ export default function VolunteerApplicationWeb() {
       return;
     }
 
-    if (application) {
+    if (!identityVerified) {
+      Alert.alert(
+        "Identity Verification Required",
+        "Volunteer applications are available only to Verified Residents. Complete Resident Identity Verification first."
+      );
+      return;
+    }
+
+    if (
+      application &&
+      application.status !== "rejected"
+    ) {
       Alert.alert(
         "Application already submitted",
         "You already have a volunteer application on record."
@@ -210,10 +252,24 @@ export default function VolunteerApplicationWeb() {
       return;
     }
 
+    const cleanPhone =
+      String(
+        profile.phoneNumber ||
+          ""
+      ).trim();
+
+    if (cleanPhone.length < 8) {
+      Alert.alert(
+        "Contact Number Required",
+        "Add a valid contact number in Account Settings before applying as a volunteer."
+      );
+      return;
+    }
+
     if (!formValid) {
       Alert.alert(
         "Complete the form",
-        "Select at least one skill and availability, choose a preferred activity, and complete your experience and motivation."
+        "Select at least one skill and availability, choose a preferred activity, and complete your experience and motivation within the allowed lengths."
       );
       return;
     }
@@ -221,12 +277,22 @@ export default function VolunteerApplicationWeb() {
     try {
       setSubmitting(true);
 
-      await setDoc(
-        doc(
-          db,
-          "volunteerApplications",
-          user.uid
-        ),
+      const applicationRef = doc(
+        db,
+        "volunteerApplications",
+        user.uid
+      );
+
+      const userRef = doc(
+        db,
+        "users",
+        user.uid
+      );
+
+      const batch = writeBatch(db);
+
+      batch.set(
+        applicationRef,
         {
           uid: user.uid,
           source: "resident_application",
@@ -240,10 +306,8 @@ export default function VolunteerApplicationWeb() {
             "",
           barangay:
             profile.barangay || "",
-          phone:
-            profile.phoneNumber || "",
-          phoneNumber:
-            profile.phoneNumber || "",
+          phone: cleanPhone,
+          phoneNumber: cleanPhone,
 
           occupationCategory:
             profile.occupationCategory || "",
@@ -264,15 +328,34 @@ export default function VolunteerApplicationWeb() {
 
           status: "pending",
           createdAt:
+            application?.createdAt ||
             serverTimestamp(),
           updatedAt:
             serverTimestamp(),
         }
       );
 
+      /*
+       * Keep the same Resident account. Applying only changes the
+       * Volunteer application status to Pending; it does not grant
+       * Volunteer access and does not switch account mode.
+       *
+       * Firestore rules verify both writes together with getAfter().
+       */
+      batch.update(
+        userRef,
+        {
+          volunteerStatus: "pending",
+        }
+      );
+
+      await batch.commit();
+
+      setEditingRejected(false);
+
       Alert.alert(
         "Application submitted",
-        "Your volunteer application is now pending administrator review. You will remain in Resident Mode until it is approved."
+        "Your volunteer application is now pending administrator review. Your Resident access stays active while you wait."
       );
     } catch (error: any) {
       console.log(
@@ -283,7 +366,7 @@ export default function VolunteerApplicationWeb() {
       Alert.alert(
         "Unable to submit",
         error?.code === "permission-denied"
-          ? "Permission denied. Make sure the latest Firestore rules are deployed."
+          ? "Submission was blocked. Make sure your identity is verified and the latest Firestore rules are deployed."
           : error?.message ||
               "Your application could not be submitted."
       );
@@ -373,6 +456,31 @@ export default function VolunteerApplicationWeb() {
                     Checking volunteer status...
                   </Text>
                 </View>
+              ) : !identityVerified ? (
+                <StatusPanel
+                  icon="shield-outline"
+                  title="Verify Your Resident Identity First"
+                  text="Volunteer application is available only to Verified Residents. Your Basic Account and emergency reporting access remain available."
+                  tone="pending"
+                >
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={() =>
+                      router.push(
+                        "/identity-verification" as any
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.primaryButtonText}>
+                      Open Identity Verification
+                    </Text>
+                  </Pressable>
+                </StatusPanel>
               ) : applicationStatus === "approved" ? (
                 <StatusPanel
                   icon="checkmark-circle"
@@ -418,17 +526,34 @@ export default function VolunteerApplicationWeb() {
                   text="Your volunteer application has been submitted. You will stay in Resident Mode while the administrator verifies your application."
                   tone="pending"
                 />
-              ) : applicationStatus === "rejected" ? (
+              ) : applicationStatus === "rejected" &&
+                !editingRejected ? (
                 <StatusPanel
                   icon="close-circle"
                   title="Volunteer Application Rejected"
                   text={
                     application?.rejectedReason
                       ? `Reason: ${application.rejectedReason}`
-                      : "Your application was not approved. Please contact the administrator if you need clarification or want to submit updated requirements."
+                      : "Your application was not approved. You may update your volunteer information and submit it again for review."
                   }
                   tone="rejected"
-                />
+                >
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={() =>
+                      setEditingRejected(true)
+                    }
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.primaryButtonText}>
+                      Update & Re-apply
+                    </Text>
+                  </Pressable>
+                </StatusPanel>
               ) : (
                 <>
                   <SectionHeading
@@ -611,6 +736,7 @@ export default function VolunteerApplicationWeb() {
                       setExperienceTraining
                     }
                     multiline
+                    maxLength={1500}
                     placeholder="Example: Basic first aid training, barangay clean-up volunteer, licensed driver..."
                     placeholderTextColor="#94A3B8"
                     style={styles.textArea}
@@ -626,6 +752,7 @@ export default function VolunteerApplicationWeb() {
                     value={motivation}
                     onChangeText={setMotivation}
                     multiline
+                    maxLength={2000}
                     placeholder="Tell us why you want to help the community..."
                     placeholderTextColor="#94A3B8"
                     style={styles.textArea}
@@ -641,6 +768,7 @@ export default function VolunteerApplicationWeb() {
                     }
                     placeholder="Name and contact number"
                     placeholderTextColor="#94A3B8"
+                    maxLength={60}
                     style={styles.input}
                   />
 
@@ -717,7 +845,7 @@ export default function VolunteerApplicationWeb() {
                   </Text>
                 </View>
                 <Text style={styles.flowText}>
-                  Submit volunteer details
+                  Complete Resident Identity Verification
                 </Text>
               </View>
 
@@ -728,7 +856,7 @@ export default function VolunteerApplicationWeb() {
                   </Text>
                 </View>
                 <Text style={styles.flowText}>
-                  Administrator reviews application
+                  Submit volunteer details
                 </Text>
               </View>
 
@@ -739,7 +867,7 @@ export default function VolunteerApplicationWeb() {
                   </Text>
                 </View>
                 <Text style={styles.flowText}>
-                  Volunteer access is unlocked
+                  Administrator reviews application
                 </Text>
               </View>
 
@@ -750,7 +878,7 @@ export default function VolunteerApplicationWeb() {
                   </Text>
                 </View>
                 <Text style={styles.flowText}>
-                  Switch Resident ↔ Volunteer anytime
+                  Volunteer access is unlocked; switch modes anytime
                 </Text>
               </View>
 

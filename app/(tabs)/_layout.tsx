@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
 import {
@@ -70,6 +70,12 @@ const residentDesktopTabs: TabDefinition[] = [
     activeIcon: "document-text",
   },
   {
+    name: "community-events",
+    label: "Community Events",
+    icon: "calendar-outline",
+    activeIcon: "calendar",
+  },
+  {
     name: "notifications",
     label: "Notifications",
     icon: "notifications-outline",
@@ -101,6 +107,12 @@ const volunteerDesktopTabs: TabDefinition[] = [
     label: "Volunteer Tasks",
     icon: "people-outline",
     activeIcon: "people",
+  },
+  {
+    name: "community-events",
+    label: "Community Events",
+    icon: "calendar-outline",
+    activeIcon: "calendar",
   },
   {
     name: "donation",
@@ -154,6 +166,12 @@ const residentMobileTabs: TabDefinition[] = [
     activeIcon: "alert-circle",
   },
   {
+    name: "community-events",
+    label: "Events",
+    icon: "calendar-outline",
+    activeIcon: "calendar",
+  },
+  {
     name: "profile",
     label: "Profile",
     icon: "person-outline",
@@ -179,6 +197,12 @@ const volunteerMobileTabs: TabDefinition[] = [
     label: "Tasks",
     icon: "people-outline",
     activeIcon: "people",
+  },
+  {
+    name: "community-events",
+    label: "Events",
+    icon: "calendar-outline",
+    activeIcon: "calendar",
   },
   {
     name: "profile",
@@ -270,7 +294,9 @@ function DesktopTabBar({
   const adminRoute = administrativeRouteForProfile(profile);
   const portalLabel =
     profile.role === "superadmin" ? "Super Admin Portal" : "Admin Portal";
-  const tabs = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
+
+  const tabs =
+    mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
 
   const switchMode = async () => {
     if (!canSwitchMode) return;
@@ -294,7 +320,10 @@ function DesktopTabBar({
   };
 
   const navigate = (routeName: string) => {
-    const route = state.routes.find((item: any) => item.name === routeName);
+    const route = state.routes.find(
+      (item: any) => item.name === routeName
+    );
+
     if (!route) return;
 
     const event = navigation.emit({
@@ -303,10 +332,10 @@ function DesktopTabBar({
       canPreventDefault: true,
     });
 
-    if (!event.defaultPrevented) navigation.navigate(route.name);
+    if (!event.defaultPrevented) {
+      navigation.navigate(route.name);
+    }
   };
-
-
 
   return (
     <View style={styles.desktopSidebar}>
@@ -325,14 +354,17 @@ function DesktopTabBar({
       </View>
 
       <Text style={styles.desktopSectionLabel}>MAIN MENU</Text>
+
       <View style={styles.desktopNavigation}>
         {tabs.map((item) => {
           const routeIndex = state.routes.findIndex(
             (route: any) => route.name === item.name
           );
+
           if (routeIndex === -1) return null;
 
           const focused = state.index === routeIndex;
+
           return (
             <Pressable
               key={item.name}
@@ -363,7 +395,9 @@ function DesktopTabBar({
               >
                 {item.label}
               </Text>
-              {focused ? <View style={styles.desktopActiveMark} /> : null}
+              {focused ? (
+                <View style={styles.desktopActiveMark} />
+              ) : null}
             </Pressable>
           );
         })}
@@ -378,7 +412,11 @@ function DesktopTabBar({
             ]}
             onPress={() => void switchMode()}
           >
-            <Ionicons name="swap-horizontal-outline" size={18} color="#60728A" />
+            <Ionicons
+              name="swap-horizontal-outline"
+              size={18}
+              color="#60728A"
+            />
             <Text style={styles.desktopUtilityText}>
               {mode === "volunteer"
                 ? "Switch to Resident Mode"
@@ -396,7 +434,11 @@ function DesktopTabBar({
             ]}
             onPress={openAdminPortal}
           >
-            <Ionicons name="shield-checkmark-outline" size={18} color="#6D28D9" />
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={18}
+              color="#6D28D9"
+            />
             <Text style={styles.desktopPortalText}>{portalLabel}</Text>
           </Pressable>
         ) : null}
@@ -408,9 +450,14 @@ function DesktopTabBar({
           ]}
           onPress={() => navigate("profile")}
         >
-          <Ionicons name="settings-outline" size={18} color="#60728A" />
+          <Ionicons
+            name="settings-outline"
+            size={18}
+            color="#60728A"
+          />
           <Text style={styles.desktopUtilityText}>Account Settings</Text>
         </Pressable>
+
         <Pressable
           style={({ pressed }) => [
             styles.desktopUtilityButton,
@@ -418,8 +465,14 @@ function DesktopTabBar({
           ]}
           onPress={() => void logoutUser()}
         >
-          <Ionicons name="log-out-outline" size={18} color="#DC3244" />
-          <Text style={[styles.desktopUtilityText, styles.desktopLogoutText]}>
+          <Ionicons
+            name="log-out-outline"
+            size={18}
+            color="#DC3244"
+          />
+          <Text
+            style={[styles.desktopUtilityText, styles.desktopLogoutText]}
+          >
             Log Out
           </Text>
         </Pressable>
@@ -441,7 +494,9 @@ function CustomTabBar({
   const adminRoute = administrativeRouteForProfile(profile);
   const portalLabel =
     profile.role === "superadmin" ? "Super Admin" : "Admin";
-  const tabs = mode === "volunteer" ? volunteerMobileTabs : residentMobileTabs;
+
+  const tabs =
+    mode === "volunteer" ? volunteerMobileTabs : residentMobileTabs;
 
   const switchMode = async () => {
     if (!canSwitchMode) return;
@@ -556,7 +611,6 @@ function CustomTabBar({
                   size={24}
                   color={focused ? "#078F82" : "#7A8799"}
                 />
-
                 <Text
                   style={[
                     styles.tabText,
@@ -599,7 +653,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 10,
   },
-
   mobileModeRow: {
     minHeight: 44,
     flexDirection: "row",
@@ -609,7 +662,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 7,
   },
-
   mobileModeButton: {
     minHeight: 34,
     flexDirection: "row",
@@ -620,13 +672,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#E7F8F4",
   },
-
   mobileModeButtonText: {
     color: "#0F766E",
     fontSize: 11,
     fontWeight: "800",
   },
-
   mobilePortalButton: {
     minHeight: 34,
     flexDirection: "row",
@@ -637,17 +687,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#F3E8FF",
   },
-
   mobilePortalButtonText: {
     color: "#6D28D9",
     fontSize: 11,
     fontWeight: "800",
   },
-
   mobilePressed: {
     opacity: 0.72,
   },
-
   tabBar: {
     height: 76,
     flexDirection: "row",
@@ -657,13 +704,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingTop: 8,
   },
-
   tabItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-
   tabInner: {
     minWidth: 64,
     minHeight: 56,
@@ -673,23 +718,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-
   tabInnerActive: {
     backgroundColor: "#E7F8F4",
   },
-
   tabText: {
     fontSize: 11.5,
     color: "#7A8799",
     marginTop: 3,
     fontWeight: "500",
   },
-
   tabTextActive: {
     color: "#078F82",
     fontWeight: "800",
   },
-
   desktopSidebar: {
     width: 268,
     height: "100%",
@@ -716,7 +757,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: "#E8F8F5",
   },
-  desktopBrandCopy: { flex: 1, minWidth: 0 },
+  desktopBrandCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
   desktopBrandTitle: {
     color: "#0F675F",
     fontSize: 20,
@@ -766,7 +810,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.1,
   },
-  desktopNavigation: { gap: 4 },
+  desktopNavigation: {
+    gap: 4,
+  },
   desktopNavItem: {
     minHeight: 50,
     flexDirection: "row",
@@ -775,7 +821,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     borderRadius: 13,
   },
-  desktopNavItemActive: { backgroundColor: "#EAF8F4" },
+  desktopNavItemActive: {
+    backgroundColor: "#EAF8F4",
+  },
   desktopNavIcon: {
     width: 34,
     height: 34,
@@ -784,14 +832,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#F2F5F8",
   },
-  desktopNavIconActive: { backgroundColor: "#078F82" },
+  desktopNavIconActive: {
+    backgroundColor: "#078F82",
+  },
   desktopNavText: {
     flex: 1,
     color: "#52647B",
     fontSize: 12,
     fontWeight: "700",
   },
-  desktopNavTextActive: { color: "#076E66", fontWeight: "900" },
+  desktopNavTextActive: {
+    color: "#076E66",
+    fontWeight: "900",
+  },
   desktopActiveMark: {
     width: 4,
     height: 22,
@@ -822,7 +875,16 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "900",
   },
-  desktopUtilityText: { flex: 1, color: "#52647B", fontSize: 11.5, fontWeight: "700" },
-  desktopLogoutText: { color: "#C92537" },
-  desktopPressed: { opacity: 0.72 },
+  desktopUtilityText: {
+    flex: 1,
+    color: "#52647B",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  desktopLogoutText: {
+    color: "#C92537",
+  },
+  desktopPressed: {
+    opacity: 0.72,
+  },
 });

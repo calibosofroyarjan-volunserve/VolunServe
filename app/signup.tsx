@@ -36,7 +36,6 @@ const redirectUri = AuthSession.makeRedirectUri({
 type Step = 1 | 2 | 3 | 4;
 
 type FormState = {
-  role: "resident";
   lastName: string;
   firstName: string;
   middleName: string;
@@ -51,9 +50,6 @@ type FormState = {
   occupationCategory: string;
   occupationSpecialization: string;
   occupationOther: string;
-  skills: string[];
-  skillOther: string;
-  availability: string[];
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
@@ -78,6 +74,27 @@ const COLORS = {
 };
 
 const ALLOWED_REGIONS = ["Region III – Central Luzon"];
+
+const ALLOWED_PROVINCES = [
+  "Bulacan",
+  "BULACAN",
+  "Province of Bulacan",
+];
+
+const ALLOWED_CITIES = [
+  "City of San Jose del Monte",
+  "CITY OF SAN JOSE DEL MONTE",
+  "City of San Jose Del Monte",
+  "San Jose del Monte",
+  "San Jose Del Monte",
+  "SAN JOSE DEL MONTE",
+];
+
+const isAllowedProvince = (value: string) =>
+  ALLOWED_PROVINCES.includes(value);
+
+const isAllowedCity = (value: string) =>
+  ALLOWED_CITIES.includes(value);
 
 const OCCUPATION_OPTIONS = [
   "Medical Professional",
@@ -127,7 +144,7 @@ const SLIDES = [
   },
   {
     title: "Verify When Ready",
-    body: "Create a Basic Resident Account first, then verify your identity with a government ID and live selfie.",
+    body: "Create a Basic Resident Account first. Identity Verification is a separate step before protected Resident and Volunteer services.",
     icon: "✅",
   },
 ];
@@ -144,8 +161,8 @@ const STEP_META: Record<Step, { title: string; subtitle: string; icon: string }>
     icon: "🏠",
   },
   3: {
-    title: "Profile & Availability",
-    subtitle: "Occupation and basic resident profile",
+    title: "Resident Profile",
+    subtitle: "Occupation and basic resident information",
     icon: "🧰",
   },
   4: {
@@ -379,11 +396,11 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 
         <ScrollView contentContainerStyle={styles.termsBody} showsVerticalScrollIndicator>
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
-          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Resident Account becomes active after successful registration.</Text>
+          <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Resident Account becomes active after successful registration. Identity Verification is a separate trust step for protected Resident and Volunteer services.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later request Identity Verification, your submitted government ID and live selfie are processed only for verification purposes and should be handled as private verification evidence.</Text>
+          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later use Identity Verification, verification evidence is handled as private data and must only be used for the verification process.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and Volunteer application are separate steps that you may complete after creating your account.</Text>
+          <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and the Volunteer Application are separate steps after account creation.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -414,7 +431,6 @@ export default function Signup() {
   const [dobOpen, setDobOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormState>({
-    role: "resident",
     lastName: "",
     firstName: "",
     middleName: "",
@@ -429,9 +445,6 @@ export default function Signup() {
     occupationCategory: "",
     occupationSpecialization: "",
     occupationOther: "",
-    skills: [],
-    skillOther: "",
-    availability: [],
     password: "",
     confirmPassword: "",
     acceptTerms: false,
@@ -503,7 +516,8 @@ export default function Signup() {
         setCities([]);
         setBarangays([]);
         const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces"));
-        setProvinces(snap.docs.map((d) => d.id).sort());
+        const available = snap.docs.map((d) => d.id).sort();
+        setProvinces(available.filter(isAllowedProvince));
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load provinces.");
       } finally {
@@ -521,7 +535,8 @@ export default function Signup() {
         setCities([]);
         setBarangays([]);
         const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces", formData.province, "cities"));
-        setCities(snap.docs.map((d) => d.id).sort());
+        const available = snap.docs.map((d) => d.id).sort();
+        setCities(available.filter(isAllowedCity));
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load cities.");
       } finally {
@@ -561,7 +576,11 @@ export default function Signup() {
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
-    const step2Valid = !!formData.region && !!formData.province && !!formData.city && !!formData.barangay;
+    const step2Valid =
+      !!formData.region &&
+      isAllowedProvince(formData.province) &&
+      isAllowedCity(formData.city) &&
+      !!formData.barangay;
     const needsSpec = specializationOptions.length > 0;
     const isOther = formData.occupationCategory === "Other (Specify)";
     const occupationOtherValid = !isOther || formData.occupationOther.trim().length >= 2;
@@ -614,7 +633,7 @@ export default function Signup() {
       
       const stepMessages: Record<Step, string> = {
         1: "Please complete your personal information and contact details.",
-        2: "Please select your complete residential address.",
+        2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your occupation information.",
         4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
       };
@@ -658,7 +677,6 @@ export default function Signup() {
     try {
       setLoadingSubmit(true);
       await signUpUser({
-        role: "resident",
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
@@ -674,14 +692,11 @@ export default function Signup() {
         occupationCategory: formData.occupationCategory,
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
-        skills: [],
-        skillOther: "",
-        availability: [],
-      } as any);
+      });
 
       Alert.alert(
         "Welcome to VolunServe",
-        "Your Basic Resident Account is ready. You can use Resident services now. When you are ready, verify your identity from your Profile using a supported government ID and live selfie. Verified Residents may then apply for Volunteer access.",
+        "Your Basic Resident Account is ready. You can sign in and use basic safety services now. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.",
         [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
       );
     } catch (e: any) {
@@ -715,7 +730,7 @@ export default function Signup() {
           </View>
 
           <Text style={styles.heroTitle}>Create your account</Text>
-          <Text style={styles.heroText}>Create one Basic Resident Account first. Identity Verification and Volunteer access are completed later from your account.</Text>
+          <Text style={styles.heroText}>Create one Basic Resident Account first. Identity Verification and Volunteer access are separate steps completed later from your account.</Text>
         </View>
 
         <View style={styles.carouselWrap}>
@@ -785,7 +800,7 @@ export default function Signup() {
             <View>
               <View style={styles.infoBox}>
                 <Text style={styles.infoBoxText}>
-                  Basic Resident Account — all public users start here. After signup, you may verify your identity with a supported government ID and live selfie. Verified Residents can later apply for Volunteer access.
+                  Basic Resident Account — all public users start here. Identity Verification is completed separately. After verification, Residents can access protected services and may apply for Volunteer access.
                 </Text>
               </View>
 
@@ -860,7 +875,7 @@ export default function Signup() {
 
           {step === 2 && (
             <View>
-              <SectionTitle title="Residential Address" subtitle="This helps LGUs assign services and volunteers to nearby areas." />
+              <SectionTitle title="Residential Address" subtitle="VolunServe currently serves residents of the City of San Jose del Monte, Bulacan." />
               {loadingAddress ? <View style={styles.loadingRow}><ActivityIndicator color={COLORS.primary} /><Text style={styles.loadingText}>Loading address options…</Text></View> : null}
               <Dropdown icon="🌐" label="Region *" value={formData.region} options={regions} enabled={false} onChange={(value) => {
                 updateField("region", value); updateField("province", ""); updateField("city", ""); updateField("barangay", "");
@@ -886,7 +901,7 @@ export default function Signup() {
 
               <View style={styles.infoBox}>
                 <Text style={styles.infoBoxText}>
-                  Volunteer skills and availability are not collected during signup. After your identity is verified, you can choose “Become a Volunteer” from your account and submit those details for Admin review.
+                  Volunteer skills and availability are not collected during signup. After your identity is verified, you can submit a Volunteer Application with those details for Admin review.
                 </Text>
               </View>
             </View>
@@ -1070,13 +1085,6 @@ const styles = StyleSheet.create({
   sectionHeader: { fontSize: 16, fontWeight: "900", color: COLORS.text },
   sectionSubheader: { fontSize: 12.5, color: COLORS.muted, fontWeight: "600", marginTop: 4, lineHeight: 18 },
 
-  roleRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  roleBtn: { flex: 1, backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, paddingVertical: 14, borderRadius: 16, alignItems: "center" },
-  roleBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  roleIcon: { fontSize: 22, marginBottom: 6 },
-  roleBtnText: { color: COLORS.text, fontWeight: "900" },
-  roleBtnTextActive: { color: "#fff" },
-
   googleBtn: { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
   googleBtnDisabled: { opacity: 0.82 },
   googleBtnText: { fontWeight: "900", color: COLORS.text },
@@ -1105,15 +1113,6 @@ const styles = StyleSheet.create({
 
   loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14, backgroundColor: COLORS.field, padding: 12, borderRadius: 14 },
   loadingText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
-
-  cardBox: { backgroundColor: COLORS.field, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 18 },
-  skillWrap: { flexDirection: "row", flexWrap: "wrap", marginBottom: 8 },
-  skillTag: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#d1d5db", margin: 5, backgroundColor: "#fff" },
-  skillTagActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  skillText: { fontSize: 12.5, fontWeight: "800", color: COLORS.text },
-  skillTextActive: { color: "#ffffff" },
-  checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  checkboxLabel: { marginLeft: 2, fontSize: 14, color: COLORS.text, flex: 1, fontWeight: "700" },
 
   passwordToggleBtn: { alignSelf: "flex-start", marginTop: -4, marginBottom: 12 },
   passwordToggleText: { color: COLORS.primary, fontWeight: "900", fontSize: 13 },

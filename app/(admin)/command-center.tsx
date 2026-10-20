@@ -1,9 +1,13 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
+  deleteDoc,
+  doc,
   onSnapshot,
   query,
+  serverTimestamp,
+  setDoc,
   where,
 } from "firebase/firestore";
 import React, {
@@ -13,9 +17,12 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -45,6 +52,46 @@ type DisasterCase = {
   status?: CaseStatus;
 };
 
+type EvacuationCenter = {
+  id: string;
+  name?: string;
+  address?: string;
+  barangay?: string;
+  latitude?: number;
+  longitude?: number;
+  capacity?: number;
+  occupied?: number;
+  status?: string;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+type BarangayNeedAssessment = {
+  id: string;
+  barangay?: string;
+  status?: string;
+};
+
+type CenterForm = {
+  name: string;
+  barangay: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  capacity: string;
+  occupied: string;
+};
+
+const EMPTY_CENTER_FORM: CenterForm = {
+  name: "",
+  barangay: "",
+  address: "",
+  latitude: "",
+  longitude: "",
+  capacity: "",
+  occupied: "0",
+};
+
 type ModuleCardProps = {
   icon: React.ComponentProps<
     typeof Ionicons
@@ -69,7 +116,7 @@ type OverviewCardProps = {
   onPress: () => void;
 };
 
-export default function AdminDashboard() {
+export default function CommandCenter() {
   const router =
     useRouter();
 
@@ -89,6 +136,44 @@ export default function AdminDashboard() {
   ] = useState<
     DisasterCase[]
   >([]);
+
+  const [
+    centers,
+    setCenters,
+  ] = useState<
+    EvacuationCenter[]
+  >([]);
+
+  const [
+    needAssessments,
+    setNeedAssessments,
+  ] = useState<
+    BarangayNeedAssessment[]
+  >([]);
+
+  const [
+    centerModalVisible,
+    setCenterModalVisible,
+  ] = useState(false);
+
+  const [
+    editingCenterId,
+    setEditingCenterId,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    centerForm,
+    setCenterForm,
+  ] = useState<CenterForm>(
+    EMPTY_CENTER_FORM,
+  );
+
+  const [
+    savingCenter,
+    setSavingCenter,
+  ] = useState(false);
 
   const [
     pendingUserIds,
@@ -213,6 +298,90 @@ export default function AdminDashboard() {
       return;
     }
 
+    const unsubscribe =
+      onSnapshot(
+        collection(
+          db,
+          "evacuation_centers",
+        ),
+        (snapshot) => {
+          const rows =
+            snapshot.docs
+              .map((item) => ({
+                id: item.id,
+                ...(item.data() as Omit<
+                  EvacuationCenter,
+                  "id"
+                >),
+              }))
+              .sort((a, b) =>
+                String(
+                  a.name || "",
+                ).localeCompare(
+                  String(
+                    b.name || "",
+                  ),
+                ),
+              );
+
+          setCenters(rows);
+        },
+        (error) => {
+          console.log(
+            "Command center evacuation centers error:",
+            error,
+          );
+
+          setDataError(true);
+        },
+      );
+
+    return unsubscribe;
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const unsubscribe =
+      onSnapshot(
+        collection(
+          db,
+          "barangayNeedAssessments",
+        ),
+        (snapshot) => {
+          const rows =
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...(item.data() as Omit<
+                  BarangayNeedAssessment,
+                  "id"
+                >),
+              }),
+            );
+
+          setNeedAssessments(rows);
+        },
+        (error) => {
+          console.log(
+            "Command center barangay needs error:",
+            error,
+          );
+
+          setDataError(true);
+        },
+      );
+
+    return unsubscribe;
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
     const pendingUsersQuery =
       query(
         collection(
@@ -296,6 +465,337 @@ export default function AdminDashboard() {
     return unsubscribe;
   }, [isAdmin]);
 
+  const updateCenterField = (
+    field: keyof CenterForm,
+    value: string,
+  ) => {
+    setCenterForm(
+      (current) => ({
+        ...current,
+        [field]: value,
+      }),
+    );
+  };
+
+  const openNewCenter = () => {
+    setEditingCenterId(null);
+    setCenterForm(
+      EMPTY_CENTER_FORM,
+    );
+    setCenterModalVisible(true);
+  };
+
+  const openEditCenter = (
+    center: EvacuationCenter,
+  ) => {
+    setEditingCenterId(center.id);
+
+    setCenterForm({
+      name:
+        center.name || "",
+      barangay:
+        center.barangay || "",
+      address:
+        center.address || "",
+      latitude:
+        Number.isFinite(
+          Number(center.latitude),
+        )
+          ? String(center.latitude)
+          : "",
+      longitude:
+        Number.isFinite(
+          Number(center.longitude),
+        )
+          ? String(center.longitude)
+          : "",
+      capacity:
+        Number.isFinite(
+          Number(center.capacity),
+        )
+          ? String(
+              Math.max(
+                0,
+                Number(center.capacity),
+              ),
+            )
+          : "",
+      occupied:
+        Number.isFinite(
+          Number(center.occupied),
+        )
+          ? String(
+              Math.max(
+                0,
+                Number(center.occupied),
+              ),
+            )
+          : "0",
+    });
+
+    setCenterModalVisible(true);
+  };
+
+  const closeCenterModal = () => {
+    if (savingCenter) {
+      return;
+    }
+
+    setCenterModalVisible(false);
+    setEditingCenterId(null);
+    setCenterForm(
+      EMPTY_CENTER_FORM,
+    );
+  };
+
+  const saveEvacuationCenter =
+    async () => {
+      if (!user || !isAdmin) {
+        Alert.alert(
+          "Admin access required",
+          "Only the LGU Admin can manage evacuation centers.",
+        );
+        return;
+      }
+
+      const name =
+        centerForm.name.trim();
+      const barangay =
+        centerForm.barangay.trim();
+      const address =
+        centerForm.address.trim();
+
+      const latitude =
+        Number(
+          centerForm.latitude,
+        );
+      const longitude =
+        Number(
+          centerForm.longitude,
+        );
+
+      const capacity =
+        Math.floor(
+          Number(
+            centerForm.capacity,
+          ),
+        );
+
+      const occupied =
+        Math.floor(
+          Number(
+            centerForm.occupied,
+          ),
+        );
+
+      if (name.length < 3) {
+        Alert.alert(
+          "Center name required",
+          "Enter the official evacuation center name.",
+        );
+        return;
+      }
+
+      if (barangay.length < 2) {
+        Alert.alert(
+          "Barangay required",
+          "Enter the barangay served by this evacuation center.",
+        );
+        return;
+      }
+
+      if (address.length < 3) {
+        Alert.alert(
+          "Address required",
+          "Enter the evacuation center address or landmark.",
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(latitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        !Number.isFinite(longitude) ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        Alert.alert(
+          "Invalid coordinates",
+          "Enter valid latitude and longitude values.",
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(capacity) ||
+        capacity < 1
+      ) {
+        Alert.alert(
+          "Invalid capacity",
+          "Capacity must be at least 1 person.",
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(occupied) ||
+        occupied < 0 ||
+        occupied > capacity
+      ) {
+        Alert.alert(
+          "Invalid occupancy",
+          "Current occupancy must be from 0 up to the center capacity.",
+        );
+        return;
+      }
+
+      try {
+        setSavingCenter(true);
+
+        if (editingCenterId) {
+          await setDoc(
+            doc(
+              db,
+              "evacuation_centers",
+              editingCenterId,
+            ),
+            {
+              name,
+              barangay,
+              address,
+              latitude,
+              longitude,
+              capacity,
+              occupied,
+              status: "active",
+              updatedBy: user.uid,
+              updatedAt:
+                serverTimestamp(),
+            },
+            {
+              merge: true,
+            },
+          );
+        } else {
+          const centerRef =
+            doc(
+              collection(
+                db,
+                "evacuation_centers",
+              ),
+            );
+
+          await setDoc(
+            centerRef,
+            {
+              centerId:
+                centerRef.id,
+              name,
+              barangay,
+              address,
+              latitude,
+              longitude,
+              capacity,
+              occupied,
+              status: "active",
+              createdBy:
+                user.uid,
+              updatedBy:
+                user.uid,
+              createdAt:
+                serverTimestamp(),
+              updatedAt:
+                serverTimestamp(),
+            },
+          );
+        }
+
+        setCenterModalVisible(false);
+        setEditingCenterId(null);
+        setCenterForm(
+          EMPTY_CENTER_FORM,
+        );
+
+        Alert.alert(
+          "Evacuation Center Saved",
+          "The official LGU evacuation center is now available to the VolunServe map.",
+        );
+      } catch (error) {
+        console.log(
+          "Save evacuation center error:",
+          error,
+        );
+
+        Alert.alert(
+          "Save Failed",
+          "The evacuation center could not be saved. Check Firestore permissions and try again.",
+        );
+      } finally {
+        setSavingCenter(false);
+      }
+    };
+
+  const removeEvacuationCenter =
+    async (
+      center: EvacuationCenter,
+    ) => {
+      if (!user || !isAdmin) {
+        return;
+      }
+
+      try {
+        await deleteDoc(
+          doc(
+            db,
+            "evacuation_centers",
+            center.id,
+          ),
+        );
+
+        Alert.alert(
+          "Center Removed",
+          "The evacuation center was removed from the official LGU list.",
+        );
+      } catch (error) {
+        console.log(
+          "Remove evacuation center error:",
+          error,
+        );
+
+        Alert.alert(
+          "Remove Failed",
+          "The evacuation center could not be removed.",
+        );
+      }
+    };
+
+  const confirmRemoveCenter = (
+    center: EvacuationCenter,
+  ) => {
+    Alert.alert(
+      "Remove Evacuation Center?",
+      `${
+        center.name ||
+        "This evacuation center"
+      } will no longer appear on the official VolunServe evacuation-center list.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () =>
+            void removeEvacuationCenter(
+              center,
+            ),
+        },
+      ],
+    );
+  };
+
   const metrics =
     useMemo(() => {
       const activeCases =
@@ -332,44 +832,92 @@ export default function AdminDashboard() {
           },
         ).length;
 
-      const pendingAccounts =
+      const pendingReviews =
         new Set([
           ...pendingUserIds,
           ...pendingVolunteerIds,
         ]).size;
 
+      const openBarangayNeeds =
+        needAssessments.filter(
+          (item) =>
+            ![
+              "fulfilled",
+              "closed",
+            ].includes(
+              String(
+                item.status ||
+                  "verified",
+              ).toLowerCase(),
+            ),
+        ).length;
+
+      const activeCenters =
+        centers.filter(
+          (item) =>
+            String(
+              item.status ||
+              "active",
+            ).toLowerCase() !==
+              "inactive" &&
+            String(
+              item.status ||
+              "active",
+            ).toLowerCase() !==
+              "closed",
+        );
+
+      const evacuationCapacity =
+        activeCenters.reduce(
+          (total, item) =>
+            total +
+            Math.max(
+              0,
+              Number(
+                item.capacity || 0,
+              ),
+            ),
+          0,
+        );
+
+      const evacuationOccupied =
+        activeCenters.reduce(
+          (total, item) =>
+            total +
+            Math.max(
+              0,
+              Number(
+                item.occupied || 0,
+              ),
+            ),
+          0,
+        );
+
       return {
         activeCases,
         criticalOpen,
-        pendingAccounts,
+        pendingReviews,
+        openBarangayNeeds,
+        activeCenters:
+          activeCenters.length,
+        availableEvacuationSpaces:
+          Math.max(
+            0,
+            evacuationCapacity -
+              evacuationOccupied,
+          ),
       };
     }, [
       cases,
+      centers,
       pendingUserIds,
       pendingVolunteerIds,
+      needAssessments,
     ]);
 
   const modules:
     ModuleCardProps[] =
     [
-      {
-        icon:
-          "people-outline",
-        iconColor:
-          "#2563EB",
-        iconBackground:
-          "#EFF6FF",
-        title:
-          "Account Approvals",
-        description:
-          "Review resident and volunteer applications.",
-        count:
-          metrics.pendingAccounts,
-        onPress: () =>
-          navigate(
-            "/(admin)/account-approvals",
-          ),
-      },
       {
         icon:
           "warning-outline",
@@ -378,14 +926,66 @@ export default function AdminDashboard() {
         iconBackground:
           "#FEF2F2",
         title:
-          "Emergency Cases",
+          "Emergency LGU Operations",
         description:
-          "Validate reports and assign responders.",
+          "Validate reports and coordinate the LGU response. Volunteer assignment is optional support.",
         count:
           metrics.activeCases,
         onPress: () =>
           navigate(
             "/(admin)/admin-cases",
+          ),
+      },
+      {
+        icon:
+          "business-outline",
+        iconColor:
+          "#0891B2",
+        iconBackground:
+          "#ECFEFF",
+        title:
+          "Evacuation Centers",
+        description:
+          "Create and update official LGU evacuation centers shown on the map.",
+        count:
+          metrics.activeCenters,
+        onPress:
+          openNewCenter,
+      },
+      {
+        icon:
+          "cube-outline",
+        iconColor:
+          "#059669",
+        iconBackground:
+          "#ECFDF5",
+        title:
+          "Relief Operations",
+        description:
+          "Review verified barangay needs, LGU inventory, allocations, and distribution records in one place.",
+        count:
+          metrics.openBarangayNeeds,
+        onPress: () =>
+          navigate(
+            "/(admin)/relief-operations",
+          ),
+      },
+      {
+        icon:
+          "people-outline",
+        iconColor:
+          "#2563EB",
+        iconBackground:
+          "#EFF6FF",
+        title:
+          "Volunteer Reviews",
+        description:
+          "Review volunteer applications and legacy account records. Volunteers support LGU operations.",
+        count:
+          metrics.pendingReviews,
+        onPress: () =>
+          navigate(
+            "/(admin)/account-approvals",
           ),
       },
       {
@@ -398,26 +998,10 @@ export default function AdminDashboard() {
         title:
           "Events",
         description:
-          "Manage volunteer events and activities.",
+          "Manage organized community and volunteer activities.",
         onPress: () =>
           navigate(
             "/(admin)/admin-events",
-          ),
-      },
-      {
-        icon:
-          "heart-outline",
-        iconColor:
-          "#059669",
-        iconBackground:
-          "#ECFDF5",
-        title:
-          "Donations",
-        description:
-          "Manage verified donation campaigns.",
-        onPress: () =>
-          navigate(
-            "/donation-list",
           ),
       },
       {
@@ -430,7 +1014,7 @@ export default function AdminDashboard() {
         title:
           "Announcements",
         description:
-          "Publish important community updates.",
+          "Publish official LGU community updates and emergency information.",
         onPress: () =>
           navigate(
             "/(admin)/create-announcement",
@@ -446,7 +1030,7 @@ export default function AdminDashboard() {
         title:
           "Analytics",
         description:
-          "Review operational trends and reports.",
+          "Review operational trends, response activity, and documented outcomes.",
         onPress: () =>
           navigate(
             "/(admin)/admin-analytics",
@@ -462,7 +1046,7 @@ export default function AdminDashboard() {
         title:
           "Certificates",
         description:
-          "Issue and manage volunteer certificates.",
+          "Issue certificates from verified volunteer service records.",
         onPress: () =>
           navigate(
             "/(admin)/admin-certificates",
@@ -478,7 +1062,7 @@ export default function AdminDashboard() {
         title:
           "Disputes",
         description:
-          "Review contested assistance outcomes.",
+          "Review contested volunteer-response outcomes and service records.",
         onPress: () =>
           navigate(
             "/(admin)/admin-disputes",
@@ -501,7 +1085,7 @@ export default function AdminDashboard() {
         value:
           metrics.activeCases,
         description:
-          "Cases that still need action.",
+          "Emergency cases still under LGU responsibility.",
         onPress: () =>
           navigate(
             "/(admin)/admin-cases",
@@ -519,7 +1103,7 @@ export default function AdminDashboard() {
         value:
           metrics.criticalOpen,
         description:
-          "Critical cases not yet resolved.",
+          "Critical cases requiring immediate LGU attention.",
         onPress: () =>
           navigate(
             "/(admin)/admin-cases",
@@ -527,21 +1111,53 @@ export default function AdminDashboard() {
       },
       {
         icon:
-          "person-add-outline",
+          "list-outline",
         iconColor:
-          "#D97706",
+          "#059669",
         iconBackground:
-          "#FFFBEB",
+          "#ECFDF5",
         label:
-          "Pending Accounts",
+          "Barangay Needs",
         value:
-          metrics.pendingAccounts,
+          metrics.openBarangayNeeds,
         description:
-          "Applications waiting for review.",
+          "Verified assessments still included in LGU relief planning.",
         onPress: () =>
           navigate(
-            "/(admin)/account-approvals",
+            "/(admin)/relief-operations",
           ),
+      },
+      {
+        icon:
+          "business-outline",
+        iconColor:
+          "#0891B2",
+        iconBackground:
+          "#ECFEFF",
+        label:
+          "Active Centers",
+        value:
+          metrics.activeCenters,
+        description:
+          "Official evacuation centers currently listed by LGU.",
+        onPress:
+          openNewCenter,
+      },
+      {
+        icon:
+          "bed-outline",
+        iconColor:
+          "#7C3AED",
+        iconBackground:
+          "#F5F3FF",
+        label:
+          "Available Spaces",
+        value:
+          metrics.availableEvacuationSpaces,
+        description:
+          "Remaining listed capacity across active evacuation centers.",
+        onPress:
+          openNewCenter,
       },
     ];
 
@@ -562,7 +1178,7 @@ export default function AdminDashboard() {
             styles.loadingText
           }
         >
-          Loading Admin Dashboard...
+          Loading LGU Command Center...
         </Text>
       </View>
     );
@@ -631,7 +1247,7 @@ export default function AdminDashboard() {
                 styles.title
               }
             >
-              Admin Dashboard
+              LGU Command Center
             </Text>
 
             <Text
@@ -639,7 +1255,7 @@ export default function AdminDashboard() {
                 styles.subtitle
               }
             >
-              Manage community operations and response activities.
+              Central control for LGU emergency response, evacuation centers, relief resources, and optional volunteer support.
             </Text>
           </View>
 
@@ -688,6 +1304,46 @@ export default function AdminDashboard() {
 
         <View
           style={
+            styles.lguDoctrineCard
+          }
+        >
+          <View
+            style={
+              styles.lguDoctrineIcon
+            }
+          >
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={22}
+              color="#0F766E"
+            />
+          </View>
+
+          <View
+            style={
+              styles.lguDoctrineCopy
+            }
+          >
+            <Text
+              style={
+                styles.lguDoctrineTitle
+              }
+            >
+              LGU-led response
+            </Text>
+
+            <Text
+              style={
+                styles.lguDoctrineText
+              }
+            >
+              The LGU remains responsible for emergency response, evacuation centers, relief resources, and barangay allocation. Volunteers are optional support: they may accept or decline an assignment, but a declined or unavailable volunteer never stops the LGU response.
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={
             styles.sectionHeader
           }
         >
@@ -704,7 +1360,7 @@ export default function AdminDashboard() {
               styles.sectionSubtitle
             }
           >
-            Open the module you need.
+            LGU/Admin remains the primary authority and responder for every case.
           </Text>
         </View>
 
@@ -747,7 +1403,7 @@ export default function AdminDashboard() {
               styles.sectionTitle
             }
           >
-            Live Overview
+            LGU Live Overview
           </Text>
 
           <Text
@@ -755,7 +1411,7 @@ export default function AdminDashboard() {
               styles.sectionSubtitle
             }
           >
-            Key items that may need attention.
+            Operational indicators for cases and official evacuation capacity.
           </Text>
         </View>
 
@@ -786,8 +1442,692 @@ export default function AdminDashboard() {
             ),
           )}
         </View>
+
+        <View
+          style={
+            styles.centersHeader
+          }
+        >
+          <View
+            style={{
+              flex: 1,
+            }}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
+              Official Evacuation Centers
+            </Text>
+
+            <Text
+              style={
+                styles.sectionSubtitle
+              }
+            >
+              These LGU-managed centers are read by the VolunServe map. Keep coordinates and capacity updated.
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.centerHeaderActions
+            }
+          >
+            <TouchableOpacity
+              style={
+                styles.primaryActionButton
+              }
+              onPress={
+                openNewCenter
+              }
+            >
+              <Ionicons
+                name="add"
+                size={18}
+                color="#FFFFFF"
+              />
+              <Text
+                style={
+                  styles.primaryActionText
+                }
+              >
+                Add Center
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {centers.length === 0 ? (
+          <View
+            style={
+              styles.emptyCenterCard
+            }
+          >
+            <Ionicons
+              name="business-outline"
+              size={32}
+              color="#94A3B8"
+            />
+            <Text
+              style={
+                styles.emptyCenterTitle
+              }
+            >
+              No evacuation centers listed
+            </Text>
+            <Text
+              style={
+                styles.emptyCenterText
+              }
+            >
+              Add the official LGU evacuation centers so residents can see them on the map.
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={
+              styles.centerList
+            }
+          >
+            {centers.map(
+              (center) => {
+                const capacity =
+                  Math.max(
+                    0,
+                    Number(
+                      center.capacity || 0,
+                    ),
+                  );
+
+                const occupied =
+                  Math.max(
+                    0,
+                    Number(
+                      center.occupied || 0,
+                    ),
+                  );
+
+                const available =
+                  Math.max(
+                    0,
+                    capacity -
+                      occupied,
+                  );
+
+                return (
+                  <View
+                    key={
+                      center.id
+                    }
+                    style={
+                      styles.centerCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.centerCardTop
+                      }
+                    >
+                      <View
+                        style={
+                          styles.centerCardIcon
+                        }
+                      >
+                        <Ionicons
+                          name="business"
+                          size={20}
+                          color="#0891B2"
+                        />
+                      </View>
+
+                      <View
+                        style={
+                          styles.centerCardCopy
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.centerName
+                          }
+                        >
+                          {center.name ||
+                            "Evacuation Center"}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.centerMeta
+                          }
+                        >
+                          {center.barangay ||
+                            "Barangay not set"}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.centerMeta
+                          }
+                        >
+                          {center.address ||
+                            "Address not set"}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.centerStatusBadge
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.centerStatusText
+                          }
+                        >
+                          {String(
+                            center.status ||
+                              "active",
+                          ).toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={
+                        styles.centerStatsRow
+                      }
+                    >
+                      <CenterStat
+                        label="Capacity"
+                        value={capacity}
+                      />
+                      <CenterStat
+                        label="Occupied"
+                        value={occupied}
+                      />
+                      <CenterStat
+                        label="Available"
+                        value={available}
+                      />
+                    </View>
+
+                    <Text
+                      style={
+                        styles.centerCoordinates
+                      }
+                    >
+                      GPS:{" "}
+                      {Number(
+                        center.latitude,
+                      ).toFixed(6)}
+                      {", "}
+                      {Number(
+                        center.longitude,
+                      ).toFixed(6)}
+                    </Text>
+
+                    <View
+                      style={
+                        styles.centerActionRow
+                      }
+                    >
+                      <TouchableOpacity
+                        style={
+                          styles.editCenterButton
+                        }
+                        onPress={() =>
+                          openEditCenter(
+                            center,
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="create-outline"
+                          size={17}
+                          color="#2563EB"
+                        />
+                        <Text
+                          style={
+                            styles.editCenterText
+                          }
+                        >
+                          Edit
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={
+                          styles.removeCenterButton
+                        }
+                        onPress={() =>
+                          confirmRemoveCenter(
+                            center,
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={17}
+                          color="#DC2626"
+                        />
+                        <Text
+                          style={
+                            styles.removeCenterText
+                          }
+                        >
+                          Remove
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              },
+            )}
+          </View>
+        )}
       </View>
+
+      <Modal
+        visible={
+          centerModalVisible
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={
+          closeCenterModal
+        }
+      >
+        <View
+          style={
+            styles.modalBackdrop
+          }
+        >
+          <ScrollView
+            contentContainerStyle={
+              styles.modalScrollContent
+            }
+            keyboardShouldPersistTaps="handled"
+          >
+            <View
+              style={
+                styles.modalCard
+              }
+            >
+              <View
+                style={
+                  styles.modalHeader
+                }
+              >
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.modalTitle
+                    }
+                  >
+                    {editingCenterId
+                      ? "Edit Evacuation Center"
+                      : "Add Evacuation Center"}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.modalSubtitle
+                    }
+                  >
+                    Official LGU evacuation-center information shown in VolunServe.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={
+                    styles.modalCloseButton
+                  }
+                  disabled={
+                    savingCenter
+                  }
+                  onPress={
+                    closeCenterModal
+                  }
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color="#475569"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <CenterInput
+                label="Center name"
+                value={
+                  centerForm.name
+                }
+                onChangeText={(
+                  value,
+                ) =>
+                  updateCenterField(
+                    "name",
+                    value,
+                  )
+                }
+                placeholder="Official evacuation center name"
+              />
+
+              <CenterInput
+                label="Barangay"
+                value={
+                  centerForm.barangay
+                }
+                onChangeText={(
+                  value,
+                ) =>
+                  updateCenterField(
+                    "barangay",
+                    value,
+                  )
+                }
+                placeholder="Barangay"
+              />
+
+              <CenterInput
+                label="Address / landmark"
+                value={
+                  centerForm.address
+                }
+                onChangeText={(
+                  value,
+                ) =>
+                  updateCenterField(
+                    "address",
+                    value,
+                  )
+                }
+                placeholder="Complete address or nearby landmark"
+              />
+
+              <View
+                style={
+                  styles.formRow
+                }
+              >
+                <View
+                  style={
+                    styles.formColumn
+                  }
+                >
+                  <CenterInput
+                    label="Latitude"
+                    value={
+                      centerForm.latitude
+                    }
+                    onChangeText={(
+                      value,
+                    ) =>
+                      updateCenterField(
+                        "latitude",
+                        value,
+                      )
+                    }
+                    placeholder="14.000000"
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.formColumn
+                  }
+                >
+                  <CenterInput
+                    label="Longitude"
+                    value={
+                      centerForm.longitude
+                    }
+                    onChangeText={(
+                      value,
+                    ) =>
+                      updateCenterField(
+                        "longitude",
+                        value,
+                      )
+                    }
+                    placeholder="121.000000"
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+              </View>
+
+              <View
+                style={
+                  styles.formRow
+                }
+              >
+                <View
+                  style={
+                    styles.formColumn
+                  }
+                >
+                  <CenterInput
+                    label="Capacity"
+                    value={
+                      centerForm.capacity
+                    }
+                    onChangeText={(
+                      value,
+                    ) =>
+                      updateCenterField(
+                        "capacity",
+                        value.replace(
+                          /[^0-9]/g,
+                          "",
+                        ),
+                      )
+                    }
+                    placeholder="500"
+                    keyboardType="number-pad"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.formColumn
+                  }
+                >
+                  <CenterInput
+                    label="Current occupancy"
+                    value={
+                      centerForm.occupied
+                    }
+                    onChangeText={(
+                      value,
+                    ) =>
+                      updateCenterField(
+                        "occupied",
+                        value.replace(
+                          /[^0-9]/g,
+                          "",
+                        ),
+                      )
+                    }
+                    placeholder="0"
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              <View
+                style={
+                  styles.modalNotice
+                }
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#0F766E"
+                />
+                <Text
+                  style={
+                    styles.modalNoticeText
+                  }
+                >
+                  LGU/Admin owns this record. Volunteers do not create or manage evacuation centers.
+                </Text>
+              </View>
+
+              <View
+                style={
+                  styles.modalActions
+                }
+              >
+                <TouchableOpacity
+                  style={
+                    styles.cancelModalButton
+                  }
+                  disabled={
+                    savingCenter
+                  }
+                  onPress={
+                    closeCenterModal
+                  }
+                >
+                  <Text
+                    style={
+                      styles.cancelModalText
+                    }
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.saveModalButton,
+                    savingCenter &&
+                      styles.saveModalButtonDisabled,
+                  ]}
+                  disabled={
+                    savingCenter
+                  }
+                  onPress={() =>
+                    void saveEvacuationCenter()
+                  }
+                >
+                  {savingCenter ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFFFFF"
+                    />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="save-outline"
+                        size={18}
+                        color="#FFFFFF"
+                      />
+                      <Text
+                        style={
+                          styles.saveModalText
+                        }
+                      >
+                        Save Center
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </ScrollView>
+  );
+}
+
+function CenterStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <View
+      style={
+        styles.centerStat
+      }
+    >
+      <Text
+        style={
+          styles.centerStatValue
+        }
+      >
+        {value}
+      </Text>
+      <Text
+        style={
+          styles.centerStatLabel
+        }
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function CenterInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = "default",
+}: {
+  label: string;
+  value: string;
+  onChangeText: (
+    value: string,
+  ) => void;
+  placeholder: string;
+  keyboardType?:
+    | "default"
+    | "number-pad"
+    | "numbers-and-punctuation";
+}) {
+  return (
+    <View
+      style={
+        styles.inputGroup
+      }
+    >
+      <Text
+        style={
+          styles.inputLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <TextInput
+        value={value}
+        onChangeText={
+          onChangeText
+        }
+        placeholder={
+          placeholder
+        }
+        placeholderTextColor="#94A3B8"
+        keyboardType={
+          keyboardType
+        }
+        style={
+          styles.input
+        }
+      />
+    </View>
   );
 }
 
@@ -1080,6 +2420,45 @@ const styles =
       fontWeight: "600",
     },
 
+    lguDoctrineCard: {
+      marginBottom: 24,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      borderRadius: 15,
+      backgroundColor: "#ECFDF5",
+      borderWidth: 1,
+      borderColor: "#A7F3D0",
+    },
+
+    lguDoctrineIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#D1FAE5",
+    },
+
+    lguDoctrineCopy: {
+      flex: 1,
+    },
+
+    lguDoctrineTitle: {
+      color: "#065F46",
+      fontSize: 14,
+      fontWeight: "900",
+    },
+
+    lguDoctrineText: {
+      marginTop: 4,
+      color: "#3F6F62",
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: "600",
+    },
+
     sectionHeader: {
       marginBottom: 13,
     },
@@ -1236,5 +2615,367 @@ const styles =
       color: "#64748B",
       fontSize: 11.5,
       lineHeight: 16,
+    },
+
+    centersHeader: {
+      marginTop: 34,
+      marginBottom: 14,
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 14,
+    },
+
+    centerHeaderActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    primaryActionButton: {
+      minHeight: 42,
+      paddingHorizontal: 14,
+      borderRadius: 11,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: "#0F766E",
+    },
+
+    primaryActionText: {
+      color: "#FFFFFF",
+      fontSize: 11.5,
+      fontWeight: "900",
+    },
+
+    secondaryActionButton: {
+      minHeight: 42,
+      paddingHorizontal: 13,
+      borderRadius: 11,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+    },
+
+    secondaryActionText: {
+      color: "#334155",
+      fontSize: 11.5,
+      fontWeight: "800",
+    },
+
+    emptyCenterCard: {
+      minHeight: 160,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      borderRadius: 15,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+
+    emptyCenterTitle: {
+      marginTop: 9,
+      color: "#334155",
+      fontSize: 14,
+      fontWeight: "900",
+    },
+
+    emptyCenterText: {
+      maxWidth: 520,
+      marginTop: 4,
+      color: "#64748B",
+      fontSize: 12,
+      lineHeight: 18,
+      textAlign: "center",
+    },
+
+    centerList: {
+      width: "100%",
+      gap: 12,
+    },
+
+    centerCard: {
+      padding: 16,
+      borderRadius: 15,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+
+    centerCardTop: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 11,
+    },
+
+    centerCardIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#ECFEFF",
+    },
+
+    centerCardCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+
+    centerName: {
+      color: "#0F172A",
+      fontSize: 14,
+      fontWeight: "900",
+    },
+
+    centerMeta: {
+      marginTop: 3,
+      color: "#64748B",
+      fontSize: 11.5,
+      lineHeight: 16,
+    },
+
+    centerStatusBadge: {
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: "#ECFDF5",
+      borderWidth: 1,
+      borderColor: "#A7F3D0",
+    },
+
+    centerStatusText: {
+      color: "#047857",
+      fontSize: 9.5,
+      fontWeight: "900",
+    },
+
+    centerStatsRow: {
+      marginTop: 14,
+      flexDirection: "row",
+      gap: 8,
+    },
+
+    centerStat: {
+      flex: 1,
+      minHeight: 64,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+      backgroundColor: "#F8FAFC",
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+
+    centerStatValue: {
+      color: "#0F172A",
+      fontSize: 18,
+      fontWeight: "900",
+    },
+
+    centerStatLabel: {
+      marginTop: 2,
+      color: "#64748B",
+      fontSize: 10,
+      fontWeight: "700",
+    },
+
+    centerCoordinates: {
+      marginTop: 10,
+      color: "#64748B",
+      fontSize: 10.5,
+      fontWeight: "600",
+    },
+
+    centerActionRow: {
+      marginTop: 12,
+      flexDirection: "row",
+      gap: 8,
+    },
+
+    editCenterButton: {
+      flex: 1,
+      minHeight: 40,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      borderRadius: 10,
+      backgroundColor: "#EFF6FF",
+      borderWidth: 1,
+      borderColor: "#BFDBFE",
+    },
+
+    editCenterText: {
+      color: "#2563EB",
+      fontSize: 11.5,
+      fontWeight: "900",
+    },
+
+    removeCenterButton: {
+      flex: 1,
+      minHeight: 40,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      borderRadius: 10,
+      backgroundColor: "#FEF2F2",
+      borderWidth: 1,
+      borderColor: "#FECACA",
+    },
+
+    removeCenterText: {
+      color: "#DC2626",
+      fontSize: 11.5,
+      fontWeight: "900",
+    },
+
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(15,23,42,0.55)",
+    },
+
+    modalScrollContent: {
+      flexGrow: 1,
+      justifyContent: "center",
+      padding: 20,
+    },
+
+    modalCard: {
+      width: "100%",
+      maxWidth: 680,
+      alignSelf: "center",
+      padding: 20,
+      borderRadius: 18,
+      backgroundColor: "#FFFFFF",
+    },
+
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 16,
+    },
+
+    modalTitle: {
+      color: "#0F172A",
+      fontSize: 20,
+      fontWeight: "900",
+    },
+
+    modalSubtitle: {
+      marginTop: 4,
+      color: "#64748B",
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    modalCloseButton: {
+      width: 38,
+      height: 38,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+      backgroundColor: "#F1F5F9",
+    },
+
+    formRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+
+    formColumn: {
+      flex: 1,
+    },
+
+    inputGroup: {
+      marginBottom: 13,
+    },
+
+    inputLabel: {
+      marginBottom: 6,
+      color: "#334155",
+      fontSize: 11.5,
+      fontWeight: "800",
+    },
+
+    input: {
+      minHeight: 46,
+      paddingHorizontal: 12,
+      borderRadius: 11,
+      backgroundColor: "#F8FAFC",
+      borderWidth: 1,
+      borderColor: "#CBD5E1",
+      color: "#0F172A",
+      fontSize: 13,
+    },
+
+    modalNotice: {
+      marginTop: 2,
+      padding: 12,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      borderRadius: 11,
+      backgroundColor: "#ECFDF5",
+      borderWidth: 1,
+      borderColor: "#A7F3D0",
+    },
+
+    modalNoticeText: {
+      flex: 1,
+      color: "#3F6F62",
+      fontSize: 11.5,
+      lineHeight: 17,
+      fontWeight: "600",
+    },
+
+    modalActions: {
+      marginTop: 18,
+      flexDirection: "row",
+      gap: 10,
+    },
+
+    cancelModalButton: {
+      flex: 1,
+      minHeight: 46,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+      backgroundColor: "#F1F5F9",
+    },
+
+    cancelModalText: {
+      color: "#475569",
+      fontSize: 12,
+      fontWeight: "900",
+    },
+
+    saveModalButton: {
+      flex: 1,
+      minHeight: 46,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      borderRadius: 11,
+      backgroundColor: "#0F766E",
+    },
+
+    saveModalButtonDisabled: {
+      opacity: 0.65,
+    },
+
+    saveModalText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "900",
     },
   });

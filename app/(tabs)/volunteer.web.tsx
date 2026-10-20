@@ -1,31 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
-    collection,
-    doc,
-    onSnapshot,
-    query,
-    runTransaction,
-    serverTimestamp,
-    where,
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  runTransaction,
+  serverTimestamp,
+  where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 import { db } from "../../lib/firebase";
 import {
-    activeModeForProfile,
-    hasVolunteerAccess,
-    isApprovedProfile,
+  activeModeForProfile,
+  hasVolunteerAccess,
+  isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -49,6 +50,14 @@ type ResponseAssignment = {
   createdBy?: string;
   createdAt?: any;
   updatedAt?: any;
+  responseStartedAt?: any;
+  arrivedAt?: any;
+  completedAt?: any;
+  contributionType?: string;
+  contributionSummary?: string;
+  peopleHelped?: number;
+  completionNotes?: string;
+  residentConfirmationStatus?: string;
 };
 
 type IncidentAttachment = {
@@ -64,6 +73,7 @@ type DisasterCase = {
   category?: string;
   severity?: "low" | "medium" | "high" | "critical" | string;
   status?: string;
+  reporterBarangay?: string;
   location?: string;
   details?: string;
   needs?: string;
@@ -78,6 +88,28 @@ type FilterKey = "new" | "active" | "completed" | "all";
 type SortDirection = "latest" | "oldest";
 
 const ACTIVE_STATUSES = ["accepted", "responding", "on_site"];
+
+const COMPLETION_TYPES = [
+  "Emergency Response",
+  "Evacuation Assistance",
+  "Medical / First Aid",
+  "Transport / Logistics",
+  "Relief / Goods Delivery",
+  "Clearing / Heavy Lifting",
+  "Safety / Welfare Check",
+  "Other",
+];
+
+const FIELD_NEED_OPTIONS = [
+  "Food",
+  "Water",
+  "Clothing",
+  "Temporary Shelter",
+  "Medical",
+  "Hygiene",
+  "Transport",
+  "Other",
+];
 
 const timestampMillis = (value: any) => {
   if (!value) return 0;
@@ -125,8 +157,8 @@ const severityLabel = (severity?: string) => {
   const value = String(severity || "").toLowerCase();
   if (value === "critical") return "CRITICAL PRIORITY";
   if (value === "high") return "HIGH PRIORITY";
-  if (value === "medium") return "MEDIUM PRIORITY";
-  if (value === "low") return "LOW PRIORITY";
+  if (value === "medium") return "URGENT PRIORITY";
+  if (value === "low") return "STANDARD PRIORITY";
   return "INCIDENT";
 };
 
@@ -282,6 +314,17 @@ export default function VolunteerTasksWeb() {
   const [sortDirection, setSortDirection] =
     useState<SortDirection>("latest");
 
+  const [completionId, setCompletionId] = useState("");
+  const [contributionType, setContributionType] = useState("");
+  const [contributionSummary, setContributionSummary] = useState("");
+  const [peopleHelped, setPeopleHelped] = useState("0");
+  const [completionNotes, setCompletionNotes] = useState("");
+  const [situationSummary, setSituationSummary] = useState("");
+  const [remainingNeeds, setRemainingNeeds] = useState<string[]>([]);
+  const [remainingNeedsNote, setRemainingNeedsNote] = useState("");
+  const [lguFollowUpRequired, setLguFollowUpRequired] =
+    useState<boolean | null>(null);
+
   const compact = width < 1120;
 
   useEffect(() => {
@@ -404,11 +447,85 @@ export default function VolunteerTasksWeb() {
     window.alert(`${title}\n\n${message}`);
   };
 
-  const decide = async (
+  const resetCompletion = () => {
+    setCompletionId("");
+    setContributionType("");
+    setContributionSummary("");
+    setPeopleHelped("0");
+    setCompletionNotes("");
+    setSituationSummary("");
+    setRemainingNeeds([]);
+    setRemainingNeedsNote("");
+    setLguFollowUpRequired(null);
+  };
+
+  const toggleRemainingNeed = (item: string) => {
+    setRemainingNeeds((current) =>
+      current.includes(item)
+        ? current.filter((value) => value !== item)
+        : [...current, item].slice(0, 12),
+    );
+  };
+
+  const transitionAssignment = async (
     assignment: ResponseAssignment,
-    next: "accepted" | "declined",
+    next: "accepted" | "declined" | "responding" | "on_site" | "completed",
   ) => {
-    if (!user || busyId) return;
+    if (!user || !profile || busyId) return;
+
+    const allowedPrevious: Record<string, string> = {
+      accepted: "offered",
+      declined: "offered",
+      responding: "accepted",
+      on_site: "responding",
+      completed: "on_site",
+    };
+
+    const people = Number(peopleHelped);
+
+    if (next === "completed") {
+      if (situationSummary.trim().length < 10) {
+        setError(
+          "Describe the actual situation you observed on site in at least 10 characters.",
+        );
+        return;
+      }
+
+      if (!contributionType.trim()) {
+        setError("Select the type of service you provided.");
+        return;
+      }
+
+      if (contributionSummary.trim().length < 10) {
+        setError("Describe the assistance you actually provided in at least 10 characters.");
+        return;
+      }
+
+      if (!Number.isInteger(people) || people < 0 || people > 999) {
+        setError("People helped must be a whole number from 0 to 999.");
+        return;
+      }
+
+      if (remainingNeeds.includes("Other") && remainingNeedsNote.trim().length < 3) {
+        setError("Describe the remaining need selected as Other.");
+        return;
+      }
+
+      if (remainingNeedsNote.trim().length > 1500) {
+        setError("Remaining-needs notes must be 1500 characters or fewer.");
+        return;
+      }
+
+      if (lguFollowUpRequired === null) {
+        setError("Select whether LGU/Admin follow-up is still required.");
+        return;
+      }
+
+      if (completionNotes.trim().length > 600) {
+        setError("Completion notes must be 600 characters or fewer.");
+        return;
+      }
+    }
 
     try {
       setBusyId(assignment.id);
@@ -416,41 +533,202 @@ export default function VolunteerTasksWeb() {
 
       await runTransaction(db, async (transaction) => {
         const assignmentRef = doc(db, "responseAssignments", assignment.id);
-        const snapshot = await transaction.get(assignmentRef);
+        const assignmentSnapshot = await transaction.get(assignmentRef);
 
-        if (!snapshot.exists()) {
+        if (!assignmentSnapshot.exists()) {
           throw new Error("This assignment no longer exists.");
         }
 
-        const current = snapshot.data() as ResponseAssignment;
+        const current = assignmentSnapshot.data() as ResponseAssignment;
 
         if (current.volunteerId !== user.uid) {
           throw new Error("This assignment does not belong to your account.");
         }
 
-        if (current.status !== "offered") {
+        if (current.status !== allowedPrevious[next]) {
           throw new Error(
-            "This assignment already changed. Check its latest status.",
+            "This assignment already changed. Refresh and check its latest status.",
           );
         }
 
-        transaction.update(assignmentRef, {
+        const caseId = String(current.caseId || assignment.caseId || "").trim();
+        let reporterUid = "";
+        let caseData: Record<string, any> | null = null;
+
+        if (next !== "declined" && caseId) {
+          const caseSnapshot = await transaction.get(
+            doc(db, "disasterCases", caseId),
+          );
+
+          if (caseSnapshot.exists()) {
+            caseData = caseSnapshot.data();
+            reporterUid = String(caseData?.reporterUid || "").trim();
+          }
+        }
+
+        if (next === "completed") {
+          if (!caseId || !caseData) {
+            throw new Error(
+              "The linked emergency case could not be loaded. The field report cannot be submitted.",
+            );
+          }
+
+          const barangay = String(caseData.reporterBarangay || "").trim();
+
+          if (barangay.length < 2) {
+            throw new Error(
+              "The emergency case has no valid barangay. Ask LGU/Admin to correct the case before completing this mission.",
+            );
+          }
+        }
+
+        const patch: Record<string, any> = {
           status: next,
           updatedAt: serverTimestamp(),
-        });
+        };
+
+        if (next === "responding") {
+          patch.responseStartedAt = serverTimestamp();
+        }
+
+        if (next === "on_site") {
+          patch.arrivedAt = serverTimestamp();
+        }
+
+        if (next === "completed") {
+          patch.contributionType = contributionType.trim().slice(0, 100);
+          patch.contributionSummary = contributionSummary.trim().slice(0, 1200);
+          patch.peopleHelped = people;
+          patch.completionNotes = completionNotes.trim().slice(0, 600);
+          patch.completedAt = serverTimestamp();
+          patch.residentConfirmationStatus = "pending";
+        }
+
+        transaction.update(assignmentRef, patch);
+
+        if (next === "completed" && caseId && caseData) {
+          const volunteerName =
+            String(current.volunteerName || profile.fullName || "Volunteer")
+              .trim()
+              .slice(0, 120) || "Volunteer";
+
+          const barangay = String(caseData.reporterBarangay || "")
+            .trim()
+            .slice(0, 120);
+
+          transaction.set(
+            doc(db, "volunteerFieldReports", assignment.id),
+            {
+              assignmentId: assignment.id,
+              caseId,
+
+              volunteerId: user.uid,
+              volunteerName,
+              barangay,
+
+              situationSummary: situationSummary.trim().slice(0, 2000),
+              assistanceProvided: contributionSummary.trim().slice(0, 2000),
+              peopleHelped: people,
+
+              remainingNeeds: remainingNeeds.slice(0, 12),
+              remainingNeedsNote: remainingNeedsNote.trim().slice(0, 1500),
+              lguFollowUpRequired: lguFollowUpRequired === true,
+
+              evidenceUrls: [],
+
+              reportStatus: "submitted",
+              adminReviewNote: "",
+
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              reviewedAt: null,
+              reviewedBy: "",
+            },
+          );
+        }
+
+        if (
+          next !== "declined" &&
+          caseId &&
+          reporterUid &&
+          reporterUid !== user.uid
+        ) {
+          const notificationRef = doc(collection(db, "notifications"));
+          const responderName =
+            String(current.volunteerName || profile.fullName || "Volunteer")
+              .trim()
+              .slice(0, 120) || "Volunteer";
+
+          const copy: Record<
+            "accepted" | "responding" | "on_site" | "completed",
+            { title: string; message: string }
+          > = {
+            accepted: {
+              title: "Responder accepted your case",
+              message: `${responderName} accepted the emergency assignment.`,
+            },
+            responding: {
+              title: "Responder is on the way",
+              message: `${responderName} has started responding to your emergency case.`,
+            },
+            on_site: {
+              title: "Responder arrived",
+              message: `${responderName} marked the response as on site.`,
+            },
+            completed: {
+              title: "Volunteer field report submitted",
+              message:
+                `${responderName} completed the assigned support response and submitted a field report to LGU/Admin. ` +
+                "LGU will review any remaining needs and decide the next action.",
+            },
+          };
+
+          const notification = copy[next as keyof typeof copy];
+
+          transaction.set(notificationRef, {
+            userId: reporterUid,
+            caseId,
+            assignmentId: assignment.id,
+            responderId: user.uid,
+            responderName,
+            title: notification.title,
+            message: notification.message,
+            type: "resident_response_update",
+            status: next,
+            read: false,
+            createdAt: serverTimestamp(),
+          });
+        }
       });
 
       if (next === "accepted") {
         showMessage(
           "Assignment accepted",
-          "The mission is now in progress. Open it when you are ready to continue on the Live Response Map.",
+          "The assignment is accepted. Select Start Response when you begin travelling or responding.",
         );
         setFilter("active");
-      } else {
+      } else if (next === "declined") {
         showMessage(
           "Assignment declined",
-          "The administrator will see that you declined this assignment.",
+          "Admin will see the decline and can offer the case to another qualified volunteer.",
         );
+      } else if (next === "responding") {
+        showMessage(
+          "Response started",
+          "Your status is now Responding. Use the Live Response Map while travelling to the incident.",
+        );
+      } else if (next === "on_site") {
+        showMessage(
+          "Arrival recorded",
+          "Your status is now On Site. Complete the mission only after the assigned assistance is finished.",
+        );
+      } else {
+        showMessage(
+          "Field report submitted",
+          "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action.",
+        );
+        resetCompletion();
+        setFilter("completed");
       }
     } catch (problem) {
       const message =
@@ -508,7 +786,7 @@ export default function VolunteerTasksWeb() {
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>Volunteer Tasks</Text>
               <Text style={styles.subtitle}>
-                Emergency assignments validated and assigned by Admin.
+                Optional Volunteer support assignments coordinated by LGU/Admin.
               </Text>
             </View>
           </View>
@@ -647,10 +925,10 @@ export default function VolunteerTasksWeb() {
             const busy = busyId === assignment.id;
 
             return (
-              <View
-                key={assignment.id}
-                style={[styles.assignmentCard, compact && styles.assignmentCardCompact]}
-              >
+              <React.Fragment key={assignment.id}>
+                <View
+                  style={[styles.assignmentCard, compact && styles.assignmentCardCompact]}
+                >
                 <View style={[styles.mediaWrap, compact && styles.mediaWrapCompact]}>
                   <IncidentMedia incident={incident} />
                   <View style={[styles.priorityBadge, severityStyle(incident?.severity)]}>
@@ -732,7 +1010,7 @@ export default function VolunteerTasksWeb() {
                       <TouchableOpacity
                         style={[styles.acceptButton, busy && styles.buttonDisabled]}
                         disabled={busy}
-                        onPress={() => decide(assignment, "accepted")}
+                        onPress={() => transitionAssignment(assignment, "accepted")}
                         activeOpacity={0.85}
                       >
                         {busy ? (
@@ -748,7 +1026,7 @@ export default function VolunteerTasksWeb() {
                       <TouchableOpacity
                         style={[styles.declineButton, busy && styles.buttonDisabled]}
                         disabled={busy}
-                        onPress={() => decide(assignment, "declined")}
+                        onPress={() => transitionAssignment(assignment, "declined")}
                         activeOpacity={0.85}
                       >
                         <Ionicons name="close" size={20} color="#123047" />
@@ -757,15 +1035,61 @@ export default function VolunteerTasksWeb() {
                     </>
                   )}
 
+                  {status === "accepted" && (
+                    <TouchableOpacity
+                      style={[styles.responseButton, busy && styles.buttonDisabled]}
+                      disabled={busy}
+                      onPress={() => transitionAssignment(assignment, "responding")}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="navigate-circle" size={19} color="#ffffff" />
+                      <Text style={styles.responseButtonText}>Start Response</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {status === "responding" && (
+                    <TouchableOpacity
+                      style={[styles.arrivalButton, busy && styles.buttonDisabled]}
+                      disabled={busy}
+                      onPress={() => transitionAssignment(assignment, "on_site")}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="location" size={18} color="#ffffff" />
+                      <Text style={styles.arrivalButtonText}>Mark On Site</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {status === "on_site" && (
+                    <TouchableOpacity
+                      style={styles.completeButton}
+                      onPress={() => {
+                        if (completionId === assignment.id) {
+                          resetCompletion();
+                        } else {
+                          resetCompletion();
+                          setCompletionId(assignment.id);
+                        }
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="checkmark-done" size={18} color="#ffffff" />
+                      <Text style={styles.completeButtonText}>
+                        {completionId === assignment.id
+                          ? "Hide Field Report"
+                          : "Complete & Report to LGU"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   {active && (
                     <TouchableOpacity
                       style={styles.openMissionButton}
                       onPress={() => openLiveMap(assignment)}
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="navigate" size={18} color="#ffffff" />
+                      <Ionicons name="map-outline" size={18} color="#ffffff" />
                       <Text style={styles.openMissionButtonText}>
-                        {status === "accepted" ? "Start Mission" : "Open Mission"}
+                        Open Live Map
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -773,7 +1097,9 @@ export default function VolunteerTasksWeb() {
                   {status === "completed" && (
                     <View style={styles.completedBox}>
                       <Ionicons name="checkmark-circle" size={20} color="#16845b" />
-                      <Text style={styles.completedBoxText}>Mission completed</Text>
+                      <Text style={styles.completedBoxText}>
+                        Field report submitted to LGU/Admin
+                      </Text>
                     </View>
                   )}
 
@@ -785,6 +1111,258 @@ export default function VolunteerTasksWeb() {
                   )}
                 </View>
               </View>
+
+              {completionId === assignment.id && status === "on_site" && (
+                <View style={styles.completionPanel}>
+                  <View style={styles.completionHeader}>
+                    <View>
+                      <Text style={styles.completionEyebrow}>
+                        LGU FIELD REPORT
+                      </Text>
+                      <Text style={styles.completionTitle}>
+                        Complete your support assignment and report the situation
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity onPress={resetCompletion}>
+                      <Ionicons name="close" size={21} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.completionNoticeBox}>
+                    LGU/Admin remains the primary responder and final authority.
+                    This report records what you observed, what you actually did,
+                    and what needs may still require LGU action.
+                  </Text>
+
+                  <Text style={styles.completionLabel}>
+                    Situation observed on site
+                  </Text>
+                  <TextInput
+                    style={[styles.completionInput, styles.completionMultiline]}
+                    value={situationSummary}
+                    onChangeText={setSituationSummary}
+                    placeholder="Describe the actual condition of the resident, household, or affected area when you arrived."
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                    maxLength={2000}
+                  />
+
+                  <Text style={styles.completionLabel}>Contribution type</Text>
+                  <View style={styles.completionTypeGrid}>
+                    {COMPLETION_TYPES.map((item) => {
+                      const selected = contributionType === item;
+
+                      return (
+                        <TouchableOpacity
+                          key={item}
+                          style={[
+                            styles.completionTypeButton,
+                            selected && styles.completionTypeButtonActive,
+                          ]}
+                          onPress={() => setContributionType(item)}
+                        >
+                          <Text
+                            style={[
+                              styles.completionTypeText,
+                              selected && styles.completionTypeTextActive,
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={styles.completionLabel}>
+                    Assistance actually provided
+                  </Text>
+                  <TextInput
+                    style={[styles.completionInput, styles.completionMultiline]}
+                    value={contributionSummary}
+                    onChangeText={setContributionSummary}
+                    placeholder="Describe what you actually did during this assigned support response."
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                    maxLength={1200}
+                  />
+
+                  <View
+                    style={[
+                      styles.completionPair,
+                      compact && styles.completionPairCompact,
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.completionLabel}>People helped</Text>
+                      <TextInput
+                        style={styles.completionInput}
+                        value={peopleHelped}
+                        onChangeText={(value) =>
+                          setPeopleHelped(
+                            value.replace(/[^0-9]/g, "").slice(0, 3),
+                          )
+                        }
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+
+                    <View style={{ flex: 2 }}>
+                      <Text style={styles.completionLabel}>
+                        Completion notes (optional)
+                      </Text>
+                      <TextInput
+                        style={styles.completionInput}
+                        value={completionNotes}
+                        onChangeText={setCompletionNotes}
+                        placeholder="Any other operational note for LGU/Admin."
+                        placeholderTextColor="#94a3b8"
+                        maxLength={600}
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.completionLabel}>
+                    Remaining needs observed (optional)
+                  </Text>
+                  <View style={styles.completionTypeGrid}>
+                    {FIELD_NEED_OPTIONS.map((item) => {
+                      const selected = remainingNeeds.includes(item);
+
+                      return (
+                        <TouchableOpacity
+                          key={item}
+                          style={[
+                            styles.completionTypeButton,
+                            selected && styles.remainingNeedButtonActive,
+                          ]}
+                          onPress={() => toggleRemainingNeed(item)}
+                        >
+                          <Text
+                            style={[
+                              styles.completionTypeText,
+                              selected && styles.remainingNeedTextActive,
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={styles.completionLabel}>
+                    Remaining-needs details (optional)
+                  </Text>
+                  <TextInput
+                    style={[styles.completionInput, styles.completionMultilineSmall]}
+                    value={remainingNeedsNote}
+                    onChangeText={setRemainingNeedsNote}
+                    placeholder="Add details that LGU/Admin should verify, such as temporary shelter, food, clothing, medicine, or other recovery needs."
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                    maxLength={1500}
+                  />
+
+                  <Text style={styles.completionLabel}>
+                    Does LGU/Admin still need to follow up?
+                  </Text>
+                  <View style={styles.followUpRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.followUpButton,
+                        lguFollowUpRequired === true &&
+                          styles.followUpButtonWarning,
+                      ]}
+                      onPress={() => setLguFollowUpRequired(true)}
+                    >
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={16}
+                        color={
+                          lguFollowUpRequired === true
+                            ? "#ffffff"
+                            : "#b45309"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.followUpButtonText,
+                          lguFollowUpRequired === true &&
+                            styles.followUpButtonTextActive,
+                        ]}
+                      >
+                        Yes, follow-up needed
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.followUpButton,
+                        lguFollowUpRequired === false &&
+                          styles.followUpButtonSafe,
+                      ]}
+                      onPress={() => setLguFollowUpRequired(false)}
+                    >
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={16}
+                        color={
+                          lguFollowUpRequired === false
+                            ? "#ffffff"
+                            : "#16845b"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.followUpButtonText,
+                          lguFollowUpRequired === false &&
+                            styles.followUpButtonTextActive,
+                        ]}
+                      >
+                        No further field follow-up
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.completionFooter}>
+                    <Text style={styles.completionNotice}>
+                      Submitting completes only your Volunteer assignment and
+                      sends the field report to LGU/Admin. It does not close the
+                      emergency case, approve relief goods, or grant service
+                      credit automatically.
+                    </Text>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.submitCompletionButton,
+                        busy && styles.buttonDisabled,
+                      ]}
+                      disabled={busy}
+                      onPress={() =>
+                        transitionAssignment(assignment, "completed")
+                      }
+                    >
+                      {busy ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <Ionicons
+                          name="document-text-outline"
+                          size={18}
+                          color="#ffffff"
+                        />
+                      )}
+                      <Text style={styles.submitCompletionText}>
+                        Submit Field Report & Complete
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              </React.Fragment>
             );
           })}
         </View>
@@ -1334,6 +1912,222 @@ const styles = StyleSheet.create({
   inactiveBoxText: {
     color: "#64748b",
     fontSize: 11,
+    fontWeight: "900",
+  },
+  responseButton: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#2563eb",
+  },
+  responseButtonText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  arrivalButton: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#7c3aed",
+  },
+  arrivalButtonText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  completeButton: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#16845b",
+  },
+  completeButtonText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  completionPanel: {
+    marginTop: -1,
+    marginBottom: 10,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#cfe4df",
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
+    backgroundColor: "#fbfefd",
+  },
+  completionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+  completionEyebrow: {
+    color: "#078F82",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  completionTitle: {
+    marginTop: 3,
+    color: "#183448",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  completionLabel: {
+    marginTop: 9,
+    marginBottom: 6,
+    color: "#334155",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  completionTypeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  completionTypeButton: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff",
+  },
+  completionTypeButtonActive: {
+    borderColor: "#078F82",
+    backgroundColor: "#e8f6f2",
+  },
+  completionTypeText: {
+    color: "#64748b",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  completionTypeTextActive: {
+    color: "#087f74",
+  },
+  remainingNeedButtonActive: {
+    borderColor: "#d97706",
+    backgroundColor: "#fff7ed",
+  },
+  remainingNeedTextActive: {
+    color: "#b45309",
+  },
+  completionNoticeBox: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d1eee5",
+    backgroundColor: "#eef8f5",
+    color: "#527267",
+    fontSize: 10.5,
+    lineHeight: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  completionInput: {
+    minHeight: 43,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#d7e0e7",
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    color: "#183448",
+    fontSize: 11,
+  },
+  completionMultiline: {
+    minHeight: 92,
+    textAlignVertical: "top",
+  },
+  completionMultilineSmall: {
+    minHeight: 76,
+    textAlignVertical: "top",
+  },
+  followUpRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  followUpButton: {
+    minHeight: 42,
+    minWidth: 190,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d7e0e7",
+    backgroundColor: "#ffffff",
+  },
+  followUpButtonWarning: {
+    borderColor: "#d97706",
+    backgroundColor: "#d97706",
+  },
+  followUpButtonSafe: {
+    borderColor: "#16845b",
+    backgroundColor: "#16845b",
+  },
+  followUpButtonText: {
+    color: "#475569",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  followUpButtonTextActive: {
+    color: "#ffffff",
+  },
+  completionPair: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  completionPairCompact: {
+    flexDirection: "column",
+  },
+  completionFooter: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  completionNotice: {
+    flex: 1,
+    color: "#64748b",
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: "600",
+  },
+  submitCompletionButton: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    backgroundColor: "#0aa16f",
+  },
+  submitCompletionText: {
+    color: "#ffffff",
+    fontSize: 10.5,
     fontWeight: "900",
   },
   buttonDisabled: {

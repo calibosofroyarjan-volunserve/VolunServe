@@ -968,8 +968,8 @@ def run_face_verification(
             "ok": True,
             "verificationId":
                 verification_id,
-            "status": "verified",
-            "decision": "verified",
+            "status": "pending",
+            "decision": "manual_review",
             "matchScore":
                 match_score,
             # A single still selfie cannot prove liveness.
@@ -994,12 +994,12 @@ def run_face_verification(
             "message": (
                 "The government ID face and submitted selfie "
                 "passed the VolunServe 1-to-1 landmark comparison. "
-                "This does not prove liveness or government ID authenticity."
+                "Manual Admin review is required; liveness and ID authenticity are unverified."
             ),
             "warnings": [
                 (
-                    "Passive liveness is not inferred from a "
-                    "single still image."
+                    "Independent Admin review is needed; passive liveness "
+                    "cannot be proven from a single still image."
                 )
             ],
             "engine": (

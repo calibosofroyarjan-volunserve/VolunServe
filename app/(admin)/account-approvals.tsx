@@ -51,7 +51,7 @@ type Filter =
 
 type VolunteerApplication = {
   uid?: string;
-  status?: "pending" | "approved" | "rejected" | "suspended";
+  status?: "pending" | "approved" | "rejected";
   skills?: string[];
   availability?: string[];
   experienceTraining?: string;
@@ -59,6 +59,8 @@ type VolunteerApplication = {
   emergencyContact?: string;
   motivation?: string;
   rejectedReason?: string;
+  reviewedAt?: any;
+  reviewedBy?: string;
 };
 
 const timestampValue = (
@@ -127,7 +129,8 @@ export default function AccountApprovals() {
               .filter(
                 (item) =>
                   item.role !== "admin" &&
-                  item.role !== "superadmin"
+                  item.role !== "superadmin" &&
+                  item.role !== "applicant"
               )
               .sort(
                 (a, b) =>
@@ -210,27 +213,33 @@ export default function AccountApprovals() {
     return volunteerApplications[account.id] || null;
   };
 
-  const requestedRoleFor = (
+  const isVerifiedResidentAccount = (
+    account: Account
+  ) => {
+    return (
+      account.status === "approved" &&
+      account.role !== "admin" &&
+      account.role !== "superadmin" &&
+      account.role !== "applicant" &&
+      account.residentAccess === true &&
+      (
+        account.identityVerified === true ||
+        account.identityStatus === "verified"
+      )
+    );
+  };
+
+  const isPendingVolunteerApplication = (
     account: Account
   ) => {
     const application =
       volunteerApplicationFor(account);
 
-    // A pending Resident -> Volunteer application takes priority
-    // over the account's original requestedRole ("resident").
-    if (application?.status === "pending") {
-      return "volunteer";
-    }
-
-    if (account.requestedRole) {
-      return account.requestedRole;
-    }
-
-    if (account.role === "volunteer") {
-      return "volunteer";
-    }
-
-    return "resident";
+    return (
+      application?.status === "pending" &&
+      account.role !== "applicant" &&
+      account.volunteerAccess !== true
+    );
   };
 
   const visibleAccounts =
@@ -238,10 +247,7 @@ export default function AccountApprovals() {
       if (filter === "pending") {
         return accounts.filter(
           (item) =>
-            item.status ===
-              "pending_review" ||
-            volunteerApplications[item.id]
-              ?.status === "pending"
+            isPendingVolunteerApplication(item)
         );
       }
 
@@ -252,328 +258,264 @@ export default function AccountApprovals() {
       volunteerApplications,
     ]);
 
-  const saveReview = async (
+  const writeAdminLogSafely = async (
+    payload: Parameters<typeof createAdminLog>[0]
+  ) => {
+    try {
+      await createAdminLog(payload);
+    } catch (error) {
+      /*
+       * The review itself is already committed at this point.
+       * A logging failure must not mislead the Admin into repeating
+       * a successful approval/rejection.
+       */
+      console.log(
+        "admin review log error",
+        error
+      );
+    }
+  };
+
+  const reviewVolunteerApplication = async (
     account: Account,
-    status:
-      | "approved"
-      | "rejected"
-      | "suspended",
+    decision: "approved" | "rejected",
     reason = ""
   ) => {
-    const reviewer =
-      auth.currentUser;
+    const reviewer = auth.currentUser;
 
     if (!reviewer) {
       Alert.alert(
         "Session Error",
         "Please sign in again."
       );
-
-      return;
+      return false;
     }
 
-    const requestedRole =
-      requestedRoleFor(account);
-
-    const volunteerApplication =
+    const application =
       volunteerApplicationFor(account);
 
-    const isExistingResidentVolunteerApplication =
-      requestedRole === "volunteer" &&
-      volunteerApplication?.status === "pending" &&
-      account.status === "approved" &&
-      account.role !== "applicant" &&
-      account.primaryRole !== "volunteer";
-
-    const isInitialVolunteerSignup =
-      requestedRole === "volunteer" &&
-      (
-        account.primaryRole === "volunteer" ||
-        (
-          account.role === "applicant" &&
-          account.requestedRole === "volunteer"
-        )
+    if (application?.status !== "pending") {
+      Alert.alert(
+        "Review Updated",
+        "This volunteer application is no longer pending. Refresh the queue and review its latest status."
       );
+      return false;
+    }
 
-    const nextRole =
-      status === "approved"
-        ? account.role &&
-          account.role !== "applicant"
-          ? account.role
-          : requestedRole
-        : account.role;
+    if (decision === "approved" && !isVerifiedResidentAccount(account)) {
+      Alert.alert(
+        "Verified Resident Required",
+        "Volunteer access can only be approved for an active Verified Resident."
+      );
+      return false;
+    }
 
-    /*
-     * IMPORTANT:
-     * Reviewing an existing resident's volunteer application must NOT
-     * reject/suspend/replace the resident account itself.
-     */
-    const reviewPatch:
-      Record<string, any> =
-      isExistingResidentVolunteerApplication
-        ? {
-            residentAccess: true,
-            volunteerAccess:
-              status === "approved",
-            volunteerStatus:
-              status === "approved"
-                ? "approved"
-                : status === "rejected"
-                  ? "rejected"
-                  : "pending",
-            activeMode: "resident",
-            volunteerReviewedAt:
-              serverTimestamp(),
-            volunteerReviewedBy:
-              reviewer.uid,
-          }
-        : {
-            status,
-            role: nextRole,
-
-            primaryRole:
-              account.primaryRole ||
-              requestedRole,
-
-            reviewedAt:
-              serverTimestamp(),
-
-            reviewedBy:
-              reviewer.uid,
-
-            rejectedReason:
-              status === "rejected"
-                ? reason.trim()
-                : "",
-
-            ...(status === "approved"
-              ? {
-                  residentAccess: true,
-
-                  volunteerAccess:
-                    requestedRole ===
-                      "volunteer"
-                      ? true
-                      : account.volunteerStatus ===
-                          "approved" ||
-                        account.volunteerAccess ===
-                          true,
-
-                  volunteerStatus:
-                    requestedRole ===
-                      "volunteer"
-                      ? "approved"
-                      : account.volunteerStatus ||
-                        "not_applied",
-
-                  activeMode:
-                    isInitialVolunteerSignup
-                      ? "volunteer"
-                      : account.volunteerAccess ===
-                            true &&
-                          account.activeMode ===
-                            "volunteer"
-                        ? "volunteer"
-                        : "resident",
-                }
-              : {}),
-
-            ...(status === "rejected"
-              ? {
-                  residentAccess: true,
-                  volunteerAccess:
-                    requestedRole ===
-                    "volunteer"
-                      ? false
-                      : account.volunteerAccess ===
-                          true,
-                  volunteerStatus:
-                    requestedRole ===
-                    "volunteer"
-                      ? "rejected"
-                      : account.volunteerStatus ||
-                        "not_applied",
-                  activeMode:
-                    "resident",
-                }
-              : {}),
-          };
+    if (
+      decision === "rejected" &&
+      reason.trim().length < 5
+    ) {
+      Alert.alert(
+        "Reason required",
+        "Please enter a clear rejection reason."
+      );
+      return false;
+    }
 
     try {
       setSavingUid(account.id);
 
-      const batch =
-        writeBatch(db);
+      const batch = writeBatch(db);
 
+      /*
+       * Same Resident account:
+       * approval adds Volunteer access; rejection does not affect
+       * Resident access or the Resident account status.
+       */
+      batch.update(
+        doc(db, "users", account.id),
+        {
+          volunteerAccess:
+            decision === "approved",
+          volunteerStatus:
+            decision,
+          activeMode: "resident",
+          volunteerReviewedAt:
+            serverTimestamp(),
+          volunteerReviewedBy:
+            reviewer.uid,
+        }
+      );
+
+      /*
+       * Update only fields permitted by the volunteerApplications
+       * Admin-review rule. Do not overwrite the applicant's submitted
+       * skills, availability, experience, or contact snapshot.
+       */
       batch.update(
         doc(
           db,
-          "users",
+          "volunteerApplications",
           account.id
         ),
-        reviewPatch
+        {
+          status: decision,
+          volunteerAccess:
+            decision === "approved",
+          activeMode: "resident",
+          reviewedAt:
+            serverTimestamp(),
+          reviewedBy:
+            reviewer.uid,
+          rejectedReason:
+            decision === "rejected"
+              ? reason.trim()
+              : "",
+        }
       );
-
-      if (
-        requestedRole ===
-        "volunteer"
-      ) {
-        batch.set(
-          doc(
-            db,
-            "volunteerApplications",
-            account.id
-          ),
-          {
-            uid: account.id,
-
-            fullName:
-              account.fullName,
-
-            email:
-              account.email,
-
-            barangay:
-              account.barangay || "",
-
-            phone:
-              account.phoneNumber || "",
-
-            phoneNumber:
-              account.phoneNumber || "",
-
-            status:
-              status === "approved"
-                ? "approved"
-                : status === "rejected"
-                  ? "rejected"
-                  : "suspended",
-
-            // Explicit access metadata for the volunteer review record.
-            volunteerAccess:
-              status === "approved",
-
-            activeMode:
-              isInitialVolunteerSignup &&
-              status === "approved"
-                ? "volunteer"
-                : "resident",
-
-            reviewedAt:
-              serverTimestamp(),
-
-            reviewedBy:
-              reviewer.uid,
-
-            rejectedReason:
-              status === "rejected"
-                ? reason.trim()
-                : "",
-          },
-          {
-            merge: true,
-          }
-        );
-      }
 
       await batch.commit();
 
-      await createAdminLog({
+      await writeAdminLogSafely({
         actionType:
-          isExistingResidentVolunteerApplication
-            ? `volunteer_application_${status}`
-            : `account_${status}`,
-
-        targetType:
-          "user",
-
-        targetId:
-          account.id,
-
-        adminUid:
-          reviewer.uid,
-
+          `volunteer_application_${decision}`,
+        targetType: "user",
+        targetId: account.id,
+        adminUid: reviewer.uid,
         adminName:
           reviewer.displayName ||
           reviewer.email ||
           "Administrator",
-
         description:
-          isExistingResidentVolunteerApplication
-            ? `${
-                account.fullName ||
-                account.email
-              } volunteer application was marked as ${status}.`
-            : `${
-                account.fullName ||
-                account.email
-              } account was marked as ${status}.`,
+          `${
+            account.fullName ||
+            account.email
+          } volunteer application was marked as ${decision}.`,
       });
 
       Alert.alert(
         "Saved",
-        isExistingResidentVolunteerApplication
-          ? `Volunteer application marked as ${status.replace(
-              "_",
-              " "
-            )}.`
-          : `Account marked as ${status.replace(
-              "_",
-              " "
-            )}.`
+        decision === "approved"
+          ? "Volunteer access approved. The Resident account remains active and the user may switch to Volunteer Mode."
+          : "Volunteer application rejected. The Resident account remains active."
       );
+      return true;
     } catch (error) {
       console.log(
-        "account review error",
+        "volunteer application review error",
         error
       );
 
       Alert.alert(
         "Error",
-        "The account review could not be saved."
+        "The volunteer application review could not be saved. Check the latest Firestore rules and try again."
+      );
+      return false;
+    } finally {
+      setSavingUid(null);
+    }
+  };
+
+  const moderateCommunityAccount = async (
+    account: Account,
+    nextStatus: "approved" | "suspended"
+  ) => {
+    const reviewer = auth.currentUser;
+
+    if (!reviewer) {
+      Alert.alert(
+        "Session Error",
+        "Please sign in again."
+      );
+      return;
+    }
+
+    if (
+      account.role === "applicant" ||
+      account.role === "admin" ||
+      account.role === "superadmin"
+    ) {
+      Alert.alert(
+        "Action unavailable",
+        "This moderation action applies only to community Resident/Volunteer accounts."
+      );
+      return;
+    }
+
+    try {
+      setSavingUid(account.id);
+
+      const batch = writeBatch(db);
+
+      batch.update(
+        doc(db, "users", account.id),
+        {
+          status: nextStatus,
+          reviewedAt:
+            serverTimestamp(),
+          reviewedBy:
+            reviewer.uid,
+          rejectedReason: "",
+        }
+      );
+
+      await batch.commit();
+
+      await writeAdminLogSafely({
+        actionType:
+          nextStatus === "suspended"
+            ? "account_suspended"
+            : "account_reactivated",
+        targetType: "user",
+        targetId: account.id,
+        adminUid: reviewer.uid,
+        adminName:
+          reviewer.displayName ||
+          reviewer.email ||
+          "Administrator",
+        description:
+          `${
+            account.fullName ||
+            account.email
+          } community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
+      });
+
+      Alert.alert(
+        "Saved",
+        nextStatus === "suspended"
+          ? "Community account suspended."
+          : "Community account reactivated."
+      );
+    } catch (error) {
+      console.log(
+        "community account moderation error",
+        error
+      );
+
+      Alert.alert(
+        "Error",
+        "The account status could not be updated."
       );
     } finally {
       setSavingUid(null);
     }
   };
 
-  const approve = (
-    account: Account
-  ) => {
-    return saveReview(
-      account,
-      "approved"
-    );
-  };
-
-  const confirmReject =
-    async () => {
-      if (!selected) {
-        return;
-      }
-
-      if (
-        rejectionReason
-          .trim()
-          .length < 5
-      ) {
-        Alert.alert(
-          "Reason required",
-          "Please enter a clear rejection reason."
-        );
-
-        return;
-      }
-
-      await saveReview(
-        selected,
-        "rejected",
-        rejectionReason
-      );
-
+  const confirmReject = async () => {
+    if (!selected || savingUid) return;
+    if (rejectionReason.trim().length < 5) {
+      Alert.alert("Reason required", "Please enter a clear rejection reason.");
+      return;
+    }
+    if (!isPendingVolunteerApplication(selected)) {
+      Alert.alert("Review Updated", "This volunteer application is no longer pending.");
+      return;
+    }
+    const saved = await reviewVolunteerApplication(selected, "rejected", rejectionReason);
+    if (saved) {
       setSelected(null);
       setRejectionReason("");
-    };
+    }
+  };
 
   if (
     usersLoading ||
@@ -587,7 +529,7 @@ export default function AccountApprovals() {
         />
 
         <Text style={styles.muted}>
-          Loading account applications...
+          Loading volunteer applications and resident accounts...
         </Text>
       </View>
     );
@@ -614,13 +556,11 @@ export default function AccountApprovals() {
 
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>
-              Registration Approvals
+              Volunteer Applications & Accounts
             </Text>
 
             <Text style={styles.subtitle}>
-              Single review queue for
-              resident and volunteer
-              registrations.
+              All signups are Basic Residents automatically. Review volunteer requests and manage existing Resident accounts here.
             </Text>
           </View>
 
@@ -628,13 +568,7 @@ export default function AccountApprovals() {
             <Text style={styles.countText}>
               {
                 accounts.filter(
-                  (item) =>
-                    item.status ===
-                      "pending_review" ||
-                    volunteerApplications[
-                      item.id
-                    ]?.status ===
-                      "pending"
+                  (item) => isPendingVolunteerApplication(item)
                 ).length
               }
             </Text>
@@ -669,8 +603,8 @@ export default function AccountApprovals() {
                 ]}
               >
                 {value === "pending"
-                  ? "Pending Review"
-                  : "All Accounts"}
+                  ? "Pending Volunteers"
+                  : "All Residents"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -685,22 +619,19 @@ export default function AccountApprovals() {
             />
 
             <Text style={styles.emptyTitle}>
-              No accounts in this view
+              No volunteer applications or resident accounts in this view
             </Text>
           </View>
         ) : (
           visibleAccounts.map(
             (account) => {
-              const requestedRole =
-                requestedRoleFor(account);
-
               const application =
                 volunteerApplicationFor(account);
 
               const isExistingResidentApplication =
-                application?.status === "pending" &&
-                account.status === "approved" &&
-                account.role !== "applicant";
+                isPendingVolunteerApplication(
+                  account
+                );
 
               const isSaving =
                 savingUid === account.id;
@@ -718,7 +649,7 @@ export default function AccountApprovals() {
                         style={styles.name}
                       >
                         {account.fullName ||
-                          "Unnamed applicant"}
+                          "Unnamed resident"}
                       </Text>
 
                       <Text
@@ -734,15 +665,26 @@ export default function AccountApprovals() {
                       <Text
                         style={styles.roleText}
                       >
-                        {requestedRole.toUpperCase()}
+                        {account.volunteerAccess === true
+                          ? "VOLUNTEER"
+                          : isVerifiedResidentAccount(account)
+                            ? "VERIFIED RESIDENT"
+                            : "BASIC RESIDENT"}
                       </Text>
                     </View>
                   </View>
 
                   {isExistingResidentApplication ? (
-                    <Text style={styles.meta}>
-                      Application: Existing Resident → Volunteer
-                    </Text>
+                    <>
+                      <Text style={styles.meta}>
+                        Application: Verified Resident → Volunteer
+                      </Text>
+                      {!isVerifiedResidentAccount(account) ? (
+                        <Text style={styles.reason}>
+                          Approval unavailable: this account must be an active Verified Resident. You may reject the pending request.
+                        </Text>
+                      ) : null}
+                    </>
                   ) : null}
 
                   <Text style={styles.meta}>
@@ -756,8 +698,32 @@ export default function AccountApprovals() {
                       "-"}
                   </Text>
 
-                  {requestedRole ===
-                  "volunteer" ? (
+                  <Text style={styles.meta}>
+                    Identity:{" "}
+                    {account.identityVerified === true ||
+                    account.identityStatus === "verified"
+                      ? "VERIFIED RESIDENT"
+                      : String(
+                          account.identityStatus ||
+                          "basic"
+                        )
+                          .replace("_", " ")
+                          .toUpperCase()}
+                  </Text>
+
+                  <Text style={styles.meta}>
+                    Volunteer Access:{" "}
+                    {account.volunteerAccess === true
+                      ? "ACTIVE"
+                      : String(
+                          account.volunteerStatus ||
+                          "not_applied"
+                        )
+                          .replace("_", " ")
+                          .toUpperCase()}
+                  </Text>
+
+                  {application ? (
                     <>
                       <Text
                         style={styles.meta}
@@ -793,43 +759,36 @@ export default function AccountApprovals() {
                     </>
                   ) : null}
 
-                  <Text
-                    style={styles.statusText}
-                  >
-                    Status:{" "}
-                    {(
-                      account.status ||
-                      "legacy"
-                    )
-                      .replace("_", " ")
-                      .toUpperCase()}
+                  <Text style={styles.statusText}>
+                    Account Status: {account.status === "approved"
+                      ? "ACTIVE"
+                      : String(account.status || "unknown")
+                          .replace(/_/g, " ")
+                          .toUpperCase()}
                   </Text>
 
-                  {account.rejectedReason ? (
+                  {application?.rejectedReason ? (
                     <Text
                       style={styles.reason}
                     >
                       Reason:{" "}
-                      {
-                        account.rejectedReason
-                      }
+                      {application.rejectedReason}
                     </Text>
                   ) : null}
 
-                  {account.status ===
-                    "pending_review" ||
-                  isExistingResidentApplication ? (
+                  {isExistingResidentApplication ? (
                     <View
                       style={styles.actionRow}
                     >
                       <TouchableOpacity
-                        disabled={isSaving}
+                        disabled={isSaving || !isVerifiedResidentAccount(account)}
                         style={[
                           styles.actionButton,
                           styles.approveButton,
+                          (isSaving || !isVerifiedResidentAccount(account)) && { opacity: 0.55 },
                         ]}
                         onPress={() =>
-                          approve(account)
+                          reviewVolunteerApplication(account, "approved")
                         }
                       >
                         <Text
@@ -837,11 +796,7 @@ export default function AccountApprovals() {
                             styles.actionText
                           }
                         >
-                          {isSaving
-                            ? "Saving..."
-                            : isExistingResidentApplication
-                              ? "Approve Volunteer"
-                              : "Approve"}
+                          {isSaving ? "Saving..." : "Approve Volunteer"}
                         </Text>
                       </TouchableOpacity>
 
@@ -860,9 +815,7 @@ export default function AccountApprovals() {
                             styles.actionText
                           }
                         >
-                          {isExistingResidentApplication
-                            ? "Reject Volunteer"
-                            : "Reject"}
+                          Reject Volunteer
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -878,7 +831,7 @@ export default function AccountApprovals() {
                         styles.suspendButton,
                       ]}
                       onPress={() =>
-                        saveReview(
+                        moderateCommunityAccount(
                           account,
                           "suspended"
                         )
@@ -896,10 +849,7 @@ export default function AccountApprovals() {
                     </TouchableOpacity>
                   ) : null}
 
-                  {account.status ===
-                    "suspended" ||
-                  account.status ===
-                    "rejected" ? (
+                  {account.status === "suspended" ? (
                     <TouchableOpacity
                       disabled={isSaving}
                       style={[
@@ -907,7 +857,7 @@ export default function AccountApprovals() {
                         styles.approveButton,
                       ]}
                       onPress={() =>
-                        approve(account)
+                        moderateCommunityAccount(account, "approved")
                       }
                     >
                       <Text
@@ -944,11 +894,7 @@ export default function AccountApprovals() {
             <Text
               style={styles.modalTitle}
             >
-              {selected &&
-              volunteerApplications[selected.id]?.status === "pending" &&
-              selected.status === "approved"
-                ? "Reject Volunteer Application"
-                : "Reject Registration"}
+              Reject Volunteer Application
             </Text>
 
             <Text style={styles.subtitle}>

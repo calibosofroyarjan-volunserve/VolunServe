@@ -1,37 +1,37 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import {
-    collection,
-    doc,
-    onSnapshot,
-    serverTimestamp,
-    writeBatch,
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import React, {
-    useEffect,
-    useMemo,
-    useState,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { db } from "../../lib/firebase";
 
 import {
-    isApprovedProfile,
+  isApprovedProfile,
 } from "../../lib/firebaseAuth";
 
 import {
-    useUserSession,
+  useUserSession,
 } from "../../lib/useUserSession";
 
 // ============================================================

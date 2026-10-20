@@ -45,7 +45,7 @@ type AssistanceCategory =
 
 type AssistanceRequestGroup = "disaster_recovery" | "community_need";
 type BeneficiaryType = "self" | "someone_else";
-type PreferredAssistanceType = "monetary" | "in_kind";
+type PreferredAssistanceType = "monetary";
 type ScreenMode = "new_request" | "my_requests";
 
 type DocumentRequirement = {
@@ -158,7 +158,7 @@ const CATEGORY_CONFIGS: CategoryConfig[] = [
     value: "disaster_recovery",
     label: "Disaster Recovery",
     shortLabel: "Disaster Recovery",
-    description: "Post-emergency repair, recovery, shelter, and material needs.",
+    description: "Post-emergency household recovery, temporary shelter, repair, and material needs after immediate danger has passed.",
     icon: "home-outline",
     requestGroup: "disaster_recovery",
     accent: "#C2410C",
@@ -348,9 +348,9 @@ const CATEGORY_CONFIGS: CategoryConfig[] = [
   },
   {
     value: "other_community_assistance",
-    label: "Other Community Assistance",
+    label: "Other Assistance",
     shortLabel: "Other Assistance",
-    description: "Other legitimate, verifiable community support needs.",
+    description: "Other legitimate, verifiable individual or household support needs.",
     icon: "help-buoy-outline",
     requestGroup: "community_need",
     accent: "#475569",
@@ -371,19 +371,13 @@ const CURRENT_SITUATION_OPTIONS = [
   "At home / recovering",
   "Awaiting treatment or service",
   "Temporarily displaced",
-  "Ongoing community need",
+  "Ongoing individual / household need",
   "Other",
 ];
 
 const BENEFICIARY_OPTIONS: DropdownOption[] = [
   { value: "self", label: "Myself" },
   { value: "someone_else", label: "Someone else" },
-];
-
-const ASSISTANCE_PREFERENCE_OPTIONS: DropdownOption[] = [
-  { value: "monetary", label: "Monetary support" },
-  { value: "in_kind", label: "In-kind support" },
-  { value: "both", label: "Both monetary and in-kind support" },
 ];
 
 const timestampMillis = (value: any) => {
@@ -523,10 +517,7 @@ export default function AssistanceRequestScreen() {
   const [currentSituation, setCurrentSituation] = useState("");
   const [otherSituation, setOtherSituation] = useState("");
 
-  const [
-    preferredAssistanceTypes,
-    setPreferredAssistanceTypes,
-  ] = useState<PreferredAssistanceType[]>([]);
+  const preferredAssistanceTypes: PreferredAssistanceType[] = ["monetary"];
 
   const [
     pickedDocuments,
@@ -615,11 +606,6 @@ export default function AssistanceRequestScreen() {
     currentSituation === "Other"
       ? otherSituation.trim()
       : currentSituation.trim();
-
-  const preferredAssistanceSelection =
-    preferredAssistanceTypes.length === 2
-      ? "both"
-      : preferredAssistanceTypes[0] || "";
 
   useEffect(() => {
     let mounted = true;
@@ -713,37 +699,12 @@ export default function AssistanceRequestScreen() {
     setEstimatedAmount("");
     setCurrentSituation("");
     setOtherSituation("");
-    setPreferredAssistanceTypes([]);
     setPickedDocuments({});
     setPublicCampaignPhoto(null);
     setPublicCampaignPhotoConsent(false);
     setUploadProgress("");
     setSuccessRequestId("");
     setSubmissionNeedsAttention(false);
-  };
-
-  const choosePreferredAssistance = (
-    value: string,
-  ) => {
-    if (value === "both") {
-      setPreferredAssistanceTypes([
-        "monetary",
-        "in_kind",
-      ]);
-      return;
-    }
-
-    if (
-      value === "monetary" ||
-      value === "in_kind"
-    ) {
-      setPreferredAssistanceTypes([
-        value,
-      ]);
-      return;
-    }
-
-    setPreferredAssistanceTypes([]);
   };
 
   const chooseCategory = (
@@ -1313,12 +1274,6 @@ export default function AssistanceRequestScreen() {
         resolvedSituation.length < 3
       ) {
         return "Select or describe the current situation.";
-      }
-
-      if (
-        !preferredAssistanceTypes.length
-      ) {
-        return "Select at least one preferred type of assistance.";
       }
 
       if (
@@ -2042,11 +1997,11 @@ export default function AssistanceRequestScreen() {
       }
 
       if (
-        requestPayload.preferredAssistanceTypes.length < 1 ||
-        requestPayload.preferredAssistanceTypes.length > 2
+        requestPayload.preferredAssistanceTypes.length !== 1 ||
+        requestPayload.preferredAssistanceTypes[0] !== "monetary"
       ) {
         localRuleProblems.push(
-          "preferredAssistanceTypes size is invalid",
+          "preferredAssistanceTypes must be monetary-only",
         );
       }
 
@@ -2823,14 +2778,12 @@ export default function AssistanceRequestScreen() {
                 }
               >
                 Submit a verified
-                non-emergency or
-                recovery assistance
-                request for LGU
-                review. Donation
-                support may be opened
-                later only when a
-                verified shortage
-                remains.
+                non-emergency individual
+                or household assistance
+                request for LGU review.
+                Disaster recovery belongs
+                here after immediate
+                danger has passed.
               </Text>
             </View>
 
@@ -2995,8 +2948,8 @@ export default function AssistanceRequestScreen() {
               >
                 <InfoCard
                   icon="shield-checkmark-outline"
-                  title="Verified Residents Only"
-                  text="Identity verification is required for non-emergency assistance requests."
+                  title="Verified Resident Required"
+                  text="Identity verification is required before submitting a non-emergency assistance request."
                 />
 
                 <InfoCard
@@ -3008,7 +2961,7 @@ export default function AssistanceRequestScreen() {
                 <InfoCard
                   icon="location-outline"
                   title="LGU Sets the Location"
-                  text="Residents do not choose the public map point. The LGU assigns a safe service or receiving location when needed."
+                  text="Residents do not choose the public map point. The LGU assigns a safe public service location when needed."
                 />
 
                 <InfoCard
@@ -3056,16 +3009,17 @@ export default function AssistanceRequestScreen() {
                     }
                   >
                     Use Emergency
-                    Report for fire,
-                    rescue, evacuation,
-                    serious injury,
-                    urgent transport,
-                    or other immediate
-                    threats. Request
-                    Assistance is for
-                    non-urgent recovery
-                    and community
-                    support.
+                    Report for an active
+                    danger that needs an
+                    immediate response.
+                    Use Request Assistance
+                    for non-emergency
+                    individual or household
+                    needs, including
+                    post-emergency recovery.
+                    Broader barangay relief
+                    is handled separately
+                    by the LGU.
                   </Text>
                 </View>
 
@@ -3102,55 +3056,71 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 1 OF 4"
-                    title="Assistance Category"
-                    text="Select the category that best matches the non-emergency need."
+                    title="Choose an Assistance Category"
+                    text="Choose the category that best describes the verified individual or household need."
                   />
 
-                  <DropdownField
-                    label="Category"
-                    required
-                    value={category}
-                    placeholder="Select assistance category"
-                    options={CATEGORY_CONFIGS.map(
-                      (item) => ({
-                        value: item.value,
-                        label: item.label,
-                        helper: item.description,
-                      }),
+                  <View
+                    style={[
+                      styles.categoryGrid,
+                      !wide &&
+                        styles.categoryGridCompact,
+                    ]}
+                  >
+                    {CATEGORY_CONFIGS.map(
+                      (item) => (
+                        <TouchableOpacity
+                          key={item.value}
+                          activeOpacity={0.84}
+                          style={[
+                            styles.categoryCard,
+                            category === item.value && {
+                              borderColor: item.accent,
+                              backgroundColor: item.soft,
+                            },
+                          ]}
+                          onPress={() =>
+                            chooseCategory(item.value)
+                          }
+                        >
+                          <View
+                            style={[
+                              styles.categoryIcon,
+                              {
+                                backgroundColor: item.soft,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={item.icon}
+                              size={23}
+                              color={item.accent}
+                            />
+                          </View>
+
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={styles.categoryTitle}
+                            >
+                              {item.label}
+                            </Text>
+
+                            <Text
+                              style={styles.categoryText}
+                            >
+                              {item.description}
+                            </Text>
+                          </View>
+
+                          <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color="#94A3B8"
+                          />
+                        </TouchableOpacity>
+                      ),
                     )}
-                    onSelect={(value) =>
-                      chooseCategory(
-                        value as AssistanceCategory,
-                      )
-                    }
-                  />
-
-                  {selectedCategory && (
-                    <View
-                      style={[
-                        styles.selectedOptionSummary,
-                        {
-                          borderColor:
-                            selectedCategory.accent,
-                          backgroundColor:
-                            selectedCategory.soft,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name={selectedCategory.icon}
-                        size={20}
-                        color={selectedCategory.accent}
-                      />
-                      <Text
-                        style={
-                          styles.selectedOptionSummaryText
-                        }
-                      >
-                        {selectedCategory.description}
-                      </Text>
-                    </View>
-                  )}
+                  </View>
 
                   <View
                     style={
@@ -3527,15 +3497,6 @@ export default function AssistanceRequestScreen() {
                     />
                   )}
 
-                  <DropdownField
-                    label="Preferred type of assistance"
-                    required
-                    value={preferredAssistanceSelection}
-                    placeholder="Select assistance type"
-                    options={ASSISTANCE_PREFERENCE_OPTIONS}
-                    onSelect={choosePreferredAssistance}
-                  />
-
                   <View
                     style={
                       styles.privateNotice
@@ -3557,10 +3518,9 @@ export default function AssistanceRequestScreen() {
                       are private verification
                       data. You are not asked
                       to choose a public Google
-                      Maps location. If a
-                      service, receiving, or
-                      handover point is needed,
-                      the LGU will assign it.
+                      Maps location. If a public service
+                      location is needed, the
+                      LGU will assign it.
                     </Text>
                   </View>
 
@@ -4058,7 +4018,7 @@ export default function AssistanceRequestScreen() {
                           selectedCategory.requestGroup ===
                           "disaster_recovery"
                             ? "Disaster Recovery"
-                            : "Community Assistance"
+                            : "Individual / Household Assistance"
                         }
                       />
 
@@ -4109,23 +4069,6 @@ export default function AssistanceRequestScreen() {
                         value={
                           resolvedSituation
                         }
-                      />
-
-                      <ReviewRow
-                        label="Preferred Assistance"
-                        value={preferredAssistanceTypes
-                          .map(
-                            (
-                              item,
-                            ) =>
-                              item ===
-                              "monetary"
-                                ? "Monetary"
-                                : "In-kind",
-                          )
-                          .join(
-                            " + ",
-                          )}
                       />
 
                       <ReviewRow
@@ -5221,8 +5164,8 @@ function MyRequestsPanel({
           >
             Submit a verified
             non-emergency request
-            when legitimate
-            community or recovery
+            when legitimate individual,
+            household, or recovery
             support is needed.
           </Text>
         </View>
@@ -5320,7 +5263,7 @@ function MyRequestsPanel({
                     >
                       {request.categoryLabel ||
                         config?.label ||
-                        "Community Assistance"}
+                        "Assistance"}
                       {" · "}
                       {formatDate(
                         request.createdAt,
@@ -5959,7 +5902,7 @@ function RequestDetailsModal({
                     }
                   >
                     LGU-Assigned
-                    Service / Receiving
+                    Public Service
                     Location
                   </Text>
 
@@ -6112,11 +6055,9 @@ function RequestDetailsModal({
                       No location has
                       been assigned. If
                       the LGU later
-                      needs a service,
-                      receiving, or
-                      coordinated
-                      handover point, it
-                      will appear here
+                      assigns a public
+                      service location,
+                      it will appear here
                       automatically.
                     </Text>
                   </View>

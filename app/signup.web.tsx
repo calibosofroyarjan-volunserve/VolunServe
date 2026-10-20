@@ -64,6 +64,18 @@ const COLORS = {
 
 const ALLOWED_REGIONS = ["Region III – Central Luzon"];
 
+const normalizeLocationName = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const isAllowedProvince = (value: string) =>
+  ["bulacan", "province of bulacan"].includes(normalizeLocationName(value));
+
+const isAllowedCity = (value: string) =>
+  [
+    "city of san jose del monte",
+    "san jose del monte",
+  ].includes(normalizeLocationName(value));
+
 const OCCUPATION_OPTIONS = [
   "Medical Professional",
   "Emergency Responder",
@@ -198,14 +210,6 @@ function getFriendlyAuthError(error: any) {
   if (code === "auth/network-request-failed") return "Network error. Please check your internet connection and try again.";
   if (code === "auth/account-exists-with-different-credential") return "An account already exists with this email using a different sign-in method.";
   return error?.message || "Something went wrong. Please try again.";
-}
-
-function splitDisplayName(displayName: string) {
-  const clean = displayName.trim().replace(/\s+/g, " ");
-  if (!clean) return { firstName: "", lastName: "" };
-  const parts = clean.split(" ");
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
-  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
 }
 
 const SectionTitle = memo(function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -464,7 +468,16 @@ export default function Signup() {
         setCities([]);
         setBarangays([]);
         const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces"));
-        setProvinces(snap.docs.map((d) => d.id).sort());
+        const allowedProvinces = snap.docs
+          .map((d) => d.id)
+          .filter(isAllowedProvince)
+          .sort();
+
+        setProvinces(allowedProvinces);
+
+        if (allowedProvinces.length === 1) {
+          updateField("province", allowedProvinces[0]);
+        }
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load provinces.");
       } finally {
@@ -472,7 +485,7 @@ export default function Signup() {
       }
     };
     fetchProvinces();
-  }, [formData.region]);
+  }, [formData.region, updateField]);
 
   useEffect(() => {
     const fetchCities = async () => {
@@ -484,7 +497,17 @@ export default function Signup() {
         const snap = await getDocs(
           collection(db, "address_regions", formData.region, "provinces", formData.province, "cities")
         );
-        setCities(snap.docs.map((d) => d.id).sort());
+
+        const allowedCities = snap.docs
+          .map((d) => d.id)
+          .filter(isAllowedCity)
+          .sort();
+
+        setCities(allowedCities);
+
+        if (allowedCities.length === 1) {
+          updateField("city", allowedCities[0]);
+        }
       } catch (err: any) {
         Alert.alert("Address Error", err?.message || "Failed to load cities.");
       } finally {
@@ -492,7 +515,7 @@ export default function Signup() {
       }
     };
     fetchCities();
-  }, [formData.region, formData.province]);
+  }, [formData.region, formData.province, updateField]);
 
   useEffect(() => {
     const fetchBarangays = async () => {
@@ -533,7 +556,7 @@ export default function Signup() {
 
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName || !formData.middleName.trim() || nameOk(formData.middleName);
+    const middleNameValid = formData.noMiddleName ? true : nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
@@ -545,7 +568,11 @@ export default function Signup() {
 
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
-    const step2Valid = !!formData.region && !!formData.province && !!formData.city && !!formData.barangay;
+    const step2Valid =
+      !!formData.region &&
+      isAllowedProvince(formData.province) &&
+      isAllowedCity(formData.city) &&
+      !!formData.barangay;
 
     const needsSpec = specializationOptions.length > 0;
     const isOther = formData.occupationCategory === "Other (Specify)";
@@ -566,7 +593,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
 
     return {
       lastNameValid,
@@ -608,11 +635,9 @@ export default function Signup() {
 
       const stepMessages: Record<Step, string> = {
         1: "Please complete your personal information and contact details.",
-        2: "Please select your complete residential address.",
+        2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your basic profile information.",
-        4: googleBound
-          ? "Please agree to the terms and confirm your information."
-          : "Please create a password and agree to the terms.",
+        4: "Please create a password and agree to the terms.",
       };
 
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -678,13 +703,6 @@ export default function Signup() {
       setLoadingSubmit(true);
 
       await signUpUser({
-        // All new users start as a Basic Account.
-        // "resident" is kept here for compatibility with the existing auth/profile schema.
-        role: "resident",
-        accountStatus: "basic",
-        residentVerificationStatus: "unverified",
-        volunteerStatus: "not_applied",
-
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
@@ -702,24 +720,19 @@ export default function Signup() {
         occupationCategory: formData.occupationCategory,
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
-
-        // Volunteer data is intentionally empty at sign-up.
-        // It will be collected later from the Volunteer Application form.
-        skills: [],
-        skillOther: "",
-        availability: [],
-      } as any);
+      });
 
       const successTitle = "Basic Account Created";
-      const successMessage =
-        "Your account is ready. Sign in to continue. To become a Verified Resident, complete the National ID and face-verification process from your account. Volunteer application will only be available after Resident verification.";
+      const successMessage = googleBound
+        ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
+        : "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace("/login");
+        router.replace("/(tabs)");
       } else {
         Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace("/login") },
+          { text: "OK", onPress: () => router.replace("/(tabs)") },
         ]);
       }
     } catch (e: any) {
@@ -952,7 +965,7 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Middle Name (Optional)"
+                        label="Middle Name *"
                         value={formData.middleName}
                         onChange={(v) => updateField("middleName", sanitizeName(v))}
                         editable={!formData.noMiddleName}
@@ -1256,9 +1269,9 @@ export default function Signup() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.residentNoticeTitle}>What happens after sign-up?</Text>
                       <Text style={styles.residentNoticeText}>
-                        Your account starts as Basic. Resident verification is a separate step using
-                        National ID and AI-assisted face verification. Only a Verified Resident can
-                        later submit the Volunteer Application form.
+                        Your account starts as Basic. Identity Verification is a separate trust step.
+                        Only a Verified Resident can later access protected Resident services and submit
+                        the Volunteer Application form.
                       </Text>
                     </View>
                   </View>
@@ -1280,86 +1293,88 @@ export default function Signup() {
                         <Text style={styles.verifiedBadgeText}>✓ Email Verified</Text>
                       </View>
                     </View>
-                  ) : (
-                    <>
-                      <SectionTitle
-                        title="Password Security"
-                        subtitle="Create a strong password to protect your account."
+                  ) : null}
+
+                  <SectionTitle
+                    title="Password Security"
+                    subtitle={
+                      googleBound
+                        ? "Create a VolunServe password so this same account can sign in with Google or email/password."
+                        : "Create a strong password to protect your account."
+                    }
+                  />
+
+                  <View style={styles.formRow}>
+                    <View style={styles.formColumn}>
+                      <Field
+                        icon="🔒"
+                        label="Password *"
+                        value={formData.password}
+                        onChange={(v) => updateField("password", v)}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
                       />
-
-                      <View style={styles.formRow}>
-                        <View style={styles.formColumn}>
-                          <Field
-                            icon="🔒"
-                            label="Password *"
-                            value={formData.password}
-                            onChange={(v) => updateField("password", v)}
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                          />
-                          <TouchableOpacity
-                            style={styles.passwordToggleBtn}
-                            onPress={() => setShowPassword((prev) => !prev)}
-                          >
-                            <Text style={styles.passwordToggleText}>
-                              {showPassword ? "Hide Password" : "Show Password"}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.formColumn}>
-                          <Field
-                            icon="🔐"
-                            label="Confirm Password *"
-                            value={formData.confirmPassword}
-                            onChange={(v) => updateField("confirmPassword", v)}
-                            secureTextEntry={!showConfirmPassword}
-                            autoCapitalize="none"
-                          />
-                          <TouchableOpacity
-                            style={styles.passwordToggleBtn}
-                            onPress={() => setShowConfirmPassword((prev) => !prev)}
-                          >
-                            <Text style={styles.passwordToggleText}>
-                              {showConfirmPassword
-                                ? "Hide Confirm Password"
-                                : "Show Confirm Password"}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <View style={styles.passwordPanel}>
-                        <Text style={styles.passwordStrength}>
-                          Password Strength: {validation.passwordStrength}
+                      <TouchableOpacity
+                        style={styles.passwordToggleBtn}
+                        onPress={() => setShowPassword((prev) => !prev)}
+                      >
+                        <Text style={styles.passwordToggleText}>
+                          {showPassword ? "Hide Password" : "Show Password"}
                         </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                        <View style={styles.requirementsGrid}>
-                          <ValidationText ok={validation.passwordChecks.minLength}>
-                            Minimum 8 characters.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.upper}>
-                            One uppercase letter.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.lower}>
-                            One lowercase letter.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.number}>
-                            One number.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.special}>
-                            One special character.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.notCommon}>
-                            Not a common password.
-                          </ValidationText>
-                          <ValidationText ok={validation.passwordChecks.matches}>
-                            Passwords match.
-                          </ValidationText>
-                        </View>
-                      </View>
-                    </>
-                  )}
+                    <View style={styles.formColumn}>
+                      <Field
+                        icon="🔐"
+                        label="Confirm Password *"
+                        value={formData.confirmPassword}
+                        onChange={(v) => updateField("confirmPassword", v)}
+                        secureTextEntry={!showConfirmPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={styles.passwordToggleBtn}
+                        onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      >
+                        <Text style={styles.passwordToggleText}>
+                          {showConfirmPassword
+                            ? "Hide Confirm Password"
+                            : "Show Confirm Password"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.passwordPanel}>
+                    <Text style={styles.passwordStrength}>
+                      Password Strength: {validation.passwordStrength}
+                    </Text>
+
+                    <View style={styles.requirementsGrid}>
+                      <ValidationText ok={validation.passwordChecks.minLength}>
+                        Minimum 8 characters.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.upper}>
+                        One uppercase letter.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.lower}>
+                        One lowercase letter.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.number}>
+                        One number.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.special}>
+                        One special character.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.notCommon}>
+                        Not a common password.
+                      </ValidationText>
+                      <ValidationText ok={validation.passwordChecks.matches}>
+                        Passwords match.
+                      </ValidationText>
+                    </View>
+                  </View>
 
                   <TouchableOpacity
                     style={styles.termsOpenBtn}
