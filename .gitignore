@@ -41,3 +41,24 @@ app-example
 # generated native folders
 /ios
 /android
+
+
+# Firebase emulator and backups
+.firebase/
+firebase-export-*/
+VolunServe-Backup-*/
+VolunServe-SafeBackup-*/
+
+# Firebase private credentials
+*adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
+
+# Environment secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Debug logs
+firebase-debug.log
+firestore-debug.log
