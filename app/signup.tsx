@@ -4,7 +4,6 @@ import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,8 +23,9 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { auth, db } from "../lib/firebase";
+import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
+import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -425,8 +425,8 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [barangays, setBarangays] = useState<string[]>([]);
-  const [loadingAddress, setLoadingAddress] = useState(false);
+  const barangays = SJDM_BARANGAYS;
+  const loadingAddress = false;
   const [dobOpen, setDobOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormState>({
@@ -500,32 +500,6 @@ export default function Signup() {
     };
     handleGoogleSuccess();
   }, [response, updateField]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadBarangays = async () => {
-      try {
-        setLoadingAddress(true);
-        setBarangays([]);
-        const provinces = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces"));
-        const provinceIds = provinces.docs.map((item) => item.id);
-        const provinceId = provinceIds.find((name) => name === FIXED_PROVINCE) ||
-          provinceIds.find(isAllowedProvince) || FIXED_PROVINCE;
-        const cities = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities"));
-        const cityIds = cities.docs.map((item) => item.id);
-        const cityId = cityIds.find((name) => name === FIXED_CITY) ||
-          cityIds.find(isAllowedCity) || FIXED_CITY;
-        const snapshot = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities", cityId, "barangays"));
-        if (mounted) setBarangays(snapshot.docs.map((item) => item.id).sort());
-      } catch (error: any) {
-        if (mounted) Alert.alert("Address Error", error?.message || "Failed to load barangays.");
-      } finally {
-        if (mounted) setLoadingAddress(false);
-      }
-    };
-    void loadBarangays();
-    return () => { mounted = false; };
-  }, []);
 
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
