@@ -1,4 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -216,6 +217,8 @@ const Field = memo(function Field({
   placeholder,
   keyboardType,
   secureTextEntry,
+  showPassword,
+  onTogglePassword,
   editable = true,
   invalid = false,
   returnKeyType,
@@ -230,6 +233,8 @@ const Field = memo(function Field({
   placeholder?: string;
   keyboardType?: any;
   secureTextEntry?: boolean;
+  showPassword?: boolean;
+  onTogglePassword?: () => void;
   editable?: boolean;
   invalid?: boolean;
   returnKeyType?: any;
@@ -262,6 +267,19 @@ const Field = memo(function Field({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
+        {onTogglePassword ? (
+          <TouchableOpacity
+            style={styles.passwordEyeButton}
+            onPress={onTogglePassword}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            accessibilityState={{ pressed: !!showPassword }}
+            hitSlop={8}
+          >
+            <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={COLORS.muted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -1136,42 +1154,26 @@ export default function Signup() {
                   <View style={styles.formRow}>
                     <View style={styles.formColumn}>
                       <Field
-                        icon="🔒"
                         label="Password *"
                         value={formData.password}
                         onChange={(v) => updateField("password", v)}
                         secureTextEntry={!showPassword}
+                        showPassword={showPassword}
+                        onTogglePassword={() => setShowPassword((prev) => !prev)}
                         autoCapitalize="none"
                       />
-                      <TouchableOpacity
-                        style={styles.passwordToggleBtn}
-                        onPress={() => setShowPassword((prev) => !prev)}
-                      >
-                        <Text style={styles.passwordToggleText}>
-                          {showPassword ? "Hide Password" : "Show Password"}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
 
                     <View style={styles.formColumn}>
                       <Field
-                        icon="🔐"
                         label="Confirm Password *"
                         value={formData.confirmPassword}
                         onChange={(v) => updateField("confirmPassword", v)}
                         secureTextEntry={!showConfirmPassword}
+                        showPassword={showConfirmPassword}
+                        onTogglePassword={() => setShowConfirmPassword((prev) => !prev)}
                         autoCapitalize="none"
                       />
-                      <TouchableOpacity
-                        style={styles.passwordToggleBtn}
-                        onPress={() => setShowConfirmPassword((prev) => !prev)}
-                      >
-                        <Text style={styles.passwordToggleText}>
-                          {showConfirmPassword
-                            ? "Hide Confirm Password"
-                            : "Show Confirm Password"}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -1595,8 +1597,7 @@ const styles = StyleSheet.create({
   checkboxRow: { width: "33.333%", flexDirection: "row", alignItems: "center", marginBottom: 12 },
   checkboxLabel: { marginLeft: 2, fontSize: 14, color: COLORS.text, flex: 1, fontWeight: "700" },
 
-  passwordToggleBtn: { alignSelf: "flex-start", marginTop: -4, marginBottom: 12 },
-  passwordToggleText: { color: COLORS.primary, fontWeight: "900", fontSize: 13 },
+  passwordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   passwordPanel: { backgroundColor: COLORS.field, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 18 },
   passwordStrength: { color: COLORS.text, fontWeight: "900", fontSize: 14, marginBottom: 8 },
   requirementsGrid: { flexDirection: "row", flexWrap: "wrap", columnGap: 18 },
