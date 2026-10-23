@@ -7586,7 +7586,7 @@ app.post(
         throw makeHttpError(400, "invalid_proposal", "Event date and time must be in the future.");
       }
 
-      if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime) || endTime <= time) {
+      if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(endTime) || endTime <= time) {
         throw makeHttpError(400, "invalid_proposal", "Set an event end time later than its start time on the same date.");
       }
       const latitude = Number(input.latitude);
