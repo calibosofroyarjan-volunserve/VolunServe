@@ -21,7 +21,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { connectGoogleAccountWeb, homeRouteForProfile, signUpUser, type UserProfile } from "../lib/firebaseAuth";
+import { signUpUser } from "../lib/firebaseAuth";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -420,7 +420,6 @@ export default function Signup() {
   const [step, setStep] = useState<Step>(1);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
-  const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -589,7 +588,6 @@ export default function Signup() {
       // Birthdate, phone, barangay and other details must come from user.
     }));
     setGoogleBound(true);
-    setGoogleProfileLoaded(true);
   }, []);
 
   // Resume signup after Google OAuth (including when redirected here from
@@ -610,26 +608,6 @@ export default function Signup() {
     });
     return () => { active = false; unsubscribe(); };
   }, [applyGoogleIdentity]);
-
-  const handleGooglePress = useCallback(async () => {
-    try {
-      const user = await connectGoogleAccountWeb();
-      const profileSnapshot = await getDoc(doc(db, "users", user.uid));
-      if (profileSnapshot.exists()) {
-        // Existing registered users should sign in, not create a duplicate.
-        router.replace(homeRouteForProfile(profileSnapshot.data() as UserProfile) as any);
-        return;
-      }
-      applyGoogleIdentity(user);
-      setStep(1);
-      scrollTop();
-      window.alert(
-        "Google Account Connected\n\nYour Google email and available name were filled in. Review the name and complete the remaining required details to create your Basic Account."
-      );
-    } catch (error: any) {
-      window.alert("Google Error\n\n" + getFriendlyAuthError(error));
-    }
-  }, [applyGoogleIdentity, router, scrollTop]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
@@ -856,24 +834,14 @@ export default function Signup() {
                     </Text>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={handleGooglePress}
-                    disabled={googleProfileLoaded}
-                    style={[styles.googleBtn, googleProfileLoaded && styles.googleBtnDisabled]}
-                  >
-                    <View style={styles.googleButtonContent}>
-                      <Text style={styles.googleButtonMark}>G</Text>
-                      <Text style={styles.googleBtnText}>
-                        {googleProfileLoaded ? "Google Account Connected" : "Continue with Google"}
+                  {googleBound ? (
+                    <View style={styles.googleConnectedNotice}>
+                      <Feather name="check-circle" size={18} color={COLORS.primary} />
+                      <Text style={styles.googleConnectedText}>
+                        Google account connected. Your email is linked; complete the details below.
                       </Text>
                     </View>
-                  </TouchableOpacity>
-
-                  <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>or register with email</Text>
-                    <View style={styles.dividerLine} />
-                  </View>
+                  ) : null}
 
                   <Field
                     icon="✉"
@@ -1573,14 +1541,8 @@ const styles = StyleSheet.create({
   roleInfoTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900", marginBottom: 4 },
   roleInfoText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
 
-  googleBtn: { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 9, borderWidth: 1, borderColor: "#d7e0e6", alignItems: "center" },
-  googleBtnDisabled: { opacity: 0.82 },
-  googleBtnText: { fontWeight: "900", color: COLORS.text },
-  googleButtonContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  googleButtonMark: { color: "#2563eb", fontSize: 20, fontWeight: "900" },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
+  googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 
