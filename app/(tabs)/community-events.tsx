@@ -364,6 +364,9 @@ const prettyDate = (date?: string, time?: string) => {
   });
 };
 
+const eventScheduleLabel = (event: {date: string;time: string;endTime?: string}) =>
+  `${prettyDate(event.date,event.time)}${event.endTime ? ` – ${formatChosenTime(event.endTime)}` : ""}`;
+
 const categoryIcon = (
   category: Category
 ): keyof typeof Ionicons.glyphMap => {
@@ -2079,7 +2082,7 @@ export default function CommunityEventsScreen() {
             {!!event.description && <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description}</Text>}
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
-              <Text style={styles.lockedEventMetaText}>{prettyDate(event.date, event.time)}</Text>
+              <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)}</Text>
             </View>
             <View style={styles.lockedEventMeta}>
               <Ionicons name="location-outline" size={14} color="#6B7F93" />
@@ -2117,7 +2120,7 @@ export default function CommunityEventsScreen() {
             <Text style={styles.lockedAboutText}>
               {event.description?.trim() || "No additional description was provided for this event."}
             </Text>
-            <Text style={styles.lockedEventMetaText}>{prettyDate(event.date, event.time)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
+            <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
             {isVolunteer && owned && <View style={styles.webOwnershipNotice}>
               <Ionicons name="information-circle-outline" size={19} color="#0B7C70" />
               <Text style={styles.webOwnershipText}>You proposed this event. You cannot join it as a volunteer.</Text>
@@ -2182,7 +2185,7 @@ export default function CommunityEventsScreen() {
                 <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
                   onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
                   <Ionicons name="navigate-outline" size={16} color="white" />
-                  <Text style={styles.lockedMapSolidText}>Open in Google Maps</Text>
+                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
                 </Pressable>
               </View>
               <Text style={styles.lockedMapFootnote}>In-app routes require a configured Google Maps Embed API key and browser location permission. External Google Maps directions remain available. Your GPS position is not saved in Firestore.</Text>
@@ -2218,7 +2221,7 @@ export default function CommunityEventsScreen() {
             <Text style={styles.ruiCategoryTag}>{event.category}</Text>
             {!!event.barangay && <Text style={styles.ruiBarangayTag}>{event.barangay}</Text>}
           </View>
-          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{prettyDate(event.date, event.time)}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{eventScheduleLabel(event)}</Text></View>
           <View style={styles.ruiInfoLine}><Ionicons name="location-outline" size={14} color="#58738A" /><Text numberOfLines={2} style={styles.ruiMeta}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text></View>
           <View style={styles.ruiInfoLine}><Ionicons name="people-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text></View>
           <Pressable style={styles.ruiPrimary} onPress={() => { setResidentDetailsId(event.id); setResidentDetailTab("details"); }} accessibilityRole="button">
@@ -2417,7 +2420,7 @@ export default function CommunityEventsScreen() {
                         style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
-                          <Text style={styles.lockedAttendanceHistoryDate}>{prettyDate(item.date, item.time)}</Text>
+                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
                         </View>
                         <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
                           <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
@@ -2447,7 +2450,7 @@ export default function CommunityEventsScreen() {
                         <Text style={styles.lockedAttendanceEventTitle} numberOfLines={2}>{selectedEvent.title}</Text>
                         <Text style={styles.lockedAttendanceEventPlace} numberOfLines={2}>{selectedEvent.location}{selectedEvent.barangay ? `, ${selectedEvent.barangay}` : ""}</Text>
                         <View style={styles.lockedAttendanceEventDate}><Ionicons name="calendar-outline" size={12} color="#6B8798"/>
-                          <Text style={styles.lockedAttendanceEventDateText}>{prettyDate(selectedEvent.date, selectedEvent.time)}</Text>
+                          <Text style={styles.lockedAttendanceEventDateText}>{eventScheduleLabel(selectedEvent)}</Text>
                         </View>
                       </View>
                     </View>
@@ -2566,7 +2569,7 @@ export default function CommunityEventsScreen() {
           {proposals.length === 0 ? <View style={styles.webEmptyCard}><Ionicons name="document-text-outline" size={34} color="#93A6AE"/><Text style={styles.webEmptyTitle}>No event proposals yet</Text><Pressable style={styles.ruiPrimary} onPress={()=>setSection("propose")}><Text style={styles.ruiPrimaryText}>Propose Event</Text><Ionicons name="arrow-forward" size={15} color="white" /></Pressable></View> :
             proposals.slice().sort((a,b)=>getTime(b.createdAt)-getTime(a.createdAt)).map(item=><View key={item.id} style={styles.ruiProposalRow}>
               {item.photoUrls?.[0]&&validPublicMediaUrl(item.photoUrls[0])?<Image source={{uri:item.photoUrls[0]}} style={styles.ruiProposalThumbnail}/>:<LinearGradient colors={["#D3EEE4","#93CBB4"]} style={styles.ruiProposalThumbnail}><Ionicons name={categoryIcon(item.category)} size={24} color="#078772"/></LinearGradient>}
-              <View style={styles.ruiProposalDescription}><Text style={styles.ruiProposalTitle}>{item.title}</Text><Text style={styles.ruiMeta}>{item.barangay} · {prettyDate(item.date,item.time)}</Text><Text style={styles.ruiProposalNote}>{item.status==="approved"?"Approved and published as an official Community Event.":item.status==="pending"?"Pending Admin/LGU review.":item.adminNote||"Rejected. Review the Admin note."}</Text></View>
+              <View style={styles.ruiProposalDescription}><Text style={styles.ruiProposalTitle}>{item.title}</Text><Text style={styles.ruiMeta}>{item.barangay} · {eventScheduleLabel(item)}</Text><Text style={styles.ruiProposalNote}>{item.status==="approved"?"Approved and published as an official Community Event.":item.status==="pending"?"Pending Admin/LGU review.":item.adminNote||"Rejected. Review the Admin note."}</Text></View>
               <View style={[styles.ruiProposalStatus,item.status==="pending"&&styles.ruiProposalStatusPending,item.status==="rejected"&&styles.ruiProposalStatusRejected]}><Text style={[styles.ruiProposalStatusText,item.status==="rejected"&&{color:"#B32929"}]}>{item.status.toUpperCase()}</Text></View>
             </View>)}
         </View>}
