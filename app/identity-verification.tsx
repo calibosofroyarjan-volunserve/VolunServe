@@ -348,76 +348,38 @@ export default function IdentityVerification() {
     identityStatus,
   ]);
 
-  const chooseIdDocument =
-    async () => {
-      if (
-        pickingId ||
-        submitting
-      ) {
+  const chooseIdDocument = async () => {
+    if (pickingId || submitting) return;
+    try {
+      setPickingId(true);
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Camera Required", "Allow camera access to scan your physical government ID.");
         return;
       }
-
-      try {
-        setPickingId(true);
-
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (
-          !permission.granted
-        ) {
-          Alert.alert(
-            "Photo Access Required",
-            "Allow photo access so you can select your government ID image.",
-          );
-          return;
-        }
-
-        const result =
-          await ImagePicker.launchImageLibraryAsync(
-            {
-              mediaTypes:
-                ImagePicker
-                  .MediaTypeOptions
-                  .Images,
-              allowsEditing:
-                false,
-              quality:
-                0.92,
-            },
-          );
-
-        if (
-          !result.canceled &&
-          result.assets[0]
-        ) {
-          setIdDocument(
-            mediaFromAsset(
-              result.assets[0],
-              "government-id",
-            ),
-          );
-          setLocalMessage("");
-        }
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Unable to Select ID",
-          error?.message ||
-            "The government ID image could not be selected.",
-        );
-      } finally {
-        setPickingId(false);
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.92,
+        cameraType: ImagePicker.CameraType.back,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setIdDocument(mediaFromAsset(result.assets[0], "government-id-camera"));
+        setLocalMessage("");
       }
-    };
+    } catch (error: any) {
+      Alert.alert("ID Camera Failed", error?.message || "Unable to scan the government ID.");
+    } finally {
+      setPickingId(false);
+    }
+  };
 
   const openFaceScan =
     async () => {
       if (!idDocument) {
         Alert.alert(
           "Government ID Required",
-          "Upload a clear government ID photo before starting the face scan.",
+          "Scan a clear government ID using your camera before starting the face scan.",
         );
         return;
       }
@@ -509,70 +471,6 @@ export default function IdentityVerification() {
           "Unable to Capture Face",
           error?.message ||
             "The face scan photo could not be captured.",
-        );
-      } finally {
-        setPickingSelfie(false);
-      }
-    };
-
-  const chooseSelfie =
-    async () => {
-      if (
-        pickingSelfie ||
-        submitting
-      ) {
-        return;
-      }
-
-      try {
-        setPickingSelfie(true);
-
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (
-          !permission.granted
-        ) {
-          Alert.alert(
-            "Photo Access Required",
-            "Allow photo access so you can select a recent selfie.",
-          );
-          return;
-        }
-
-        const result =
-          await ImagePicker.launchImageLibraryAsync(
-            {
-              mediaTypes:
-                ImagePicker
-                  .MediaTypeOptions
-                  .Images,
-              allowsEditing:
-                false,
-              quality:
-                0.92,
-            },
-          );
-
-        if (
-          !result.canceled &&
-          result.assets[0]
-        ) {
-          setSelfie(
-            mediaFromAsset(
-              result.assets[0],
-              "identity-selfie",
-            ),
-          );
-          setLocalMessage("");
-        }
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Unable to Select Selfie",
-          error?.message ||
-            "The selfie image could not be selected.",
         );
       } finally {
         setPickingSelfie(false);
@@ -1030,9 +928,6 @@ export default function IdentityVerification() {
           onCapture={() =>
             void captureFace()
           }
-          onUpload={() =>
-            void chooseSelfie()
-          }
           onRetake={() => {
             setSelfie(null);
             setCameraReady(false);
@@ -1254,7 +1149,7 @@ function UploadIdStep({
               styles.stepTitle
             }
           >
-            Upload Government ID
+            Scan Government ID
           </Text>
           <Text
             style={
@@ -1474,7 +1369,7 @@ function UploadIdStep({
                   styles.uploadTitle
                 }
               >
-                Tap to upload ID photo
+                Tap to open camera and scan ID
               </Text>
 
               <Text
@@ -1539,7 +1434,6 @@ function FaceScanStep({
   consent,
   setConsent,
   onCapture,
-  onUpload,
   onRetake,
   onVerify,
 }: {
@@ -1572,8 +1466,6 @@ function FaceScanStep({
         boolean,
     ) => void;
   onCapture:
-    () => void;
-  onUpload:
     () => void;
   onRetake:
     () => void;
@@ -1905,33 +1797,7 @@ function FaceScanStep({
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={
-            styles.uploadSelfieButton
-          }
-          activeOpacity={
-            0.84
-          }
-          onPress={
-            onUpload
-          }
-          disabled={
-            pickingSelfie
-          }
-        >
-          <Ionicons
-            name="image-outline"
-            size={18}
-            color="#475569"
-          />
-          <Text
-            style={
-              styles.uploadSelfieButtonText
-            }
-          >
-            Upload Selfie Instead
-          </Text>
-        </TouchableOpacity>
+
       </View>
 
       <TouchableOpacity
