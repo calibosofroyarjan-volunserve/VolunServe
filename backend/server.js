@@ -4696,12 +4696,56 @@ app.get(
           message: "The Python AI face-comparison service is not ready or its internal authentication is missing. Check its Render deployment and environment settings.",
         });
       }
+      // Health alone cannot detect two different configured keys.
+      // Ask the Python AI service to actually authenticate our key before
+      // sending any government ID or face images.
+      const authCheckUrl = healthUrl.slice(0, -"/health".length) + "/api/internal/auth-check";
+      const authResponse = await fetch(authCheckUrl, {
+        method: "GET",
+        headers: {
+          "X-VolunServe-Internal-Key": String(process.env.IDENTITY_AI_INTERNAL_KEY).trim(),
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (authResponse.status === 401 || authResponse.status === 403) {
+        return response.status(503).json({
+          ok: false,
+          ready: false,
+          error: "identity_ai_auth_mismatch",
+          message: "AI authentication mismatch: set the SAME IDENTITY_AI_INTERNAL_KEY secret on both Render services (VolunServe Node backend and volunserve-identity-ai), then redeploy both.",
+        });
+      }
+      if (authResponse.status === 404) {
+        return response.status(503).json({
+          ok: false,
+          ready: false,
+          error: "identity_ai_auth_check_missing",
+          message: "The Python AI service needs its latest GitHub deployment to validate backend authentication. Deploy the latest main commit to volunserve-identity-ai.",
+        });
+      }
+      if (!authResponse.ok) {
+        return response.status(503).json({
+          ok: false,
+          ready: false,
+          error: "identity_ai_auth_check_failed",
+          message: "AI backend authentication check failed. Verify the AI Render service environment and deployment.",
+        });
+      }
+      const authResult = await readJsonResponse(authResponse);
+      if (authResult?.authenticated !== true) {
+        return response.status(503).json({
+          ok: false,
+          ready: false,
+          error: "identity_ai_auth_check_invalid",
+          message: "The AI service did not confirm backend authentication. Verify both Render deployments.",
+        });
+      }
       return response.json({
         ok: true,
         ready: true,
         provider: "volunserve-custom-ai",
         livenessImplemented: health.livenessImplemented === true,
-        message: "The AI comparison service is connected. ID authenticity and liveness are not fully verified by this service.",
+        message: "The AI comparison service and private backend authentication are connected. ID authenticity and liveness are not fully verified by this service.",
       });
     } catch (error) {
       console.warn("Identity AI readiness check failed:", error?.code || error?.name || "unreachable");
