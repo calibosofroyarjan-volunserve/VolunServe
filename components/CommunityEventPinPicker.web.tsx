@@ -38,6 +38,17 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
       }
       if(marker)marker.on('dragend',function(){var p=marker.getLatLng();pin(p.lat,p.lng);});
       map.on('click',function(e){pin(e.latlng.lat,e.latlng.lng);});
+      window.addEventListener('message',function(e){
+        if(e.data&&e.data.type==='volunserve-set-event-venue-pin'){
+          var latitude=Number(e.data.latitude),longitude=Number(e.data.longitude);
+          if(isFinite(latitude)&&isFinite(longitude)&&Math.abs(latitude)<=90&&Math.abs(longitude)<=180){
+            if(!marker)marker=L.marker([latitude,longitude],{draggable:true}).addTo(map);
+            else marker.setLatLng([latitude,longitude]);
+            marker.off('dragend').on('dragend',function(){var p=marker.getLatLng();pin(p.lat,p.lng);});
+            map.setView([latitude,longitude],16);
+          }
+        }
+      });
       setTimeout(function(){map.invalidateSize()},150);
     })();
     </script></body></html>`, []); // Map remains mounted while parent updates chosen pin.
@@ -50,6 +61,11 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [onChange]);
+  useEffect(() => {
+    if (latitude == null || longitude == null || !inRange(latitude,longitude)) return;
+    frame.current?.contentWindow?.postMessage({type:"volunserve-set-event-venue-pin",latitude,longitude},"*");
+  }, [latitude,longitude]);
+
   const locate = () => {
     if (!navigator.geolocation) { setNotice("Location services are not available."); return; }
     setNotice("Requesting location permission...");
