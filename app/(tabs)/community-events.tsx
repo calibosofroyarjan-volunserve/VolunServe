@@ -1317,7 +1317,52 @@ export default function CommunityEventsScreen() {
         "Proposal submitted! Please wait for Admin/LGU review."
       );
     } catch (error) {
-      setNotice(errorText(error));
+      // Keep the underlying Firebase error visible for diagnosis. Firestore
+      // returns a generic permission-denied for failing Security Rules, so
+      // avoid claiming the rules are missing or asking users to open access.
+      const firebaseCode =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: unknown }).code || "")
+          : "";
+      const firebaseMessage =
+        error instanceof Error ? error.message : String(error);
+
+      console.error("[Community Events] Proposal submission failed", {
+        operation: "create",
+        collection: "communityEventProposals",
+        code: firebaseCode || "unknown",
+        message: firebaseMessage,
+        accountMode: mode,
+        residentAccessEnabled: canPropose,
+        // Only field sizes and counts. No name, UID, private media, or tokens.
+        payloadShape: {
+          titleLength: title.length,
+          descriptionLength: description.length,
+          volunteerTasksLength: form.volunteerTasks.trim().length,
+          lookingForLength: selectedRoles.join(", ").length,
+          requiredRolesCount: selectedRoles.length,
+          requiredSkillsCount: form.requiredSkills.length,
+          photosCount: uploadedPhotos.filter(Boolean).length,
+          hasVideo: Boolean(videoUrl),
+          capacityIsInteger: Number.isInteger(capacity),
+        },
+      });
+
+      if (
+        firebaseCode === "permission-denied" ||
+        firebaseCode === "firestore/permission-denied" ||
+        firebaseMessage.includes("Missing or insufficient permissions")
+      ) {
+        setNotice(
+          "Proposal was rejected by Firestore (permission-denied). Open DevTools Console for the original Firebase error and field-size diagnostics. Your account access alone does not guarantee the proposal passes every create rule."
+        );
+      } else {
+        setNotice(
+          firebaseCode
+            ? `Proposal failed (${firebaseCode}): ${firebaseMessage}`
+            : errorText(error)
+        );
+      }
     } finally {
       setBusy(false);
     }
