@@ -265,6 +265,8 @@ export default function IdentityVerificationWeb() {
     useState<IdentityVerificationStatusResult | null>(null);
   const [localMessage, setLocalMessage] = useState("");
   const [submissionError, setSubmissionError] = useState("");
+  // In-memory only: never write captured government IDs to Firestore or browser storage.
+  const [submittedIdPreviewUri, setSubmittedIdPreviewUri] = useState<string | null>(null);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -315,6 +317,16 @@ export default function IdentityVerificationWeb() {
       if (stopProfile) stopProfile();
     };
   }, []);
+
+  // Release the private camera snapshot when replaced or leaving the page.
+  // This preview is intentionally temporary; secure server-side evidence
+  // retention would require separate consent, access controls and deletion.
+  useEffect(() => {
+    const uri = idDocument?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [idDocument?.uri]);
 
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
@@ -977,6 +989,7 @@ export default function IdentityVerificationWeb() {
         });
 
       setRetryingFailed(false);
+      setSubmittedIdPreviewUri(idDocument.uri);
       setStatusResult({
         identityStatus: result.status,
         identityVerified: result.status === "verified",
@@ -1030,6 +1043,7 @@ export default function IdentityVerificationWeb() {
           latest.identityStatus === "pending" ||
           latest.identityStatus === "failed")
       ) {
+        setSubmittedIdPreviewUri(idDocument.uri);
         setStatusResult(latest);
         setLocalMessage(latest.message || reason);
         setSubmissionError("");
@@ -1092,6 +1106,8 @@ export default function IdentityVerificationWeb() {
         background={COLORS.dangerBg}
         color={COLORS.danger}
         badge="Failed · Retry Allowed"
+        idPreviewUri={submittedIdPreviewUri}
+        idPreviewLabel={selectedIdLabel}
         primaryLabel="Try Verification Again"
         primaryAction={() => {
           stopCamera();
@@ -1101,6 +1117,7 @@ export default function IdentityVerificationWeb() {
           setRetryingFailed(true);
           setStatusResult(null);
           setLocalMessage("");
+          setSubmittedIdPreviewUri(null);
           setIdDocument(null);
           setSelfie(null);
           setConsent(false);
@@ -1129,6 +1146,8 @@ export default function IdentityVerificationWeb() {
         background={COLORS.successBg}
         color={COLORS.success}
         badge="Verified"
+        idPreviewUri={submittedIdPreviewUri}
+        idPreviewLabel={selectedIdLabel}
         matchScore={statusResult?.matchScore}
         primaryLabel="Back to Profile"
         primaryAction={() => router.back()}
@@ -1149,6 +1168,8 @@ export default function IdentityVerificationWeb() {
         background={COLORS.warningBg}
         color={COLORS.warning}
         badge="Pending"
+        idPreviewUri={submittedIdPreviewUri}
+        idPreviewLabel={selectedIdLabel}
         matchScore={statusResult?.matchScore}
         primaryLabel={
           checkingStatus ? "Checking..." : "Check Status"
@@ -1961,6 +1982,8 @@ function StatusScreen({
   color,
   badge,
   matchScore,
+  idPreviewUri,
+  idPreviewLabel,
   primaryLabel,
   primaryAction,
   secondaryLabel,
@@ -1974,6 +1997,8 @@ function StatusScreen({
   color: string;
   badge: string;
   matchScore?: number;
+  idPreviewUri?: string | null;
+  idPreviewLabel?: string;
   primaryLabel: string;
   primaryAction: () => void;
   secondaryLabel?: string;
@@ -1981,7 +2006,7 @@ function StatusScreen({
   loading?: boolean;
 }) {
   return (
-    <View style={styles.statusScreen}>
+    <ScrollView style={styles.statusScreen} contentContainerStyle={styles.statusScreenContent} showsVerticalScrollIndicator={false}>
       <View
         style={[
           styles.statusCard,
@@ -2035,6 +2060,26 @@ function StatusScreen({
           </View>
         ) : null}
 
+        {idPreviewUri ? (
+          <View style={styles.submittedIdCard}>
+            <View style={styles.submittedIdTitleRow}>
+              <Ionicons name="shield-checkmark-outline" size={17} color={COLORS.tealDark} />
+              <Text style={styles.submittedIdTitle}>Your scanned Government ID</Text>
+            </View>
+            <Image
+              source={{ uri: idPreviewUri }}
+              style={styles.submittedIdImage}
+              resizeMode="contain"
+              accessibilityLabel="Private preview of the government ID you just scanned"
+            />
+            <Text style={styles.submittedIdLabel}>{idPreviewLabel || "Government ID"}</Text>
+            <Text style={styles.submittedIdPrivacy}>
+              Private preview from this scan only. It disappears after reloading or leaving this page;
+              the ID image is not retained in your account or shown to Admin reviewers.
+            </Text>
+          </View>
+        ) : null}
+
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={primaryAction}
@@ -2060,7 +2105,7 @@ function StatusScreen({
           </TouchableOpacity>
         ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -2769,11 +2814,58 @@ const styles = StyleSheet.create({
   },
   statusScreen: {
     flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  statusScreenContent: {
+    flexGrow: 1,
     minHeight: 590,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundColor: COLORS.bg,
+    paddingVertical: 32,
+  },
+  submittedIdCard: {
+    width: "100%",
+    maxWidth: 500,
+    marginTop: 16,
+    marginBottom: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+  },
+  submittedIdTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+  },
+  submittedIdTitle: {
+    color: COLORS.navy,
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  submittedIdImage: {
+    width: "100%",
+    height: 170,
+    marginTop: 10,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  submittedIdLabel: {
+    marginTop: 8,
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  submittedIdPrivacy: {
+    marginTop: 6,
+    textAlign: "center",
+    fontSize: 10,
+    lineHeight: 15,
+    color: COLORS.muted,
   },
   statusCard: {
     width: "100%",
