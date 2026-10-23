@@ -2,9 +2,12 @@ fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.20,<1
 firebase-admin==7.6.0
-opencv-contrib-python-headless==4.14.0.94
-mediapipe==1.0.1
-numpy>=1.26,<3
+# Align with MediaPipe legacy wheel to avoid incompatible OpenCV/numpy ABIs.
+opencv-contrib-python==4.11.0.86
+# MediaPipe 1.0.1 removed mp.solutions.face_mesh used by main.py.
+# This legacy version still provides FaceMesh and has Python 3.11 Linux wheels.
+mediapipe==0.10.21
+numpy==1.26.4
 Pillow>=10,<13
 pytesseract>=0.3.13,<1
 rapidfuzz>=3.10,<4
