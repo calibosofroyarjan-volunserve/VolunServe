@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
 import React, {
@@ -123,27 +122,6 @@ const ID_TYPES: Array<{
   },
 ];
 
-function mediaFromAsset(
-  asset: ImagePicker.ImagePickerAsset,
-  fallbackPrefix: string,
-): CapturedIdentityMedia {
-  const guessedExtension =
-    asset.mimeType === "image/png"
-      ? "png"
-      : asset.mimeType === "image/webp"
-        ? "webp"
-        : "jpg";
-
-  return {
-    uri: asset.uri,
-    name:
-      asset.fileName ||
-      `${fallbackPrefix}-${Date.now()}.${guessedExtension}`,
-    type: asset.mimeType || "image/jpeg",
-    file: (asset as any).file,
-  };
-}
-
 function scoreLabel(value?: number) {
   if (
     typeof value !== "number" ||
@@ -250,6 +228,9 @@ export default function IdentityVerificationWeb() {
   const router = useRouter();
 
   const videoRef = useRef<any>(null);
+  const idVideoRef = useRef<HTMLVideoElement | null>(null);
+  const idCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const idStreamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<any>(null);
@@ -274,8 +255,9 @@ export default function IdentityVerificationWeb() {
 
   const [consent, setConsent] = useState(false);
   const [retryingFailed, setRetryingFailed] = useState(false);
-  const [pickingId, setPickingId] = useState(false);
-  const [pickingSelfie, setPickingSelfie] = useState(false);
+  const [idCameraOpen, setIdCameraOpen] = useState(false);
+  const [idCameraReady, setIdCameraReady] = useState(false);
+  const [idCameraError, setIdCameraError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [statusResult, setStatusResult] =
@@ -414,37 +396,105 @@ export default function IdentityVerificationWeb() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, identityStatus]);
 
-  const chooseIdDocument = async () => {
-    if (pickingId || submitting) return;
-
-    try {
-      setPickingId(true);
-
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          quality: 0.92,
-        });
-
-      if (!result.canceled && result.assets[0]) {
-        setIdDocument(
-          mediaFromAsset(
-            result.assets[0],
-            "government-id",
-          ),
-        );
-        setLocalMessage("");
-      }
-    } catch (error: any) {
-      Alert.alert(
-        "Unable to Select ID",
-        error?.message ||
-          "The government ID image could not be selected.",
-      );
-    } finally {
-      setPickingId(false);
+  // Scan the physical ID directly from the camera; do not accept gallery
+  // images as identity evidence. Live face detection is a separate step.
+  const stopIdCamera = useCallback(() => {
+    const stream = idStreamRef.current;
+    idStreamRef.current = null;
+    stream?.getTracks().forEach((track) => track.stop());
+    if (idVideoRef.current) {
+      idVideoRef.current.srcObject = null;
     }
+    setIdCameraReady(false);
+  }, []);
+
+  useEffect(() => {
+    if (!idCameraOpen) {
+      stopIdCamera();
+      return;
+    }
+    let cancelled = false;
+    const open = async () => {
+      try {
+        setIdCameraError("");
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera access requires HTTPS and a browser with camera support.");
+        }
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          });
+        } catch (error: any) {
+          if (error?.name === "NotAllowedError" || error?.name === "SecurityError") throw error;
+          stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+        }
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        idStreamRef.current = stream;
+        const element = idVideoRef.current;
+        if (!element) throw new Error("Unable to initialize the ID camera preview.");
+        element.srcObject = stream;
+        await element.play();
+        if (!cancelled) setIdCameraReady(true);
+      } catch (error: any) {
+        if (!cancelled) {
+          setIdCameraError(
+            error?.name === "NotAllowedError"
+              ? "Camera permission denied. Enable camera access for this site and retry."
+              : error?.message || "Unable to open the ID camera.",
+          );
+          stopIdCamera();
+        }
+      }
+    };
+    void open();
+    return () => {
+      cancelled = true;
+      stopIdCamera();
+    };
+  }, [idCameraOpen, stopIdCamera]);
+
+  const chooseIdDocument = () => {
+    setIdCameraReady(false);
+    setIdCameraError("");
+    setIdCameraOpen(true);
+  };
+
+  const captureIdDocument = async () => {
+    const video = idVideoRef.current;
+    const canvas = idCanvasRef.current;
+    if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not access the ID capture camera.");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (image) => image ? resolve(image) : reject(new Error("Camera image was empty.")),
+          "image/jpeg",
+          0.92,
+        );
+      });
+      const name = `government-id-camera-${Date.now()}.jpg`;
+      const file = new File([blob], name, { type: "image/jpeg" });
+      if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
+      setIdDocument({ uri: URL.createObjectURL(blob), name, type: "image/jpeg", file });
+      setLocalMessage("");
+      setIdCameraOpen(false);
+    } catch (error: any) {
+      setIdCameraError(error?.message || "ID capture failed; please retry.");
+    }
+  };
+
+  const discardIdDocument = () => {
+    if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
+    setIdDocument(null);
   };
 
   const ensureDetector = async () => {
@@ -848,7 +898,7 @@ export default function IdentityVerificationWeb() {
     if (!idDocument) {
       Alert.alert(
         "Government ID Required",
-        "Upload a clear government ID photo before starting the face scan.",
+        "Capture a clear government ID image using your camera before starting the face scan.",
       );
       return;
     }
@@ -859,43 +909,6 @@ export default function IdentityVerificationWeb() {
     setTimeout(() => {
       void startCamera();
     }, 250);
-  };
-
-  const chooseSelfie = async () => {
-    if (pickingSelfie || submitting) return;
-
-    try {
-      setPickingSelfie(true);
-      stopCamera();
-
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          quality: 0.92,
-        });
-
-      if (!result.canceled && result.assets[0]) {
-        setSelfie(
-          mediaFromAsset(
-            result.assets[0],
-            "identity-selfie",
-          ),
-        );
-        setScanState("captured");
-        setScanProgress(100);
-        // An uploaded image has NOT passed live camera checks.
-        setLiveChecks(EMPTY_CHECKS);
-      }
-    } catch (error: any) {
-      Alert.alert(
-        "Unable to Select Selfie",
-        error?.message ||
-          "The selfie image could not be selected.",
-      );
-    } finally {
-      setPickingSelfie(false);
-    }
   };
 
   const retake = () => {
@@ -1169,10 +1182,16 @@ export default function IdentityVerificationWeb() {
           setIdType={setIdType}
           idDocument={idDocument}
           selectedIdLabel={selectedIdLabel}
-          picking={pickingId}
-          onPick={() => void chooseIdDocument()}
+          cameraOpen={idCameraOpen}
+          cameraReady={idCameraReady}
+          cameraError={idCameraError}
+          idVideoRef={idVideoRef}
+          idCanvasRef={idCanvasRef}
+          onPick={chooseIdDocument}
+          onCapture={() => void captureIdDocument()}
+          onCancel={() => setIdCameraOpen(false)}
           onNext={() => void openFaceScan()}
-          onRemove={() => setIdDocument(null)}
+          onRemove={discardIdDocument}
         />
       ) : null}
 
@@ -1408,22 +1427,7 @@ export default function IdentityVerificationWeb() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity
-              style={styles.uploadSelfieButton}
-              onPress={() => void chooseSelfie()}
-              disabled={pickingSelfie}
-            >
-              <Ionicons
-                name="image-outline"
-                size={18}
-                color="#475569"
-              />
-              <Text style={styles.uploadSelfieButtonText}>
-                {pickingSelfie
-                  ? "Opening..."
-                  : "Upload Selfie Instead"}
-              </Text>
-            </TouchableOpacity>
+
           </View>
 
           <TouchableOpacity
@@ -1609,8 +1613,14 @@ function UploadIdStep({
   setIdType,
   idDocument,
   selectedIdLabel,
-  picking,
+  cameraOpen,
+  cameraReady,
+  cameraError,
+  idVideoRef,
+  idCanvasRef,
   onPick,
+  onCapture,
+  onCancel,
   onNext,
   onRemove,
 }: {
@@ -1618,8 +1628,14 @@ function UploadIdStep({
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
   selectedIdLabel: string;
-  picking: boolean;
+  cameraOpen: boolean;
+  cameraReady: boolean;
+  cameraError: string;
+  idVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
+  idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
+  onCapture: () => void;
+  onCancel: () => void;
   onNext: () => void;
   onRemove: () => void;
 }) {
@@ -1633,11 +1649,10 @@ function UploadIdStep({
         </View>
         <View style={styles.stepHeaderCopy}>
           <Text style={styles.stepTitle}>
-            Upload Government ID
+            Scan Government ID
           </Text>
           <Text style={styles.stepSubtitle}>
-            Choose a clear photo of a valid government-issued
-            ID with a visible face.
+            Scan your physical government-issued ID with the camera. Make the face and printed details clear.
           </Text>
         </View>
       </View>
@@ -1732,16 +1747,45 @@ function UploadIdStep({
             </TouchableOpacity>
           </View>
         </View>
+      ) : cameraOpen ? (
+        <View style={styles.mediaPreviewCard}>
+          <View style={styles.idLivePreview}>
+            {React.createElement("video" as any, {
+              ref: idVideoRef,
+              autoPlay: true,
+              muted: true,
+              playsInline: true,
+              style: { width: "100%", height: "100%", objectFit: "contain", background: "#111827" },
+            })}
+            {React.createElement("canvas" as any, {
+              ref: idCanvasRef,
+              style: { display: "none" },
+            })}
+          </View>
+          <Text style={styles.uploadText}>
+            Hold the physical ID flat and steady. Avoid glare, make sure the face is visible, then capture.
+          </Text>
+          {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
+          <View style={styles.idCameraActions}>
+            <TouchableOpacity
+              style={[styles.nextButton, !cameraReady && styles.disabledButton]}
+              onPress={onCapture}
+              disabled={!cameraReady}
+            >
+              <Ionicons name="camera" size={19} color="#FFFFFF" />
+              <Text style={styles.nextButtonText}>Capture ID</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
+              <Text style={styles.secondaryWideButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         <TouchableOpacity
           style={styles.uploadZone}
           onPress={onPick}
-          disabled={picking}
         >
-          {picking ? (
-            <ActivityIndicator color={COLORS.blue} />
-          ) : (
-            <>
+          <>
               <View style={styles.uploadIcon}>
                 <Ionicons
                   name="image-outline"
@@ -1750,13 +1794,12 @@ function UploadIdStep({
                 />
               </View>
               <Text style={styles.uploadTitle}>
-                Tap to upload ID photo
+                Open Camera to Scan ID
               </Text>
               <Text style={styles.uploadText}>
-                JPG, PNG or WebP · clear face · no glare
+                Live camera capture · clear ID face · no glare
               </Text>
-            </>
-          )}
+          </>
         </TouchableOpacity>
       )}
 
@@ -2321,6 +2364,9 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  idLivePreview: { width: "100%", height: 290, backgroundColor: "#111827", borderRadius: 12, overflow: "hidden" },
+  idCameraError: { marginTop: 8, color: "#B91C1C", fontSize: 12 },
+  idCameraActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12, alignItems: "center" },
   scanOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
