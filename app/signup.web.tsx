@@ -623,12 +623,11 @@ export default function Signup() {
       applyGoogleIdentity(user);
       setStep(1);
       scrollTop();
-      Alert.alert(
-        "Google Account Connected",
-        "Your Google email and available name were filled in. Review the name and complete the remaining required details to create your Basic Account."
+      window.alert(
+        "Google Account Connected\n\nYour Google email and available name were filled in. Review the name and complete the remaining required details to create your Basic Account."
       );
     } catch (error: any) {
-      Alert.alert("Google Error", getFriendlyAuthError(error));
+      window.alert("Google Error\n\n" + getFriendlyAuthError(error));
     }
   }, [applyGoogleIdentity, router, scrollTop]);
 
