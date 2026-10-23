@@ -21,6 +21,10 @@ RUN pip install \
     --no-cache-dir \
     -r requirements.txt
 
+# Fail deployment at BUILD time if a MediaPipe update removes the FaceMesh
+# API required by main.py. This check uses no images or personal data.
+RUN python -c "import mediapipe as mp; assert hasattr(mp, 'solutions') and hasattr(mp.solutions.face_mesh, 'FaceMesh'), 'Legacy FaceMesh API is missing'; print('FaceMesh dependency OK:', mp.__version__)"
+
 COPY . .
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]

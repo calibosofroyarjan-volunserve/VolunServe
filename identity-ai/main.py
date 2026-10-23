@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 import os
 import secrets
@@ -101,6 +102,17 @@ def clean_text(
         .replace("\x00", " ")
         .split()
     )[:maximum_length]
+
+
+def face_mesh_engine_ready():
+    """Match the health response to what /verify actually needs."""
+    try:
+        return bool(
+            getattr(getattr(mp, "solutions", None), "face_mesh", None)
+            and hasattr(mp.solutions.face_mesh, "FaceMesh")
+        )
+    except Exception:
+        return False
 
 
 def get_internal_key():
@@ -1054,7 +1066,8 @@ def health():
         "internalAuthConfigured": bool(
             get_internal_key()
         ),
-        "verificationEngineReady": True,
+        "verificationEngineReady": face_mesh_engine_ready(),
+        "mediaPipeVersion": str(getattr(mp, "__version__", "unknown")),
         "faceMatchThreshold":
             get_match_threshold(),
         "livenessImplemented": False,
@@ -1203,14 +1216,35 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
-    result = await asyncio.to_thread(
-        run_face_verification,
-        uid=uid,
-        id_document_bytes=(
-            id_document_bytes
-        ),
-        selfie_bytes=selfie_bytes,
-    )
+    if not face_mesh_engine_ready():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI FaceMesh runtime is unavailable. The AI service must "
+                "deploy the compatible MediaPipe build."
+            ),
+        )
+    try:
+        result = await asyncio.to_thread(
+            run_face_verification,
+            uid=uid,
+            id_document_bytes=id_document_bytes,
+            selfie_bytes=selfie_bytes,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        # Logs a technical stack trace in private Render service logs only.
+        # Never log ID/face media, user identifiers, keys, or submitted fields.
+        logging.exception("Face comparison engine error")
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "The AI face comparison failed internally. "
+                "Check volunserve-identity-ai Render Logs for "
+                "'Face comparison engine error'. No match decision was produced."
+            ),
+        ) from None
     return {
         **result,
         "idType": id_type,
