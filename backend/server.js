@@ -7571,6 +7571,7 @@ app.post(
 
       const date = String(input.date || "");
       const time = String(input.time || "");
+      const endTime = String(input.endTime || "");
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
         !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)
@@ -7583,6 +7584,17 @@ app.post(
         eventTime.getTime() <= Date.now()
       ) {
         throw makeHttpError(400, "invalid_proposal", "Event date and time must be in the future.");
+      }
+
+      if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime) || endTime <= time) {
+        throw makeHttpError(400, "invalid_proposal", "Set an event end time later than its start time on the same date.");
+      }
+      const latitude = Number(input.latitude);
+      const longitude = Number(input.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          latitude < 14.65 || latitude > 15.0 ||
+          longitude < 120.88 || longitude > 121.30) {
+        throw makeHttpError(400, "event_pin_required", "Select an event GPS meeting point near San Jose del Monte, Bulacan.");
       }
 
       const capacity = Number(input.capacity);
@@ -7644,13 +7656,30 @@ app.post(
         return value;
       });
 
+      if (!photoUrls.length) {
+        throw makeHttpError(400, "event_photo_required", "At least one real site/activity evidence photo is required.");
+      }
+      const credentialAssetId = String(input.credentialAssetId || "");
+      if (credentialAssetId && credentialAssetId !== proposalId) {
+        throw makeHttpError(400, "invalid_credential", "Credential must belong to this proposal.");
+      }
+      if (credentialAssetId) {
+        const asset = await db.collection("communityEventCredentialAssets").doc(proposalId).get();
+        if (!asset.exists || asset.data().ownerUid !== uid ||
+            asset.data().status !== "staged" || !asset.data().cloudinaryPublicId) {
+          throw makeHttpError(400, "credential_missing", "Private credential upload was not found; upload it again.");
+        }
+      }
+
       // All privileged fields are set by the server. The client cannot
       // approve its own proposal, impersonate an owner, or set timestamps.
       const docData = {
         title, description, volunteerTasks, lookingFor, requiredRoles,
         requiredSkills, qualificationNotes, whatToBring, photoUrls, videoUrl,
+        ...(credentialAssetId ? {credentialAssetId} : {}),
         ...(photoUrls.length ? {coverPhotoUrl: photoUrls[0]} : {}),
-        category, barangay, location, date, time, capacity,
+        category, barangay, location, date, time, endTime, capacity,
+        latitude, longitude, coordinates: {latitude, longitude},
         proposedBy: uid,
         proposerName: communityEventText(
           String(profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Resident"),
@@ -7663,6 +7692,11 @@ app.post(
       };
 
       await db.collection("communityEventProposals").doc(proposalId).create(docData);
+      if (credentialAssetId) {
+        await db.collection("communityEventCredentialAssets").doc(proposalId).update({
+          status: "attached", updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
       response.status(201).json({ok: true, proposalId, status: "pending"});
     } catch (error) {
       console.error("Community Event proposal creation failed:", error?.code || error?.message);
