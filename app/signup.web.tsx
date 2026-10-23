@@ -157,26 +157,12 @@ function sanitizeName(input: string) {
 }
 
 function sanitizePhoneLocal(input: string) {
-  return input.replace(/\D/g, "").slice(0, 15);
+  return input.replace(/\D/g, "").slice(0, 10);
 }
 
-type CountryPhone = { name: string; flag: string; code: string; min: number; max: number; placeholder: string };
-
-const COUNTRY_PHONES: CountryPhone[] = [
-  { name: "Philippines", flag: "🇵🇭", code: "+63", min: 10, max: 10, placeholder: "912 345 6789" },
-  { name: "United States", flag: "🇺🇸", code: "+1", min: 10, max: 10, placeholder: "202 555 0123" },
-  { name: "Canada", flag: "🇨🇦", code: "+1", min: 10, max: 10, placeholder: "416 555 0123" },
-  { name: "United Kingdom", flag: "🇬🇧", code: "+44", min: 10, max: 10, placeholder: "7400 123456" },
-  { name: "Australia", flag: "🇦🇺", code: "+61", min: 9, max: 9, placeholder: "412 345 678" },
-  { name: "Japan", flag: "🇯🇵", code: "+81", min: 10, max: 10, placeholder: "90 1234 5678" },
-  { name: "South Korea", flag: "🇰🇷", code: "+82", min: 9, max: 10, placeholder: "10 1234 5678" },
-  { name: "Singapore", flag: "🇸🇬", code: "+65", min: 8, max: 8, placeholder: "8123 4567" },
-  { name: "United Arab Emirates", flag: "🇦🇪", code: "+971", min: 9, max: 9, placeholder: "50 123 4567" },
-  { name: "Saudi Arabia", flag: "🇸🇦", code: "+966", min: 9, max: 9, placeholder: "50 123 4567" },
-];
-
-function toE164FromLocal(country: CountryPhone, local: string) {
-  return `${country.code}${local.replace(/\D/g, "")}`;
+// VolunServe serves the Philippines: always store mobile numbers in PH E.164 format.
+function toE164FromLocal(local: string) {
+  return `+63${local.replace(/\D/g, "")}`;
 }
 
 function formatDateForInput(date: Date | null) {
@@ -422,8 +408,6 @@ export default function Signup() {
   const [barangays, setBarangays] = useState<string[]>([]);
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [dobOpen, setDobOpen] = useState(false);
-  const [countryOpen, setCountryOpen] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<CountryPhone>(COUNTRY_PHONES[0]);
 
   const [formData, setFormData] = useState<FormState>({
     lastName: "",
@@ -556,15 +540,12 @@ export default function Signup() {
 
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName ? true : nameOk(formData.middleName);
+    const middleNameValid = formData.noMiddleName || !formData.middleName.trim() || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
-    const phoneValid =
-      phoneDigits.length >= selectedCountry.min &&
-      phoneDigits.length <= selectedCountry.max &&
-      (selectedCountry.code !== "+63" || /^9\d{9}$/.test(phoneDigits));
+    const phoneValid = /^9\d{9}$/.test(phoneDigits);
 
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
@@ -612,7 +593,7 @@ export default function Signup() {
       needsSpec,
       isOther,
     };
-  }, [formData, googleBound, selectedCountry, specializationOptions.length]);
+  }, [formData, googleBound, specializationOptions.length]);
 
   const isStepValid = useCallback(
     (s: Step) => {
@@ -710,7 +691,7 @@ export default function Signup() {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         authProvider: googleBound ? "google" : "email",
-        phoneNumber: toE164FromLocal(selectedCountry, formData.phoneLocal),
+        phoneNumber: toE164FromLocal(formData.phoneLocal),
 
         region: formData.region,
         province: formData.province,
@@ -746,7 +727,7 @@ export default function Signup() {
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, googleBound, loadingSubmit, router, selectedCountry, validation]);
+  }, [formData, googleBound, loadingSubmit, router, validation]);
 
   const currentMeta = STEP_META[step];
 
@@ -941,7 +922,7 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="First Name"
+                        label="First Name *"
                         value={formData.firstName}
                         onChange={(v) => updateField("firstName", sanitizeName(v))}
                         invalid={!validation.firstNameValid && formData.firstName.length > 0}
@@ -952,7 +933,7 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Last Name"
+                        label="Last Name *"
                         value={formData.lastName}
                         onChange={(v) => updateField("lastName", sanitizeName(v))}
                         invalid={!validation.lastNameValid && formData.lastName.length > 0}
@@ -965,7 +946,7 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Middle Name *"
+                        label="Middle Name"
                         value={formData.middleName}
                         onChange={(v) => updateField("middleName", sanitizeName(v))}
                         editable={!formData.noMiddleName}
@@ -1068,15 +1049,10 @@ export default function Signup() {
                   <Text style={styles.label}>Mobile Number</Text>
 
                   <View style={styles.phoneWrap}>
-                    <TouchableOpacity
-                      style={styles.phonePrefix}
-                      onPress={() => setCountryOpen(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.flag}>{selectedCountry.flag}</Text>
-                      <Text style={styles.phonePrefixText}>{selectedCountry.code}</Text>
-                      <Text style={styles.countryChevron}>⌄</Text>
-                    </TouchableOpacity>
+                    <View style={styles.phonePrefix}>
+                      <Text style={styles.flag}>PH</Text>
+                      <Text style={styles.phonePrefixText}>+63</Text>
+                    </View>
 
                     <TextInput
                       style={[
@@ -1090,59 +1066,19 @@ export default function Signup() {
                         updateField("phoneLocal", sanitizePhoneLocal(v.trim()))
                       }
                       keyboardType="phone-pad"
-                      placeholder={selectedCountry.placeholder}
+                      placeholder="912 345 6789"
                       placeholderTextColor={COLORS.lightText}
-                      maxLength={selectedCountry.max}
+                      maxLength={10}
                       returnKeyType="next"
                     />
                   </View>
 
                   {formData.phoneLocal.length > 0 && !validation.phoneValid ? (
                     <ValidationText ok={false}>
-                      Enter a valid {selectedCountry.name} mobile number.
+                      Enter a valid Philippine mobile number starting with 9.
                     </ValidationText>
                   ) : null}
 
-                  <Modal
-                    visible={countryOpen}
-                    transparent
-                    animationType="fade"
-                    onRequestClose={() => setCountryOpen(false)}
-                  >
-                    <Pressable
-                      style={styles.countryBackdrop}
-                      onPress={() => setCountryOpen(false)}
-                    >
-                      <Pressable
-                        style={styles.countryPanel}
-                        onPress={(event) => event.stopPropagation()}
-                      >
-                        <Text style={styles.countryTitle}>Select country</Text>
-
-                        <ScrollView style={styles.countryList}>
-                          {COUNTRY_PHONES.map((country) => (
-                            <TouchableOpacity
-                              key={`${country.name}-${country.code}`}
-                              style={[
-                                styles.countryItem,
-                                selectedCountry.name === country.name &&
-                                  styles.countryItemActive,
-                              ]}
-                              onPress={() => {
-                                setSelectedCountry(country);
-                                updateField("phoneLocal", "");
-                                setCountryOpen(false);
-                              }}
-                            >
-                              <Text style={styles.countryFlag}>{country.flag}</Text>
-                              <Text style={styles.countryName}>{country.name}</Text>
-                              <Text style={styles.countryCode}>{country.code}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </Pressable>
-                    </Pressable>
-                  </Modal>
                 </View>
               )}
 
@@ -1744,17 +1680,7 @@ const styles = StyleSheet.create({
   phonePrefix: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 46, borderRightWidth: 1, borderRightColor: COLORS.border, backgroundColor: "#fff" },
   flag: { fontSize: 18 },
   phonePrefixText: { fontSize: 14, fontWeight: "900", color: COLORS.text },
-  countryChevron: { color: COLORS.muted, fontSize: 13, marginLeft: 2 },
   phoneInput: { flex: 1, height: 46, paddingHorizontal: 14, fontSize: 14, backgroundColor: "#fff", color: COLORS.text, fontWeight: "600" },
-  countryBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.38)", justifyContent: "center", alignItems: "center", padding: 20 },
-  countryPanel: { width: "100%", maxWidth: 430, maxHeight: 560, backgroundColor: "#fff", borderRadius: 16, padding: 18, shadowColor: "#0f172a", shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
-  countryTitle: { color: COLORS.text, fontSize: 19, fontWeight: "900", marginBottom: 12 },
-  countryList: { maxHeight: 470 },
-  countryItem: { minHeight: 50, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, borderRadius: 10, marginBottom: 5 },
-  countryItemActive: { backgroundColor: "#ecfdf5" },
-  countryFlag: { fontSize: 23, marginRight: 12 },
-  countryName: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "700" },
-  countryCode: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
 
   loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14, backgroundColor: COLORS.field, padding: 12, borderRadius: 14 },
   loadingText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
