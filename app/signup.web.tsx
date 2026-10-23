@@ -540,7 +540,7 @@ export default function Signup() {
 
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName || !formData.middleName.trim() || nameOk(formData.middleName);
+    const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
@@ -903,7 +903,7 @@ export default function Signup() {
 
                   <Field
                     icon="✉"
-                    label="Email Address"
+                    label="Email Address *"
                     placeholder="you@example.com"
                     value={formData.email}
                     onChange={(v) => updateField("email", v.trim().toLowerCase())}
@@ -946,7 +946,7 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Middle Name"
+                        label="Middle Name *"
                         value={formData.middleName}
                         onChange={(v) => updateField("middleName", sanitizeName(v))}
                         editable={!formData.noMiddleName}
@@ -970,7 +970,7 @@ export default function Signup() {
 
                     <View style={styles.formColumn}>
                       <View style={styles.field}>
-                        <Text style={styles.label}>Date of Birth</Text>
+                        <Text style={styles.label}>Date of Birth *</Text>
 
                         {Platform.OS === "web" ? (
                           <View
@@ -1046,7 +1046,7 @@ export default function Signup() {
                     </ValidationText>
                   ) : null}
 
-                  <Text style={styles.label}>Mobile Number</Text>
+                  <Text style={styles.label}>Mobile Number *</Text>
 
                   <View style={styles.phoneWrap}>
                     <View style={styles.phonePrefix}>

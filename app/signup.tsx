@@ -570,7 +570,7 @@ export default function Signup() {
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName || !formData.middleName.trim() || nameOk(formData.middleName);
+    const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
@@ -824,7 +824,7 @@ export default function Signup() {
 
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
-              <Field icon="👤" label="Middle Name" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} editable={!formData.noMiddleName} invalid={!formData.noMiddleName && formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
+              <Field icon="👤" label="Middle Name *" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} editable={!formData.noMiddleName} invalid={!formData.noMiddleName && formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
               <CheckRow label="No Middle Name" checked={formData.noMiddleName} onPress={() => {
                 const next = !formData.noMiddleName;
                 updateField("noMiddleName", next);
