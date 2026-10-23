@@ -11,6 +11,12 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
+  // Production and Firebase Hosting previews of the VolunServe web app.
+  "https://volunserve.org",
+  "https://www.volunserve.org",
+  "https://volunserve-3aa5b.web.app",
+  "https://volunserve-3aa5b.firebaseapp.com",
+  "https://volunserve-3aa5b--mock-defense-oct24-4t5zxuw8.web.app",
   "http\://localhost:8081",
   "http\://localhost:8082",
   "http\://localhost:8083",
