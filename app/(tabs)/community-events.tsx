@@ -2476,8 +2476,11 @@ export default function CommunityEventsScreen() {
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
             </View>
+            <CommunityEventPinPicker latitude={form.latitude} longitude={form.longitude}
+              onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))}/>
           </View>
 
           <View style={styles.ruiFormSection}>
@@ -3325,6 +3328,16 @@ export default function CommunityEventsScreen() {
                   </Pressable>
                 </View>
 
+                {/* End Time */}
+                <View style={styles.formColumn}>
+                  <Text style={styles.fieldLabel}>End time *</Text>
+                  <Pressable style={styles.pickerField} onPress={() => openTimePicker("end")}>
+                    <Ionicons name="time-outline" size={18} color={colors.green}/>
+                    <Text style={styles.pickerFieldText}>{formatChosenTime(form.endTime)}</Text>
+                    <Ionicons name="chevron-down" size={17} color={colors.muted}/>
+                  </Pressable>
+                </View>
+
                 {/* Capacity */}
                 <View
                   style={
@@ -3407,6 +3420,9 @@ export default function CommunityEventsScreen() {
                   )}
                 </View>
               </View>
+
+              <CommunityEventPinPicker latitude={form.latitude} longitude={form.longitude}
+                onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))} />
 
               {/* Description */}
               <Text
