@@ -115,7 +115,18 @@ export default function WebLogin() {
       await applySessionPersistence();
 
       const googleUser = await connectGoogleAccountWeb();
-      const profile = await getUserProfile(googleUser.uid);
+      let profile;
+      try {
+        profile = await getUserProfile(googleUser.uid);
+      } catch (profileError: any) {
+        if (String(profileError?.message || "").includes("Profile not found")) {
+          // A Google identity is not a completed Resident account.
+          // Keep the Firebase session so Signup can prefill Google details.
+          router.replace("/signup");
+          return;
+        }
+        throw profileError;
+      }
 
       if (!isApprovedProfile(profile)) {
         await logoutUser();

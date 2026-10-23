@@ -1,6 +1,8 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { GoogleAuthProvider, onAuthStateChanged, type User } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,7 +21,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { connectGoogleAccountWeb, signUpUser } from "../lib/firebaseAuth";
+import { connectGoogleAccountWeb, homeRouteForProfile, signUpUser, type UserProfile } from "../lib/firebaseAuth";
+import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 type Step = 1 | 2 | 3 | 4;
@@ -569,32 +572,65 @@ export default function Signup() {
     }
   }, [scrollTop, step]);
 
+  // Google sign-in authenticates the email, but it does not create a
+  // VolunServe resident profile. Only the final registration step does that.
+  const applyGoogleIdentity = useCallback((user: User) => {
+    const nameParts = (user.displayName || "").trim().split(/\s+/).filter(Boolean);
+    const inferredLastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+    const inferredFirstName = nameParts.length > 1
+      ? nameParts.slice(0, -1).join(" ")
+      : nameParts[0] || "";
+    const googleEmail = (user.email || "").trim().toLowerCase();
+    setFormData((previous) => ({
+      ...previous,
+      email: googleEmail || previous.email,
+      firstName: previous.firstName || sanitizeName(inferredFirstName),
+      lastName: previous.lastName || sanitizeName(inferredLastName),
+      // Birthdate, phone, barangay and other details must come from user.
+    }));
+    setGoogleBound(true);
+    setGoogleProfileLoaded(true);
+  }, []);
+
+  // Resume signup after Google OAuth (including when redirected here from
+  // the login page). Do not treat an Auth-only user as a completed account.
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user || !user.providerData.some(
+        (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
+      )) return;
+      try {
+        const profileSnapshot = await getDoc(doc(db, "users", user.uid));
+        if (active && !profileSnapshot.exists()) applyGoogleIdentity(user);
+      } catch {
+        // The final registration step will report any actual data-access
+        // errors; do not assume that a failed read means no profile exists.
+      }
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [applyGoogleIdentity]);
+
   const handleGooglePress = useCallback(async () => {
     try {
       const user = await connectGoogleAccountWeb();
-      const googleEmail = (user.email || "").trim().toLowerCase();
-
-      setFormData((previous) => ({
-        ...previous,
-        email: googleEmail || previous.email,
-        firstName: "",
-        lastName: "",
-        middleName: "",
-      }));
-
-      setGoogleBound(true);
-      setGoogleProfileLoaded(true);
+      const profileSnapshot = await getDoc(doc(db, "users", user.uid));
+      if (profileSnapshot.exists()) {
+        // Existing registered users should sign in, not create a duplicate.
+        router.replace(homeRouteForProfile(profileSnapshot.data() as UserProfile) as any);
+        return;
+      }
+      applyGoogleIdentity(user);
       setStep(1);
       scrollTop();
-
       Alert.alert(
         "Google Account Connected",
-        "Your verified Google email was added. Enter your legal name and complete the remaining information."
+        "Your Google email and available name were filled in. Review the name and complete the remaining required details to create your Basic Account."
       );
     } catch (error: any) {
       Alert.alert("Google Error", getFriendlyAuthError(error));
     }
-  }, [scrollTop]);
+  }, [applyGoogleIdentity, router, scrollTop]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
