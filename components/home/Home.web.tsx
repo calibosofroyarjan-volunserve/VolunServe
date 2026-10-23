@@ -11,11 +11,11 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ImageBackground,
   Pressable,
   ScrollView,
-  Alert,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -151,6 +151,7 @@ export default function WebHome() {
 
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState(false);
+  const [mobileSlide, setMobileSlide] = useState(0);
 
   const compact = width < 1040;
   const narrow = width < 760;
@@ -436,7 +437,79 @@ export default function WebHome() {
         showsVerticalScrollIndicator
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.page}>
+        <View style={[styles.page, narrow && styles.pageMobile]}>
+          {narrow ? (
+            <ImageBackground
+              source={require("../../assets/images/sjdm-aerial.png")}
+              resizeMode="cover"
+              style={styles.mobileHero}
+              imageStyle={styles.mobileHeroImage}
+            >
+              <View style={styles.mobileHeroShade} />
+              <View style={styles.mobileHeroBody}>
+                {mobileSlide === 0 ? (
+                  <>
+                    <Text style={styles.mobileHeroEyebrow}>
+                      {volunteerMode ? "VOLUNTEER OPERATIONS CENTER" : "RESIDENT OPERATIONS CENTER"}
+                    </Text>
+                    <Text style={styles.mobileHeroGreeting} numberOfLines={2}>Good day, {firstName}!</Text>
+                    <Text style={styles.mobileHeroDescription}>Here&apos;s what&apos;s happening in San Jose del Monte today.</Text>
+                    <View style={styles.mobileWeatherCard}>
+                      <Ionicons name="location-outline" size={19} color="#FFFFFF" />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.mobileWeatherLocation} numberOfLines={2}>San Jose del Monte, Bulacan</Text>
+                        <Text style={styles.mobileWeatherMeta} numberOfLines={1}>
+                          {weather ? new Date(weather.dataTime).toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PHT" : "Weather update pending"}
+                        </Text>
+                      </View>
+                      <Ionicons name={weather?.icon || "cloud-outline"} size={25} color="#FFD54A" />
+                      <View>
+                        <Text style={styles.mobileWeatherTemp}>{weather ? Math.round(weather.temperature) + "°C" : "--"}</Text>
+                        <Text style={styles.mobileWeatherLabel} numberOfLines={1}>{weather?.label || (weatherLoading ? "Loading" : "Unavailable")}</Text>
+                      </View>
+                    </View>
+                    <Pressable accessibilityRole="link" accessibilityLabel="Open-Meteo weather source" onPress={() => window.open("https://open-meteo.com/", "_blank", "noopener,noreferrer")}>
+                      <Text style={styles.mobileWeatherSource}>Weather by Open-Meteo</Text>
+                    </Pressable>
+                  </>
+                ) : mobileSlide === 1 ? (
+                  <>
+                    <Text style={styles.mobileHeroEyebrow}>COMMUNITY OVERVIEW</Text>
+                    <Text style={styles.mobileHeroGreeting}>Your community at a glance</Text>
+                    <Text style={styles.mobileHeroDescription}>Generally stable conditions across San Jose del Monte today. Local teams remain on alert and monitoring.</Text>
+                    <Text style={styles.mobileHeroSlogan}>Together for a Safer Tomorrow</Text>
+                    <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.mobileSmallSeal} resizeMode="contain" />
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
+                    <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
+                    <Text style={styles.mobileHeroDescription}>
+                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                    </Text>
+                    <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
+                      <Text style={styles.mobileSlideActionText}>View announcements</Text>
+                      <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                    </Pressable>
+                  </>
+                )}
+              </View>
+              <View style={styles.mobileSlideControls}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Previous slide" onPress={() => setMobileSlide((index) => (index + 2) % 3)} style={styles.mobileSlideArrow}>
+                  <Ionicons name="chevron-back" color="#FFFFFF" size={18}/>
+                </Pressable>
+                <View style={styles.mobileSlideDots}>
+                  {[0,1,2].map((i) => (
+                    <Pressable key={i} accessibilityLabel={`Open slide ${i + 1}`} accessibilityRole="button" onPress={() => setMobileSlide(i)} style={[styles.mobileSlideDot, mobileSlide === i && styles.mobileSlideDotActive]} />
+                  ))}
+                </View>
+                <Text style={styles.mobileSlideCount}>{mobileSlide + 1} / 3</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Next slide" onPress={() => setMobileSlide((index) => (index + 1) % 3)} style={styles.mobileSlideArrow}>
+                  <Ionicons name="chevron-forward" color="#FFFFFF" size={18}/>
+                </Pressable>
+              </View>
+            </ImageBackground>
+          ) : (
           <ImageBackground
             source={require("../../assets/images/sjdm-aerial.png")}
             resizeMode="cover"
@@ -615,9 +688,10 @@ export default function WebHome() {
               </View>
             </View>
           </ImageBackground>
+          )}
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
-            <View style={styles.panel}>
+            <View style={[styles.panel, narrow && styles.mobilePanel]}>
               <PanelTitle
                 icon="document-text"
                 title="Your Current Activity"
@@ -727,7 +801,7 @@ export default function WebHome() {
               )}
             </View>
 
-            <View style={styles.panel}>
+            <View style={[styles.panel, narrow && styles.mobilePanel]}>
               <PanelTitle
                 icon="megaphone"
                 title="Community Updates"
@@ -765,7 +839,7 @@ export default function WebHome() {
             </View>
           </View>
 
-          <View style={styles.emergencyPanel}>
+          <View style={[styles.emergencyPanel, narrow && styles.mobilePanel]}>
             <View style={styles.emergencyHeader}>
               <View style={styles.emergencyHeadingIcon}>
                 <Ionicons name="call" size={22} color="#FFFFFF" />
@@ -851,11 +925,14 @@ function ActivityRow({
   onPress: () => void;
   last?: boolean;
 }) {
+  const { width } = useWindowDimensions();
+  const mobile = width < 760;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.activityRow,
+        mobile && styles.mobileActivityRow,
         !last && styles.rowDivider,
         pressed && styles.rowPressed,
       ]}
@@ -865,11 +942,11 @@ function ActivityRow({
       </View>
       <View style={styles.activityCopy}>
         <Text style={styles.activityTitle}>{title}</Text>
-        <Text style={styles.activitySubtitle} numberOfLines={1}>
+        <Text style={styles.activitySubtitle} numberOfLines={mobile ? 2 : 1}>
           {subtitle}
         </Text>
       </View>
-      <View style={styles.statusPill}>
+      <View style={[styles.statusPill, mobile && styles.mobileStatusPill]}>
         <Text style={styles.statusText} numberOfLines={1}>
           {status}
         </Text>
@@ -949,6 +1026,40 @@ function ContactCard({
 }
 
 const styles = StyleSheet.create({
+  mobileHero: {
+    minHeight: 335, borderRadius: 18, overflow: "hidden",
+    backgroundColor: "#174F63", justifyContent: "space-between", padding: 17,
+  },
+  mobileHeroImage: { borderRadius: 18 },
+  mobileHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2, 21, 32, 0.55)" },
+  mobileHeroBody: { zIndex: 1, paddingTop: 6, minHeight: 245, justifyContent: "center" },
+  mobileHeroEyebrow: { color: "#E9F9FC", fontSize: 9, fontWeight: "900", letterSpacing: 1.4, marginBottom: 8 },
+  mobileHeroGreeting: { color: "#FFFFFF", fontSize: 29, lineHeight: 34, fontWeight: "900", letterSpacing: -0.6 },
+  mobileHeroDescription: { color: "#FFFFFF", fontSize: 12.5, lineHeight: 18.5, fontWeight: "600", marginTop: 8, maxWidth: 370 },
+  mobileWeatherCard: {
+    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 15,
+    backgroundColor: "rgba(4, 35, 53, 0.84)", borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 11,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.28)",
+  },
+  mobileWeatherLocation: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  mobileWeatherMeta: { color: "#D0EAF1", fontSize: 8.5, marginTop: 3 },
+  mobileWeatherTemp: { color: "#FFFFFF", fontWeight: "900", fontSize: 19 },
+  mobileWeatherLabel: { color: "#FFFFFF", fontSize: 9, maxWidth: 66 },
+  mobileWeatherSource: { color: "#EAF6F8", fontSize: 9, textDecorationLine: "underline", marginTop: 6 },
+  mobileHeroSlogan: { marginTop: 16, fontSize: 11, color: "#FFFFFF", fontWeight: "800" },
+  mobileSmallSeal: { width: 64, height: 64, marginTop: 14, borderRadius: 32 },
+  mobileSlideAction: { flexDirection: "row", alignSelf: "flex-start", alignItems: "center", gap: 8, padding: 11, backgroundColor: "#087F70", borderRadius: 10, marginTop: 18 },
+  mobileSlideActionText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "800" },
+  mobileSlideControls: { flexDirection: "row", alignItems: "center", justifyContent: "center", zIndex: 2, gap: 10, marginTop: 10 },
+  mobileSlideArrow: { width: 31, height: 31, borderRadius: 16, backgroundColor: "rgba(10,30,46,0.6)", borderColor: "rgba(255,255,255,0.45)", borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  mobileSlideDots: { flexDirection: "row", alignItems: "center", gap: 6 },
+  mobileSlideDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.45)" },
+  mobileSlideDotActive: { width: 20, backgroundColor: "#FFFFFF" },
+  mobileSlideCount: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
+  mobilePanel: { padding: 13, borderRadius: 17 },
+  mobileActivityRow: { gap: 8, paddingHorizontal: 0, paddingVertical: 10 },
+  mobileStatusPill: { minWidth: 70, maxWidth: 92, paddingHorizontal: 6 },
   screen: {
     flex: 1,
     backgroundColor: "#EFF8FD",
@@ -957,6 +1068,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 24,
   },
+  pageMobile: { paddingHorizontal: 11, paddingTop: 11 },
   page: {
     width: "100%",
     maxWidth: 1520,

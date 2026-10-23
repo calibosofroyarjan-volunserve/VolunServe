@@ -263,11 +263,15 @@ function StatCard({
   value,
   label,
   tone,
+  mobile,
+  narrowMobile,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   value: number;
   label: string;
   tone: "red" | "blue" | "green" | "neutral";
+  mobile?: boolean;
+  narrowMobile?: boolean;
 }) {
   const toneBox =
     tone === "red"
@@ -288,13 +292,13 @@ function StatCard({
           : styles.statValueNeutral;
 
   return (
-    <View style={styles.statCard}>
-      <View style={[styles.statIcon, toneBox]}>
+    <View style={[styles.statCard, mobile && styles.statCardMobile, narrowMobile && styles.statCardNarrow]}>
+      <View style={[styles.statIcon, toneBox, mobile && styles.statIconMobile]}>
         <Ionicons name={icon} size={22} color="#0f172a" />
       </View>
-      <View>
+      <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.statValue, toneText]}>{value}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={[styles.statLabel, mobile && styles.statLabelMobile]}>{label}</Text>
       </View>
     </View>
   );
@@ -326,6 +330,9 @@ export default function VolunteerTasksWeb() {
     useState<boolean | null>(null);
 
   const compact = width < 1120;
+  // Mobile browser layout only. Desktop interactions/data remain unchanged.
+  const mobile = width <= 700;
+  const narrowMobile = width <= 350;
 
   useEffect(() => {
     if (!user || !profile || !hasVolunteerAccess(profile)) {
@@ -773,36 +780,65 @@ export default function VolunteerTasksWeb() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.page}
+      contentContainerStyle={[styles.page, mobile && styles.pageMobile]}
       showsVerticalScrollIndicator
     >
-      <View style={styles.headerRow}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>VOLUNSERVE · VOLUNTEER MODE</Text>
-          <View style={styles.titleRow}>
-            <View style={styles.titleIcon}>
-              <Ionicons name="people" size={24} color="#078F82" />
+      {/* On phones, render the header as independently sized blocks.
+          Keeping the button outside title row prevents RN Web flex overlap. */}
+      {mobile ? (
+        <View style={styles.mobileTaskHeader}>
+          <Text style={styles.mobileTaskEyebrow}>
+            VOLUNSERVE · VOLUNTEER MODE
+          </Text>
+          <View style={styles.mobileTaskTitleRow}>
+            <View style={styles.mobileTaskIcon}>
+              <Ionicons name="people" size={22} color="#087F74" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Volunteer Tasks</Text>
-              <Text style={styles.subtitle}>
-                Optional Volunteer support assignments coordinated by LGU/Admin.
-              </Text>
+            <View style={styles.mobileTaskTitleContainer}>
+              <Text style={styles.mobileTaskTitle}>Volunteer Tasks</Text>
             </View>
           </View>
+          <Text style={styles.mobileTaskDescription}>
+            Optional volunteer support assignments coordinated by LGU/Admin.
+          </Text>
+          <TouchableOpacity
+            style={styles.mobileTaskMapButton}
+            onPress={() => openLiveMap()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="map-outline" size={19} color="#FFFFFF" />
+            <Text style={styles.mobileTaskMapText}>Open Live Response Map</Text>
+            <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
+      ) : (
+        <View style={styles.headerRow}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>VOLUNSERVE · VOLUNTEER MODE</Text>
+            <View style={styles.titleRow}>
+              <View style={styles.titleIcon}>
+                <Ionicons name="people" size={24} color="#078F82" />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.title}>Volunteer Tasks</Text>
+                <Text style={styles.subtitle}>
+                  Optional Volunteer support assignments coordinated by LGU/Admin.
+                </Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.liveMapButton}
+            onPress={() => openLiveMap()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="map-outline" size={18} color="#ffffff" />
+            <Text style={styles.liveMapButtonText}>Open Live Response Map</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        <TouchableOpacity
-          style={styles.liveMapButton}
-          onPress={() => openLiveMap()}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="map-outline" size={18} color="#ffffff" />
-          <Text style={styles.liveMapButtonText}>Open Live Response Map</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.liveStrip}>
+      <View style={[styles.liveStrip, mobile && styles.liveStripMobile]}>
         <View style={styles.liveDot} />
         <Text style={styles.liveStripText}>LIVE FIRESTORE</Text>
         <Text style={styles.liveStripSubtext}>
@@ -810,35 +846,43 @@ export default function VolunteerTasksWeb() {
         </Text>
       </View>
 
-      <View style={styles.statsGrid}>
+      <View style={[styles.statsGrid, mobile && styles.statsGridMobile]}>
         <StatCard
           icon="clipboard-outline"
           value={counts.new}
           label="New Assignments"
+          mobile={mobile}
+          narrowMobile={narrowMobile}
           tone="red"
         />
         <StatCard
           icon="navigate-circle-outline"
           value={counts.active}
           label="In Progress"
+          mobile={mobile}
+          narrowMobile={narrowMobile}
           tone="blue"
         />
         <StatCard
           icon="checkmark-circle-outline"
           value={counts.completed}
           label="Completed"
+          mobile={mobile}
+          narrowMobile={narrowMobile}
           tone="green"
         />
         <StatCard
           icon="time-outline"
           value={counts.all}
           label="Total Assignments"
+          mobile={mobile}
+          narrowMobile={narrowMobile}
           tone="neutral"
         />
       </View>
 
-      <View style={[styles.toolbar, compact && styles.toolbarCompact]}>
-        <View style={styles.filters}>
+      <View style={[styles.toolbar, compact && styles.toolbarCompact, mobile && styles.toolbarMobile]}>
+        <View style={[styles.filters, mobile && styles.filtersMobile]}>
           {(
             [
               ["new", "New", counts.new],
@@ -849,7 +893,7 @@ export default function VolunteerTasksWeb() {
           ).map(([key, label, count]) => (
             <TouchableOpacity
               key={key}
-              style={[styles.filterButton, filter === key && styles.filterButtonActive]}
+              style={[styles.filterButton, mobile && styles.filterButtonMobile, filter === key && styles.filterButtonActive]}
               onPress={() => setFilter(key)}
               activeOpacity={0.8}
             >
@@ -866,7 +910,7 @@ export default function VolunteerTasksWeb() {
         </View>
 
         <TouchableOpacity
-          style={styles.sortButton}
+          style={[styles.sortButton, mobile && styles.sortButtonMobile]}
           onPress={() =>
             setSortDirection((current) =>
               current === "latest" ? "oldest" : "latest",
@@ -889,12 +933,12 @@ export default function VolunteerTasksWeb() {
       )}
 
       {!assignmentsReady ? (
-        <View style={styles.emptyCard}>
+        <View style={[styles.emptyCard, mobile && styles.emptyCardMobile]}>
           <ActivityIndicator color="#078F82" />
           <Text style={styles.emptyTitle}>Loading assignments…</Text>
         </View>
       ) : visibleAssignments.length === 0 ? (
-        <View style={styles.emptyCard}>
+        <View style={[styles.emptyCard, mobile && styles.emptyCardMobile]}>
           <View style={styles.emptyIcon}>
             <Ionicons name="shield-checkmark-outline" size={30} color="#078F82" />
           </View>
@@ -914,7 +958,7 @@ export default function VolunteerTasksWeb() {
           </Text>
         </View>
       ) : (
-        <View style={styles.cardsList}>
+        <View style={[styles.cardsList, mobile && styles.cardsListMobile]}>
           {visibleAssignments.map((assignment) => {
             const incident = assignment.caseId
               ? casesById[assignment.caseId]
@@ -927,9 +971,9 @@ export default function VolunteerTasksWeb() {
             return (
               <React.Fragment key={assignment.id}>
                 <View
-                  style={[styles.assignmentCard, compact && styles.assignmentCardCompact]}
+                  style={[styles.assignmentCard, compact && styles.assignmentCardCompact, mobile && styles.assignmentCardMobile]}
                 >
-                <View style={[styles.mediaWrap, compact && styles.mediaWrapCompact]}>
+                <View style={[styles.mediaWrap, compact && styles.mediaWrapCompact, mobile && styles.mediaWrapMobile]}>
                   <IncidentMedia incident={incident} />
                   <View style={[styles.priorityBadge, severityStyle(incident?.severity)]}>
                     <Ionicons name="warning" size={12} color="#ffffff" />
@@ -939,8 +983,8 @@ export default function VolunteerTasksWeb() {
                   </View>
                 </View>
 
-                <View style={styles.assignmentBody}>
-                  <View style={styles.assignmentHeadingRow}>
+                <View style={[styles.assignmentBody, mobile && styles.assignmentBodyMobile]}>
+                  <View style={[styles.assignmentHeadingRow, mobile && styles.assignmentHeadingRowMobile]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.assignmentTitle} numberOfLines={1}>
                         {incident?.title || assignment.caseTitle || "Emergency Assignment"}
@@ -965,8 +1009,8 @@ export default function VolunteerTasksWeb() {
                       "Open the assigned mission to view the validated incident details."}
                   </Text>
 
-                  <View style={styles.metaGrid}>
-                    <View style={styles.metaItem}>
+                  <View style={[styles.metaGrid, mobile && styles.metaGridMobile]}>
+                    <View style={[styles.metaItem, mobile && styles.metaItemMobile]}>
                       <View style={styles.metaIcon}>
                         <Ionicons name="document-text-outline" size={17} color="#4b647a" />
                       </View>
@@ -978,7 +1022,7 @@ export default function VolunteerTasksWeb() {
                       </View>
                     </View>
 
-                    <View style={styles.metaItem}>
+                    <View style={[styles.metaItem, mobile && styles.metaItemMobile]}>
                       <View style={styles.metaIcon}>
                         <Ionicons name="calendar-outline" size={17} color="#4b647a" />
                       </View>
@@ -990,7 +1034,7 @@ export default function VolunteerTasksWeb() {
                       </View>
                     </View>
 
-                    <View style={styles.metaItem}>
+                    <View style={[styles.metaItem, mobile && styles.metaItemMobile]}>
                       <View style={styles.metaIcon}>
                         <Ionicons name="help-buoy-outline" size={17} color="#4b647a" />
                       </View>
@@ -1004,7 +1048,7 @@ export default function VolunteerTasksWeb() {
                   </View>
                 </View>
 
-                <View style={[styles.actionsColumn, compact && styles.actionsColumnCompact]}>
+                <View style={[styles.actionsColumn, compact && styles.actionsColumnCompact, mobile && styles.actionsColumnMobile]}>
                   {offered && (
                     <>
                       <TouchableOpacity
@@ -1113,7 +1157,7 @@ export default function VolunteerTasksWeb() {
               </View>
 
               {completionId === assignment.id && status === "on_site" && (
-                <View style={styles.completionPanel}>
+                <View style={[styles.completionPanel, mobile && styles.completionPanelMobile]}>
                   <View style={styles.completionHeader}>
                     <View>
                       <Text style={styles.completionEyebrow}>
@@ -1328,7 +1372,7 @@ export default function VolunteerTasksWeb() {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.completionFooter}>
+                  <View style={[styles.completionFooter, mobile && styles.completionFooterMobile]}>
                     <Text style={styles.completionNotice}>
                       Submitting completes only your Volunteer assignment and
                       sends the field report to LGU/Admin. It does not close the
@@ -1339,6 +1383,7 @@ export default function VolunteerTasksWeb() {
                     <TouchableOpacity
                       style={[
                         styles.submitCompletionButton,
+                        mobile && styles.submitCompletionButtonMobile,
                         busy && styles.buttonDisabled,
                       ]}
                       disabled={busy}
@@ -1372,6 +1417,249 @@ export default function VolunteerTasksWeb() {
 }
 
 const styles = StyleSheet.create({
+  // Mobile-only Volunteer Tasks header. Desktop remains unchanged.
+  mobileTaskHeader: {
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "stretch",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    marginBottom: 14,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2EBEE",
+  },
+  mobileTaskEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    color: "#087F74",
+    marginBottom: 12,
+  },
+  mobileTaskTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 8,
+  },
+  mobileTaskIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: "#E5F6F1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  mobileTaskTitleContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mobileTaskTitle: {
+    color: "#11283C",
+    fontSize: 23,
+    fontWeight: "900",
+    lineHeight: 29,
+    letterSpacing: -0.35,
+  },
+  mobileTaskDescription: {
+    width: "100%",
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#607588",
+    marginBottom: 14,
+  },
+  mobileTaskMapButton: {
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#0A9C73",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mobileTaskMapText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginHorizontal: 9,
+  },
+  // Responsive mobile-browser overrides. No navigation, authorization, or Firebase changes.
+  pageMobile: {
+    paddingHorizontal: 14,
+    paddingTop: 18,
+    paddingBottom: 32,
+    maxWidth: "100%",
+  },
+  headerRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerCopyMobile: {
+    flex: 0,
+    width: "100%",
+    minWidth: 0,
+  },
+  titleRowMobile: {
+    alignItems: "flex-start",
+    gap: 10,
+    width: "100%",
+  },
+  titleIconMobile: {
+    height: 42,
+    width: 42,
+    borderRadius: 13,
+    marginTop: 2,
+  },
+  titleMobile: {
+    fontSize: 25,
+    lineHeight: 31,
+    letterSpacing: -0.5,
+    flexShrink: 1,
+  },
+  subtitleMobile: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    flexShrink: 1,
+  },
+  liveMapButtonMobile: {
+    alignSelf: "stretch",
+    width: "100%",
+    minHeight: 46,
+    paddingHorizontal: 10,
+  },
+  liveStripMobile: {
+    alignSelf: "stretch",
+    width: "100%",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    minHeight: 36,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+  },
+  statsGridMobile: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    width: "100%",
+  },
+  statCardMobile: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minWidth: 0,
+    minHeight: 88,
+    paddingHorizontal: 11,
+    paddingVertical: 11,
+    gap: 9,
+  },
+  statCardNarrow: {
+    flexBasis: "100%",
+  },
+  statIconMobile: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+  },
+  statLabelMobile: {
+    fontSize: 11,
+    lineHeight: 15,
+    flexShrink: 1,
+  },
+  toolbarMobile: {
+    width: "100%",
+    flexDirection: "column",
+    gap: 10,
+    alignItems: "stretch",
+  },
+  filtersMobile: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    width: "100%",
+  },
+  filterButtonMobile: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minWidth: 0,
+    minHeight: 42,
+    paddingHorizontal: 8,
+  },
+  sortButtonMobile: {
+    width: "100%",
+    alignSelf: "stretch",
+    minHeight: 42,
+  },
+  emptyCardMobile: {
+    minHeight: 210,
+    paddingHorizontal: 18,
+    paddingVertical: 32,
+  },
+  cardsListMobile: {
+    width: "100%",
+  },
+  assignmentCardMobile: {
+    flexDirection: "column",
+    flexWrap: "nowrap",
+    alignItems: "stretch",
+    gap: 12,
+    padding: 11,
+    minHeight: 0,
+  },
+  mediaWrapMobile: {
+    width: "100%",
+    height: 170,
+    minHeight: 170,
+  },
+  assignmentBodyMobile: {
+    flex: 0,
+    width: "100%",
+    minWidth: 0,
+    paddingVertical: 0,
+  },
+  assignmentHeadingRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+  },
+  metaGridMobile: {
+    width: "100%",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  metaItemMobile: {
+    minWidth: 0,
+    flexBasis: "100%",
+    flexGrow: 1,
+    width: "100%",
+  },
+  actionsColumnMobile: {
+    width: "100%",
+    flexDirection: "column",
+    flexWrap: "nowrap",
+    gap: 8,
+    paddingLeft: 0,
+  },
+  completionPanelMobile: {
+    padding: 13,
+  },
+  completionFooterMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 12,
+  },
+  submitCompletionButtonMobile: {
+    alignSelf: "stretch",
+    width: "100%",
+    minHeight: 46,
+  },
+
   screen: {
     flex: 1,
     backgroundColor: "#f5f8fb",

@@ -4896,6 +4896,32 @@ service cloud.firestore {
         ).data;
       }
 
+      // Resident site photos can be uploaded to an owner-scoped Storage path
+      // or provided as HTTPS URLs; Admin must review them before publication.
+      function validPhotoUrl(url) {
+        return url is string
+          && url.size() >= 12
+          && url.size() <= 2048
+          && url.matches('^https://[^ ]+$');
+      }
+      function validPhotoUrls(photos) {
+        return photos is list
+          && photos.size() <= 3
+          && (photos.size() < 1 || validPhotoUrl(photos[0]))
+          && (photos.size() < 2 || validPhotoUrl(photos[1]))
+          && (photos.size() < 3 || validPhotoUrl(photos[2]));
+      }
+      function validVideoUrl(url) {
+        return url is string
+          && url.size() <= 2048
+          && (
+            url == ''
+            || url.matches('^https://(www[.]|m[.])?youtube[.]com/.+')
+            || url.matches('^https://youtu[.]be/.+')
+            || url.matches('^https://(www[.])?vimeo[.]com/.+')
+          );
+      }
+
       allow get, list: if isAdminOrSuperAdmin()
         || (isResident()
           && resource.data.proposedBy == request.auth.uid);
@@ -4905,8 +4931,44 @@ service cloud.firestore {
           'title', 'description', 'category', 'barangay',
           'location', 'date', 'time', 'capacity',
           'proposedBy', 'proposerName', 'status',
-          'adminNote', 'createdAt', 'updatedAt'
+          'adminNote', 'createdAt', 'updatedAt',
+          'volunteerTasks', 'lookingFor', 'requiredRoles', 'requiredSkills',
+          'qualificationNotes', 'whatToBring', 'photoUrls', 'videoUrl',
+          'coverPhotoUrl'
         ])
+        // New fields remain optional for older Resident clients.
+        // Present fields are validated so data cannot bypass review limits.
+        && request.resource.data.get('volunteerTasks', '') is string
+        && request.resource.data.get('volunteerTasks', '').size() <= 1200
+        && (
+          !('volunteerTasks' in request.resource.data)
+          || request.resource.data.volunteerTasks.size() >= 12
+        )
+        && request.resource.data.get('lookingFor', '') is string
+        && request.resource.data.get('lookingFor', '').size() <= 1600
+        && request.resource.data.get('requiredRoles', []) is list
+        && request.resource.data.get('requiredRoles', []).size() <= 20
+        && (
+          !('requiredRoles' in request.resource.data)
+          || request.resource.data.requiredRoles.size() >= 1
+        )
+        && request.resource.data.get('requiredSkills', []) is list
+        && request.resource.data.get('requiredSkills', []).size() <= 20
+        && request.resource.data.get('qualificationNotes', '') is string
+        && request.resource.data.get('qualificationNotes', '').size() <= 500
+        && request.resource.data.get('whatToBring', '') is string
+        && request.resource.data.get('whatToBring', '').size() <= 500
+        && validPhotoUrls(request.resource.data.get('photoUrls', []))
+        && validVideoUrl(request.resource.data.get('videoUrl', ''))
+        && request.resource.data.get('coverPhotoUrl', '') is string
+        && (
+          !('coverPhotoUrl' in request.resource.data)
+          || (
+            validPhotoUrl(request.resource.data.coverPhotoUrl)
+            && request.resource.data.get('photoUrls', []).size() >= 1
+            && request.resource.data.coverPhotoUrl == request.resource.data.photoUrls[0]
+          )
+        )
         && request.resource.data.proposedBy == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.adminNote == ''
@@ -5000,7 +5062,10 @@ service cloud.firestore {
           'location', 'date', 'time', 'capacity',
           'participantsCount', 'status', 'publicationStatus',
           'sourceProposalId', 'proposedBy', 'proposerName',
-          'approvedBy', 'approvedAt', 'createdAt', 'updatedAt'
+          'approvedBy', 'approvedAt', 'createdAt', 'updatedAt',
+          'volunteerTasks', 'lookingFor', 'requiredRoles', 'requiredSkills',
+          'qualificationNotes', 'whatToBring', 'photoUrls', 'videoUrl',
+          'coverImageUrl'
         ])
         && request.resource.data.sourceProposalId == eventId
         && request.resource.data.status == 'upcoming'
@@ -5019,6 +5084,17 @@ service cloud.firestore {
         && proposalAfter().reviewedAt == request.time
         && request.resource.data.title == proposalAfter().title
         && request.resource.data.description == proposalAfter().description
+        // Admin can only copy these fields from the approved proposal.
+        // Defaults preserve compatibility with proposals made before this update.
+        && request.resource.data.volunteerTasks == proposalAfter().get('volunteerTasks', '')
+        && request.resource.data.lookingFor == proposalAfter().get('lookingFor', '')
+        && request.resource.data.requiredRoles == proposalAfter().get('requiredRoles', [])
+        && request.resource.data.requiredSkills == proposalAfter().get('requiredSkills', [])
+        && request.resource.data.qualificationNotes == proposalAfter().get('qualificationNotes', '')
+        && request.resource.data.whatToBring == proposalAfter().get('whatToBring', '')
+        && request.resource.data.photoUrls == proposalAfter().get('photoUrls', [])
+        && request.resource.data.videoUrl == proposalAfter().get('videoUrl', '')
+        && request.resource.data.coverImageUrl == proposalAfter().get('coverPhotoUrl', '')
         && request.resource.data.category == proposalAfter().category
         && request.resource.data.barangay == proposalAfter().barangay
         && request.resource.data.location == proposalAfter().location

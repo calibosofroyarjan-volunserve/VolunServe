@@ -401,6 +401,8 @@ export default function Donation() {
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // Mobile: the detail page opens only after the user taps a campaign.
+  const pageScrollRef = React.useRef<ScrollView>(null);
   const donationType: DonationType = "monetary";
   const [amount, setAmount] = useState("");
   const [checkoutProgress, setCheckoutProgress] = useState("");
@@ -531,10 +533,9 @@ export default function Donation() {
     [campaigns, selectedCampaignId],
   );
 
-  useEffect(() => {
-    if (selectedCampaignId || filteredCampaigns.length === 0) return;
-    setSelectedCampaignId(filteredCampaigns[0].id);
-  }, [filteredCampaigns, selectedCampaignId]);
+  // No automatic campaign selection: a donor must open the campaign card first.
+  // This prevents "Donate Now" from appearing before the donor chooses a campaign.
+  const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
 
   const selectedGoal = campaignGoal(selectedCampaign);
   const selectedRaised = campaignRaised(selectedCampaign);
@@ -566,7 +567,14 @@ export default function Donation() {
     setSelectedCampaignId(campaignId);
     setShowDonationPanel(false);
     resetDonationForm();
+    pageScrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
 
+  const closeMobileCampaignDetails = () => {
+    setSelectedCampaignId("");
+    setShowDonationPanel(false);
+    resetDonationForm();
+    pageScrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const chooseFilter = (nextFilter: CampaignFilter) => {
@@ -726,11 +734,24 @@ export default function Donation() {
 
   return (
     <ScrollView
+      ref={pageScrollRef}
       style={styles.screen}
-      contentContainerStyle={styles.webContainer}
+      contentContainerStyle={[styles.webContainer, !medium && styles.mobileContainer]}
       showsVerticalScrollIndicator
     >
-      <View style={styles.webPageHeader}>
+      {mobileDetailOpen && (
+        <TouchableOpacity
+          style={styles.mobileBackButton}
+          onPress={closeMobileCampaignDetails}
+          activeOpacity={0.82}
+          accessibilityRole="button"
+          accessibilityLabel="Back to donation campaigns"
+        >
+          <Ionicons name="arrow-back" size={19} color="#0F766E" />
+          <Text style={styles.mobileBackText}>Back to Campaigns</Text>
+        </TouchableOpacity>
+      )}
+      <View style={[styles.webPageHeader, !medium && styles.mobilePageHeader, mobileDetailOpen && styles.mobileHidden]}>
         <View style={styles.webHeaderCopy}>
           <Text style={styles.webEyebrow}>VOLUNSERVE · LGU VERIFIED</Text>
           <Text style={styles.webPageTitle}>Donation Campaigns</Text>
@@ -740,7 +761,7 @@ export default function Donation() {
         </View>
 
         <View style={[styles.webHeaderActions, !medium && styles.webHeaderActionsStack]}>
-          <View style={styles.webSearchBox}>
+          <View style={[styles.webSearchBox, !medium && styles.mobileSearchBox]}>
             <Ionicons name="search-outline" size={17} color="#64748B" />
             <TextInput
               value={searchText}
@@ -778,7 +799,7 @@ export default function Donation() {
         </View>
       </View>
 
-      <View style={styles.webFilterBar}>
+      <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
         {FILTER_OPTIONS.map((option) => {
           const active = filter === option.value;
           const count =
@@ -863,7 +884,7 @@ export default function Donation() {
         </View>
       ) : (
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-          <View style={styles.webCampaignPane}>
+          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden]}>
             <View style={styles.webSectionHeaderRow}>
               <View>
                 <Text style={styles.webSectionTitle}>Active Campaigns</Text>
@@ -898,7 +919,7 @@ export default function Donation() {
             )}
           </View>
 
-          <View style={styles.webDetailPane}>
+          <View style={[styles.webDetailPane, !wide && styles.webPaneStacked, !medium && !selectedCampaign && styles.mobileHidden]}>
             {!selectedCampaign ? (
               <View style={styles.webDetailEmpty}>
                 <Ionicons name="heart-outline" size={34} color="#0F766E" />
@@ -3727,6 +3748,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     textAlign: "center",
+  },
+  // Mobile-only overrides; preserve existing desktop layout and donation behavior.
+  mobileContainer: {
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 32,
+  },
+  mobilePageHeader: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 12,
+  },
+  mobileSearchBox: {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+  mobileHidden: {
+    display: "none",
+  },
+  webPaneStacked: {
+    width: "100%",
+    flexGrow: 0,
+    flexShrink: 0,
+    alignSelf: "stretch",
+  },
+  mobileBackButton: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 13,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#CDE4DF",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  mobileBackText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F766E",
   },
   webContainer: {
     width: "100%",

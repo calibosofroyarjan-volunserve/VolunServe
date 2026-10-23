@@ -67,6 +67,9 @@ type Participant = {
   attendanceVerifiedAt?: unknown;
   assignedRole?: string;
   preferredRole?: string;
+  // Present on some legacy participant records; otherwise read the user profile.
+  profilePictureUrl?: string;
+  photoURL?: string;
 };
 
 type Filter =
@@ -262,11 +265,24 @@ function imageFor(event: EventItem): string {
   return /^https:\/\//i.test(candidate) ? candidate : "";
 }
 
+function verifiedServiceMeetsMinimum(person: Participant): boolean {
+  const start = asDate(person.checkedInAt)?.getTime() ?? 0;
+  const end = asDate(person.checkedOutAt)?.getTime() ?? 0;
+  return person.attendanceVerified === true &&
+    start > 0 && end >= start && end - start >= 30 * 60 * 1000;
+}
+
+function safeProfileImage(value: unknown): string {
+  return typeof value === "string" && /^https:\/\//i.test(value.trim())
+    ? value.trim()
+    : "";
+}
+
 function hoursFor(person: Participant): number | null {
   const first = asDate(person.checkedInAt)?.getTime() ?? 0;
   const last = asDate(person.checkedOutAt)?.getTime() ?? 0;
   if (!first || !last || last < first) return null;
-  return Math.max(0, Math.round((last - first) / 60000));
+  return Math.max(0, Math.floor((last - first) / 60000));
 }
 
 function readableDuration(minutes: number | null): string {
@@ -327,8 +343,10 @@ export default function CommunityAttendanceAdmin() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
 
-  const narrow = width < 1270;
-  const phone = width < 650;
+  // Leave space for VolunServe's existing navigation sidebar on desktop.
+  const narrow = width < 1380;
+  const phone = width < 740;
+  const smallHeader = width < 970;
 
   const allowed = Boolean(
     profile &&
@@ -368,6 +386,9 @@ export default function CommunityAttendanceAdmin() {
   const [profileModal, setProfileModal] = useState<ProfileSummary | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [rosterSort, setRosterSort] = useState<"name" | "latest">("name");
+  const [profilePhotos, setProfilePhotos] = useState<Record<string, string>>({});
+  const profilePhotoCache = React.useRef<Record<string, string>>({});
 
   const [
     confirmComplete,
@@ -505,6 +526,48 @@ export default function CommunityAttendanceAdmin() {
     (total, person) => total + (person.attendanceVerified ? hoursFor(person) || 0 : 0),
     0
   );
+  const awaitingVerificationCount = joined.filter(
+    (person) => !person.attendanceVerified && !!person.checkedInAt && !!person.checkedOutAt
+  ).length;
+  const serviceMinimumCount = joined.filter(verifiedServiceMeetsMinimum).length;
+
+  // Cache profile images for the selected event; failures gracefully use initials.
+  // This only reads profiles that Admin can already access through View Profile.
+  useEffect(() => {
+    if (!user || !allowed || participants.length === 0) return;
+    const ids = [...new Set(participants
+      .filter((person) => person.status === "joined" && !!person.uid)
+      .map((person) => person.uid))]
+      .slice(0, 60)
+      .filter((uid) => !(uid in profilePhotoCache.current));
+    if (!ids.length) return;
+    let cancelled = false;
+    const loadPhotos = async () => {
+      for (let index = 0; index < ids.length; index += 8) {
+        const batch = ids.slice(index, index + 8);
+        const results = await Promise.allSettled(batch.map(async (uid) => {
+          const snapshot = await getDoc(doc(db, "users", uid));
+          const data = snapshot.exists() ? snapshot.data() : {};
+          return {uid, url: safeProfileImage(data.profilePictureUrl || data.photoURL)};
+        }));
+        if (cancelled) return;
+        const updates: Record<string, string> = {};
+        results.forEach((result, i) => {
+          const uid = batch[i];
+          const url = result.status === "fulfilled" ? result.value.url : "";
+          profilePhotoCache.current[uid] = url;
+          updates[uid] = url;
+        });
+        setProfilePhotos((previous) => ({...previous, ...updates}));
+      }
+    };
+    void loadPhotos();
+    return () => { cancelled = true; };
+  }, [participants, user?.uid, allowed]);
+
+  const photoFor = (person: Participant) =>
+    safeProfileImage(person.profilePictureUrl || person.photoURL) ||
+    profilePhotos[person.uid] || "";
 
   const visibleVolunteers = joined.filter((person) => {
     const search = volunteerSearch.trim().toLowerCase();
@@ -515,6 +578,13 @@ export default function CommunityAttendanceAdmin() {
     if (attendanceFilter === "checked-in") return !person.attendanceVerified && !!person.checkedInAt && !person.checkedOutAt;
     if (attendanceFilter === "not-checked-in") return !person.checkedInAt;
     return true;
+  }).sort((a, b) => {
+    if (rosterSort === "latest") {
+      const aTime = asDate(a.checkedInAt)?.getTime() ?? 0;
+      const bTime = asDate(b.checkedInAt)?.getTime() ?? 0;
+      if (aTime !== bTime) return bTime - aTime;
+    }
+    return (a.fullName || "").localeCompare(b.fullName || "");
   });
 
   async function openProfile(uid: string, fallbackName: string) {
@@ -536,7 +606,7 @@ export default function CommunityAttendanceAdmin() {
         name: safeText(data.fullName, composedName || fallbackName),
         role: safeText(data.role, "Volunteer"),
         barangay: safeText(data.barangay),
-        photo: safeText(data.profilePictureUrl, safeText(data.photoURL)),
+        photo: safeProfileImage(data.profilePictureUrl || data.photoURL),
       });
     } catch (reason) {
       setProfileError(errorMessage(reason));
@@ -796,8 +866,8 @@ export default function CommunityAttendanceAdmin() {
   return (
     <View style={styles.page}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, phone && styles.contentPhone]}
         keyboardShouldPersistTaps="handled"
       >
         {/* The existing Admin navigation/sidebar is owned by the parent layout. */}
@@ -809,7 +879,7 @@ export default function CommunityAttendanceAdmin() {
               Volunteers record their own Time In/Out. Admin reviews attendance, verifies service, and manages event status.
             </Text>
           </View>
-          {!phone && (
+          {!smallHeader && (
             <View style={styles.headerNote}>
               <View style={styles.headerNoteIcon}>
                 <Ionicons name="calendar-outline" size={30} color={GREEN} />
@@ -1043,6 +1113,7 @@ export default function CommunityAttendanceAdmin() {
                     {label: "Checked In", value: String(checkedInCount), icon: "checkmark-done-outline" as const, tint: "#E8F1FF", ink: "#336ED0"},
                     {label: "Verified", value: String(verifiedCount), icon: "shield-checkmark-outline" as const, tint: "#E3F5ED", ink: "#0A8875"},
                     {label: "Verified Hours", value: readableDuration(verifiedMinutes), icon: "time-outline" as const, tint: "#F0ECFF", ink: "#6742C3"},
+                    {label: "For Review", value: String(awaitingVerificationCount), icon: "clipboard-outline" as const, tint: "#FFF5E7", ink: "#A96716"},
                   ]).map((stat) => (
                     <View key={stat.label} style={[styles.stat, phone && styles.statPhone]}>
                       <View style={[styles.statIcon, {backgroundColor: stat.tint}]}>
@@ -1161,6 +1232,15 @@ export default function CommunityAttendanceAdmin() {
                     accessibilityLabel="Search volunteers"
                   />
                 </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={rosterSort === "name" ? "Sort by latest Time In" : "Sort by volunteer name"}
+                  onPress={() => setRosterSort((current) => current === "name" ? "latest" : "name")}
+                  style={styles.sortButton}
+                >
+                  <Ionicons name="swap-vertical-outline" color={GREEN} size={16} />
+                  <Text style={styles.sortButtonText}>{rosterSort === "name" ? "Name A–Z" : "Latest Time In"}</Text>
+                </Pressable>
               </View>
             </View>
 
@@ -1198,6 +1278,82 @@ export default function CommunityAttendanceAdmin() {
                 <Text style={styles.emptySub}>Clear the search or change the attendance filter.</Text>
               </View>
             ) : (
+              phone ? (
+                <View style={styles.mobileRosterList}>
+                  {visibleVolunteers.map((person, index) => {
+                    const state = participantStatus(person);
+                    const verified = person.attendanceVerified === true;
+                    const canVerify = (selected.status === "active" || selected.status === "completed") &&
+                      !verified && !!person.checkedInAt && !!person.checkedOutAt;
+                    const photo = photoFor(person);
+                    return (
+                      <View key={person.id} style={styles.mobileRosterCard}>
+                        <View style={styles.mobileRosterHeading}>
+                          <View style={styles.personAvatar}>
+                            {photo ? <Image source={{uri: photo}} style={styles.personAvatarImage} resizeMode="cover" /> :
+                              <Text style={styles.personAvatarText}>{initials(person.fullName || "Volunteer")}</Text>}
+                          </View>
+                          <View style={styles.mobileRosterIdentity}>
+                            <Text style={styles.personName} numberOfLines={2}>{index + 1}. {person.fullName || "Volunteer"}</Text>
+                            <Text style={styles.personSub} numberOfLines={2}>
+                              {safeText(person.assignedRole, safeText(person.preferredRole, "Role not assigned"))}
+                            </Text>
+                          </View>
+                          <View style={[styles.attendanceStatus,
+                            state.kind === "verified" && styles.attendanceVerified,
+                            state.kind === "checked" && styles.attendanceChecked,
+                            state.kind === "pending" && styles.attendancePending]}>
+                            <Text style={[styles.attendanceStatusText,
+                              state.kind === "verified" && styles.attendanceVerifiedText,
+                              state.kind === "checked" && styles.attendanceCheckedText,
+                              state.kind === "pending" && styles.attendancePendingText]}>{state.label}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.mobileTimes}>
+                          <View style={styles.mobileTimeBlock}>
+                            <Text style={styles.mobileTimeLabel}>VOLUNTEER TIME IN</Text>
+                            <Text style={styles.timeText}>{clockStamp(person.checkedInAt)}</Text>
+                            <Text style={styles.timeSub}>{dateStamp(person.checkedInAt) || "Not recorded"}</Text>
+                          </View>
+                          <View style={styles.mobileTimeBlock}>
+                            <Text style={styles.mobileTimeLabel}>VOLUNTEER TIME OUT</Text>
+                            <Text style={styles.timeText}>{clockStamp(person.checkedOutAt)}</Text>
+                            <Text style={styles.timeSub}>{dateStamp(person.checkedOutAt) || "Not recorded"}</Text>
+                          </View>
+                          <View style={styles.mobileTimeBlock}>
+                            <Text style={styles.mobileTimeLabel}>DURATION</Text>
+                            <Text style={styles.timeText}>{readableDuration(hoursFor(person))}</Text>
+                            {verifiedServiceMeetsMinimum(person) &&
+                              <Text style={styles.mobileDurationEligible}>30m minimum met</Text>}
+                          </View>
+                        </View>
+                        <View style={styles.mobileRosterActions}>
+                          <Pressable
+                            onPress={() => void openProfile(person.uid, person.fullName || "Volunteer")}
+                            disabled={!person.uid}
+                            accessibilityRole="button"
+                            style={[styles.profileOutlineButton, styles.mobileRosterButton]}
+                          >
+                            <Ionicons name="eye-outline" color={GREEN} size={15} />
+                            <Text style={styles.profileOutlineText}>View Profile</Text>
+                          </Pressable>
+                          {canVerify && (
+                            <Pressable
+                              onPress={() => void verifyAttendance(person)}
+                              disabled={!!busy}
+                              accessibilityRole="button"
+                              style={[styles.primaryButton, styles.mobileRosterButton, !!busy && styles.disabled]}
+                            >
+                              <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={15} />
+                              <Text style={styles.rowActionText}>Verify Attendance</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={true} nestedScrollEnabled>
                 <View style={styles.table}>
                   <View style={styles.tableHeader}>
@@ -1223,7 +1379,9 @@ export default function CommunityAttendanceAdmin() {
                         <Text style={[styles.tableText, styles.colNumber]}>{index + 1}</Text>
                         <View style={[styles.personCell, styles.colPerson]}>
                           <View style={styles.personAvatar}>
-                            <Text style={styles.personAvatarText}>{initials(person.fullName || "Volunteer")}</Text>
+                            {photoFor(person) ?
+                              <Image source={{uri: photoFor(person)}} style={styles.personAvatarImage} resizeMode="cover" /> :
+                              <Text style={styles.personAvatarText}>{initials(person.fullName || "Volunteer")}</Text>}
                           </View>
                           <View style={{flex: 1}}>
                             <Text numberOfLines={2} style={styles.personName}>{person.fullName || "Volunteer"}</Text>
@@ -1285,7 +1443,20 @@ export default function CommunityAttendanceAdmin() {
                   })}
                 </View>
               </ScrollView>
-            )}
+              ))}
+            <View style={styles.certificateReadinessRow}>
+              <View style={styles.readinessChip}>
+                <Ionicons name="clipboard-outline" color="#9B651C" size={15} />
+                <Text style={styles.readinessText}>{awaitingVerificationCount} waiting for Admin verification</Text>
+              </View>
+              <View style={styles.readinessChip}>
+                <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
+                <Text style={styles.readinessText}>
+                  {serviceMinimumCount} verified with 30+ minutes
+                  {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
+                </Text>
+              </View>
+            </View>
             <View style={styles.eligibilityNotice}>
               <View style={styles.eligibilityIcon}>
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
@@ -1317,7 +1488,9 @@ export default function CommunityAttendanceAdmin() {
             ) : (
               <>
                 <View style={styles.modalAvatar}>
-                  <Text style={styles.modalAvatarText}>{initials(profileModal?.name || "Volunteer")}</Text>
+                  {profileModal?.photo ?
+                    <Image source={{uri: profileModal.photo}} style={styles.modalAvatarImage} resizeMode="cover" /> :
+                    <Text style={styles.modalAvatarText}>{initials(profileModal?.name || "Volunteer")}</Text>}
                 </View>
                 <Text style={styles.modalName}>{profileModal?.name || "Volunteer"}</Text>
                 <Text style={styles.modalMeta}>Role: {profileModal?.role || "Not specified"}</Text>
@@ -1344,8 +1517,9 @@ const styles = StyleSheet.create({
   page: {flex: 1, backgroundColor: "#F3F8F8"},
   scroll: {flex: 1},
   content: {width: "100%", maxWidth: 1560, alignSelf: "center", padding: 22, paddingBottom: 42},
+  contentPhone: {padding: 12, paddingBottom: 30},
   center: {flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F8F8"},
-  titleRow: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 18, marginBottom: 21},
+  titleRow: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 18, marginBottom: 21, flexWrap: "wrap"},
   titleRowPhone: {flexDirection: "column", alignItems: "flex-start"},
   pageIntro: {flex: 1, minWidth: 0},
   eyebrow: {fontSize: 11, fontWeight: "900", letterSpacing: 0.65, color: GREEN, marginBottom: 7},
@@ -1385,7 +1559,7 @@ const styles = StyleSheet.create({
   eventTitle: {fontSize: 12.5, lineHeight: 17, color: INK, fontWeight: "900", marginBottom: 5},
   miniMetaRow: {flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4},
   miniMeta: {fontSize: 10, color: MUTED, flexShrink: 1},
-  eventRowEnd: {height: 68, alignItems: "flex-end", justifyContent: "space-between"},
+  eventRowEnd: {height: 68, alignItems: "flex-end", justifyContent: "space-between", maxWidth: 95},
   statusPill: {borderRadius: 7, backgroundColor: "#E5F5F0", alignSelf: "flex-start", paddingHorizontal: 7, paddingVertical: 6},
   statusText: {color: GREEN, fontSize: 9, fontWeight: "900", letterSpacing: 0.2},
   statusActive: {backgroundColor: "#E9F0FF"},
@@ -1442,10 +1616,12 @@ const styles = StyleSheet.create({
   attendanceTitleRow: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12},
   attendanceTitleRowPhone: {flexDirection: "column", alignItems: "stretch"},
   sectionSub: {fontSize: 10.5, color: MUTED, marginTop: 3},
-  rosterControls: {flex: 1, flexDirection: "row", justifyContent: "flex-end"},
-  rosterControlsPhone: {width: "100%"},
-  rosterSearch: {marginTop: 0, width: 285},
+  rosterControls: {flex: 1, flexDirection: "row", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 8},
+  rosterControlsPhone: {width: "100%", justifyContent: "flex-start"},
+  rosterSearch: {marginTop: 0, width: 285, maxWidth: "100%"},
   rosterSearchPhone: {width: "100%"},
+  sortButton: {minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 9, paddingHorizontal: 11, borderColor: "#B7DDD4", borderWidth: 1, backgroundColor: "#F3FAF7"},
+  sortButtonText: {fontSize: 11, color: GREEN, fontWeight: "800"},
   attendanceFilterRow: {flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 13, marginBottom: 11},
   attendanceChip: {backgroundColor: "#F2F6F8", borderWidth: 1, borderColor: "#E5EDF0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7},
   attendanceChipActive: {backgroundColor: "#E6F6F2", borderColor: "#99D5CA"},
@@ -1464,7 +1640,8 @@ const styles = StyleSheet.create({
   colStatus: {width: 134},
   colActions: {width: 195},
   personCell: {flexDirection: "row", gap: 8, alignItems: "center"},
-  personAvatar: {width: 39, height: 39, borderRadius: 20, backgroundColor: "#E0EEF3", alignItems: "center", justifyContent: "center"},
+  personAvatar: {width: 39, height: 39, borderRadius: 20, backgroundColor: "#E0EEF3", alignItems: "center", justifyContent: "center", overflow: "hidden"},
+  personAvatarImage: {width: "100%", height: "100%"},
   personAvatarText: {fontSize: 12, fontWeight: "900", color: NAVY},
   personName: {color: INK, fontSize: 11, fontWeight: "900", lineHeight: 15},
   personSub: {fontSize: 10, color: MUTED, marginTop: 3},
@@ -1484,6 +1661,19 @@ const styles = StyleSheet.create({
   profileOutlineText: {fontSize: 10, fontWeight: "900", color: GREEN},
   rowAction: {minHeight: 33, paddingHorizontal: 9, paddingVertical: 8},
   rowActionText: {fontSize: 10, color: "#FFFFFF", fontWeight: "900"},
+  mobileRosterList: {gap: 11},
+  mobileRosterCard: {padding: 13, borderWidth: 1, borderColor: "#E1ECEC", borderRadius: 12, backgroundColor: "#FFFFFF", gap: 13},
+  mobileRosterHeading: {flexDirection: "row", alignItems: "flex-start", gap: 9, flexWrap: "wrap"},
+  mobileRosterIdentity: {flex: 1, minWidth: 130, paddingTop: 2},
+  mobileTimes: {flexDirection: "row", flexWrap: "wrap", gap: 7},
+  mobileTimeBlock: {flexGrow: 1, flexBasis: 92, minWidth: 90, padding: 10, backgroundColor: "#F6F9FA", borderRadius: 9},
+  mobileTimeLabel: {fontSize: 9, fontWeight: "900", color: "#71869A", marginBottom: 6},
+  mobileDurationEligible: {fontSize: 9, marginTop: 4, fontWeight: "800", color: GREEN},
+  mobileRosterActions: {flexDirection: "row", flexWrap: "wrap", gap: 8},
+  mobileRosterButton: {flexGrow: 1},
+  certificateReadinessRow: {marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 8},
+  readinessChip: {flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F4F9F7", paddingVertical: 9, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: "#E0EEEA", flexGrow: 1},
+  readinessText: {flexShrink: 1, fontSize: 10.5, color: "#486B64", lineHeight: 16, fontWeight: "700"},
   eligibilityNotice: {marginTop: 15, flexDirection: "row", gap: 11, padding: 12, backgroundColor: "#EAF4FF", borderRadius: 10, alignItems: "center"},
   eligibilityIcon: {width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#D7E9FF"},
   eligibilityText: {fontSize: 11, lineHeight: 17, color: "#355C88", flex: 1},
@@ -1496,7 +1686,8 @@ const styles = StyleSheet.create({
   modalHeader: {flexDirection: "row", alignItems: "center", justifyContent: "space-between"},
   modalTitle: {fontSize: 17, fontWeight: "900", color: NAVY},
   modalClose: {padding: 5},
-  modalAvatar: {width: 74, height: 74, borderRadius: 37, backgroundColor: "#DCEFEF", alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 17},
+  modalAvatar: {width: 74, height: 74, borderRadius: 37, backgroundColor: "#DCEFEF", alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 17, overflow: "hidden"},
+  modalAvatarImage: {width: "100%", height: "100%"},
   modalAvatarText: {fontSize: 24, fontWeight: "900", color: GREEN},
   modalName: {fontSize: 19, fontWeight: "900", color: NAVY, textAlign: "center", marginTop: 10, marginBottom: 11},
   modalMeta: {fontSize: 12, color: MUTED, textAlign: "center", marginBottom: 5},

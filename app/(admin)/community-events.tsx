@@ -51,8 +51,11 @@ type Proposal = {
   volunteerTasks?: string;
   lookingFor?: string;
   whatToBring?: string;
+  requiredRoles?: string[];
+  requiredSkills?: string[];
+  qualificationNotes?: string;
+  videoUrl?: string;
 };
-
 type PersonProfile = {
   uid: string;
   fullName?: string;
@@ -65,7 +68,6 @@ type PersonProfile = {
   volunteerAccess?: boolean;
   volunteerStatus?: string;
 };
-
 type Participation = {
   id: string;
   eventId: string;
@@ -76,13 +78,11 @@ type Participation = {
   checkedInAt?: unknown;
   checkedOutAt?: unknown;
 };
-
 function validImageUrl(value: unknown): string {
   return typeof value === "string" && /^https:\/\//i.test(value)
     ? value
     : "";
 }
-
 function eventPhotos(item: Proposal): string[] {
   const provided = [
     item.coverPhotoUrl,
@@ -93,23 +93,19 @@ function eventPhotos(item: Proposal): string[] {
   ];
   return [...new Set(provided.map(validImageUrl).filter(Boolean))].slice(0, 5);
 }
-
 function personName(person: PersonProfile | undefined, fallback: string): string {
   if (!person) return fallback;
   return String(person.fullName || [person.firstName, person.lastName].filter(Boolean).join(" ") || fallback);
 }
-
 function initials(value: string): string {
   return value.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "?";
 }
-
 function attendanceLabel(item: Participation): string {
   if (item.attendanceVerified) return "Verified";
   if (item.checkedOutAt) return "Timed out";
   if (item.checkedInAt) return "Timed in";
   return "Joined";
 }
-
 const GREEN = "#078F82";
 const INK = "#173247";
 const MUTED = "#64798A";
@@ -237,7 +233,6 @@ export default function CommunityEventAdminScreen() {
   }, [proposals, filter, search]);
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
-
   // Read only profiles needed for visible proposal cards, not the full user directory.
   useEffect(() => {
     if (!user || !authorized) return;
@@ -262,7 +257,6 @@ export default function CommunityEventAdminScreen() {
     });
     return () => { active = false; };
   }, [user?.uid, authorized, visible]);
-
   // Query only the selected published event's participants.
   useEffect(() => {
     if (!user || !authorized || !selectedProposal || selectedProposal.status !== "approved") {
@@ -287,7 +281,6 @@ export default function CommunityEventAdminScreen() {
       }
     );
   }, [user?.uid, authorized, selectedProposal?.id, selectedProposal?.status]);
-
   // Show actual profile photos next to joined volunteers when available.
   useEffect(() => {
     if (!user || !authorized) return;
@@ -312,7 +305,6 @@ export default function CommunityEventAdminScreen() {
     });
     return () => { active = false; };
   }, [user?.uid, authorized, participants]);
-
   const openProfile = async (uid: string) => {
     if (!uid) return;
     setSelectedPersonUid(uid);
@@ -332,7 +324,6 @@ export default function CommunityEventAdminScreen() {
       setProfileBusy(false);
     }
   };
-
   const renderAvatar = (uid: string, fallback: string, size = 44) => {
     const person = people[uid];
     const url = validImageUrl(person?.profilePictureUrl);
@@ -344,7 +335,6 @@ export default function CommunityEventAdminScreen() {
       </View>
     );
   };
-
   // Admin approval and publishing are completed together.
   const approveAndPublish = async (item: Proposal) => {
     if (!user || !authorized || busyId) return;
@@ -415,6 +405,15 @@ export default function CommunityEventAdminScreen() {
         tx.set(eventRef, {
           title: proposal.title,
           description: proposal.description || "",
+          volunteerTasks: proposal.volunteerTasks || "",
+          lookingFor: proposal.lookingFor || "",
+          requiredRoles: Array.isArray(proposal.requiredRoles) ? proposal.requiredRoles : [],
+          requiredSkills: Array.isArray(proposal.requiredSkills) ? proposal.requiredSkills : [],
+          qualificationNotes: proposal.qualificationNotes || "",
+          whatToBring: proposal.whatToBring || "",
+          photoUrls: Array.isArray(proposal.photoUrls) ? proposal.photoUrls : [],
+          videoUrl: proposal.videoUrl || "",
+          coverImageUrl: proposal.coverPhotoUrl || "",
           category: proposal.category || "Other",
           barangay: proposal.barangay || "",
           location: proposal.location,
@@ -821,7 +820,6 @@ export default function CommunityEventAdminScreen() {
         </View>
       )}
       </ScrollView>
-
       {/* Admin review: actual photo URLs only, never generated placeholders. */}
       <Modal
         visible={selectedProposal !== null && selectedPersonUid === null}
@@ -867,7 +865,6 @@ export default function CommunityEventAdminScreen() {
                   <Text style={styles.detailMeta}><Ionicons name="calendar-outline" size={15} color={MUTED} />{"  "}{formatSchedule(selectedProposal.date, selectedProposal.time)}</Text>
                   <Text style={styles.detailMeta}><Ionicons name="location-outline" size={15} color={MUTED} />{"  "}{selectedProposal.location}, {selectedProposal.barangay}</Text>
                   <Text style={styles.detailMeta}><Ionicons name="people-outline" size={15} color={MUTED} />{"  "}{selectedProposal.capacity} volunteer slots</Text>
-
                   <Text style={styles.detailHeading}>Proposed by</Text>
                   <View style={styles.profileRow}>
                     {renderAvatar(selectedProposal.proposedBy, selectedProposal.proposerName || "Resident", 46)}
@@ -879,16 +876,38 @@ export default function CommunityEventAdminScreen() {
                       <Text style={styles.inlineButtonText}>View Profile</Text>
                     </Pressable>
                   </View>
-
                   <Text style={styles.detailHeading}>About this event</Text>
                   <Text style={styles.bodyText}>{selectedProposal.description || "No event description provided."}</Text>
                   <Text style={styles.detailHeading}>Looking for volunteers to help with</Text>
                   <Text style={styles.bodyText}>{selectedProposal.lookingFor?.trim() || "Not provided yet."}</Text>
                   <Text style={styles.detailHeading}>What volunteers will do</Text>
                   <Text style={styles.bodyText}>{selectedProposal.volunteerTasks?.trim() || "Not provided yet."}</Text>
+                  {!!selectedProposal.requiredRoles?.length && (
+                    <>
+                      <Text style={styles.detailHeading}>Volunteer roles / occupations needed</Text>
+                      <Text style={styles.bodyText}>{selectedProposal.requiredRoles.join(", ")}</Text>
+                    </>
+                  )}
+                  {!!selectedProposal.requiredSkills?.length && (
+                    <>
+                      <Text style={styles.detailHeading}>Skills needed</Text>
+                      <Text style={styles.bodyText}>{selectedProposal.requiredSkills.join(", ")}</Text>
+                    </>
+                  )}
+                  {!!selectedProposal.qualificationNotes?.trim() && (
+                    <>
+                      <Text style={styles.detailHeading}>Qualifications / credentials</Text>
+                      <Text style={styles.bodyText}>{selectedProposal.qualificationNotes}</Text>
+                    </>
+                  )}
+                  {!!selectedProposal.videoUrl?.trim() && (
+                    <>
+                      <Text style={styles.detailHeading}>Resident video reference</Text>
+                      <Text selectable style={styles.bodyText}>{selectedProposal.videoUrl}</Text>
+                    </>
+                  )}
                   <Text style={styles.detailHeading}>What to bring</Text>
                   <Text style={styles.bodyText}>{selectedProposal.whatToBring?.trim() || "Not provided yet."}</Text>
-
                   {selectedProposal.status === "approved" && (
                     <>
                       <View style={styles.participantHeader}>
@@ -913,7 +932,6 @@ export default function CommunityEventAdminScreen() {
                       ))}
                     </>
                   )}
-
                   {selectedProposal.adminNote ? (
                     <Text style={styles.adminNote}>Admin note: {selectedProposal.adminNote}</Text>
                   ) : null}
@@ -923,7 +941,6 @@ export default function CommunityEventAdminScreen() {
           </View>
         </View>
       </Modal>
-
       {/* Admin-only profile preview: no sensitive identity document URLs. */}
       <Modal
         visible={selectedPersonUid !== null}

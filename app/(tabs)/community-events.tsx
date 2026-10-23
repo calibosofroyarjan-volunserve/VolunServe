@@ -1,15 +1,14 @@
-
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -82,6 +81,13 @@ type CommunityEvent = {
   imageUrl?: string;
   coverImageUrl?: string;
   photoUrl?: string;
+  photoUrls?: string[];
+  videoUrl?: string;
+  volunteerTasks?: string;
+  requiredRoles?: string[];
+  requiredSkills?: string[];
+  qualificationNotes?: string;
+  whatToBring?: string;
   // Optional verified location coordinates from Admin/LGU, if supplied.
   latitude?: number;
   longitude?: number;
@@ -99,6 +105,11 @@ type Proposal = {
   status: "pending" | "approved" | "rejected";
   adminNote?: string;
   createdAt?: unknown;
+  volunteerTasks?: string;
+  requiredRoles?: string[];
+  requiredSkills?: string[];
+  photoUrls?: string[];
+  videoUrl?: string;
 };
 
 type Participation = {
@@ -120,6 +131,14 @@ type ProposalForm = {
   time: string;
   capacity: string;
   description: string;
+  volunteerTasks: string;
+  requiredRoles: string[];
+  requiredSkills: string[];
+  otherRole: string;
+  qualificationNotes: string;
+  whatToBring: string;
+  photoUrls: string[];
+  videoUrl: string;
 };
 
 const categories: Category[] = [
@@ -222,6 +241,14 @@ const initialForm: ProposalForm = {
   time: "",
   capacity: "20",
   description: "",
+  volunteerTasks: "",
+  requiredRoles: ["General Volunteer"],
+  requiredSkills: [],
+  otherRole: "",
+  qualificationNotes: "",
+  whatToBring: "",
+  photoUrls: ["", "", ""],
+  videoUrl: "",
 };
 
 const colors = {
@@ -230,6 +257,50 @@ const colors = {
   muted: "#66788B",
   border: "#DEE9E8",
   bg: "#F5F9F8",
+};
+
+// Event-specific roles are suggestions, never automatic proof of a professional license.
+const suggestedRoles: Record<Category, string[]> = {
+  "Clean-up Drive": ["General Volunteer", "Cleanup Crew", "Waste Segregation", "Driver", "Safety Marshal"],
+  "Tree Planting": ["General Volunteer", "Tree Planter", "Gardening / Forestry", "Driver", "Logistics"],
+  "Feeding Program": ["General Volunteer", "Cook", "Food Packer", "Driver", "Nutrition Support"],
+  "Pet Welfare": ["General Volunteer", "Animal Care", "Veterinarian", "Driver", "Logistics"],
+  "Community Outreach": ["General Volunteer", "First-Aid Volunteer", "Nurse / Medic", "Teacher / Tutor", "Driver", "Organizer"],
+  "Other": ["General Volunteer", "Organizer", "Driver", "First-Aid Volunteer", "Nurse / Medic", "Logistics"],
+};
+
+const suggestedSkills: Record<Category, string[]> = {
+  "Clean-up Drive": ["Teamwork", "Waste Sorting", "Safety Awareness", "Equipment Handling", "Driving"],
+  "Tree Planting": ["Planting", "Gardening", "Tool Handling", "Teamwork", "Driving"],
+  "Feeding Program": ["Cooking", "Food Safety", "Food Packing", "Organization", "Driving"],
+  "Pet Welfare": ["Animal Handling", "Animal Care", "Basic First Aid", "Transport", "Teamwork"],
+  "Community Outreach": ["First Aid", "Health Education", "Teaching", "Organization", "Driving"],
+  "Other": ["Communication", "First Aid", "Teaching", "Organization", "Driving", "Teamwork"],
+};
+
+const professionalRoleNames = ["nurse", "medic", "veterinarian", "doctor", "licensed"];
+const needsProfessionalCheck = (roles: string[]) => roles.some((role) =>
+  professionalRoleNames.some((word) => role.toLowerCase().includes(word))
+);
+
+// Submitted media must already be hosted; this is not an upload endpoint.
+const validPublicMediaUrl = (value: string): boolean => {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !!url.hostname && value.length <= 2048 &&
+      !url.username && !url.password;
+  } catch { return false; }
+};
+
+const videoLinkSupported = (value: string): boolean => {
+  if (!value) return true;
+  if (!validPublicMediaUrl(value)) return false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "vimeo.com", "www.vimeo.com"]
+      .includes(host);
+  } catch { return false; }
 };
 
 const pad2 = (value: number) =>
@@ -363,7 +434,7 @@ const durationMinutes = (participation?: Participation): number => {
   if (!participation?.attendanceVerified) return 0;
   const start = getTime(participation.checkedInAt);
   const end = getTime(participation.checkedOutAt);
-  return start > 0 && end >= start ? Math.round((end - start) / 60000) : 0;
+  return start > 0 && end >= start ? Math.floor((end - start) / 60000) : 0;
 };
 
 const formatHours = (minutes: number): string => {
@@ -392,16 +463,194 @@ const errorText = (error: unknown) => {
     return "Firestore access denied. Community Events security rules must be configured before this action can work.";
   }
 
+  if (message.includes("Failed to fetch") || message.includes("Network request failed")) {
+    return "Could not connect to the Community Event photo service. Check the backend and try again.";
+  }
   return message;
 };
+
+// Cloudinary media proxy on the authenticated VolunServe backend (not Firebase Storage).
+const COMMUNITY_EVENT_PHOTO_BACKEND_URL = String(
+  process.env.EXPO_PUBLIC_VOLUNSERVE_BACKEND_URL || "https://volunserve.onrender.com"
+).replace(/\/$/, "");
+
+async function uploadResidentEventPhoto(
+  file: File,
+  token: string,
+  proposalId: string,
+  slot: number,
+): Promise<string> {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size > 5 * 1024 * 1024 || file.size < 12) {
+    throw new Error("Event site photos must be JPG, PNG or WebP and under 5 MB.");
+  }
+  const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/proposal-photo/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type,
+      "X-Proposal-Id": proposalId,
+      "X-Photo-Slot": String(slot),
+    },
+    body: file,
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.ok !== true || typeof result?.photo?.publicUrl !== "string") {
+    throw new Error(result?.message || `Cloudinary upload failed (HTTP ${response.status}).`);
+  }
+  const url = result.photo.publicUrl;
+  if (!/^https:\/\//.test(url)) throw new Error("Cloudinary returned an invalid secure photo URL.");
+  return url;
+}
+
+// Shared by web and mobile Resident proposal screens.
+function ProposalNeedsAndMedia({
+  form,
+  update,
+  onPhotoChange,
+}: {
+  form: ProposalForm;
+  update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
+  onPhotoChange: (index: number, value: string) => void;
+}) {
+  const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
+  const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
+  const photoUrls = form.photoUrls.filter((url) => validPublicMediaUrl(url.trim()) && !!url.trim());
+  const selectedProfessional = needsProfessionalCheck([
+    ...form.requiredRoles, form.otherRole,
+  ]);
+
+  return (
+    <>
+      <View style={styles.residentSectionHeading}>
+        <View style={styles.residentSectionIcon}><Ionicons name="people-outline" size={20} color="#047E73" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.residentSectionTitle}>03 · Volunteer needs</Text>
+          <Text style={styles.residentSectionSub}>What help is needed, and who can safely do it?</Text>
+        </View>
+      </View>
+      <Text style={styles.fieldLabel}>What will volunteers actually do? *</Text>
+      <TextInput
+        style={[styles.input, styles.residentMultiline]}
+        placeholder="e.g. Plant seedlings, prepare soil, distribute water and monitor planting areas..."
+        placeholderTextColor="#91A2AF"
+        multiline textAlignVertical="top" maxLength={1200}
+        value={form.volunteerTasks}
+        onChangeText={(value) => update("volunteerTasks", value)}
+      />
+      <Text style={styles.fieldLabel}>Needed volunteer roles / occupations *</Text>
+      <Text style={styles.residentHelp}>Choose one or more. Suggestions change with the event category.</Text>
+      <View style={styles.residentChipRow}>
+        {roles.map((role) => {
+          const chosen = form.requiredRoles.includes(role);
+          return (
+            <Pressable key={role} accessibilityRole="checkbox" accessibilityState={{ checked: chosen }}
+              onPress={() => update("requiredRoles", chosen
+                ? form.requiredRoles.filter((item) => item !== role)
+                : [...form.requiredRoles, role])}
+              style={[styles.residentChoiceChip, chosen && styles.residentChoiceChipSelected]}>
+              <Ionicons name={chosen ? "checkmark-circle" : "add-circle-outline"} size={15}
+                color={chosen ? "#FFFFFF" : "#287A71"} />
+              <Text style={[styles.residentChoiceText, chosen && styles.residentChoiceTextSelected]}>{role}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <TextInput
+        style={[styles.input, styles.residentSmallInput]}
+        placeholder="Another role or occupation? (optional)"
+        placeholderTextColor="#91A2AF"
+        value={form.otherRole}
+        onChangeText={(value) => update("otherRole", value)}
+        maxLength={80}
+      />
+      <Text style={styles.fieldLabel}>Helpful skills (optional)</Text>
+      <View style={styles.residentChipRow}>
+        {skills.map((skill) => {
+          const chosen = form.requiredSkills.includes(skill);
+          return (
+            <Pressable key={skill} accessibilityRole="checkbox" accessibilityState={{ checked: chosen }}
+              onPress={() => update("requiredSkills", chosen
+                ? form.requiredSkills.filter((item) => item !== skill)
+                : [...form.requiredSkills, skill])}
+              style={[styles.residentChoiceChip, styles.residentSkillChip,
+                chosen && styles.residentChoiceChipSelected]}>
+              <Ionicons name={chosen ? "checkmark" : "add"} size={15}
+                color={chosen ? "#FFFFFF" : "#287A71"} />
+              <Text style={[styles.residentChoiceText, chosen && styles.residentChoiceTextSelected]}>{skill}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {selectedProfessional && (
+        <View style={styles.residentSafeguard}>
+          <Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13" />
+          <Text style={styles.residentSafeguardText}>
+            Professional role selected. Admin/LGU must check licenses and qualifications before assigning medical or veterinary responsibilities. Unlicensed volunteers may help with non-clinical tasks only.
+          </Text>
+        </View>
+      )}
+      <Text style={styles.fieldLabel}>Qualifications / supervision needed (optional)</Text>
+      <TextInput style={[styles.input, styles.residentSmallInput]}
+        placeholder="e.g. Valid PRC license for clinical tasks; others may assist with logistics"
+        placeholderTextColor="#91A2AF" value={form.qualificationNotes}
+        onChangeText={(value) => update("qualificationNotes", value)} maxLength={500} />
+      <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
+      <TextInput style={[styles.input, styles.residentSmallInput]}
+        placeholder="e.g. Gloves, reusable water bottle, closed shoes"
+        placeholderTextColor="#91A2AF" value={form.whatToBring}
+        onChangeText={(value) => update("whatToBring", value)} maxLength={500} />
+
+      <View style={styles.residentSectionHeading}>
+        <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.residentSectionTitle}>04 · Location photos & video</Text>
+          <Text style={styles.residentSectionSub}>Help Admin understand the actual site. All media is optional.</Text>
+        </View>
+      </View>
+      <View style={styles.residentMediaNotice}>
+        <Ionicons name="information-circle-outline" color="#317A8E" size={18} />
+        <Text style={styles.residentMediaNoticeText}>
+          Attach up to 3 JPG/PNG/WebP site photos from your device (web), or use HTTPS image links. A YouTube/Vimeo video link is optional. Photos are uploaded through Cloudinary when you submit.
+        </Text>
+      </View>
+      {form.photoUrls.map((url, index) => (
+        <View key={index} style={styles.residentMediaField}>
+          <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo" : `Additional site photo ${index + 1}`} (optional)</Text>
+          <TextInput style={[styles.input, styles.residentSmallInput]} keyboardType="url"
+            autoCapitalize="none" autoCorrect={false}
+            placeholder="https://example.com/location-photo.jpg"
+            placeholderTextColor="#91A2AF" value={url} maxLength={2048}
+            onChangeText={(value) => onPhotoChange(index, value)} />
+          {!!url.trim() && validPublicMediaUrl(url.trim()) && (
+            <Image source={{ uri: url.trim() }} resizeMode="cover" style={styles.residentMediaPreview} />
+          )}
+        </View>
+      ))}
+      <Text style={styles.fieldLabel}>Event site / activity video (optional)</Text>
+      <TextInput style={[styles.input, styles.residentSmallInput]} keyboardType="url"
+        autoCapitalize="none" autoCorrect={false}
+        placeholder="https://youtu.be/... or https://vimeo.com/..."
+        placeholderTextColor="#91A2AF" value={form.videoUrl} maxLength={2048}
+        onChangeText={(value) => update("videoUrl", value)} />
+      {form.videoUrl.trim().length > 0 && videoLinkSupported(form.videoUrl.trim()) && (
+        <Pressable style={styles.residentMediaLink} onPress={() => void Linking.openURL(form.videoUrl.trim())}>
+          <Ionicons name="play-circle-outline" size={18} color="#067F75" />
+          <Text style={styles.residentMediaLinkText}>Preview video link</Text>
+        </Pressable>
+      )}
+      {photoUrls.length > 0 && (
+        <Text style={styles.residentHelp}>{photoUrls.length} site photo{photoUrls.length === 1 ? "" : "s"} included for Admin review.</Text>
+      )}
+    </>
+  );
+}
 
 export default function CommunityEventsScreen() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
 
   const isCompact = width < (Platform.OS === "web" ? 950 : 720);
-  const webSideBySide = width >= 1450; // Allow room for the existing navigation sidebar and 360px map rail.
-  const webRowNarrow = width < 760;
   const mode = activeModeForProfile(profile);
 
   const isVolunteer =
@@ -412,6 +661,10 @@ export default function CommunityEventsScreen() {
     mode === "resident" &&
     hasResidentAccess(profile);
 
+  // Only approved volunteers need a My Attendance rail; residents use the full event width.
+  const webSideBySide = Platform.OS === "web" && isVolunteer && width >= 1260;
+  const webRowNarrow = width < 760 || (webSideBySide && width < 1420);
+
   const [section, setSection] =
     useState<Section>("explore");
 
@@ -420,6 +673,8 @@ export default function CommunityEventsScreen() {
 
   const [search, setSearch] = useState("");
   const [dateSort, setDateSort] = useState<"soonest" | "latest">("soonest");
+  const [attendanceSort, setAttendanceSort] = useState<"latest" | "oldest">("latest");
+  const [showAllAttendance, setShowAllAttendance] = useState(false);
   const [visibleEventCount, setVisibleEventCount] = useState(6);
 
   const [events, setEvents] =
@@ -464,6 +719,46 @@ export default function CommunityEventsScreen() {
 
   const [clockPeriod, setClockPeriod] =
     useState<"AM" | "PM">("AM");
+
+  // Local browser files are not uploaded until Submit Proposal is pressed.
+  const [localPhotoFiles, setLocalPhotoFiles] = useState<(File | null)[]>([null, null, null]);
+  const [localPhotoPreviews, setLocalPhotoPreviews] = useState<string[]>(["", "", ""]);
+  const [photoPickerError, setPhotoPickerError] = useState("");
+  const [showPhotoLinkFallback, setShowPhotoLinkFallback] = useState(false);
+  const [residentDetailsId, setResidentDetailsId] = useState<string | null>(null);
+  const [residentDetailTab, setResidentDetailTab] = useState<"details" | "map" | "volunteers" | "media">("details");
+  const [residentBarangayFilter, setResidentBarangayFilter] = useState("All Barangays");
+  const [residentStatusFilter, setResidentStatusFilter] = useState("All Status");
+  const [residentFilterPicker, setResidentFilterPicker] = useState<"category" | "barangay" | "status" | null>(null);
+
+  const pickResidentPhoto = (slot: number) => {
+    if (Platform.OS !== "web") {
+      setPhotoPickerError("On mobile, add a secure HTTPS photo link in the media section.");
+      return;
+    }
+    const docObject = (globalThis as any).document;
+    if (!docObject) return;
+    const input = docObject.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = () => {
+      const selected = input.files?.[0] as File | undefined;
+      if (!selected) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(selected.type) || selected.size > 5 * 1024 * 1024) {
+        setPhotoPickerError("Use JPG, PNG, or WebP images up to 5 MB each.");
+        return;
+      }
+      setPhotoPickerError("");
+      setLocalPhotoFiles((prev) => prev.map((file, i) => i === slot ? selected : file));
+      const reader = new FileReader();
+      reader.onload = () => {
+        const preview = typeof reader.result === "string" ? reader.result : "";
+        setLocalPhotoPreviews((prev) => prev.map((value, i) => i === slot ? preview : value));
+      };
+      reader.readAsDataURL(selected);
+    };
+    input.click();
+  };
 
   const [busy, setBusy] = useState(false);
   const [busyEvent, setBusyEvent] = useState("");
@@ -639,13 +934,15 @@ export default function CommunityEventsScreen() {
         return (
           event.status !== "cancelled" &&
           matchesCategory &&
-          matchesSearch
+          matchesSearch &&
+          (!canPropose || residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
+          (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter)
         );
       })
       .sort((a, b) =>
         a.date.localeCompare(b.date)
       );
-  }, [events, category, search]);
+  }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter]);
 
   const participationMap = useMemo(
     () =>
@@ -667,6 +964,14 @@ export default function CommunityEventsScreen() {
       ),
     [events, participationMap]
   );
+
+  // A separate, date-sorted attendance list stays visible independently of event search/filter tabs.
+  const myAttendanceEvents = useMemo(() => [...myEvents].sort((a, b) => {
+    const aDate = `${a.date || ""}T${a.time || "00:00"}`;
+    const bDate = `${b.date || ""}T${b.time || "00:00"}`;
+    const byDate = aDate.localeCompare(bDate);
+    return (attendanceSort === "latest" ? -byDate : byDate) || a.title.localeCompare(b.title);
+  }), [myEvents, attendanceSort]);
 
   const availableCount = events.filter(
     (event) =>
@@ -692,7 +997,8 @@ export default function CommunityEventsScreen() {
     setVisibleEventCount(6);
   }, [section, category, search, dateSort]);
   const visibleEvents = displayEvents.slice(0, visibleEventCount);
-  const selectedEvent = displayEvents.find((event) => event.id === expandedEvent) || displayEvents[0] || null;
+  const selectedEvent = events.find((event) => event.id === expandedEvent) ||
+    (isVolunteer ? myAttendanceEvents[0] : undefined) || displayEvents[0] || null;
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
   const selectedJoined = selectedParticipation?.status === "joined";
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
@@ -704,6 +1010,14 @@ export default function CommunityEventsScreen() {
     setForm((previous) => ({
       ...previous,
       [field]: value,
+    }));
+  };
+
+  const updateProposalPhoto = (index: number, value: string) => {
+    setForm((previous) => ({
+      ...previous,
+      photoUrls: previous.photoUrls.map((item, photoIndex) =>
+        index === photoIndex ? value : item),
     }));
   };
 
@@ -884,6 +1198,23 @@ export default function CommunityEventsScreen() {
     const barangay = form.barangay.trim();
     const description = form.description.trim();
     const capacity = Number(form.capacity);
+    const selectedRoles = [...new Set([
+      ...form.requiredRoles,
+      ...(form.otherRole.trim() ? [form.otherRole.trim()] : []),
+    ])];
+    const photoUrls = form.photoUrls.map((url) => url.trim()).filter(Boolean);
+    const videoUrl = form.videoUrl.trim();
+
+    if (form.volunteerTasks.trim().length < 12 || selectedRoles.length === 0) {
+      setNotice("Describe what volunteers will do (at least 12 characters) and select at least one needed role.");
+      return;
+    }
+    if (form.otherRole.length > 80 || form.qualificationNotes.length > 500 ||
+        photoUrls.some((url) => !validPublicMediaUrl(url)) ||
+        !videoLinkSupported(videoUrl)) {
+      setNotice("Check the optional links and professional requirements. Photos require HTTPS links; video must be YouTube or Vimeo.");
+      return;
+    }
 
     const dateOkay =
       /^\d{4}-\d{2}-\d{2}$/.test(form.date);
@@ -935,11 +1266,29 @@ export default function CommunityEventsScreen() {
     setBusy(true);
 
     try {
-      await addDoc(
-        collection(db, "communityEventProposals"),
+      const proposalRef = doc(collection(db, "communityEventProposals"));
+      const uploadedPhotos = [...form.photoUrls.map((url) => url.trim())];
+      // Upload only selected local images. Unchanged HTTPS links remain valid.
+      const token = localPhotoFiles.some(Boolean) ? await user.getIdToken() : "";
+      for (let index = 0; index < localPhotoFiles.length; index += 1) {
+        const file = localPhotoFiles[index];
+        if (!file) continue;
+        setNotice(`Uploading Community Event photo ${index + 1}...`);
+        uploadedPhotos[index] = await uploadResidentEventPhoto(file, token, proposalRef.id, index + 1);
+      }
+      await setDoc(proposalRef,
         {
           title,
           description,
+          volunteerTasks: form.volunteerTasks.trim(),
+          lookingFor: selectedRoles.join(", "),
+          requiredRoles: selectedRoles,
+          requiredSkills: [...form.requiredSkills],
+          qualificationNotes: form.qualificationNotes.trim(),
+          whatToBring: form.whatToBring.trim(),
+          photoUrls: uploadedPhotos.filter(Boolean).slice(0, 3),
+          videoUrl,
+          ...(uploadedPhotos.filter(Boolean).length ? { coverPhotoUrl: uploadedPhotos.filter(Boolean)[0] } : {}),
           category: form.category,
           barangay,
           location,
@@ -958,6 +1307,8 @@ export default function CommunityEventsScreen() {
       );
 
       setForm(initialForm);
+      setLocalPhotoFiles([null, null, null]);
+      setLocalPhotoPreviews(["", "", ""]);
       setCustomVenue(false);
       setCustomCapacity(false);
       setSection("mine");
@@ -1460,6 +1811,38 @@ export default function CommunityEventsScreen() {
             after event completion.
           </Text>
         )}
+        {joined && isVolunteer && !isOwnProposal && (
+          <View style={styles.nativeAttendancePanel}>
+            <View style={styles.lockedSectionHeading}>
+              <Ionicons name="time-outline" size={19} color="#078C80" />
+              <Text style={styles.lockedSectionTitle}>My Attendance</Text>
+            </View>
+            <Text style={styles.lockedAttendanceHistoryDate}>Time In: {prettyAttendanceTime(participation?.checkedInAt)} · Time Out: {prettyAttendanceTime(participation?.checkedOutAt)}</Text>
+            <Text style={styles.lockedAttendanceHistoryDate}>{participation?.attendanceVerified ? `Verified · ${formatHours(durationMinutes(participation))} credited` : participation?.checkedOutAt ? "Pending Admin/LGU verification" : participation?.checkedInAt ? "Time In recorded" : "Waiting for Time In"}</Text>
+            {!participation?.attendanceVerified && event.status === "active" && !participation?.checkedOutAt && (
+              attendanceConfirmation?.eventId === event.id ? (
+                <View style={styles.webAttendanceConfirmBox}>
+                  <Text style={styles.webAttendanceConfirmText}>Confirm {attendanceConfirmation.action === "check-in" ? "Time In" : "Time Out"} using the server time?</Text>
+                  <View style={styles.webAttendanceConfirmButtons}>
+                    <Pressable onPress={() => setAttendanceConfirmation(null)} style={styles.webAttendanceCancelButton}><Text style={styles.webAttendanceCancelText}>Cancel</Text></Pressable>
+                    <Pressable disabled={!!attendanceBusy} onPress={() => void recordSelfAttendance(event, attendanceConfirmation.action)} style={styles.webAttendanceActionButton}>
+                      <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : "Confirm"}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable accessibilityRole="button" disabled={!!attendanceBusy}
+                  onPress={() => setAttendanceConfirmation({ eventId: event.id, action: participation?.checkedInAt ? "check-out" : "check-in" })}
+                  style={styles.webAttendanceActionButton}>
+                  <Ionicons name={participation?.checkedInAt ? "log-out-outline" : "log-in-outline"} size={18} color="white" />
+                  <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : participation?.checkedInAt ? "Time Out" : "Time In"}</Text>
+                </Pressable>
+              )
+            )}
+            {event.status === "upcoming" && <Text style={styles.webAttendanceHint}>Time In opens when Admin/LGU starts the event.</Text>}
+            {attendanceFeedback?.eventId === event.id && <Text style={styles.webAttendanceHint}>{attendanceFeedback.message}</Text>}
+          </View>
+        )}
       </View>
     );
   };
@@ -1549,7 +1932,7 @@ export default function CommunityEventsScreen() {
               <Ionicons name="information-circle-outline" size={19} color="#07877A" />
               <Text style={styles.lockedInlineTitle}>About {event.title}</Text>
             </View>
-            <Text style={styles.lockedAboutText} numberOfLines={7}>
+            <Text style={styles.lockedAboutText}>
               {event.description?.trim() || "No additional description was provided for this event."}
             </Text>
             <Text style={styles.lockedEventMetaText}>{prettyDate(event.date, event.time)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
@@ -1580,10 +1963,123 @@ export default function CommunityEventsScreen() {
               <Ionicons name="lock-closed-outline" size={18} color="#657989" />
               <Text style={styles.webClosedText}>This event is closed for new volunteers.</Text>
             </View>}
+            {/* Event map belongs to the expanded event details, not the My Attendance rail. */}
+            <View style={styles.lockedEventMapCard}>
+              <View style={styles.lockedSectionHeading}>
+                <View style={styles.lockedSectionIcon}><Ionicons name="location" size={21} color="#078C80" /></View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.lockedSectionTitle}>Event Location &amp; Directions</Text>
+                  <Text style={styles.lockedSectionSub}>Map and route for this community event</Text>
+                </View>
+              </View>
+              <Text style={styles.lockedMapAddress}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
+              <View style={styles.lockedMapFrame}>{renderWebMap(event)}</View>
+              {!eventHasCoordinates(event) && <View style={styles.lockedMapHintRow}>
+                <Ionicons name="information-circle-outline" size={14} color="#7C929E" />
+                <Text style={styles.lockedMapWarning}>Approximate location · confirm the exact meeting point with Admin/LGU</Text>
+              </View>}
+              {routeEventId === event.id && routeOrigin && googleMapsEmbedKey ? (
+                <View style={styles.lockedRouteReady}>
+                  <Ionicons name="navigate-circle" size={17} color="#078371" />
+                  <Text style={styles.lockedRouteReadyText}>Driving route preview from your permitted device location</Text>
+                  <Pressable accessibilityRole="button" onPress={() => { setRouteEventId(null); setRouteNotice(""); }}>
+                    <Text style={styles.lockedRouteReset}>Location map</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {!!routeNotice && <View style={styles.lockedRouteHintRow}>
+                <Ionicons name="information-circle-outline" size={15} color="#6F8794" />
+                <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
+              </View>}
+              <View style={styles.lockedMapActions}>
+                <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
+                  onPress={() => showRouteInVolunServe(event)}>
+                  {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
+                  <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
+                </Pressable>
+                <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
+                  onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
+                  <Ionicons name="navigate-outline" size={16} color="white" />
+                  <Text style={styles.lockedMapSolidText}>Open in Google Maps</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.lockedMapFootnote}>In-app routes require a configured Google Maps Embed API key and browser location permission. External Google Maps directions remain available. Your GPS position is not saved in Firestore.</Text>
+            </View>
           </View>
         )}
       </View>
     );
+  };
+
+  const residentGridColumns = width >= 1540 ? 3 : width >= 1100 ? 2 : 1;
+  const residentGridWidth = (residentGridColumns === 3 ? "31.9%" : residentGridColumns === 2 ? "48.6%" : "100%") as `${number}%`;
+  const residentDetailEvent = residentDetailsId ? events.find((event) => event.id === residentDetailsId) : null;
+
+  const renderResidentEventCard = (event: CommunityEvent) => {
+    const cover = eventCover(event);
+    return (
+      <View key={event.id} style={[styles.ruiCard, { width: residentGridWidth }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`View details of ${event.title}`}
+          onPress={() => { setResidentDetailsId(event.id); setResidentDetailTab("details"); }}>
+          <View style={styles.ruiCardCover}>
+            {cover ? <Image source={{ uri: cover }} style={styles.ruiCoverImage} resizeMode="cover" />
+              : <LinearGradient colors={["#B4E5CF", "#7FC9AF", "#3A9C83"]} style={styles.ruiCoverFallback}>
+                  <Ionicons name={categoryIcon(event.category)} size={52} color="#E9FFF6" />
+                  <Text style={styles.ruiCoverFallbackText}>{event.category}</Text>
+                </LinearGradient>}
+            <View style={styles.ruiImageStatus}><Text style={styles.ruiImageStatusText}>{eventStatusText(event.status)}</Text></View>
+          </View>
+        </Pressable>
+        <View style={styles.ruiCardBody}>
+          <Text style={styles.ruiCardTitle} numberOfLines={2}>{event.title}</Text>
+          <View style={styles.ruiTagRow}>
+            <Text style={styles.ruiCategoryTag}>{event.category}</Text>
+            {!!event.barangay && <Text style={styles.ruiBarangayTag}>{event.barangay}</Text>}
+          </View>
+          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{prettyDate(event.date, event.time)}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="location-outline" size={14} color="#58738A" /><Text numberOfLines={2} style={styles.ruiMeta}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="people-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text></View>
+          <Pressable style={styles.ruiPrimary} onPress={() => { setResidentDetailsId(event.id); setResidentDetailTab("details"); }} accessibilityRole="button">
+            <Text style={styles.ruiPrimaryText}>View Details</Text><Ionicons name="arrow-forward" color="white" size={16} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  const renderResidentEventDetail = (event: CommunityEvent) => {
+    const pictures = [eventCover(event), ...(Array.isArray((event as any).photoUrls) ? (event as any).photoUrls : [])]
+      .filter((value, idx, arr): value is string => !!value && arr.indexOf(value) === idx);
+    const needed = Array.isArray((event as any).requiredRoles) ? (event as any).requiredRoles as string[] : [];
+    const skills = Array.isArray((event as any).requiredSkills) ? (event as any).requiredSkills as string[] : [];
+    return <View style={styles.ruiDetailsCard}>
+      <Pressable style={styles.ruiBack} onPress={() => setResidentDetailsId(null)}><Ionicons name="arrow-back" size={16} color="#0B786F"/><Text style={styles.ruiBackText}>Back to Events</Text></Pressable>
+      <View style={[styles.ruiDetailIntro, isCompact && { flexDirection: "column" }]}>
+        {pictures.length ? <Image source={{uri:pictures[0]}} style={styles.ruiDetailPhoto} resizeMode="cover" />
+          : <LinearGradient colors={["#CBF4E4", "#78C7AC"]} style={styles.ruiDetailPhoto}><Ionicons name={categoryIcon(event.category)} size={62} color="#077D6F" /></LinearGradient>}
+        <View style={styles.ruiDetailOverview}>
+          <View style={styles.ruiTagRow}><Text style={styles.ruiCategoryTag}>{eventStatusText(event.status)}</Text><Text style={styles.ruiBarangayTag}>{event.category}</Text></View>
+          <Text style={styles.ruiDetailTitle}>{event.title}</Text>
+          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={16} color="#60798A"/><Text style={styles.ruiMeta}>{prettyDate(event.date,event.time)}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="location-outline" size={16} color="#60798A"/><Text style={styles.ruiMeta}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="people-outline" size={16} color="#60798A"/><Text style={styles.ruiMeta}>{Number(event.participantsCount||0)} / {Number(event.capacity||0)} volunteers</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="shield-checkmark-outline" size={16} color="#60798A"/><Text style={styles.ruiMeta}>Published by Admin/LGU · Join through approved Volunteer mode</Text></View>
+        </View>
+      </View>
+      <View style={styles.ruiDetailTabs}>{([ ["details","Details"], ["map","Location & Map"], ["volunteers","Volunteers"], ["media","Media"] ] as const).map(([key,title])=><Pressable key={key} onPress={()=>setResidentDetailTab(key)} style={[styles.ruiDetailTab,residentDetailTab===key && styles.ruiDetailTabActive]}><Text style={[styles.ruiDetailTabText,residentDetailTab===key&&styles.ruiDetailTabTextActive]}>{title}</Text></Pressable>)}</View>
+      {residentDetailTab==="details" && <View style={styles.ruiDetailContent}>
+        <Text style={styles.ruiSectionTitle}>Description</Text><Text style={styles.ruiParagraph}>{event.description?.trim()||"No description provided."}</Text>
+        <Text style={styles.ruiSectionTitle}>Type of Help / Event</Text><Text style={styles.ruiParagraph}>{event.category}</Text>
+        <Text style={styles.ruiSectionTitle}>What Volunteers Will Do</Text><Text style={styles.ruiParagraph}>{(event as any).volunteerTasks || "Contact the organizer for task details."}</Text>
+        <Text style={styles.ruiSectionTitle}>Required Roles / Occupation</Text><View style={styles.ruiTagRow}>{(needed.length?needed:["General Volunteer"]).map((name)=><Text key={name} style={styles.ruiRequirementTag}>{name}</Text>)}</View>
+        {!!skills.length && <><Text style={styles.ruiSectionTitle}>Helpful Skills</Text><View style={styles.ruiTagRow}>{skills.map(name=><Text key={name} style={styles.ruiRequirementTag}>{name}</Text>)}</View></>}
+        {!!(event as any).qualificationNotes && <><Text style={styles.ruiSectionTitle}>Qualifications / Supervision</Text><Text style={styles.ruiParagraph}>{(event as any).qualificationNotes}</Text></>}
+        {!!(event as any).whatToBring && <><Text style={styles.ruiSectionTitle}>What to Bring</Text><Text style={styles.ruiParagraph}>{(event as any).whatToBring}</Text></>}
+      </View>}
+      {residentDetailTab==="map" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Event Venue & Directions</Text><Text style={styles.ruiParagraph}>{eventDestination(event)}</Text>{renderWebMap(event)}<Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}><Text style={styles.ruiPrimaryText}>Open in Google Maps</Text><Ionicons name="navigate-outline" size={16} color="white"/></Pressable></View>}
+      {residentDetailTab==="volunteers" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Volunteer Participation</Text><Text style={styles.ruiParagraph}>{Number(event.participantsCount||0)} of {Number(event.capacity||0)} slots filled. Approved volunteers can join in Volunteer Mode. Resident profiles are not disclosed here.</Text></View>}
+      {residentDetailTab==="media" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Location / Activity Photos</Text><View style={styles.ruiMediaGallery}>{pictures.map((url,index)=><Image key={index} source={{uri:url}} style={styles.ruiGalleryPhoto} resizeMode="cover"/>)}</View>{pictures.length===0&&<Text style={styles.ruiParagraph}>No public photos have been provided.</Text>}{!!(event as any).videoUrl&&videoLinkSupported((event as any).videoUrl)&&<Pressable onPress={()=>void Linking.openURL((event as any).videoUrl)} style={styles.ruiPrimary}><Text style={styles.ruiPrimaryText}>View Optional Event Video</Text><Ionicons name="play-circle-outline" size={16} color="white"/></Pressable>}</View>}
+    </View>;
   };
 
   // Route preview uses the supported Google Maps Embed API when configured.
@@ -1615,14 +2111,16 @@ export default function CommunityEventsScreen() {
         <View style={[styles.lockedColumns, !webSideBySide && styles.lockedColumnsStack]}>
           <View style={[styles.lockedMain, !webSideBySide && styles.lockedMainStack]}>
             <View style={styles.webHero}>
-              <LinearGradient colors={["#DBF4EC", "#EBF8F6", "#EFFBFA"]} style={styles.lockedHeroGradient}>
+              <LinearGradient colors={["#DBF4EC", "#EBF8F6", "#EFFBFA"]} style={[styles.lockedHeroGradient, canPropose && styles.ruiHeroHeight]}>
+                {canPropose && <Image source={require("../../assets/images/sjdm-rising-city.png")} resizeMode="cover" style={styles.ruiHeroImage} />}
+                {canPropose && <LinearGradient pointerEvents="none" colors={["rgba(227,250,245,0.97)","rgba(226,248,243,0.94)","rgba(231,249,244,0.24)"]} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.ruiHeroOverlay}/>}
                 <View style={styles.lockedHeroWords}>
                   <View style={styles.webHeroKickerRow}><Ionicons name="leaf-outline" size={15} color="#008579" />
                     <Text style={styles.webHeroKicker}>COMMUNITY EVENTS · SAN JOSE DEL MONTE</Text></View>
                   <Text style={[styles.webHeroTitle, isCompact && styles.webHeroTitleSmall]}>Be part of a stronger San Jose del Monte.</Text>
                   <Text style={styles.webHeroDescription}>{isVolunteer ? "Join local community events and make a meaningful difference." : "Discover community activities or propose an event for your barangay."}</Text>
                 </View>
-                {webSideBySide && <View style={styles.lockedHeroIllustration} pointerEvents="none">
+                {webSideBySide && !canPropose && <View style={styles.lockedHeroIllustration} pointerEvents="none">
                   <View style={styles.lockedHeroSun} />
                   <View style={styles.lockedHeroHillBack} />
                   <View style={styles.lockedHeroHillFront} />
@@ -1640,22 +2138,30 @@ export default function CommunityEventsScreen() {
             </View>
             <View style={styles.lockedToolbar}>
               <View style={styles.webSectionTabs}>
-                <Pressable onPress={() => { setSection("explore"); setNotice(""); }} style={[styles.webSectionTab, section === "explore" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "explore" && styles.webSectionTabTextActive]}>Explore Events</Text></Pressable>
-                <Pressable onPress={() => { setSection("mine"); setNotice(""); }} style={[styles.webSectionTab, section === "mine" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "mine" && styles.webSectionTabTextActive]}>{isVolunteer ? "My Events" : "My Proposals"}</Text></Pressable>
-                {canPropose && <Pressable onPress={() => { setSection("propose"); setNotice(""); }} style={[styles.webSectionTab, section === "propose" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "propose" && styles.webSectionTabTextActive]}>+ Propose Event</Text></Pressable>}
+                <Pressable onPress={() => { setSection("explore"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "explore" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "explore" && styles.webSectionTabTextActive]}>Explore Events</Text></Pressable>
+                <Pressable onPress={() => { setSection("mine"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "mine" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "mine" && styles.webSectionTabTextActive]}>{isVolunteer ? "My Events" : "My Proposals"}</Text></Pressable>
+                {canPropose && <Pressable onPress={() => { setSection("propose"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "propose" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "propose" && styles.webSectionTabTextActive]}>+ Propose Event</Text></Pressable>}
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>
             {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
             {!!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
-            {section === "explore" && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.webFilters}>
+            {section === "explore" && canPropose && !residentDetailsId && (
+              <View style={styles.ruiFilterBar}>
+                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.ruiFilterLabel}>{category === "All" ? "All Categories" : category}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
+                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.ruiFilterLabel}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
+                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("status")}><Text style={styles.ruiFilterLabel}>{residentStatusFilter === "All Status" ? "All Status" : residentStatusFilter.toUpperCase()}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
+                <Pressable style={styles.ruiFilterSelect} onPress={()=>setDateSort((v)=>v==="soonest"?"latest":"soonest")}><Ionicons name="swap-vertical" size={15} color="#07907C"/><Text style={styles.ruiFilterLabel}>Date ({dateSort==="soonest"?"Soonest":"Latest"})</Text></Pressable>
+              </View>
+            )}
+            {section === "explore" && !canPropose && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.webFilters}>
               {(["All", ...categories] as const).map((item) => <Pressable key={item} onPress={() => setCategory(item)} style={[styles.webFilterChip, category === item && styles.webFilterChipActive]}>
                 {item !== "All" && <Ionicons name={categoryIcon(item)} size={15} color={category === item ? "white" : "#067A70"}/>}
                 <Text style={[styles.webFilterText, category === item && styles.webFilterTextActive]}>{item}</Text>
               </Pressable>)}
             </ScrollView>}
             {(section === "explore" || (section === "mine" && isVolunteer)) && <View style={styles.lockedEventList}>
-              <View style={[styles.webListHeading, styles.lockedListHeading]}>
+              {!residentDetailEvent && <View style={[styles.webListHeading, styles.lockedListHeading]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.webHeadingTitle}>Community Events</Text>
                   <Text style={styles.webHeadingHint}>{section === "explore" ? "Explore activities and make a difference in San Jose del Monte." : "Your community event participation."}</Text>
@@ -1671,13 +2177,13 @@ export default function CommunityEventsScreen() {
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
                   </Pressable>
                 </View>
-              </View>
+              </View>}
               {eventsLoading ? <View style={styles.webLoading}><ActivityIndicator color={colors.green}/></View> :
                 eventError ? <View style={styles.webError}><Text style={styles.webErrorText}>{eventError}</Text></View> :
                 !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>Browse approved events to see the available activities.</Text></View> :
                 <View style={styles.lockedEventListRows}>
-                  {visibleEvents.map(renderEvent)}
-                  {displayEvents.length > 6 && (
+                  {canPropose ? (residentDetailEvent ? renderResidentEventDetail(residentDetailEvent) : <View style={styles.ruiCardGrid}>{visibleEvents.map(renderResidentEventCard)}</View>) : visibleEvents.map(renderEvent)}
+                  {!residentDetailEvent && displayEvents.length > 6 && (
                     <View style={styles.lockedLoadMoreRow}>
                       {visibleEventCount < displayEvents.length ? (
                         <Pressable accessibilityRole="button" onPress={() => setVisibleEventCount((count) => count + 6)} style={styles.lockedLoadMoreButton}>
@@ -1695,46 +2201,53 @@ export default function CommunityEventsScreen() {
                 </View>}
             </View>}
           </View>
-          {(section === "explore" || (section === "mine" && isVolunteer)) && (
+          {isVolunteer && (section === "explore" || section === "mine") && (
             <View style={[styles.lockedRail, !webSideBySide && styles.lockedRailStack]}>
-              <View style={styles.lockedRailCard}>
-                <View style={styles.lockedSectionHeading}><View style={styles.lockedSectionIcon}><Ionicons name="location" size={22} color="#078C80" /></View><View style={{flex:1, minWidth:0}}><Text style={styles.lockedSectionTitle}>Event Location</Text><Text style={styles.lockedSectionSub}>Map of the selected volunteer event</Text></View></View>
-                {selectedEvent ? <>
-                  <Text style={styles.lockedMapAddress} numberOfLines={3}>{selectedEvent.location}{selectedEvent.barangay ? `, ${selectedEvent.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
-                  <View style={styles.lockedMapFrame}>{renderWebMap(selectedEvent)}</View>
-                  {!eventHasCoordinates(selectedEvent) && <View style={styles.lockedMapHintRow}>
-                    <Ionicons name="information-circle-outline" size={14} color="#7C929E" />
-                    <Text style={styles.lockedMapWarning}>Approximate location · confirm the meeting point with Admin/LGU</Text>
-                  </View>}
-                  {routeEventId === selectedEvent.id && routeOrigin && googleMapsEmbedKey ? (
-                    <View style={styles.lockedRouteReady}>
-                      <Ionicons name="navigate-circle" size={17} color="#078371" />
-                      <Text style={styles.lockedRouteReadyText}>Driving route preview from your permitted device location</Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel="Return to event location map" onPress={() => {setRouteEventId(null); setRouteNotice("");}}>
-                        <Text style={styles.lockedRouteReset}>Map</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {!!routeNotice && <View style={styles.lockedRouteHintRow}>
-                    <Ionicons name="information-circle-outline" size={15} color="#6F8794" />
-                    <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
-                  </View>}
-                  <View style={styles.lockedMapActions}>
-                    <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading} onPress={() => showRouteInVolunServe(selectedEvent)}>
-                      {routeLoading ? <ActivityIndicator size="small" color="#08796F"/> : <Ionicons name="map-outline" size={16} color="#0B5963"/>}
-                      <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
-                    </Pressable>
-                    <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open navigation in Google Maps" onPress={() => void Linking.openURL(googleMapsNavigationUrl(selectedEvent))}>
-                      <Ionicons name="navigate-outline" size={16} color="white"/><Text style={styles.lockedMapSolidText}>Open in Google Maps</Text>
-                    </Pressable>
+              <View style={[styles.lockedRailCard, styles.lockedAttendanceRail]}>
+                <View style={styles.lockedSectionHeading}>
+                  <View style={styles.lockedSectionIcon}><Ionicons name="time-outline" size={22} color="#078C80" /></View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.lockedSectionTitle}>My Attendance</Text>
+                    <Text style={styles.lockedSectionSub}>Your joined events · {myAttendanceEvents.length} total</Text>
                   </View>
-                  <Text style={styles.lockedMapFootnote}>In-app route asks for GPS permission. External directions open in Google Maps. VolunServe does not store or continuously track your location.</Text>
-                </> : <View style={styles.lockedMapPlaceholder}><Ionicons name="map-outline" color="#8DA8AF" size={33}/><Text style={styles.webEmptySubtitle}>Select an event to see its location.</Text></View>}
-              </View>
-              <View style={styles.lockedRailCard}>
-                <View style={styles.lockedSectionHeading}><View style={styles.lockedSectionIcon}><Ionicons name="time-outline" size={22} color="#078C80" /></View><View style={{flex:1, minWidth:0}}><Text style={styles.lockedSectionTitle}>My Attendance</Text><Text style={styles.lockedSectionSub}>{selectedEvent?.title || "Your participation record"}</Text></View>
                   {selectedParticipation?.attendanceVerified && <View style={styles.lockedAttendanceVerified}><Ionicons name="checkmark-circle" size={14} color="#06856D"/><Text style={styles.lockedAttendanceVerifiedText}>Verified</Text></View>}
                 </View>
+                {isVolunteer && <View style={styles.lockedAttendanceOverview}>
+                  <View style={styles.lockedAttendanceOverviewHeading}>
+                    <Text style={styles.lockedAttendanceOverviewTitle}>Joined Events</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Change attendance sort by date"
+                      onPress={() => setAttendanceSort((previous) => previous === "latest" ? "oldest" : "latest")}
+                      style={styles.lockedAttendanceSort}>
+                      <Ionicons name="calendar-outline" size={14} color="#087668" />
+                      <Text style={styles.lockedAttendanceSortText}>{attendanceSort === "latest" ? "Newest First" : "Oldest First"}</Text>
+                      <Ionicons name="swap-vertical-outline" size={13} color="#087668" />
+                    </Pressable>
+                  </View>
+                  {myAttendanceEvents.length === 0 ? (
+                    <Text style={styles.lockedAttendanceEmptyText}>No joined events yet. Explore published community events to participate.</Text>
+                  ) : <View style={styles.lockedAttendanceHistory}>
+                    {(showAllAttendance ? myAttendanceEvents : myAttendanceEvents.slice(0, 4)).map((item) => {
+                      const participation = participationMap.get(item.id);
+                      const isCurrent = selectedEvent?.id === item.id;
+                      const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
+                      return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
+                        onPress={() => { setExpandedEvent(item.id); setAttendanceConfirmation(null); }}
+                        style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
+                          <Text style={styles.lockedAttendanceHistoryDate}>{prettyDate(item.date, item.time)}</Text>
+                        </View>
+                        <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
+                          <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
+                        </View>
+                      </Pressable>;
+                    })}
+                    {myAttendanceEvents.length > 4 && <Pressable accessibilityRole="button" onPress={() => setShowAllAttendance((previous) => !previous)} style={styles.lockedAttendanceMore}>
+                      <Text style={styles.lockedAttendanceMoreText}>{showAllAttendance ? "Show fewer" : `Show all ${myAttendanceEvents.length} events`}</Text>
+                      <Ionicons name={showAllAttendance ? "chevron-up-outline" : "chevron-down-outline"} size={15} color="#087567" />
+                    </Pressable>}
+                  </View>}
+                </View>}
                 {!selectedEvent ? <Text style={styles.webEmptySubtitle}>Select an event to view attendance.</Text> :
                   !isVolunteer ? <Text style={styles.webEmptySubtitle}>Attendance is available for approved volunteers.</Text> :
                   selectedOwned ? <Text style={styles.webEmptySubtitle}>Your proposed event cannot be joined as a volunteer.</Text> :
@@ -1773,7 +2286,7 @@ export default function CommunityEventsScreen() {
                         <View style={[styles.lockedAttendanceTileIcon, { backgroundColor: "#EAF3FF" }]}><Ionicons name="time-outline" size={17} color="#2679DE" /></View>
                         <View style={styles.lockedAttendanceTileBody}><Text style={styles.lockedAttendanceTileLabel}>Recorded Duration</Text>
                           <Text style={styles.lockedAttendanceTileValue}>{getTime(selectedParticipation?.checkedInAt) > 0 && getTime(selectedParticipation?.checkedOutAt) >= getTime(selectedParticipation?.checkedInAt) && getTime(selectedParticipation?.checkedOutAt) > 0
-                            ? formatHours(Math.round((getTime(selectedParticipation?.checkedOutAt) - getTime(selectedParticipation?.checkedInAt)) / 60000)) : "—"}</Text></View>
+                            ? formatHours(Math.floor((getTime(selectedParticipation?.checkedOutAt) - getTime(selectedParticipation?.checkedInAt)) / 60000)) : "—"}</Text></View>
                       </View>
                       <View style={styles.lockedAttendanceTile}>
                         <View style={[styles.lockedAttendanceTileIcon, { backgroundColor: "#FFF8E8" }]}><Ionicons name="star" size={17} color="#E5A51F" /></View>
@@ -1847,6 +2360,11 @@ export default function CommunityEventsScreen() {
                         <Text style={[styles.webAttendanceFeedbackText, attendanceFeedback.type === "error" && styles.webAttendanceFeedbackErrorText]}>{attendanceFeedback.message}</Text>
                       </View>
                     )}
+                    {selectedParticipation?.attendanceVerified && selectedEvent.status === "completed" && durationMinutes(selectedParticipation) >= 30 &&
+                      <View style={styles.lockedVerifiedSummary}>
+                        <Ionicons name="ribbon-outline" size={17} color="#087B68" />
+                        <Text style={styles.lockedVerifiedSummaryText}>Meets the attendance and event-completion requirements. Certificate issuance is processed separately.</Text>
+                      </View>}
                     {selectedParticipation?.attendanceVerified && durationMinutes(selectedParticipation) < 30 &&
                       <View style={styles.lockedCertificateLine}>
                         <Ionicons name="ribbon-outline" size={15} color="#758A96" />
@@ -1860,479 +2378,76 @@ export default function CommunityEventsScreen() {
           )}
         </View>
 
-        {section === "mine" && canPropose && <View style={styles.webProposalWrap}>
-          <View style={styles.webListHeading}><View><Text style={styles.webHeadingTitle}>My Event Proposals</Text><Text style={styles.webHeadingHint}>Track Admin/LGU review of your submissions</Text></View></View>
-          {proposals.length === 0 ? <View style={styles.webEmptyCard}><Ionicons name="document-text-outline" size={34} color="#93A6AE" /><Text style={styles.webEmptyTitle}>No event proposals yet</Text><Text style={styles.webEmptySubtitle}>Submit a proposal to get started.</Text><Pressable style={styles.webEmptyAction} onPress={() => setSection("propose")}><Text style={styles.webEmptyActionText}>Propose Event</Text></Pressable></View> : proposals.slice().sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt)).map((item) => <View key={item.id} style={styles.webProposalCard}><View style={{ flex: 1 }}><Text style={styles.webProposalTitle}>{item.title}</Text><Text style={styles.webMetaText}>{item.category} · {item.barangay} · {prettyDate(item.date, item.time)}</Text><Text style={styles.webMetaText}>{item.location}</Text>{!!item.adminNote && <Text style={styles.webProposalNote}>Admin note: {item.adminNote}</Text>}</View><View style={styles.webProposalBadge}><Text style={styles.webProposalBadgeText}>{item.status.toUpperCase()}</Text></View></View>)}
+        {section === "mine" && canPropose && <View style={styles.ruiProposalWrap}>
+          <Text style={styles.ruiSectionHeading}>My Event Proposals</Text>
+          <Text style={styles.ruiChecklistSubtitle}>Track the status of your submissions.</Text>
+          {proposals.length === 0 ? <View style={styles.webEmptyCard}><Ionicons name="document-text-outline" size={34} color="#93A6AE"/><Text style={styles.webEmptyTitle}>No event proposals yet</Text><Pressable style={styles.ruiPrimary} onPress={()=>setSection("propose")}><Text style={styles.ruiPrimaryText}>Propose Event</Text><Ionicons name="arrow-forward" size={15} color="white" /></Pressable></View> :
+            proposals.slice().sort((a,b)=>getTime(b.createdAt)-getTime(a.createdAt)).map(item=><View key={item.id} style={styles.ruiProposalRow}>
+              {item.photoUrls?.[0]&&validPublicMediaUrl(item.photoUrls[0])?<Image source={{uri:item.photoUrls[0]}} style={styles.ruiProposalThumbnail}/>:<LinearGradient colors={["#D3EEE4","#93CBB4"]} style={styles.ruiProposalThumbnail}><Ionicons name={categoryIcon(item.category)} size={24} color="#078772"/></LinearGradient>}
+              <View style={styles.ruiProposalDescription}><Text style={styles.ruiProposalTitle}>{item.title}</Text><Text style={styles.ruiMeta}>{item.barangay} · {prettyDate(item.date,item.time)}</Text><Text style={styles.ruiProposalNote}>{item.status==="approved"?"Approved and published as an official Community Event.":item.status==="pending"?"Pending Admin/LGU review.":item.adminNote||"Rejected. Review the Admin note."}</Text></View>
+              <View style={[styles.ruiProposalStatus,item.status==="pending"&&styles.ruiProposalStatusPending,item.status==="rejected"&&styles.ruiProposalStatusRejected]}><Text style={[styles.ruiProposalStatusText,item.status==="rejected"&&{color:"#B32929"}]}>{item.status.toUpperCase()}</Text></View>
+            </View>)}
         </View>}
 
-        {/* Propose event form */}
-        {section === "propose" &&
-          canPropose && (
-            <View style={[styles.formCard, styles.webProposalWrap]}>
-              <View
-                style={
-                  styles.sectionHeading
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Propose a Community Event
-                </Text>
+        {/* Resident Propose Event · desktop layout from the approved visual mockup. */}
+        {section === "propose" && canPropose && <View style={[styles.ruiFormRoot, isCompact && styles.ruiFormCompact]}>
+          <View style={styles.ruiFormTop}>
+            <Pressable onPress={()=>setSection("explore")} style={styles.ruiBack}><Ionicons name="arrow-back" size={16} color="#0A736A"/><Text style={styles.ruiBackText}>Back to Events</Text></Pressable>
+            <Text style={styles.ruiFormApproval}>Admin/LGU approval is required before publication.</Text>
+          </View>
+          <Text style={styles.ruiFormTitle}>Propose a Community Event</Text>
 
-                <Text
-                  style={
-                    styles.sectionHint
-                  }
-                >
-                  Admin/LGU approval is
-                  required before publication.
-                </Text>
-              </View>
-
-              <Text
-                style={styles.fieldLabel}
-              >
-                Event title *
-              </Text>
-
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Barangay Clean-up Drive"
-                placeholderTextColor="#9AABB4"
-                value={form.title}
-                onChangeText={(value) =>
-                  setValue(
-                    "title",
-                    value
-                  )
-                }
-                maxLength={100}
-              />
-
-              {/* Category */}
-              <Text
-                style={styles.fieldLabel}
-              >
-                Category *
-              </Text>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Choose event category"
-                style={
-                  styles.pickerField
-                }
-                onPress={() =>
-                  openSelect("category")
-                }
-              >
-                <Ionicons
-                  name="apps-outline"
-                  size={18}
-                  color={colors.green}
-                />
-
-                <Text
-                  style={
-                    styles.pickerFieldText
-                  }
-                >
-                  {form.category}
-                </Text>
-
-                <Ionicons
-                  name="chevron-down"
-                  size={17}
-                  color={colors.muted}
-                />
-              </Pressable>
-
-              <View
-                style={styles.formRow}
-              >
-                {/* Barangay */}
-                <View
-                  style={
-                    styles.formColumn
-                  }
-                >
-                  <Text
-                    style={
-                      styles.fieldLabel
-                    }
-                  >
-                    Barangay *
-                  </Text>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Search and select barangay"
-                    style={
-                      styles.pickerField
-                    }
-                    onPress={() =>
-                      openSelect(
-                        "barangay"
-                      )
-                    }
-                  >
-                    <Ionicons
-                      name="location-outline"
-                      size={18}
-                      color={colors.green}
-                    />
-
-                    <Text
-                      style={[
-                        styles.pickerFieldText,
-                        !form.barangay &&
-                          styles.pickerPlaceholder,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {form.barangay ||
-                        "Choose barangay"}
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-down"
-                      size={17}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-                </View>
-
-                {/* Venue */}
-                <View
-                  style={
-                    styles.formColumn
-                  }
-                >
-                  <Text
-                    style={
-                      styles.fieldLabel
-                    }
-                  >
-                    Venue / location *
-                  </Text>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose venue type or specify another location"
-                    style={
-                      styles.pickerField
-                    }
-                    onPress={() =>
-                      openSelect("venue")
-                    }
-                  >
-                    <Ionicons
-                      name="business-outline"
-                      size={18}
-                      color={colors.green}
-                    />
-
-                    <Text
-                      style={[
-                        styles.pickerFieldText,
-                        !form.location &&
-                          styles.pickerPlaceholder,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {customVenue
-                        ? "Other / specify location"
-                        : form.location ||
-                          "Choose venue"}
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-down"
-                      size={17}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-
-                  {customVenue && (
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.customInput,
-                      ]}
-                      placeholder="Enter exact venue / location"
-                      placeholderTextColor="#9AABB4"
-                      value={
-                        form.location
-                      }
-                      onChangeText={(
-                        value
-                      ) =>
-                        setValue(
-                          "location",
-                          value
-                        )
-                      }
-                      maxLength={150}
-                    />
-                  )}
-                </View>
-              </View>
-
-              <View
-                style={styles.formRow}
-              >
-                {/* Date */}
-                <View
-                  style={
-                    styles.formColumn
-                  }
-                >
-                  <Text
-                    style={
-                      styles.fieldLabel
-                    }
-                  >
-                    Event date *
-                  </Text>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose event date from calendar"
-                    style={
-                      styles.pickerField
-                    }
-                    onPress={
-                      openDatePicker
-                    }
-                  >
-                    <Ionicons
-                      name="calendar-outline"
-                      size={18}
-                      color={colors.green}
-                    />
-
-                    <Text
-                      style={[
-                        styles.pickerFieldText,
-                        !form.date &&
-                          styles.pickerPlaceholder,
-                      ]}
-                    >
-                      {form.date ||
-                        "Choose a date"}
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-down"
-                      size={17}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-                </View>
-
-                {/* Time */}
-                <View
-                  style={
-                    styles.formColumn
-                  }
-                >
-                  <Text
-                    style={
-                      styles.fieldLabel
-                    }
-                  >
-                    Event time *
-                  </Text>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose event time"
-                    style={
-                      styles.pickerField
-                    }
-                    onPress={
-                      openTimePicker
-                    }
-                  >
-                    <Ionicons
-                      name="time-outline"
-                      size={18}
-                      color={colors.green}
-                    />
-
-                    <Text
-                      style={[
-                        styles.pickerFieldText,
-                        !form.time &&
-                          styles.pickerPlaceholder,
-                      ]}
-                    >
-                      {formatChosenTime(
-                        form.time
-                      )}
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-down"
-                      size={17}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-                </View>
-
-                {/* Capacity */}
-                <View
-                  style={
-                    styles.formColumn
-                  }
-                >
-                  <Text
-                    style={
-                      styles.fieldLabel
-                    }
-                  >
-                    Volunteer capacity *
-                  </Text>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose volunteer capacity"
-                    style={
-                      styles.pickerField
-                    }
-                    onPress={() =>
-                      openSelect(
-                        "capacity"
-                      )
-                    }
-                  >
-                    <Ionicons
-                      name="people-outline"
-                      size={18}
-                      color={colors.green}
-                    />
-
-                    <Text
-                      style={[
-                        styles.pickerFieldText,
-                        !form.capacity &&
-                          styles.pickerPlaceholder,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {customCapacity
-                        ? "Custom capacity"
-                        : form.capacity
-                          ? `${form.capacity} volunteers`
-                          : "Choose capacity"}
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-down"
-                      size={17}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-
-                  {customCapacity && (
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.customInput,
-                      ]}
-                      keyboardType="number-pad"
-                      placeholder="Enter 1 to 500 volunteers"
-                      placeholderTextColor="#9AABB4"
-                      value={
-                        form.capacity
-                      }
-                      onChangeText={(
-                        value
-                      ) =>
-                        setValue(
-                          "capacity",
-                          value.replace(
-                            /[^0-9]/g,
-                            ""
-                          )
-                        )
-                      }
-                      maxLength={3}
-                    />
-                  )}
-                </View>
-              </View>
-
-              {/* Description */}
-              <Text
-                style={styles.fieldLabel}
-              >
-                Event description *
-              </Text>
-
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.textarea,
-                ]}
-                placeholder="Describe the activity, purpose, and what volunteers will do..."
-                placeholderTextColor="#9AABB4"
-                multiline
-                textAlignVertical="top"
-                value={
-                  form.description
-                }
-                onChangeText={(value) =>
-                  setValue(
-                    "description",
-                    value
-                  )
-                }
-                maxLength={1500}
-              />
-
-              <Text
-                style={styles.helper}
-              >
-                Proposals remain pending
-                until reviewed by the
-                Admin/LGU. Submission never
-                publishes an event automatically.
-              </Text>
-
-              <Pressable
-                disabled={busy}
-                style={[
-                  styles.primaryButton,
-                  styles.submitButton,
-                  busy &&
-                    styles.disabledButton,
-                ]}
-                onPress={() =>
-                  void submitProposal()
-                }
-              >
-                <Text
-                  style={
-                    styles.primaryButtonText
-                  }
-                >
-                  {busy
-                    ? "Submitting..."
-                    : "Submit Proposal"}
-                </Text>
-
-                <Ionicons
-                  name="arrow-forward"
-                  size={16}
-                  color="white"
-                />
-              </Pressable>
+          <View style={styles.ruiFormSection}>
+            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>1</Text><Text style={styles.ruiStepHeading}>Basic Information</Text></View>
+            <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event title *</Text><TextInput style={styles.input} value={form.title} placeholder="e.g. Barangay Clean-up Drive" placeholderTextColor="#99ACBA" maxLength={100} onChangeText={v=>setValue("title",v)}/></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Category *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("category")}><Ionicons name="apps-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.category}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
             </View>
-          )}
+            <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Barangay *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("barangay")}><Ionicons name="location-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.barangay&&styles.pickerPlaceholder]}>{form.barangay||"Select barangay"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Venue / Location *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("venue")}><Ionicons name="business-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.location&&styles.pickerPlaceholder]}>{customVenue?"Specify exact location":form.location||"Select venue or type location"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customVenue&&<TextInput style={[styles.input,{marginTop:6}]} value={form.location} placeholder="Street / landmark / meeting point" maxLength={150} onChangeText={v=>setValue("location",v)}/>}</View>
+            </View>
+            <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={openTimePicker}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
+            </View>
+          </View>
+
+          <View style={styles.ruiFormSection}>
+            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>2</Text><Text style={styles.ruiStepHeading}>Event Details</Text></View>
+            <Text style={styles.fieldLabel}>Description *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiTextarea]} value={form.description} onChangeText={v=>setValue("description",v)} placeholder="Describe the activity, purpose, location conditions, and what the community needs..." placeholderTextColor="#94A8B8" maxLength={1500}/>
+            <Text style={styles.ruiCharCount}>{form.description.length}/1500</Text>
+            <Text style={styles.fieldLabel}>What volunteers will actually do *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiSmallTextarea]} value={form.volunteerTasks} onChangeText={v=>setValue("volunteerTasks",v)} placeholder="e.g. Segregate waste, clean pathways, carry supplies and document the activity" placeholderTextColor="#94A8B8" maxLength={1200}/>
+            <View style={[styles.ruiFormRow, isCompact&&styles.ruiFormRowStack]}>
+              <View style={[styles.ruiFormCell,styles.ruiChecklistColumn]}>
+                <Text style={styles.ruiChecklistTitle}>Type of Help / Event *</Text>
+                <Text style={styles.ruiChecklistSubtitle}>Select the activity that best describes your event.</Text>
+                {categories.map((entry)=><Pressable key={entry} style={styles.ruiChecklistItem} onPress={()=>{setValue("category",entry);setValue("requiredRoles",["General Volunteer"]);setValue("requiredSkills",[]);}}><Ionicons name={form.category===entry?"checkbox":"square-outline"} size={17} color={form.category===entry?"#038B7C":"#92AAC0"}/><Text style={styles.ruiChecklistText}>{entry}</Text></Pressable>)}
+              </View>
+              <View style={[styles.ruiFormCell,styles.ruiChecklistColumn]}>
+                <Text style={styles.ruiChecklistTitle}>Required Skills / Occupation *</Text>
+                <Text style={styles.ruiChecklistSubtitle}>Multiple selections allowed. Licenses checked by Admin/LGU.</Text>
+                {[...new Set([...suggestedRoles[form.category],...form.requiredRoles])].map((role)=><Pressable key={role} style={styles.ruiChecklistItem} onPress={()=>setValue("requiredRoles",form.requiredRoles.includes(role)?form.requiredRoles.filter(v=>v!==role):[...form.requiredRoles,role])}><Ionicons name={form.requiredRoles.includes(role)?"checkbox":"square-outline"} size={17} color={form.requiredRoles.includes(role)?"#038B7C":"#92AAC0"}/><Text style={styles.ruiChecklistText}>{role}</Text></Pressable>)}
+                <TextInput style={[styles.input,styles.ruiMiniInput]} value={form.otherRole} maxLength={80} onChangeText={v=>setValue("otherRole",v)} placeholder="Other occupation / role (optional)" placeholderTextColor="#94A8B8"/>
+              </View>
+            </View>
+            <Text style={styles.fieldLabel}>Other helpful skills (optional)</Text>
+            <View style={styles.ruiSkillsChips}>{suggestedSkills[form.category].map(name=><Pressable key={name} onPress={()=>setValue("requiredSkills",form.requiredSkills.includes(name)?form.requiredSkills.filter(v=>v!==name):[...form.requiredSkills,name])} style={[styles.ruiSkillChip,form.requiredSkills.includes(name)&&styles.ruiSkillChipSelected]}><Text style={[styles.ruiSkillChipText,form.requiredSkills.includes(name)&&styles.ruiSkillChipTextSelected]}>{form.requiredSkills.includes(name)?"✓ ":"+ "}{name}</Text></Pressable>)}</View>
+            {needsProfessionalCheck([...form.requiredRoles,form.otherRole])&&<View style={styles.residentSafeguard}><Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13"/><Text style={styles.residentSafeguardText}>Clinical and veterinary work requires verified professional qualifications. General volunteers may assist with non-clinical duties.</Text></View>}
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Credentials / supervision (optional)</Text><TextInput style={styles.input} value={form.qualificationNotes} maxLength={500} onChangeText={v=>setValue("qualificationNotes",v)} placeholder="e.g. Licensed nurse required for clinical tasks"/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
+          </View>
+
+          <View style={styles.ruiFormSection}>
+            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Optional)</Text></View>
+            <Text style={styles.ruiChecklistSubtitle}>Share photos of the actual location or planned activity, with consent. Do not upload IDs or private information. JPG, PNG, WebP · 5 MB max each.</Text>
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}>
+              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Recommended":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>Choose files to upload on submission. HTTPS photo URLs are an alternative when Storage is unavailable.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
+            </View>
+          </View>
+          <View style={styles.ruiFormFooter}><Pressable style={styles.ruiCancelButton} onPress={()=>setSection("explore")}><Text style={styles.ruiCancelText}>Cancel</Text></Pressable><Pressable disabled={busy} style={[styles.ruiPrimary,styles.ruiSubmitButton,busy&&styles.disabledButton]} onPress={()=>void submitProposal()}>{busy?<ActivityIndicator color="white" size="small"/>:<Text style={styles.ruiPrimaryText}>Submit Proposal</Text>}<Ionicons name="arrow-forward" color="white" size={16}/></Pressable></View>
+        </View>}
 
         {isVolunteer && (
           <Pressable
@@ -2366,6 +2481,12 @@ export default function CommunityEventsScreen() {
         )}
       </ScrollView>
       )}
+      <Modal visible={Platform.OS === "web" && residentFilterPicker !== null} transparent animationType="fade" onRequestClose={()=>setResidentFilterPicker(null)}>
+        <View style={styles.ruiFilterBackdrop}><View style={styles.ruiFilterModal}>
+          <View style={styles.ruiFilterModalHeader}><Text style={styles.ruiSectionHeading}>Filter Events</Text><Pressable onPress={()=>setResidentFilterPicker(null)}><Ionicons name="close" size={22} color="#476578"/></Pressable></View>
+          <ScrollView style={{maxHeight:370}}>{(residentFilterPicker==="category"?["All",...categories]:residentFilterPicker==="barangay"?["All Barangays",...sjdmBarangays]:["All Status","upcoming","active","completed"]).map(entry=><Pressable key={entry} style={styles.ruiFilterOption} onPress={()=>{if(residentFilterPicker==="category")setCategory(entry as Category|"All");if(residentFilterPicker==="barangay")setResidentBarangayFilter(entry);if(residentFilterPicker==="status")setResidentStatusFilter(entry);setResidentFilterPicker(null);}}><Text style={styles.ruiFilterLabel}>{entry}</Text></Pressable>)}</ScrollView>
+        </View></View>
+      </Modal>
       {Platform.OS !== "web" && (
       <ScrollView
         contentContainerStyle={[
@@ -2807,7 +2928,15 @@ export default function CommunityEventsScreen() {
         {/* Propose event form */}
         {section === "propose" &&
           canPropose && (
-            <View style={styles.formCard}>
+            <View style={[styles.formCard, styles.residentFormCard]}>
+              <LinearGradient colors={["#E3F7EF", "#F2FBF8", "#FFFFFF"]} style={styles.residentFormHero}>
+                <View style={styles.residentFormHeroIcon}><Ionicons name="heart-circle-outline" size={26} color="#078577" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.residentFormKicker}>RESIDENT COMMUNITY PROPOSAL</Text>
+                  <Text style={styles.residentFormHeroTitle}>Plan a meaningful community activity</Text>
+                  <Text style={styles.residentFormHeroSub}>Tell the LGU what your community needs, what volunteers will do, and who is best suited to help.</Text>
+                </View>
+              </LinearGradient>
               <View
                 style={
                   styles.sectionHeading
@@ -2831,11 +2960,14 @@ export default function CommunityEventsScreen() {
                 </Text>
               </View>
 
-              <Text
-                style={styles.fieldLabel}
-              >
-                Event title *
-              </Text>
+              <View style={styles.residentSectionHeading}>
+                <View style={styles.residentSectionIcon}><Ionicons name="document-text-outline" size={20} color="#047E73" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.residentSectionTitle}>01 · Activity overview</Text>
+                  <Text style={styles.residentSectionSub}>Name the event, choose a category, and explain its purpose.</Text>
+                </View>
+              </View>
+              <Text style={styles.fieldLabel}>Event title *</Text>
 
               <TextInput
                 style={styles.input}
@@ -2889,6 +3021,13 @@ export default function CommunityEventsScreen() {
                 />
               </Pressable>
 
+              <View style={styles.residentSectionHeading}>
+                <View style={styles.residentSectionIcon}><Ionicons name="location-outline" size={20} color="#047E73" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.residentSectionTitle}>02 · Schedule & location</Text>
+                  <Text style={styles.residentSectionSub}>Give a recognizable meeting place and realistic number of volunteers.</Text>
+                </View>
+              </View>
               <View
                 style={styles.formRow}
               >
@@ -3232,6 +3371,16 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={1500}
               />
+
+              <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto} />
+
+              <View style={styles.residentSubmissionFooter}>
+                <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.residentSectionTitle}>05 · Review & send to Admin</Text>
+                  <Text style={styles.residentSectionSub}>An Admin/LGU must review your proposal and any required professional qualifications before publication.</Text>
+                </View>
+              </View>
 
               <Text
                 style={styles.helper}
@@ -4814,7 +4963,7 @@ const styles = StyleSheet.create({
   webEmptySubtitle: { fontSize: 12, color: "#6B8290", textAlign: "center" },
   webEmptyAction: { backgroundColor: "#048E81", borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10 },
   webEmptyActionText: { color: "white", fontWeight: "900", fontSize: 12 },
-  webProposalWrap: { maxWidth: 940, width: "100%", alignSelf: "center", marginTop: 15 },
+  webProposalWrap: { maxWidth: 1160, width: "100%", alignSelf: "center", marginTop: 18 },
   webProposalCard: { flexDirection: "row", gap: 15, backgroundColor: "white", padding: 15, borderRadius: 12, borderWidth: 1, borderColor: "#E1EBEA", marginBottom: 8 },
   webProposalTitle: { color: "#12344A", fontSize: 14, fontWeight: "900", marginBottom: 4 },
   webProposalNote: { fontSize: 11, color: "#9C6F39", marginTop: 6 },
@@ -4824,7 +4973,7 @@ const styles = StyleSheet.create({
   lockedColumns: { flexDirection: "row", alignItems: "flex-start", width: "100%", gap: 18 },
   lockedColumnsStack: { flexDirection: "column" },
   lockedMain: { flex: 1, minWidth: 0 },
-  lockedRail: { width: 360, maxWidth: "100%", flexShrink: 0, gap: 14 },
+  lockedRail: { width: 338, maxWidth: "100%", flexShrink: 0, gap: 14 },
   lockedRailStack: { width: "100%" },
   lockedHeroGradient: { minHeight: 196, flexDirection: "row", paddingHorizontal: 26, paddingVertical: 24, alignItems: "center" },
   lockedHeroWords: { flex: 1, minWidth: 0, paddingRight: 12, zIndex: 3 },
@@ -4886,6 +5035,25 @@ const styles = StyleSheet.create({
   lockedAboutCard: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, padding: 16, marginTop: 14, gap: 9 },
   lockedAboutText: { color: "#567183", fontSize: 12, lineHeight: 20 },
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 15, padding: 14, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
+  lockedAttendanceRail: { backgroundColor: "#F2FBF6", borderColor: "#B4DDCB", borderWidth: 1.5 },
+  lockedEventMapCard: { backgroundColor: "#F6FBF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 13, marginTop: 6 },
+  lockedAttendanceOverview: { backgroundColor: "#E6F6ED", borderRadius: 11, padding: 10, gap: 9, marginBottom: 12 },
+  lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
+  lockedAttendanceOverviewTitle: { color: "#0D6A55", fontSize: 12, fontWeight: "900" },
+  lockedAttendanceSort: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#B9DECD" },
+  lockedAttendanceSortText: { color: "#0B7666", fontSize: 10, fontWeight: "800" },
+  lockedAttendanceHistory: { gap: 6 },
+  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 9, borderWidth: 1, borderColor: "#C9E5D7", padding: 9, backgroundColor: "#FFFFFF" },
+  lockedAttendanceHistoryActive: { borderColor: "#078F82", borderWidth: 1.5, backgroundColor: "#F4FFFA" },
+  lockedAttendanceHistoryTitle: { fontSize: 11, fontWeight: "900", color: "#133D3D" },
+  lockedAttendanceHistoryDate: { fontSize: 10, color: "#567F75", marginTop: 4, lineHeight: 15 },
+  lockedAttendanceHistoryBadge: { backgroundColor: "#E3EDF1", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5, flexShrink: 0 },
+  lockedAttendanceHistoryBadgeVerified: { backgroundColor: "#D8F4E4" },
+  lockedAttendanceHistoryBadgeText: { fontSize: 9, fontWeight: "900", color: "#087666" },
+  lockedAttendanceMore: { flexDirection: "row", alignSelf: "center", alignItems: "center", padding: 8, gap: 5 },
+  lockedAttendanceMoreText: { fontSize: 11, fontWeight: "800", color: "#087567" },
+  lockedAttendanceEmptyText: { fontSize: 11, color: "#527D72", lineHeight: 17 },
+  nativeAttendancePanel: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: "#F0FAF5", borderWidth: 1, borderColor: "#C0E5D2", gap: 9 },
   lockedSectionHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   lockedSectionIcon: { width: 40, height: 40, backgroundColor: "#E5F8F2", borderRadius: 10, justifyContent: "center", alignItems: "center" },
   lockedSectionTitle: { color: "#113049", fontSize: 16, fontWeight: "900", flexShrink: 1 },
@@ -4896,15 +5064,15 @@ const styles = StyleSheet.create({
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
   lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
   lockedMapFootnote: { color: "#788E9B", fontSize: 9.5, lineHeight: 15, marginTop: 9 },
-  lockedMapActions: { flexDirection: "row", marginTop: 11, gap: 8 },
-  lockedMapOutline: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
+  lockedMapActions: { flexDirection: "row", flexWrap: "wrap", marginTop: 11, gap: 8 },
+  lockedMapOutline: { flexGrow: 1, flexBasis: 145, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
   lockedMapOutlineText: { color: "#0A5663", fontSize: 10.2, fontWeight: "800", flexShrink: 1, textAlign: "center" },
-  lockedMapSolid: { flex: 1, minWidth: 0, backgroundColor: "#007B75", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
+  lockedMapSolid: { flexGrow: 1, flexBasis: 145, minWidth: 0, backgroundColor: "#007B75", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
   lockedMapSolidText: { color: "white", fontSize: 10.2, fontWeight: "900", flexShrink: 1, textAlign: "center" },
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedAttendanceVerifiedText: { color: "#067D68", fontSize: 9, fontWeight: "900" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
-  lockedAttendancePanel: { backgroundColor: "transparent", borderWidth: 0, padding: 0, marginTop: 3 },
+  lockedAttendancePanel: { backgroundColor: "#F0FAF5", borderWidth: 1, borderColor: "#C7E5D4", borderRadius: 12, padding: 10, marginTop: 3 },
   lockedParticipationMeta: { backgroundColor: "#ECF8F5", borderRadius: 8, padding: 9, marginBottom: 7 },
   lockedParticipationText: { fontSize: 11, fontWeight: "800", color: "#087567" },
   lockedCertificateLine: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#E5EFED", flexDirection: "row", alignItems: "center", gap: 7 },
@@ -4933,4 +5101,131 @@ const styles = StyleSheet.create({
   lockedAttendanceTileSmall: { color: "#728897", fontSize: 9, marginTop: 2 },
   lockedAttendanceVerifier: { flexDirection: "row", alignItems: "center", gap: 7, padding: 9, backgroundColor: "#F1F9F7", borderRadius: 8, marginBottom: 9 },
   lockedAttendanceVerifierText: { fontSize: 10.5, fontWeight: "800", color: "#08766B", flex: 1 },
+  // Resident Community Proposal: clear section hierarchy, touch-friendly selections and safe media links.
+  residentFormCard: { borderRadius: 19, padding: 20, borderColor: "#DCEAE5", backgroundColor: "#FFFFFF", overflow: "hidden" },
+  residentFormHero: { flexDirection: "row", gap: 15, padding: 20, borderRadius: 15, marginBottom: 19, alignItems: "center" },
+  residentFormHeroIcon: { width: 52, height: 52, borderRadius: 15, backgroundColor: "#D0F0E5", alignItems: "center", justifyContent: "center" },
+  residentFormKicker: { fontSize: 10, fontWeight: "900", letterSpacing: 1.15, color: "#078578" },
+  residentFormHeroTitle: { fontSize: 22, lineHeight: 29, fontWeight: "900", color: "#12334A", marginTop: 5 },
+  residentFormHeroSub: { fontSize: 12, lineHeight: 19, color: "#536D7C", marginTop: 5 },
+  residentSectionHeading: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#E6EFEB", paddingTop: 20, marginTop: 17, marginBottom: 13 },
+  residentSectionIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: "#E3F7EF", alignItems: "center", justifyContent: "center" },
+  residentSectionTitle: { fontSize: 16, lineHeight: 21, fontWeight: "900", color: "#13334B" },
+  residentSectionSub: { fontSize: 11, color: "#728597", lineHeight: 16, marginTop: 3 },
+  residentHelp: { fontSize: 11, color: "#6A8291", lineHeight: 17, marginBottom: 7 },
+  residentChipRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 8, marginTop: 4 },
+  residentChoiceChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#BEDCD4", backgroundColor: "#F4FBF8", paddingHorizontal: 12, minHeight: 38, borderRadius: 10 },
+  residentChoiceChipSelected: { backgroundColor: "#078F82", borderColor: "#078F82" },
+  residentChoiceText: { fontSize: 11.5, fontWeight: "800", color: "#286B65" },
+  residentChoiceTextSelected: { color: "#FFFFFF" },
+  residentSkillChip: { backgroundColor: "#F8FBFC" },
+  residentMultiline: { minHeight: 108, textAlignVertical: "top", paddingVertical: 12 },
+  residentSmallInput: { marginTop: 8, marginBottom: 8 },
+  residentSafeguard: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderWidth: 1, borderColor: "#F2DEA8", backgroundColor: "#FFF9EA", padding: 12, borderRadius: 10, marginTop: 8, marginBottom: 9 },
+  residentSafeguardText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#795B24" },
+  residentMediaNotice: { flexDirection: "row", gap: 9, alignItems: "flex-start", backgroundColor: "#ECF7FA", borderRadius: 10, padding: 13, marginBottom: 10 },
+  residentMediaNoticeText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#4C7181" },
+  residentMediaField: { marginBottom: 6 },
+  residentMediaPreview: { width: "100%", maxWidth: 360, height: 150, borderRadius: 11, backgroundColor: "#E7EFF0", marginTop: 4, marginBottom: 9 },
+  residentMediaLink: { flexDirection: "row", gap: 7, alignItems: "center", padding: 8, alignSelf: "flex-start" },
+  residentMediaLinkText: { color: "#067E73", fontSize: 11.5, fontWeight: "800" },
+  residentSubmissionFooter: { flexDirection: "row", gap: 10, alignItems: "center", borderTopWidth: 1, borderTopColor: "#E6EFEB", marginTop: 21, paddingTop: 17, marginBottom: 12 },
+  residentMiniChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 7 },
+  residentMiniChip: { backgroundColor: "#E8F7F2", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7 },
+  residentMiniChipText: { color: "#08796B", fontSize: 10, fontWeight: "800" },
+  residentProposalExcerpt: { color: "#5A7789", fontSize: 11, lineHeight: 17, marginTop: 6 },
+  residentProposalPhoto: { height: 120, maxWidth: 280, width: "100%", borderRadius: 8, marginTop: 9 },
+
+  // Final Resident Community Events UI (matches the approved mockup).
+  ruiHeroHeight: { minHeight: 170 },
+  ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
+  ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  ruiFilterBar: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 15, marginBottom: 11 },
+  ruiFilterSelect: { flex: 1, minWidth: 160, borderWidth: 1, borderColor: "#DCE7E9", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 12, minHeight: 39, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  ruiFilterLabel: { color: "#3D5B73", fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
+  ruiCardGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", justifyContent: "flex-start", gap: 12 },
+  ruiCard: { borderRadius: 12, borderWidth: 1, borderColor: "#DAE9E7", backgroundColor: "#FFFFFF", overflow: "hidden", marginBottom: 5 },
+  ruiCardCover: { width: "100%", height: 155, backgroundColor: "#BDEADB" },
+  ruiCoverImage: { width: "100%", height: "100%" },
+  ruiCoverFallback: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6 },
+  ruiCoverFallbackText: { fontSize: 11, fontWeight: "800", color: "#EFFFFA" },
+  ruiImageStatus: { position: "absolute", top: 10, left: 11, backgroundColor: "#D5F5E6", borderRadius: 7, paddingVertical: 5, paddingHorizontal: 8 },
+  ruiImageStatusText: { fontSize: 10, fontWeight: "900", color: "#087F70" },
+  ruiCardBody: { padding: 12, gap: 7, flex: 1 },
+  ruiCardTitle: { fontSize: 14.5, fontWeight: "900", color: "#112F47", lineHeight: 19 },
+  ruiTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginVertical: 4 },
+  ruiCategoryTag: { backgroundColor: "#E3F8EC", color: "#058377", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: 10, fontWeight: "800", overflow: "hidden" },
+  ruiBarangayTag: { backgroundColor: "#E9F4FF", color: "#2376BB", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: 10, fontWeight: "800", overflow: "hidden" },
+  ruiInfoLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  ruiMeta: { color: "#586F85", fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  ruiPrimary: { backgroundColor: "#008E7B", minHeight: 37, paddingHorizontal: 14, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 5 },
+  ruiPrimaryText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "900" },
+  ruiDetailsCard: { backgroundColor: "white", padding: 17, borderWidth: 1, borderColor: "#DCE9E8", borderRadius: 13, width: "100%" },
+  ruiBack: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7, alignSelf: "flex-start" },
+  ruiBackText: { color: "#0A786D", fontWeight: "800", fontSize: 11 },
+  ruiDetailIntro: { flexDirection: "row", gap: 18 },
+  ruiDetailPhoto: { width: 240, height: 190, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  ruiDetailOverview: { flex: 1, minWidth: 0, gap: 7 },
+  ruiDetailTitle: { fontSize: 22, color: "#133448", fontWeight: "900", marginBottom: 5 },
+  ruiDetailTabs: { flexDirection: "row", flexWrap: "wrap", borderBottomWidth: 1, borderBottomColor: "#DDECE7", gap: 7, marginTop: 13 },
+  ruiDetailTab: { paddingVertical: 10, paddingHorizontal: 9 },
+  ruiDetailTabActive: { borderBottomWidth: 3, borderBottomColor: "#009987" },
+  ruiDetailTabText: { color: "#52728D", fontSize: 11, fontWeight: "700" },
+  ruiDetailTabTextActive: { color: "#058678", fontWeight: "900" },
+  ruiDetailContent: { gap: 9, paddingVertical: 15 },
+  ruiSectionTitle: { fontSize: 12.5, color: "#173549", fontWeight: "900" },
+  ruiParagraph: { color: "#617789", fontSize: 11.5, lineHeight: 18 },
+  ruiRequirementTag: { color: "#08776E", backgroundColor: "#E3F7F2", borderRadius: 6, paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, overflow: "hidden" },
+  ruiMediaGallery: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  ruiGalleryPhoto: { width: 170, height: 120, borderRadius: 8 },
+  ruiProposalWrap: { width: "100%", maxWidth: 1160, alignSelf: "center", marginTop: 13 },
+  ruiSectionHeading: { color: "#14364D", fontSize: 19, fontWeight: "900" },
+  ruiProposalRow: { marginTop: 8, backgroundColor: "white", borderWidth: 1, borderColor: "#DBE9E8", borderRadius: 10, flexDirection: "row", alignItems: "center", padding: 12, gap: 12 },
+  ruiProposalThumbnail: { width: 86, height: 68, backgroundColor: "#C3ECDA", borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  ruiProposalDescription: { flex: 1, minWidth: 0, gap: 4 },
+  ruiProposalTitle: { fontSize: 13, fontWeight: "900", color: "#12354C" },
+  ruiProposalNote: { color: "#0C8B72", fontSize: 10.5 },
+  ruiProposalStatus: { borderRadius: 7, backgroundColor: "#E6F6ED", paddingHorizontal: 9, paddingVertical: 6 },
+  ruiProposalStatusPending: { backgroundColor: "#FFF2D9" },
+  ruiProposalStatusRejected: { backgroundColor: "#FFE8E8" },
+  ruiProposalStatusText: { color: "#067965", fontWeight: "900", fontSize: 9 },
+  ruiFormRoot: { marginTop: 13, backgroundColor: "white", borderWidth: 1, borderColor: "#E0EAEA", padding: 19, borderRadius: 17, width: "100%" },
+  ruiFormCompact: { paddingHorizontal: 12 },
+  ruiFormTop: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: 10 },
+  ruiFormApproval: { fontSize: 10.5, color: "#6C8297" },
+  ruiFormTitle: { color: "#0E2E46", fontSize: 23, fontWeight: "900", marginTop: 13, marginBottom: 13 },
+  ruiFormSection: { borderWidth: 1, borderColor: "#E6EFED", borderRadius: 13, padding: 16, marginBottom: 12, backgroundColor: "#FFFFFF" },
+  ruiStepRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10 },
+  ruiStepNumber: { backgroundColor: "#04927B", borderRadius: 20, overflow: "hidden", paddingVertical: 6, paddingHorizontal: 11, color: "white", fontSize: 12, fontWeight: "900" },
+  ruiStepHeading: { fontWeight: "900", fontSize: 14, color: "#0B2C46" },
+  ruiFormRow: { flexDirection: "row", gap: 11, marginBottom: 6, alignItems: "flex-start" },
+  ruiFormRowStack: { flexDirection: "column" },
+  ruiFormCell: { flex: 1, minWidth: 0 },
+  ruiTextarea: { minHeight: 85, paddingTop: 12, marginBottom: 2 },
+  ruiSmallTextarea: { minHeight: 69, paddingTop: 10, marginBottom: 11 },
+  ruiCharCount: { fontSize: 10, color: "#8B9EA9", textAlign: "right", marginBottom: 11 },
+  ruiChecklistColumn: { padding: 11, borderWidth: 1, borderColor: "#EEF2F2", borderRadius: 8 },
+  ruiChecklistTitle: { color: "#14354C", fontWeight: "900", fontSize: 12, marginBottom: 4 },
+  ruiChecklistSubtitle: { color: "#7E94A5", fontSize: 10.5, lineHeight: 16, marginBottom: 10 },
+  ruiChecklistItem: { flexDirection: "row", gap: 7, alignItems: "center", minHeight: 28 },
+  ruiChecklistText: { color: "#35546D", fontSize: 11.5, flexShrink: 1 },
+  ruiMiniInput: { marginTop: 9 },
+  ruiSkillsChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
+  ruiSkillChip: { backgroundColor: "#F0F6F7", borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10 },
+  ruiSkillChipSelected: { backgroundColor: "#D7F4E9" },
+  ruiSkillChipText: { color: "#467083", fontSize: 10.5 },
+  ruiSkillChipTextSelected: { color: "#087A6D", fontWeight: "900" },
+  ruiUploadRow: { flexDirection: "row", gap: 7, flexWrap: "wrap" },
+  ruiUploadTile: { borderWidth: 1, borderColor: "#BDCEDC", borderRadius: 8, borderStyle: "dashed", width: 92, height: 95, alignItems: "center", justifyContent: "center", overflow: "hidden", padding: 3 },
+  ruiTilePreview: { width: "100%", height: 55, borderRadius: 5 },
+  ruiUploadText: { color: "#2A536C", fontSize: 10, fontWeight: "900", marginTop: 2 },
+  ruiUploadHint: { fontSize: 9, color: "#7790A5" },
+  ruiFormFooter: { alignItems: "center", justifyContent: "flex-end", flexDirection: "row", gap: 9 },
+  ruiCancelButton: { borderWidth: 1, borderColor: "#D3E2E7", borderRadius: 8, paddingHorizontal: 19, paddingVertical: 11 },
+  ruiCancelText: { color: "#4F7186", fontWeight: "800", fontSize: 12 },
+  ruiSubmitButton: { paddingHorizontal: 19, marginTop: 0 },
+  ruiFilterBackdrop: { backgroundColor: "#0009", flex: 1, justifyContent: "center", alignItems: "center", padding: 15 },
+  ruiFilterModal: { backgroundColor: "white", padding: 18, borderRadius: 13, width: "100%", maxWidth: 450 },
+  ruiFilterModalHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  ruiFilterOption: { minHeight: 39, paddingHorizontal: 8, justifyContent: "center", borderBottomColor: "#EDF1F1", borderBottomWidth: 1 },
 });

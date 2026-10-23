@@ -487,6 +487,8 @@ export default function AssistanceRequestScreen() {
   const { width } = useWindowDimensions();
 
   const wide = width >= 1040;
+  // Layout-only breakpoint. Does not change resident access or request submission.
+  const mobile = width < 700;
   const user = auth.currentUser;
 
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -2717,9 +2719,10 @@ export default function AssistanceRequestScreen() {
       >
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={
-            styles.pageContainer
-          }
+          contentContainerStyle={[
+            styles.pageContainer,
+            mobile && styles.mobilePageContainer,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
         >
@@ -2736,12 +2739,10 @@ export default function AssistanceRequestScreen() {
               x: 1,
               y: 1,
             }}
-            style={styles.hero}
+            style={[styles.hero, mobile && styles.mobileHero]}
           >
             <View
-              style={
-                styles.heroIcon
-              }
+              style={[styles.heroIcon, mobile && styles.mobileHeroIcon]}
             >
               <Ionicons
                 name="hand-left-outline"
@@ -2751,31 +2752,23 @@ export default function AssistanceRequestScreen() {
             </View>
 
             <View
-              style={
-                styles.heroCopy
-              }
+              style={[styles.heroCopy, mobile && styles.mobileHeroCopy]}
             >
               <Text
-                style={
-                  styles.heroEyebrow
-                }
+                style={[styles.heroEyebrow, mobile && styles.mobileHeroEyebrow]}
               >
                 VOLUNSERVE · VERIFIED
                 RESIDENT SERVICE
               </Text>
 
               <Text
-                style={
-                  styles.heroTitle
-                }
+                style={[styles.heroTitle, mobile && styles.mobileHeroTitle]}
               >
                 Request Assistance
               </Text>
 
               <Text
-                style={
-                  styles.heroSubtitle
-                }
+                style={[styles.heroSubtitle, mobile && styles.mobileHeroSubtitle]}
               >
                 Submit a verified
                 non-emergency individual
@@ -2788,9 +2781,7 @@ export default function AssistanceRequestScreen() {
             </View>
 
             <View
-              style={
-                styles.heroVerifiedBadge
-              }
+              style={[styles.heroVerifiedBadge, mobile && styles.mobileHeroBadge]}
             >
               <Ionicons
                 name="shield-checkmark"
@@ -2809,13 +2800,12 @@ export default function AssistanceRequestScreen() {
           </LinearGradient>
 
           <View
-            style={
-              styles.modeTabs
-            }
+            style={[styles.modeTabs, mobile && styles.mobileModeTabs]}
           >
             <Pressable
               style={[
                 styles.modeTab,
+                mobile && styles.mobileModeTab,
                 screenMode ===
                   "new_request" &&
                   styles.modeTabActive,
@@ -2852,6 +2842,7 @@ export default function AssistanceRequestScreen() {
             <Pressable
               style={[
                 styles.modeTab,
+                mobile && styles.mobileModeTab,
                 screenMode ===
                   "my_requests" &&
                   styles.modeTabActive,
@@ -2972,9 +2963,7 @@ export default function AssistanceRequestScreen() {
               </View>
 
               <View
-                style={
-                  styles.emergencyNotice
-                }
+                style={[styles.emergencyNotice, mobile && styles.mobileEmergencyNotice]}
               >
                 <View
                   style={
@@ -2989,9 +2978,7 @@ export default function AssistanceRequestScreen() {
                 </View>
 
                 <View
-                  style={{
-                    flex: 1,
-                  }}
+                  style={mobile ? styles.mobileNoticeCopy : { flex: 1 }}
                 >
                   <Text
                     style={
@@ -3024,9 +3011,7 @@ export default function AssistanceRequestScreen() {
                 </View>
 
                 <TouchableOpacity
-                  style={
-                    styles.emergencyButton
-                  }
+                  style={[styles.emergencyButton, mobile && styles.mobileEmergencyButton]}
                   onPress={() =>
                     router.push(
                       "/(tabs)/disaster-response" as any,
@@ -3046,13 +3031,12 @@ export default function AssistanceRequestScreen() {
               <StepProgress
                 step={step}
                 wide={wide}
+                mobile={mobile}
               />
 
               {step === 1 && (
                 <View
-                  style={
-                    styles.formCard
-                  }
+                  style={[styles.formCard, mobile && styles.mobileFormCard]}
                 >
                   <FormHeading
                     eyebrow="STEP 1 OF 4"
@@ -3074,6 +3058,7 @@ export default function AssistanceRequestScreen() {
                           activeOpacity={0.84}
                           style={[
                             styles.categoryCard,
+                            mobile && styles.mobileCategoryCard,
                             category === item.value && {
                               borderColor: item.accent,
                               backgroundColor: item.soft,
@@ -3098,7 +3083,7 @@ export default function AssistanceRequestScreen() {
                             />
                           </View>
 
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.mobileSafeTextColumn}>
                             <Text
                               style={styles.categoryTitle}
                             >
@@ -3156,9 +3141,7 @@ export default function AssistanceRequestScreen() {
               {step === 2 &&
                 selectedCategory && (
                 <View
-                  style={
-                    styles.formCard
-                  }
+                  style={[styles.formCard, mobile && styles.mobileFormCard]}
                 >
                   <FormHeading
                     eyebrow="STEP 2 OF 4"
@@ -3534,9 +3517,7 @@ export default function AssistanceRequestScreen() {
               {step === 3 &&
                 selectedCategory && (
                 <View
-                  style={
-                    styles.formCard
-                  }
+                  style={[styles.formCard, mobile && styles.mobileFormCard]}
                 >
                   <FormHeading
                     eyebrow="STEP 3 OF 4"
@@ -3982,9 +3963,7 @@ export default function AssistanceRequestScreen() {
               {step === 4 &&
                 selectedCategory && (
                 <View
-                  style={
-                    styles.formCard
-                  }
+                  style={[styles.formCard, mobile && styles.mobileFormCard]}
                 >
                   <FormHeading
                     eyebrow="STEP 4 OF 4"
@@ -4408,9 +4387,11 @@ export default function AssistanceRequestScreen() {
 function StepProgress({
   step,
   wide,
+  mobile,
 }: {
   step: number;
   wide: boolean;
+  mobile: boolean;
 }) {
   const rows = [
     {
@@ -4446,6 +4427,7 @@ function StepProgress({
 
         !wide &&
           styles.progressCardCompact,
+        mobile && styles.mobileProgressCard,
       ]}
     >
       {rows.map(
@@ -4472,7 +4454,7 @@ function StepProgress({
                 <View
                   style={[
                     styles.progressLine,
-
+                    mobile && styles.mobileProgressLine,
                     done &&
                       styles.progressLineDone,
                   ]}
@@ -4480,9 +4462,7 @@ function StepProgress({
               )}
 
               <View
-                style={
-                  styles.progressItem
-                }
+                style={[styles.progressItem, mobile && styles.mobileProgressItem]}
               >
                 <View
                   style={[
@@ -4516,7 +4496,7 @@ function StepProgress({
                 <Text
                   style={[
                     styles.progressLabel,
-
+                    mobile && styles.mobileProgressLabel,
                     active &&
                       styles.progressLabelActive,
                   ]}
@@ -8946,4 +8926,134 @@ const styles =
       lineHeight:
         17,
     },
+    // --- Mobile-only visual overrides: preserves the existing desktop design ---
+    mobilePageContainer: {
+      paddingHorizontal: 14,
+      paddingTop: 14,
+      paddingBottom: 32,
+      minWidth: 0,
+    },
+    mobileHero: {
+      flexDirection: "column",
+      alignItems: "stretch",
+      justifyContent: "flex-start",
+      gap: 12,
+      minHeight: 0,
+      padding: 18,
+      borderRadius: 18,
+    },
+    mobileHeroIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      alignSelf: "flex-start",
+    },
+    mobileHeroCopy: {
+      flex: 0,
+      flexGrow: 0,
+      flexShrink: 1,
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      alignSelf: "stretch",
+    },
+    mobileHeroEyebrow: {
+      fontSize: 10,
+      lineHeight: 15,
+      letterSpacing: 0.6,
+    },
+    mobileHeroTitle: {
+      fontSize: 25,
+      lineHeight: 31,
+      marginTop: 5,
+    },
+    mobileHeroSubtitle: {
+      fontSize: 13,
+      lineHeight: 20,
+      marginTop: 8,
+      maxWidth: "100%",
+    },
+    mobileHeroBadge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+      flexShrink: 0,
+      maxWidth: "100%",
+    },
+    mobileModeTabs: {
+      alignSelf: "stretch",
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+    },
+    mobileModeTab: {
+      flex: 1,
+      minWidth: 0,
+      justifyContent: "center",
+      paddingHorizontal: 8,
+    },
+    mobileEmergencyNotice: {
+      flexDirection: "column",
+      alignItems: "stretch",
+      padding: 14,
+      gap: 9,
+      minWidth: 0,
+    },
+    mobileNoticeCopy: {
+      width: "100%",
+      flexGrow: 0,
+      flexShrink: 1,
+      minWidth: 0,
+    },
+    mobileEmergencyButton: {
+      alignSelf: "stretch",
+      width: "100%",
+      minHeight: 42,
+      marginTop: 2,
+    },
+    mobileProgressCard: {
+      paddingHorizontal: 8,
+      paddingVertical: 12,
+      gap: 0,
+      minWidth: 0,
+      width: "100%",
+      justifyContent: "space-between",
+    },
+    mobileProgressLine: {
+      flex: 0.14,
+      minWidth: 0,
+      marginHorizontal: 0,
+      marginBottom: 17,
+    },
+    mobileProgressItem: {
+      flex: 1,
+      minWidth: 0,
+      width: "auto",
+    },
+    mobileProgressLabel: {
+      fontSize: 10,
+      lineHeight: 13,
+      textAlign: "center",
+    },
+    mobileFormCard: {
+      padding: 15,
+      borderRadius: 15,
+      minWidth: 0,
+      width: "100%",
+    },
+    mobileCategoryCard: {
+      width: "100%",
+      minWidth: 0,
+      minHeight: 90,
+      flexShrink: 1,
+      flexGrow: 0,
+      padding: 13,
+      gap: 10,
+    },
+    mobileSafeTextColumn: {
+      flex: 1,
+      flexShrink: 1,
+      minWidth: 0,
+    },
+
   });

@@ -56,6 +56,8 @@ export default function WebLogin() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const compact = width < 900;
+  const mobile = width < 640;
+  const narrowMobile = width < 360;
   const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -219,43 +221,56 @@ export default function WebLogin() {
         resizeMode="cover"
         style={[
           styles.visualPanel,
-          compact
-            ? styles.visualPanelCompact
-            : styles.visualPanelDesktop,
+          mobile
+            ? styles.visualPanelMobile
+            : compact
+              ? styles.visualPanelCompact
+              : styles.visualPanelDesktop,
+          narrowMobile && styles.visualPanelNarrow,
         ]}
         imageStyle={styles.visualImage}
       >
         <LinearGradient
-          colors={[
-            "rgba(4,120,87,0.90)",
-            "rgba(15,118,110,0.70)",
-            "rgba(15,23,42,0.78)",
-          ]}
+          colors={
+            mobile
+              ? [
+                  "rgba(2,64,61,0.48)",
+                  "rgba(3,57,57,0.52)",
+                  "rgba(2,24,39,0.88)",
+                ]
+              : [
+                  "rgba(4,120,87,0.90)",
+                  "rgba(15,118,110,0.70)",
+                  "rgba(15,23,42,0.78)",
+                ]
+          }
           style={StyleSheet.absoluteFillObject}
         />
-        <View style={styles.brandRow}>
-          <View style={styles.logoContainer}>
+        <View style={[styles.brandRow, mobile && styles.brandRowMobile]}>
+          <View style={[styles.logoContainer, mobile && styles.logoContainerMobile]}>
             <Image
               source={require("../assets/images/logo.png")}
-              style={styles.logo}
+              style={[styles.logo, mobile && styles.logoMobile]}
               resizeMode="contain"
             />
           </View>
           <View>
-            <Text style={styles.brandName}>VolunServe</Text>
-            <Text style={styles.brandSubtitle}>
+            <Text style={[styles.brandName, mobile && styles.brandNameMobile]}>
+              VolunServe
+            </Text>
+            <Text style={[styles.brandSubtitle, mobile && styles.brandSubtitleMobile]}>
               City Disaster Response Platform
             </Text>
           </View>
         </View>
-        <View style={styles.heroContent}>
-          <View style={styles.statusBadge}>
+        <View style={[styles.heroContent, mobile && styles.heroContentMobile]}>
+          <View style={[styles.statusBadge, mobile && styles.statusBadgeMobile]}>
             <Ionicons
               name="shield-checkmark"
               size={17}
               color="#10b981"
             />
-            <Text style={styles.statusText}>
+            <Text style={[styles.statusText, mobile && styles.statusTextMobile]}>
               Community Response System
             </Text>
           </View>
@@ -263,11 +278,17 @@ export default function WebLogin() {
             style={[
               styles.heroTitle,
               compact && styles.heroTitleCompact,
+              mobile && styles.heroTitleMobile,
+              narrowMobile && styles.heroTitleNarrow,
             ]}
           >
             {currentSlide.title}
           </Text>
-          <Text style={styles.heroDescription}>
+          <Text style={[
+            styles.heroDescription,
+            mobile && styles.heroDescriptionMobile,
+            narrowMobile && styles.heroDescriptionNarrow,
+          ]}>
             {currentSlide.description}
           </Text>
         </View>
@@ -295,11 +316,24 @@ export default function WebLogin() {
             </TouchableOpacity>
           </>
         )}
-        <View style={styles.carouselFooter}>
+        <View style={[styles.carouselFooter, mobile && styles.carouselFooterMobile]}>
+          {mobile && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Previous carousel slide"
+              onPress={() => changeSlide(-1)}
+              style={styles.mobileSlideArrow}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chevron-back" size={19} color="#ffffff" />
+            </TouchableOpacity>
+          )}
           <View style={styles.dots}>
             {SLIDES.map((_, index) => (
               <Pressable
                 key={index}
+                accessibilityRole="button"
+                accessibilityLabel={`Show carousel slide ${index + 1} of ${SLIDES.length}`}
                 onPress={() => setSlideIndex(index)}
                 style={[
                   styles.dot,
@@ -308,33 +342,49 @@ export default function WebLogin() {
               />
             ))}
           </View>
-          <Text style={styles.slideCounter}>
+          <Text style={[styles.slideCounter, mobile && styles.slideCounterMobile]}>
             {slideIndex + 1} / {SLIDES.length}
           </Text>
+          {mobile && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Next carousel slide"
+              onPress={() => changeSlide(1)}
+              style={styles.mobileSlideArrow}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chevron-forward" size={19} color="#ffffff" />
+            </TouchableOpacity>
+          )}
         </View>
       </ImageBackground>
       <View
         style={[
           styles.formPanel,
           compact && styles.formPanelCompact,
+          mobile && styles.formPanelMobile,
         ]}
       >
         <View
           style={[
             styles.loginCard,
             compact && styles.loginCardCompact,
+            mobile && styles.loginCardMobile,
           ]}
         >
-          <Text style={styles.welcomeTitle}>Welcome back</Text>
-          <Text style={styles.welcomeSubtitle}>
+          <Text style={[styles.welcomeTitle, mobile && styles.welcomeTitleMobile]}>
+            Welcome back
+          </Text>
+          <Text style={[styles.welcomeSubtitle, mobile && styles.welcomeSubtitleMobile]}>
             Sign in to continue to VolunServe
           </Text>
-          <Text style={styles.inputLabel}>
+          <Text style={[styles.inputLabel, mobile && styles.inputLabelMobile]}>
             Email Address
           </Text>
           <View
             style={[
               styles.inputContainer,
+              mobile && styles.inputContainerMobile,
               focusedInput === "email" &&
                 styles.inputContainerFocused,
             ]}
@@ -355,13 +405,16 @@ export default function WebLogin() {
               keyboardType="email-address"
               returnKeyType="next"
               editable={!loading}
-              style={styles.textInput}
+              style={[styles.textInput, mobile && styles.textInputMobile]}
             />
           </View>
-          <Text style={styles.inputLabel}>Password</Text>
+          <Text style={[styles.inputLabel, mobile && styles.inputLabelMobile]}>
+            Password
+          </Text>
           <View
             style={[
               styles.inputContainer,
+              mobile && styles.inputContainerMobile,
               focusedInput === "password" &&
                 styles.inputContainerFocused,
             ]}
@@ -382,7 +435,7 @@ export default function WebLogin() {
               secureTextEntry={!showPassword}
               returnKeyType="done"
               editable={!loading}
-              style={styles.textInput}
+              style={[styles.textInput, mobile && styles.textInputMobile]}
             />
             <TouchableOpacity
               disabled={loading}
@@ -399,7 +452,7 @@ export default function WebLogin() {
               />
             </TouchableOpacity>
           </View>
-          <View style={styles.optionsRow}>
+          <View style={[styles.optionsRow, mobile && styles.optionsRowMobile]}>
             <Pressable
               disabled={loading}
               style={styles.rememberRow}
@@ -421,7 +474,7 @@ export default function WebLogin() {
                   />
                 )}
               </View>
-              <Text style={styles.rememberText}>
+              <Text style={[styles.rememberText, mobile && styles.optionTextMobile]}>
                 Remember me
               </Text>
             </Pressable>
@@ -429,7 +482,7 @@ export default function WebLogin() {
               disabled={loading}
               onPress={handleForgotPassword}
             >
-              <Text style={styles.forgotText}>
+              <Text style={[styles.forgotText, mobile && styles.optionTextMobile]}>
                 Forgot password?
               </Text>
             </TouchableOpacity>
@@ -439,6 +492,7 @@ export default function WebLogin() {
             onPress={handleLogin}
             style={({ pressed }) => [
               styles.signInButton,
+              mobile && styles.signInButtonMobile,
               (pressed || loading) &&
                 styles.buttonPressed,
             ]}
@@ -447,7 +501,7 @@ export default function WebLogin() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <>
-                <Text style={styles.signInText}>
+                <Text style={[styles.signInText, mobile && styles.signInTextMobile]}>
                   Sign In
                 </Text>
                 <Ionicons
@@ -458,13 +512,17 @@ export default function WebLogin() {
               </>
             )}
           </Pressable>
-          <View style={styles.dividerRow}>
+          <View style={[styles.dividerRow, mobile && styles.dividerRowMobile]}>
             <View style={styles.divider} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.divider} />
           </View>
           <TouchableOpacity
-            style={[styles.googleButton, loading && styles.googleButtonDisabled]}
+            style={[
+              styles.googleButton,
+              mobile && styles.actionButtonMobile,
+              loading && styles.googleButtonDisabled,
+            ]}
             onPress={handleGoogleLogin}
             disabled={loading}
             activeOpacity={0.85}
@@ -472,10 +530,14 @@ export default function WebLogin() {
             <View style={styles.googleMark}>
               <Text style={styles.googleMarkText}>G</Text>
             </View>
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            <Text style={[styles.googleButtonText, mobile && styles.googleButtonTextMobile]}>Continue with Google</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.guestButton, styles.guestButtonSpaced]}
+            style={[
+              styles.guestButton,
+              styles.guestButtonSpaced,
+              mobile && styles.actionButtonMobile,
+            ]}
             onPress={() => router.replace("/public")}
             disabled={loading}
           >
@@ -484,23 +546,23 @@ export default function WebLogin() {
               size={21}
               color="#0f172a"
             />
-            <Text style={styles.guestButtonText}>
+            <Text style={[styles.guestButtonText, mobile && styles.guestButtonTextMobile]}>
               Continue as Guest
             </Text>
           </TouchableOpacity>
-          <View style={styles.signupRow}>
-            <Text style={styles.signupQuestion}>
+          <View style={[styles.signupRow, mobile && styles.signupRowMobile]}>
+            <Text style={[styles.signupQuestion, mobile && styles.signupQuestionMobile]}>
               Don&apos;t have an account?
             </Text>
             <TouchableOpacity
               onPress={() => router.push("/signup")}
             >
-              <Text style={styles.signupLink}>
+              <Text style={[styles.signupLink, mobile && styles.signupLinkMobile]}>
                 Create account
               </Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.securityBox}>
+          <View style={[styles.securityBox, mobile && styles.hideOnMobile]}>
             <Ionicons
               name="shield-checkmark"
               size={22}
@@ -880,5 +942,227 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginLeft: 10,
+  },
+  // Mobile presentation: visible rotating carousel above the compact form.
+  // All authentication, permissions, and redirects remain untouched.
+  hideOnMobile: {
+    display: "none",
+  },
+  // Balanced mobile carousel: clear separation between brand, slide text,
+  // navigation controls, and the login card below it.
+  visualPanelMobile: {
+    width: "100%",
+    height: 302,
+    minHeight: 302,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    justifyContent: "space-between",
+    borderBottomWidth: 3,
+    borderBottomColor: "#10b981",
+  },
+  visualPanelNarrow: {
+    height: 318,
+    minHeight: 318,
+    paddingHorizontal: 15,
+  },
+  heroContentMobile: {
+    flex: 1,
+    justifyContent: "flex-end",
+    marginTop: 14,
+    marginBottom: 13,
+    paddingTop: 0,
+    maxWidth: "100%",
+  },
+  statusBadgeMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 11,
+    backgroundColor: "rgba(255,255,255,0.96)",
+  },
+  statusTextMobile: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+  },
+  heroTitleMobile: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "800",
+    letterSpacing: 0.18,
+    maxWidth: "100%",
+  },
+  heroTitleNarrow: {
+    fontSize: 18,
+    lineHeight: 24,
+    letterSpacing: 0.12,
+  },
+  heroDescriptionMobile: {
+    fontSize: 12,
+    lineHeight: 19,
+    fontWeight: "500",
+    letterSpacing: 0.18,
+    marginTop: 8,
+    maxWidth: "100%",
+  },
+  heroDescriptionNarrow: {
+    fontSize: 11,
+    lineHeight: 18,
+    letterSpacing: 0.12,
+  },
+  carouselFooterMobile: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    minHeight: 30,
+  },
+  slideCounterMobile: {
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  mobileSlideArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.50)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandRowMobile: {
+    alignItems: "center",
+  },
+  logoContainerMobile: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 10,
+  },
+  logoMobile: {
+    width: 38,
+    height: 38,
+  },
+  brandNameMobile: {
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: "800",
+    letterSpacing: 0.12,
+  },
+  brandSubtitleMobile: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "500",
+    letterSpacing: 0.12,
+    marginTop: 2,
+  },
+  formPanelMobile: {
+    width: "100%",
+    minHeight: 0,
+    flexGrow: 1,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 22,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    backgroundColor: "#f3f8f7",
+  },
+  loginCardMobile: {
+    width: "100%",
+    maxWidth: 480,
+    borderWidth: 1,
+    borderColor: "#e2ebe8",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 26,
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 0,
+  },
+  welcomeTitleMobile: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "800",
+    letterSpacing: 0.12,
+    textAlign: "left",
+  },
+  welcomeSubtitleMobile: {
+    fontSize: 12.5,
+    lineHeight: 19,
+    letterSpacing: 0.15,
+    textAlign: "left",
+    marginTop: 3,
+    marginBottom: 12,
+  },
+  inputLabelMobile: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+    marginTop: 11,
+    marginBottom: 6,
+  },
+  inputContainerMobile: {
+    minHeight: 49,
+    paddingHorizontal: 13,
+    borderRadius: 12,
+  },
+  textInputMobile: {
+    fontSize: 14.5,
+    letterSpacing: 0.14,
+    minWidth: 0,
+  },
+  optionsRowMobile: {
+    marginTop: 12,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  optionTextMobile: {
+    fontSize: 12,
+    letterSpacing: 0.08,
+  },
+  signInButtonMobile: {
+    minHeight: 50,
+    marginTop: 17,
+    borderRadius: 12,
+  },
+  dividerRowMobile: {
+    marginVertical: 16,
+  },
+  actionButtonMobile: {
+    minHeight: 49,
+    borderRadius: 12,
+  },
+  signupRowMobile: {
+    marginTop: 16,
+  },
+  // Typography-only adjustments for phone screens. The original carousel
+  // dimensions, slide controls, login-card spacing, and auth handlers stay unchanged.
+  signInTextMobile: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    letterSpacing: 0.18,
+  },
+  googleButtonTextMobile: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+  },
+  guestButtonTextMobile: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+  },
+  signupQuestionMobile: {
+    fontSize: 12.5,
+    letterSpacing: 0.12,
+  },
+  signupLinkMobile: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    letterSpacing: 0.12,
   },
 });

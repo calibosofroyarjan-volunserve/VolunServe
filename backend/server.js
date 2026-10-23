@@ -24,6 +24,23 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const IDENTITY_UPLOAD_LIMIT = "20mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
+const MAX_IDENTITY_AI_ATTEMPTS = 3;
+const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
+
+function identityAttemptCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count > 0
+    ? Math.min(count, MAX_IDENTITY_AI_ATTEMPTS)
+    : 0;
+}
+
+function identityAttemptOutcome(decision, attempts) {
+  const requiresManualReview = decision === "manual_review" ||
+    (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
+  const status = decision === "verified" ? "verified" :
+    requiresManualReview ? "pending" : "failed";
+  return { status, requiresManualReview };
+}
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
 const ASSISTANCE_EVIDENCE_MAX_BYTES =
   10 * 1024 * 1024;
@@ -241,6 +258,8 @@ app.use(
       "Authorization",
       "X-File-Name",
       "X-Document-Type",
+      "X-Proposal-Id",
+      "X-Photo-Slot",
     ],
   }),
 );
@@ -475,7 +494,6 @@ app.post(
           error: "invalid_paymongo_webhook_json",
         });
       }
-     
       const eventEnvelope = payload?.data || {};
       const eventAttributes = eventEnvelope?.attributes || {};
       const eventType = paymongoText(
@@ -510,7 +528,6 @@ app.post(
           ...result,
         });
       } catch (error) {
-        
         if (error?.code === "paymongo_donation_not_found") {
           return response.status(200).json({
             ok: true,
@@ -1193,7 +1210,6 @@ app.post(
         request.firebaseUser?.email || "",
         160,
       ).toLowerCase();
-
       if (fullName.length < 2) {
         throw makeHttpError(
           400,
@@ -1201,7 +1217,6 @@ app.post(
           "Enter the LGU Personnel full name.",
         );
       }
-
       if (department.length < 2 || position.length < 2) {
         throw makeHttpError(
           400,
@@ -1209,7 +1224,6 @@ app.post(
           "Enter the LGU department and position.",
         );
       }
-
       if (verificationReference.length < 3) {
         throw makeHttpError(
           400,
@@ -1217,7 +1231,6 @@ app.post(
           "Enter the LGU staff verification reference or source used to confirm this employee.",
         );
       }
-
       if (
         employeeId.length < 2 ||
         employeeId.startsWith("TEST-LGU-")
@@ -1228,7 +1241,6 @@ app.post(
           "Enter the real LGU employee ID. TEST-LGU- IDs are reserved for development accounts.",
         );
       }
-
       if (
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
         /@volunserve[.]test$/i.test(email)
@@ -1239,13 +1251,11 @@ app.post(
           "Enter the staff member's real working email address. @volunserve.test is reserved for TEST accounts.",
         );
       }
-
       const duplicatePersonnel = await db
         .collection("lguPersonnel")
         .where("employeeId", "==", employeeId)
         .limit(1)
         .get();
-
       if (!duplicatePersonnel.empty) {
         throw makeHttpError(
           409,
@@ -1253,7 +1263,6 @@ app.post(
           "This LGU employee ID is already registered.",
         );
       }
-
       try {
         await auth.getUserByEmail(email);
         throw makeHttpError(
@@ -1266,9 +1275,7 @@ app.post(
           throw error;
         }
       }
-
       const password = makeLguTemporaryPassword();
-
       createdAuthUser = await auth.createUser({
         email,
         password,
@@ -1276,14 +1283,12 @@ app.post(
         emailVerified: false,
         disabled: false,
       });
-
       const uid = createdAuthUser.uid;
       const userRef = db.collection("users").doc(uid);
       const personnelRef = db.collection("lguPersonnel").doc(uid);
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       const activityRef = db.collection("adminActivityLogs").doc();
       const batch = db.batch();
-
       batch.set(userRef, {
         uid,
         fullName,
@@ -1309,7 +1314,6 @@ app.post(
         reviewedAt: FieldValue.serverTimestamp(),
         reviewedBy: adminUid,
       });
-
       batch.set(personnelRef, {
         uid,
         fullName,
@@ -1334,7 +1338,6 @@ app.post(
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: adminUid,
       });
-
       batch.set(dutyRef, {
         uid,
         dutyStatus: "off_duty",
@@ -1347,7 +1350,6 @@ app.post(
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: adminUid,
       });
-
       batch.set(activityRef, {
         action: "LGU Personnel Created",
         personnelUid: uid,
@@ -1363,7 +1365,6 @@ app.post(
         performedBy: adminUid,
         timestamp: FieldValue.serverTimestamp(),
       });
-
       try {
         await batch.commit();
       } catch (error) {
@@ -1378,7 +1379,6 @@ app.post(
         createdAuthUser = null;
         throw error;
       }
-
       response.status(201).json({
         ok: true,
         testAccount: false,
@@ -1405,13 +1405,11 @@ app.post(
           );
         }
       }
-
       const authCode = cleanText(error?.code || "", 120);
       const statusCode =
         authCode === "auth/email-already-exists"
           ? 409
           : Number(error?.statusCode) || 500;
-
       response.status(statusCode).json({
         error: authCode || "lgu_personnel_creation_failed",
         message: cleanText(
@@ -1667,7 +1665,6 @@ app.patch(
     try {
       const adminUid = request.firebaseUser.uid;
       const targetUid = cleanText(request.params?.uid || "", 160);
-
       if (!targetUid) {
         throw makeHttpError(
           400,
@@ -1675,12 +1672,10 @@ app.patch(
           "The LGU Personnel account ID is required.",
         );
       }
-
       const [profile, personnelSnapshot] = await Promise.all([
         loadUserProfile(targetUid),
         db.collection("lguPersonnel").doc(targetUid).get(),
       ]);
-
       if (!profile || !personnelSnapshot.exists) {
         throw makeHttpError(
           404,
@@ -1688,9 +1683,7 @@ app.patch(
           "The LGU Personnel account was not found.",
         );
       }
-
       const personnel = personnelSnapshot.data() || {};
-
       if (
         getProfileRole(profile) !== "lgu_personnel" ||
         personnel.isTestAccount === true ||
@@ -1702,7 +1695,6 @@ app.patch(
           "This management action is available only for real LGU Personnel accounts.",
         );
       }
-
       const fullName = cleanText(
         request.body?.fullName ?? personnel.fullName ?? profile.fullName ?? "",
         120,
@@ -1722,7 +1714,6 @@ app.patch(
       const capabilities = normalizeLguCapabilities(
         request.body?.capabilities ?? personnel.capabilities ?? [],
       );
-
       if (fullName.length < 2) {
         throw makeHttpError(
           400,
@@ -1730,7 +1721,6 @@ app.patch(
           "Enter the LGU Personnel full name.",
         );
       }
-
       if (department.length < 2 || position.length < 2) {
         throw makeHttpError(
           400,
@@ -1738,16 +1728,13 @@ app.patch(
           "Enter the LGU department and position.",
         );
       }
-
       await auth.updateUser(targetUid, {
         displayName: fullName,
       });
-
       const batch = db.batch();
       const userRef = db.collection("users").doc(targetUid);
       const personnelRef = db.collection("lguPersonnel").doc(targetUid);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       batch.set(
         userRef,
         {
@@ -1760,7 +1747,6 @@ app.patch(
         },
         { merge: true },
       );
-
       batch.set(
         personnelRef,
         {
@@ -1774,7 +1760,6 @@ app.patch(
         },
         { merge: true },
       );
-
       batch.set(activityRef, {
         action: "LGU Personnel Profile Updated",
         personnelUid: targetUid,
@@ -1784,9 +1769,7 @@ app.patch(
         performedBy: adminUid,
         timestamp: FieldValue.serverTimestamp(),
       });
-
       await batch.commit();
-
       response.json({
         ok: true,
         uid: targetUid,
@@ -1799,7 +1782,6 @@ app.patch(
       });
     } catch (error) {
       console.error("LGU Personnel profile update failed:", error);
-
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(
           error?.code || "lgu_personnel_update_failed",
@@ -1813,7 +1795,6 @@ app.patch(
     }
   },
 );
-
 app.post(
   "/api/admin/lgu/personnel/:uid/status",
   requireFirebaseUser,
@@ -1827,7 +1808,6 @@ app.post(
         40,
       ).toLowerCase();
       const reason = cleanText(request.body?.reason || "", 700);
-
       if (!targetUid) {
         throw makeHttpError(
           400,
@@ -1835,7 +1815,6 @@ app.post(
           "The LGU Personnel account ID is required.",
         );
       }
-
       if (!["active", "suspended", "inactive"].includes(nextStatus)) {
         throw makeHttpError(
           400,
@@ -1843,7 +1822,6 @@ app.post(
           "Employment status must be active, suspended, or inactive.",
         );
       }
-
       if (
         ["suspended", "inactive"].includes(nextStatus) &&
         reason.length < 3
@@ -1854,13 +1832,11 @@ app.post(
           "Enter a short reason for suspending or deactivating this LGU Personnel account.",
         );
       }
-
       const [profile, personnelSnapshot, dutySnapshot] = await Promise.all([
         loadUserProfile(targetUid),
         db.collection("lguPersonnel").doc(targetUid).get(),
         db.collection("lguDutyStatus").doc(targetUid).get(),
       ]);
-
       if (!profile || !personnelSnapshot.exists) {
         throw makeHttpError(
           404,
@@ -1868,10 +1844,8 @@ app.post(
           "The LGU Personnel account was not found.",
         );
       }
-
       const personnel = personnelSnapshot.data() || {};
       const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
-
       if (
         getProfileRole(profile) !== "lgu_personnel" ||
         personnel.isTestAccount === true ||
@@ -1883,12 +1857,10 @@ app.post(
           "Employment access management is available only for real LGU Personnel accounts.",
         );
       }
-
       const currentStatus = cleanText(
         personnel.employmentStatus || profile.employmentStatus || "active",
         40,
       ).toLowerCase();
-
       if (currentStatus === nextStatus) {
         response.json({
           ok: true,
@@ -1898,7 +1870,6 @@ app.post(
         });
         return;
       }
-
       const dutyStatus = cleanText(
         duty.dutyStatus || "off_duty",
         40,
@@ -1912,7 +1883,6 @@ app.post(
         duty.activeAssignmentId || "",
         180,
       );
-
       if (
         nextStatus !== "active" &&
         (
@@ -1930,7 +1900,6 @@ app.post(
           "This LGU Personnel account cannot be suspended or deactivated while On Duty or handling an active emergency. Complete the response and Time Out first.",
         );
       }
-
       if (nextStatus === "active") {
         await auth.updateUser(targetUid, {
           disabled: false,
@@ -1941,13 +1910,11 @@ app.post(
         });
         await auth.revokeRefreshTokens(targetUid);
       }
-
       const userRef = db.collection("users").doc(targetUid);
       const personnelRef = db.collection("lguPersonnel").doc(targetUid);
       const dutyRef = db.collection("lguDutyStatus").doc(targetUid);
       const activityRef = db.collection("adminActivityLogs").doc();
       const batch = db.batch();
-
       batch.set(
         userRef,
         {
@@ -1962,7 +1929,6 @@ app.post(
         },
         { merge: true },
       );
-
       batch.set(
         personnelRef,
         {
@@ -1976,7 +1942,6 @@ app.post(
         },
         { merge: true },
       );
-
       batch.set(
         dutyRef,
         {
@@ -1990,7 +1955,6 @@ app.post(
         },
         { merge: true },
       );
-
       batch.set(activityRef, {
         action:
           nextStatus === "active"
@@ -2006,9 +1970,7 @@ app.post(
         performedBy: adminUid,
         timestamp: FieldValue.serverTimestamp(),
       });
-
       await batch.commit();
-
       response.json({
         ok: true,
         uid: targetUid,
@@ -2022,7 +1984,6 @@ app.post(
       });
     } catch (error) {
       console.error("LGU Personnel status update failed:", error);
-
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(
           error?.code || "lgu_personnel_status_update_failed",
@@ -2099,48 +2060,38 @@ app.get(
         Number.isFinite(requestedLimit) && requestedLimit > 0
           ? Math.min(Math.floor(requestedLimit), 500)
           : 200;
-
       const [attendanceSnapshot, personnelSnapshot] = await Promise.all([
         db.collection("lguAttendance").limit(500).get(),
         db.collection("lguPersonnel").limit(200).get(),
       ]);
-
       const personnelByUid = new Map();
-
       personnelSnapshot.docs.forEach((document) => {
         const data = document.data() || {};
-
         personnelByUid.set(document.id, {
           employeeId: cleanText(data.employeeId || "", 80),
           isTestAccount: data.isTestAccount === true,
           email: cleanText(data.email || "", 160),
         });
       });
-
       const timestampIso = (value) => {
         try {
           if (!value) return "";
-
           if (typeof value.toDate === "function") {
             return value.toDate().toISOString();
           }
-
           if (value instanceof Date) {
             return value.toISOString();
           }
-
           return "";
         } catch {
           return "";
         }
       };
-
       const records = attendanceSnapshot.docs
         .map((document) => {
           const data = document.data() || {};
           const uid = cleanText(data.uid || "", 160);
           const personnelMeta = personnelByUid.get(uid) || {};
-
           return {
             id: document.id,
             uid,
@@ -2165,18 +2116,15 @@ app.get(
           const bTime = b.timeInAt
             ? new Date(b.timeInAt).getTime()
             : 0;
-
           return bTime - aTime;
         })
         .slice(0, safeLimit);
-
       response.json({
         ok: true,
         records,
       });
     } catch (error) {
       console.error("LGU attendance history load failed:", error);
-
       response.status(Number(error?.statusCode) || 500).json({
         error: cleanText(
           error?.code || "lgu_attendance_history_failed",
@@ -2199,15 +2147,12 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const caseId = cleanText(request.body?.caseId || "", 160);
       const personnelUid = cleanText(request.body?.personnelUid || "", 160);
-
       if (!caseId) {
         throw makeHttpError(400, "case_id_required", "Select an emergency case before assigning LGU Personnel.");
       }
-
       if (!personnelUid) {
         throw makeHttpError(400, "lgu_personnel_uid_required", "Select an LGU Personnel account to assign.");
       }
-
       const caseRef = db.collection("disasterCases").doc(caseId);
       const personnelRef = db.collection("lguPersonnel").doc(personnelUid);
       const personnelUserRef = db.collection("users").doc(personnelUid);
@@ -2216,9 +2161,7 @@ app.post(
       const personnelNotificationRef = db.collection("notifications").doc();
       const residentNotificationRef = db.collection("notifications").doc();
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let assignedPersonnel = null;
-
       await db.runTransaction(async (transaction) => {
         const [
           caseSnapshot,
@@ -2231,15 +2174,12 @@ app.post(
           transaction.get(personnelUserRef),
           transaction.get(dutyRef),
         ]);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(404, "emergency_case_not_found", "The emergency case no longer exists.");
         }
-
         if (!personnelSnapshot.exists || !personnelUserSnapshot.exists) {
           throw makeHttpError(404, "lgu_personnel_not_found", "The selected LGU Personnel account was not found.");
         }
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -2247,12 +2187,10 @@ app.post(
             "The selected LGU Personnel has no active duty record. They must Time In first.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
         const personnel = personnelSnapshot.data() || {};
         const personnelUser = personnelUserSnapshot.data() || {};
         const duty = dutySnapshot.data() || {};
-
         const caseStatus = cleanText(emergencyCase.status || "", 40).toLowerCase();
         const verificationStatus = cleanText(
           emergencyCase.verificationStatus ||
@@ -2261,7 +2199,6 @@ app.post(
               : "pending_verification"),
           60,
         ).toLowerCase();
-
         if (verificationStatus !== "validated") {
           throw makeHttpError(
             409,
@@ -2269,7 +2206,6 @@ app.post(
             "Validate the emergency report before assigning official LGU Personnel.",
           );
         }
-
         if (!["validated", "assigned", "in_progress"].includes(caseStatus)) {
           throw makeHttpError(
             409,
@@ -2277,7 +2213,6 @@ app.post(
             "This emergency case is not currently eligible for LGU assignment.",
           );
         }
-
         if (emergencyCase.dispatchBlocked === true) {
           throw makeHttpError(
             409,
@@ -2285,7 +2220,6 @@ app.post(
             "LGU dispatch is blocked while this case is awaiting verification or additional evidence.",
           );
         }
-
         if (
           cleanText(
             emergencyCase.officialLguResponseStatus || "",
@@ -2298,7 +2232,6 @@ app.post(
             "Review the completed official LGU field report before assigning another official responder.",
           );
         }
-
         if (cleanText(emergencyCase.reporterUid || "", 160) === personnelUid) {
           throw makeHttpError(
             409,
@@ -2306,7 +2239,6 @@ app.post(
             "The resident who reported this emergency cannot be assigned as the official LGU responder.",
           );
         }
-
         if (
           cleanText(personnel.verificationStatus || "", 40).toLowerCase() !== "verified" ||
           cleanText(personnel.employmentStatus || "", 40).toLowerCase() !== "active"
@@ -2317,7 +2249,6 @@ app.post(
             "Only verified and active LGU Personnel can be assigned.",
           );
         }
-
         if (!isVerifiedLguPersonnelProfile(personnelUser)) {
           throw makeHttpError(
             409,
@@ -2325,12 +2256,10 @@ app.post(
             "The selected account is not an approved verified LGU Personnel account.",
           );
         }
-
         const dutyStatus = cleanText(duty.dutyStatus || "", 40).toLowerCase();
         const availabilityStatus = cleanText(duty.availabilityStatus || "", 40).toLowerCase();
         const activeCaseId = cleanText(duty.activeCaseId || "", 160);
         const activeAssignmentId = cleanText(duty.activeAssignmentId || "", 180);
-
         if (
           dutyStatus !== "on_duty" ||
           availabilityStatus !== "available" ||
@@ -2343,12 +2272,10 @@ app.post(
             "The selected LGU Personnel must be On Duty and Available with no active emergency assignment.",
           );
         }
-
         const currentOfficialUid = cleanText(
           emergencyCase.activeLguResponderUid || "",
           160,
         );
-
         if (currentOfficialUid) {
           throw makeHttpError(
             409,
@@ -2358,7 +2285,6 @@ app.post(
               : "This emergency case already has an official LGU responder assigned.",
           );
         }
-
         const currentPrimaryUid = cleanText(
           emergencyCase.activeResponderUid || "",
           160,
@@ -2367,7 +2293,6 @@ app.post(
           emergencyCase.activeResponderKind || "",
           80,
         ).toLowerCase();
-
         if (
           currentPrimaryUid &&
           currentPrimaryUid !== personnelUid &&
@@ -2380,7 +2305,6 @@ app.post(
             "This case currently has another active primary responder. Clear or finish that response before assigning the official LGU responder.",
           );
         }
-
         const personnelName =
           cleanText(
             personnel.fullName ||
@@ -2389,10 +2313,8 @@ app.post(
               "LGU Responder",
             120,
           ) || "LGU Responder";
-
         const department = cleanText(personnel.department || "", 120);
         const position = cleanText(personnel.position || "", 120);
-
         if (department.length < 2 || position.length < 2) {
           throw makeHttpError(
             409,
@@ -2400,7 +2322,6 @@ app.post(
             "The selected LGU Personnel record is missing a valid department or position.",
           );
         }
-
         transaction.set(assignmentRef, {
           caseId,
           personnelUid,
@@ -2418,7 +2339,6 @@ app.post(
           cancelledBy: "",
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(dutyRef, {
           availabilityStatus: "assigned",
           activeCaseId: caseId,
@@ -2426,7 +2346,6 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: adminUid,
         });
-
         const casePatch = {
           activeResponderUid: personnelUid,
           activeResponderName: personnelName,
@@ -2445,14 +2364,11 @@ app.post(
           assignedLguPersonnelIds: FieldValue.arrayUnion(personnelUid),
           updatedAt: FieldValue.serverTimestamp(),
         };
-
         if (caseStatus === "validated") {
           casePatch.status = "assigned";
           casePatch.assignedAt = FieldValue.serverTimestamp();
         }
-
         transaction.update(caseRef, casePatch);
-
         transaction.set(personnelNotificationRef, {
           userId: personnelUid,
           audience: "lgu_personnel",
@@ -2467,7 +2383,6 @@ app.post(
           read: false,
           createdAt: FieldValue.serverTimestamp(),
         });
-
         const reporterUid = cleanText(emergencyCase.reporterUid || "", 160);
         if (reporterUid) {
           transaction.set(residentNotificationRef, {
@@ -2484,7 +2399,6 @@ app.post(
             createdAt: FieldValue.serverTimestamp(),
           });
         }
-
         transaction.set(activityLogRef, {
           action: "Official LGU Personnel Assigned",
           caseId,
@@ -2496,7 +2410,6 @@ app.post(
           performedBy: adminUid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         assignedPersonnel = {
           uid: personnelUid,
           fullName: personnelName,
@@ -2504,7 +2417,6 @@ app.post(
           position,
         };
       });
-
       response.json({
         ok: true,
         assignmentId: assignmentRef.id,
@@ -2532,7 +2444,6 @@ app.post(
     try {
       const uid = request.firebaseUser.uid;
       const assignmentId = cleanText(request.params?.assignmentId || "", 180);
-
       if (!assignmentId) {
         throw makeHttpError(
           400,
@@ -2540,19 +2451,15 @@ app.post(
           "The LGU assignment ID is required.",
         );
       }
-
       const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let acknowledgedAssignment = null;
-
       await db.runTransaction(async (transaction) => {
         const [assignmentSnapshot, dutySnapshot] = await Promise.all([
           transaction.get(assignmentRef),
           transaction.get(dutyRef),
         ]);
-
         if (!assignmentSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -2560,7 +2467,6 @@ app.post(
             "This LGU assignment no longer exists.",
           );
         }
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -2568,10 +2474,8 @@ app.post(
             "Your LGU duty record could not be found.",
           );
         }
-
         const assignment = assignmentSnapshot.data() || {};
         const duty = dutySnapshot.data() || {};
-
         if (cleanText(assignment.personnelUid || "", 160) !== uid) {
           throw makeHttpError(
             403,
@@ -2579,12 +2483,10 @@ app.post(
             "This emergency assignment does not belong to your LGU account.",
           );
         }
-
         const assignmentStatus = cleanText(
           assignment.status || "",
           40,
         ).toLowerCase();
-
         if (assignmentStatus !== "assigned") {
           throw makeHttpError(
             409,
@@ -2594,7 +2496,6 @@ app.post(
               : "This emergency assignment already changed. Refresh and check its latest status.",
           );
         }
-
         if (
           cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
           cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "assigned" ||
@@ -2608,13 +2509,11 @@ app.post(
             "Your active duty record no longer matches this emergency assignment.",
           );
         }
-
         transaction.update(assignmentRef, {
           status: "acknowledged",
           acknowledgedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.set(activityLogRef, {
           action: "Official LGU Assignment Acknowledged",
           caseId: cleanText(assignment.caseId || "", 160),
@@ -2624,7 +2523,6 @@ app.post(
           performedBy: uid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         acknowledgedAssignment = {
           id: assignmentId,
           caseId: cleanText(assignment.caseId || "", 160),
@@ -2632,7 +2530,6 @@ app.post(
           status: "acknowledged",
         };
       });
-
       response.json({
         ok: true,
         assignment: acknowledgedAssignment,
@@ -2658,7 +2555,6 @@ app.post(
     try {
       const uid = request.firebaseUser.uid;
       const assignmentId = cleanText(request.params?.assignmentId || "", 180);
-
       if (!assignmentId) {
         throw makeHttpError(
           400,
@@ -2666,20 +2562,16 @@ app.post(
           "The LGU assignment ID is required.",
         );
       }
-
       const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       const residentNotificationRef = db.collection("notifications").doc();
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let responseResult = null;
-
       await db.runTransaction(async (transaction) => {
         const [assignmentSnapshot, dutySnapshot] = await Promise.all([
           transaction.get(assignmentRef),
           transaction.get(dutyRef),
         ]);
-
         if (!assignmentSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -2687,7 +2579,6 @@ app.post(
             "This LGU assignment no longer exists.",
           );
         }
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -2695,11 +2586,9 @@ app.post(
             "Your LGU duty record could not be found.",
           );
         }
-
         const assignment = assignmentSnapshot.data() || {};
         const duty = dutySnapshot.data() || {};
         const caseId = cleanText(assignment.caseId || "", 160);
-
         if (cleanText(assignment.personnelUid || "", 160) !== uid) {
           throw makeHttpError(
             403,
@@ -2707,7 +2596,6 @@ app.post(
             "This emergency assignment does not belong to your LGU account.",
           );
         }
-
         if (!caseId) {
           throw makeHttpError(
             409,
@@ -2715,12 +2603,10 @@ app.post(
             "This LGU assignment is not linked to a valid emergency case.",
           );
         }
-
         const assignmentStatus = cleanText(
           assignment.status || "",
           40,
         ).toLowerCase();
-
         if (assignmentStatus !== "acknowledged") {
           throw makeHttpError(
             409,
@@ -2732,7 +2618,6 @@ app.post(
                 : "This emergency assignment is not ready to start a response.",
           );
         }
-
         if (
           cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
           cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "assigned" ||
@@ -2745,10 +2630,8 @@ app.post(
             "Your active duty record no longer matches this emergency assignment.",
           );
         }
-
         const caseRef = db.collection("disasterCases").doc(caseId);
         const caseSnapshot = await transaction.get(caseRef);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -2756,13 +2639,11 @@ app.post(
             "The linked emergency case no longer exists.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
         const caseStatus = cleanText(
           emergencyCase.status || "",
           40,
         ).toLowerCase();
-
         if (!["validated", "assigned", "in_progress"].includes(caseStatus)) {
           throw makeHttpError(
             409,
@@ -2770,7 +2651,6 @@ app.post(
             "This emergency case is no longer active for official response.",
           );
         }
-
         if (
           cleanText(emergencyCase.activeLguResponderUid || "", 160) !== uid
         ) {
@@ -2780,19 +2660,16 @@ app.post(
             "You are no longer the active official LGU responder for this case.",
           );
         }
-
         transaction.update(assignmentRef, {
           status: "responding",
           responseStartedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(dutyRef, {
           availabilityStatus: "responding",
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
-
         const casePatch = {
           activeResponderUid: uid,
           activeResponderKind: "lgu",
@@ -2804,15 +2681,11 @@ app.post(
           officialLguResponseStatus: "responding",
           updatedAt: FieldValue.serverTimestamp(),
         };
-
         if (caseStatus !== "in_progress") {
           casePatch.status = "in_progress";
         }
-
         transaction.update(caseRef, casePatch);
-
         const reporterUid = cleanText(emergencyCase.reporterUid || "", 160);
-
         if (reporterUid) {
           transaction.set(residentNotificationRef, {
             userId: reporterUid,
@@ -2834,7 +2707,6 @@ app.post(
             createdAt: FieldValue.serverTimestamp(),
           });
         }
-
         transaction.set(activityLogRef, {
           action: "Official LGU Response Started",
           caseId,
@@ -2847,7 +2719,6 @@ app.post(
           performedBy: uid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         responseResult = {
           id: assignmentId,
           caseId,
@@ -2855,7 +2726,6 @@ app.post(
           status: "responding",
         };
       });
-
       response.json({
         ok: true,
         assignment: responseResult,
@@ -2884,7 +2754,6 @@ app.post(
     try {
       const uid = request.firebaseUser.uid;
       const assignmentId = cleanText(request.params?.assignmentId || "", 180);
-
       if (!assignmentId) {
         throw makeHttpError(
           400,
@@ -2892,20 +2761,16 @@ app.post(
           "The LGU assignment ID is required.",
         );
       }
-
       const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       const residentNotificationRef = db.collection("notifications").doc();
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let arrivalResult = null;
-
       await db.runTransaction(async (transaction) => {
         const [assignmentSnapshot, dutySnapshot] = await Promise.all([
           transaction.get(assignmentRef),
           transaction.get(dutyRef),
         ]);
-
         if (!assignmentSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -2913,7 +2778,6 @@ app.post(
             "This LGU assignment no longer exists.",
           );
         }
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -2921,11 +2785,9 @@ app.post(
             "Your LGU duty record could not be found.",
           );
         }
-
         const assignment = assignmentSnapshot.data() || {};
         const duty = dutySnapshot.data() || {};
         const caseId = cleanText(assignment.caseId || "", 160);
-
         if (cleanText(assignment.personnelUid || "", 160) !== uid) {
           throw makeHttpError(
             403,
@@ -2933,7 +2795,6 @@ app.post(
             "This emergency assignment does not belong to your LGU account.",
           );
         }
-
         if (!caseId) {
           throw makeHttpError(
             409,
@@ -2941,12 +2802,10 @@ app.post(
             "This LGU assignment is not linked to a valid emergency case.",
           );
         }
-
         const assignmentStatus = cleanText(
           assignment.status || "",
           40,
         ).toLowerCase();
-
         if (assignmentStatus !== "responding") {
           throw makeHttpError(
             409,
@@ -2956,7 +2815,6 @@ app.post(
               : "Start the official response before marking arrival.",
           );
         }
-
         if (
           cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
           cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "responding" ||
@@ -2969,10 +2827,8 @@ app.post(
             "Your active duty record no longer matches this responding emergency assignment.",
           );
         }
-
         const caseRef = db.collection("disasterCases").doc(caseId);
         const caseSnapshot = await transaction.get(caseRef);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -2980,13 +2836,11 @@ app.post(
             "The linked emergency case no longer exists.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
         const caseStatus = cleanText(
           emergencyCase.status || "",
           40,
         ).toLowerCase();
-
         if (caseStatus !== "in_progress") {
           throw makeHttpError(
             409,
@@ -2994,7 +2848,6 @@ app.post(
             "The emergency case must be In Progress before arrival can be recorded.",
           );
         }
-
         if (
           cleanText(emergencyCase.activeLguResponderUid || "", 160) !== uid
         ) {
@@ -3004,7 +2857,6 @@ app.post(
             "You are no longer the active official LGU responder for this case.",
           );
         }
-
         transaction.update(assignmentRef, {
           status: "on_site",
           arrivedAt: FieldValue.serverTimestamp(),
@@ -3013,13 +2865,11 @@ app.post(
           residentArrivalConfirmedBy: "",
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(dutyRef, {
           availabilityStatus: "on_site",
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
-
         transaction.update(caseRef, {
           officialLguResponseStatus: "on_site",
           lguArrivalConfirmationStatus: "pending",
@@ -3030,9 +2880,7 @@ app.post(
           lguArrivalResponderUid: uid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         const reporterUid = cleanText(emergencyCase.reporterUid || "", 160);
-
         if (reporterUid) {
           transaction.set(residentNotificationRef, {
             userId: reporterUid,
@@ -3054,7 +2902,6 @@ app.post(
             createdAt: FieldValue.serverTimestamp(),
           });
         }
-
         transaction.set(activityLogRef, {
           action: "Official LGU Responder Arrived On Site",
           caseId,
@@ -3067,7 +2914,6 @@ app.post(
           performedBy: uid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         arrivalResult = {
           id: assignmentId,
           caseId,
@@ -3075,7 +2921,6 @@ app.post(
           status: "on_site",
         };
       });
-
       response.json({
         ok: true,
         assignment: arrivalResult,
@@ -3104,7 +2949,6 @@ app.post(
     try {
       const uid = request.firebaseUser.uid;
       const caseId = cleanText(request.params?.caseId || "", 160);
-
       if (!caseId) {
         throw makeHttpError(
           400,
@@ -3112,9 +2956,7 @@ app.post(
           "The emergency case ID is required.",
         );
       }
-
       const profile = await loadUserProfile(uid);
-
       if (
         !isApprovedAccount(profile) ||
         profile?.residentAccess !== true
@@ -3125,15 +2967,11 @@ app.post(
           "An approved Resident account is required to confirm LGU arrival.",
         );
       }
-
       const caseRef = db.collection("disasterCases").doc(caseId);
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let confirmationResult = null;
-
       await db.runTransaction(async (transaction) => {
         const caseSnapshot = await transaction.get(caseRef);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3141,9 +2979,7 @@ app.post(
             "The emergency case no longer exists.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
-
         if (cleanText(emergencyCase.reporterUid || "", 160) !== uid) {
           throw makeHttpError(
             403,
@@ -3151,12 +2987,10 @@ app.post(
             "Only the Resident who reported this emergency can confirm the official LGU arrival.",
           );
         }
-
         const caseStatus = cleanText(
           emergencyCase.status || "",
           40,
         ).toLowerCase();
-
         if (!["in_progress", "resolved"].includes(caseStatus)) {
           throw makeHttpError(
             409,
@@ -3164,12 +2998,10 @@ app.post(
             "This emergency case is not in a state where LGU arrival can be confirmed.",
           );
         }
-
         const confirmationStatus = cleanText(
           emergencyCase.lguArrivalConfirmationStatus || "",
           40,
         ).toLowerCase();
-
         if (confirmationStatus === "confirmed") {
           confirmationResult = {
             caseId,
@@ -3186,7 +3018,6 @@ app.post(
           };
           return;
         }
-
         if (confirmationStatus !== "pending") {
           throw makeHttpError(
             409,
@@ -3194,7 +3025,6 @@ app.post(
             "The official LGU responder has not reported an arrival that is waiting for confirmation.",
           );
         }
-
         const assignmentId = cleanText(
           emergencyCase.lguArrivalAssignmentId ||
             emergencyCase.activeResponderAssignmentId ||
@@ -3207,7 +3037,6 @@ app.post(
             "",
           160,
         );
-
         if (!assignmentId || !responderUid) {
           throw makeHttpError(
             409,
@@ -3215,13 +3044,11 @@ app.post(
             "The LGU arrival record is missing its responder or assignment reference.",
           );
         }
-
         const assignmentRef = db
           .collection("lguAssignments")
           .doc(assignmentId);
         const assignmentSnapshot =
           await transaction.get(assignmentRef);
-
         if (!assignmentSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3229,13 +3056,11 @@ app.post(
             "The official LGU assignment linked to this arrival no longer exists.",
           );
         }
-
         const assignment = assignmentSnapshot.data() || {};
         const assignmentStatus = cleanText(
           assignment.status || "",
           40,
         ).toLowerCase();
-
         if (
           cleanText(assignment.caseId || "", 160) !== caseId ||
           cleanText(assignment.personnelUid || "", 160) !== responderUid
@@ -3246,7 +3071,6 @@ app.post(
             "The stored LGU arrival no longer matches the official response assignment.",
           );
         }
-
         if (!["on_site", "completed"].includes(assignmentStatus)) {
           throw makeHttpError(
             409,
@@ -3254,24 +3078,20 @@ app.post(
             "The official LGU assignment is not recorded as On Site.",
           );
         }
-
         transaction.update(caseRef, {
           lguArrivalConfirmationStatus: "confirmed",
           lguArrivalConfirmedAt: FieldValue.serverTimestamp(),
           lguArrivalConfirmedBy: uid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(assignmentRef, {
           residentArrivalConfirmationStatus: "confirmed",
           residentArrivalConfirmedAt: FieldValue.serverTimestamp(),
           residentArrivalConfirmedBy: uid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         const responderNotificationRef =
           db.collection("notifications").doc();
-
         transaction.set(responderNotificationRef, {
           userId: responderUid,
           audience: "lgu_personnel",
@@ -3286,7 +3106,6 @@ app.post(
           read: false,
           createdAt: FieldValue.serverTimestamp(),
         });
-
         transaction.set(activityLogRef, {
           action: "Resident Confirmed Official LGU Arrival",
           caseId,
@@ -3302,7 +3121,6 @@ app.post(
           performedBy: uid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         confirmationResult = {
           caseId,
           assignmentId,
@@ -3311,7 +3129,6 @@ app.post(
           alreadyConfirmed: false,
         };
       });
-
       response.json({
         ok: true,
         confirmation: confirmationResult,
@@ -3348,14 +3165,12 @@ app.post(
       const outcome = cleanText(request.body?.outcome || "", 80).toLowerCase();
       const remainingNeeds = cleanText(request.body?.remainingNeeds || "", 1000);
       const notes = cleanText(request.body?.notes || "", 1000);
-
       const allowedOutcomes = [
         "resolved_on_site",
         "stabilized",
         "referred",
         "needs_follow_up",
       ];
-
       if (!assignmentId) {
         throw makeHttpError(
           400,
@@ -3363,7 +3178,6 @@ app.post(
           "The LGU assignment ID is required.",
         );
       }
-
       if (situationSummary.length < 10) {
         throw makeHttpError(
           400,
@@ -3371,7 +3185,6 @@ app.post(
           "Enter a short situation summary of at least 10 characters.",
         );
       }
-
       if (actionsTaken.length < 10) {
         throw makeHttpError(
           400,
@@ -3379,7 +3192,6 @@ app.post(
           "Describe the response actions taken using at least 10 characters.",
         );
       }
-
       if (
         !Number.isInteger(peopleAssistedRaw) ||
         peopleAssistedRaw < 0 ||
@@ -3391,7 +3203,6 @@ app.post(
           "People assisted must be a whole number from 0 to 999.",
         );
       }
-
       if (!allowedOutcomes.includes(outcome)) {
         throw makeHttpError(
           400,
@@ -3399,7 +3210,6 @@ app.post(
           "Select a valid field response outcome.",
         );
       }
-
       if (
         ["referred", "needs_follow_up"].includes(outcome) &&
         remainingNeeds.length < 3
@@ -3410,15 +3220,12 @@ app.post(
           "Describe the remaining need or referral before completing this response.",
         );
       }
-
       const assignmentRef = db.collection("lguAssignments").doc(assignmentId);
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       const reportRef = db.collection("lguFieldReports").doc(assignmentId);
       const residentNotificationRef = db.collection("notifications").doc();
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let completionResult = null;
-
       await db.runTransaction(async (transaction) => {
         const [
           assignmentSnapshot,
@@ -3429,7 +3236,6 @@ app.post(
           transaction.get(dutyRef),
           transaction.get(reportRef),
         ]);
-
         if (!assignmentSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3437,7 +3243,6 @@ app.post(
             "This LGU assignment no longer exists.",
           );
         }
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -3445,11 +3250,9 @@ app.post(
             "Your LGU duty record could not be found.",
           );
         }
-
         const assignment = assignmentSnapshot.data() || {};
         const duty = dutySnapshot.data() || {};
         const caseId = cleanText(assignment.caseId || "", 160);
-
         if (cleanText(assignment.personnelUid || "", 160) !== uid) {
           throw makeHttpError(
             403,
@@ -3457,7 +3260,6 @@ app.post(
             "This emergency assignment does not belong to your LGU account.",
           );
         }
-
         if (!caseId) {
           throw makeHttpError(
             409,
@@ -3465,12 +3267,10 @@ app.post(
             "This LGU assignment is not linked to a valid emergency case.",
           );
         }
-
         const assignmentStatus = cleanText(
           assignment.status || "",
           40,
         ).toLowerCase();
-
         if (assignmentStatus !== "on_site") {
           throw makeHttpError(
             409,
@@ -3480,7 +3280,6 @@ app.post(
               : "Mark the responder as On Site before submitting the completion report.",
           );
         }
-
         if (existingReportSnapshot.exists) {
           throw makeHttpError(
             409,
@@ -3488,7 +3287,6 @@ app.post(
             "A field completion report already exists for this assignment.",
           );
         }
-
         if (
           cleanText(duty.dutyStatus || "", 40).toLowerCase() !== "on_duty" ||
           cleanText(duty.availabilityStatus || "", 40).toLowerCase() !== "on_site" ||
@@ -3501,11 +3299,9 @@ app.post(
             "Your active duty record no longer matches this On Site emergency assignment.",
           );
         }
-
         const caseRef = db.collection("disasterCases").doc(caseId);
         const liveLocationRef = db.collection("lguResponseLocations").doc(caseId);
         const caseSnapshot = await transaction.get(caseRef);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3513,13 +3309,11 @@ app.post(
             "The linked emergency case no longer exists.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
         const caseStatus = cleanText(
           emergencyCase.status || "",
           40,
         ).toLowerCase();
-
         if (caseStatus !== "in_progress") {
           throw makeHttpError(
             409,
@@ -3527,7 +3321,6 @@ app.post(
             "The emergency case is no longer active for LGU field completion.",
           );
         }
-
         if (
           cleanText(emergencyCase.activeLguResponderUid || "", 160) !== uid
         ) {
@@ -3537,14 +3330,12 @@ app.post(
             "You are no longer the active official LGU responder for this case.",
           );
         }
-
         const personnelName = cleanText(
           assignment.personnelName || "LGU Responder",
           120,
         );
         const department = cleanText(assignment.department || "", 120);
         const position = cleanText(assignment.position || "", 120);
-
         transaction.set(reportRef, {
           reportId: assignmentId,
           assignmentId,
@@ -3571,7 +3362,6 @@ app.post(
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(assignmentRef, {
           status: "completed",
           completionReportId: assignmentId,
@@ -3579,7 +3369,6 @@ app.post(
           completedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(dutyRef, {
           availabilityStatus: "available",
           activeCaseId: "",
@@ -3587,7 +3376,6 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
-
         const casePatch = {
           activeLguResponderUid: "",
           activeLguResponderName: "",
@@ -3596,7 +3384,6 @@ app.post(
           latestLguFieldReportId: assignmentId,
           updatedAt: FieldValue.serverTimestamp(),
         };
-
         const activeResponderUid = cleanText(
           emergencyCase.activeResponderUid || "",
           160,
@@ -3605,7 +3392,6 @@ app.post(
           emergencyCase.activeResponderKind || "",
           80,
         ).toLowerCase();
-
         if (
           activeResponderUid === uid &&
           ["lgu", "official_lgu", "lgu_personnel"].includes(activeResponderKind)
@@ -3615,12 +3401,9 @@ app.post(
           casePatch.activeResponderAssignmentId = "";
           casePatch.activeResponderKind = "";
         }
-
         transaction.update(caseRef, casePatch);
         transaction.delete(liveLocationRef);
-
         const reporterUid = cleanText(emergencyCase.reporterUid || "", 160);
-
         if (reporterUid) {
           transaction.set(residentNotificationRef, {
             userId: reporterUid,
@@ -3637,7 +3420,6 @@ app.post(
             createdAt: FieldValue.serverTimestamp(),
           });
         }
-
         transaction.set(activityLogRef, {
           action: "Official LGU Field Response Completed",
           caseId,
@@ -3650,7 +3432,6 @@ app.post(
           performedBy: uid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         completionResult = {
           assignmentId,
           reportId: assignmentId,
@@ -3660,7 +3441,6 @@ app.post(
           outcome,
         };
       });
-
       response.json({
         ok: true,
         completion: completionResult,
@@ -3691,7 +3471,6 @@ app.get(
   async (request, response) => {
     try {
       const caseId = cleanText(request.query?.caseId || "", 160);
-
       if (!caseId) {
         throw makeHttpError(
           400,
@@ -3699,12 +3478,10 @@ app.get(
           "The emergency case ID is required.",
         );
       }
-
       const snapshot = await db
         .collection("lguFieldReports")
         .where("caseId", "==", caseId)
         .get();
-
       const timestampIso = (value) => {
         try {
           if (!value) return "";
@@ -3719,11 +3496,9 @@ app.get(
           return "";
         }
       };
-
       const reports = snapshot.docs
         .map((documentSnapshot) => {
           const data = documentSnapshot.data() || {};
-
           return {
             id: documentSnapshot.id,
             assignmentId: cleanText(
@@ -3770,7 +3545,6 @@ app.get(
             : 0;
           return bTime - aTime;
         });
-
       response.json({
         ok: true,
         caseId,
@@ -3791,7 +3565,6 @@ app.get(
     }
   },
 );
-
 app.post(
   "/api/admin/lgu/field-reports/:reportId/review",
   requireFirebaseUser,
@@ -3804,7 +3577,6 @@ app.post(
         request.body?.adminReviewNote || "",
         1500,
       );
-
       if (!reportId) {
         throw makeHttpError(
           400,
@@ -3812,15 +3584,11 @@ app.post(
           "The official LGU field report ID is required.",
         );
       }
-
       const reportRef = db.collection("lguFieldReports").doc(reportId);
       const activityLogRef = db.collection("adminActivityLogs").doc();
-
       let reviewResult = null;
-
       await db.runTransaction(async (transaction) => {
         const reportSnapshot = await transaction.get(reportRef);
-
         if (!reportSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3828,10 +3596,8 @@ app.post(
             "The official LGU field report no longer exists.",
           );
         }
-
         const report = reportSnapshot.data() || {};
         const caseId = cleanText(report.caseId || "", 160);
-
         if (!caseId) {
           throw makeHttpError(
             409,
@@ -3839,12 +3605,10 @@ app.post(
             "This LGU field report is not linked to a valid emergency case.",
           );
         }
-
         const currentReviewStatus = cleanText(
           report.adminReviewStatus || "pending",
           40,
         ).toLowerCase();
-
         if (currentReviewStatus === "reviewed") {
           throw makeHttpError(
             409,
@@ -3852,10 +3616,8 @@ app.post(
             "This official LGU field report has already been reviewed.",
           );
         }
-
         const caseRef = db.collection("disasterCases").doc(caseId);
         const caseSnapshot = await transaction.get(caseRef);
-
         if (!caseSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -3863,13 +3625,11 @@ app.post(
             "The linked emergency case no longer exists.",
           );
         }
-
         const emergencyCase = caseSnapshot.data() || {};
         const latestReportId = cleanText(
           emergencyCase.latestLguFieldReportId || "",
           180,
         );
-
         if (latestReportId && latestReportId !== reportId) {
           throw makeHttpError(
             409,
@@ -3877,7 +3637,6 @@ app.post(
             "A newer official LGU field report exists for this case. Review the latest report instead.",
           );
         }
-
         transaction.update(reportRef, {
           adminReviewStatus: "reviewed",
           adminReviewNote,
@@ -3885,7 +3644,6 @@ app.post(
           reviewedBy: adminUid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.update(caseRef, {
           officialLguResponseStatus: "reviewed",
           latestLguFieldReportId: reportId,
@@ -3893,7 +3651,6 @@ app.post(
           lguFieldReportReviewedBy: adminUid,
           updatedAt: FieldValue.serverTimestamp(),
         });
-
         transaction.set(activityLogRef, {
           action: "Official LGU Field Report Reviewed",
           caseId,
@@ -3908,14 +3665,12 @@ app.post(
           performedBy: adminUid,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         reviewResult = {
           reportId,
           caseId,
           status: "reviewed",
         };
       });
-
       response.json({
         ok: true,
         review: reviewResult,
@@ -3985,15 +3740,12 @@ app.post(
       const personnel = request.lguPersonnelRecord || {};
       const shiftDate = getManilaDateKey();
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
-
       // Each Time In creates a new attendance session so an LGU Personnel
       // account can safely Time In again later on the same Manila date.
       const attendanceRef = db.collection("lguAttendance").doc();
-
       await db.runTransaction(async (transaction) => {
         const dutySnapshot = await transaction.get(dutyRef);
         const duty = dutySnapshot.exists ? dutySnapshot.data() || {} : {};
-
         if (cleanText(duty.dutyStatus || "off_duty", 40) === "on_duty") {
           throw makeHttpError(
             409,
@@ -4001,7 +3753,6 @@ app.post(
             "You are already timed in for LGU duty.",
           );
         }
-
         if (
           ["assigned", "responding", "on_site"].includes(
             cleanText(duty.availabilityStatus || "", 40),
@@ -4013,7 +3764,6 @@ app.post(
             "You cannot Time In while an emergency assignment is still active.",
           );
         }
-
         transaction.set(dutyRef, {
           uid,
           dutyStatus: "on_duty",
@@ -4027,7 +3777,6 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
-
         transaction.set(attendanceRef, {
           uid,
           fullName: cleanText(personnel.fullName || "", 120),
@@ -4041,7 +3790,6 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
-
       response.json({
         ok: true,
         dutyStatus: "on_duty",
@@ -4060,7 +3808,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/lgu/duty/time-out",
   requireFirebaseUser,
@@ -4071,10 +3818,8 @@ app.post(
       const dutyRef = db.collection("lguDutyStatus").doc(uid);
       let completedShiftDate = "";
       let completedAttendanceId = "";
-
       await db.runTransaction(async (transaction) => {
         const dutySnapshot = await transaction.get(dutyRef);
-
         if (!dutySnapshot.exists) {
           throw makeHttpError(
             409,
@@ -4082,7 +3827,6 @@ app.post(
             "Time In before attempting to Time Out.",
           );
         }
-
         const duty = dutySnapshot.data() || {};
         const dutyStatus = cleanText(duty.dutyStatus || "", 40);
         const availabilityStatus = cleanText(
@@ -4094,7 +3838,6 @@ app.post(
           duty.activeAttendanceId || "",
           180,
         );
-
         if (dutyStatus !== "on_duty") {
           throw makeHttpError(
             409,
@@ -4102,7 +3845,6 @@ app.post(
             "This LGU Personnel account is not currently on duty.",
           );
         }
-
         if (availabilityStatus !== "available") {
           throw makeHttpError(
             409,
@@ -4110,7 +3852,6 @@ app.post(
             "Complete or release the active emergency assignment before Time Out.",
           );
         }
-
         if (!shiftDate) {
           throw makeHttpError(
             409,
@@ -4118,16 +3859,13 @@ app.post(
             "The active LGU duty record is missing its shift date.",
           );
         }
-
         // Backward compatibility:
         // older active duty records used `${uid}_${shiftDate}` as the
         // attendance document ID and therefore have no activeAttendanceId.
         const attendanceRef = db
           .collection("lguAttendance")
           .doc(activeAttendanceId || `${uid}_${shiftDate}`);
-
         const attendanceSnapshot = await transaction.get(attendanceRef);
-
         if (!attendanceSnapshot.exists) {
           throw makeHttpError(
             409,
@@ -4135,10 +3873,8 @@ app.post(
             "The active LGU attendance record was not found.",
           );
         }
-
         completedShiftDate = shiftDate;
         completedAttendanceId = attendanceRef.id;
-
         transaction.update(dutyRef, {
           dutyStatus: "off_duty",
           availabilityStatus: "unavailable",
@@ -4149,14 +3885,12 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: uid,
         });
-
         transaction.update(attendanceRef, {
           status: "completed",
           timeOutAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
-
       response.json({
         ok: true,
         dutyStatus: "off_duty",
@@ -5014,6 +4748,10 @@ app.get(
               "",
             500,
           ),
+        attemptCount: identityAttemptCount(verification.aiAttemptCount),
+        maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
+        attemptsRemaining: Math.max(0, MAX_IDENTITY_AI_ATTEMPTS - identityAttemptCount(verification.aiAttemptCount)),
+        requiresManualReview: verification.requiresManualReview === true,
       });
     } catch (error) {
       console.error(
@@ -5034,195 +4772,115 @@ app.get(
 app.post(
   "/api/identity/verify",
   requireFirebaseUser,
-  express.raw({
-    type:
-      "multipart/form-data",
-    limit:
-      IDENTITY_UPLOAD_LIMIT,
-  }),
-  async (
-    request,
-    response,
-  ) => {
-    const uid =
-      request
-        .firebaseUser
-        .uid;
+  express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
+  async (request, response) => {
+    const uid = request.firebaseUser.uid;
+    const userRef = db.collection("users").doc(uid);
+    const verificationRef = db.collection("identityVerifications").doc(uid);
+    const requestId = crypto.randomUUID();
+    let claimed = false;
+
     try {
-      const userRef =
-        db
-          .collection(
-            "users",
-          )
-          .doc(
-            uid,
-          );
-      const verificationRef =
-        db
-          .collection(
-            "identityVerifications",
-          )
-          .doc(
-            uid,
-          );
-      const [
-        userSnapshot,
-        verificationSnapshot,
-      ] =
-        await Promise.all([
-          userRef.get(),
-          verificationRef.get(),
+      // Firestore transaction ensures concurrent requests cannot bypass the
+      // three-attempt limit. No attempt is consumed until the AI responds.
+      await db.runTransaction(async (transaction) => {
+        const [userSnapshot, verificationSnapshot] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(verificationRef),
         ]);
-      if (
-        !userSnapshot.exists
-      ) {
-        response
-          .status(
-            404,
-          )
-          .json({
-            error:
-              "profile_not_found",
-            message:
-              "Your VolunServe profile was not found.",
-          });
-        return;
-      }
-      const profile =
-        userSnapshot.data() ||
-        {};
-      const accountStatus =
-        cleanText(
-          profile.status ||
-            "approved",
-          40,
-        ).toLowerCase();
-      if (
-        accountStatus !==
-        "approved"
-      ) {
-        response
-          .status(
-            403,
-          )
-          .json({
-            error:
-              "account_not_active",
-            message:
-              "This VolunServe account is not active.",
-          });
-        return;
-      }
-      const currentIdentityStatus =
-        normalizeIdentityStatus(
-          profile
-            .identityStatus ||
-            "basic",
+        if (!userSnapshot.exists) {
+          throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
+        }
+        const profile = userSnapshot.data() || {};
+        const verification = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
+        if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
+          throw makeHttpError(403, "account_not_active", "This VolunServe account is not active.");
+        }
+        if (profile.identityVerified === true ||
+            normalizeIdentityStatus(profile.identityStatus || "basic") === "verified") {
+          throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+        }
+        if (verification.requiresManualReview === true &&
+            normalizeIdentityStatus(verification.status) === "pending") {
+          throw makeHttpError(409, "identity_manual_review_pending",
+            "Your identity verification is waiting for Admin review. Please wait for a decision.");
+        }
+        if (identityAttemptCount(verification.aiAttemptCount) >= MAX_IDENTITY_AI_ATTEMPTS) {
+          throw makeHttpError(409, "identity_attempt_limit_reached",
+            "Three verification attempts have been used. Admin review is required before another retry.");
+        }
+        const startedAt = verification.processingStartedAt?.toMillis?.() || 0;
+        if (verification.processingRequestId &&
+            Date.now() - startedAt >= 0 &&
+            Date.now() - startedAt < IDENTITY_PROCESSING_LEASE_MS) {
+          throw makeHttpError(409, "identity_verification_in_progress",
+            "Your previous verification is still processing. Please wait before retrying.");
+        }
+        const lastSubmission = Math.max(
+          verification.lastSubmissionAt?.toMillis?.() || 0,
+          verification.lastAttemptStartedAt?.toMillis?.() || 0,
         );
-      if (
-        profile
-          .identityVerified ===
-          true ||
-        currentIdentityStatus ===
-          "verified"
-      ) {
-        response
-          .status(
-            409,
-          )
-          .json({
-            error:
-              "already_verified",
-            message:
-              "Your identity is already verified.",
-          });
-        return;
-      }
-      const verificationData =
-        verificationSnapshot.exists
-          ? verificationSnapshot.data() ||
-            {}
-          : {};
-      const lastSubmissionTime =
-        verificationData
-          .lastSubmissionAt
-          ?.toMillis?.() ||
-        0;
-      if (
-        Date.now() -
-          lastSubmissionTime <
-        IDENTITY_RETRY_DELAY_MS
-      ) {
-        response
-          .status(
-            429,
-          )
-          .json({
-            error:
-              "too_many_requests",
-            message:
-              "Please wait a few seconds before submitting another identity verification.",
-          });
-        return;
-      }
-      const aiResult =
-        await callIdentityAiService(
-          request,
-        );
-      const decision =
-        normalizeAiDecision(
-          aiResult?.decision ||
-            aiResult?.status,
-        );
-      const matchScore =
-        numberOrNull(
-          aiResult
-            ?.matchScore,
-        );
-      const livenessScore =
-        numberOrNull(
-          aiResult
-            ?.livenessScore,
-        );
-      const verificationId =
-        cleanText(
-          aiResult
-            ?.verificationId ||
-            `identity_${uid}_${Date.now()}`,
-          200,
-        );
-      const resultMessage =
-        cleanText(
-          aiResult?.message ||
-            (
-              decision === "verified"
-                ? "Identity verification completed successfully."
-                : decision === "failed"
-                  ? "Identity verification attempt failed. Please retry with valid, clear images."
-                  : "The submission requires LGU/Admin manual review."
-            ),
-          500,
-        );
-      const batch =
-        db.batch();
-      batch.set(
-        verificationRef,
-        {
+        if (Date.now() - lastSubmission < IDENTITY_RETRY_DELAY_MS) {
+          throw makeHttpError(429, "too_many_requests",
+            "Please wait a few seconds before submitting another identity verification.");
+        }
+        transaction.set(verificationRef, {
+          uid,
+          processingRequestId: requestId,
+          processingStartedAt: FieldValue.serverTimestamp(),
+          lastAttemptStartedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      claimed = true;
+
+      const aiResult = await callIdentityAiService(request);
+      const decision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
+      const matchScore = numberOrNull(aiResult?.matchScore);
+      const livenessScore = numberOrNull(aiResult?.livenessScore);
+      const verificationId = cleanText(
+        aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
+      );
+
+      const outcome = await db.runTransaction(async (transaction) => {
+        const [userSnapshot, verificationSnapshot] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(verificationRef),
+        ]);
+        const current = verificationSnapshot.data() || {};
+        if (current.processingRequestId !== requestId) {
+          throw makeHttpError(409, "identity_request_expired",
+            "This attempt was superseded. Please refresh your identity status.");
+        }
+        if (!userSnapshot.exists || userSnapshot.data()?.identityVerified === true) {
+          throw makeHttpError(409, "identity_account_changed",
+            "Your account verification status has changed. Please refresh your identity status.");
+        }
+        const attemptCount = identityAttemptCount(current.aiAttemptCount) + 1;
+        const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
+          ? current.aiAttemptCycle : 1;
+        const result = identityAttemptOutcome(decision, attemptCount);
+        const resultMessage = result.requiresManualReview && decision === "failed"
+          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
+          : cleanText(aiResult?.message || (
+            decision === "verified" ? "Identity verification completed successfully." :
+            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
+            "The submission requires LGU/Admin manual review."
+          ), 500);
+        const previousReview = current.reviewedAt || current.manualReviewDecision ? {
+          previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
+          previousValidationMethod: cleanText(current.manualValidationMethod, 120),
+          previousReviewNotes: cleanText(current.manualReviewNotes, 1000),
+          previousReviewedBy: cleanText(current.reviewedBy, 200),
+          previousReviewedAt: current.reviewedAt || null,
+        } : null;
+
+        transaction.set(verificationRef, {
           ...diditCleanupFields(),
           uid,
           verificationId,
-          verificationMethod:
-            "volunserve_ai",
-          status:
-            decision === "verified"
-              ? "verified"
-              : decision === "failed"
-                ? "failed"
-                : "pending",
-          aiDecision:
-            decision,
-          // This is a new attempt: clear decisions and audit fields
-          // inherited from any previous LGU/Admin review.
+          verificationMethod: "volunserve_ai",
+          status: result.status,
+          aiDecision: decision,
           decision: FieldValue.delete(),
           manualReviewDecision: FieldValue.delete(),
           manualValidationMethod: FieldValue.delete(),
@@ -5232,150 +4890,96 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
-          message:
-            resultMessage,
-          requiresManualReview:
-            decision === "manual_review",
-          lastSubmissionAt:
-            FieldValue
-              .serverTimestamp(),
-          updatedAt:
-            FieldValue
-              .serverTimestamp(),
-          createdAt:
-            verificationData
-              .createdAt ||
-            FieldValue
-              .serverTimestamp(),
-        },
-        {
-          merge:
-            true,
-        },
-      );
-      if (
-        decision ===
-        "verified"
-      ) {
-        batch.set(
-          userRef,
+          message: resultMessage,
+          requiresManualReview: result.requiresManualReview,
+          aiAttemptCount: attemptCount,
+          aiAttemptCycle: attemptCycle,
+          processingRequestId: FieldValue.delete(),
+          processingStartedAt: FieldValue.delete(),
+          lastSubmissionAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: current.createdAt || FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Immutable attempt metadata; no ID image, selfie, or biometric media
+        // is stored here. Existing Admin decision logs are never deleted.
+        transaction.create(
+          db.collection("identityVerificationAttempts").doc(`${uid}_${requestId}`),
           {
-            identityStatus:
-              "verified",
-            identityVerified:
-              true,
-            identityVerificationProvider:
-              FieldValue.delete(),
-            identityVerificationSessionId:
-              FieldValue.delete(),
-            identityVerificationMethod:
-              "volunserve_ai",
-            identityVerificationStartedAt:
-              FieldValue
-                .serverTimestamp(),
-            identityVerifiedAt:
-              FieldValue
-                .serverTimestamp(),
-            identityVerifiedBy:
-              "volunserve_ai",
-            identityFailureReason:
-              FieldValue.delete(),
-            updatedAt:
-              FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
+            uid, requestId, verificationId,
+            attemptNumber: attemptCount,
+            attemptCycle,
+            aiDecision: decision,
+            status: result.status,
+            requiresManualReview: result.requiresManualReview,
+            matchScore, livenessScore,
+            verificationMethod: "volunserve_ai",
+            previousReview,
+            createdAt: FieldValue.serverTimestamp(),
           },
         );
-      } else {
-        batch.set(
-          userRef,
-          {
-            identityStatus:
-              decision === "failed" ? "failed" : "pending",
-            identityVerified:
-              false,
-            identityVerificationProvider:
-              FieldValue.delete(),
-            identityVerificationSessionId:
-              FieldValue.delete(),
-            identityVerificationMethod:
-              "volunserve_ai",
-            identityVerificationStartedAt:
-              FieldValue
-                .serverTimestamp(),
-            identityFailureReason:
-              decision === "failed"
-                ? resultMessage
-                : FieldValue.delete(),
-            updatedAt:
-              FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          },
-        );
-      }
-      await batch.commit();
-      response
-        .status(
-          200,
-        )
-        .json({
-          ok:
-            true,
-          status:
-            decision === "verified"
-              ? "verified"
-              : decision === "failed"
-                ? "failed"
-                : "pending",
-          verificationId,
-          decision,
-          matchScore,
-          livenessScore,
-          message:
-            resultMessage,
-        });
+
+        if (decision === "verified") {
+          transaction.set(userRef, {
+            identityStatus: "verified",
+            identityVerified: true,
+            identityVerificationProvider: FieldValue.delete(),
+            identityVerificationSessionId: FieldValue.delete(),
+            identityVerificationMethod: "volunserve_ai",
+            identityVerificationStartedAt: FieldValue.serverTimestamp(),
+            identityVerifiedAt: FieldValue.serverTimestamp(),
+            identityVerifiedBy: "volunserve_ai",
+            identityFailureReason: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } else {
+          transaction.set(userRef, {
+            identityStatus: result.status,
+            identityVerified: false,
+            identityVerificationProvider: FieldValue.delete(),
+            identityVerificationSessionId: FieldValue.delete(),
+            identityVerificationMethod: "volunserve_ai",
+            identityVerificationStartedAt: FieldValue.serverTimestamp(),
+            identityFailureReason: decision === "failed" && !result.requiresManualReview
+              ? resultMessage : FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+        return {
+          ok: true, status: result.status, verificationId, decision,
+          matchScore, livenessScore, message: resultMessage,
+          attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
+          attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
+          requiresManualReview: result.requiresManualReview,
+        };
+      });
+      response.status(200).json(outcome);
     } catch (error) {
-      console.error(
-        "Identity verification failed:",
-        error,
-      );
-      const statusCode =
-        Number(
-          error
-            ?.statusCode,
-        );
-      response
-        .status(
-          statusCode >= 400 &&
-          statusCode <= 599
-            ? statusCode
-            : 500,
-        )
-        .json({
-          error:
-            cleanText(
-              error?.code ||
-                "identity_verification_failed",
-              100,
-            ),
-          message:
-            cleanText(
-              error?.message ||
-                "Unable to process identity verification.",
-              500,
-            ),
-        });
+      if (claimed) {
+        // Unlock only our own attempt, never another request's lease.
+        try {
+          await db.runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(verificationRef);
+            if (snapshot.exists && snapshot.data()?.processingRequestId === requestId) {
+              transaction.set(verificationRef, {
+                processingRequestId: FieldValue.delete(),
+                processingStartedAt: FieldValue.delete(),
+              }, { merge: true });
+            }
+          });
+        } catch (cleanupError) {
+          console.error("Identity verification lease cleanup failed:", cleanupError?.message);
+        }
+      }
+      console.error("Identity verification failed:", error?.message);
+      const statusCode = Number(error?.statusCode);
+      response.status(statusCode >= 400 && statusCode <= 599 ? statusCode : 500).json({
+        error: cleanText(error?.code || "identity_verification_failed", 100),
+        message: cleanText(error?.message || "Unable to process identity verification.", 500),
+      });
     }
   },
 );
-
 function identityAdminTimestampIso(value) {
   try {
     if (!value) return "";
@@ -5390,7 +4994,6 @@ function identityAdminTimestampIso(value) {
     return "";
   }
 }
-
 function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
   const verification = verificationSnapshot?.data?.() || {};
   const profile = userSnapshot?.data?.() || {};
@@ -5398,7 +5001,6 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     verificationSnapshot?.id || profile?.uid || "",
     200,
   );
-
   return {
     uid,
     verificationId: cleanText(verification.verificationId || "", 200),
@@ -5416,6 +5018,8 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     livenessScore: numberOrNull(verification.livenessScore),
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
+    attemptCount: identityAttemptCount(verification.aiAttemptCount),
+    maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
     manualReviewDecision: cleanText(
       verification.manualReviewDecision || "",
       80,
@@ -5450,7 +5054,6 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     },
   };
 }
-
 app.get(
   "/api/admin/identity/reviews",
   requireFirebaseUser,
@@ -5464,21 +5067,18 @@ app.get(
         .orderBy("updatedAt", "desc")
         .limit(250)
         .get();
-
       const items = await Promise.all(
         verificationSnapshot.docs.map(async (verificationDoc) => {
           const userSnapshot = await db
             .collection("users")
             .doc(verificationDoc.id)
             .get();
-
           return identityAdminReviewPayload(
             verificationDoc,
             userSnapshot,
           );
         }),
       );
-
       items.sort((first, second) => {
         const firstTime =
           Date.parse(
@@ -5496,7 +5096,6 @@ app.get(
           ) || 0;
         return secondTime - firstTime;
       });
-
       response.json({
         ok: true,
         items,
@@ -5517,7 +5116,6 @@ app.get(
     }
   },
 );
-
 app.post(
   "/api/admin/identity/reviews/:uid/decision",
   requireFirebaseUser,
@@ -5539,7 +5137,6 @@ app.post(
           "LGU/Admin Reviewer",
         160,
       );
-
       if (
         !targetUid ||
         !/^[A-Za-z0-9_-]{8,200}$/.test(targetUid)
@@ -5550,7 +5147,6 @@ app.post(
           "The Resident identity review ID is invalid.",
         );
       }
-
       if (
         action !== "verify" &&
         action !== "require_retry"
@@ -5561,7 +5157,6 @@ app.post(
           "Choose Verify Resident or Require Retry.",
         );
       }
-
       if (
         action === "verify" &&
         validationMethod.length < 3
@@ -5572,7 +5167,6 @@ app.post(
           "Select the LGU validation method used before manually verifying this Resident.",
         );
       }
-
       if (
         action === "require_retry" &&
         notes.length < 5
@@ -5583,19 +5177,16 @@ app.post(
           "Enter a clear reason before requiring the Resident to retry identity verification.",
         );
       }
-
       const userRef = db.collection("users").doc(targetUid);
       const verificationRef = db
         .collection("identityVerifications")
         .doc(targetUid);
       const activityRef = db.collection("adminActivityLogs").doc();
-
       const result = await db.runTransaction(async (transaction) => {
         const [userSnapshot, verificationSnapshot] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
         ]);
-
         if (!userSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -5603,7 +5194,6 @@ app.post(
             "The Resident account was not found.",
           );
         }
-
         if (!verificationSnapshot.exists) {
           throw makeHttpError(
             404,
@@ -5611,7 +5201,6 @@ app.post(
             "The identity verification record was not found.",
           );
         }
-
         const profile = userSnapshot.data() || {};
         const verification = verificationSnapshot.data() || {};
         const currentStatus = normalizeIdentityStatus(
@@ -5619,7 +5208,6 @@ app.post(
             verification.status ||
             "basic",
         );
-
         if (
           profile.identityVerified === true ||
           currentStatus === "verified"
@@ -5630,7 +5218,6 @@ app.post(
             "This Resident is already identity verified.",
           );
         }
-
         if (
           verification.requiresManualReview !== true ||
           normalizeIdentityStatus(
@@ -5643,7 +5230,6 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
-
         const commonReviewFields = {
           requiresManualReview: false,
           manualReviewDecision:
@@ -5660,7 +5246,6 @@ app.post(
           reviewedByName,
           updatedAt: FieldValue.serverTimestamp(),
         };
-
         if (action === "verify") {
           transaction.set(
             verificationRef,
@@ -5673,7 +5258,6 @@ app.post(
             },
             { merge: true },
           );
-
           transaction.set(
             userRef,
             {
@@ -5688,7 +5272,6 @@ app.post(
             },
             { merge: true },
           );
-
           transaction.set(activityRef, {
             action: "Resident Identity Manually Verified",
             residentUid: targetUid,
@@ -5707,13 +5290,11 @@ app.post(
             performedByName: reviewedByName,
             timestamp: FieldValue.serverTimestamp(),
           });
-
           return {
             status: "verified",
             identityVerified: true,
           };
         }
-
         transaction.set(
           verificationRef,
           {
@@ -5721,10 +5302,12 @@ app.post(
             status: "failed",
             decision: "retry_required",
             message: notes,
+            aiAttemptCount: 0,
+            aiAttemptCycle: (Number.isSafeInteger(verification.aiAttemptCycle) && verification.aiAttemptCycle > 0
+              ? verification.aiAttemptCycle : 1) + 1,
           },
           { merge: true },
         );
-
         transaction.set(
           userRef,
           {
@@ -5735,7 +5318,6 @@ app.post(
           },
           { merge: true },
         );
-
         transaction.set(activityRef, {
           action: "Resident Identity Retry Required",
           residentUid: targetUid,
@@ -5753,13 +5335,11 @@ app.post(
           performedByName: reviewedByName,
           timestamp: FieldValue.serverTimestamp(),
         });
-
         return {
           status: "failed",
           identityVerified: false,
         };
       });
-
       response.json({
         ok: true,
         uid: targetUid,
@@ -5785,7 +5365,6 @@ app.post(
     }
   },
 );
-
 app.post(
   "/api/admin/assistance/requests/:requestId/start-review",
   requireFirebaseUser,
@@ -7807,6 +7386,114 @@ app.post(
     }
   },
 );
+// Dedicated Cloudinary upload for Resident Community Event proposal photos.
+// Keeps Assistance photos and protected evidence entirely separate.
+const COMMUNITY_EVENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const COMMUNITY_EVENT_PHOTO_UPLOAD_LIMIT = "5mb";
+
+app.post(
+  "/api/community-events/proposal-photo/upload",
+  requireFirebaseUser,
+  express.raw({
+    type: ["image/jpeg", "image/png", "image/webp", "application/octet-stream"],
+    limit: COMMUNITY_EVENT_PHOTO_UPLOAD_LIMIT,
+  }),
+  async (request, response) => {
+    const uid = request.firebaseUser.uid;
+    let uploadResult = null;
+    let photoRef = null;
+    let claimed = false;
+    try {
+      const userProfile = await loadUserProfile(uid);
+      const userRole = getProfileRole(userProfile);
+      if (!isApprovedAccount(userProfile) ||
+          userProfile.residentAccess !== true ||
+          userProfile.activeMode !== "resident" ||
+          ["admin", "superadmin", "lgu_personnel", "applicant"].includes(userRole)) {
+        throw makeHttpError(403, "resident_required", "Switch to an approved Resident account to upload a proposal photo.");
+      }
+      const proposalId = cleanText(request.headers["x-proposal-id"], 64);
+      const slot = Number(request.headers["x-photo-slot"]);
+      if (!/^[A-Za-z0-9]{12,40}$/.test(proposalId) ||
+          !Number.isInteger(slot) || slot < 1 || slot > 3) {
+        throw makeHttpError(400, "invalid_proposal_photo_slot", "A valid proposal ID and photo slot (1–3) are required.");
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length < 12) {
+        throw makeHttpError(400, "photo_required", "Select a valid event site photo.");
+      }
+      if (request.body.length > COMMUNITY_EVENT_PHOTO_MAX_BYTES) {
+        throw makeHttpError(413, "photo_too_large", "Each site photo must be 5 MB or smaller.");
+      }
+      const detected = detectAssistanceImage(request.body);
+      if (!detected) {
+        throw makeHttpError(415, "invalid_photo", "Only real JPEG, PNG or WebP photos are accepted.");
+      }
+      if ((await db.collection("communityEventProposals").doc(proposalId).get()).exists) {
+        throw makeHttpError(409, "proposal_already_submitted", "Photos cannot be changed after proposal submission.");
+      }
+      // Limit new uploads to nine per resident per 24 hours to reduce abandoned uploads.
+      const recent = await db.collection("communityEventPhotoAssets")
+        .where("ownerUid", "==", uid).limit(100).get();
+      const since = Date.now() - 24 * 60 * 60 * 1000;
+      const recentCount = recent.docs.filter((item) => {
+        const created = item.data().createdAt;
+        return created && typeof created.toMillis === "function" && created.toMillis() > since;
+      }).length;
+      if (recentCount >= 9) {
+        throw makeHttpError(429, "photo_upload_daily_limit", "Daily photo upload limit reached. Try again later.");
+      }
+      photoRef = db.collection("communityEventPhotoAssets").doc(`${proposalId}_${slot}`);
+      await db.runTransaction(async (tx) => {
+        const existing = await tx.get(photoRef);
+        if (existing.exists) {
+          throw makeHttpError(409, "photo_slot_already_uploaded", "This photo slot has already been uploaded.");
+        }
+        tx.create(photoRef, {
+          proposalId, ownerUid: uid, slot, status: "uploading",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+      claimed = true;
+      configureCloudinary();
+      const photoId = typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID() : crypto.randomBytes(18).toString("hex");
+      uploadResult = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream({
+          resource_type: "image", type: "upload", overwrite: false,
+          public_id: `volunserve/community-event-proposals/${uid}/${proposalId}/slot-${slot}-${photoId}`,
+          unique_filename: false,
+        }, (error, result) => error ? reject(error) : resolve(result));
+        stream.on("error", reject);
+        stream.end(request.body);
+      });
+      const publicUrl = String(uploadResult?.secure_url || "");
+      if (!uploadResult?.public_id || !/^https:\/\//.test(publicUrl)) {
+        throw makeHttpError(502, "photo_upload_failed", "Cloudinary did not return a valid secure photo URL.");
+      }
+      await photoRef.update({
+        status: "staged", publicUrl,
+        cloudinaryPublicId: uploadResult.public_id,
+        bytes: request.body.length, mimeType: detected.mimeType,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      response.status(201).json({ok: true, photo: {publicUrl, proposalId, slot}});
+    } catch (error) {
+      if (uploadResult?.public_id) {
+        try { await cloudinary.uploader.destroy(uploadResult.public_id, {resource_type: "image"}); }
+        catch (cleanupError) { console.error("Event photo cleanup failed:", cleanupError?.message); }
+      }
+      if (claimed && photoRef) {
+        try { await photoRef.delete(); }
+        catch (cleanupError) { console.error("Event photo reservation cleanup failed:", cleanupError?.message); }
+      }
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "community_event_photo_upload_failed", 100),
+        message: cleanText(error?.message || "Could not upload event photo.", 500),
+      });
+    }
+  },
+);
+
 app.post(
   "/api/assistance/public-photo/upload",
   requireFirebaseUser,
@@ -10515,7 +10202,6 @@ app.post(
               assistance.categoryLabel || assistance.category || "Community Assistance",
               120,
             ) || "Community Assistance";
-         
           const publicCopy = [title, description, story].join(" ");
           const privateSourceValues = [
             assistance.requesterAddress,
@@ -11283,7 +10969,6 @@ app.post(
     }
   },
 );
-
 const port =
   Number(
     process.env.PORT ||

@@ -7,6 +7,7 @@ import {
   Image,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -228,8 +229,31 @@ const residentOnlyRoutes = new Set([
 export default function TabLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const segments = useSegments();
   const isDesktopWeb = Platform.OS === "web" && width >= 1040;
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+
+  const mode = profile ? activeModeForProfile(profile) : "resident";
+  const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
+  const canSwitchMode = Boolean(profile && hasResidentAccess(profile) && hasVolunteerAccess(profile));
+  const adminRoute = profile ? administrativeRouteForProfile(profile) : null;
+
+  const visit = (name: string) => {
+    setMobileMenuOpen(false);
+    router.push((name === "index" ? "/(tabs)" : `/(tabs)/${name}`) as Href);
+  };
+
+  const switchMobileMode = async () => {
+    if (!canSwitchMode) return;
+    setMobileMenuOpen(false);
+    try {
+      await setActiveUserMode(mode === "volunteer" ? "resident" : "volunteer");
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      Alert.alert("Unable to switch mode", error?.message || "Please try again.");
+    }
+  };
 
   if (loading) {
     return (
@@ -265,19 +289,133 @@ export default function TabLayout() {
     }
   }
 
+  // On phones, keep the COMPLETE navigation in a slide-out sidebar.
+  // The desktop sidebar remains unchanged; there is no bottom mobile tab bar.
+  if (!isDesktopWeb) {
+    return (
+      <View style={styles.mobileShell}>
+        <View style={[styles.mobileHeader, { paddingTop: insets.top, height: 60 + insets.top }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={mobileMenuOpen ? "Close sidebar" : "Open sidebar"}
+            onPress={() => setMobileMenuOpen((current) => !current)}
+            style={styles.mobileHeaderButton}
+          >
+            <Ionicons name={mobileMenuOpen ? "close" : "menu"} size={22} color="#12365B" />
+          </Pressable>
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={styles.mobileHeaderLogo}
+            resizeMode="contain"
+          />
+          <View style={styles.mobileBrandText}>
+            <Text style={styles.mobileBrandName} numberOfLines={1}>VolunServe</Text>
+            <Text style={styles.mobileBrandMode} numberOfLines={1}>
+              {mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}
+            </Text>
+          </View>
+          <View style={styles.mobileHeaderStatus}>
+            <View style={styles.mobileStatusDot} />
+            <Text style={styles.mobileStatusText} numberOfLines={1}>Online</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            onPress={() => visit("notifications")}
+            style={styles.mobileHeaderButton}
+          >
+            <Ionicons name="notifications-outline" size={21} color="#12365B" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Profile"
+            onPress={() => visit("profile")}
+            style={styles.mobileHeaderButton}
+          >
+            <Ionicons name="person-circle-outline" size={23} color="#12365B" />
+          </Pressable>
+        </View>
+        <View style={styles.mobileMain}>
+          <Tabs screenOptions={{ headerShown: false, tabBarPosition: "bottom" }} tabBar={() => null} />
+        </View>
+        {mobileMenuOpen ? (
+          <View style={[styles.mobileDrawerLayer, { top: 60 + insets.top }]}>
+            <Pressable
+              style={styles.mobileDrawerBackdrop}
+              onPress={() => setMobileMenuOpen(false)}
+              accessibilityLabel="Close navigation drawer"
+            />
+            <View style={styles.mobileDrawer}>
+              <View style={styles.mobileDrawerBrand}>
+                <Image
+                  source={require("../../assets/images/logo.png")}
+                  style={styles.mobileDrawerLogo}
+                  resizeMode="contain"
+                />
+                <View style={styles.mobileDrawerBrandCopy}>
+                  <Text style={styles.mobileDrawerTitle}>VolunServe</Text>
+                  <Text style={styles.mobileDrawerSub}>
+                    {mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.mobileDrawerLabel}>MAIN MENU</Text>
+              <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
+                {menuItems.map((item) => (
+                  <Pressable
+                    key={item.name}
+                    accessibilityRole="button"
+                    onPress={() => visit(item.name)}
+                    style={({ pressed }) => [
+                      styles.mobileDrawerItem,
+                      item.name === (segments[segments.length - 1] || "index") && styles.mobileDrawerActive,
+                      pressed && styles.mobilePressed,
+                    ]}
+                  >
+                    <Ionicons name={item.icon as any} size={20} color="#0C7068" />
+                    <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
+                  </Pressable>
+                ))}
+                {canSwitchMode ? (
+                  <Pressable onPress={() => void switchMobileMode()} style={styles.mobileDrawerItem}>
+                    <Ionicons name="swap-horizontal-outline" size={20} color="#0C7068" />
+                    <Text style={styles.mobileDrawerItemText}>
+                      Switch to {mode === "volunteer" ? "Resident" : "Volunteer"} Mode
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {adminRoute ? (
+                  <Pressable onPress={() => {setMobileMenuOpen(false); router.push(adminRoute as Href);}} style={styles.mobileDrawerItem}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color="#0C7068" />
+                    <Text style={styles.mobileDrawerItemText}>Admin Portal</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => visit("profile")} style={styles.mobileDrawerItem}>
+                  <Ionicons name="settings-outline" size={20} color="#0C7068" />
+                  <Text style={styles.mobileDrawerItemText}>Account Settings</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    void logoutUser().then(() => router.replace("/login")).catch(() => Alert.alert("Log out failed", "Please try again."));
+                  }}
+                  style={styles.mobileDrawerItem}
+                >
+                  <Ionicons name="log-out-outline" size={20} color="#E43D48" />
+                  <Text style={[styles.mobileDrawerItemText, { color: "#C3303D" }]}>Log Out</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: isDesktopWeb ? "left" : "bottom",
-      }}
-      tabBar={(props) =>
-        isDesktopWeb ? (
-          <DesktopTabBar {...props} profile={profile} />
-        ) : (
-          <CustomTabBar {...props} profile={profile} />
-        )
-      }
+      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+      tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
     />
   );
 }
@@ -629,6 +767,41 @@ function CustomTabBar({
 }
 
 const styles = StyleSheet.create({
+  // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
+  mobileShell: { flex: 1, backgroundColor: "#F2F9FC" },
+  mobileHeader: {
+    height: 60, flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#FFFFFF", paddingHorizontal: 7,
+    borderBottomWidth: 1, borderBottomColor: "#E4EDF3", zIndex: 2,
+  },
+  mobileMain: { flex: 1 },
+  mobileHeaderButton: {
+    width: 35, height: 38, alignItems: "center", justifyContent: "center",
+    borderRadius: 10, backgroundColor: "#F4F8FA",
+  },
+  mobileHeaderLogo: { width: 31, height: 31 },
+  mobileBrandText: { flex: 1, minWidth: 0 },
+  mobileBrandName: { color: "#006859", fontWeight: "900", fontSize: 15 },
+  mobileBrandMode: { color: "#607890", fontSize: 9, fontWeight: "800" },
+  mobileHeaderStatus: {
+    minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
+    borderRadius: 20, paddingHorizontal: 7, height: 30, backgroundColor: "#E9F8F1",
+  },
+  mobileStatusDot: { backgroundColor: "#00A17C", width: 6, height: 6, borderRadius: 3 },
+  mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
+  mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
+  mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
+  mobileDrawer: { height: "100%", width: "79%", maxWidth: 298, backgroundColor: "#FFFFFF", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
+  mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "#E7EEF4" },
+  mobileDrawerLogo: { width: 44, height: 44 },
+  mobileDrawerBrandCopy: { flex: 1 },
+  mobileDrawerTitle: { color: "#006859", fontSize: 18, fontWeight: "900" },
+  mobileDrawerSub: { color: "#75869B", fontSize: 9, fontWeight: "800" },
+  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#8493A7", fontWeight: "800", letterSpacing: 1.2, fontSize: 10 },
+  mobileDrawerScroll: { flex: 1 },
+  mobileDrawerItem: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 3 },
+  mobileDrawerActive: { backgroundColor: "#E5F7F2" },
+  mobileDrawerItemText: { color: "#18375C", fontWeight: "700", fontSize: 12.5, flex: 1 },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
