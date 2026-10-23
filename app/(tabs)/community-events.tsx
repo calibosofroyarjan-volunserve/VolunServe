@@ -1,5 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
+import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import { router } from "expo-router";
 import {
   collection,
@@ -71,6 +73,7 @@ type CommunityEvent = {
   location: string;
   date: string;
   time: string;
+  endTime?: string;
   capacity: number;
   participantsCount?: number;
   proposedBy?: string;
@@ -102,6 +105,7 @@ type Proposal = {
   location: string;
   date: string;
   time: string;
+  endTime?: string;
   status: "pending" | "approved" | "rejected";
   adminNote?: string;
   createdAt?: unknown;
@@ -129,6 +133,9 @@ type ProposalForm = {
   location: string;
   date: string;
   time: string;
+  endTime: string;
+  latitude: number | null;
+  longitude: number | null;
   capacity: string;
   description: string;
   volunteerTasks: string;
@@ -239,6 +246,9 @@ const initialForm: ProposalForm = {
   location: "",
   date: "",
   time: "",
+  endTime: "",
+  latitude: null,
+  longitude: null,
   capacity: "20",
   description: "",
   volunteerTasks: "",
@@ -710,6 +720,7 @@ export default function CommunityEventsScreen() {
 
   const [picker, setPicker] =
     useState<"date" | "time" | null>(null);
+  const [timePickerTarget, setTimePickerTarget] = useState<"start" | "end">("start");
 
   const [calendarMonth, setCalendarMonth] =
     useState(() => new Date());
@@ -1111,10 +1122,11 @@ export default function CommunityEventsScreen() {
   };
 
   // Time picker
-  const openTimePicker = () => {
+  const openTimePicker = (target: "start" | "end" = "start") => {
+    setTimePickerTarget(target);
     const match =
       /^([01]\d|2[0-3]):([0-5]\d)$/.exec(
-        form.time
+        target === "end" ? form.endTime : form.time
       );
 
     const hour = match ? Number(match[1]) : 8;
@@ -1132,7 +1144,7 @@ export default function CommunityEventsScreen() {
       (clockPeriod === "PM" ? 12 : 0);
 
     setValue(
-      "time",
+      timePickerTarget === "end" ? "endTime" : "time",
       `${pad2(hour24)}:${pad2(clockMinute)}`
     );
 
@@ -2463,7 +2475,7 @@ export default function CommunityEventsScreen() {
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={openTimePicker}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
             </View>
           </View>
@@ -3285,9 +3297,7 @@ export default function CommunityEventsScreen() {
                     style={
                       styles.pickerField
                     }
-                    onPress={
-                      openTimePicker
-                    }
+                    onPress={() => openTimePicker("start")}
                   >
                     <Ionicons
                       name="time-outline"
@@ -3738,7 +3748,7 @@ export default function CommunityEventsScreen() {
               >
                 {picker === "date"
                   ? "Choose event date"
-                  : "Choose event time"}
+                  : timePickerTarget === "end" ? "Choose end time" : "Choose start time"}
               </Text>
 
               <Pressable
