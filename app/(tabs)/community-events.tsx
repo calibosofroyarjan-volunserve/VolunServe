@@ -513,15 +513,52 @@ async function uploadResidentEventPhoto(
   return url;
 }
 
+// Unlike public event evidence, credentials are protected Cloudinary assets
+// and are only opened through the authenticated Admin access endpoint.
+async function uploadResidentCredentialPhoto(file: Blob, mimeType: string, token: string, proposalId: string): Promise<string> {
+  if (!["image/jpeg","image/png","image/webp"].includes(mimeType) || file.size < 12 || file.size > 5*1024*1024) {
+    throw new Error("Upload a valid JPG, PNG or WebP credential photo under 5 MB.");
+  }
+  const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/credential-photo/upload`, {
+    method:"POST",
+    headers:{Authorization:`Bearer ${token}`,"Content-Type":mimeType,"X-Proposal-Id":proposalId},
+    body:file,
+  });
+  const json = await response.json().catch(()=>null);
+  if (!response.ok || json?.ok !== true || json?.credentialAssetId !== proposalId) {
+    throw new Error(json?.message || "Unable to securely upload credentials.");
+  }
+  return proposalId;
+}
+
+function CredentialPhotoField({preview,onPick,error}: {preview:string;onPick:()=>void;error:string}) {
+  return <View style={{marginTop:10,marginBottom:10}}>
+    <Text style={styles.fieldLabel}>Credentials / professional certificate photo (optional)</Text>
+    <Pressable onPress={onPick} accessibilityRole="button" style={{borderWidth:1,borderColor:"#C7DEDA",backgroundColor:"#F5FBF9",borderRadius:10,minHeight:64,padding:12,flexDirection:"row",alignItems:"center",gap:12}}>
+      <Ionicons name="camera-outline" size={24} color="#087F75"/>
+      <Text style={{flex:1,color:"#0A7468",fontSize:12,fontWeight:"800"}}>{preview?"Photo selected — change credential":"Upload a photo of license or relevant certificate"}</Text>
+    </Pressable>
+    {preview?<Image source={{uri:preview}} resizeMode="contain" style={{width:"100%",height:145,marginTop:8,borderRadius:9,backgroundColor:"#EDF2F2"}}/>:null}
+    <Text style={{fontSize:10,color:"#617A85",marginTop:5}}>Private Admin-only review. Do not upload credentials as public event evidence. JPG/PNG/WebP, max 5 MB.</Text>
+    {!!error&&<Text style={{fontSize:11,color:"#B91C1C",marginTop:5}}>{error}</Text>}
+  </View>;
+}
+
 // Shared by web and mobile Resident proposal screens.
 function ProposalNeedsAndMedia({
   form,
   update,
   onPhotoChange,
+  onCredentialPick,
+  credentialPreview,
+  credentialError,
 }: {
   form: ProposalForm;
   update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
   onPhotoChange: (index: number, value: string) => void;
+  onCredentialPick: () => void;
+  credentialPreview: string;
+  credentialError: string;
 }) {
   const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
   const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
@@ -600,11 +637,7 @@ function ProposalNeedsAndMedia({
           </Text>
         </View>
       )}
-      <Text style={styles.fieldLabel}>Qualifications / supervision needed (optional)</Text>
-      <TextInput style={[styles.input, styles.residentSmallInput]}
-        placeholder="e.g. Valid PRC license for clinical tasks; others may assist with logistics"
-        placeholderTextColor="#91A2AF" value={form.qualificationNotes}
-        onChangeText={(value) => update("qualificationNotes", value)} maxLength={500} />
+      <CredentialPhotoField preview={credentialPreview} onPick={onCredentialPick} error={credentialError}/>
       <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
       <TextInput style={[styles.input, styles.residentSmallInput]}
         placeholder="e.g. Gloves, reusable water bottle, closed shoes"
@@ -614,19 +647,19 @@ function ProposalNeedsAndMedia({
       <View style={styles.residentSectionHeading}>
         <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.residentSectionTitle}>04 · Location photos & video</Text>
-          <Text style={styles.residentSectionSub}>Help Admin understand the actual site. All media is optional.</Text>
+          <Text style={styles.residentSectionTitle}>04 · Required Site Evidence</Text>
+          <Text style={styles.residentSectionSub}>At least one location/activity photo is required. Video is optional.</Text>
         </View>
       </View>
       <View style={styles.residentMediaNotice}>
         <Ionicons name="information-circle-outline" color="#317A8E" size={18} />
         <Text style={styles.residentMediaNoticeText}>
-          Attach up to 3 JPG/PNG/WebP site photos from your device (web), or use HTTPS image links. A YouTube/Vimeo video link is optional. Photos are uploaded through Cloudinary when you submit.
+          At least one JPG/PNG/WebP event venue or activity photo is required. Add up to 3 photos using the site upload or valid HTTPS photo links. A YouTube/Vimeo link is optional.
         </Text>
       </View>
       {form.photoUrls.map((url, index) => (
         <View key={index} style={styles.residentMediaField}>
-          <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo" : `Additional site photo ${index + 1}`} (optional)</Text>
+          <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo *" : `Additional site photo ${index + 1} (optional)`}</Text>
           <TextInput style={[styles.input, styles.residentSmallInput]} keyboardType="url"
             autoCapitalize="none" autoCorrect={false}
             placeholder="https://example.com/location-photo.jpg"
@@ -736,6 +769,48 @@ export default function CommunityEventsScreen() {
   const [localPhotoPreviews, setLocalPhotoPreviews] = useState<string[]>(["", "", ""]);
   const [photoPickerError, setPhotoPickerError] = useState("");
   const [showPhotoLinkFallback, setShowPhotoLinkFallback] = useState(false);
+  const [credentialFile, setCredentialFile] = useState<Blob | null>(null);
+  const [credentialMimeType, setCredentialMimeType] = useState("");
+  const [credentialPreview, setCredentialPreview] = useState("");
+  const [credentialError, setCredentialError] = useState("");
+  const pickCredentialPhoto = async () => {
+    setCredentialError("");
+    if (Platform.OS === "web") {
+      const d = (globalThis as any).document;
+      if (!d) return;
+      const input = d.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.onchange = () => {
+        const file = input.files?.[0] as File | undefined;
+        if (!file) return;
+        if (!["image/jpeg","image/png","image/webp"].includes(file.type) || file.size > 5*1024*1024) {
+          setCredentialError("Only JPG/PNG/WebP photos up to 5 MB are allowed.");return;
+        }
+        setCredentialFile(file);
+        setCredentialMimeType(file.type);
+        const reader = new FileReader();
+        reader.onload = () => setCredentialPreview(typeof reader.result === "string" ? reader.result : "");
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    } else {
+      try {
+        const asset = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes:["images"],allowsEditing:false,quality:0.85,
+        });
+        if (asset.canceled || !asset.assets?.[0]) return;
+        const selected = asset.assets[0];
+        const mime = selected.mimeType || "image/jpeg";
+        const blob = await (await fetch(selected.uri)).blob();
+        if (blob.size > 5*1024*1024 || !["image/jpeg","image/png","image/webp"].includes(mime)) throw new Error("Credential photo must be JPG/PNG/WebP, max 5 MB.");
+        setCredentialFile(blob);
+        setCredentialMimeType(mime);
+        setCredentialPreview(selected.uri);
+      } catch(error:any) {setCredentialError(error?.message||"Credential photo could not be selected.");}
+    }
+  };
+
   const [residentDetailsId, setResidentDetailsId] = useState<string | null>(null);
   const [residentDetailTab, setResidentDetailTab] = useState<"details" | "map" | "volunteers" | "media">("details");
   const [residentBarangayFilter, setResidentBarangayFilter] = useState("All Barangays");
@@ -744,7 +819,19 @@ export default function CommunityEventsScreen() {
 
   const pickResidentPhoto = (slot: number) => {
     if (Platform.OS !== "web") {
-      setPhotoPickerError("On mobile, add a secure HTTPS photo link in the media section.");
+      void (async () => {
+        try {
+          const result = await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],allowsEditing:false,quality:0.85});
+          if (result.canceled || !result.assets?.[0]) return;
+          const asset = result.assets[0];
+          const raw = await (await fetch(asset.uri)).blob();
+          const blob = new Blob([raw],{type:asset.mimeType||"image/jpeg"}) as File;
+          if (!["image/jpeg","image/png","image/webp"].includes(blob.type) || blob.size>5*1024*1024) throw new Error("Site photo must be JPG/PNG/WebP, max 5 MB.");
+          setLocalPhotoFiles(previous=>previous.map((file,i)=>i===slot?blob:file));
+          setLocalPhotoPreviews(previous=>previous.map((url,i)=>i===slot?asset.uri:url));
+          setPhotoPickerError("");
+        } catch(error:any){setPhotoPickerError(error?.message||"Could not choose site photo.");}
+      })();
       return;
     }
     const docObject = (globalThis as any).document;
