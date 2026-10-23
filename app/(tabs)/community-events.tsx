@@ -1342,7 +1342,7 @@ export default function CommunityEventsScreen() {
           lookingForLength: selectedRoles.join(", ").length,
           requiredRolesCount: selectedRoles.length,
           requiredSkillsCount: form.requiredSkills.length,
-          photosCount: uploadedPhotos.filter(Boolean).length,
+          photosCount: form.photoUrls.filter(Boolean).length + localPhotoFiles.filter(Boolean).length,
           hasVideo: Boolean(videoUrl),
           capacityIsInteger: Number.isInteger(capacity),
         },
