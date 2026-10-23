@@ -5,7 +5,7 @@ import {
   useRouter,
   useSegments,
 } from "expo-router";
-import type { User } from "firebase/auth";
+import { GoogleAuthProvider, type User } from "firebase/auth";
 import React, {
   useEffect,
   useRef,
@@ -215,16 +215,28 @@ export default function RootLayout() {
             return;
           }
           setProfile(refreshedProfile);
-        } catch {
-          if (
-            currentAuthUidRef.current !== retryUid
-          ) {
+        } catch (error) {
+          if (currentAuthUidRef.current !== retryUid) {
             return;
           }
-          try {
-            await logoutUser();
-          } finally {
-            router.replace("/login");
+          // A Google-authenticated user can exist before they have finished
+          // their VolunServe Basic Account registration. The protected-route
+          // guard must not sign them out or bounce them to Login.
+          const hasGoogleIdentity = authUser.providerData.some(
+            (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
+          );
+          if (
+            hasGoogleIdentity &&
+            error instanceof Error &&
+            error.message === "Profile not found."
+          ) {
+            router.replace("/signup");
+          } else {
+            try {
+              await logoutUser();
+            } finally {
+              router.replace("/login");
+            }
           }
         } finally {
           if (

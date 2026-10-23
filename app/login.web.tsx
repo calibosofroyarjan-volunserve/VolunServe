@@ -119,7 +119,7 @@ export default function WebLogin() {
       try {
         profile = await getUserProfile(googleUser.uid);
       } catch (profileError: any) {
-        if (String(profileError?.message || "").includes("Profile not found")) {
+        if (String(profileError?.message || "").trim() === "Profile not found.") {
           // A Google identity is not a completed Resident account.
           // Keep the Firebase session so Signup can prefill Google details.
           router.replace("/signup");
