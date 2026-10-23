@@ -263,6 +263,7 @@ export default function IdentityVerificationWeb() {
   const [statusResult, setStatusResult] =
     useState<IdentityVerificationStatusResult | null>(null);
   const [localMessage, setLocalMessage] = useState("");
+  const [submissionError, setSubmissionError] = useState("");
 
   const [cameraActive, setCameraActive] = useState(false);
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -379,10 +380,10 @@ export default function IdentityVerificationWeb() {
       }
     } catch (error: any) {
       if (!silent) {
-        Alert.alert(
-          "Unable to Check Status",
-          error?.message ||
-            "Identity verification status could not be loaded.",
+        setLocalMessage(
+          error?.message
+            ? `Unable to check verification status: ${error.message}`
+            : "Unable to check verification status. Please try again.",
         );
       }
     } finally {
@@ -960,6 +961,7 @@ export default function IdentityVerificationWeb() {
       setStep(3);
       setSubmitting(true);
       setLocalMessage("");
+      setSubmissionError("");
 
       const result =
         await submitIdentityVerification({
@@ -988,12 +990,39 @@ export default function IdentityVerificationWeb() {
               : "Your submission is pending LGU/Admin review."),
       );
     } catch (error: any) {
-      setStep(2);
-      Alert.alert(
-        "Verification Not Completed",
-        error?.message ||
-          "Identity verification could not be completed.",
+      // In web builds React Native Alert.alert may be unavailable/silent.
+      // Never send the Resident back to face scan without an explanation.
+      const reason = String(
+        error?.message || "The AI verification service could not complete your submission.",
       );
+      console.error("[Identity Verification] Submission failed", {
+        stage: "submit",
+        message: reason,
+      });
+
+      // The backend might have completed the Firestore transaction even
+      // though its response was interrupted; check before suggesting retry.
+      let latest: IdentityVerificationStatusResult | null = null;
+      try {
+        latest = await getIdentityVerificationStatus();
+      } catch (statusError: any) {
+        console.warn("[Identity Verification] Unable to confirm saved status", {
+          message: String(statusError?.message || "unknown status error"),
+        });
+      }
+      if (
+        latest &&
+        (latest.identityStatus === "verified" ||
+          latest.identityStatus === "pending" ||
+          latest.identityStatus === "failed")
+      ) {
+        setStatusResult(latest);
+        setLocalMessage(latest.message || reason);
+        setSubmissionError("");
+      } else {
+        setSubmissionError(reason);
+        setStep(2);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1391,6 +1420,28 @@ export default function IdentityVerificationWeb() {
               </View>
             </View>
           </View>
+
+          {submissionError ? (
+            <View style={styles.submissionErrorCard} accessibilityRole="alert">
+              <Ionicons
+                name="alert-circle-outline"
+                size={22}
+                color={COLORS.danger}
+              />
+              <View style={styles.submissionErrorContent}>
+                <Text style={styles.submissionErrorTitle}>
+                  AI verification was not completed
+                </Text>
+                <Text style={styles.submissionErrorText}>
+                  {submissionError}
+                </Text>
+                <Text style={styles.submissionErrorHint}>
+                  Your account has not been marked as verified. Check your connection and
+                  the message above before resubmitting; each completed AI result can count as an attempt.
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.captureActions}>
             {selfie ? (
@@ -2364,6 +2415,21 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  submissionErrorCard: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    backgroundColor: COLORS.dangerBg,
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  submissionErrorContent: { flex: 1 },
+  submissionErrorTitle: { fontSize: 14, fontWeight: "800", color: COLORS.danger },
+  submissionErrorText: { fontSize: 12.5, lineHeight: 19, marginTop: 5, color: "#7F1D1D" },
+  submissionErrorHint: { fontSize: 11.5, lineHeight: 17, marginTop: 6, color: "#991B1B" },
   idLivePreview: { width: "100%", height: 290, backgroundColor: "#111827", borderRadius: 12, overflow: "hidden" },
   idCameraError: { marginTop: 8, color: "#B91C1C", fontSize: 12 },
   idCameraActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12, alignItems: "center" },
