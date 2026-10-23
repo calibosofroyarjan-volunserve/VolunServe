@@ -493,7 +493,13 @@ function DesktopTabBar({
 
       <Text style={styles.desktopSectionLabel}>MAIN MENU</Text>
 
-      <View style={styles.desktopNavigation}>
+      <ScrollView
+        style={styles.desktopNavigationScroll}
+        contentContainerStyle={styles.desktopNavigation}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        accessibilityLabel="Main menu navigation"
+      >
         {tabs.map((item) => {
           const routeIndex = state.routes.findIndex(
             (route: any) => route.name === item.name
@@ -539,7 +545,7 @@ function DesktopTabBar({
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <View style={styles.desktopUtilityArea}>
         {canSwitchMode ? (
@@ -983,8 +989,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.1,
   },
+  desktopNavigationScroll: {
+    flex: 1,
+    minHeight: 0,
+    marginTop: 0,
+  },
   desktopNavigation: {
     gap: 4,
+    paddingRight: 5,
+    paddingBottom: 8,
   },
   desktopNavItem: {
     minHeight: 50,
@@ -1025,7 +1038,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#078F82",
   },
   desktopUtilityArea: {
-    marginTop: "auto",
+    flexShrink: 0,
+    marginTop: 0,
     paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: "#E7EDF2",
