@@ -1276,35 +1276,44 @@ export default function CommunityEventsScreen() {
         setNotice(`Uploading Community Event photo ${index + 1}...`);
         uploadedPhotos[index] = await uploadResidentEventPhoto(file, token, proposalRef.id, index + 1);
       }
-      await setDoc(proposalRef,
+      // Server validates the verified Resident and writes the pending
+      // proposal. Direct Firestore creation is not relied upon here.
+      const submissionToken = await user.getIdToken();
+      const result = await fetch(
+        `${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/proposals`,
         {
-          title,
-          description,
-          volunteerTasks: form.volunteerTasks.trim(),
-          lookingFor: selectedRoles.join(", "),
-          requiredRoles: selectedRoles,
-          requiredSkills: [...form.requiredSkills],
-          qualificationNotes: form.qualificationNotes.trim(),
-          whatToBring: form.whatToBring.trim(),
-          photoUrls: uploadedPhotos.filter(Boolean).slice(0, 3),
-          videoUrl,
-          ...(uploadedPhotos.filter(Boolean).length ? { coverPhotoUrl: uploadedPhotos.filter(Boolean)[0] } : {}),
-          category: form.category,
-          barangay,
-          location,
-          date: form.date,
-          time: form.time,
-          capacity,
-          proposedBy: user.uid,
-          proposerName: String(
-            profile.fullName || "Resident"
-          ),
-          status: "pending",
-          adminNote: "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${submissionToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            proposalId: proposalRef.id,
+            title,
+            description,
+            volunteerTasks: form.volunteerTasks.trim(),
+            requiredRoles: selectedRoles,
+            requiredSkills: [...form.requiredSkills],
+            qualificationNotes: form.qualificationNotes.trim(),
+            whatToBring: form.whatToBring.trim(),
+            photoUrls: uploadedPhotos.filter(Boolean).slice(0, 3),
+            videoUrl,
+            category: form.category,
+            barangay,
+            location,
+            date: form.date,
+            time: form.time,
+            capacity,
+          }),
+        },
       );
+      const body = await result.json().catch(() => null);
+      if (!result.ok || !body?.ok) {
+        throw new Error(
+          body?.message ||
+          `Community Event proposal failed (HTTP ${result.status}).`,
+        );
+      }
 
       setForm(initialForm);
       setLocalPhotoFiles([null, null, null]);
