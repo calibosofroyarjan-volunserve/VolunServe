@@ -214,6 +214,32 @@ async function fetchWithTimeout(
 }
 
 /**
+ * Check the deployed Python AI engine before submitting private identity
+ * media or consuming an AI attempt. This endpoint requires Firebase auth.
+ */
+export async function checkIdentityEngineReady(): Promise<void> {
+  const user = await getAuthenticatedUser();
+  const token = await user.getIdToken();
+  const response = await fetchWithTimeout(
+    `${getBackendBaseUrl()}/api/identity/engine-health`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+    17000,
+  );
+  const body = await readResponseBody(response);
+  if (!response.ok || body?.ready !== true) {
+    throw new Error(
+      getResponseMessage(
+        body,
+        `Cannot confirm AI engine availability (HTTP ${response.status}). Check that the Python AI service is deployed and connected in Render.`,
+      ),
+    );
+  }
+}
+
+/**
  * Sends the Resident's government ID image and live/selfie capture
  * directly to the VolunServe backend.
  *
