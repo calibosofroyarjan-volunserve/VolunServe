@@ -7392,6 +7392,178 @@ app.post(
     }
   },
 );
+// Authenticated production path for Resident community event proposals.
+// Firestore Admin SDK writes are server-authorized, not client-rule bypasses.
+const COMMUNITY_EVENT_CATEGORIES = new Set([
+  "Clean-up Drive",
+  "Tree Planting",
+  "Feeding Program",
+  "Pet Welfare",
+  "Community Outreach",
+  "Other",
+]);
+
+function communityEventText(value, label, min, max) {
+  if (typeof value !== "string") {
+    throw makeHttpError(400, "invalid_proposal", label + " must be text.");
+  }
+  const text = value.trim();
+  if (text.length < min || text.length > max) {
+    throw makeHttpError(
+      400,
+      "invalid_proposal",
+      label + " must contain " + min + "–" + max + " characters.",
+    );
+  }
+  return text;
+}
+
+app.post(
+  "/api/community-events/proposals",
+  requireFirebaseUser,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const profile = await loadUserProfile(uid);
+      const role = String(profile.role || "").toLowerCase();
+      if (
+        !isVerifiedResidentProfile(profile) ||
+        profile.activeMode !== "resident" ||
+        ["admin", "superadmin", "lgu_personnel", "applicant"].includes(role)
+      ) {
+        throw makeHttpError(
+          403,
+          "verified_resident_required",
+          "Switch to an approved Verified Resident account to propose an event.",
+        );
+      }
+
+      const input = request.body;
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw makeHttpError(400, "invalid_proposal", "A proposal form is required.");
+      }
+      // Same 20-character Firestore ID used when staging up to 3 photos.
+      const proposalId = String(input.proposalId || "");
+      if (!/^[A-Za-z0-9]{12,40}$/.test(proposalId)) {
+        throw makeHttpError(400, "invalid_proposal_id", "Invalid proposal ID.");
+      }
+
+      const title = communityEventText(input.title, "Title", 5, 100);
+      const description = communityEventText(input.description, "Description", 20, 1500);
+      const volunteerTasks = communityEventText(input.volunteerTasks, "Volunteer tasks", 12, 1200);
+      const barangay = communityEventText(input.barangay, "Barangay", 1, 90);
+      const location = communityEventText(input.location, "Location", 1, 150);
+      const category = communityEventText(input.category, "Category", 1, 80);
+      if (!COMMUNITY_EVENT_CATEGORIES.has(category)) {
+        throw makeHttpError(400, "invalid_proposal", "Choose a supported event category.");
+      }
+
+      const date = String(input.date || "");
+      const time = String(input.time || "");
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+      ) {
+        throw makeHttpError(400, "invalid_proposal", "Enter a valid event date and time.");
+      }
+      const eventTime = new Date(date + "T" + time + ":00+08:00");
+      if (
+        !Number.isFinite(eventTime.getTime()) ||
+        eventTime.getTime() <= Date.now()
+      ) {
+        throw makeHttpError(400, "invalid_proposal", "Event date and time must be in the future.");
+      }
+
+      const capacity = Number(input.capacity);
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 500) {
+        throw makeHttpError(400, "invalid_proposal", "Volunteer capacity must be 1–500.");
+      }
+      if (!Array.isArray(input.requiredRoles) ||
+          input.requiredRoles.length < 1 ||
+          input.requiredRoles.length > 20) {
+        throw makeHttpError(400, "invalid_proposal", "Select 1–20 required volunteer roles.");
+      }
+      const requiredRoles = input.requiredRoles.map((role) =>
+        communityEventText(role, "Volunteer role", 1, 80),
+      );
+      const lookingFor = requiredRoles.join(", ");
+      if (lookingFor.length > 1600) {
+        throw makeHttpError(400, "invalid_proposal", "Too many required volunteer roles.");
+      }
+
+      const suppliedSkills = input.requiredSkills === undefined ? [] : input.requiredSkills;
+      if (!Array.isArray(suppliedSkills) || suppliedSkills.length > 20) {
+        throw makeHttpError(400, "invalid_proposal", "At most 20 skills may be selected.");
+      }
+      const requiredSkills = suppliedSkills.map((skill) =>
+        communityEventText(skill, "Required skill", 1, 80),
+      );
+      const qualificationNotes = communityEventText(
+        input.qualificationNotes || "", "Qualification notes", 0, 500,
+      );
+      const whatToBring = communityEventText(input.whatToBring || "", "What to bring", 0, 500);
+      const videoUrl = communityEventText(input.videoUrl || "", "Video URL", 0, 2048);
+      if (videoUrl) {
+        let videoHost = "";
+        try {
+          const parsed = new URL(videoUrl);
+          if (parsed.protocol === "https:") videoHost = parsed.hostname.toLowerCase();
+        } catch { /* invalid URL rejected below */ }
+        if (![
+          "www.youtube.com", "youtube.com", "m.youtube.com",
+          "youtu.be", "www.vimeo.com", "vimeo.com",
+        ].includes(videoHost)) {
+          throw makeHttpError(400, "invalid_proposal", "Video must be an HTTPS YouTube or Vimeo URL.");
+        }
+      }
+      const suppliedPhotos = input.photoUrls === undefined ? [] : input.photoUrls;
+      if (!Array.isArray(suppliedPhotos) || suppliedPhotos.length > 3) {
+        throw makeHttpError(400, "invalid_proposal", "At most three event photos are allowed.");
+      }
+      const photoUrls = suppliedPhotos.map((photo) => {
+        const value = communityEventText(photo, "Photo URL", 12, 2048);
+        try {
+          const url = new URL(value);
+          if (url.protocol !== "https:" || !url.hostname || url.username || url.password) {
+            throw new Error("invalid");
+          }
+        } catch {
+          throw makeHttpError(400, "invalid_proposal", "Photos must use valid public HTTPS URLs.");
+        }
+        return value;
+      });
+
+      // All privileged fields are set by the server. The client cannot
+      // approve its own proposal, impersonate an owner, or set timestamps.
+      const docData = {
+        title, description, volunteerTasks, lookingFor, requiredRoles,
+        requiredSkills, qualificationNotes, whatToBring, photoUrls, videoUrl,
+        ...(photoUrls.length ? {coverPhotoUrl: photoUrls[0]} : {}),
+        category, barangay, location, date, time, capacity,
+        proposedBy: uid,
+        proposerName: communityEventText(
+          String(profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Resident"),
+          "Resident name", 1, 120,
+        ),
+        status: "pending",
+        adminNote: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      await db.collection("communityEventProposals").doc(proposalId).create(docData);
+      response.status(201).json({ok: true, proposalId, status: "pending"});
+    } catch (error) {
+      console.error("Community Event proposal creation failed:", error?.code || error?.message);
+      response.status(Number(error?.statusCode) || 500).json({
+        ok: false,
+        error: cleanText(error?.code || "community_event_proposal_failed", 100),
+        message: cleanText(error?.message || "Could not submit your Community Event proposal.", 500),
+      });
+    }
+  },
+);
+
 // Dedicated Cloudinary upload for Resident Community Event proposal photos.
 // Keeps Assistance photos and protected evidence entirely separate.
 const COMMUNITY_EVENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
