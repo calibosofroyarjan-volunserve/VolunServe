@@ -188,6 +188,21 @@ def require_internal_backend(
         )
 
 
+
+# Called by the existing Node backend prior to uploading ID and face
+# images. Verify that its actual internal key matches ours, not merely
+# that both services have some secret configured.
+@app.get("/api/internal/auth-check")
+def internal_backend_auth_check(
+    x_volunserve_internal_key: str | None = Header(
+        default=None,
+        alias="X-VolunServe-Internal-Key",
+    ),
+):
+    require_internal_backend(x_volunserve_internal_key)
+    return {"ok": True, "authenticated": True}
+
+
 def validate_forwarded_user(
     value,
 ):
