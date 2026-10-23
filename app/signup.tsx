@@ -73,7 +73,9 @@ const COLORS = {
   field: "#f8fafc",
 };
 
-const ALLOWED_REGIONS = ["Region III – Central Luzon"];
+const FIXED_REGION = "Region III – Central Luzon";
+const FIXED_PROVINCE = "Bulacan";
+const FIXED_CITY = "City of San Jose del Monte";
 
 const ALLOWED_PROVINCES = [
   "Bulacan",
@@ -423,9 +425,6 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [regions, setRegions] = useState<string[]>([]);
-  const [provinces, setProvinces] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
   const [barangays, setBarangays] = useState<string[]>([]);
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [dobOpen, setDobOpen] = useState(false);
@@ -438,9 +437,9 @@ export default function Signup() {
     dateOfBirth: null,
     phoneLocal: "",
     email: "",
-    region: "",
-    province: "",
-    city: "",
+    region: FIXED_REGION,
+    province: FIXED_PROVINCE,
+    city: FIXED_CITY,
     barangay: "",
     occupationCategory: "",
     occupationSpecialization: "",
@@ -468,11 +467,6 @@ export default function Signup() {
   const minDOB = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
 
   const progressPercent = (step / 4) * 100;
-
-  useEffect(() => {
-    setRegions(ALLOWED_REGIONS);
-    if (ALLOWED_REGIONS.length === 1) updateField("region", ALLOWED_REGIONS[0]);
-  }, [updateField]);
 
   useEffect(() => {
     const handleGoogleSuccess = async () => {
@@ -508,60 +502,30 @@ export default function Signup() {
   }, [response, updateField]);
 
   useEffect(() => {
-    const fetchProvinces = async () => {
-      if (!formData.region) return;
-      try {
-        setLoadingAddress(true);
-        setProvinces([]);
-        setCities([]);
-        setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces"));
-        const available = snap.docs.map((d) => d.id).sort();
-        setProvinces(available.filter(isAllowedProvince));
-      } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load provinces.");
-      } finally {
-        setLoadingAddress(false);
-      }
-    };
-    fetchProvinces();
-  }, [formData.region]);
-
-  useEffect(() => {
-    const fetchCities = async () => {
-      if (!formData.region || !formData.province) return;
-      try {
-        setLoadingAddress(true);
-        setCities([]);
-        setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces", formData.province, "cities"));
-        const available = snap.docs.map((d) => d.id).sort();
-        setCities(available.filter(isAllowedCity));
-      } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load cities.");
-      } finally {
-        setLoadingAddress(false);
-      }
-    };
-    fetchCities();
-  }, [formData.region, formData.province]);
-
-  useEffect(() => {
-    const fetchBarangays = async () => {
-      if (!formData.region || !formData.province || !formData.city) return;
+    let mounted = true;
+    const loadBarangays = async () => {
       try {
         setLoadingAddress(true);
         setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces", formData.province, "cities", formData.city, "barangays"));
-        setBarangays(snap.docs.map((d) => d.id).sort());
-      } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load barangays.");
+        const provinces = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces"));
+        const provinceIds = provinces.docs.map((item) => item.id);
+        const provinceId = provinceIds.find((name) => name === FIXED_PROVINCE) ||
+          provinceIds.find(isAllowedProvince) || FIXED_PROVINCE;
+        const cities = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities"));
+        const cityIds = cities.docs.map((item) => item.id);
+        const cityId = cityIds.find((name) => name === FIXED_CITY) ||
+          cityIds.find(isAllowedCity) || FIXED_CITY;
+        const snapshot = await getDocs(collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities", cityId, "barangays"));
+        if (mounted) setBarangays(snapshot.docs.map((item) => item.id).sort());
+      } catch (error: any) {
+        if (mounted) Alert.alert("Address Error", error?.message || "Failed to load barangays.");
       } finally {
-        setLoadingAddress(false);
+        if (mounted) setLoadingAddress(false);
       }
     };
-    fetchBarangays();
-  }, [formData.region, formData.province, formData.city]);
+    void loadBarangays();
+    return () => { mounted = false; };
+  }, []);
 
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
@@ -877,15 +841,9 @@ export default function Signup() {
             <View>
               <SectionTitle title="Residential Address" subtitle="VolunServe currently serves residents of the City of San Jose del Monte, Bulacan." />
               {loadingAddress ? <View style={styles.loadingRow}><ActivityIndicator color={COLORS.primary} /><Text style={styles.loadingText}>Loading address options…</Text></View> : null}
-              <Dropdown icon="🌐" label="Region *" value={formData.region} options={regions} enabled={false} onChange={(value) => {
-                updateField("region", value); updateField("province", ""); updateField("city", ""); updateField("barangay", "");
-              }} />
-              <Dropdown icon="🗺️" label="Province *" value={formData.province} options={provinces} enabled={!!formData.region && provinces.length > 0} onChange={(value) => {
-                updateField("province", value); updateField("city", ""); updateField("barangay", "");
-              }} />
-              <Dropdown icon="🏙️" label="City / Municipality *" value={formData.city} options={cities} enabled={!!formData.province && cities.length > 0} onChange={(value) => {
-                updateField("city", value); updateField("barangay", "");
-              }} />
+              <View style={styles.field}><Text style={styles.label}>🌐 Region</Text><View style={styles.fixedLocationField}><Text style={styles.fixedLocationText}>{formData.region}</Text></View></View>
+              <View style={styles.field}><Text style={styles.label}>🗺️ Province</Text><View style={styles.fixedLocationField}><Text style={styles.fixedLocationText}>{formData.province}</Text></View></View>
+              <View style={styles.field}><Text style={styles.label}>🏙️ City / Municipality</Text><View style={styles.fixedLocationField}><Text style={styles.fixedLocationText}>{formData.city}</Text></View></View>
               <Dropdown icon="📍" label="Barangay *" value={formData.barangay} options={barangays} enabled={!!formData.city && barangays.length > 0} onChange={(value) => updateField("barangay", value)} />
             </View>
           )}
@@ -1092,6 +1050,8 @@ const styles = StyleSheet.create({
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 
   field: { marginBottom: 16 },
+  fixedLocationField: { minHeight: 54, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
+  fixedLocationText: { fontSize: 15, color: COLORS.text, fontWeight: "700" },
   label: { fontSize: 14, fontWeight: "800", color: "#1f2937", marginBottom: 8 },
   input: { backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14, fontSize: 15, color: COLORS.text, fontWeight: "700" },
   inputFocused: { borderColor: COLORS.primary, backgroundColor: "#fff" },
