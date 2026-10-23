@@ -662,6 +662,16 @@ export default function Signup() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={undefined}>
+      {/*
+        Edge shows a second, browser-generated reveal button only after typing
+        into a password field. Hide that native control, and keep the
+        intentional Feather eye toggle at the right side of each field.
+      */}
+      {React.createElement(
+        "style",
+        { type: "text/css" },
+        'input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none !important; }'
+      )}
       <View style={styles.desktopShell}>
         {width >= 900 ? (
           <View style={styles.photoPanel}>
