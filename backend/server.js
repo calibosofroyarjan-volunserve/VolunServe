@@ -4533,20 +4533,24 @@ async function callIdentityAiService(
       500;
     throw error;
   }
-  const aiResponse =
-    await fetch(
-      endpoint,
-      {
-        method:
-          "POST",
-        headers:
-          getIdentityAiHeaders(
-            request,
-          ),
-        body:
-          request.body,
-      },
+  let aiResponse;
+  try {
+    aiResponse = await fetch(endpoint, {
+      method: "POST",
+      headers: getIdentityAiHeaders(request),
+      body: request.body,
+      // Release the verification lease on AI outages rather than waiting
+      // indefinitely. The frontend request times out after 65 seconds.
+      signal: AbortSignal.timeout(55000),
+    });
+  } catch (error) {
+    console.error("Identity AI connection failed:", error?.name || "network_error");
+    throw makeHttpError(
+      503,
+      "identity_ai_unreachable",
+      "The AI face-comparison service is unavailable or timed out. Check the Python AI service in Render; the scan was not evaluated.",
     );
+  }
   const body =
     await readJsonResponse(
       aiResponse,
@@ -4645,6 +4649,68 @@ app.get(
         new Date()
           .toISOString(),
     });
+  },
+);
+// Cheap readiness check for the private Python face-comparison service.
+// No biometric media, UID or secrets are sent to its public /health route.
+// Clients call this BEFORE spending an AI verification attempt.
+app.get(
+  "/api/identity/engine-health",
+  requireFirebaseUser,
+  async (_request, response) => {
+    const endpoint = getIdentityAiEndpoint();
+    if (!endpoint) {
+      return response.status(503).json({
+        ok: false,
+        ready: false,
+        error: "identity_ai_not_configured",
+        message: "AI face comparison is not connected. Configure IDENTITY_AI_SERVICE_URL on the VolunServe Render backend and deploy the Python identity-ai service.",
+      });
+    }
+    if (!String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim()) {
+      return response.status(503).json({
+        ok: false,
+        ready: false,
+        error: "identity_ai_key_missing",
+        message: "The AI service internal authentication key has not been configured on the backend.",
+      });
+    }
+    try {
+      const healthUrl = endpoint.endsWith("/verify")
+        ? endpoint.slice(0, -"/verify".length) + "/health"
+        : endpoint.replace(/\/+$/, "") + "/health";
+      const healthResponse = await fetch(healthUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(12000),
+      });
+      const health = await readJsonResponse(healthResponse);
+      if (!healthResponse.ok ||
+          health?.ok !== true ||
+          health?.verificationEngineReady !== true ||
+          health?.internalAuthConfigured !== true) {
+        return response.status(503).json({
+          ok: false,
+          ready: false,
+          error: "identity_ai_not_ready",
+          message: "The Python AI face-comparison service is not ready or its internal authentication is missing. Check its Render deployment and environment settings.",
+        });
+      }
+      return response.json({
+        ok: true,
+        ready: true,
+        provider: "volunserve-custom-ai",
+        livenessImplemented: health.livenessImplemented === true,
+        message: "The AI comparison service is connected. ID authenticity and liveness are not fully verified by this service.",
+      });
+    } catch (error) {
+      console.warn("Identity AI readiness check failed:", error?.code || error?.name || "unreachable");
+      return response.status(503).json({
+        ok: false,
+        ready: false,
+        error: "identity_ai_unreachable",
+        message: "Cannot connect to the Python AI comparison service. Check that the AI Render service is Live and IDENTITY_AI_SERVICE_URL points to its correct HTTPS address.",
+      });
+    }
   },
 );
 app.get(
