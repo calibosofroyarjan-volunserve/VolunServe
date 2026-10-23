@@ -1,4 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
@@ -235,6 +236,8 @@ const Field = memo(function Field({
   placeholder,
   keyboardType,
   secureTextEntry,
+  showPassword,
+  onTogglePassword,
   editable = true,
   invalid = false,
   returnKeyType,
@@ -249,6 +252,8 @@ const Field = memo(function Field({
   placeholder?: string;
   keyboardType?: any;
   secureTextEntry?: boolean;
+  showPassword?: boolean;
+  onTogglePassword?: () => void;
   editable?: boolean;
   invalid?: boolean;
   returnKeyType?: any;
@@ -262,9 +267,11 @@ const Field = memo(function Field({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
-      <TextInput
+      <View style={styles.passwordInputContainer}>
+        <TextInput
         style={[
           styles.input,
+          onTogglePassword && styles.passwordInput,
           focused && styles.inputFocused,
           !editable && styles.disabledInput,
           invalid && styles.inputInvalid,
@@ -283,7 +290,9 @@ const Field = memo(function Field({
         blurOnSubmit={false}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-      />
+        />
+        {onTogglePassword ? <TouchableOpacity style={styles.passwordEyeButton} onPress={onTogglePassword} accessibilityRole="button" accessibilityLabel={showPassword ? "Hide password" : "Show password"} hitSlop={8}><Feather name={showPassword ? "eye-off" : "eye"} size={20} color={COLORS.muted} /></TouchableOpacity> : null}
+      </View>
     </View>
   );
 });
@@ -866,10 +875,8 @@ export default function Signup() {
               ) : (
                 <>
                   <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
-                  <Field icon="🔒" label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} autoCapitalize="none" />
-                  <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showPassword ? "Hide Password" : "Show Password"}</Text></TouchableOpacity>
-                  <Field icon="🔐" label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} autoCapitalize="none" />
-                  <TouchableOpacity style={styles.passwordToggleBtn} onPress={() => setShowConfirmPassword((prev) => !prev)}><Text style={styles.passwordToggleText}>{showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}</Text></TouchableOpacity>
+                  <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
+                  <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
 
                   <View style={styles.passwordPanel}>
                     <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
@@ -1024,6 +1031,9 @@ const styles = StyleSheet.create({
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 
   field: { marginBottom: 16 },
+  passwordInputContainer: { position: "relative", justifyContent: "center" },
+  passwordInput: { paddingRight: 60 },
+  passwordEyeButton: { position: "absolute", right: 4, top: 0, bottom: 0, minWidth: 48, alignItems: "center", justifyContent: "center" },
   fixedLocationField: { minHeight: 54, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
   fixedLocationText: { fontSize: 15, color: COLORS.text, fontWeight: "700" },
   label: { fontSize: 14, fontWeight: "800", color: "#1f2937", marginBottom: 8 },
@@ -1048,8 +1058,6 @@ const styles = StyleSheet.create({
   loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14, backgroundColor: COLORS.field, padding: 12, borderRadius: 14 },
   loadingText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
 
-  passwordToggleBtn: { alignSelf: "flex-start", marginTop: -4, marginBottom: 12 },
-  passwordToggleText: { color: COLORS.primary, fontWeight: "900", fontSize: 13 },
   passwordPanel: { backgroundColor: COLORS.field, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 18 },
   passwordStrength: { color: COLORS.text, fontWeight: "900", fontSize: 14, marginBottom: 8 },
 
