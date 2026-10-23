@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -37,6 +38,11 @@ type Proposal = {
   location: string;
   date: string;
   time: string;
+  endTime?: string;
+  latitude?: number;
+  longitude?: number;
+  coordinates?: {latitude: number; longitude: number};
+  credentialAssetId?: string;
   capacity: number;
   proposedBy: string;
   proposerName?: string;
@@ -419,6 +425,11 @@ export default function CommunityEventAdminScreen() {
           location: proposal.location,
           date: proposal.date,
           time: proposal.time,
+          ...(proposal.endTime ? {endTime:proposal.endTime} : {}),
+          ...(Number.isFinite(Number(proposal.latitude)) && Number.isFinite(Number(proposal.longitude)) &&
+             proposal.latitude != null && proposal.longitude != null
+             ? {latitude:Number(proposal.latitude),longitude:Number(proposal.longitude),
+                coordinates:{latitude:Number(proposal.latitude),longitude:Number(proposal.longitude)}} : {}),
           capacity,
           participantsCount: 0,
           status: "upcoming",
@@ -862,7 +873,7 @@ export default function CommunityEventAdminScreen() {
                     <Text style={styles.statusBadge}>{selectedProposal.status.toUpperCase()}</Text>
                     <Text style={styles.categoryBadge}>{selectedProposal.category}</Text>
                   </View>
-                  <Text style={styles.detailMeta}><Ionicons name="calendar-outline" size={15} color={MUTED} />{"  "}{formatSchedule(selectedProposal.date, selectedProposal.time)}</Text>
+                  <Text style={styles.detailMeta}><Ionicons name="calendar-outline" size={15} color={MUTED} />{"  "}{formatSchedule(selectedProposal.date, selectedProposal.time)}{selectedProposal.endTime ? ` – ${selectedProposal.endTime}` : ""}</Text>
                   <Text style={styles.detailMeta}><Ionicons name="location-outline" size={15} color={MUTED} />{"  "}{selectedProposal.location}, {selectedProposal.barangay}</Text>
                   <Text style={styles.detailMeta}><Ionicons name="people-outline" size={15} color={MUTED} />{"  "}{selectedProposal.capacity} volunteer slots</Text>
                   <Text style={styles.detailHeading}>Proposed by</Text>
@@ -899,6 +910,31 @@ export default function CommunityEventAdminScreen() {
                       <Text style={styles.detailHeading}>Qualifications / credentials</Text>
                       <Text style={styles.bodyText}>{selectedProposal.qualificationNotes}</Text>
                     </>
+                  )}
+                  {selectedProposal.latitude != null && selectedProposal.longitude != null && (
+                    <Pressable style={styles.inlineButton} onPress={() => void Linking.openURL(
+                      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedProposal.latitude},${selectedProposal.longitude}`)}`
+                    )}>
+                      <Text style={styles.inlineButtonText}>View Resident GPS Event Pin</Text>
+                    </Pressable>
+                  )}
+                  {!!selectedProposal.credentialAssetId && (
+                    <Pressable style={styles.inlineButton} onPress={async () => {
+                      try {
+                        const authToken = await user?.getIdToken();
+                        const response = await fetch(
+                          `https://volunserve.onrender.com/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
+                          {headers:{Authorization:`Bearer ${authToken || ""}`}},
+                        );
+                        const body = await response.json().catch(() => null);
+                        if (!response.ok || typeof body?.url !== "string") throw new Error(body?.message || "Credential cannot be loaded.");
+                        await Linking.openURL(body.url);
+                      } catch(error:any) {
+                        setActionError(error?.message || "Unable to open private credential photo.");
+                      }
+                    }}>
+                      <Text style={styles.inlineButtonText}>View Private Credential Photo (Admin Only)</Text>
+                    </Pressable>
                   )}
                   {!!selectedProposal.videoUrl?.trim() && (
                     <>
