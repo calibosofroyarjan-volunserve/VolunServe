@@ -1303,6 +1303,14 @@ export default function CommunityEventsScreen() {
     ])];
     const photoUrls = form.photoUrls.map((url) => url.trim()).filter(Boolean);
     const videoUrl = form.videoUrl.trim();
+    if (!photoUrls.length && !localPhotoFiles.some(Boolean)) {
+      setNotice("At least one event site evidence photo is required. Upload Main Photo or supply a valid HTTPS image link.");
+      return;
+    }
+    if (form.latitude === null || form.longitude === null) {
+      setNotice("Set the exact GPS meeting point by tapping the map or using the venue's GPS.");
+      return;
+    }
 
     if (form.volunteerTasks.trim().length < 12 || selectedRoles.length === 0) {
       setNotice("Describe what volunteers will do (at least 12 characters) and select at least one needed role.");
@@ -1320,6 +1328,12 @@ export default function CommunityEventsScreen() {
 
     const timeOkay =
       /^([01]\d|2[0-3]):[0-5]\d$/.test(form.time);
+
+    const endTimeOkay = /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.endTime);
+    if (!endTimeOkay || (timeOkay && form.endTime <= form.time)) {
+      setNotice("Choose an end time later than the start time, on the same day.");
+      return;
+    }
 
     const parsed =
       dateOkay && timeOkay
@@ -1368,12 +1382,19 @@ export default function CommunityEventsScreen() {
       const proposalRef = doc(collection(db, "communityEventProposals"));
       const uploadedPhotos = [...form.photoUrls.map((url) => url.trim())];
       // Upload only selected local images. Unchanged HTTPS links remain valid.
-      const token = localPhotoFiles.some(Boolean) ? await user.getIdToken() : "";
+      const token = await user.getIdToken();
       for (let index = 0; index < localPhotoFiles.length; index += 1) {
         const file = localPhotoFiles[index];
         if (!file) continue;
         setNotice(`Uploading Community Event photo ${index + 1}...`);
         uploadedPhotos[index] = await uploadResidentEventPhoto(file, token, proposalRef.id, index + 1);
+      }
+      let credentialAssetId = "";
+      if (credentialFile) {
+        setNotice("Uploading private professional credential for Admin review...");
+        credentialAssetId = await uploadResidentCredentialPhoto(
+          credentialFile, credentialMimeType, token, proposalRef.id,
+        );
       }
       // Server validates the verified Resident and writes the pending
       // proposal. Direct Firestore creation is not relied upon here.
@@ -1393,7 +1414,8 @@ export default function CommunityEventsScreen() {
             volunteerTasks: form.volunteerTasks.trim(),
             requiredRoles: selectedRoles,
             requiredSkills: [...form.requiredSkills],
-            qualificationNotes: form.qualificationNotes.trim(),
+            qualificationNotes: "",
+            ...(credentialAssetId ? {credentialAssetId} : {}),
             whatToBring: form.whatToBring.trim(),
             photoUrls: uploadedPhotos.filter(Boolean).slice(0, 3),
             videoUrl,
@@ -1402,6 +1424,9 @@ export default function CommunityEventsScreen() {
             location,
             date: form.date,
             time: form.time,
+            endTime: form.endTime,
+            latitude: form.latitude,
+            longitude: form.longitude,
             capacity,
           }),
         },
@@ -1417,6 +1442,10 @@ export default function CommunityEventsScreen() {
       setForm(initialForm);
       setLocalPhotoFiles([null, null, null]);
       setLocalPhotoPreviews(["", "", ""]);
+      setCredentialFile(null);
+      setCredentialMimeType("");
+      setCredentialPreview("");
+      setCredentialError("");
       setCustomVenue(false);
       setCustomCapacity(false);
       setSection("mine");
@@ -2591,14 +2620,14 @@ export default function CommunityEventsScreen() {
             <Text style={styles.fieldLabel}>Other helpful skills (optional)</Text>
             <View style={styles.ruiSkillsChips}>{suggestedSkills[form.category].map(name=><Pressable key={name} onPress={()=>setValue("requiredSkills",form.requiredSkills.includes(name)?form.requiredSkills.filter(v=>v!==name):[...form.requiredSkills,name])} style={[styles.ruiSkillChip,form.requiredSkills.includes(name)&&styles.ruiSkillChipSelected]}><Text style={[styles.ruiSkillChipText,form.requiredSkills.includes(name)&&styles.ruiSkillChipTextSelected]}>{form.requiredSkills.includes(name)?"✓ ":"+ "}{name}</Text></Pressable>)}</View>
             {needsProfessionalCheck([...form.requiredRoles,form.otherRole])&&<View style={styles.residentSafeguard}><Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13"/><Text style={styles.residentSafeguardText}>Clinical and veterinary work requires verified professional qualifications. General volunteers may assist with non-clinical duties.</Text></View>}
-            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Credentials / supervision (optional)</Text><TextInput style={styles.input} value={form.qualificationNotes} maxLength={500} onChangeText={v=>setValue("qualificationNotes",v)} placeholder="e.g. Licensed nurse required for clinical tasks"/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
           </View>
 
           <View style={styles.ruiFormSection}>
-            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Optional)</Text></View>
-            <Text style={styles.ruiChecklistSubtitle}>Share photos of the actual location or planned activity, with consent. Do not upload IDs or private information. JPG, PNG, WebP · 5 MB max each.</Text>
+            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Required)</Text></View>
+            <Text style={styles.ruiChecklistSubtitle}>Upload at least one real venue/activity evidence photo (Main Photo required). Up to 3 JPG, PNG or WebP images, 5 MB each. Video optional. Never upload private IDs here.</Text>
             <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}>
-              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Recommended":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>Choose files to upload on submission. HTTPS photo URLs are an alternative when Storage is unavailable.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
+              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
             </View>
           </View>
@@ -3539,7 +3568,8 @@ export default function CommunityEventsScreen() {
                 maxLength={1500}
               />
 
-              <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto} />
+              <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto}
+                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError}/>
 
               <View style={styles.residentSubmissionFooter}>
                 <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
