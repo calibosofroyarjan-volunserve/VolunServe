@@ -1,6 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { collection, getDocs } from "firebase/firestore";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,8 +18,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { db } from "../lib/firebase";
 import { connectGoogleAccountWeb, signUpUser } from "../lib/firebaseAuth";
+import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -405,8 +404,8 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [barangays, setBarangays] = useState<string[]>([]);
-  const [loadingAddress, setLoadingAddress] = useState(false);
+  const barangays = SJDM_BARANGAYS;
+  const loadingAddress = false;
   const [dobOpen, setDobOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormState>({
@@ -441,49 +440,6 @@ export default function Signup() {
   // Region, province and city are fixed and immediately available.
   // Look up the actual address document IDs separately for compatibility
   // with previously seeded Firestore locations (including name variants).
-  useEffect(() => {
-    let mounted = true;
-    const loadBarangays = async () => {
-      try {
-        setLoadingAddress(true);
-        setBarangays([]);
-        const provinceSnapshot = await getDocs(
-          collection(db, "address_regions", FIXED_REGION, "provinces")
-        );
-        const provinceNames = provinceSnapshot.docs.map((d) => d.id);
-        const provinceId =
-          provinceNames.find((name) => name === FIXED_PROVINCE) ||
-          provinceNames.find(isAllowedProvince) ||
-          FIXED_PROVINCE;
-        const citySnapshot = await getDocs(
-          collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities")
-        );
-        const cityNames = citySnapshot.docs.map((d) => d.id);
-        const cityId =
-          cityNames.find((name) => name === FIXED_CITY) ||
-          cityNames.find(isAllowedCity) ||
-          FIXED_CITY;
-        const barangaySnapshot = await getDocs(
-          collection(
-            db, "address_regions", FIXED_REGION, "provinces",
-            provinceId, "cities", cityId, "barangays"
-          )
-        );
-        if (mounted) {
-          setBarangays(barangaySnapshot.docs.map((d) => d.id).sort());
-        }
-      } catch (err: any) {
-        if (mounted) {
-          Alert.alert("Address Error", err?.message || "Failed to load barangays.");
-        }
-      } finally {
-        if (mounted) setLoadingAddress(false);
-      }
-    };
-    void loadBarangays();
-    return () => { mounted = false; };
-  }, []);
-
   const specializationOptions = useMemo(
     () => SPECIALIZATIONS[formData.occupationCategory] ?? [],
     [formData.occupationCategory]
