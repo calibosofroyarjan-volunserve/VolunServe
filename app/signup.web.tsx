@@ -62,7 +62,10 @@ const COLORS = {
   field: "#f8fafc",
 };
 
-const ALLOWED_REGIONS = ["Region III – Central Luzon"];
+// Signups are restricted to the City of San Jose del Monte, Bulacan.
+const FIXED_REGION = "Region III – Central Luzon";
+const FIXED_PROVINCE = "Bulacan";
+const FIXED_CITY = "City of San Jose del Monte";
 
 const normalizeLocationName = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -402,9 +405,6 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [regions, setRegions] = useState<string[]>([]);
-  const [provinces, setProvinces] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
   const [barangays, setBarangays] = useState<string[]>([]);
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [dobOpen, setDobOpen] = useState(false);
@@ -417,9 +417,9 @@ export default function Signup() {
     dateOfBirth: null,
     phoneLocal: "",
     email: "",
-    region: "",
-    province: "",
-    city: "",
+    region: FIXED_REGION,
+    province: FIXED_PROVINCE,
+    city: FIXED_CITY,
     barangay: "",
     occupationCategory: "",
     occupationSpecialization: "",
@@ -438,96 +438,51 @@ export default function Signup() {
   const maxDOB = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
   const minDOB = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
 
+  // Region, province and city are fixed and immediately available.
+  // Look up the actual address document IDs separately for compatibility
+  // with previously seeded Firestore locations (including name variants).
   useEffect(() => {
-    setRegions(ALLOWED_REGIONS);
-    if (ALLOWED_REGIONS.length === 1) updateField("region", ALLOWED_REGIONS[0]);
-  }, [updateField]);
-
-  useEffect(() => {
-    const fetchProvinces = async () => {
-      if (!formData.region) return;
+    let mounted = true;
+    const loadBarangays = async () => {
       try {
         setLoadingAddress(true);
-        setProvinces([]);
-        setCities([]);
         setBarangays([]);
-        const snap = await getDocs(collection(db, "address_regions", formData.region, "provinces"));
-        const allowedProvinces = snap.docs
-          .map((d) => d.id)
-          .filter(isAllowedProvince)
-          .sort();
-
-        setProvinces(allowedProvinces);
-
-        if (allowedProvinces.length === 1) {
-          updateField("province", allowedProvinces[0]);
-        }
-      } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load provinces.");
-      } finally {
-        setLoadingAddress(false);
-      }
-    };
-    fetchProvinces();
-  }, [formData.region, updateField]);
-
-  useEffect(() => {
-    const fetchCities = async () => {
-      if (!formData.region || !formData.province) return;
-      try {
-        setLoadingAddress(true);
-        setCities([]);
-        setBarangays([]);
-        const snap = await getDocs(
-          collection(db, "address_regions", formData.region, "provinces", formData.province, "cities")
+        const provinceSnapshot = await getDocs(
+          collection(db, "address_regions", FIXED_REGION, "provinces")
         );
-
-        const allowedCities = snap.docs
-          .map((d) => d.id)
-          .filter(isAllowedCity)
-          .sort();
-
-        setCities(allowedCities);
-
-        if (allowedCities.length === 1) {
-          updateField("city", allowedCities[0]);
-        }
-      } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load cities.");
-      } finally {
-        setLoadingAddress(false);
-      }
-    };
-    fetchCities();
-  }, [formData.region, formData.province, updateField]);
-
-  useEffect(() => {
-    const fetchBarangays = async () => {
-      if (!formData.region || !formData.province || !formData.city) return;
-      try {
-        setLoadingAddress(true);
-        setBarangays([]);
-        const snap = await getDocs(
+        const provinceNames = provinceSnapshot.docs.map((d) => d.id);
+        const provinceId =
+          provinceNames.find((name) => name === FIXED_PROVINCE) ||
+          provinceNames.find(isAllowedProvince) ||
+          FIXED_PROVINCE;
+        const citySnapshot = await getDocs(
+          collection(db, "address_regions", FIXED_REGION, "provinces", provinceId, "cities")
+        );
+        const cityNames = citySnapshot.docs.map((d) => d.id);
+        const cityId =
+          cityNames.find((name) => name === FIXED_CITY) ||
+          cityNames.find(isAllowedCity) ||
+          FIXED_CITY;
+        const barangaySnapshot = await getDocs(
           collection(
-            db,
-            "address_regions",
-            formData.region,
-            "provinces",
-            formData.province,
-            "cities",
-            formData.city,
-            "barangays"
+            db, "address_regions", FIXED_REGION, "provinces",
+            provinceId, "cities", cityId, "barangays"
           )
         );
-        setBarangays(snap.docs.map((d) => d.id).sort());
+        if (mounted) {
+          setBarangays(barangaySnapshot.docs.map((d) => d.id).sort());
+        }
       } catch (err: any) {
-        Alert.alert("Address Error", err?.message || "Failed to load barangays.");
+        if (mounted) {
+          Alert.alert("Address Error", err?.message || "Failed to load barangays.");
+        }
       } finally {
-        setLoadingAddress(false);
+        if (mounted) setLoadingAddress(false);
       }
     };
-    fetchBarangays();
-  }, [formData.region, formData.province, formData.city]);
+    void loadBarangays();
+    return () => { mounted = false; };
+  }, []);
 
   const specializationOptions = useMemo(
     () => SPECIALIZATIONS[formData.occupationCategory] ?? [],
@@ -1091,47 +1046,29 @@ export default function Signup() {
                     </View>
                   ) : null}
 
-                  <Dropdown
-                    label="Region"
-                    value={formData.region}
-                    options={regions}
-                    enabled={false}
-                    onChange={(value) => {
-                      updateField("region", value);
-                      updateField("province", "");
-                      updateField("city", "");
-                      updateField("barangay", "");
-                    }}
-                  />
+                  <View style={styles.field}>
+                    <Text style={styles.label}>Region</Text>
+                    <View style={styles.fixedLocationField}>
+                      <Text style={styles.fixedLocationText}>{formData.region}</Text>
+                    </View>
+                  </View>
 
                   <View style={styles.formRow}>
                     <View style={styles.formColumn}>
-                      <Dropdown
-                        label="Province"
-                        placeholder="Select province"
-                        value={formData.province}
-                        options={provinces}
-                        enabled={!!formData.region && provinces.length > 0}
-                        onChange={(value) => {
-                          updateField("province", value);
-                          updateField("city", "");
-                          updateField("barangay", "");
-                        }}
-                      />
+                      <View style={styles.field}>
+                        <Text style={styles.label}>Province</Text>
+                        <View style={styles.fixedLocationField}>
+                          <Text style={styles.fixedLocationText}>{formData.province}</Text>
+                        </View>
+                      </View>
                     </View>
-
                     <View style={styles.formColumn}>
-                      <Dropdown
-                        label="City"
-                        placeholder="Select city"
-                        value={formData.city}
-                        options={cities}
-                        enabled={!!formData.province && cities.length > 0}
-                        onChange={(value) => {
-                          updateField("city", value);
-                          updateField("barangay", "");
-                        }}
-                      />
+                      <View style={styles.field}>
+                        <Text style={styles.label}>City</Text>
+                        <View style={styles.fixedLocationField}>
+                          <Text style={styles.fixedLocationText}>{formData.city}</Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
 
@@ -1647,6 +1584,8 @@ const styles = StyleSheet.create({
   formRow: { flexDirection: "row", gap: 14 },
   formColumn: { flex: 1, minWidth: 0 },
   field: { marginBottom: 14 },
+  fixedLocationField: { height: 52, borderWidth: 1, borderColor: "#dce5ec", borderRadius: 12, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
+  fixedLocationText: { color: COLORS.text, fontSize: 14, fontWeight: "800" },
   label: { fontSize: 12.5, fontWeight: "800", color: "#172033", marginBottom: 7 },
   groupLabel: { fontSize: 13, fontWeight: "900", color: "#172033", marginTop: 3, marginBottom: 7 },
   helperText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "600", marginTop: -3, marginBottom: 10 },
