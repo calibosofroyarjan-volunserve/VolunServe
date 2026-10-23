@@ -5059,7 +5059,8 @@ service cloud.firestore {
       allow create: if isAdminOrSuperAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
-          'location', 'date', 'time', 'capacity',
+          'location', 'date', 'time', 'endTime', 'capacity',
+          'latitude', 'longitude', 'coordinates',
           'participantsCount', 'status', 'publicationStatus',
           'sourceProposalId', 'proposedBy', 'proposerName',
           'approvedBy', 'approvedAt', 'createdAt', 'updatedAt',
@@ -5100,6 +5101,296 @@ service cloud.firestore {
         && request.resource.data.location == proposalAfter().location
         && request.resource.data.date == proposalAfter().date
         && request.resource.data.time == proposalAfter().time
+        && request.resource.data.get('endTime', '') == proposalAfter().get('endTime', '')
+        && request.resource.data.get('latitude', null) == proposalAfter().get('latitude', null)
+        && request.resource.data.get('longitude', null) == proposalAfter().get('longitude', null)
+        && request.resource.data.get('coordinates', null) == proposalAfter().get('coordinates', null)
+        && (
+          !('endTime' in request.resource.data)
+          || (
+            request.resource.data.endTime is string
+            && request.resource.data.endTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && request.resource.data.endTime > request.resource.data.time
+          )
+        )
+        && (
+          !('latitude' in request.resource.data)
+          || (
+            request.resource.data.latitude is number
+            && request.resource.data.longitude is number
+            && request.resource.data.coordinates is map
+            && request.resource.data.coordinates.latitude == request.resource.data.latitude
+            && request.resource.data.coordinates.longitude == request.resource.data.longitude
+          )
+        )
+        && request.resource.data.proposedBy == proposalAfter().proposedBy
+        && request.resource.data.proposerName == proposalAfter().proposerName;
+
+      // Admin can advance status; completion is recorded by the Admin.
+      allow update: if isAdminOrSuperAdmin()
+        && resource.data.publicationStatus == 'published'
+        && resource.data.status in ['upcoming', 'active']
+        && (
+          (resource.data.status == 'upcoming'
+            && request.resource.data.status in ['active', 'cancelled'])
+          ||
+          (resource.data.status == 'active'
+            && request.resource.data.status in ['completed', 'cancelled'])
+        )
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'status', 'updatedAt', 'completedAt', 'completedBy'
+          ])
+        && (
+          request.resource.data.status != 'completed'
+          || (
+            request.resource.data.completedAt == request.time
+            && request.resource.data.completedBy == request.auth.uid
+          )
+        );
+
+      // A Volunteer can increase count only when their matching Join write
+      // is part of this same Firestore transaction.
+      allow update: if isVolunteer()
+        && resource.data.publicationStatus == 'published'
+        && resource.data.status in ['upcoming', 'active']
+        && resource.data.proposedBy != request.auth.uid
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'participantsCount', 'updatedAt'
+          ])
+        && resource.data.participantsCount is int
+        && request.resource.data.participantsCount
+          == resource.data.participantsCount + 1
+        && request.resource.data.participantsCount
+          <= resource.data.capacity
+        && request.resource.data.updatedAt == request.time
+        && (
+          !exists(myParticipantPath())
+          || get(myParticipantPath()).data.status == 'declined'
+        )
+        && getAfter(myParticipantPath()).data.status == 'joined'
+        && getAfter(myParticipantPath()).data.uid == request.auth.uid
+        && getAfter(myParticipantPath()).data.eventId == eventId
+        && getAfter(myParticipantPath()).data.joinedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /communityEventParticipants/{participantId} {
+      function eventBefore() {
+        return get(
+          /databases/$(database)/documents/communityEvents/$(request.resource.data.eventId)
+        ).data;
+      }
+
+      function eventAfter() {
+        return getAfter(
+          /databases/$(database)/documents/communityEvents/$(request.resource.data.eventId)
+        ).data;
+      }
+
+      // Allow a Volunteer to read only their own deterministic document,
+      // including when it does not exist yet (first-time Join transaction).
+      allow get: if isAdminOrSuperAdmin()
+        || (isVolunteer()
+          && participantId.matches('^.+_' + request.auth.uid + '$'));
+      // Query permissions remain unchanged: query must filter uid == auth.uid.
+      allow list: if isAdminOrSuperAdmin()
+        || (isVolunteer() && resource.data.uid == request.auth.uid);
+
+      // The participant's document ID is eventId_uid.
+      allow create: if isVolunteer()
+        && request.resource.data.eventId is string
+        && participantId
+          == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && eventBefore().publicationStatus == 'published'
+        && eventBefore().status in ['upcoming', 'active']
+        && eventBefore().proposedBy != request.auth.uid
+        && (
+          (
+            request.resource.data.status == 'declined'
+            && request.resource.data.keys().hasOnly([
+              'eventId', 'uid', 'status',
+              'declinedAt', 'joinedAt', 'updatedAt'
+            ])
+            && request.resource.data.declinedAt == request.time
+            && request.resource.data.joinedAt == null
+          )
+          ||
+          (
+            request.resource.data.status == 'joined'
+            && request.resource.data.keys().hasOnly([
+              'eventId', 'uid', 'fullName', 'status',
+              'joinedAt', 'declinedAt', 'checkedInAt',
+              'checkedOutAt', 'attendanceVerified',
+              'attendanceVerifiedAt', 'updatedAt'
+            ])
+            && request.resource.data.fullName is string
+            && request.resource.data.fullName.size() <= 120
+            && request.resource.data.joinedAt == request.time
+            && request.resource.data.declinedAt == null
+            && request.resource.data.checkedInAt == null
+            && request.resource.data.checkedOutAt == null
+            && request.resource.data.attendanceVerified == false
+            && request.resource.data.attendanceVerifiedAt == null
+            && eventBefore().participantsCount is int
+            && eventAfter().participantsCount
+              == eventBefore().participantsCount + 1
+            && eventAfter().participantsCount
+              <= eventBefore().capacity
+          )
+        );
+
+      // All participant updates use one role gate, reducing evaluation cost.
+      // Each volunteer transition retains its original field whitelist.
+      allow update: if request.auth != null
+        // An event participant may never mark their own attendance as verified.
+        // Evaluate this denial before the longer Volunteer/Admin checks.
+        && !(
+          resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasAny(['attendanceVerified'])
+          && request.resource.data.attendanceVerified == true
+        )
+        && (
+          (
+            // A volunteer can only modify their own participant document.
+            resource.data.uid == request.auth.uid
+            && request.resource.data.get('attendanceVerified', false) == false
+            && isVolunteer()
+            && (
+              (
+                // Repeat decline; never change participant status or slots.
+                resource.data.status == 'declined'
+                && request.resource.data.status == 'declined'
+                && request.resource.data.uid == resource.data.uid
+                && request.resource.data.eventId == resource.data.eventId
+                && participantId == resource.data.eventId + '_' + request.auth.uid
+                && request.resource.data.diff(resource.data)
+                  .affectedKeys().hasOnly(['declinedAt', 'updatedAt'])
+                && request.resource.data.declinedAt == request.time
+                && request.resource.data.updatedAt == request.time
+              )
+              ||
+              (
+                // Declined volunteer joins; event slot count increments atomically.
+                resource.data.status == 'declined'
+                && request.resource.data.status == 'joined'
+                && request.resource.data.uid == resource.data.uid
+                && request.resource.data.eventId == resource.data.eventId
+                && participantId == resource.data.eventId + '_' + request.auth.uid
+                && request.resource.data.diff(resource.data)
+                  .affectedKeys().hasOnly([
+                    'fullName', 'status', 'joinedAt', 'declinedAt',
+                    'checkedInAt', 'checkedOutAt', 'attendanceVerified',
+                    'attendanceVerifiedAt', 'updatedAt'
+                  ])
+                && request.resource.data.fullName is string
+                && request.resource.data.fullName.size() <= 120
+                && request.resource.data.joinedAt == request.time
+                && request.resource.data.declinedAt == null
+                && request.resource.data.checkedInAt == null
+                && request.resource.data.checkedOutAt == null
+                && request.resource.data.attendanceVerified == false
+                && request.resource.data.attendanceVerifiedAt == null
+                && request.resource.data.updatedAt == request.time
+                && eventBefore().publicationStatus == 'published'
+                && eventBefore().status in ['upcoming', 'active']
+                && eventBefore().proposedBy != request.auth.uid
+                && eventBefore().participantsCount is int
+                && eventAfter().participantsCount == eventBefore().participantsCount + 1
+                && eventAfter().participantsCount <= eventBefore().capacity
+              )
+              ||
+              (
+                // Volunteer Time In/Out, cannot self-verify.
+                resource.data.status == 'joined'
+                && resource.data.attendanceVerified == false
+                && request.resource.data.attendanceVerified == false
+                && request.resource.data.diff(resource.data)
+                  .affectedKeys().hasOnly([
+                    'checkedInAt', 'checkedOutAt', 'updatedAt'
+                  ])
+                && request.resource.data.updatedAt == request.time
+                && eventBefore().status == 'active'
+                && (
+                  (
+                    resource.data.checkedInAt == null
+                    && resource.data.checkedOutAt == null
+                    && request.resource.data.checkedInAt == request.time
+                    && request.resource.data.checkedOutAt == null
+                  )
+                  ||
+                  (
+                    resource.data.checkedInAt is timestamp
+                    && resource.data.checkedOutAt == null
+                    && request.resource.data.checkedInAt == resource.data.checkedInAt
+                    && request.resource.data.checkedOutAt == request.time
+                  )
+                )
+              )
+            )
+          )
+          ||
+          (
+            // Admin-only corrections/verification; signed-in verifier must match.
+            isAdminOrSuperAdmin()
+            && (
+              request.resource.data.attendanceVerified == false
+              || request.resource.data.attendanceVerifiedBy == request.auth.uid
+            )
+            && resource.data.status == 'joined'
+            && resource.data.attendanceVerified == false
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data)
+              .affectedKeys().hasOnly([
+                'checkedInAt', 'checkedOutAt', 'attendanceVerified',
+                'attendanceVerifiedAt', 'attendanceVerifiedBy', 'updatedAt'
+              ])
+            && (
+              (
+                request.resource.data.attendanceVerified == false
+                && request.resource.data.attendanceVerifiedAt == null
+                && !('attendanceVerifiedBy' in request.resource.data)
+              )
+              ||
+              (
+                request.resource.data.attendanceVerified == true
+                && request.resource.data.checkedInAt is timestamp
+                && request.resource.data.checkedOutAt is timestamp
+                && request.resource.data.checkedOutAt >= request.resource.data.checkedInAt
+                && request.resource.data.attendanceVerifiedAt == request.time
+                && request.resource.data.attendanceVerifiedBy == request.auth.uid
+              )
+            )
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+)
+            && request.resource.data.endTime > request.resource.data.time
+          )
+        )
+        && (
+          !('latitude' in request.resource.data)
+          || (
+            request.resource.data.latitude is number
+            && request.resource.data.longitude is number
+            && request.resource.data.coordinates is map
+            && request.resource.data.coordinates.latitude == request.resource.data.latitude
+            && request.resource.data.coordinates.longitude == request.resource.data.longitude
+          )
+        )
         && request.resource.data.capacity == proposalAfter().capacity
         && request.resource.data.proposedBy == proposalAfter().proposedBy
         && request.resource.data.proposerName == proposalAfter().proposerName;

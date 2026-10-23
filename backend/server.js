@@ -7571,6 +7571,7 @@ app.post(
 
       const date = String(input.date || "");
       const time = String(input.time || "");
+      const endTime = String(input.endTime || "");
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
         !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)
@@ -7583,6 +7584,17 @@ app.post(
         eventTime.getTime() <= Date.now()
       ) {
         throw makeHttpError(400, "invalid_proposal", "Event date and time must be in the future.");
+      }
+
+      if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(endTime) || endTime <= time) {
+        throw makeHttpError(400, "invalid_proposal", "Set an event end time later than its start time on the same date.");
+      }
+      const latitude = Number(input.latitude);
+      const longitude = Number(input.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          latitude < 14.65 || latitude > 15.0 ||
+          longitude < 120.88 || longitude > 121.30) {
+        throw makeHttpError(400, "event_pin_required", "Select an event GPS meeting point near San Jose del Monte, Bulacan.");
       }
 
       const capacity = Number(input.capacity);
@@ -7644,13 +7656,30 @@ app.post(
         return value;
       });
 
+      if (!photoUrls.length) {
+        throw makeHttpError(400, "event_photo_required", "At least one real site/activity evidence photo is required.");
+      }
+      const credentialAssetId = String(input.credentialAssetId || "");
+      if (credentialAssetId && credentialAssetId !== proposalId) {
+        throw makeHttpError(400, "invalid_credential", "Credential must belong to this proposal.");
+      }
+      if (credentialAssetId) {
+        const asset = await db.collection("communityEventCredentialAssets").doc(proposalId).get();
+        if (!asset.exists || asset.data().ownerUid !== uid ||
+            asset.data().status !== "staged" || !asset.data().cloudinaryPublicId) {
+          throw makeHttpError(400, "credential_missing", "Private credential upload was not found; upload it again.");
+        }
+      }
+
       // All privileged fields are set by the server. The client cannot
       // approve its own proposal, impersonate an owner, or set timestamps.
       const docData = {
         title, description, volunteerTasks, lookingFor, requiredRoles,
         requiredSkills, qualificationNotes, whatToBring, photoUrls, videoUrl,
+        ...(credentialAssetId ? {credentialAssetId} : {}),
         ...(photoUrls.length ? {coverPhotoUrl: photoUrls[0]} : {}),
-        category, barangay, location, date, time, capacity,
+        category, barangay, location, date, time, endTime, capacity,
+        latitude, longitude, coordinates: {latitude, longitude},
         proposedBy: uid,
         proposerName: communityEventText(
           String(profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Resident"),
@@ -7663,6 +7692,11 @@ app.post(
       };
 
       await db.collection("communityEventProposals").doc(proposalId).create(docData);
+      if (credentialAssetId) {
+        await db.collection("communityEventCredentialAssets").doc(proposalId).update({
+          status: "attached", updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
       response.status(201).json({ok: true, proposalId, status: "pending"});
     } catch (error) {
       console.error("Community Event proposal creation failed:", error?.code || error?.message);
@@ -7781,6 +7815,103 @@ app.post(
       });
     }
   },
+);
+
+// Professional credentials are protected evidence, not public event photos.
+// Upload owner-scoped; retrieve only through an authenticated Admin review.
+app.post(
+  "/api/community-events/credential-photo/upload",
+  requireFirebaseUser,
+  express.raw({type:["image/jpeg","image/png","image/webp","application/octet-stream"],limit:"5mb"}),
+  async (request,response) => {
+    const uid = request.firebaseUser.uid;
+    let uploadResult = null;
+    let reserved = false;
+    let assetRef = null;
+    try {
+      const profile = await loadUserProfile(uid);
+      if (!isVerifiedResidentProfile(profile) || profile.activeMode !== "resident") {
+        throw makeHttpError(403,"verified_resident_required","Verified Resident access is required.");
+      }
+      const proposalId = cleanText(request.headers["x-proposal-id"] || "",64);
+      if (!/^[A-Za-z0-9]{12,40}$/.test(proposalId)) {
+        throw makeHttpError(400,"invalid_proposal_id","Invalid event proposal ID.");
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length < 12 || request.body.length > 5*1024*1024) {
+        throw makeHttpError(400,"invalid_credential","Choose a valid credential photo under 5 MB.");
+      }
+      const detected = detectAssistanceImage(request.body);
+      if (!detected) throw makeHttpError(415,"invalid_credential","Credential must be a JPEG, PNG or WebP image.");
+      if ((await db.collection("communityEventProposals").doc(proposalId).get()).exists) {
+        throw makeHttpError(409,"proposal_already_submitted","Credentials cannot be changed after submission.");
+      }
+      assetRef = db.collection("communityEventCredentialAssets").doc(proposalId);
+      await db.runTransaction(async tx => {
+        const current = await tx.get(assetRef);
+        if (current.exists) throw makeHttpError(409,"credential_already_uploaded","A credential was already uploaded for this proposal.");
+        tx.create(assetRef,{ownerUid:uid,proposalId,status:"uploading",createdAt:FieldValue.serverTimestamp()});
+      });
+      reserved = true;
+      configureCloudinary();
+      uploadResult = await new Promise((resolve,reject) => {
+        const stream = cloudinary.uploader.upload_stream({
+          resource_type:"image",type:"authenticated",overwrite:false,
+          public_id:"volunserve/event-credentials/"+uid+"/"+proposalId+"/"+crypto.randomBytes(14).toString("hex"),
+        },(error,result)=>error?reject(error):resolve(result));
+        stream.on("error",reject);
+        stream.end(request.body);
+      });
+      if (!uploadResult?.public_id || !uploadResult?.format) {
+        throw makeHttpError(502,"credential_upload_failed","Protected credential upload did not complete.");
+      }
+      await assetRef.update({
+        cloudinaryPublicId:uploadResult.public_id,
+        format:String(uploadResult.format),
+        deliveryType:"authenticated",bytes:request.body.length,
+        status:"staged",updatedAt:FieldValue.serverTimestamp(),
+      });
+      response.status(201).json({ok:true,credentialAssetId:proposalId});
+    } catch(error) {
+      if(uploadResult?.public_id) {
+        try {await cloudinary.uploader.destroy(uploadResult.public_id,{resource_type:"image",type:"authenticated"});}
+        catch(_) { console.warn("Credential upload cleanup failed."); }
+      }
+      if(reserved && assetRef) {
+        try {await assetRef.delete();} catch(_) {console.warn("Credential staging cleanup failed.");}
+      }
+      response.status(Number(error?.statusCode)||500).json({
+        ok:false,error:cleanText(error?.code||"credential_upload_failed",100),
+        message:cleanText(error?.message||"Unable to upload private credential photo.",300),
+      });
+    }
+  }
+);
+app.get(
+  "/api/community-events/credentials/:proposalId/access",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request,response) => {
+    try {
+      const id = cleanText(request.params.proposalId||"",64);
+      if(!/^[A-Za-z0-9]{12,40}$/.test(id))throw makeHttpError(400,"invalid_id","Invalid proposal ID.");
+      const proposal = await db.collection("communityEventProposals").doc(id).get();
+      if (!proposal.exists || proposal.data()?.credentialAssetId !== id) {
+        throw makeHttpError(404,"credential_missing","No private credential photo attached.");
+      }
+      const asset = await db.collection("communityEventCredentialAssets").doc(id).get();
+      if (!asset.exists || asset.data()?.status !== "attached" || asset.data()?.deliveryType !== "authenticated") {
+        throw makeHttpError(404,"credential_missing","Private credential unavailable.");
+      }
+      const signed = createCloudinaryPrivateDownloadUrl({
+        publicId:asset.data().cloudinaryPublicId, format:asset.data().format,
+      });
+      response.json({ok:true,url:signed.url,expiresAt:signed.expiresAt});
+    } catch(error) {
+      response.status(Number(error?.statusCode)||500).json({
+        ok:false,message:cleanText(error?.message||"Cannot access private credential.",300),
+      });
+    }
+  }
 );
 
 app.post(

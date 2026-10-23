@@ -1,5 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
+import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import { router } from "expo-router";
 import {
   collection,
@@ -71,6 +73,7 @@ type CommunityEvent = {
   location: string;
   date: string;
   time: string;
+  endTime?: string;
   capacity: number;
   participantsCount?: number;
   proposedBy?: string;
@@ -102,6 +105,7 @@ type Proposal = {
   location: string;
   date: string;
   time: string;
+  endTime?: string;
   status: "pending" | "approved" | "rejected";
   adminNote?: string;
   createdAt?: unknown;
@@ -129,6 +133,9 @@ type ProposalForm = {
   location: string;
   date: string;
   time: string;
+  endTime: string;
+  latitude: number | null;
+  longitude: number | null;
   capacity: string;
   description: string;
   volunteerTasks: string;
@@ -239,6 +246,9 @@ const initialForm: ProposalForm = {
   location: "",
   date: "",
   time: "",
+  endTime: "",
+  latitude: null,
+  longitude: null,
   capacity: "20",
   description: "",
   volunteerTasks: "",
@@ -353,6 +363,9 @@ const prettyDate = (date?: string, time?: string) => {
     minute: "2-digit",
   });
 };
+
+const eventScheduleLabel = (event: {date: string;time: string;endTime?: string}) =>
+  `${prettyDate(event.date,event.time)}${event.endTime ? ` – ${formatChosenTime(event.endTime)}` : ""}`;
 
 const categoryIcon = (
   category: Category
@@ -503,15 +516,52 @@ async function uploadResidentEventPhoto(
   return url;
 }
 
+// Unlike public event evidence, credentials are protected Cloudinary assets
+// and are only opened through the authenticated Admin access endpoint.
+async function uploadResidentCredentialPhoto(file: Blob, mimeType: string, token: string, proposalId: string): Promise<string> {
+  if (!["image/jpeg","image/png","image/webp"].includes(mimeType) || file.size < 12 || file.size > 5*1024*1024) {
+    throw new Error("Upload a valid JPG, PNG or WebP credential photo under 5 MB.");
+  }
+  const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/credential-photo/upload`, {
+    method:"POST",
+    headers:{Authorization:`Bearer ${token}`,"Content-Type":mimeType,"X-Proposal-Id":proposalId},
+    body:file,
+  });
+  const json = await response.json().catch(()=>null);
+  if (!response.ok || json?.ok !== true || json?.credentialAssetId !== proposalId) {
+    throw new Error(json?.message || "Unable to securely upload credentials.");
+  }
+  return proposalId;
+}
+
+function CredentialPhotoField({preview,onPick,error}: {preview:string;onPick:()=>void;error:string}) {
+  return <View style={{marginTop:10,marginBottom:10}}>
+    <Text style={styles.fieldLabel}>Credentials / professional certificate photo (optional)</Text>
+    <Pressable onPress={onPick} accessibilityRole="button" style={{borderWidth:1,borderColor:"#C7DEDA",backgroundColor:"#F5FBF9",borderRadius:10,minHeight:64,padding:12,flexDirection:"row",alignItems:"center",gap:12}}>
+      <Ionicons name="camera-outline" size={24} color="#087F75"/>
+      <Text style={{flex:1,color:"#0A7468",fontSize:12,fontWeight:"800"}}>{preview?"Photo selected — change credential":"Upload a photo of license or relevant certificate"}</Text>
+    </Pressable>
+    {preview?<Image source={{uri:preview}} resizeMode="contain" style={{width:"100%",height:145,marginTop:8,borderRadius:9,backgroundColor:"#EDF2F2"}}/>:null}
+    <Text style={{fontSize:10,color:"#617A85",marginTop:5}}>Private Admin-only review. Do not upload credentials as public event evidence. JPG/PNG/WebP, max 5 MB.</Text>
+    {!!error&&<Text style={{fontSize:11,color:"#B91C1C",marginTop:5}}>{error}</Text>}
+  </View>;
+}
+
 // Shared by web and mobile Resident proposal screens.
 function ProposalNeedsAndMedia({
   form,
   update,
   onPhotoChange,
+  onCredentialPick,
+  credentialPreview,
+  credentialError,
 }: {
   form: ProposalForm;
   update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
   onPhotoChange: (index: number, value: string) => void;
+  onCredentialPick: () => void;
+  credentialPreview: string;
+  credentialError: string;
 }) {
   const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
   const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
@@ -590,11 +640,7 @@ function ProposalNeedsAndMedia({
           </Text>
         </View>
       )}
-      <Text style={styles.fieldLabel}>Qualifications / supervision needed (optional)</Text>
-      <TextInput style={[styles.input, styles.residentSmallInput]}
-        placeholder="e.g. Valid PRC license for clinical tasks; others may assist with logistics"
-        placeholderTextColor="#91A2AF" value={form.qualificationNotes}
-        onChangeText={(value) => update("qualificationNotes", value)} maxLength={500} />
+      <CredentialPhotoField preview={credentialPreview} onPick={onCredentialPick} error={credentialError}/>
       <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
       <TextInput style={[styles.input, styles.residentSmallInput]}
         placeholder="e.g. Gloves, reusable water bottle, closed shoes"
@@ -604,19 +650,19 @@ function ProposalNeedsAndMedia({
       <View style={styles.residentSectionHeading}>
         <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.residentSectionTitle}>04 · Location photos & video</Text>
-          <Text style={styles.residentSectionSub}>Help Admin understand the actual site. All media is optional.</Text>
+          <Text style={styles.residentSectionTitle}>04 · Required Site Evidence</Text>
+          <Text style={styles.residentSectionSub}>At least one location/activity photo is required. Video is optional.</Text>
         </View>
       </View>
       <View style={styles.residentMediaNotice}>
         <Ionicons name="information-circle-outline" color="#317A8E" size={18} />
         <Text style={styles.residentMediaNoticeText}>
-          Attach up to 3 JPG/PNG/WebP site photos from your device (web), or use HTTPS image links. A YouTube/Vimeo video link is optional. Photos are uploaded through Cloudinary when you submit.
+          At least one JPG/PNG/WebP event venue or activity photo is required. Add up to 3 photos using the site upload or valid HTTPS photo links. A YouTube/Vimeo link is optional.
         </Text>
       </View>
       {form.photoUrls.map((url, index) => (
         <View key={index} style={styles.residentMediaField}>
-          <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo" : `Additional site photo ${index + 1}`} (optional)</Text>
+          <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo *" : `Additional site photo ${index + 1} (optional)`}</Text>
           <TextInput style={[styles.input, styles.residentSmallInput]} keyboardType="url"
             autoCapitalize="none" autoCorrect={false}
             placeholder="https://example.com/location-photo.jpg"
@@ -710,6 +756,7 @@ export default function CommunityEventsScreen() {
 
   const [picker, setPicker] =
     useState<"date" | "time" | null>(null);
+  const [timePickerTarget, setTimePickerTarget] = useState<"start" | "end">("start");
 
   const [calendarMonth, setCalendarMonth] =
     useState(() => new Date());
@@ -725,6 +772,48 @@ export default function CommunityEventsScreen() {
   const [localPhotoPreviews, setLocalPhotoPreviews] = useState<string[]>(["", "", ""]);
   const [photoPickerError, setPhotoPickerError] = useState("");
   const [showPhotoLinkFallback, setShowPhotoLinkFallback] = useState(false);
+  const [credentialFile, setCredentialFile] = useState<Blob | null>(null);
+  const [credentialMimeType, setCredentialMimeType] = useState("");
+  const [credentialPreview, setCredentialPreview] = useState("");
+  const [credentialError, setCredentialError] = useState("");
+  const pickCredentialPhoto = async () => {
+    setCredentialError("");
+    if (Platform.OS === "web") {
+      const d = (globalThis as any).document;
+      if (!d) return;
+      const input = d.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.onchange = () => {
+        const file = input.files?.[0] as File | undefined;
+        if (!file) return;
+        if (!["image/jpeg","image/png","image/webp"].includes(file.type) || file.size > 5*1024*1024) {
+          setCredentialError("Only JPG/PNG/WebP photos up to 5 MB are allowed.");return;
+        }
+        setCredentialFile(file);
+        setCredentialMimeType(file.type);
+        const reader = new FileReader();
+        reader.onload = () => setCredentialPreview(typeof reader.result === "string" ? reader.result : "");
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    } else {
+      try {
+        const asset = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes:["images"],allowsEditing:false,quality:0.85,
+        });
+        if (asset.canceled || !asset.assets?.[0]) return;
+        const selected = asset.assets[0];
+        const mime = selected.mimeType || "image/jpeg";
+        const blob = await (await fetch(selected.uri)).blob();
+        if (blob.size > 5*1024*1024 || !["image/jpeg","image/png","image/webp"].includes(mime)) throw new Error("Credential photo must be JPG/PNG/WebP, max 5 MB.");
+        setCredentialFile(blob);
+        setCredentialMimeType(mime);
+        setCredentialPreview(selected.uri);
+      } catch(error:any) {setCredentialError(error?.message||"Credential photo could not be selected.");}
+    }
+  };
+
   const [residentDetailsId, setResidentDetailsId] = useState<string | null>(null);
   const [residentDetailTab, setResidentDetailTab] = useState<"details" | "map" | "volunteers" | "media">("details");
   const [residentBarangayFilter, setResidentBarangayFilter] = useState("All Barangays");
@@ -733,7 +822,19 @@ export default function CommunityEventsScreen() {
 
   const pickResidentPhoto = (slot: number) => {
     if (Platform.OS !== "web") {
-      setPhotoPickerError("On mobile, add a secure HTTPS photo link in the media section.");
+      void (async () => {
+        try {
+          const result = await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],allowsEditing:false,quality:0.85});
+          if (result.canceled || !result.assets?.[0]) return;
+          const asset = result.assets[0];
+          const raw = await (await fetch(asset.uri)).blob();
+          const blob = new Blob([raw],{type:asset.mimeType||"image/jpeg"}) as File;
+          if (!["image/jpeg","image/png","image/webp"].includes(blob.type) || blob.size>5*1024*1024) throw new Error("Site photo must be JPG/PNG/WebP, max 5 MB.");
+          setLocalPhotoFiles(previous=>previous.map((file,i)=>i===slot?blob:file));
+          setLocalPhotoPreviews(previous=>previous.map((url,i)=>i===slot?asset.uri:url));
+          setPhotoPickerError("");
+        } catch(error:any){setPhotoPickerError(error?.message||"Could not choose site photo.");}
+      })();
       return;
     }
     const docObject = (globalThis as any).document;
@@ -1111,10 +1212,11 @@ export default function CommunityEventsScreen() {
   };
 
   // Time picker
-  const openTimePicker = () => {
+  const openTimePicker = (target: "start" | "end" = "start") => {
+    setTimePickerTarget(target);
     const match =
       /^([01]\d|2[0-3]):([0-5]\d)$/.exec(
-        form.time
+        target === "end" ? form.endTime : form.time
       );
 
     const hour = match ? Number(match[1]) : 8;
@@ -1132,7 +1234,7 @@ export default function CommunityEventsScreen() {
       (clockPeriod === "PM" ? 12 : 0);
 
     setValue(
-      "time",
+      timePickerTarget === "end" ? "endTime" : "time",
       `${pad2(hour24)}:${pad2(clockMinute)}`
     );
 
@@ -1204,6 +1306,14 @@ export default function CommunityEventsScreen() {
     ])];
     const photoUrls = form.photoUrls.map((url) => url.trim()).filter(Boolean);
     const videoUrl = form.videoUrl.trim();
+    if (!photoUrls.length && !localPhotoFiles.some(Boolean)) {
+      setNotice("At least one event site evidence photo is required. Upload Main Photo or supply a valid HTTPS image link.");
+      return;
+    }
+    if (form.latitude === null || form.longitude === null) {
+      setNotice("Set the exact GPS meeting point by tapping the map or using the venue's GPS.");
+      return;
+    }
 
     if (form.volunteerTasks.trim().length < 12 || selectedRoles.length === 0) {
       setNotice("Describe what volunteers will do (at least 12 characters) and select at least one needed role.");
@@ -1221,6 +1331,12 @@ export default function CommunityEventsScreen() {
 
     const timeOkay =
       /^([01]\d|2[0-3]):[0-5]\d$/.test(form.time);
+
+    const endTimeOkay = /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.endTime);
+    if (!endTimeOkay || (timeOkay && form.endTime <= form.time)) {
+      setNotice("Choose an end time later than the start time, on the same day.");
+      return;
+    }
 
     const parsed =
       dateOkay && timeOkay
@@ -1269,12 +1385,19 @@ export default function CommunityEventsScreen() {
       const proposalRef = doc(collection(db, "communityEventProposals"));
       const uploadedPhotos = [...form.photoUrls.map((url) => url.trim())];
       // Upload only selected local images. Unchanged HTTPS links remain valid.
-      const token = localPhotoFiles.some(Boolean) ? await user.getIdToken() : "";
+      const token = await user.getIdToken();
       for (let index = 0; index < localPhotoFiles.length; index += 1) {
         const file = localPhotoFiles[index];
         if (!file) continue;
         setNotice(`Uploading Community Event photo ${index + 1}...`);
         uploadedPhotos[index] = await uploadResidentEventPhoto(file, token, proposalRef.id, index + 1);
+      }
+      let credentialAssetId = "";
+      if (credentialFile) {
+        setNotice("Uploading private professional credential for Admin review...");
+        credentialAssetId = await uploadResidentCredentialPhoto(
+          credentialFile, credentialMimeType, token, proposalRef.id,
+        );
       }
       // Server validates the verified Resident and writes the pending
       // proposal. Direct Firestore creation is not relied upon here.
@@ -1294,7 +1417,8 @@ export default function CommunityEventsScreen() {
             volunteerTasks: form.volunteerTasks.trim(),
             requiredRoles: selectedRoles,
             requiredSkills: [...form.requiredSkills],
-            qualificationNotes: form.qualificationNotes.trim(),
+            qualificationNotes: "",
+            ...(credentialAssetId ? {credentialAssetId} : {}),
             whatToBring: form.whatToBring.trim(),
             photoUrls: uploadedPhotos.filter(Boolean).slice(0, 3),
             videoUrl,
@@ -1303,6 +1427,9 @@ export default function CommunityEventsScreen() {
             location,
             date: form.date,
             time: form.time,
+            endTime: form.endTime,
+            latitude: form.latitude,
+            longitude: form.longitude,
             capacity,
           }),
         },
@@ -1318,6 +1445,10 @@ export default function CommunityEventsScreen() {
       setForm(initialForm);
       setLocalPhotoFiles([null, null, null]);
       setLocalPhotoPreviews(["", "", ""]);
+      setCredentialFile(null);
+      setCredentialMimeType("");
+      setCredentialPreview("");
+      setCredentialError("");
       setCustomVenue(false);
       setCustomCapacity(false);
       setSection("mine");
@@ -1951,7 +2082,7 @@ export default function CommunityEventsScreen() {
             {!!event.description && <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description}</Text>}
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
-              <Text style={styles.lockedEventMetaText}>{prettyDate(event.date, event.time)}</Text>
+              <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)}</Text>
             </View>
             <View style={styles.lockedEventMeta}>
               <Ionicons name="location-outline" size={14} color="#6B7F93" />
@@ -1989,7 +2120,7 @@ export default function CommunityEventsScreen() {
             <Text style={styles.lockedAboutText}>
               {event.description?.trim() || "No additional description was provided for this event."}
             </Text>
-            <Text style={styles.lockedEventMetaText}>{prettyDate(event.date, event.time)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
+            <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
             {isVolunteer && owned && <View style={styles.webOwnershipNotice}>
               <Ionicons name="information-circle-outline" size={19} color="#0B7C70" />
               <Text style={styles.webOwnershipText}>You proposed this event. You cannot join it as a volunteer.</Text>
@@ -2054,7 +2185,7 @@ export default function CommunityEventsScreen() {
                 <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
                   onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
                   <Ionicons name="navigate-outline" size={16} color="white" />
-                  <Text style={styles.lockedMapSolidText}>Open in Google Maps</Text>
+                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
                 </Pressable>
               </View>
               <Text style={styles.lockedMapFootnote}>In-app routes require a configured Google Maps Embed API key and browser location permission. External Google Maps directions remain available. Your GPS position is not saved in Firestore.</Text>
@@ -2090,7 +2221,7 @@ export default function CommunityEventsScreen() {
             <Text style={styles.ruiCategoryTag}>{event.category}</Text>
             {!!event.barangay && <Text style={styles.ruiBarangayTag}>{event.barangay}</Text>}
           </View>
-          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{prettyDate(event.date, event.time)}</Text></View>
+          <View style={styles.ruiInfoLine}><Ionicons name="calendar-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{eventScheduleLabel(event)}</Text></View>
           <View style={styles.ruiInfoLine}><Ionicons name="location-outline" size={14} color="#58738A" /><Text numberOfLines={2} style={styles.ruiMeta}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text></View>
           <View style={styles.ruiInfoLine}><Ionicons name="people-outline" size={14} color="#58738A" /><Text style={styles.ruiMeta}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text></View>
           <Pressable style={styles.ruiPrimary} onPress={() => { setResidentDetailsId(event.id); setResidentDetailTab("details"); }} accessibilityRole="button">
@@ -2289,7 +2420,7 @@ export default function CommunityEventsScreen() {
                         style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
-                          <Text style={styles.lockedAttendanceHistoryDate}>{prettyDate(item.date, item.time)}</Text>
+                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
                         </View>
                         <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
                           <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
@@ -2319,7 +2450,7 @@ export default function CommunityEventsScreen() {
                         <Text style={styles.lockedAttendanceEventTitle} numberOfLines={2}>{selectedEvent.title}</Text>
                         <Text style={styles.lockedAttendanceEventPlace} numberOfLines={2}>{selectedEvent.location}{selectedEvent.barangay ? `, ${selectedEvent.barangay}` : ""}</Text>
                         <View style={styles.lockedAttendanceEventDate}><Ionicons name="calendar-outline" size={12} color="#6B8798"/>
-                          <Text style={styles.lockedAttendanceEventDateText}>{prettyDate(selectedEvent.date, selectedEvent.time)}</Text>
+                          <Text style={styles.lockedAttendanceEventDateText}>{eventScheduleLabel(selectedEvent)}</Text>
                         </View>
                       </View>
                     </View>
@@ -2438,7 +2569,7 @@ export default function CommunityEventsScreen() {
           {proposals.length === 0 ? <View style={styles.webEmptyCard}><Ionicons name="document-text-outline" size={34} color="#93A6AE"/><Text style={styles.webEmptyTitle}>No event proposals yet</Text><Pressable style={styles.ruiPrimary} onPress={()=>setSection("propose")}><Text style={styles.ruiPrimaryText}>Propose Event</Text><Ionicons name="arrow-forward" size={15} color="white" /></Pressable></View> :
             proposals.slice().sort((a,b)=>getTime(b.createdAt)-getTime(a.createdAt)).map(item=><View key={item.id} style={styles.ruiProposalRow}>
               {item.photoUrls?.[0]&&validPublicMediaUrl(item.photoUrls[0])?<Image source={{uri:item.photoUrls[0]}} style={styles.ruiProposalThumbnail}/>:<LinearGradient colors={["#D3EEE4","#93CBB4"]} style={styles.ruiProposalThumbnail}><Ionicons name={categoryIcon(item.category)} size={24} color="#078772"/></LinearGradient>}
-              <View style={styles.ruiProposalDescription}><Text style={styles.ruiProposalTitle}>{item.title}</Text><Text style={styles.ruiMeta}>{item.barangay} · {prettyDate(item.date,item.time)}</Text><Text style={styles.ruiProposalNote}>{item.status==="approved"?"Approved and published as an official Community Event.":item.status==="pending"?"Pending Admin/LGU review.":item.adminNote||"Rejected. Review the Admin note."}</Text></View>
+              <View style={styles.ruiProposalDescription}><Text style={styles.ruiProposalTitle}>{item.title}</Text><Text style={styles.ruiMeta}>{item.barangay} · {eventScheduleLabel(item)}</Text><Text style={styles.ruiProposalNote}>{item.status==="approved"?"Approved and published as an official Community Event.":item.status==="pending"?"Pending Admin/LGU review.":item.adminNote||"Rejected. Review the Admin note."}</Text></View>
               <View style={[styles.ruiProposalStatus,item.status==="pending"&&styles.ruiProposalStatusPending,item.status==="rejected"&&styles.ruiProposalStatusRejected]}><Text style={[styles.ruiProposalStatusText,item.status==="rejected"&&{color:"#B32929"}]}>{item.status.toUpperCase()}</Text></View>
             </View>)}
         </View>}
@@ -2463,9 +2594,12 @@ export default function CommunityEventsScreen() {
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={openTimePicker}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
             </View>
+            <CommunityEventPinPicker latitude={form.latitude} longitude={form.longitude}
+              onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))}/>
           </View>
 
           <View style={styles.ruiFormSection}>
@@ -2489,14 +2623,14 @@ export default function CommunityEventsScreen() {
             <Text style={styles.fieldLabel}>Other helpful skills (optional)</Text>
             <View style={styles.ruiSkillsChips}>{suggestedSkills[form.category].map(name=><Pressable key={name} onPress={()=>setValue("requiredSkills",form.requiredSkills.includes(name)?form.requiredSkills.filter(v=>v!==name):[...form.requiredSkills,name])} style={[styles.ruiSkillChip,form.requiredSkills.includes(name)&&styles.ruiSkillChipSelected]}><Text style={[styles.ruiSkillChipText,form.requiredSkills.includes(name)&&styles.ruiSkillChipTextSelected]}>{form.requiredSkills.includes(name)?"✓ ":"+ "}{name}</Text></Pressable>)}</View>
             {needsProfessionalCheck([...form.requiredRoles,form.otherRole])&&<View style={styles.residentSafeguard}><Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13"/><Text style={styles.residentSafeguardText}>Clinical and veterinary work requires verified professional qualifications. General volunteers may assist with non-clinical duties.</Text></View>}
-            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Credentials / supervision (optional)</Text><TextInput style={styles.input} value={form.qualificationNotes} maxLength={500} onChangeText={v=>setValue("qualificationNotes",v)} placeholder="e.g. Licensed nurse required for clinical tasks"/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
           </View>
 
           <View style={styles.ruiFormSection}>
-            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Optional)</Text></View>
-            <Text style={styles.ruiChecklistSubtitle}>Share photos of the actual location or planned activity, with consent. Do not upload IDs or private information. JPG, PNG, WebP · 5 MB max each.</Text>
+            <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Required)</Text></View>
+            <Text style={styles.ruiChecklistSubtitle}>Upload at least one real venue/activity evidence photo (Main Photo required). Up to 3 JPG, PNG or WebP images, 5 MB each. Video optional. Never upload private IDs here.</Text>
             <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}>
-              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Recommended":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>Choose files to upload on submission. HTTPS photo URLs are an alternative when Storage is unavailable.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
+              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
             </View>
           </View>
@@ -3285,9 +3419,7 @@ export default function CommunityEventsScreen() {
                     style={
                       styles.pickerField
                     }
-                    onPress={
-                      openTimePicker
-                    }
+                    onPress={() => openTimePicker("start")}
                   >
                     <Ionicons
                       name="time-outline"
@@ -3312,6 +3444,16 @@ export default function CommunityEventsScreen() {
                       size={17}
                       color={colors.muted}
                     />
+                  </Pressable>
+                </View>
+
+                {/* End Time */}
+                <View style={styles.formColumn}>
+                  <Text style={styles.fieldLabel}>End time *</Text>
+                  <Pressable style={styles.pickerField} onPress={() => openTimePicker("end")}>
+                    <Ionicons name="time-outline" size={18} color={colors.green}/>
+                    <Text style={styles.pickerFieldText}>{formatChosenTime(form.endTime)}</Text>
+                    <Ionicons name="chevron-down" size={17} color={colors.muted}/>
                   </Pressable>
                 </View>
 
@@ -3398,6 +3540,9 @@ export default function CommunityEventsScreen() {
                 </View>
               </View>
 
+              <CommunityEventPinPicker latitude={form.latitude} longitude={form.longitude}
+                onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))} />
+
               {/* Description */}
               <Text
                 style={styles.fieldLabel}
@@ -3426,7 +3571,8 @@ export default function CommunityEventsScreen() {
                 maxLength={1500}
               />
 
-              <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto} />
+              <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto}
+                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError}/>
 
               <View style={styles.residentSubmissionFooter}>
                 <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
@@ -3738,7 +3884,7 @@ export default function CommunityEventsScreen() {
               >
                 {picker === "date"
                   ? "Choose event date"
-                  : "Choose event time"}
+                  : timePickerTarget === "end" ? "Choose end time" : "Choose start time"}
               </Text>
 
               <Pressable
