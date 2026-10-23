@@ -28,6 +28,7 @@ import {
 import {
     CapturedIdentityMedia,
     getIdentityVerificationStatus,
+    checkIdentityEngineReady,
     IdentityDocumentType,
     IdentityVerificationStatusResult,
     submitIdentityVerification,
@@ -957,11 +958,16 @@ export default function IdentityVerificationWeb() {
 
     stopCamera();
 
+    let requestStarted = false;
     try {
-      setStep(3);
       setSubmitting(true);
       setLocalMessage("");
       setSubmissionError("");
+      // Check the separate Render Python engine before private images
+      // are uploaded or a limited AI attempt is consumed.
+      await checkIdentityEngineReady();
+      setStep(3);
+      requestStarted = true;
 
       const result =
         await submitIdentityVerification({
@@ -999,6 +1005,14 @@ export default function IdentityVerificationWeb() {
         stage: "submit",
         message: reason,
       });
+
+      // Readiness failures did not send any face/ID media; show the actual
+      // infrastructure error, and allow a retry only after setup is fixed.
+      if (!requestStarted) {
+        setSubmissionError(reason);
+        setStep(2);
+        return;
+      }
 
       // The backend might have completed the Firestore transaction even
       // though its response was interrupted; check before suggesting retry.
