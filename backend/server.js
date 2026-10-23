@@ -4681,7 +4681,8 @@ app.get(
         : endpoint.replace(/\/+$/, "") + "/health";
       const healthResponse = await fetch(healthUrl, {
         method: "GET",
-        signal: AbortSignal.timeout(12000),
+        // Render Free Python services may need more than 50 seconds to wake.
+        signal: AbortSignal.timeout(85000),
       });
       const health = await readJsonResponse(healthResponse);
       if (!healthResponse.ok ||

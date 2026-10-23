@@ -226,7 +226,8 @@ export async function checkIdentityEngineReady(): Promise<void> {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
     },
-    17000,
+    // Both Render backend and the Python AI service can cold-start.
+    150000,
   );
   const body = await readResponseBody(response);
   if (!response.ok || body?.ready !== true) {
