@@ -3,6 +3,7 @@ import { router, type Href } from "expo-router";
 import React from "react";
 import {
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -31,9 +32,10 @@ export default function SuperAdminDashboard() {
 
   return (
     <ScrollView
-      style={styles.screen}
+      style={[styles.screen, Platform.OS === "web" && styles.webScrollBar]}
       contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={true}
+      accessibilityLabel="Super Admin dashboard content"
     >
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
@@ -48,7 +50,7 @@ export default function SuperAdminDashboard() {
 
         {!compact ? (
           <View style={styles.roleBadge}>
-            <Ionicons name="shield-checkmark" size={16} color="#5B3FD4" />
+            <Ionicons name="shield-checkmark" size={16} color="#078F82" />
             <Text style={styles.roleBadgeText}>SUPER ADMIN</Text>
           </View>
         ) : null}
@@ -61,8 +63,8 @@ export default function SuperAdminDashboard() {
           title="Admin Accounts"
           description="Manage operational admin access."
           icon="people"
-          iconBackground="#F0EDFF"
-          iconColor="#5B3FD4"
+          iconBackground="#E6F7F1"
+          iconColor="#078F82"
           onPress={() => openRoute("/(superadmin)/admin-accounts")}
         />
 
@@ -70,8 +72,8 @@ export default function SuperAdminDashboard() {
           title="All Records"
           description="View system-wide records."
           icon="document-text-outline"
-          iconBackground="#EAF4FF"
-          iconColor="#1685E5"
+          iconBackground="#EDF5FF"
+          iconColor="#2472CA"
           onPress={() => openRoute("/(superadmin)/all-records")}
         />
 
@@ -79,8 +81,8 @@ export default function SuperAdminDashboard() {
           title="Audit Logs"
           description="Review system activity logs."
           icon="time-outline"
-          iconBackground="#EAF8F2"
-          iconColor="#139667"
+          iconBackground="#E8F8F0"
+          iconColor="#07906C"
           onPress={() => openRoute("/(superadmin)/admin-logs")}
         />
 
@@ -88,8 +90,8 @@ export default function SuperAdminDashboard() {
           title="System Settings"
           description="Manage platform settings."
           icon="settings"
-          iconBackground="#FFF3E8"
-          iconColor="#E68119"
+          iconBackground="#FFF4E7"
+          iconColor="#D97A14"
           onPress={() => openRoute("/(superadmin)/system-settings")}
         />
       </View>
@@ -128,7 +130,7 @@ function ModuleCard({
       </View>
 
       <View style={styles.arrowButton}>
-        <Ionicons name="arrow-forward" size={20} color="#5B4BDB" />
+        <Ionicons name="arrow-forward" size={20} color="#078F82" />
       </View>
     </TouchableOpacity>
   );
@@ -137,135 +139,114 @@ function ModuleCard({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    minHeight: 0,
+    backgroundColor: "#F2F9FC",
   },
-
+  webScrollBar: {
+    overflowY: "scroll",
+    scrollbarWidth: "auto",
+    scrollbarColor: "#8CA3B2 #F2F9FC",
+  } as any,
   content: {
     width: "100%",
     maxWidth: 1280,
     alignSelf: "center",
-    paddingHorizontal: 34,
-    paddingTop: 48,
-    paddingBottom: 56,
+    paddingHorizontal: 28,
+    paddingTop: 35,
+    paddingBottom: 64,
   },
-
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 20,
-    marginBottom: 38,
+    flexWrap: "wrap",
+    gap: 16,
+    marginBottom: 34,
   },
-
-  headerCopy: {
-    flex: 1,
-  },
-
+  headerCopy: { flex: 1, minWidth: 0 },
   title: {
-    color: "#10213A",
-    fontSize: 40,
-    lineHeight: 48,
-    fontWeight: "900",
-    letterSpacing: -1,
-  },
-
-  titleCompact: {
+    color: "#0E2D4E",
     fontSize: 30,
-    lineHeight: 37,
+    lineHeight: 39,
+    fontWeight: "900",
+    letterSpacing: -0.6,
   },
-
+  titleCompact: { fontSize: 25, lineHeight: 32 },
   subtitle: {
-    color: "#66758D",
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: 7,
+    color: "#657D92",
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 5,
   },
-
   roleBadge: {
-    minHeight: 42,
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#DED7FF",
-    backgroundColor: "#F3F0FF",
+    borderColor: "#A7EDCE",
+    backgroundColor: "#E7FBF2",
   },
-
   roleBadgeText: {
-    color: "#5B3FD4",
-    fontSize: 12,
+    color: "#08766C",
+    fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-
   sectionTitle: {
-    color: "#17213A",
-    fontSize: 20,
+    color: "#0E2D4E",
+    fontSize: 18,
     fontWeight: "900",
-    marginBottom: 16,
+    marginBottom: 14,
   },
-
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 16,
+    gap: 14,
   },
-
   gridCompact: {
     flexDirection: "column",
   },
-
   card: {
     flexGrow: 1,
-    flexBasis: 230,
-    minHeight: 250,
+    flexBasis: 220,
+    minWidth: 0,
+    minHeight: 205,
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
-    borderRadius: 17,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DEE5EE",
-    padding: 24,
+    borderColor: "#DCEAE8",
+    padding: 18,
   },
-
-  cardMain: {
-    alignItems: "flex-start",
-  },
-
+  cardMain: { alignItems: "flex-start" },
   iconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 15,
+    width: 46,
+    height: 46,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 15,
   },
-
   cardTitle: {
-    color: "#132039",
-    fontSize: 18,
+    color: "#0E2D4E",
+    fontSize: 15,
     fontWeight: "900",
-    lineHeight: 23,
-  },
-
-  cardDescription: {
-    color: "#617089",
-    fontSize: 14,
     lineHeight: 21,
-    marginTop: 8,
-    maxWidth: 210,
   },
-
+  cardDescription: {
+    color: "#657D92",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 7,
+    maxWidth: 230,
+  },
   arrowButton: {
-    width: 42,
-    height: 42,
-    alignSelf: "flex-end",
-    borderRadius: 21,
+    alignSelf: "flex-start",
+    marginTop: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F4F1FF",
-    borderWidth: 1,
-    borderColor: "#E5DEFF",
   },
 });
