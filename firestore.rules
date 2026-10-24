@@ -4889,6 +4889,87 @@ service cloud.firestore {
     // Separate from the legacy volunteerEvents emergency/training flow.
     // =========================================================
 
+    // Private opt-in organizer GPS, separate from the public event location.
+    // No collection listing, no unjoined Volunteer access, and stale GPS is unreadable.
+    match /communityEventLiveLocations/{eventId} {
+      function eventPath() {
+        return /databases/$(database)/documents/communityEvents/$(eventId);
+      }
+      function participantPath() {
+        let key = eventId + '_' + request.auth.uid;
+        return /databases/$(database)/documents/communityEventParticipants/$(key);
+      }
+      function eventForGps() {
+        return get(eventPath()).data;
+      }
+      function isEventOrganizer() {
+        return signedIn()
+          && eventForGps().proposedBy == request.auth.uid;
+      }
+      function isJoinedEventVolunteer() {
+        return isVolunteer()
+          && exists(participantPath())
+          && get(participantPath()).data.uid == request.auth.uid
+          && get(participantPath()).data.eventId == eventId
+          && get(participantPath()).data.status == 'joined';
+      }
+      function eventIsOpen() {
+        return exists(eventPath())
+          && eventForGps().publicationStatus == 'published'
+          && eventForGps().status in ['upcoming', 'active'];
+      }
+      function validLiveCoordinates() {
+        return request.resource.data.keys().hasOnly([
+          'eventId', 'residentId', 'latitude', 'longitude',
+          'accuracyMeters', 'updatedAt', 'expiresAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'eventId', 'residentId', 'latitude', 'longitude',
+          'accuracyMeters', 'updatedAt', 'expiresAt'
+        ])
+        && request.resource.data.eventId == eventId
+        && request.resource.data.residentId == request.auth.uid
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.accuracyMeters is number
+        && request.resource.data.accuracyMeters >= 0
+        && request.resource.data.accuracyMeters <= 5000
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(3, 'm');
+      }
+
+      allow get: if isAdminOrSuperAdmin()
+        || (
+          approved()
+          && eventIsOpen()
+          && (isEventOrganizer() || isJoinedEventVolunteer())
+          && (
+            resource == null
+            || resource.data.expiresAt > request.time
+          )
+        );
+      allow list: if false;
+      allow create: if isResident()
+        && eventIsOpen()
+        && isEventOrganizer()
+        && validLiveCoordinates();
+      allow update: if isResident()
+        && eventIsOpen()
+        && isEventOrganizer()
+        && resource.data.residentId == request.auth.uid
+        && validLiveCoordinates();
+      allow delete: if isAdminOrSuperAdmin()
+        || (isResident()
+          && isEventOrganizer()
+          && resource.data.residentId == request.auth.uid);
+    }
+
     match /communityEventProposals/{proposalId} {
       function publishedEventAfter() {
         return getAfter(
