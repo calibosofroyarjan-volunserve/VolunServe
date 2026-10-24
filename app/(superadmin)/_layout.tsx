@@ -57,6 +57,12 @@ const navItems: NavItem[] = [
     match: "/all-records",
   },
   {
+    label: "Donation Management",
+    icon: "heart-outline",
+    route: "/(superadmin)/donations",
+    match: "/donations",
+  },
+  {
     label: "Audit Logs",
     icon: "time-outline",
     route: "/(superadmin)/admin-logs",
