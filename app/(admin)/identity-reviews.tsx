@@ -4,6 +4,7 @@ import {
     ActivityIndicator,
     Alert,
     ScrollView,
+    Platform,
     StyleSheet,
     Text,
     TextInput,
@@ -366,9 +367,14 @@ export default function IdentityReviewsAdmin() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        style={styles.scroll}
+        style={[
+          styles.scroll,
+          Platform.OS === "web" && styles.webScrollBar,
+        ]}
         contentContainerStyle={styles.page}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        accessibilityLabel="Identity reviews content"
       >
         <View style={styles.header}>
           <View style={styles.headerIcon}>
@@ -950,11 +956,19 @@ function InfoLine({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    minHeight: 0,
+    backgroundColor: "#F2F9FC",
   },
   scroll: {
     flex: 1,
+    minHeight: 0,
   },
+  // On desktop browsers, keep the right-side review scrollbar visible.
+  webScrollBar: {
+    overflowY: "scroll",
+    scrollbarWidth: "auto",
+    scrollbarColor: "#8CA3B2 #F2F9FC",
+  } as any,
   page: {
     width: "100%",
     maxWidth: 1450,
