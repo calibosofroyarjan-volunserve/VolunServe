@@ -1823,9 +1823,10 @@ export default function CommunityEventsScreen() {
                 "Community Service"}
             </Text>
 
-            <Text style={styles.eventTitle}>
-              {event.title}
-            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={"Open " + event.title + " event details"} onPress={() => setExpandedEvent(expanded ? null : event.id)}>
+              <Text style={styles.eventTitle}>{event.title}</Text>
+              <Text style={{fontSize:11,color:"#087F75",marginTop:4,fontWeight:"700"}}>{expanded ? "Tap to close details" : "Tap title for details and directions"}</Text>
+            </Pressable>
           </View>
 
           <View
@@ -1901,10 +1902,22 @@ export default function CommunityEventsScreen() {
 
         {expanded && (
           <View style={styles.descriptionBox}>
+            <Text style={{fontSize:11,fontWeight:"900",color:"#087F75",marginBottom:7}}>ABOUT THIS EVENT</Text>
             <Text style={styles.description}>
-              {event.description ||
-                "No additional details provided."}
+              {event.description || "No additional details provided."}
             </Text>
+            <View style={{marginTop:12,backgroundColor:"#F2FAF8",padding:12,borderRadius:10,gap:9}}>
+              <Text style={{fontSize:13,color:"#153E49",fontWeight:"900"}}>Event Location &amp; Directions</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
+              {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              <Pressable accessibilityRole="button" accessibilityLabel={"Navigate to " + event.title + " in Google Maps"}
+                onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
+                style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+                <Ionicons name="navigate-outline" size={17} color="#FFFFFF"/>
+                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Open Directions in Google Maps</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -5286,7 +5299,7 @@ const styles = StyleSheet.create({
   lockedAboutText: { color: "#567183", fontSize: 12, lineHeight: 20 },
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 15, padding: 14, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#F2FBF6", borderColor: "#B4DDCB", borderWidth: 1.5 },
-  lockedEventMapCard: { backgroundColor: "#F6FBF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 13, marginTop: 6 },
+  lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
   lockedAttendanceOverview: { backgroundColor: "#E6F6ED", borderRadius: 11, padding: 10, gap: 9, marginBottom: 12 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { color: "#0D6A55", fontSize: 12, fontWeight: "900" },
@@ -5309,16 +5322,16 @@ const styles = StyleSheet.create({
   lockedSectionTitle: { color: "#113049", fontSize: 16, fontWeight: "900", flexShrink: 1 },
   lockedSectionSub: { color: "#6E8494", fontSize: 10.5, marginTop: 3 },
   lockedMapAddress: { fontSize: 11, color: "#486980", lineHeight: 17, marginBottom: 9 },
-  lockedMapFrame: { width: "100%", height: 232, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
+  lockedMapFrame: { width: "100%", height: 260, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
   lockedMapPlaceholder: { backgroundColor: "#F1F7F6", minHeight: 160, borderRadius: 11, justifyContent: "center", alignItems: "center", padding: 18, gap: 12 },
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
   lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
   lockedMapFootnote: { color: "#788E9B", fontSize: 9.5, lineHeight: 15, marginTop: 9 },
   lockedMapActions: { flexDirection: "row", flexWrap: "wrap", marginTop: 11, gap: 8 },
-  lockedMapOutline: { flexGrow: 1, flexBasis: 145, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
-  lockedMapOutlineText: { color: "#0A5663", fontSize: 10.2, fontWeight: "800", flexShrink: 1, textAlign: "center" },
-  lockedMapSolid: { flexGrow: 1, flexBasis: 145, minWidth: 0, backgroundColor: "#007B75", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
-  lockedMapSolidText: { color: "white", fontSize: 10.2, fontWeight: "900", flexShrink: 1, textAlign: "center" },
+  lockedMapOutline: { flexGrow: 1, flexBasis: 190, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
+  lockedMapOutlineText: { color: "#0A5663", fontSize: 11, fontWeight: "800", flexShrink: 1, textAlign: "center" },
+  lockedMapSolid: { flexGrow: 1, flexBasis: 190, minWidth: 0, backgroundColor: "#007B75", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
+  lockedMapSolidText: { color: "white", fontSize: 11, fontWeight: "900", flexShrink: 1, textAlign: "center" },
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedAttendanceVerifiedText: { color: "#067D68", fontSize: 9, fontWeight: "900" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
