@@ -1,0 +1,32 @@
+name: Validate finalized VolunServe donation screens
+on:
+  push:
+    branches:
+      - feature/final-donations-ui-role-sidebars
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate backend syntax
+        run: node --check backend/server.js
+      - name: TypeScript check
+        run: npx tsc --noEmit --pretty false
+      - name: Expo web production export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Confirm exported entry page
+        run: test -f dist/index.html
