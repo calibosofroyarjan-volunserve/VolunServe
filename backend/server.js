@@ -14,6 +14,8 @@ const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
   // Production and Firebase Hosting previews of the VolunServe web app.
   "https://volunserve.org",
+  "https://volunserve.com",
+  "https://www.volunserve.com",
   "https://www.volunserve.org",
   "https://volunserve-3aa5b.web.app",
   "https://volunserve-3aa5b.firebaseapp.com",
@@ -358,6 +360,16 @@ const finalizePaymongoDonation = async (session) => {
   }
   const donationRef = db.collection("donations").doc(donationId);
   const activityRef = db.collection("adminActivityLogs").doc();
+  // A fixed notification document per recipient and donation is idempotent.
+  // Fetch authorized recipients before the Firestore transaction; never trust
+  // a client-supplied admin list, and do not notify on failed checkouts.
+  const adminUsers = await db.collection("users")
+    .where("role", "in", ["admin", "superadmin"])
+    .limit(200).get();
+  const adminRecipients = adminUsers.docs.filter((item) => {
+    const p = item.data() || {};
+    return p.status === "approved" && ["admin", "superadmin"].includes(p.role);
+  });
   return db.runTransaction(async (transaction) => {
     const donationSnapshot = await transaction.get(donationRef);
     if (!donationSnapshot.exists) {
@@ -463,6 +475,25 @@ const finalizePaymongoDonation = async (session) => {
       performedBy: "paymongo_webhook",
       timestamp: FieldValue.serverTimestamp(),
     });
+    // A single confirmed payment creates one unread alert for EACH approved
+    // Admin/Super Admin. Repeated PayMongo webhook delivery cannot duplicate it.
+    for (const recipient of adminRecipients) {
+      const recipientRole = String(recipient.data()?.role || "admin");
+      const notificationId = "donation_" + donationId + "_" + recipient.id;
+      transaction.set(db.collection("notifications").doc(notificationId), {
+        userId: recipient.id,
+        audience: recipientRole,
+        type: "donation_received",
+        donationId,
+        campaignId,
+        title: "New confirmed donation",
+        message: paymongoText(donation.donorName || "A resident", 110) +
+          " donated PHP " + amount.toFixed(2) + " to " +
+          paymongoText(donation.campaignTitle || "a campaign", 160) + ".",
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     return {
       donationId,
       campaignId,
