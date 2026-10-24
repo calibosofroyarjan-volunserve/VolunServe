@@ -232,6 +232,9 @@ function SuperAdminSidebar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 60, left: -30, opacity: 0.13 }}>
+        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
+      </View>
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"
