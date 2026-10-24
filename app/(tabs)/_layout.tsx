@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
   ActivityIndicator,
@@ -476,7 +477,7 @@ function DesktopTabBar({
   };
 
   return (
-    <View style={styles.desktopSidebar}>
+    <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -528,7 +529,7 @@ function DesktopTabBar({
                 <Ionicons
                   name={(focused ? item.activeIcon : item.icon) as any}
                   size={20}
-                  color={focused ? "#FFFFFF" : "#60728A"}
+                  color={focused ? "#FFFFFF" : "#D9F5ED"}
                 />
               </View>
               <Text
@@ -559,7 +560,7 @@ function DesktopTabBar({
             <Ionicons
               name="swap-horizontal-outline"
               size={18}
-              color="#60728A"
+              color="#E6F5F2"
             />
             <Text style={styles.desktopUtilityText}>
               {mode === "volunteer"
@@ -597,7 +598,7 @@ function DesktopTabBar({
           <Ionicons
             name="settings-outline"
             size={18}
-            color="#60728A"
+            color="#E6F5F2"
           />
           <Text style={styles.desktopUtilityText}>Account Settings</Text>
         </Pressable>
@@ -621,7 +622,7 @@ function DesktopTabBar({
           </Text>
         </Pressable>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -916,9 +917,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     paddingTop: 22,
     paddingBottom: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#07332F",
     borderRightWidth: 1,
-    borderRightColor: "#E1E8EF",
+    borderRightColor: "#13695E",
     shadowColor: "#183153",
     shadowOffset: { width: 5, height: 0 },
     shadowOpacity: 0.04,
@@ -941,13 +942,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   desktopBrandTitle: {
-    color: "#0F675F",
+    color: "#FFFFFF",
     fontSize: 20,
     fontWeight: "900",
   },
   desktopBrandSubtitle: {
     marginTop: 1,
-    color: "#718095",
+    color: "#B6E9DF",
     fontSize: 8.5,
     fontWeight: "700",
   },
@@ -984,7 +985,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 9,
     paddingHorizontal: 10,
-    color: "#95A1B0",
+    color: "#A7DCD4",
     fontSize: 9,
     fontWeight: "900",
     letterSpacing: 1.1,
@@ -1008,7 +1009,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   desktopNavItemActive: {
-    backgroundColor: "#EAF8F4",
+    backgroundColor: "#049C7B",
   },
   desktopNavIcon: {
     width: 34,
@@ -1016,33 +1017,33 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F2F5F8",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   desktopNavIconActive: {
-    backgroundColor: "#078F82",
+    backgroundColor: "#00775F",
   },
   desktopNavText: {
     flex: 1,
-    color: "#52647B",
+    color: "#E6F5F2",
     fontSize: 12,
     fontWeight: "700",
   },
   desktopNavTextActive: {
-    color: "#076E66",
+    color: "#FFFFFF",
     fontWeight: "900",
   },
   desktopActiveMark: {
     width: 4,
     height: 22,
     borderRadius: 3,
-    backgroundColor: "#078F82",
+    backgroundColor: "#C5FFF1",
   },
   desktopUtilityArea: {
     flexShrink: 0,
     marginTop: 0,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E7EDF2",
+    borderTopColor: "rgba(255,255,255,0.18)",
     gap: 4,
   },
   desktopUtilityButton: {
@@ -1064,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   desktopUtilityText: {
     flex: 1,
-    color: "#52647B",
+    color: "#FFFFFF",
     fontSize: 11.5,
     fontWeight: "700",
   },
