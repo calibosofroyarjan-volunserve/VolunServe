@@ -97,6 +97,9 @@ export default function CommunityEventLiveLocation({
   const sharingRef = useRef(false);
   const writeInFlightRef = useRef(false);
   const lastPublishRef = useRef(0);
+  const pendingWriteRef = useRef<Promise<void> | null>(null);
+  const lastPositionRef = useRef<any>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationRef = doc(db, "communityEventLiveLocations", eventId);
 
   useEffect(() => {
@@ -132,14 +135,23 @@ export default function CommunityEventLiveLocation({
       geoApi()?.clearWatch(watchRef.current);
       watchRef.current = null;
     }
+    if (heartbeatRef.current != null) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
     setSharing(false);
+  };
+
+  const clearAfterPendingWrite = async () => {
+    try { await pendingWriteRef.current; } catch { /* best-effort cleanup */ }
+    await deleteDoc(locationRef);
   };
 
   const stopSharing = async () => {
     stopWatch();
     setBusy(true);
     try {
-      await deleteDoc(locationRef);
+      await clearAfterPendingWrite();
       setPoint(null);
       setNotice("Live GPS sharing stopped. Your last location was cleared.");
     } catch {
@@ -153,16 +165,31 @@ export default function CommunityEventLiveLocation({
     // Leaving the event view or switching modes ends live sharing.
     // If a browser closes abruptly, the Firestore expiry prevents ongoing access.
     return () => {
+      const wasSharing = sharingRef.current;
+      sharingRef.current = false;
       if (watchRef.current != null) {
         geoApi()?.clearWatch(watchRef.current);
         watchRef.current = null;
       }
-      if (sharingRef.current) {
-        sharingRef.current = false;
-        void deleteDoc(doc(db, "communityEventLiveLocations", eventId)).catch(() => {});
+      if (heartbeatRef.current != null) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+      if (wasSharing) {
+        void (async () => {
+          try { await pendingWriteRef.current; } catch { /* ignore */ }
+          await deleteDoc(doc(db, "communityEventLiveLocations", eventId));
+        })().catch(() => {});
       }
     };
   }, [eventId]);
+
+  useEffect(() => {
+    if (!canShare && sharingRef.current) {
+      stopWatch();
+      void clearAfterPendingWrite().catch(() => {});
+    }
+  }, [canShare]);
 
   const startSharing = () => {
     if (!canShare || sharingRef.current) return;
@@ -178,6 +205,7 @@ export default function CommunityEventLiveLocation({
     lastPublishRef.current = 0;
     const onPosition = async (position: any) => {
       if (!sharingRef.current) return;
+      lastPositionRef.current = position;
       const latitude = Number(position?.coords?.latitude);
       const longitude = Number(position?.coords?.longitude);
       if (!validCoordinates(latitude, longitude)) {
@@ -188,7 +216,7 @@ export default function CommunityEventLiveLocation({
       writeInFlightRef.current = true;
       lastPublishRef.current = Date.now();
       try {
-        await setDoc(locationRef, {
+        const write = setDoc(locationRef, {
           eventId,
           residentId: currentUid,
           latitude,
@@ -197,6 +225,8 @@ export default function CommunityEventLiveLocation({
           updatedAt: serverTimestamp(),
           expiresAt: Timestamp.fromMillis(Date.now() + POINT_TTL_MS),
         });
+        pendingWriteRef.current = write;
+        await write;
         if (sharingRef.current) {
           setBusy(false);
           setNotice("Live location is being shared only with joined volunteers in this event.");
@@ -209,9 +239,10 @@ export default function CommunityEventLiveLocation({
             ? "Sharing blocked by Firestore rules. Deploy the updated event GPS rules first."
             : "Unable to update your GPS. The last shared point will expire shortly."
         );
-        void deleteDoc(locationRef).catch(() => {});
+        void clearAfterPendingWrite().catch(() => {});
       } finally {
         writeInFlightRef.current = false;
+        pendingWriteRef.current = null;
       }
     };
     const onGeoError = (error: any) => {
@@ -222,9 +253,14 @@ export default function CommunityEventLiveLocation({
           ? "Location permission denied. Allow GPS access in your browser to share."
           : "Unable to get a reliable GPS fix. Check device location and try again."
       );
-      void deleteDoc(locationRef).catch(() => {});
+      void clearAfterPendingWrite().catch(() => {});
     };
     try {
+      heartbeatRef.current = setInterval(() => {
+        if (sharingRef.current && lastPositionRef.current) {
+          void onPosition(lastPositionRef.current);
+        }
+      }, 45_000);
       watchRef.current = geo.watchPosition(onPosition, onGeoError, {
         enableHighAccuracy: true,
         maximumAge: 0,
@@ -316,7 +352,7 @@ export default function CommunityEventLiveLocation({
             Resident GPS: {activePoint.latitude.toFixed(5)}, {activePoint.longitude.toFixed(5)} · accuracy ±{Math.round(activePoint.accuracyMeters || 0)} m
           </Text>
           <Text style={styles.helper}>
-            Updated within the last 2 minutes. Live GPS is approximate; confirm your meetup with the organizer.
+            Updated within the last 2 minutes. Live GPS is approximate; confirm your meetup with the organizer. Google Maps processes the displayed map coordinates.
           </Text>
           {isJoinedVolunteer && (
             <View style={styles.actions}>
