@@ -20,6 +20,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -1213,15 +1214,14 @@ export default function CommandCenter() {
 
   return (
     <ScrollView
-      style={
-        styles.screen
-      }
-      contentContainerStyle={
-        styles.page
-      }
-      showsVerticalScrollIndicator={
-        false
-      }
+      style={[
+        styles.screen,
+        Platform.OS === "web" && styles.webScrollBar,
+      ]}
+      contentContainerStyle={styles.page}
+      showsVerticalScrollIndicator={true}
+      keyboardShouldPersistTaps="handled"
+      accessibilityLabel="Admin dashboard content"
     >
       <View
         style={[
@@ -2315,9 +2315,16 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor:
-        "#F2F9FC",
+      minHeight: 0,
+      backgroundColor: "#F2F9FC",
     },
+
+    // Separate right-side scrolling from the fixed Admin navigation.
+    webScrollBar: {
+      overflowY: "scroll",
+      scrollbarWidth: "auto",
+      scrollbarColor: "#8CA3B2 #F2F9FC",
+    } as any,
 
     page: {
       width: "100%",
