@@ -9,6 +9,7 @@ const {
   FieldValue,
 } = require("./firebaseAdmin");
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
+const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
   // Production and Firebase Hosting previews of the VolunServe web app.
@@ -4651,109 +4652,39 @@ app.get(
     });
   },
 );
-// Cheap readiness check for the private Python face-comparison service.
-// No biometric media, UID or secrets are sent to its public /health route.
-// Clients call this BEFORE spending an AI verification attempt.
+// Idempotent preflight for the private Python face-comparison service.
+// Cold-start retry applies ONLY to GET /health and GET /api/internal/auth-check.
+// Never automatically replay /verify or consume a Resident's AI attempts.
 app.get(
   "/api/identity/engine-health",
   requireFirebaseUser,
   async (_request, response) => {
-    const endpoint = getIdentityAiEndpoint();
-    if (!endpoint) {
-      return response.status(503).json({
-        ok: false,
-        ready: false,
-        error: "identity_ai_not_configured",
-        message: "AI face comparison is not connected. Configure IDENTITY_AI_SERVICE_URL on the VolunServe Render backend and deploy the Python identity-ai service.",
-      });
-    }
-    if (!String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim()) {
-      return response.status(503).json({
-        ok: false,
-        ready: false,
-        error: "identity_ai_key_missing",
-        message: "The AI service internal authentication key has not been configured on the backend.",
-      });
-    }
+    response.set("Cache-Control", "no-store");
     try {
-      const healthUrl = endpoint.endsWith("/verify")
-        ? endpoint.slice(0, -"/verify".length) + "/health"
-        : endpoint.replace(/\/+$/, "") + "/health";
-      const healthResponse = await fetch(healthUrl, {
-        method: "GET",
-        // Render Free Python services may need more than 50 seconds to wake.
-        signal: AbortSignal.timeout(85000),
+      const result = await probeIdentityAiReadiness({
+        endpoint: getIdentityAiEndpoint(),
+        internalKey: String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim(),
       });
-      const health = await readJsonResponse(healthResponse);
-      if (!healthResponse.ok ||
-          health?.ok !== true ||
-          health?.verificationEngineReady !== true ||
-          health?.internalAuthConfigured !== true) {
-        return response.status(503).json({
-          ok: false,
-          ready: false,
-          error: "identity_ai_not_ready",
-          message: "The Python AI face-comparison service is not ready or its internal authentication is missing. Check its Render deployment and environment settings.",
-        });
+      if (!result.body.ready) {
+        // No user ID, Government ID, face photo or secret is logged.
+        console.warn("Identity AI readiness:", result.body.error);
+        if ([
+          "identity_ai_warming_up",
+          "identity_ai_unreachable",
+          "identity_ai_auth_check_unreachable",
+          "identity_ai_auth_check_failed",
+        ].includes(result.body.error)) {
+          response.set("Retry-After", "10");
+        }
       }
-      // Health alone cannot detect two different configured keys.
-      // Ask the Python AI service to actually authenticate our key before
-      // sending any government ID or face images.
-      const authCheckUrl = healthUrl.slice(0, -"/health".length) + "/api/internal/auth-check";
-      const authResponse = await fetch(authCheckUrl, {
-        method: "GET",
-        headers: {
-          "X-VolunServe-Internal-Key": String(process.env.IDENTITY_AI_INTERNAL_KEY).trim(),
-        },
-        signal: AbortSignal.timeout(20000),
-      });
-      if (authResponse.status === 401 || authResponse.status === 403) {
-        return response.status(503).json({
-          ok: false,
-          ready: false,
-          error: "identity_ai_auth_mismatch",
-          message: "AI authentication mismatch: set the SAME IDENTITY_AI_INTERNAL_KEY secret on both Render services (VolunServe Node backend and volunserve-identity-ai), then redeploy both.",
-        });
-      }
-      if (authResponse.status === 404) {
-        return response.status(503).json({
-          ok: false,
-          ready: false,
-          error: "identity_ai_auth_check_missing",
-          message: "The Python AI service needs its latest GitHub deployment to validate backend authentication. Deploy the latest main commit to volunserve-identity-ai.",
-        });
-      }
-      if (!authResponse.ok) {
-        return response.status(503).json({
-          ok: false,
-          ready: false,
-          error: "identity_ai_auth_check_failed",
-          message: "AI backend authentication check failed. Verify the AI Render service environment and deployment.",
-        });
-      }
-      const authResult = await readJsonResponse(authResponse);
-      if (authResult?.authenticated !== true) {
-        return response.status(503).json({
-          ok: false,
-          ready: false,
-          error: "identity_ai_auth_check_invalid",
-          message: "The AI service did not confirm backend authentication. Verify both Render deployments.",
-        });
-      }
-      return response.json({
-        ok: true,
-        ready: true,
-        provider: "volunserve-custom-ai",
-        livenessImplemented: health.livenessImplemented === true,
-        message: "The AI comparison service and private backend authentication are connected. ID authenticity and liveness are not fully verified by this service.",
-      });
+      return response.status(result.statusCode).json(result.body);
     } catch (error) {
-      console.warn("Identity AI readiness check failed:", error?.code || error?.name || "unreachable");
+      console.warn("Identity AI readiness internal exception:", error?.name || "unknown");
       return response.status(503).json({
         ok: false,
         ready: false,
         error: "identity_ai_unreachable",
-        message: "Cannot connect to the Python AI comparison service. Check that the AI Render service is Live and IDENTITY_AI_SERVICE_URL points to its correct HTTPS address.",
+        message: "Could not confirm the AI service is ready. Please try again shortly; no verification attempt was used.",
       });
     }
   },
