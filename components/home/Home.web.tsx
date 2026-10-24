@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   collection,
@@ -14,6 +15,7 @@ import {
   Alert,
   Image,
   ImageBackground,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,7 +31,6 @@ import {
   hasVolunteerAccess,
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
-import { usePublicSettings } from "../../lib/usePublicSettings";
 import { useUserSession } from "../../lib/useUserSession";
 
 type Announcement = {
@@ -137,7 +138,6 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
-  const { settings } = usePublicSettings();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [cases, setCases] = useState<DisasterCase[]>([]);
@@ -510,17 +510,8 @@ export default function WebHome() {
               </View>
             </ImageBackground>
           ) : (
-          <ImageBackground
-            source={require("../../assets/images/sjdm-aerial.png")}
-            resizeMode="cover"
-            style={[styles.hero, compact && styles.heroCompact]}
-            imageStyle={[
-              styles.heroImage,
-              { objectPosition: "center 82%" } as any,
-            ]}
-          >
-            <View style={styles.heroOverlay} />
-
+          <>
+            <View style={styles.desktopHeaderStrip}>
             <View style={[styles.heroTop, narrow && styles.heroTopNarrow]}>
               <View style={styles.operationalPill}>
                 <View style={styles.operationalDot} />
@@ -606,6 +597,24 @@ export default function WebHome() {
               </View>
             </View>
 
+
+            </View>
+          <ImageBackground
+            source={require("../../assets/images/sjdm-aerial.png")}
+            resizeMode="cover"
+            style={[styles.hero, compact && styles.heroCompact]}
+            imageStyle={[
+              styles.heroImage,
+              { objectPosition: "center 82%" } as any,
+            ]}
+          >
+            <LinearGradient
+              pointerEvents="none"
+              colors={["rgba(3,35,52,0.80)", "rgba(5,45,61,0.26)", "rgba(4,31,43,0.63)"]}
+              start={{ x: 0, y: 0.45 }} end={{ x: 1, y: 0.58 }}
+              style={styles.heroGradientOverlay}
+            />
+
             <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
               <View style={styles.heroLeft}>
                 <Text style={styles.eyebrow}>
@@ -614,7 +623,7 @@ export default function WebHome() {
                     : "RESIDENT OPERATIONS CENTER"}
                 </Text>
                 <Text style={[styles.greeting, narrow && styles.greetingNarrow]}>
-                  Good day, {firstName}!
+                  Good day, <Text style={styles.greetingAccent}>{firstName}!</Text>
                 </Text>
                 <Text style={styles.heroSubtitle}>
                   Here&apos;s what&apos;s happening in San Jose del Monte today.
@@ -678,16 +687,17 @@ export default function WebHome() {
               <View style={[styles.heroRight, compact && styles.heroRightCompact]}>
                 <Text style={styles.heroRightTitle}>Your community{`\n`}at a glance</Text>
                 <Text style={styles.heroRightText}>
-                  Generally stable conditions across San Jose del Monte today.
-                  Local teams remain on alert and monitoring.
+                  Stay informed through official community announcements and local response updates.
                 </Text>
                 <View style={styles.sloganRow}>
-                  <View style={styles.sloganLine} />
+                  <Ionicons name="leaf" size={17} color="#94EAC7" />
                   <Text style={styles.slogan}>Together for a Safer Tomorrow</Text>
+                  <Ionicons name="arrow-forward" size={15} color="#D4FFF1" />
                 </View>
               </View>
             </View>
           </ImageBackground>
+          </>
           )}
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
@@ -854,16 +864,8 @@ export default function WebHome() {
             </View>
 
             <View style={[styles.contactGrid, narrow && styles.contactGridNarrow]}>
-              <ContactCard
-                title="Official Local Response Contact"
-                value={settings.emergencyHotline}
-                subtitle="Local emergency response information"
-              />
-              <ContactCard
-                title="National Emergency Hotline"
-                value="911"
-                subtitle="Available nationwide 24/7"
-              />
+              <ContactCard kind="local" />
+              <ContactCard kind="national" />
             </View>
           </View>
         </View>
@@ -1000,28 +1002,58 @@ function UpdateRow({
   );
 }
 
-function ContactCard({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-}) {
+function ContactCard({ kind }: { kind: "local" | "national" }) {
+  const local = kind === "local";
+  const dial = (phone: string) => {
+    void Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`).catch(() => {});
+  };
   return (
-    <View style={styles.contactCard}>
-      <View style={styles.contactIcon}>
-        <Ionicons name="call" size={24} color="#F13447" />
+    <LinearGradient
+      colors={local ? ["#FFF7F6", "#FFE9EA"] : ["#F2F9FF", "#E1F2FE"]}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      style={[styles.contactCard, local ? styles.localContactCard : styles.nationalContactCard]}
+    >
+      <View style={[styles.contactIcon, !local && styles.nationalContactIcon]}>
+        <Ionicons name={local ? "medkit" : "call"} size={25} color={local ? "#EC3449" : "#1475DF"} />
       </View>
       <View style={styles.contactCopy}>
-        <Text style={styles.contactTitle}>{title}</Text>
-        <Text style={styles.contactValue} numberOfLines={2}>
-          {value}
+        <Text style={styles.contactTitle}>
+          {local ? "CDRRMO Hotline" : "National Emergency Hotline"}
         </Text>
-        <Text style={styles.contactSubtitle}>{subtitle}</Text>
+        {local ? (
+          <>
+            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO landline 044-306-6234"
+              onPress={() => dial("0443066234")}>
+              <Text style={styles.contactLocalNumber}>
+                Landline: <Text style={styles.contactLocalNumberStrong}>044-306-6234</Text>
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO mobile 0932-600-0119"
+              onPress={() => dial("09326000119")}>
+              <Text style={styles.contactLocalNumber}>
+                Phone Number: <Text style={styles.contactLocalNumberStrong}>0932-600-0119</Text>
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable accessibilityRole="link" accessibilityLabel="Call National Emergency Hotline 911"
+              onPress={() => dial("911")}>
+              <Text style={styles.contactValue}>911</Text>
+            </Pressable>
+            <Text style={styles.contactSubtitle}>Available nationwide 24/7</Text>
+          </>
+        )}
       </View>
-    </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={local ? "Call CDRRMO mobile 0932-600-0119" : "Call National Emergency Hotline 911"}
+        onPress={() => dial(local ? "09326000119" : "911")}
+        style={[styles.contactCallAction, !local && styles.nationalCallAction]}
+      >
+        <Ionicons name="call" size={21} color={local ? "#E83D50" : "#177ADE"} />
+      </Pressable>
+    </LinearGradient>
   );
 }
 
@@ -1062,7 +1094,7 @@ const styles = StyleSheet.create({
   mobileStatusPill: { minWidth: 70, maxWidth: 92, paddingHorizontal: 6 },
   screen: {
     flex: 1,
-    backgroundColor: "#EFF8FD",
+    backgroundColor: "#EEF8FD",
   },
   scrollContent: {
     flexGrow: 1,
@@ -1071,29 +1103,36 @@ const styles = StyleSheet.create({
   pageMobile: { paddingHorizontal: 11, paddingTop: 11 },
   page: {
     width: "100%",
-    maxWidth: 1520,
+    maxWidth: 1700,
     alignSelf: "center",
     paddingHorizontal: 18,
     paddingTop: 16,
   },
   hero: {
-    minHeight: 365,
+    minHeight: 325,
     overflow: "hidden",
-    borderRadius: 0,
-    paddingHorizontal: 34,
+    borderRadius: 20,
+    paddingHorizontal: 32,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: 20,
     justifyContent: "space-between",
   },
   heroCompact: {
     minHeight: 520,
   },
   heroImage: {
-    borderRadius: 0,
+    borderRadius: 20,
   },
+  heroGradientOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 20 },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(3, 18, 31, 0.20)",
+  },
+  desktopHeaderStrip: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 3,
+    paddingBottom: 13,
   },
   heroTop: {
     zIndex: 3,
@@ -1263,6 +1302,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  greetingAccent: { color: "#79F2C7" },
   greetingNarrow: {
     fontSize: 38,
     lineHeight: 44,
@@ -1433,10 +1473,16 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   sloganRow: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(5,82,66,0.75)",
+    borderWidth: 1,
+    borderColor: "rgba(167,249,207,0.35)",
+    borderRadius: 22,
   },
   sloganLine: {
     width: 38,
@@ -1461,10 +1507,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     padding: 20,
-    borderRadius: 18,
+    borderRadius: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E3EDF5",
+    borderColor: "#DEEDF2",
+    shadowColor: "#0D506A",
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
   },
   panelHeader: {
     flexDirection: "row",
@@ -1480,12 +1530,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   panelIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EDF5FF",
+    backgroundColor: "#DDF8F2",
   },
   panelHeaderCopy: {
     flex: 1,
@@ -1632,11 +1682,15 @@ const styles = StyleSheet.create({
   },
   emergencyPanel: {
     marginTop: 16,
-    padding: 18,
-    borderRadius: 18,
+    padding: 20,
+    borderRadius: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E3EDF5",
+    borderColor: "#DEEDF2",
+    shadowColor: "#0D506A",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   emergencyHeader: {
     flexDirection: "row",
@@ -1674,24 +1728,27 @@ const styles = StyleSheet.create({
   },
   contactCard: {
     flex: 1,
-    minHeight: 86,
+    minHeight: 100,
     flexDirection: "row",
     alignItems: "center",
-    gap: 13,
-    padding: 14,
-    borderRadius: 14,
+    gap: 14,
+    padding: 15,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#F4DCE0",
+    backgroundColor: "#FFF7F6",
   },
+  localContactCard: { borderColor: "#F4DCE0" },
+  nationalContactCard: { borderColor: "#D6EAFB" },
   contactIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFF0F2",
+    backgroundColor: "#FFE3E8",
   },
+  nationalContactIcon: { backgroundColor: "#DDEFFC" },
   contactCopy: {
     flex: 1,
     minWidth: 0,
@@ -1702,12 +1759,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   contactValue: {
-    marginTop: 3,
-    color: "#1178F3",
-    fontSize: 18,
-    lineHeight: 22,
+    marginTop: 4,
+    color: "#142D55",
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: "900",
   },
+  contactLocalNumber: { color: "#24405B", fontSize: 12.5, lineHeight: 20 },
+  contactLocalNumberStrong: { fontWeight: "900", color: "#143052" },
+  contactCallAction: {
+    width: 43, height: 43, borderRadius: 22,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#F9C5CC", backgroundColor: "#FFFFFF",
+  },
+  nationalCallAction: { borderColor: "#BEDDFF" },
   contactSubtitle: {
     marginTop: 2,
     color: "#6A7FA3",
