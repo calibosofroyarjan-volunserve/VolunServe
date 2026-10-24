@@ -77,20 +77,9 @@ const residentDesktopTabs: TabDefinition[] = [
     icon: "calendar-outline",
     activeIcon: "calendar",
   },
-  {
-    name: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-    activeIcon: "notifications",
-  },
-  {
-    name: "announcements",
-    label: "Announcements",
-    icon: "megaphone-outline",
-    activeIcon: "megaphone",
-  },
 ];
 
+// Notifications remain accessible from the dashboard bell and updates card.
 const volunteerDesktopTabs: TabDefinition[] = [
   {
     name: "index",
@@ -147,6 +136,16 @@ const volunteerDesktopTabs: TabDefinition[] = [
     activeIcon: "megaphone",
   },
 ];
+
+const residentModuleIdentity: Record<string, { subtitle: string; colors: readonly [string, string] }> = {
+  index: { subtitle: "Platform Overview", colors: ["#00846B", "#04B78F"] },
+  "map-tracking": { subtitle: "Real-Time Tracking", colors: ["#00587C", "#168BC8"] },
+  "disaster-response": { subtitle: "Report and Get Help", colors: ["#963C2F", "#D86747"] },
+  resident: { subtitle: "Community Support", colors: ["#05727D", "#0BA99F"] },
+  donation: { subtitle: "Give and Make an Impact", colors: ["#227943", "#50A95B"] },
+  "my-cases": { subtitle: "Track Your Requests", colors: ["#135679", "#308DC6"] },
+  "community-events": { subtitle: "Join Local Activities", colors: ["#516A28", "#86A83E"] },
+};
 
 const residentMobileTabs: TabDefinition[] = [
   {
@@ -478,7 +477,7 @@ function DesktopTabBar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
-      <View pointerEvents="none" style={{ position: "absolute", bottom: 60, left: -30, opacity: 0.13 }}>
+      <View pointerEvents="none" style={styles.residentSidebarAmbient}>
         <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
       </View>
       <View style={styles.desktopBrand}>
@@ -490,12 +489,15 @@ function DesktopTabBar({
         <View style={styles.desktopBrandCopy}>
           <Text style={styles.desktopBrandTitle}>VolunServe</Text>
           <Text style={styles.desktopBrandSubtitle}>
-            {mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}
+            {mode === "volunteer" ? "VOLUNTEER MODE" : "CITY OF SAN JOSE DEL MONTE"}
           </Text>
         </View>
       </View>
 
-      <Text style={styles.desktopSectionLabel}>MAIN MENU</Text>
+      {mode === "resident" ? <Text style={styles.residentModeLabel}>RESIDENT MODE</Text> : null}
+      <Text style={[styles.desktopSectionLabel, mode === "resident" && styles.residentSectionLabel]}>
+        {mode === "resident" ? "MAIN MODULES" : "MAIN MENU"}
+      </Text>
 
       <ScrollView
         style={styles.desktopNavigationScroll}
@@ -512,37 +514,63 @@ function DesktopTabBar({
           if (routeIndex === -1) return null;
 
           const focused = state.index === routeIndex;
+          const identity = mode === "resident" ? residentModuleIdentity[item.name] : null;
 
           return (
             <Pressable
               key={item.name}
               style={({ pressed }) => [
                 styles.desktopNavItem,
+                identity && styles.residentNavItem,
                 focused && styles.desktopNavItemActive,
+                focused && identity && styles.residentNavItemActive,
                 pressed && styles.desktopPressed,
               ]}
               onPress={() => navigate(item.name)}
             >
+              {focused && identity ? (
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={["#00947A", "#087D72", "#48B36D"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.6 }}
+                  style={styles.residentNavSelectedGradient}
+                />
+              ) : null}
               <View
                 style={[
                   styles.desktopNavIcon,
                   focused && styles.desktopNavIconActive,
+                  identity && styles.residentNavIcon,
                 ]}
               >
+                {identity ? (
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={[...identity.colors]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={styles.residentIconGradient}
+                  />
+                ) : null}
                 <Ionicons
                   name={(focused ? item.activeIcon : item.icon) as any}
                   size={20}
                   color={focused ? "#FFFFFF" : "#D9F5ED"}
                 />
               </View>
-              <Text
-                style={[
-                  styles.desktopNavText,
-                  focused && styles.desktopNavTextActive,
-                ]}
-              >
-                {item.label}
-              </Text>
+              <View style={styles.residentNavCopy}>
+                <Text
+                  style={[
+                    styles.desktopNavText,
+                    focused && styles.desktopNavTextActive,
+                    identity && styles.residentNavTitle,
+                  ]}
+                >{item.label}</Text>
+                {identity ? (
+                  <Text style={styles.residentNavSubtitle} numberOfLines={1}>
+                    {identity.subtitle}
+                  </Text>
+                ) : null}
+              </View>
               {focused ? (
                 <View style={styles.desktopActiveMark} />
               ) : null}
@@ -625,6 +653,26 @@ function DesktopTabBar({
           </Text>
         </Pressable>
       </View>
+      {mode === "resident" ? (
+        <View pointerEvents="none" style={styles.residentCivicFooter}>
+          <LinearGradient
+            colors={["rgba(4,83,73,0.55)", "rgba(9,128,104,0.72)"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.residentCivicFooterGradient}
+          >
+            <View style={styles.residentCivicIllustration}>
+              <Ionicons name="business-outline" size={37} color="#7BD5B9" />
+              <Ionicons name="partly-sunny-outline" size={26} color="#A3E9BD" />
+            </View>
+            <View style={styles.residentCivicFooterCopy}>
+              <Ionicons name="leaf" size={23} color="#75E6B2" />
+              <Text style={styles.residentCivicSlogan}>
+                BAGONG SJDM{"\n"}MAS LIGTAS,{"\n"}MAS MATATAG.
+              </Text>
+            </View>
+          </LinearGradient>
+        </View>
+      ) : null}
     </LinearGradient>
   );
 }
@@ -1075,6 +1123,33 @@ const styles = StyleSheet.create({
   desktopLogoutText: {
     color: "#C92537",
   },
+  residentSidebarAmbient: { position: "absolute", bottom: 125, left: -50, opacity: 0.10 },
+  residentModeLabel: {
+    marginTop: 22, paddingHorizontal: 10, color: "#80E8D1",
+    fontSize: 9.5, letterSpacing: 2.1, fontWeight: "900",
+  },
+  residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
+  residentNavItem: { minHeight: 56, overflow: "hidden", gap: 11, paddingHorizontal: 8 },
+  residentNavItemActive: { backgroundColor: "#087F71" },
+  residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
+  residentNavIcon: {
+    width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#064F53",
+  },
+  residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 0.89 },
+  residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
+  residentNavTitle: { fontSize: 12.5, color: "#FFFFFF", fontWeight: "900" },
+  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#B2DFD5", marginTop: 3 },
+  residentCivicFooter: {
+    marginTop: 8, borderRadius: 13, overflow: "hidden",
+    borderWidth: 1, borderColor: "rgba(117,218,182,0.19)",
+  },
+  residentCivicFooterGradient: { paddingHorizontal: 12, paddingVertical: 9 },
+  residentCivicIllustration: {
+    flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
+    minHeight: 29, opacity: 0.75,
+  },
+  residentCivicFooterCopy: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  residentCivicSlogan: { color: "#D9FAE9", fontSize: 9.8, lineHeight: 13, fontWeight: "800", letterSpacing: 0.3 },
   desktopPressed: {
     opacity: 0.72,
   },
