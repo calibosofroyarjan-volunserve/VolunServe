@@ -145,7 +145,7 @@ export default function RootLayout() {
     // Public certificate validation is accessible without signing in.
     // Check the route path, not the whole tabs group.
     const childSegment: string =
-      segments[1] ?? "";
+      (segments as readonly string[])[1] ?? "";
     const isCertificateVerificationRoute =
       rootSegment === "verify-certificate" ||
       (rootSegment === "(tabs)" &&
