@@ -708,8 +708,8 @@ export default function CommunityEventsScreen() {
     hasResidentAccess(profile);
 
   // Only approved volunteers need a My Attendance rail; residents use the full event width.
-  const webSideBySide = Platform.OS === "web" && isVolunteer && width >= 1260;
-  const webRowNarrow = width < 760 || (webSideBySide && width < 1420);
+  const webSideBySide = Platform.OS === "web" && isVolunteer && width >= 1450;
+  const webRowNarrow = width < 800 || (webSideBySide && width < 1500);
 
   const [section, setSection] =
     useState<Section>("explore");
@@ -2040,10 +2040,15 @@ export default function CommunityEventsScreen() {
     const owned = event.proposedBy === user?.uid;
     const full = Number(event.participantsCount || 0) >= Number(event.capacity || 0);
     const open = event.status === "active" || event.status === "upcoming";
-    const selected = selectedEvent?.id === event.id;
     const detailsOpen = expandedEvent === event.id;
+    const selected = detailsOpen;
     const cover = eventCover(event);
-    const toggleDetails = () => setExpandedEvent(detailsOpen ? null : event.id);
+    const toggleDetails = () => {
+      setExpandedEvent(detailsOpen ? null : event.id);
+      setRouteEventId(null);
+      setRouteOrigin(null);
+      setRouteNotice("");
+    };
 
     return (
       <View key={event.id} style={[styles.lockedEventShell, selected && styles.lockedEventSelected]}>
@@ -2068,7 +2073,9 @@ export default function CommunityEventsScreen() {
             </View>
           </Pressable>
           <View style={styles.lockedEventInfo}>
-            <View style={styles.lockedEventTop}>
+            <Pressable accessibilityRole="button" accessibilityLabel={(detailsOpen ? "Close " : "Open ") + event.title + " details and map"}
+              accessibilityState={{ expanded: detailsOpen }} onPress={toggleDetails} style={styles.lockedEventSummaryClick}>
+              <View style={styles.lockedEventTop}>
               <Text style={styles.lockedEventName} numberOfLines={2}>{event.title}</Text>
               <View style={styles.lockedSlotsPill}>
                 <Ionicons name="people-outline" color="#078777" size={14} />
@@ -2079,7 +2086,6 @@ export default function CommunityEventsScreen() {
               <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
               <Text style={styles.lockedSmallTagText}>{event.category}</Text>
             </View>
-            {!!event.description && <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description}</Text>}
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)}</Text>
@@ -2092,9 +2098,14 @@ export default function CommunityEventsScreen() {
               <Ionicons name="people-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text>
             </View>
+            <View style={styles.lockedEventTapHint}>
+              <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
+              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
+            </View>
+            </Pressable>
             <View style={styles.lockedRowActions}>
               <Pressable accessibilityRole="button" onPress={toggleDetails} style={styles.lockedSecondaryAction}>
-                <Text style={styles.lockedSecondaryActionText}>{detailsOpen ? "Hide Details" : "View Details"}</Text>
+                <Text style={styles.lockedSecondaryActionText}>{detailsOpen ? "Close Details" : "Details & Map"}</Text>
                 <Ionicons name={detailsOpen ? "chevron-up" : "arrow-forward"} size={14} color="#066E69" />
               </Pressable>
               {isVolunteer && !owned && !joined && open && !full && (
@@ -2153,8 +2164,8 @@ export default function CommunityEventsScreen() {
               <View style={styles.lockedSectionHeading}>
                 <View style={styles.lockedSectionIcon}><Ionicons name="location" size={21} color="#078C80" /></View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.lockedSectionTitle}>Event Location &amp; Directions</Text>
-                  <Text style={styles.lockedSectionSub}>Map and route for this community event</Text>
+                  <Text style={styles.lockedSectionTitle}>Location &amp; Directions</Text>
+                  <Text style={styles.lockedSectionSub}>Meeting point and navigation for volunteers</Text>
                 </View>
               </View>
               <Text style={styles.lockedMapAddress}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
@@ -5195,6 +5206,9 @@ const styles = StyleSheet.create({
   lockedEventListRows: { gap: 10, paddingTop: 6 },
   lockedMainStack: { width: "100%", flex: 0 },
   lockedEventShell: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, overflow: "hidden", width: "100%" },
+  lockedEventSummaryClick: { gap: 7, paddingVertical: 6, borderRadius: 8, minWidth: 0 },
+  lockedEventTapHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
+  lockedEventTapHintText: { fontSize: 11, color: "#087F75", fontWeight: "700", flexShrink: 1 },
   lockedListHeading: { flexWrap: "wrap" },
   lockedListControls: { flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" },
   lockedSortButton: { flexDirection: "row", alignItems: "center", backgroundColor: "white", borderWidth: 1, borderColor: "#DCE9E6", borderRadius: 10, paddingVertical: 7, paddingHorizontal: 11, gap: 8, minWidth: 155 },
