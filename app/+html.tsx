@@ -11,7 +11,9 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         <meta name="theme-color" content="#087E73" />
-        <link rel="manifest" href="/manifest.json" />
+        {/* Explicit fingerprinted favicon URL avoids persistent browser cache on old visits. */}
+        <link rel="icon" type="image/png" sizes="192x192" href="/volunserve-192.png?v=20261024b" />
+        <link rel="manifest" href="/manifest.json?v=20261024b" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <ScrollViewStyleReset />
       </head>
