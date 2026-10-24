@@ -5,6 +5,7 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -54,6 +55,18 @@ const navItems: NavItem[] = [
     icon: "albums-outline",
     route: "/(superadmin)/all-records",
     match: "/all-records",
+  },
+  {
+    label: "Donation Management",
+    icon: "heart-outline",
+    route: "/(superadmin)/donations",
+    match: "/donations",
+  },
+  {
+    label: "Donation Notifications",
+    icon: "notifications-outline",
+    route: "/(superadmin)/donation-notifications",
+    match: "/donation-notifications",
   },
   {
     label: "Audit Logs",
@@ -218,7 +231,10 @@ function SuperAdminSidebar({
       : pathname.endsWith(item.match);
 
   return (
-    <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
+    <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 60, left: -30, opacity: 0.13 }}>
+        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
+      </View>
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"
@@ -261,7 +277,7 @@ function SuperAdminSidebar({
                 <Ionicons
                   name={item.icon}
                   size={19}
-                  color={active ? "#FFFFFF" : "#60728A"}
+                  color={active ? "#FFFFFF" : "#D9F5ED"}
                 />
               </View>
               <Text style={[styles.navText, active && styles.navTextActive]} numberOfLines={2}>
@@ -285,7 +301,7 @@ function SuperAdminSidebar({
           <Text style={styles.signOutText}>Log Out</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -312,9 +328,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#07332F",
     borderRightWidth: 1,
-    borderRightColor: "#E1E8EF",
+    borderRightColor: "#13695E",
   },
   sidebarCompact: {
     width: 268,
@@ -342,13 +358,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   brandName: {
-    color: "#0F675F",
+    color: "#FFFFFF",
     fontSize: 20,
     fontWeight: "900",
   },
   brandTagline: {
     marginTop: 2,
-    color: "#718095",
+    color: "#B6E9DF",
     fontSize: 8.5,
     fontWeight: "800",
   },
@@ -357,7 +373,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 8,
     marginLeft: 27,
-    color: "#95A1B0",
+    color: "#A7DCD4",
     fontSize: 9,
     fontWeight: "900",
     letterSpacing: 1.1,
@@ -383,13 +399,13 @@ const styles = StyleSheet.create({
     gap: 11,
   },
   navItemActive: {
-    backgroundColor: "#EAF8F4",
+    backgroundColor: "#049C7B",
   },
   navIcon: {
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: "#F2F5F8",
+    backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -398,12 +414,12 @@ const styles = StyleSheet.create({
   },
   navText: {
     flex: 1,
-    color: "#52647B",
+    color: "#E6F5F2",
     fontSize: 12,
     fontWeight: "700",
   },
   navTextActive: {
-    color: "#076E66",
+    color: "#FFFFFF",
     fontWeight: "900",
   },
   activeIndicator: {
@@ -418,7 +434,7 @@ const styles = StyleSheet.create({
     paddingTop: 11,
     paddingBottom: 15,
     borderTopWidth: 1,
-    borderTopColor: "#E7EDF2",
+    borderTopColor: "rgba(255,255,255,0.18)",
   },
   logoutButton: {
     minHeight: 43,

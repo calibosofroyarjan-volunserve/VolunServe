@@ -103,6 +103,9 @@ type MyDonation = {
   donationType?: DonationType | string;
   amount?: number;
   status?: string;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  paymongoLivemode?: boolean;
   rejectionReason?: string;
   transactionReference?: string;
   proofUrls?: string[];
@@ -394,6 +397,8 @@ export default function Donation() {
   const [myDonations, setMyDonations] = useState<MyDonation[]>([]);
   const [campaignsReady, setCampaignsReady] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
+  const [returnedDonationId, setReturnedDonationId] = useState("");
+  const [returnedPaymentState, setReturnedPaymentState] = useState("");
   const [error, setError] = useState("");
 
   const [filter, setFilter] = useState<CampaignFilter>("all");
@@ -405,6 +410,7 @@ export default function Donation() {
   const pageScrollRef = React.useRef<ScrollView>(null);
   const donationType: DonationType = "monetary";
   const [amount, setAmount] = useState("");
+  const [donorNote, setDonorNote] = useState("");
   const [checkoutProgress, setCheckoutProgress] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -517,6 +523,9 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
+  const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
+  const returnIsConfirmed = returnedDonation?.status === "received" && returnedDonation?.paymentStatus === "paid";
+
   const disasterCount = useMemo(
     () => campaigns.filter((campaign) => campaignGroupOf(campaign) === "disaster_affected").length,
     [campaigns],
@@ -560,6 +569,7 @@ export default function Donation() {
 
   const resetDonationForm = () => {
     setAmount("");
+    setDonorNote("");
     setCheckoutProgress("");
   };
 
@@ -598,16 +608,11 @@ export default function Donation() {
     const params = new URLSearchParams(location.search);
     const paymentState = params.get("payment");
 
-    if (paymentState === "success") {
-      Alert.alert(
-        "Test Payment Submitted",
-        "PayMongo is confirming the sandbox payment. The campaign progress updates only after the signed webhook is received.",
-      );
-    } else if (paymentState === "cancelled") {
-      Alert.alert(
-        "Test Payment Cancelled",
-        "No donation was counted. You may start another test checkout anytime while the campaign is open.",
-      );
+    if (paymentState === "success" || paymentState === "cancelled") {
+      // A return URL only says checkout finished; it is NOT proof of payment.
+      setReturnedPaymentState(paymentState);
+      setReturnedDonationId(String(params.get("donationId") || ""));
+      setShowHistory(true);
     }
 
     if (paymentState && history?.replaceState) {
@@ -676,6 +681,7 @@ export default function Donation() {
         body: JSON.stringify({
           campaignId: selectedCampaign.id,
           amount: numericAmount,
+          donorNote: donorNote.trim().slice(0, 200),
           returnBaseUrl,
         }),
       });
@@ -754,9 +760,9 @@ export default function Donation() {
       <View style={[styles.webPageHeader, !medium && styles.mobilePageHeader, mobileDetailOpen && styles.mobileHidden]}>
         <View style={styles.webHeaderCopy}>
           <Text style={styles.webEyebrow}>VOLUNSERVE · LGU VERIFIED</Text>
-          <Text style={styles.webPageTitle}>Donation Campaigns</Text>
+          <Text style={styles.webPageTitle}>Donations</Text>
           <Text style={styles.webPageSubtitle}>
-            Support verified community and disaster needs.
+            Help build a stronger and safer community through verified campaigns.
           </Text>
         </View>
 
@@ -842,6 +848,37 @@ export default function Donation() {
           );
         })}
       </View>
+
+      {!!returnedPaymentState && (
+        <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
+          <Ionicons
+            name={returnedPaymentState === "cancelled" ? "close-circle" :
+              returnIsConfirmed ? "checkmark-circle" : "time-outline"}
+            size={23}
+            color={returnedPaymentState === "cancelled" ? "#AB5A09" : "#00856A"}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.webReturnTitle}>
+              {returnedPaymentState === "cancelled" ? "Test checkout cancelled" :
+                returnIsConfirmed ? "Donation confirmed — thank you!" : "Checking donation payment"}
+            </Text>
+            <Text style={styles.webReturnText}>
+              {returnedPaymentState === "cancelled"
+                ? "No payment was confirmed. You may choose another campaign."
+                : returnIsConfirmed
+                  ? "The PayMongo signed webhook verified this sandbox transaction. See My Donations for your receipt status."
+                  : "Payment is not counted yet. VolunServe is waiting for a verified PayMongo webhook; My Donations updates automatically."}
+            </Text>
+            <Text style={styles.webReturnText}>Sandbox/Test Mode · No real funds are transferred.</Text>
+          </View>
+          <TouchableOpacity accessibilityLabel="Dismiss payment status" onPress={() => {
+            setReturnedPaymentState("");
+            setReturnedDonationId("");
+          }}>
+            <Ionicons name="close" size={18} color="#587687" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!!error && (
         <View style={styles.errorBox}>
@@ -1072,8 +1109,20 @@ export default function Donation() {
                             value={amount}
                             onChangeText={(value) => setAmount(sanitizeMoneyInput(value))}
                             keyboardType="decimal-pad"
-                            placeholder="Other amount"
+                            placeholder="Enter custom donation amount"
                             placeholderTextColor="#94A3B8"
+                          />
+
+                          <Text style={styles.webFieldLabel}>Message (Optional)</Text>
+                          <TextInput
+                            style={styles.webNoteInput}
+                            value={donorNote}
+                            onChangeText={(value) => setDonorNote(value.slice(0, 200))}
+                            multiline
+                            numberOfLines={3}
+                            placeholder="Add a message of support…"
+                            placeholderTextColor="#94A3B8"
+                            accessibilityLabel="Optional message to campaign"
                           />
 
                           <View style={styles.webOfficialChannelCard}>
@@ -1223,7 +1272,7 @@ function CampaignCard({
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
           <View style={styles.viewCampaignButton}>
             <Text style={styles.viewCampaignText}>
-              {selected ? "Selected" : "View campaign"}
+              {selected ? "Selected" : "Donate Now"}
             </Text>
             <Ionicons
               name={selected ? "checkmark-circle" : "arrow-forward"}
@@ -3794,10 +3843,10 @@ const styles = StyleSheet.create({
   },
   webContainer: {
     width: "100%",
-    maxWidth: 1460,
+    maxWidth: 1660,
     alignSelf: "center",
-    paddingHorizontal: 22,
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingTop: 22,
     paddingBottom: 34,
   },
   webPageHeader: {
@@ -3905,8 +3954,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   webFilterChipActive: {
-    borderColor: "#5B4CF0",
-    backgroundColor: "#5B4CF0",
+    borderColor: "#009474",
+    backgroundColor: "#009474",
   },
   webFilterChipText: {
     color: "#475569",
@@ -3944,11 +3993,11 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   webCampaignPane: {
-    flex: 1.2,
+    flex: 1.45,
     minWidth: 0,
   },
   webDetailPane: {
-    flex: 0.8,
+    flex: 0.85,
     minWidth: 0,
   },
   webSectionHeaderRow: {
@@ -4170,7 +4219,7 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 13,
     borderRadius: 11,
-    backgroundColor: "#5B4CF0",
+    backgroundColor: "#009474",
   },
   webDonateButtonText: {
     color: "#FFFFFF",
@@ -4182,6 +4231,12 @@ const styles = StyleSheet.create({
     paddingTop: 13,
     borderTopWidth: 1,
     borderTopColor: "#E7ECEF",
+  },
+  webNoteInput: {
+    minHeight: 74, maxHeight: 130, textAlignVertical: "top",
+    padding: 11, borderRadius: 11, borderWidth: 1,
+    borderColor: "#DCE7E9", backgroundColor: "#F8FAFB",
+    fontSize: 12, color: "#162E41",
   },
   webDonatePanelHeader: {
     flexDirection: "row",
@@ -4325,6 +4380,14 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9.5,
   },
+  webReturnBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 12,
+    borderRadius: 13, padding: 14, marginBottom: 13,
+    backgroundColor: "#EAF9F2", borderWidth: 1, borderColor: "#C6EEDB",
+  },
+  webReturnCancelled: { backgroundColor: "#FFF8E9", borderColor: "#F2DEAF" },
+  webReturnTitle: { color: "#0E4C42", fontSize: 14, fontWeight: "900" },
+  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11 },
   webHistoryPanel: {
     padding: 16,
     borderWidth: 1,

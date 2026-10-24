@@ -294,7 +294,8 @@ export default function CommunityEventLiveLocation({
     );
   };
 
-  const activePoint = point && point.expiresAt?.toMillis?.() > now ? point : null;
+  const activeExpiry = point?.expiresAt?.toMillis?.() ?? 0;
+  const activePoint = point && activeExpiry > now ? point : null;
   if (!canView) return null;
 
   const map = activePoint && Platform.OS === "web"
