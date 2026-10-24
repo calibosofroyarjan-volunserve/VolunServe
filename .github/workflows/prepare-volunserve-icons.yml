@@ -1,0 +1,60 @@
+name: Prepare official VolunServe icon assets
+
+on:
+  push:
+    branches:
+      - fix/volunserve-legible-existing-icons
+    paths:
+      - scripts/generate_volunserve_icons.py
+      - .github/workflows/prepare-volunserve-icons.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-official-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Pillow
+        run: python -m pip install "Pillow>=10,<13"
+      - name: Generate all icons from existing assets/images/logo.png
+        run: python scripts/generate_volunserve_icons.py
+      - name: Confirm icon sizes and preserve source emblem
+        run: |
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          files = {
+            "assets/images/icon.png": (1024, 1024),
+            "assets/images/favicon.png": (96, 96),
+            "assets/images/android-icon-foreground.png": (1024, 1024),
+            "public/volunserve-192.png": (192, 192),
+            "public/volunserve-512.png": (512, 512),
+            "public/volunserve-maskable-512.png": (512, 512),
+            "public/apple-touch-icon.png": (180, 180),
+          }
+          for name, expected in files.items():
+              with Image.open(name) as image:
+                  assert image.size == expected, (name, image.size)
+          assert Path("assets/images/logo.png").is_file()
+          print("All icon sizes verified; original logo unchanged.")
+          PY
+      - name: Commit generated icon PNG and ICO assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/images/favicon.png assets/images/icon.png assets/images/android-icon-foreground.png assets/images/android-icon-monochrome.png assets/images/splash-icon.png
+          git add public/favicon.ico public/volunserve-192.png public/volunserve-512.png public/volunserve-maskable-512.png public/apple-touch-icon.png
+          if ! git diff --cached --quiet; then
+            git commit -m "assets(branding): enlarge existing official emblem for web and mobile icons"
+            git push
+          else
+            echo "Generated icons are already current."
+          fi
