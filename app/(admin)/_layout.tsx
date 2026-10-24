@@ -109,6 +109,12 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/community-attendance",
   },
   {
+    label: "Donations",
+    icon: "heart-outline",
+    route:
+      "/(admin)/donor-monitoring",
+  },
+  {
     label: "Relief Operations",
     icon: "cube-outline",
     route:

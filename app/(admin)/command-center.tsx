@@ -1007,6 +1007,22 @@ export default function CommandCenter() {
       },
       {
         icon:
+          "heart-outline",
+        iconColor:
+          "#078F82",
+        iconBackground:
+          "#E8F8F2",
+        title:
+          "Donations",
+        description:
+          "Monitor donor profiles, verified payment records, pending transactions, and campaign support.",
+        onPress: () =>
+          navigate(
+            "/(admin)/donor-monitoring",
+          ),
+      },
+      {
+        icon:
           "megaphone-outline",
         iconColor:
           "#D97706",
