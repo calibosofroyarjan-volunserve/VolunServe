@@ -1040,7 +1040,7 @@ export default function CommandCenter() {
         icon:
           "ribbon-outline",
         iconColor:
-          "#4F46E5",
+          "#078F82",
         iconBackground:
           "#EEF2FF",
         title:
@@ -1170,7 +1170,7 @@ export default function CommandCenter() {
       >
         <ActivityIndicator
           size="large"
-          color="#4F46E5"
+          color="#078F82"
         />
 
         <Text
@@ -1178,7 +1178,7 @@ export default function CommandCenter() {
             styles.loadingText
           }
         >
-          Loading LGU Command Center...
+          Loading Admin Command Center...
         </Text>
       </View>
     );
@@ -1247,7 +1247,7 @@ export default function CommandCenter() {
                 styles.title
               }
             >
-              LGU Command Center
+              Admin Command Center
             </Text>
 
             <Text
@@ -1255,7 +1255,7 @@ export default function CommandCenter() {
                 styles.subtitle
               }
             >
-              Central control for LGU emergency response, evacuation centers, relief resources, and optional volunteer support.
+              Manage emergency response, community activities, assistance requests, and volunteer operations in San Jose del Monte.
             </Text>
           </View>
 
@@ -2226,7 +2226,7 @@ function ModuleCard({
         <Ionicons
           name="arrow-forward"
           size={16}
-          color="#4F46E5"
+          color="#078F82"
         />
       </View>
     </TouchableOpacity>
@@ -2316,13 +2316,13 @@ const styles =
     screen: {
       flex: 1,
       backgroundColor:
-        "#F5F7FB",
+        "#F2F9FC",
     },
 
     page: {
       width: "100%",
       paddingHorizontal: 28,
-      paddingTop: 42,
+      paddingTop: 35,
       paddingBottom: 64,
     },
 
@@ -2364,7 +2364,7 @@ const styles =
     },
 
     title: {
-      color: "#0F172A",
+      color: "#0E2D4E",
       fontSize: 30,
       fontWeight: "900",
       letterSpacing: -0.5,
@@ -2494,7 +2494,7 @@ const styles =
         "#FFFFFF",
       borderWidth: 1,
       borderColor:
-        "#E2E8F0",
+        "#DCEAE8",
     },
 
     moduleTop: {
@@ -2557,7 +2557,7 @@ const styles =
     },
 
     openText: {
-      color: "#4F46E5",
+      color: "#078F82",
       fontSize: 12,
       fontWeight: "800",
     },
@@ -2580,7 +2580,7 @@ const styles =
         "#FFFFFF",
       borderWidth: 1,
       borderColor:
-        "#E2E8F0",
+        "#DCEAE8",
     },
 
     overviewIcon: {

@@ -19,6 +19,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -36,7 +37,7 @@ import {
 const WEB_PORTAL_URL =
   "https://volunserve-3aa5b.web.app";
 
-const SIDEBAR_WIDTH = 280;
+const SIDEBAR_WIDTH = 268;
 
 type NavItem = {
   label: string;
@@ -416,41 +417,19 @@ export default function AdminLayout() {
         styles.sidebar
       }
     >
-      <View
-        style={
-          styles.brand
-        }
-      >
-        <View
-          style={
-            styles.brandMark
-          }
-        >
-          <Ionicons
-            name="heart"
-            size={22}
-            color="#FFFFFF"
-          />
-        </View>
-
-        <View>
-          <Text
-            style={
-              styles.brandName
-            }
-          >
-            VolunServe
-          </Text>
-
-          <Text
-            style={
-              styles.brandTagline
-            }
-          >
-            People. Response. Community.
-          </Text>
+      <View style={styles.brand}>
+        <Image
+          source={require("../../assets/images/logo.png")}
+          resizeMode="cover"
+          style={styles.brandLogo}
+          accessibilityLabel="VolunServe logo"
+        />
+        <View style={styles.brandCopy}>
+          <Text style={styles.brandName}>VolunServe</Text>
+          <Text style={styles.brandTagline}>ADMIN MODE</Text>
         </View>
       </View>
+      <Text style={styles.sidebarSection}>MAIN MENU</Text>
 
       <ScrollView
         style={
@@ -459,18 +438,10 @@ export default function AdminLayout() {
         contentContainerStyle={
           styles.sidebarContent
         }
-        showsVerticalScrollIndicator={
-          false
-        }
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        accessibilityLabel="Admin main menu navigation"
       >
-        <Text
-          style={
-            styles.sidebarSection
-          }
-        >
-          ADMIN PORTAL
-        </Text>
-
         {NAV_ITEMS.map(
           (item) => {
             const active =
@@ -513,81 +484,34 @@ export default function AdminLayout() {
                   )
                 }
               >
-                <Ionicons
-                  name={
-                    item.icon
-                  }
-                  size={20}
-                  color={
-                    active
-                      ? "#FFFFFF"
-                      : "#B9C7DA"
-                  }
-                />
-
-                <Text
-                  style={[
-                    styles.navLabel,
-                    active &&
-                      styles.navLabelActive,
-                  ]}
-                >
+                <View style={[styles.navIcon, active && styles.navIconActive]}>
+                  <Ionicons
+                    name={item.icon}
+                    size={19}
+                    color={active ? "#FFFFFF" : "#60728A"}
+                  />
+                </View>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={2}>
                   {item.label}
                 </Text>
+                {active && <View style={styles.activeIndicator} />}
               </TouchableOpacity>
             );
           },
         )}
 
-        <View
-          style={
-            styles.divider
-          }
-        />
-
-        <TouchableOpacity
-          style={
-            styles.navItem
-          }
-          activeOpacity={
-            0.82
-          }
-          onPress={() =>
-            void signOut()
-          }
-        >
-          <Ionicons
-            name="log-out-outline"
-            size={20}
-            color="#D6DEEA"
-          />
-
-          <Text
-            style={[
-              styles.navLabel,
-              styles.signOutLabel,
-            ]}
-          >
-            Sign Out
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
-
-      <View
-        style={
-          styles.sidebarFooter
-        }
-      >
-        <Text
-          style={
-            styles.sidebarFooterText
-          }
+      <View style={styles.sidebarUtility}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          accessibilityRole="button"
+          accessibilityLabel="Log out of Admin account"
+          activeOpacity={0.82}
+          onPress={() => void signOut()}
         >
-          A SAFER{"\n"}
-          STRONGER{"\n"}
-          COMMUNITY{"\n"}
-          TOGETHER.
-        </Text>
+          <Ionicons name="log-out-outline" size={20} color="#D03647" />
+          <Text style={styles.signOutLabel}>Log Out</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -693,7 +617,7 @@ export default function AdminLayout() {
                 false,
               contentStyle: {
                 backgroundColor:
-                  "#F5F7FB",
+                  "#F2F9FC",
               },
             }}
           />
@@ -746,10 +670,8 @@ const styles =
   StyleSheet.create({
     shell: {
       flex: 1,
-      flexDirection:
-        "row",
-      backgroundColor:
-        "#F5F7FB",
+      flexDirection: "row",
+      backgroundColor: "#F2F9FC",
     },
 
     center: {
@@ -771,25 +693,25 @@ const styles =
     },
 
     sidebar: {
-      width:
-        SIDEBAR_WIDTH,
-      height:
-        "100%",
-      backgroundColor:
-        "#142A45",
+      width: SIDEBAR_WIDTH,
+      height: "100%",
+      minHeight: 0,
+      flexShrink: 0,
+      overflow: "hidden",
+      backgroundColor: "#FFFFFF",
+      borderRightWidth: 1,
+      borderRightColor: "#E1E8EF",
     },
 
     brand: {
-      minHeight:
-        92,
-      paddingHorizontal:
-        24,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap:
-        11,
+      minHeight: 91,
+      paddingTop: 20,
+      paddingBottom: 13,
+      paddingHorizontal: 22,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 11,
+      flexShrink: 0,
     },
 
     brandMark: {
@@ -807,91 +729,69 @@ const styles =
         "center",
     },
 
+    brandLogo: { width: 47, height: 47, borderRadius: 24, backgroundColor: "#E8F8F5" },
+    brandCopy: { flex: 1, minWidth: 0 },
     brandName: {
-      color:
-        "#FFFFFF",
-      fontSize:
-        21,
-      fontWeight:
-        "900",
+      color: "#0F675F",
+      fontSize: 20,
+      fontWeight: "900",
     },
 
     brandTagline: {
-      marginTop:
-        2,
-      color:
-        "#8FA7C3",
-      fontSize:
-        8.5,
-      fontWeight:
-        "600",
+      marginTop: 2,
+      color: "#718095",
+      fontSize: 8.5,
+      fontWeight: "800",
     },
 
     sidebarScroll: {
-      flex:
-        1,
+      flex: 1,
+      minHeight: 0,
+      marginHorizontal: 10,
     },
 
     sidebarContent: {
-      paddingHorizontal:
-        16,
-      paddingBottom:
-        24,
+      paddingHorizontal: 6,
+      paddingRight: 9,
+      paddingBottom: 18,
+      gap: 3,
     },
 
     sidebarSection: {
-      marginTop:
-        12,
-      marginBottom:
-        8,
-      paddingHorizontal:
-        11,
-      color:
-        "#718AA8",
-      fontSize:
-        10,
-      fontWeight:
-        "900",
-      letterSpacing:
-        1.2,
+      flexShrink: 0,
+      marginTop: 5,
+      marginBottom: 8,
+      marginLeft: 27,
+      color: "#95A1B0",
+      fontSize: 9,
+      fontWeight: "900",
+      letterSpacing: 1.1,
     },
 
     navItem: {
-      minHeight:
-        45,
-      marginBottom:
-        3,
-      paddingHorizontal:
-        12,
-      borderRadius:
-        10,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap:
-        11,
+      minHeight: 48,
+      marginBottom: 3,
+      paddingHorizontal: 9,
+      borderRadius: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 11,
     },
 
     navItemActive: {
-      backgroundColor:
-        "#5548B9",
+      backgroundColor: "#EAF8F4",
     },
 
     navLabel: {
-      color:
-        "#D6DEEA",
-      fontSize:
-        13,
-      fontWeight:
-        "700",
+      flex: 1,
+      color: "#52647B",
+      fontSize: 12,
+      fontWeight: "700",
     },
 
     navLabelActive: {
-      color:
-        "#FFFFFF",
-      fontWeight:
-        "900",
+      color: "#076E66",
+      fontWeight: "900",
     },
 
     divider: {
@@ -905,9 +805,15 @@ const styles =
         "#29415E",
     },
 
+    navIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#F2F5F8", alignItems: "center", justifyContent: "center" },
+    navIconActive: { backgroundColor: "#078F82" },
+    activeIndicator: { width: 4, height: 22, borderRadius: 3, backgroundColor: "#078F82" },
+    sidebarUtility: { flexShrink: 0, marginHorizontal: 17, paddingTop: 11, paddingBottom: 15, borderTopWidth: 1, borderTopColor: "#E7EDF2" },
+    logoutButton: { minHeight: 43, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
     signOutLabel: {
-      color:
-        "#F1F5F9",
+      color: "#C92537",
+      fontSize: 12,
+      fontWeight: "800",
     },
 
     sidebarFooter: {
@@ -931,12 +837,9 @@ const styles =
     },
 
     main: {
-      flex:
-        1,
-      minWidth:
-        0,
-      backgroundColor:
-        "#F5F7FB",
+      flex: 1,
+      minWidth: 0,
+      backgroundColor: "#F2F9FC",
     },
 
     topBar: {
@@ -992,18 +895,12 @@ const styles =
     },
 
     profileAvatar: {
-      width:
-        38,
-      height:
-        38,
-      borderRadius:
-        19,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#64748B",
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#078F82",
     },
 
     profileAvatarText: {
