@@ -478,6 +478,9 @@ function DesktopTabBar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 60, left: -30, opacity: 0.13 }}>
+        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
+      </View>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
