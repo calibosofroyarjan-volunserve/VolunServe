@@ -386,6 +386,11 @@ const campaignRaised = (campaign?: DonationCampaign) => {
   return Math.max(0, Number(value || 0));
 };
 
+const campaignFullyFunded = (campaign?: DonationCampaign) => {
+  const goal = campaignGoal(campaign);
+  return goal > 0 && campaignRaised(campaign) >= goal - 0.01;
+};
+
 export default function Donation() {
   const { width } = useWindowDimensions();
   const wide = width >= 1080;
@@ -406,6 +411,7 @@ export default function Donation() {
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCompletedCampaigns, setShowCompletedCampaigns] = useState(false);
   // Mobile: the detail page opens only after the user taps a campaign.
   const pageScrollRef = React.useRef<ScrollView>(null);
   const donationType: DonationType = "monetary";
@@ -523,6 +529,10 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
+  const completedCampaignCount = campaigns.filter(campaignFullyFunded).length;
+  const listedCampaigns = useMemo(() => showCompletedCampaigns
+    ? filteredCampaigns.filter(campaignFullyFunded)
+    : filteredCampaigns, [filteredCampaigns, showCompletedCampaigns]);
   const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
   const returnIsConfirmed = returnedDonation?.status === "received" && returnedDonation?.paymentStatus === "paid";
 
@@ -547,6 +557,7 @@ export default function Donation() {
   const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
 
   const selectedGoal = campaignGoal(selectedCampaign);
+  const selectedFunded = campaignFullyFunded(selectedCampaign);
   const selectedRaised = campaignRaised(selectedCampaign);
   const selectedPercent =
     selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
@@ -805,7 +816,34 @@ export default function Donation() {
         </View>
       </View>
 
-      <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
+      <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
+        {[
+          { key: "active", label: "Active Campaigns", count: campaigns.length },
+          { key: "history", label: "My Donations", count: myDonations.length },
+          { key: "completed", label: "Completed Campaigns", count: completedCampaignCount },
+        ].map(tab => {
+          const active = tab.key === "history" ? showHistory :
+            !showHistory && (tab.key === "completed" ? showCompletedCampaigns : !showCompletedCampaigns);
+          return <TouchableOpacity key={tab.key} accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[styles.webPrimaryTab, active && styles.webPrimaryTabActive]}
+            onPress={() => {
+              if (tab.key === "history") {
+                setShowHistory(true);
+              } else {
+                setShowHistory(false);
+                setShowCompletedCampaigns(tab.key === "completed");
+                setSelectedCampaignId("");
+                setShowDonationPanel(false);
+                resetDonationForm();
+              }
+            }}>
+            <Text style={[styles.webPrimaryTabText, active && styles.webPrimaryTabTextActive]}>{tab.label}</Text>
+            <Text style={[styles.webTabCount, active && styles.webTabCountActive]}>{tab.count}</Text>
+          </TouchableOpacity>;
+        })}
+      </View>
+      {!showHistory && <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
         {FILTER_OPTIONS.map((option) => {
           const active = filter === option.value;
           const count =
@@ -847,7 +885,7 @@ export default function Donation() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </View>}
 
       {!!returnedPaymentState && (
         <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
@@ -921,50 +959,71 @@ export default function Donation() {
         </View>
       ) : (
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden]}>
+          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden, !selectedCampaign && styles.webFullCampaignPane]}>
             <View style={styles.webSectionHeaderRow}>
               <View>
                 <Text style={styles.webSectionTitle}>Active Campaigns</Text>
                 <Text style={styles.webSectionSubtitle}>
-                  Choose a verified campaign to view details.
+                  Select an LGU-verified campaign to view its details and available support.
                 </Text>
               </View>
-              <Text style={styles.webCampaignCount}>{filteredCampaigns.length}</Text>
+              <Text style={styles.webCampaignCount}>{listedCampaigns.length}</Text>
             </View>
 
             {!campaignsReady ? (
               <View style={styles.emptyCard}>
                 <ActivityIndicator color="#0F766E" />
               </View>
-            ) : filteredCampaigns.length === 0 ? (
+            ) : listedCampaigns.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="search-outline" size={28} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>No matching campaigns</Text>
+                <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
+                <Text style={styles.emptyText}>Try another filter or check back for newly approved campaigns.</Text>
               </View>
             ) : (
-              <View style={styles.campaignGrid}>
-                {filteredCampaigns.map((campaign) => (
+              <View style={[styles.campaignGrid, !selectedCampaign && styles.campaignGridFull]}>
+                {listedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={campaign.id}
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
+                    fullGrid={!selectedCampaign}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
               </View>
             )}
+            {!selectedCampaign && campaignsReady ? (
+              <View style={styles.webHowItWorks}>
+                <Text style={styles.webHowItWorksTitle}>How donations work</Text>
+                <View style={styles.webHowSteps}>
+                  {[
+                    { icon: "shield-checkmark-outline" as const, title: "1. Choose a cause", body: "Browse LGU-verified campaigns and their confirmed funding progress." },
+                    { icon: "card-outline" as const, title: "2. Test checkout", body: "Enter a donation amount and use PayMongo Sandbox." },
+                    { icon: "receipt-outline" as const, title: "3. Track your support", body: "My Donations updates after backend confirmation." },
+                  ].map((step) => (
+                    <View key={step.title} style={styles.webHowStep}>
+                      <Ionicons name={step.icon} size={24} color="#009474" />
+                      <Text style={styles.webHowStepTitle}>{step.title}</Text>
+                      <Text style={styles.webHowStepBody}>{step.body}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={[styles.webDetailPane, !wide && styles.webPaneStacked, !medium && !selectedCampaign && styles.mobileHidden]}>
-            {!selectedCampaign ? (
-              <View style={styles.webDetailEmpty}>
-                <Ionicons name="heart-outline" size={34} color="#0F766E" />
-                <Text style={styles.webDetailEmptyTitle}>Select a campaign</Text>
-                <Text style={styles.webDetailEmptyText}>Campaign details will appear here.</Text>
-              </View>
-            ) : (
-              <View style={styles.webDetailCard}>
+          {selectedCampaign ? <View style={[styles.webDetailPane, !wide && styles.webPaneStacked]}>
+            <View style={styles.webDetailCard}>
+                <View style={styles.webDetailNavRow}>
+                  <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
+                    <Ionicons name="arrow-back" size={15} color="#087E69" />
+                    <Text style={styles.webBackToCampaignsText}>All campaigns</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.webDetailNavLabel}>Campaign Details</Text>
+                </View>
                 <PublicPhotoGallery
                   photos={selectedPhotoUrls}
                   title={selectedCampaign.title || "Donation Campaign"}
@@ -1054,7 +1113,15 @@ export default function Donation() {
                     </View>
                   </View>
 
-                  {!showDonationPanel ? (
+                  {selectedFunded ? (
+                    <View style={styles.webFundedNotice}>
+                      <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.webFundedTitle}>Funding goal reached</Text>
+                        <Text style={styles.webFundedText}>This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support.</Text>
+                      </View>
+                    </View>
+                  ) : !showDonationPanel ? (
                     <TouchableOpacity
                       style={styles.webDonateButton}
                       activeOpacity={0.88}
@@ -1067,6 +1134,16 @@ export default function Donation() {
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.webDonatePanel}>
+                      <View style={styles.webDonationStepper}>
+                        {["Amount", "Payment", "Confirmation"].map((step, index) => (
+                          <View key={step} style={styles.webStepperItem}>
+                            <View style={[styles.webStepperCircle, index === 0 && styles.webStepperCircleActive]}>
+                              <Text style={[styles.webStepperNumber, index === 0 && styles.webStepperNumberActive]}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.webStepperLabel}>{step}</Text>
+                          </View>
+                        ))}
+                      </View>
                       <View style={styles.webDonatePanelHeader}>
                         <Text style={styles.webDonatePanelTitle}>Make a Donation</Text>
                         <TouchableOpacity
@@ -1156,8 +1233,7 @@ export default function Donation() {
                   )}
                 </View>
               </View>
-            )}
-          </View>
+          </View> : null}
         </View>
       )}
     </ScrollView>
@@ -1198,11 +1274,13 @@ function CampaignCard({
   campaign,
   selected,
   wide,
+  fullGrid,
   onPress,
 }: {
   campaign: DonationCampaign;
   selected: boolean;
   wide: boolean;
+  fullGrid: boolean;
   onPress: () => void;
 }) {
   const photos = validPublicPhotoUrls(campaign);
@@ -1215,7 +1293,7 @@ function CampaignCard({
     <TouchableOpacity
       style={[
         styles.campaignCard,
-        wide && styles.campaignCardWide,
+        wide && (fullGrid ? styles.campaignCardFull : styles.campaignCardWide),
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
@@ -1270,16 +1348,15 @@ function CampaignCard({
 
         <View style={styles.cardFooter}>
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <View style={styles.viewCampaignButton}>
-            <Text style={styles.viewCampaignText}>
-              {selected ? "Selected" : "Donate Now"}
-            </Text>
-            <Ionicons
-              name={selected ? "checkmark-circle" : "arrow-forward"}
-              size={15}
-              color="#0F766E"
-            />
-          </View>
+          <Text style={campaignFullyFunded(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
+            {campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
+          </Text>
+        </View>
+        <View style={styles.cardPrimaryAction}>
+          <Text style={styles.cardPrimaryActionText}>
+            {selected ? "Viewing Details" : campaignFullyFunded(campaign) ? "View Completed Campaign" : "View Campaign"}
+          </Text>
+          <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
         </View>
       </View>
     </TouchableOpacity>
@@ -2180,13 +2257,14 @@ const styles = StyleSheet.create({
     width: "48.8%",
     minWidth: 255,
   },
+  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 480 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
   },
   campaignVisualWrap: {
     position: "relative",
-    height: 148,
+    height: 178,
     backgroundColor: "#DDE7E5",
   },
   campaignVisualImage: {
@@ -2242,7 +2320,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 12,
+    padding: 15,
   },
   badgeRow: {
     flexDirection: "row",
@@ -2282,10 +2360,10 @@ const styles = StyleSheet.create({
     color: "#7C3AED",
   },
   campaignTitle: {
-    marginTop: 8,
+    marginTop: 10,
     color: "#0F172A",
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "900",
   },
   locationLine: {
@@ -2359,6 +2437,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "capitalize",
   },
+  campaignStatusFunded: { color: "#8D5300", fontSize: 10, fontWeight: "900" },
+  campaignStatusActive: { color: "#087F67", fontSize: 10, fontWeight: "900" },
+  cardPrimaryAction: {
+    minHeight: 43, marginTop: 13, borderRadius: 9, backgroundColor: "#009775",
+    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9,
+  },
+  cardPrimaryActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   viewCampaignButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -3871,8 +3956,8 @@ const styles = StyleSheet.create({
   webPageTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 27,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 38,
     fontWeight: "900",
   },
   webPageSubtitle: {
@@ -3934,6 +4019,24 @@ const styles = StyleSheet.create({
   webHistoryButtonTextActive: {
     color: "#FFFFFF",
   },
+  webPrimaryTabs: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 10, marginTop: 18, marginBottom: 5,
+  },
+  webPrimaryTab: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingHorizontal: 17, minHeight: 42, borderWidth: 1,
+    borderColor: "#DCE8E9", borderRadius: 10, backgroundColor: "#FFFFFF",
+  },
+  webPrimaryTabActive: { borderColor: "#009879", backgroundColor: "#009879" },
+  webPrimaryTabText: { color: "#355267", fontSize: 12, fontWeight: "800" },
+  webPrimaryTabTextActive: { color: "#FFFFFF" },
+  webTabCount: {
+    paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden",
+    borderRadius: 99, backgroundColor: "#F0F5F6", color: "#64748B",
+    fontSize: 9.5, fontWeight: "900",
+  },
+  webTabCountActive: { backgroundColor: "rgba(255,255,255,0.22)", color: "#FFFFFF" },
   webFilterBar: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -3996,6 +4099,8 @@ const styles = StyleSheet.create({
     flex: 1.45,
     minWidth: 0,
   },
+  webFullCampaignPane: { flex: 1 },
+  campaignGridFull: { width: "100%", gap: 16 },
   webDetailPane: {
     flex: 0.85,
     minWidth: 0,
@@ -4014,8 +4119,8 @@ const styles = StyleSheet.create({
   webSectionSubtitle: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 9.5,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 16,
   },
   webCampaignCount: {
     minWidth: 30,
@@ -4029,6 +4134,27 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
+  webHowItWorks: {
+    marginTop: 23, padding: 20, borderRadius: 16, backgroundColor: "#FFFFFF",
+    borderColor: "#DFEAEB", borderWidth: 1,
+  },
+  webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
+  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 13 },
+  webHowStep: {
+    flexGrow: 1, flexBasis: 230, padding: 15, borderRadius: 12,
+    backgroundColor: "#F3F9F8", minWidth: 190, gap: 7,
+  },
+  webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
+  webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
+  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.5 },
+  webDetailNavRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingVertical: 12, paddingHorizontal: 15, gap: 10,
+    borderBottomWidth: 1, borderColor: "#ECF1F2",
+  },
+  webBackToCampaigns: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
+  webBackToCampaignsText: { color: "#087E69", fontSize: 11, fontWeight: "900" },
+  webDetailNavLabel: { color: "#77909D", fontSize: 10.5, fontWeight: "800" },
   webDetailCard: {
     overflow: "hidden",
     borderWidth: 1,
@@ -4226,6 +4352,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
+  webFundedNotice: {
+    marginTop: 14, padding: 15, flexDirection: "row", alignItems: "flex-start",
+    gap: 10, borderRadius: 11, backgroundColor: "#EAF9F0",
+    borderWidth: 1, borderColor: "#C8EBDC",
+  },
+  webFundedTitle: { fontSize: 12.5, fontWeight: "900", color: "#067554" },
+  webFundedText: { fontSize: 10.5, lineHeight: 16, color: "#3D7769", marginTop: 3 },
+  webDonationStepper: { flexDirection: "row", justifyContent: "space-between", gap: 7, marginBottom: 15 },
+  webStepperItem: { flex: 1, justifyContent: "center", alignItems: "center", gap: 6 },
+  webStepperCircle: {
+    width: 28, height: 28, borderRadius: 15,
+    alignItems: "center", justifyContent: "center", backgroundColor: "#E3E9EE",
+  },
+  webStepperCircleActive: { backgroundColor: "#009879" },
+  webStepperNumber: { color: "#64748B", fontSize: 12, fontWeight: "900" },
+  webStepperNumberActive: { color: "#FFFFFF" },
+  webStepperLabel: { color: "#677E90", fontSize: 10, fontWeight: "800" },
   webDonatePanel: {
     marginTop: 13,
     paddingTop: 13,
@@ -4246,7 +4389,7 @@ const styles = StyleSheet.create({
   },
   webDonatePanelTitle: {
     color: "#0F172A",
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: "900",
   },
   webCloseButton: {
@@ -4314,8 +4457,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   webAmountButtonActive: {
-    borderColor: "#5B4CF0",
-    backgroundColor: "#5B4CF0",
+    borderColor: "#009879",
+    backgroundColor: "#009879",
   },
   webAmountButtonText: {
     color: "#334155",
