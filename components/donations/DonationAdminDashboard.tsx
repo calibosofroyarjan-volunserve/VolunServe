@@ -84,7 +84,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const { user, profile, loading } = useUserSession();
   const allowed = !!user && !!profile && isApprovedProfile(profile) && profile.role === mode;
   const { width } = useWindowDimensions();
-  const compact = width < 1190;
+  const compact = width < 1450;
   const [records, setRecords] = useState<DonationRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
