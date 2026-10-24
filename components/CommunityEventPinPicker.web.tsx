@@ -201,9 +201,9 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
         ref:mapContainer,
         role:"application",
         "aria-label":"Google Maps venue pin picker. Click a location to select an event pin.",
-        style:{width:"100%",height:"285px",display:mapMode==="google"?"block":"none"}
+        style:{width:"100%",height:"285px",display:mapMode==="preview"?"none":"block"}
       }) : null}
-      {mapMode!=="google" ? React.createElement("iframe" as any,{
+      {mapMode==="preview" ? React.createElement("iframe" as any,{
         src:googlePreview(previewPoint.latitude,previewPoint.longitude),
         title:"Google Maps event location preview",
         loading:"lazy",
@@ -211,6 +211,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
         style:{display:"block",border:"0",width:"100%",height:"285px"}
       }) : null}
     </View>
+    {mapMode === "loading" ? <Text style={{fontSize:12,color:"#526C76",marginTop:7}}>Loading Google Maps...</Text> : null}
     {mapMode === "google" ?
       <Text style={{fontSize:11,color:"#0A7567",marginTop:7}}>Google Maps interactive: click or drag the pin, then Confirm Event Pin.</Text> :
       <Text style={{fontSize:11,color:"#57737D",marginTop:7}}>Google Maps preview. For clickable pin selection inside VolunServe, configure a Google Maps JavaScript API key. GPS or coordinates work without it.</Text>}
