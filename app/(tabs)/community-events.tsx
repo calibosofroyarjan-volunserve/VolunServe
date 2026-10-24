@@ -2124,14 +2124,39 @@ export default function CommunityEventsScreen() {
         </View>
         {detailsOpen && (
           <View style={styles.lockedInlineDetails}>
-            <View style={styles.lockedSectionHeading}>
-              <Ionicons name="information-circle-outline" size={19} color="#07877A" />
-              <Text style={styles.lockedInlineTitle}>About {event.title}</Text>
+            <View style={styles.volunteerDetailHeader}>
+              <View style={styles.lockedSectionHeading}>
+                <Ionicons name="information-circle-outline" size={19} color="#07877A" />
+                <Text style={styles.lockedInlineTitle}>Event Details</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={"Close details for " + event.title}
+                onPress={toggleDetails} style={styles.volunteerDetailClose}>
+                <Text style={styles.volunteerDetailCloseText}>Close</Text>
+                <Ionicons name="close-outline" size={17} color="#647E87" />
+              </Pressable>
             </View>
-            <Text style={styles.lockedAboutText}>
-              {event.description?.trim() || "No additional description was provided for this event."}
-            </Text>
-            <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
+            <View style={styles.volunteerOverviewBox}>
+              <Text style={styles.volunteerOverviewLabel}>ABOUT THE EVENT</Text>
+              <Text style={styles.lockedAboutText}>
+                {event.description?.trim() || "No additional description was provided for this event."}
+              </Text>
+              <View style={styles.volunteerEventFacts}>
+                <View style={styles.volunteerEventFact}>
+                  <Ionicons name="calendar-outline" size={19} color="#088277" />
+                  <View style={styles.volunteerEventFactText}>
+                    <Text style={styles.volunteerEventFactCaption}>DATE & TIME</Text>
+                    <Text style={styles.volunteerEventFactValue}>{eventScheduleLabel(event)}</Text>
+                  </View>
+                </View>
+                <View style={styles.volunteerEventFact}>
+                  <Ionicons name="location-outline" size={19} color="#088277" />
+                  <View style={styles.volunteerEventFactText}>
+                    <Text style={styles.volunteerEventFactCaption}>EVENT MEETING PLACE</Text>
+                    <Text style={styles.volunteerEventFactValue}>{event.location}{event.barangay ? ", " + event.barangay : ""}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
             {isVolunteer && owned && <View style={styles.webOwnershipNotice}>
               <Ionicons name="information-circle-outline" size={19} color="#0B7C70" />
               <Text style={styles.webOwnershipText}>You proposed this event. You cannot join it as a volunteer.</Text>
@@ -5216,6 +5241,17 @@ const styles = StyleSheet.create({
   lockedSortValue: { fontSize: 11, color: "#113A4B", fontWeight: "900" },
   lockedInlineDetails: { marginHorizontal: 11, marginBottom: 11, borderTopWidth: 1, borderColor: "#E2ECEA", paddingTop: 12, gap: 9 },
   lockedInlineTitle: { color: "#123248", fontSize: 13, fontWeight: "900", flexShrink: 1 },
+  volunteerDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 5 },
+  volunteerDetailClose: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EDF5F3", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  volunteerDetailCloseText: { color: "#58757C", fontSize: 11, fontWeight: "800" },
+  volunteerOverviewBox: { backgroundColor: "#FFFFFF", borderColor: "#E0ECE8", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 },
+  volunteerOverviewLabel: { color: "#0A8478", fontSize: 10, letterSpacing: 0.5, fontWeight: "900" },
+  volunteerEventFacts: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 3 },
+  volunteerEventFact: { flexGrow: 1, flexBasis: 205, flexDirection: "row", gap: 9, alignItems: "flex-start", minWidth: 0, borderRadius: 10, padding: 12, backgroundColor: "#F1F9F6" },
+  volunteerEventFactText: { flex: 1, minWidth: 0, gap: 4 },
+  volunteerEventFactCaption: { fontSize: 9, fontWeight: "900", color: "#788C99", letterSpacing: 0.4 },
+  volunteerEventFactValue: { fontSize: 12, fontWeight: "700", lineHeight: 18, color: "#264655" },
+
   lockedLoadMoreRow: { flexDirection: "row", justifyContent: "center", marginTop: 5 },
   lockedLoadMoreButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 11, backgroundColor: "#E7F7F2", borderWidth: 1, borderColor: "#CBE8E0" },
   lockedLoadMoreText: { fontSize: 12, fontWeight: "800", color: "#087B71" },
