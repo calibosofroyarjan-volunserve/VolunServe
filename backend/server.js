@@ -10123,7 +10123,7 @@ app.post(
         donationType: "monetary",
         amount,
         transactionReference: "",
-        donorNote: "",
+        donorNote: cleanText(request.body?.donorNote || "", 200),
         proofUrls: [],
         status: "payment_creating",
         actualAmountReceived: 0,
