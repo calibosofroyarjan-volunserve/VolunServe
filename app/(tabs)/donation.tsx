@@ -103,6 +103,9 @@ type MyDonation = {
   donationType?: DonationType | string;
   amount?: number;
   status?: string;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  paymongoLivemode?: boolean;
   rejectionReason?: string;
   transactionReference?: string;
   proofUrls?: string[];
@@ -394,6 +397,8 @@ export default function Donation() {
   const [myDonations, setMyDonations] = useState<MyDonation[]>([]);
   const [campaignsReady, setCampaignsReady] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
+  const [returnedDonationId, setReturnedDonationId] = useState("");
+  const [returnedPaymentState, setReturnedPaymentState] = useState("");
   const [error, setError] = useState("");
 
   const [filter, setFilter] = useState<CampaignFilter>("all");
@@ -518,6 +523,9 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
+  const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
+  const returnIsConfirmed = returnedDonation?.status === "received" && returnedDonation?.paymentStatus === "paid";
+
   const disasterCount = useMemo(
     () => campaigns.filter((campaign) => campaignGroupOf(campaign) === "disaster_affected").length,
     [campaigns],
@@ -600,16 +608,11 @@ export default function Donation() {
     const params = new URLSearchParams(location.search);
     const paymentState = params.get("payment");
 
-    if (paymentState === "success") {
-      Alert.alert(
-        "Test Payment Submitted",
-        "PayMongo is confirming the sandbox payment. The campaign progress updates only after the signed webhook is received.",
-      );
-    } else if (paymentState === "cancelled") {
-      Alert.alert(
-        "Test Payment Cancelled",
-        "No donation was counted. You may start another test checkout anytime while the campaign is open.",
-      );
+    if (paymentState === "success" || paymentState === "cancelled") {
+      // A return URL only says checkout finished; it is NOT proof of payment.
+      setReturnedPaymentState(paymentState);
+      setReturnedDonationId(String(params.get("donationId") || ""));
+      setShowHistory(true);
     }
 
     if (paymentState && history?.replaceState) {
@@ -845,6 +848,37 @@ export default function Donation() {
           );
         })}
       </View>
+
+      {!!returnedPaymentState && (
+        <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
+          <Ionicons
+            name={returnedPaymentState === "cancelled" ? "close-circle" :
+              returnIsConfirmed ? "checkmark-circle" : "time-outline"}
+            size={23}
+            color={returnedPaymentState === "cancelled" ? "#AB5A09" : "#00856A"}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.webReturnTitle}>
+              {returnedPaymentState === "cancelled" ? "Test checkout cancelled" :
+                returnIsConfirmed ? "Donation confirmed — thank you!" : "Checking donation payment"}
+            </Text>
+            <Text style={styles.webReturnText}>
+              {returnedPaymentState === "cancelled"
+                ? "No payment was confirmed. You may choose another campaign."
+                : returnIsConfirmed
+                  ? "The PayMongo signed webhook verified this sandbox transaction. See My Donations for your receipt status."
+                  : "Payment is not counted yet. VolunServe is waiting for a verified PayMongo webhook; My Donations updates automatically."}
+            </Text>
+            <Text style={styles.webReturnText}>Sandbox/Test Mode · No real funds are transferred.</Text>
+          </View>
+          <TouchableOpacity accessibilityLabel="Dismiss payment status" onPress={() => {
+            setReturnedPaymentState("");
+            setReturnedDonationId("");
+          }}>
+            <Ionicons name="close" size={18} color="#587687" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!!error && (
         <View style={styles.errorBox}>
@@ -4346,6 +4380,14 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9.5,
   },
+  webReturnBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 12,
+    borderRadius: 13, padding: 14, marginBottom: 13,
+    backgroundColor: "#EAF9F2", borderWidth: 1, borderColor: "#C6EEDB",
+  },
+  webReturnCancelled: { backgroundColor: "#FFF8E9", borderColor: "#F2DEAF" },
+  webReturnTitle: { color: "#0E4C42", fontSize: 14, fontWeight: "900" },
+  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11 },
   webHistoryPanel: {
     padding: 16,
     borderWidth: 1,
