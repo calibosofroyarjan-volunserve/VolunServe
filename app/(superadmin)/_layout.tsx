@@ -13,6 +13,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,8 +24,6 @@ import {
 import {
   isApprovedProfile,
   logoutUser,
-  setActiveUserMode,
-  type UserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -78,7 +77,7 @@ export default function SuperAdminLayout() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#5B4BDB" />
+        <ActivityIndicator size="large" color="#078F82" />
         <Text style={styles.loadingText}>Checking Super Admin access...</Text>
       </View>
     );
@@ -115,19 +114,6 @@ export default function SuperAdminLayout() {
     ? nameParts.map((part) => part[0]?.toUpperCase()).join("")
     : "SA";
 
-  const switchToMode = async (mode: UserMode) => {
-    try {
-      await setActiveUserMode(mode);
-      setDrawerOpen(false);
-      router.replace("/(tabs)");
-    } catch (error: any) {
-      Alert.alert(
-        "Unable to switch mode",
-        error?.message || "Please try again."
-      );
-    }
-  };
-
   const signOut = async () => {
     try {
       setDrawerOpen(false);
@@ -146,8 +132,6 @@ export default function SuperAdminLayout() {
       {desktop ? (
         <SuperAdminSidebar
           onNavigate={(route) => router.push(route as any)}
-          onResident={() => switchToMode("resident")}
-          onVolunteer={() => switchToMode("volunteer")}
           onSignOut={signOut}
         />
       ) : (
@@ -169,8 +153,6 @@ export default function SuperAdminLayout() {
                 setDrawerOpen(false);
                 router.push(route as any);
               }}
-              onResident={() => switchToMode("resident")}
-              onVolunteer={() => switchToMode("volunteer")}
               onSignOut={signOut}
             />
           </View>
@@ -210,7 +192,7 @@ export default function SuperAdminLayout() {
             screenOptions={{
               headerShown: false,
               contentStyle: {
-                backgroundColor: "#F7F9FC",
+                backgroundColor: "#F2F9FC",
               },
             }}
           />
@@ -222,125 +204,87 @@ export default function SuperAdminLayout() {
 
 function SuperAdminSidebar({
   onNavigate,
-  onResident,
-  onVolunteer,
   onSignOut,
   compact = false,
 }: {
   onNavigate: (route: string) => void;
-  onResident: () => void;
-  onVolunteer: () => void;
   onSignOut: () => void;
   compact?: boolean;
 }) {
   const pathname = usePathname();
-
-  const isActive = (item: NavItem) => {
-    if (item.match === "/") {
-      return (
-        pathname === "/" ||
-        pathname === "/(superadmin)" ||
-        pathname === "/superadmin"
-      );
-    }
-
-    return pathname.endsWith(item.match);
-  };
+  const isActive = (item: NavItem) =>
+    item.match === "/"
+      ? pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin"
+      : pathname.endsWith(item.match);
 
   return (
     <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <TouchableOpacity
+        style={styles.brand}
+        accessibilityRole="button"
+        accessibilityLabel="Super Admin dashboard"
+        activeOpacity={0.85}
+        onPress={() => onNavigate("/(superadmin)")}
+      >
+        <Image
+          source={require("../../assets/images/logo.png")}
+          style={styles.brandLogo}
+          resizeMode="cover"
+          accessibilityLabel="VolunServe logo"
+        />
+        <View style={styles.brandCopy}>
+          <Text style={styles.brandName}>VolunServe</Text>
+          <Text style={styles.brandTagline}>SUPER ADMIN MODE</Text>
+        </View>
+      </TouchableOpacity>
+      <Text style={styles.sidebarLabel}>MAIN MENU</Text>
+
       <ScrollView
         style={styles.sidebarScroll}
         contentContainerStyle={styles.sidebarContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        accessibilityLabel="Super Admin navigation menu"
       >
-        <TouchableOpacity
-          style={styles.brand}
-          activeOpacity={0.82}
-          onPress={() => onNavigate("/(superadmin)")}
-        >
-          <View style={styles.brandMark}>
-            <Ionicons name="heart" size={20} color="#FFFFFF" />
-          </View>
-
-          <View>
-            <Text style={styles.brandName}>VolunServe</Text>
-            <Text style={styles.brandTagline}>People. Response. Community.</Text>
-          </View>
-        </TouchableOpacity>
-
-        <Text style={styles.sidebarLabel}>SUPER ADMIN</Text>
-
-        <View style={styles.navGroup}>
-          {navItems.map((item) => {
-            const active = isActive(item);
-
-            return (
-              <TouchableOpacity
-                key={item.route}
-                style={[styles.navItem, active && styles.navItemActive]}
-                activeOpacity={0.82}
-                onPress={() => onNavigate(item.route)}
-              >
+        {navItems.map((item) => {
+          const active = isActive(item);
+          return (
+            <TouchableOpacity
+              key={item.route}
+              style={[styles.navItem, active && styles.navItemActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              activeOpacity={0.82}
+              onPress={() => onNavigate(item.route)}
+            >
+              <View style={[styles.navIcon, active && styles.navIconActive]}>
                 <Ionicons
                   name={item.icon}
-                  size={21}
-                  color={active ? "#FFFFFF" : "#BDD0EA"}
+                  size={19}
+                  color={active ? "#FFFFFF" : "#60728A"}
                 />
-                <Text
-                  style={[
-                    styles.navText,
-                    active && styles.navTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+              </View>
+              <Text style={[styles.navText, active && styles.navTextActive]} numberOfLines={2}>
+                {item.label}
+              </Text>
+              {active && <View style={styles.activeIndicator} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-        <View style={styles.sidebarDivider} />
-
-        <Text style={styles.sidebarLabel}>SWITCH MODE</Text>
-
+      <View style={styles.sidebarUtility}>
         <TouchableOpacity
-          style={styles.modeItem}
-          activeOpacity={0.82}
-          onPress={onResident}
-        >
-          <Ionicons name="person-outline" size={21} color="#BDD0EA" />
-          <Text style={styles.navText}>Use as Resident</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.modeItem}
-          activeOpacity={0.82}
-          onPress={onVolunteer}
-        >
-          <Ionicons name="people-outline" size={21} color="#BDD0EA" />
-          <Text style={styles.navText}>Use as Volunteer</Text>
-        </TouchableOpacity>
-
-        <View style={styles.sidebarDivider} />
-
-        <TouchableOpacity
-          style={styles.modeItem}
+          style={styles.logoutButton}
+          accessibilityRole="button"
+          accessibilityLabel="Log out of Super Admin account"
           activeOpacity={0.82}
           onPress={onSignOut}
         >
-          <Ionicons name="log-out-outline" size={22} color="#E7EEF9" />
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <Ionicons name="log-out-outline" size={20} color="#D03647" />
+          <Text style={styles.signOutText}>Log Out</Text>
         </TouchableOpacity>
-      </ScrollView>
-
-      {!compact ? (
-        <View style={styles.sidebarFooter}>
-          <Text style={styles.footerText}>
-            A SAFER{`\n`}STRONGER{`\n`}COMMUNITY{`\n`}TOGETHER.
-          </Text>
-        </View>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -349,164 +293,162 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#F2F9FC",
   },
-
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#F2F9FC",
   },
-
   loadingText: {
     marginTop: 10,
     color: "#64748B",
     fontWeight: "600",
   },
-
   sidebar: {
-    width: 280,
-    backgroundColor: "#14243D",
+    width: 268,
+    height: "100%",
+    minHeight: 0,
+    flexShrink: 0,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
     borderRightWidth: 1,
-    borderRightColor: "#203653",
+    borderRightColor: "#E1E8EF",
   },
-
   sidebarCompact: {
-    width: 280,
+    width: 268,
     maxWidth: "86%",
     height: "100%",
   },
-
-  sidebarScroll: {
-    flex: 1,
-  },
-
-  sidebarContent: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 26,
-  },
-
   brand: {
+    minHeight: 91,
+    paddingTop: 20,
+    paddingBottom: 13,
+    paddingHorizontal: 22,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 30,
+    flexShrink: 0,
   },
-
-  brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#5B4BDB",
+  brandLogo: {
+    width: 47,
+    height: 47,
+    borderRadius: 24,
+    backgroundColor: "#E8F8F5",
   },
-
-  brandName: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-  },
-
-  brandTagline: {
-    color: "#8FA6C5",
-    fontSize: 10,
-    marginTop: 1,
-  },
-
-  sidebarLabel: {
-    color: "#7890B1",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.05,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-
-  navGroup: {
-    gap: 5,
-  },
-
-  navItem: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-  },
-
-  navItemActive: {
-    backgroundColor: "#49439B",
-  },
-
-  navText: {
-    color: "#D8E4F3",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-
-  navTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-
-  modeItem: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-  },
-
-  sidebarDivider: {
-    height: 1,
-    backgroundColor: "#304563",
-    marginHorizontal: 10,
-    marginVertical: 20,
-  },
-
-  signOutText: {
-    color: "#F1F5F9",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  sidebarFooter: {
-    paddingHorizontal: 32,
-    paddingBottom: 26,
-  },
-
-  footerText: {
-    color: "#7890B1",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    letterSpacing: 1.4,
-  },
-
-  workspace: {
+  brandCopy: {
     flex: 1,
     minWidth: 0,
   },
-
+  brandName: {
+    color: "#0F675F",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  brandTagline: {
+    marginTop: 2,
+    color: "#718095",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+  sidebarLabel: {
+    flexShrink: 0,
+    marginTop: 5,
+    marginBottom: 8,
+    marginLeft: 27,
+    color: "#95A1B0",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  sidebarScroll: {
+    flex: 1,
+    minHeight: 0,
+    marginHorizontal: 10,
+  },
+  sidebarContent: {
+    paddingHorizontal: 6,
+    paddingRight: 9,
+    paddingBottom: 18,
+    gap: 3,
+  },
+  navItem: {
+    minHeight: 48,
+    marginBottom: 3,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+  },
+  navItemActive: {
+    backgroundColor: "#EAF8F4",
+  },
+  navIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: "#F2F5F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navIconActive: {
+    backgroundColor: "#078F82",
+  },
+  navText: {
+    flex: 1,
+    color: "#52647B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  navTextActive: {
+    color: "#076E66",
+    fontWeight: "900",
+  },
+  activeIndicator: {
+    width: 4,
+    height: 22,
+    borderRadius: 3,
+    backgroundColor: "#078F82",
+  },
+  sidebarUtility: {
+    flexShrink: 0,
+    marginHorizontal: 17,
+    paddingTop: 11,
+    paddingBottom: 15,
+    borderTopWidth: 1,
+    borderTopColor: "#E7EDF2",
+  },
+  logoutButton: {
+    minHeight: 43,
+    borderRadius: 11,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    paddingHorizontal: 11,
+  },
+  signOutText: {
+    color: "#C92537",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  workspace: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: "#F2F9FC",
+  },
   topbar: {
-    height: 76,
+    minHeight: 65,
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5EAF1",
   },
-
   menuButton: {
     width: 42,
     height: 42,
@@ -517,52 +459,46 @@ const styles = StyleSheet.create({
     borderColor: "#E3E8F0",
     backgroundColor: "#FFFFFF",
   },
-
   accountArea: {
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
     maxWidth: 280,
   },
-
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#697696",
+    backgroundColor: "#078F82",
   },
-
   avatarText: {
     color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  accountCopy: {
+    maxWidth: 220,
+    minWidth: 0,
+  },
+  accountName: {
+    color: "#0F172A",
     fontSize: 13,
     fontWeight: "900",
   },
-
-  accountCopy: {
-    maxWidth: 220,
-  },
-
-  accountName: {
-    color: "#17213A",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
   accountRole: {
-    color: "#718096",
-    fontSize: 12,
+    color: "#64748B",
+    fontSize: 10.5,
     marginTop: 2,
   },
-
   contentArea: {
     flex: 1,
+    minHeight: 0,
   },
-
   drawerOverlay: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
   },
 });
