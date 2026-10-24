@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
-import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Image, Pressable, ScrollView, StyleSheet,
@@ -78,7 +78,9 @@ function SmallButton({ text, onPress, primary = false }: {
   </Pressable>;
 }
 
-export default function DonationAdminDashboard({ mode }: { mode: "admin" | "superadmin" }) {
+export default function DonationAdminDashboard({ mode, initialView = "overview" }: {
+  mode: "admin" | "superadmin"; initialView?: Section;
+}) {
   const { user, profile, loading } = useUserSession();
   const allowed = !!user && !!profile && isApprovedProfile(profile) && profile.role === mode;
   const { width } = useWindowDimensions();
@@ -87,7 +89,8 @@ export default function DonationAdminDashboard({ mode }: { mode: "admin" | "supe
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
   const [problem, setProblem] = useState("");
-  const [view, setView] = useState<Section>("overview");
+  const [view, setView] = useState<Section>(initialView);
+  const [alerts, setAlerts] = useState<{id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any}[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
@@ -110,6 +113,14 @@ export default function DonationAdminDashboard({ mode }: { mode: "admin" | "supe
     ];
     return () => unsubs.forEach(stop => stop());
   }, [allowed]);
+
+  useEffect(() => {
+    if (!allowed || !user?.uid) return;
+    return onSnapshot(query(collection(db, "notifications"), where("userId", "==", user.uid)),
+      snapshot => setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id }))
+        .filter(a => (a as any).type === "donation_received")
+        .sort((a, b) => millis(b.createdAt) - millis(a.createdAt))), () => {});
+  }, [allowed, user?.uid]);
 
   const selected = records.find(r => r.id === selectedId) || null;
   useEffect(() => {
@@ -135,6 +146,7 @@ export default function DonationAdminDashboard({ mode }: { mode: "admin" | "supe
   const pending = records.filter(r => ["payment_creating", "payment_pending", "submitted"].includes(r.status || "")).length;
   const activeCampaigns = campaigns.filter(c => c.status === "published");
   const recent = paid.slice(0, 5);
+  const unreadCount = alerts.filter(a => !a.read).length;
   const filtered = useMemo(() => records.filter(r => {
     const term = search.trim().toLowerCase();
     const match = !term || [donorLabel(r), r.campaignTitle, r.id, r.transactionReference]
@@ -207,7 +219,7 @@ export default function DonationAdminDashboard({ mode }: { mode: "admin" | "supe
     <View style={s.tabs}>
       {([
         ["overview", "Overview"], ["all", "All Donations"], ["campaigns", "Campaigns"],
-        ["payouts", "Payout & Fund Tracking"], ["notifications", "Activity"],
+        ["payouts", "Payout & Fund Tracking"], ["notifications", "Notifications" + (unreadCount ? " (" + unreadCount + ")" : "")],
       ] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab"
         accessibilityState={{ selected: view === key }} onPress={() => setView(key)}
         style={[s.tab, view === key && s.tabActive]}>
@@ -218,15 +230,20 @@ export default function DonationAdminDashboard({ mode }: { mode: "admin" | "supe
       <Text style={s.noticeText}>Verified payment is not equivalent to settlement or release. No bank settlement is inferred from PayMongo Sandbox records. Confirm settlement and distributions using official supporting documents.</Text>
     </View>}
     {view === "notifications" ? <View style={s.panel}>
-      <Text style={s.panelTitle}>Recent Confirmed Donations · Live Activity</Text>
-      <Text style={s.info}>This feed updates in real time for authorized Admin and Super Admin accounts.</Text>
-      {(paid.length ? paid.slice(0, 20) : []).map(r => <Pressable
-        key={r.id} style={s.activity} onPress={() => { setSelectedId(r.id); setView("all"); }}>
-        <Ionicons name="notifications-outline" size={20} color="#009776"/>
-        <View style={s.flex}><Text style={s.tableMain}>{donorLabel(r)} · {peso(amountReceived(r))}</Text>
-        <Text style={s.tableSecondary}>{r.campaignTitle || "Campaign"} · {dateText(r.paidAt || r.createdAt)}</Text></View>
-      </Pressable>)}
-      {!paid.length && <Text style={s.info}>No confirmed donations yet.</Text>}
+      <Text style={s.panelTitle}>Admin Donation Notifications</Text>
+      <Text style={s.info}>Each authorized Admin receives a separate alert when the signed PayMongo webhook confirms payment.</Text>
+      {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
+        key={alert.id} style={[s.activity, !alert.read && s.selectedRow]} onPress={() => {
+          if (alert.donationId) setSelectedId(alert.donationId);
+          setView("all");
+          if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), { read: true }).catch(() => {});
+        }}>
+        <Ionicons name={alert.read ? "notifications-outline" : "notifications"} size={20} color="#009776"/>
+        <View style={s.flex}><Text style={s.tableMain}>{alert.title || "Confirmed donation"}</Text>
+        <Text style={s.tableSecondary}>{alert.message || "A donation was received."}</Text>
+        <Text style={s.tableSecondary}>{dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}</Text></View>
+        <Ionicons name="chevron-forward" size={17} color="#667D8A"/>
+      </Pressable>) : <Text style={s.info}>No donation notifications yet.</Text>}
     </View> : <View style={[s.columns, compact && s.columnsCompact]}>
       <View style={s.mainColumn}>
         {view === "overview" ? <View style={s.topPanels}>
