@@ -4964,8 +4964,11 @@ service cloud.firestore {
         && isEventOrganizer()
         && resource.data.residentId == request.auth.uid
         && validLiveCoordinates();
+      // Keep stop-sharing cleanup permitted even after a mode switch.
+      // Ownership and resident-access checks still apply; only the
+      // organizer may remove their own event's GPS document.
       allow delete: if isAdminOrSuperAdmin()
-        || (isResident()
+        || (hasResidentAccess()
           && isEventOrganizer()
           && resource.data.residentId == request.auth.uid);
     }
