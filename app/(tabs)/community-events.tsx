@@ -708,8 +708,8 @@ export default function CommunityEventsScreen() {
     hasResidentAccess(profile);
 
   // Only approved volunteers need a My Attendance rail; residents use the full event width.
-  const webSideBySide = Platform.OS === "web" && isVolunteer && width >= 1260;
-  const webRowNarrow = width < 760 || (webSideBySide && width < 1420);
+  const webSideBySide = Platform.OS === "web" && isVolunteer && width >= 1450;
+  const webRowNarrow = width < 800 || (webSideBySide && width < 1500);
 
   const [section, setSection] =
     useState<Section>("explore");
@@ -1823,9 +1823,10 @@ export default function CommunityEventsScreen() {
                 "Community Service"}
             </Text>
 
-            <Text style={styles.eventTitle}>
-              {event.title}
-            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={"Open " + event.title + " event details"} onPress={() => setExpandedEvent(expanded ? null : event.id)}>
+              <Text style={styles.eventTitle}>{event.title}</Text>
+              <Text style={{fontSize:11,color:"#087F75",marginTop:4,fontWeight:"700"}}>{expanded ? "Tap to close details" : "Tap title for details and directions"}</Text>
+            </Pressable>
           </View>
 
           <View
@@ -1901,10 +1902,22 @@ export default function CommunityEventsScreen() {
 
         {expanded && (
           <View style={styles.descriptionBox}>
+            <Text style={{fontSize:11,fontWeight:"900",color:"#087F75",marginBottom:7}}>ABOUT THIS EVENT</Text>
             <Text style={styles.description}>
-              {event.description ||
-                "No additional details provided."}
+              {event.description || "No additional details provided."}
             </Text>
+            <View style={{marginTop:12,backgroundColor:"#F2FAF8",padding:12,borderRadius:10,gap:9}}>
+              <Text style={{fontSize:13,color:"#153E49",fontWeight:"900"}}>Event Location &amp; Directions</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
+              {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              <Pressable accessibilityRole="button" accessibilityLabel={"Navigate to " + event.title + " in Google Maps"}
+                onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
+                style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+                <Ionicons name="navigate-outline" size={17} color="#FFFFFF"/>
+                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Open Directions in Google Maps</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -2040,10 +2053,15 @@ export default function CommunityEventsScreen() {
     const owned = event.proposedBy === user?.uid;
     const full = Number(event.participantsCount || 0) >= Number(event.capacity || 0);
     const open = event.status === "active" || event.status === "upcoming";
-    const selected = selectedEvent?.id === event.id;
     const detailsOpen = expandedEvent === event.id;
+    const selected = detailsOpen;
     const cover = eventCover(event);
-    const toggleDetails = () => setExpandedEvent(detailsOpen ? null : event.id);
+    const toggleDetails = () => {
+      setExpandedEvent(detailsOpen ? null : event.id);
+      setRouteEventId(null);
+      setRouteOrigin(null);
+      setRouteNotice("");
+    };
 
     return (
       <View key={event.id} style={[styles.lockedEventShell, selected && styles.lockedEventSelected]}>
@@ -2068,7 +2086,9 @@ export default function CommunityEventsScreen() {
             </View>
           </Pressable>
           <View style={styles.lockedEventInfo}>
-            <View style={styles.lockedEventTop}>
+            <Pressable accessibilityRole="button" accessibilityLabel={(detailsOpen ? "Close " : "Open ") + event.title + " details and map"}
+              accessibilityState={{ expanded: detailsOpen }} onPress={toggleDetails} style={styles.lockedEventSummaryClick}>
+              <View style={styles.lockedEventTop}>
               <Text style={styles.lockedEventName} numberOfLines={2}>{event.title}</Text>
               <View style={styles.lockedSlotsPill}>
                 <Ionicons name="people-outline" color="#078777" size={14} />
@@ -2079,7 +2099,6 @@ export default function CommunityEventsScreen() {
               <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
               <Text style={styles.lockedSmallTagText}>{event.category}</Text>
             </View>
-            {!!event.description && <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description}</Text>}
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)}</Text>
@@ -2092,9 +2111,14 @@ export default function CommunityEventsScreen() {
               <Ionicons name="people-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text>
             </View>
+            <View style={styles.lockedEventTapHint}>
+              <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
+              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
+            </View>
+            </Pressable>
             <View style={styles.lockedRowActions}>
               <Pressable accessibilityRole="button" onPress={toggleDetails} style={styles.lockedSecondaryAction}>
-                <Text style={styles.lockedSecondaryActionText}>{detailsOpen ? "Hide Details" : "View Details"}</Text>
+                <Text style={styles.lockedSecondaryActionText}>{detailsOpen ? "Close Details" : "Details & Map"}</Text>
                 <Ionicons name={detailsOpen ? "chevron-up" : "arrow-forward"} size={14} color="#066E69" />
               </Pressable>
               {isVolunteer && !owned && !joined && open && !full && (
@@ -2113,14 +2137,39 @@ export default function CommunityEventsScreen() {
         </View>
         {detailsOpen && (
           <View style={styles.lockedInlineDetails}>
-            <View style={styles.lockedSectionHeading}>
-              <Ionicons name="information-circle-outline" size={19} color="#07877A" />
-              <Text style={styles.lockedInlineTitle}>About {event.title}</Text>
+            <View style={styles.volunteerDetailHeader}>
+              <View style={styles.lockedSectionHeading}>
+                <Ionicons name="information-circle-outline" size={19} color="#07877A" />
+                <Text style={styles.lockedInlineTitle}>Event Details</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={"Close details for " + event.title}
+                onPress={toggleDetails} style={styles.volunteerDetailClose}>
+                <Text style={styles.volunteerDetailCloseText}>Close</Text>
+                <Ionicons name="close-outline" size={17} color="#647E87" />
+              </Pressable>
             </View>
-            <Text style={styles.lockedAboutText}>
-              {event.description?.trim() || "No additional description was provided for this event."}
-            </Text>
-            <Text style={styles.lockedEventMetaText}>{eventScheduleLabel(event)} · {event.location}{event.barangay ? `, ${event.barangay}` : ""}</Text>
+            <View style={styles.volunteerOverviewBox}>
+              <Text style={styles.volunteerOverviewLabel}>ABOUT THE EVENT</Text>
+              <Text style={styles.lockedAboutText}>
+                {event.description?.trim() || "No additional description was provided for this event."}
+              </Text>
+              <View style={styles.volunteerEventFacts}>
+                <View style={styles.volunteerEventFact}>
+                  <Ionicons name="calendar-outline" size={19} color="#088277" />
+                  <View style={styles.volunteerEventFactText}>
+                    <Text style={styles.volunteerEventFactCaption}>DATE & TIME</Text>
+                    <Text style={styles.volunteerEventFactValue}>{eventScheduleLabel(event)}</Text>
+                  </View>
+                </View>
+                <View style={styles.volunteerEventFact}>
+                  <Ionicons name="location-outline" size={19} color="#088277" />
+                  <View style={styles.volunteerEventFactText}>
+                    <Text style={styles.volunteerEventFactCaption}>EVENT MEETING PLACE</Text>
+                    <Text style={styles.volunteerEventFactValue}>{event.location}{event.barangay ? ", " + event.barangay : ""}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
             {isVolunteer && owned && <View style={styles.webOwnershipNotice}>
               <Ionicons name="information-circle-outline" size={19} color="#0B7C70" />
               <Text style={styles.webOwnershipText}>You proposed this event. You cannot join it as a volunteer.</Text>
@@ -2153,8 +2202,8 @@ export default function CommunityEventsScreen() {
               <View style={styles.lockedSectionHeading}>
                 <View style={styles.lockedSectionIcon}><Ionicons name="location" size={21} color="#078C80" /></View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.lockedSectionTitle}>Event Location &amp; Directions</Text>
-                  <Text style={styles.lockedSectionSub}>Map and route for this community event</Text>
+                  <Text style={styles.lockedSectionTitle}>Location &amp; Directions</Text>
+                  <Text style={styles.lockedSectionSub}>Meeting point and navigation for volunteers</Text>
                 </View>
               </View>
               <Text style={styles.lockedMapAddress}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
@@ -2177,18 +2226,20 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
               </View>}
               <View style={styles.lockedMapActions}>
-                <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
-                  onPress={() => showRouteInVolunServe(event)}>
-                  {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                  <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
-                </Pressable>
+                {!!googleMapsEmbedKey && (
+                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
+                    onPress={() => showRouteInVolunServe(event)}>
+                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
+                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
+                  </Pressable>
+                )}
                 <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
                   onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
                   <Ionicons name="navigate-outline" size={16} color="white" />
                   <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.lockedMapFootnote}>In-app routes require a configured Google Maps Embed API key and browser location permission. External Google Maps directions remain available. Your GPS position is not saved in Firestore.</Text>
+              <Text style={styles.lockedMapFootnote}>{googleMapsEmbedKey ? "In-app route preview needs location permission. " : ""}Google Maps opens directions to this event. Your current GPS position is not saved in Firestore.</Text>
             </View>
           </View>
         )}
@@ -5195,6 +5246,9 @@ const styles = StyleSheet.create({
   lockedEventListRows: { gap: 10, paddingTop: 6 },
   lockedMainStack: { width: "100%", flex: 0 },
   lockedEventShell: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, overflow: "hidden", width: "100%" },
+  lockedEventSummaryClick: { gap: 7, paddingVertical: 6, borderRadius: 8, minWidth: 0 },
+  lockedEventTapHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
+  lockedEventTapHintText: { fontSize: 11, color: "#087F75", fontWeight: "700", flexShrink: 1 },
   lockedListHeading: { flexWrap: "wrap" },
   lockedListControls: { flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" },
   lockedSortButton: { flexDirection: "row", alignItems: "center", backgroundColor: "white", borderWidth: 1, borderColor: "#DCE9E6", borderRadius: 10, paddingVertical: 7, paddingHorizontal: 11, gap: 8, minWidth: 155 },
@@ -5202,6 +5256,17 @@ const styles = StyleSheet.create({
   lockedSortValue: { fontSize: 11, color: "#113A4B", fontWeight: "900" },
   lockedInlineDetails: { marginHorizontal: 11, marginBottom: 11, borderTopWidth: 1, borderColor: "#E2ECEA", paddingTop: 12, gap: 9 },
   lockedInlineTitle: { color: "#123248", fontSize: 13, fontWeight: "900", flexShrink: 1 },
+  volunteerDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 5 },
+  volunteerDetailClose: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EDF5F3", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  volunteerDetailCloseText: { color: "#58757C", fontSize: 11, fontWeight: "800" },
+  volunteerOverviewBox: { backgroundColor: "#FFFFFF", borderColor: "#E0ECE8", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 },
+  volunteerOverviewLabel: { color: "#0A8478", fontSize: 10, letterSpacing: 0.5, fontWeight: "900" },
+  volunteerEventFacts: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 3 },
+  volunteerEventFact: { flexGrow: 1, flexBasis: 205, flexDirection: "row", gap: 9, alignItems: "flex-start", minWidth: 0, borderRadius: 10, padding: 12, backgroundColor: "#F1F9F6" },
+  volunteerEventFactText: { flex: 1, minWidth: 0, gap: 4 },
+  volunteerEventFactCaption: { fontSize: 9, fontWeight: "900", color: "#788C99", letterSpacing: 0.4 },
+  volunteerEventFactValue: { fontSize: 12, fontWeight: "700", lineHeight: 18, color: "#264655" },
+
   lockedLoadMoreRow: { flexDirection: "row", justifyContent: "center", marginTop: 5 },
   lockedLoadMoreButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 11, backgroundColor: "#E7F7F2", borderWidth: 1, borderColor: "#CBE8E0" },
   lockedLoadMoreText: { fontSize: 12, fontWeight: "800", color: "#087B71" },
@@ -5236,7 +5301,7 @@ const styles = StyleSheet.create({
   lockedAboutText: { color: "#567183", fontSize: 12, lineHeight: 20 },
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 15, padding: 14, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#F2FBF6", borderColor: "#B4DDCB", borderWidth: 1.5 },
-  lockedEventMapCard: { backgroundColor: "#F6FBF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 13, marginTop: 6 },
+  lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
   lockedAttendanceOverview: { backgroundColor: "#E6F6ED", borderRadius: 11, padding: 10, gap: 9, marginBottom: 12 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { color: "#0D6A55", fontSize: 12, fontWeight: "900" },
@@ -5259,16 +5324,16 @@ const styles = StyleSheet.create({
   lockedSectionTitle: { color: "#113049", fontSize: 16, fontWeight: "900", flexShrink: 1 },
   lockedSectionSub: { color: "#6E8494", fontSize: 10.5, marginTop: 3 },
   lockedMapAddress: { fontSize: 11, color: "#486980", lineHeight: 17, marginBottom: 9 },
-  lockedMapFrame: { width: "100%", height: 232, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
+  lockedMapFrame: { width: "100%", height: 260, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
   lockedMapPlaceholder: { backgroundColor: "#F1F7F6", minHeight: 160, borderRadius: 11, justifyContent: "center", alignItems: "center", padding: 18, gap: 12 },
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
   lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
   lockedMapFootnote: { color: "#788E9B", fontSize: 9.5, lineHeight: 15, marginTop: 9 },
   lockedMapActions: { flexDirection: "row", flexWrap: "wrap", marginTop: 11, gap: 8 },
-  lockedMapOutline: { flexGrow: 1, flexBasis: 145, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
-  lockedMapOutlineText: { color: "#0A5663", fontSize: 10.2, fontWeight: "800", flexShrink: 1, textAlign: "center" },
-  lockedMapSolid: { flexGrow: 1, flexBasis: 145, minWidth: 0, backgroundColor: "#007B75", borderRadius: 8, paddingHorizontal: 6, height: 41, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 5 },
-  lockedMapSolidText: { color: "white", fontSize: 10.2, fontWeight: "900", flexShrink: 1, textAlign: "center" },
+  lockedMapOutline: { flexGrow: 1, flexBasis: 190, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
+  lockedMapOutlineText: { color: "#0A5663", fontSize: 11, fontWeight: "800", flexShrink: 1, textAlign: "center" },
+  lockedMapSolid: { flexGrow: 1, flexBasis: 190, minWidth: 0, backgroundColor: "#007B75", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
+  lockedMapSolidText: { color: "white", fontSize: 11, fontWeight: "900", flexShrink: 1, textAlign: "center" },
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedAttendanceVerifiedText: { color: "#067D68", fontSize: 9, fontWeight: "900" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
