@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
+import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import { router } from "expo-router";
 import {
   collection,
@@ -2197,6 +2198,18 @@ export default function CommunityEventsScreen() {
               <Ionicons name="lock-closed-outline" size={18} color="#657989" />
               <Text style={styles.webClosedText}>This event is closed for new volunteers.</Text>
             </View>}
+            {/* The organizer's live GPS is private and shown ONLY after Join.
+                The public event location and route stay available separately. */}
+            {isVolunteer && joined && (
+              <CommunityEventLiveLocation
+                eventId={event.id}
+                ownerUid={event.proposedBy}
+                currentUid={user?.uid}
+                status={event.status}
+                isResidentOwner={false}
+                isJoinedVolunteer={joined}
+              />
+            )}
             {/* Event map belongs to the expanded event details, not the My Attendance rail. */}
             <View style={styles.lockedEventMapCard}>
               <View style={styles.lockedSectionHeading}>
@@ -2312,7 +2325,25 @@ export default function CommunityEventsScreen() {
         {!!(event as any).qualificationNotes && <><Text style={styles.ruiSectionTitle}>Qualifications / Supervision</Text><Text style={styles.ruiParagraph}>{(event as any).qualificationNotes}</Text></>}
         {!!(event as any).whatToBring && <><Text style={styles.ruiSectionTitle}>What to Bring</Text><Text style={styles.ruiParagraph}>{(event as any).whatToBring}</Text></>}
       </View>}
-      {residentDetailTab==="map" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Event Venue & Directions</Text><Text style={styles.ruiParagraph}>{eventDestination(event)}</Text>{renderWebMap(event)}<Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}><Text style={styles.ruiPrimaryText}>Open in Google Maps</Text><Ionicons name="navigate-outline" size={16} color="white"/></Pressable></View>}
+      {residentDetailTab==="map" && <View style={styles.ruiDetailContent}>
+        <Text style={styles.ruiSectionTitle}>Event Venue & Directions</Text>
+        <Text style={styles.ruiParagraph}>{eventDestination(event)}</Text>
+        {event.proposedBy === user?.uid && (
+          <CommunityEventLiveLocation
+            eventId={event.id}
+            ownerUid={event.proposedBy}
+            currentUid={user?.uid}
+            status={event.status}
+            isResidentOwner={canPropose}
+            isJoinedVolunteer={false}
+          />
+        )}
+        {renderWebMap(event)}
+        <Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}>
+          <Text style={styles.ruiPrimaryText}>Open in Google Maps</Text>
+          <Ionicons name="navigate-outline" size={16} color="white"/>
+        </Pressable>
+      </View>}
       {residentDetailTab==="volunteers" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Volunteer Participation</Text><Text style={styles.ruiParagraph}>{Number(event.participantsCount||0)} of {Number(event.capacity||0)} slots filled. Approved volunteers can join in Volunteer Mode. Resident profiles are not disclosed here.</Text></View>}
       {residentDetailTab==="media" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Location / Activity Photos</Text><View style={styles.ruiMediaGallery}>{pictures.map((url,index)=><Image key={index} source={{uri:url}} style={styles.ruiGalleryPhoto} resizeMode="cover"/>)}</View>{pictures.length===0&&<Text style={styles.ruiParagraph}>No public photos have been provided.</Text>}{!!(event as any).videoUrl&&videoLinkSupported((event as any).videoUrl)&&<Pressable onPress={()=>void Linking.openURL((event as any).videoUrl)} style={styles.ruiPrimary}><Text style={styles.ruiPrimaryText}>View Optional Event Video</Text><Ionicons name="play-circle-outline" size={16} color="white"/></Pressable>}</View>}
     </View>;
