@@ -16,6 +16,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -912,11 +913,29 @@ export default function CommunityEventAdminScreen() {
                     </>
                   )}
                   {selectedProposal.latitude != null && selectedProposal.longitude != null && (
-                    <Pressable style={styles.inlineButton} onPress={() => void Linking.openURL(
-                      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedProposal.latitude},${selectedProposal.longitude}`)}`
-                    )}>
-                      <Text style={styles.inlineButtonText}>View Resident GPS Event Pin</Text>
-                    </Pressable>
+                    <View style={{marginTop:14,padding:12,borderRadius:12,borderWidth:1,borderColor:"#CCE5DF",backgroundColor:"#F4FBF9"}}>
+                      <Text style={{fontSize:14,fontWeight:"800",color:"#143F42"}}>Resident-Confirmed Event Meeting Point</Text>
+                      <Text style={{fontSize:12,color:"#456C73",marginTop:5}}>
+                        GPS: {Number(selectedProposal.latitude).toFixed(6)}, {Number(selectedProposal.longitude).toFixed(6)}
+                      </Text>
+                      <Text style={{fontSize:11,color:"#577780",marginBottom:9}}>
+                        Verify that this Google Maps location matches the submitted barangay and venue before approving. The same coordinates are used for Volunteer navigation.
+                      </Text>
+                      {Platform.OS === "web" ? React.createElement("iframe" as any, {
+                        title:"Google Maps preview of the resident event pin",
+                        src:"https://maps.google.com/maps?q=" +
+                          encodeURIComponent(String(selectedProposal.latitude)+","+String(selectedProposal.longitude)) +
+                          "&z=16&output=embed",
+                        loading:"lazy",
+                        style:{height:"210px",width:"100%",border:0,borderRadius:"9px"}
+                      }) : null}
+                      <Pressable style={styles.inlineButton} onPress={() => void Linking.openURL(
+                        "https://www.google.com/maps/search/?api=1&query=" +
+                        encodeURIComponent(String(selectedProposal.latitude)+","+String(selectedProposal.longitude))
+                      )}>
+                        <Text style={styles.inlineButtonText}>Open Confirmed Pin in Google Maps ↗</Text>
+                      </Pressable>
+                    </View>
                   )}
                   {!!selectedProposal.credentialAssetId && (
                     <Pressable style={styles.inlineButton} onPress={async () => {
