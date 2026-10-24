@@ -2226,18 +2226,20 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
               </View>}
               <View style={styles.lockedMapActions}>
-                <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
-                  onPress={() => showRouteInVolunServe(event)}>
-                  {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                  <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
-                </Pressable>
+                {!!googleMapsEmbedKey && (
+                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
+                    onPress={() => showRouteInVolunServe(event)}>
+                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
+                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
+                  </Pressable>
+                )}
                 <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
                   onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
                   <Ionicons name="navigate-outline" size={16} color="white" />
                   <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.lockedMapFootnote}>In-app routes require a configured Google Maps Embed API key and browser location permission. External Google Maps directions remain available. Your GPS position is not saved in Firestore.</Text>
+              <Text style={styles.lockedMapFootnote}>{googleMapsEmbedKey ? "In-app route preview needs location permission. " : ""}Google Maps opens directions to this event. Your current GPS position is not saved in Firestore.</Text>
             </View>
           </View>
         )}
