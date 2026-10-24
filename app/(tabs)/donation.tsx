@@ -1017,6 +1017,13 @@ export default function Donation() {
 
           {selectedCampaign ? <View style={[styles.webDetailPane, !wide && styles.webPaneStacked]}>
             <View style={styles.webDetailCard}>
+                <View style={styles.webDetailNavRow}>
+                  <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
+                    <Ionicons name="arrow-back" size={15} color="#087E69" />
+                    <Text style={styles.webBackToCampaignsText}>All campaigns</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.webDetailNavLabel}>Campaign Details</Text>
+                </View>
                 <PublicPhotoGallery
                   photos={selectedPhotoUrls}
                   title={selectedCampaign.title || "Donation Campaign"}
@@ -1106,7 +1113,15 @@ export default function Donation() {
                     </View>
                   </View>
 
-                  {!showDonationPanel ? (
+                  {selectedFunded ? (
+                    <View style={styles.webFundedNotice}>
+                      <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.webFundedTitle}>Funding goal reached</Text>
+                        <Text style={styles.webFundedText}>This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support.</Text>
+                      </View>
+                    </View>
+                  ) : !showDonationPanel ? (
                     <TouchableOpacity
                       style={styles.webDonateButton}
                       activeOpacity={0.88}
@@ -1119,6 +1134,16 @@ export default function Donation() {
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.webDonatePanel}>
+                      <View style={styles.webDonationStepper}>
+                        {["Amount", "Payment", "Confirmation"].map((step, index) => (
+                          <View key={step} style={styles.webStepperItem}>
+                            <View style={[styles.webStepperCircle, index === 0 && styles.webStepperCircleActive]}>
+                              <Text style={[styles.webStepperNumber, index === 0 && styles.webStepperNumberActive]}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.webStepperLabel}>{step}</Text>
+                          </View>
+                        ))}
+                      </View>
                       <View style={styles.webDonatePanelHeader}>
                         <Text style={styles.webDonatePanelTitle}>Make a Donation</Text>
                         <TouchableOpacity
@@ -1249,11 +1274,13 @@ function CampaignCard({
   campaign,
   selected,
   wide,
+  fullGrid,
   onPress,
 }: {
   campaign: DonationCampaign;
   selected: boolean;
   wide: boolean;
+  fullGrid: boolean;
   onPress: () => void;
 }) {
   const photos = validPublicPhotoUrls(campaign);
@@ -1266,7 +1293,7 @@ function CampaignCard({
     <TouchableOpacity
       style={[
         styles.campaignCard,
-        wide && styles.campaignCardWide,
+        wide && (fullGrid ? styles.campaignCardFull : styles.campaignCardWide),
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
@@ -1321,16 +1348,15 @@ function CampaignCard({
 
         <View style={styles.cardFooter}>
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <View style={styles.viewCampaignButton}>
-            <Text style={styles.viewCampaignText}>
-              {selected ? "Selected" : "Donate Now"}
-            </Text>
-            <Ionicons
-              name={selected ? "checkmark-circle" : "arrow-forward"}
-              size={15}
-              color="#0F766E"
-            />
-          </View>
+          <Text style={campaignFullyFunded(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
+            {campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
+          </Text>
+        </View>
+        <View style={styles.cardPrimaryAction}>
+          <Text style={styles.cardPrimaryActionText}>
+            {selected ? "Viewing Details" : campaignFullyFunded(campaign) ? "View Completed Campaign" : "View Campaign"}
+          </Text>
+          <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
         </View>
       </View>
     </TouchableOpacity>
