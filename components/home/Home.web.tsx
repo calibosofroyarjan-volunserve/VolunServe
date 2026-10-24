@@ -831,11 +831,12 @@ export default function WebHome() {
                 ))
               ) : (
                 <View style={styles.emptyUpdates}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={30}
-                    color="#0B9B83"
-                  />
+                  <View style={styles.emptyUpdatesArtwork}>
+                    <Ionicons name="document-text-outline" size={53} color="#A9D2E8" />
+                    <View style={styles.emptyUpdatesCheck}>
+                      <Ionicons name="checkmark" size={19} color="#FFFFFF" />
+                    </View>
+                  </View>
                   <View style={styles.emptyUpdatesCopy}>
                     <Text style={styles.emptyUpdatesTitle}>
                       No published updates
@@ -891,7 +892,7 @@ function PanelTitle({
     <View style={styles.panelHeader}>
       <View style={styles.panelHeaderLeft}>
         <View style={styles.panelIcon}>
-          <Ionicons name={icon} size={22} color="#177CF2" />
+          <Ionicons name={icon} size={22} color="#008E7B" />
         </View>
         <View style={styles.panelHeaderCopy}>
           <Text style={styles.panelTitle}>{title}</Text>
@@ -948,11 +949,19 @@ function ActivityRow({
           {subtitle}
         </Text>
       </View>
-      <View style={[styles.statusPill, mobile && styles.mobileStatusPill]}>
-        <Text style={styles.statusText} numberOfLines={1}>
-          {status}
-        </Text>
+      <View style={[
+        styles.statusPill,
+        mobile && styles.mobileStatusPill,
+        /pending|awaiting/i.test(status) && styles.statusPillPending,
+        /approved|verified|complete/i.test(status) && styles.statusPillApproved,
+      ]}>
+        <Text style={[
+          styles.statusText,
+          /pending|awaiting/i.test(status) && styles.statusTextPending,
+          /approved|verified|complete/i.test(status) && styles.statusTextApproved,
+        ]} numberOfLines={1}>{status}</Text>
       </View>
+      <Ionicons name="chevron-forward" size={16} color="#8CA3BB" />
     </Pressable>
   );
 }
@@ -1614,8 +1623,12 @@ const styles = StyleSheet.create({
   statusText: {
     color: "#123A78",
     fontSize: 10.5,
-    fontWeight: "700",
+    fontWeight: "800",
   },
+  statusPillPending: { backgroundColor: "#FFF0E7" },
+  statusTextPending: { color: "#CE6D1B" },
+  statusPillApproved: { backgroundColor: "#E0F8EF" },
+  statusTextApproved: { color: "#077953" },
   updateIcon: {
     width: 48,
     height: 48,
@@ -1666,6 +1679,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
+  },
+  emptyUpdatesArtwork: {
+    width: 112, height: 90, borderRadius: 26,
+    backgroundColor: "#F1F9FD", alignItems: "center", justifyContent: "center",
+    position: "relative",
+  },
+  emptyUpdatesCheck: {
+    position: "absolute", right: 17, bottom: 12,
+    width: 29, height: 29, borderRadius: 15,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#009A78", borderWidth: 2, borderColor: "#FFFFFF",
   },
   emptyUpdatesCopy: {
     alignItems: "center",
