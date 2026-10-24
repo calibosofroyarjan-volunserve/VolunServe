@@ -386,6 +386,11 @@ const campaignRaised = (campaign?: DonationCampaign) => {
   return Math.max(0, Number(value || 0));
 };
 
+const campaignFullyFunded = (campaign?: DonationCampaign) => {
+  const goal = campaignGoal(campaign);
+  return goal > 0 && campaignRaised(campaign) >= goal - 0.01;
+};
+
 export default function Donation() {
   const { width } = useWindowDimensions();
   const wide = width >= 1080;
@@ -406,6 +411,7 @@ export default function Donation() {
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCompletedCampaigns, setShowCompletedCampaigns] = useState(false);
   // Mobile: the detail page opens only after the user taps a campaign.
   const pageScrollRef = React.useRef<ScrollView>(null);
   const donationType: DonationType = "monetary";
@@ -523,6 +529,10 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
+  const completedCampaignCount = campaigns.filter(campaignFullyFunded).length;
+  const listedCampaigns = useMemo(() => showCompletedCampaigns
+    ? filteredCampaigns.filter(campaignFullyFunded)
+    : filteredCampaigns, [filteredCampaigns, showCompletedCampaigns]);
   const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
   const returnIsConfirmed = returnedDonation?.status === "received" && returnedDonation?.paymentStatus === "paid";
 
@@ -547,6 +557,7 @@ export default function Donation() {
   const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
 
   const selectedGoal = campaignGoal(selectedCampaign);
+  const selectedFunded = campaignFullyFunded(selectedCampaign);
   const selectedRaised = campaignRaised(selectedCampaign);
   const selectedPercent =
     selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
@@ -805,7 +816,34 @@ export default function Donation() {
         </View>
       </View>
 
-      <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
+      <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
+        {[
+          { key: "active", label: "Active Campaigns", count: campaigns.length },
+          { key: "history", label: "My Donations", count: myDonations.length },
+          { key: "completed", label: "Completed Campaigns", count: completedCampaignCount },
+        ].map(tab => {
+          const active = tab.key === "history" ? showHistory :
+            !showHistory && (tab.key === "completed" ? showCompletedCampaigns : !showCompletedCampaigns);
+          return <TouchableOpacity key={tab.key} accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[styles.webPrimaryTab, active && styles.webPrimaryTabActive]}
+            onPress={() => {
+              if (tab.key === "history") {
+                setShowHistory(true);
+              } else {
+                setShowHistory(false);
+                setShowCompletedCampaigns(tab.key === "completed");
+                setSelectedCampaignId("");
+                setShowDonationPanel(false);
+                resetDonationForm();
+              }
+            }}>
+            <Text style={[styles.webPrimaryTabText, active && styles.webPrimaryTabTextActive]}>{tab.label}</Text>
+            <Text style={[styles.webTabCount, active && styles.webTabCountActive]}>{tab.count}</Text>
+          </TouchableOpacity>;
+        })}
+      </View>
+      {!showHistory && <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
         {FILTER_OPTIONS.map((option) => {
           const active = filter === option.value;
           const count =
@@ -847,7 +885,7 @@ export default function Donation() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </View>}
 
       {!!returnedPaymentState && (
         <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
@@ -921,50 +959,64 @@ export default function Donation() {
         </View>
       ) : (
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden]}>
+          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden, !selectedCampaign && styles.webFullCampaignPane]}>
             <View style={styles.webSectionHeaderRow}>
               <View>
                 <Text style={styles.webSectionTitle}>Active Campaigns</Text>
                 <Text style={styles.webSectionSubtitle}>
-                  Choose a verified campaign to view details.
+                  Select an LGU-verified campaign to view its details and available support.
                 </Text>
               </View>
-              <Text style={styles.webCampaignCount}>{filteredCampaigns.length}</Text>
+              <Text style={styles.webCampaignCount}>{listedCampaigns.length}</Text>
             </View>
 
             {!campaignsReady ? (
               <View style={styles.emptyCard}>
                 <ActivityIndicator color="#0F766E" />
               </View>
-            ) : filteredCampaigns.length === 0 ? (
+            ) : listedCampaigns.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="search-outline" size={28} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>No matching campaigns</Text>
+                <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
+                <Text style={styles.emptyText}>Try another filter or check back for newly approved campaigns.</Text>
               </View>
             ) : (
-              <View style={styles.campaignGrid}>
-                {filteredCampaigns.map((campaign) => (
+              <View style={[styles.campaignGrid, !selectedCampaign && styles.campaignGridFull]}>
+                {listedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={campaign.id}
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
+                    fullGrid={!selectedCampaign}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
               </View>
             )}
+            {!selectedCampaign && campaignsReady ? (
+              <View style={styles.webHowItWorks}>
+                <Text style={styles.webHowItWorksTitle}>How donations work</Text>
+                <View style={styles.webHowSteps}>
+                  {[
+                    { icon: "shield-checkmark-outline" as const, title: "1. Choose a cause", body: "Browse LGU-verified campaigns and their confirmed funding progress." },
+                    { icon: "card-outline" as const, title: "2. Test checkout", body: "Enter a donation amount and use PayMongo Sandbox." },
+                    { icon: "receipt-outline" as const, title: "3. Track your support", body: "My Donations updates after backend confirmation." },
+                  ].map((step) => (
+                    <View key={step.title} style={styles.webHowStep}>
+                      <Ionicons name={step.icon} size={24} color="#009474" />
+                      <Text style={styles.webHowStepTitle}>{step.title}</Text>
+                      <Text style={styles.webHowStepBody}>{step.body}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={[styles.webDetailPane, !wide && styles.webPaneStacked, !medium && !selectedCampaign && styles.mobileHidden]}>
-            {!selectedCampaign ? (
-              <View style={styles.webDetailEmpty}>
-                <Ionicons name="heart-outline" size={34} color="#0F766E" />
-                <Text style={styles.webDetailEmptyTitle}>Select a campaign</Text>
-                <Text style={styles.webDetailEmptyText}>Campaign details will appear here.</Text>
-              </View>
-            ) : (
-              <View style={styles.webDetailCard}>
+          {selectedCampaign ? <View style={[styles.webDetailPane, !wide && styles.webPaneStacked]}>
+            <View style={styles.webDetailCard}>
                 <PublicPhotoGallery
                   photos={selectedPhotoUrls}
                   title={selectedCampaign.title || "Donation Campaign"}
@@ -1156,8 +1208,7 @@ export default function Donation() {
                   )}
                 </View>
               </View>
-            )}
-          </View>
+          </View> : null}
         </View>
       )}
     </ScrollView>
