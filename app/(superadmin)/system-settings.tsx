@@ -274,7 +274,7 @@ export default function SystemSettings() {
       <View style={styles.center}>
         <ActivityIndicator
           size="large"
-          color="#6D28D9"
+          color="#078F82"
         />
 
         <Text style={styles.loadingText}>
@@ -331,7 +331,7 @@ export default function SystemSettings() {
         <Ionicons
           name="shield-checkmark-outline"
           size={22}
-          color="#5B21B6"
+          color="#08766C"
         />
 
         <View style={styles.noticeCopy}>
@@ -351,7 +351,7 @@ export default function SystemSettings() {
             <Ionicons
               name="business-outline"
               size={21}
-              color="#6D28D9"
+              color="#078F82"
             />
           </View>
 
@@ -408,7 +408,7 @@ export default function SystemSettings() {
             <Ionicons
               name="location-outline"
               size={21}
-              color="#6D28D9"
+              color="#078F82"
             />
           </View>
 
@@ -555,7 +555,7 @@ const styles =
     hero: {
       padding: 21,
       borderRadius: 20,
-      backgroundColor: "#6D28D9",
+      backgroundColor: "#078F82",
     },
 
     title: {
@@ -568,7 +568,7 @@ const styles =
     subtitle: {
       marginTop: 5,
       maxWidth: 700,
-      color: "#EDE9FE",
+      color: "#E6F7F1",
       lineHeight: 20,
     },
 
@@ -576,9 +576,9 @@ const styles =
       marginTop: 15,
       padding: 14,
       borderRadius: 14,
-      backgroundColor: "#F5F3FF",
+      backgroundColor: "#F3FAF8",
       borderWidth: 1,
-      borderColor: "#DDD6FE",
+      borderColor: "#BDE5D9",
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 10,
@@ -589,7 +589,7 @@ const styles =
     },
 
     noticeTitle: {
-      color: "#5B21B6",
+      color: "#08766C",
       fontWeight: "900",
     },
 
@@ -622,7 +622,7 @@ const styles =
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "#EDE9FE",
+      backgroundColor: "#E6F7F1",
     },
 
     cardHeaderText: {
@@ -698,7 +698,7 @@ const styles =
       justifyContent: "center",
       flexDirection: "row",
       gap: 8,
-      backgroundColor: "#6D28D9",
+      backgroundColor: "#078F82",
     },
 
     buttonText: {
