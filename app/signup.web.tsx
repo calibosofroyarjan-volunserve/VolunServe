@@ -277,7 +277,7 @@ const Field = memo(function Field({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-            accessibilityState={{ pressed: !!showPassword }}
+            accessibilityState={{ selected: !!showPassword }}
             hitSlop={8}
           >
             <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={COLORS.muted} />
