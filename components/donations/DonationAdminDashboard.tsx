@@ -117,8 +117,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   useEffect(() => {
     if (!allowed || !user?.uid) return;
     return onSnapshot(query(collection(db, "notifications"), where("userId", "==", user.uid)),
-      snapshot => setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id }))
-        .filter(a => (a as any).type === "donation_received")
+      snapshot => setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as { id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any; type?:string }))
+        .filter(a => a.type === "donation_received")
         .sort((a, b) => millis(b.createdAt) - millis(a.createdAt))), () => {});
   }, [allowed, user?.uid]);
 
