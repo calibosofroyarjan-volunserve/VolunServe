@@ -2257,13 +2257,14 @@ const styles = StyleSheet.create({
     width: "48.8%",
     minWidth: 255,
   },
+  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 480 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
   },
   campaignVisualWrap: {
     position: "relative",
-    height: 148,
+    height: 178,
     backgroundColor: "#DDE7E5",
   },
   campaignVisualImage: {
@@ -2319,7 +2320,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 12,
+    padding: 15,
   },
   badgeRow: {
     flexDirection: "row",
@@ -2359,10 +2360,10 @@ const styles = StyleSheet.create({
     color: "#7C3AED",
   },
   campaignTitle: {
-    marginTop: 8,
+    marginTop: 10,
     color: "#0F172A",
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "900",
   },
   locationLine: {
@@ -2436,6 +2437,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "capitalize",
   },
+  campaignStatusFunded: { color: "#8D5300", fontSize: 10, fontWeight: "900" },
+  campaignStatusActive: { color: "#087F67", fontSize: 10, fontWeight: "900" },
+  cardPrimaryAction: {
+    minHeight: 43, marginTop: 13, borderRadius: 9, backgroundColor: "#009775",
+    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9,
+  },
+  cardPrimaryActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   viewCampaignButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -3948,8 +3956,8 @@ const styles = StyleSheet.create({
   webPageTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 27,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 38,
     fontWeight: "900",
   },
   webPageSubtitle: {
@@ -4011,6 +4019,24 @@ const styles = StyleSheet.create({
   webHistoryButtonTextActive: {
     color: "#FFFFFF",
   },
+  webPrimaryTabs: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 10, marginTop: 18, marginBottom: 5,
+  },
+  webPrimaryTab: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingHorizontal: 17, minHeight: 42, borderWidth: 1,
+    borderColor: "#DCE8E9", borderRadius: 10, backgroundColor: "#FFFFFF",
+  },
+  webPrimaryTabActive: { borderColor: "#009879", backgroundColor: "#009879" },
+  webPrimaryTabText: { color: "#355267", fontSize: 12, fontWeight: "800" },
+  webPrimaryTabTextActive: { color: "#FFFFFF" },
+  webTabCount: {
+    paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden",
+    borderRadius: 99, backgroundColor: "#F0F5F6", color: "#64748B",
+    fontSize: 9.5, fontWeight: "900",
+  },
+  webTabCountActive: { backgroundColor: "rgba(255,255,255,0.22)", color: "#FFFFFF" },
   webFilterBar: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4073,6 +4099,8 @@ const styles = StyleSheet.create({
     flex: 1.45,
     minWidth: 0,
   },
+  webFullCampaignPane: { flex: 1 },
+  campaignGridFull: { width: "100%", gap: 16 },
   webDetailPane: {
     flex: 0.85,
     minWidth: 0,
@@ -4091,8 +4119,8 @@ const styles = StyleSheet.create({
   webSectionSubtitle: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 9.5,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 16,
   },
   webCampaignCount: {
     minWidth: 30,
@@ -4106,6 +4134,27 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
+  webHowItWorks: {
+    marginTop: 23, padding: 20, borderRadius: 16, backgroundColor: "#FFFFFF",
+    borderColor: "#DFEAEB", borderWidth: 1,
+  },
+  webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
+  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 13 },
+  webHowStep: {
+    flexGrow: 1, flexBasis: 230, padding: 15, borderRadius: 12,
+    backgroundColor: "#F3F9F8", minWidth: 190, gap: 7,
+  },
+  webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
+  webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
+  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.5 },
+  webDetailNavRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingVertical: 12, paddingHorizontal: 15, gap: 10,
+    borderBottomWidth: 1, borderColor: "#ECF1F2",
+  },
+  webBackToCampaigns: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
+  webBackToCampaignsText: { color: "#087E69", fontSize: 11, fontWeight: "900" },
+  webDetailNavLabel: { color: "#77909D", fontSize: 10.5, fontWeight: "800" },
   webDetailCard: {
     overflow: "hidden",
     borderWidth: 1,
@@ -4303,6 +4352,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
+  webFundedNotice: {
+    marginTop: 14, padding: 15, flexDirection: "row", alignItems: "flex-start",
+    gap: 10, borderRadius: 11, backgroundColor: "#EAF9F0",
+    borderWidth: 1, borderColor: "#C8EBDC",
+  },
+  webFundedTitle: { fontSize: 12.5, fontWeight: "900", color: "#067554" },
+  webFundedText: { fontSize: 10.5, lineHeight: 16, color: "#3D7769", marginTop: 3 },
+  webDonationStepper: { flexDirection: "row", justifyContent: "space-between", gap: 7, marginBottom: 15 },
+  webStepperItem: { flex: 1, justifyContent: "center", alignItems: "center", gap: 6 },
+  webStepperCircle: {
+    width: 28, height: 28, borderRadius: 15,
+    alignItems: "center", justifyContent: "center", backgroundColor: "#E3E9EE",
+  },
+  webStepperCircleActive: { backgroundColor: "#009879" },
+  webStepperNumber: { color: "#64748B", fontSize: 12, fontWeight: "900" },
+  webStepperNumberActive: { color: "#FFFFFF" },
+  webStepperLabel: { color: "#677E90", fontSize: 10, fontWeight: "800" },
   webDonatePanel: {
     marginTop: 13,
     paddingTop: 13,
@@ -4323,7 +4389,7 @@ const styles = StyleSheet.create({
   },
   webDonatePanelTitle: {
     color: "#0F172A",
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: "900",
   },
   webCloseButton: {
@@ -4391,8 +4457,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   webAmountButtonActive: {
-    borderColor: "#5B4CF0",
-    backgroundColor: "#5B4CF0",
+    borderColor: "#009879",
+    backgroundColor: "#009879",
   },
   webAmountButtonText: {
     color: "#334155",
