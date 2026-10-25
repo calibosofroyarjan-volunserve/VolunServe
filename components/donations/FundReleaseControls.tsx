@@ -242,7 +242,7 @@ export default function FundReleaseControls({campaigns,ready}:{
             <Text style={ss.small}>Beneficiary: linked, identity-verified requesting Resident</Text>
             <Text style={ss.small}>Processing authority: LGU Admin{record.authorizerUid?" · Approval recorded":""}</Text>
             {!!record.reviewedAt&&<Text style={ss.small}>Review filed: {new Date(record.reviewedAt).toLocaleString()}</Text>}
-            {!!record.authorizedAt&&<Text style={ss.small}>Approval date: {new Date(record.authorizedAt).toLocaleString()}</Text>
+            {!!record.authorizedAt&&<Text style={ss.small}>Approval date: {new Date(record.authorizedAt).toLocaleString()}</Text>}
             {!!record.method&&<Text style={ss.small}>
               Destination: {record.method.toUpperCase()} (TEST) ·•••• {record.walletLast4}
             </Text>}
