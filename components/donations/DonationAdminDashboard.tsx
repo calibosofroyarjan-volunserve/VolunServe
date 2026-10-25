@@ -246,7 +246,10 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     open: () => void;
   }[] = [
     {
-      label: "Request review", detail: "Verify evidence and approved assistance needs",
+      label: mode === "admin" ? "Request review" : "Campaign oversight",
+      detail: mode === "admin"
+        ? "Verify evidence and approved assistance needs"
+        : "Review fundraising activity and campaign status",
       icon: "shield-checkmark-outline",
       open: () => mode === "admin"
         ? router.push("/(admin)/assistance-requests" as any)
