@@ -131,7 +131,7 @@ export default function PremiumCampaignDetails({
   const status = ended ? "Closed" : finished ? "Goal Reached" : "Ongoing";
   return (
     <View style={[styles.columns, !wide && styles.stacked]}>
-      <View style={styles.leftColumn}>
+      <View style={[styles.leftColumn, !wide && styles.stackColumn]}>
         <CampaignGallery campaign={campaign} photos={photos} />
         <View style={styles.badges}>
           <View style={[styles.badge, styles.verifiedBadge]}>
@@ -180,7 +180,7 @@ export default function PremiumCampaignDetails({
         </View>
       </View>
 
-      <View style={styles.rightColumn}>
+      <View style={[styles.rightColumn, !wide && styles.stackColumn]}>
         <View style={styles.fundingCard}>
           <View style={styles.fundingHeading}>
             <View style={styles.sectionIcon}><Ionicons name="layers-outline" size={20} color="#087E61" /></View>
@@ -264,8 +264,9 @@ export default function PremiumCampaignDetails({
 const styles = StyleSheet.create({
   columns: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
   stacked: { flexDirection: "column", gap: 16 },
-  leftColumn: { flex: 1.45, minWidth: 0, width: "100%", gap: 0 },
-  rightColumn: { flex: 1, minWidth: 0, width: "100%", gap: 13 },
+  leftColumn: { flex: 1.45, minWidth: 0, gap: 0 },
+  rightColumn: { flex: 1, minWidth: 0, gap: 13 },
+  stackColumn: { flex: 0, width: "100%" },
   gallery: { gap: 9 },
   photoStage: { width: "100%", height: 254, overflow: "hidden", borderRadius: 15, backgroundColor: "#17352F" },
   mainPhoto: { width: "100%", height: "100%" },
