@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { auth } from "../../lib/firebase";
 import SandboxPayoutForm from "./SandboxPayoutForm";
+import WalletBrandLogo from "./WalletBrandLogo";
 import type { ReconciliationCampaign } from "./FundReconciliationPanel";
 
 const ROOT = "https://volunserve.onrender.com/api/admin/donations/fund-releases";
@@ -137,7 +138,7 @@ export default function FundReleaseControls({campaigns,ready}:{
     awaiting:rows.filter(r=>r.status==="simulated_sent").length,
     resolved:rows.filter(r=>["acknowledged_demo","disputed","rejected"].includes(r.status)).length,
   }),[rows]);
-  const stageNames=["Donations verified","LGU review","Release authorized","Test release recorded","Resident response"];
+  const stageNames=["Payment verified","Fund reviewed","Approved","Release recorded","Resident notified"];
   const stageReached=(status:string,index:number)=>{
     if(index===0)return true;
     if(status==="rejected")return index===1;
@@ -168,13 +169,9 @@ export default function FundReleaseControls({campaigns,ready}:{
         <Text style={ss.subtleText}>Refresh</Text>
       </Pressable>
     </View>
-    <View style={ss.top}>
-      <View style={ss.noticeTag}>
-        <Ionicons name="shield-checkmark-outline" size={15} color="#16745C"/>
-        <Text style={ss.noticeTagText}>TEST MODE · No actual wallet transfer</Text>
-      </View>
-      <Text style={ss.muted}>Auto-refresh every 60 seconds · LGU Admin only</Text>
-    </View>
+    <Text style={ss.muted}>
+      LGU Admin workspace · Syncs every 60 seconds · Release actions are protected by backend verification
+    </Text>
     <View style={ss.metricGrid}>
       {([
         {label:"Awaiting approval",count:counters.pending,color:"#EAF6F1"},
@@ -222,7 +219,7 @@ export default function FundReleaseControls({campaigns,ready}:{
           <Text style={ss.muted}>Campaign ID: {selection.id}</Text>
           <Text style={ss.small}>Approved goal: {php(Number(selection.monetaryGoal||0))}</Text>
           <Text style={ss.small}>Recorded campaign funding: {php(activeFunding?.recordedFunding||0)}</Text>
-          <Text style={ss.small}>PayMongo-confirmed donor payments (TEST): {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
+          <Text style={ss.small}>PayMongo-confirmed payments (Test Mode): {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
           <Text style={ss.small}>Manual/legacy contributions: {php(activeFunding?.manualLegacyAmount||0)}</Text>
           {!!activeFunding&&!activeFunding.ready&&<View style={ss.notice}>
             <Ionicons name="information-circle-outline" size={17} color="#16745C"/>
@@ -243,14 +240,15 @@ export default function FundReleaseControls({campaigns,ready}:{
             <Text style={ss.small}>Processing authority: LGU Admin{record.authorizerUid?" · Approval recorded":""}</Text>
             {!!record.reviewedAt&&<Text style={ss.small}>Review filed: {new Date(record.reviewedAt).toLocaleString()}</Text>}
             {!!record.authorizedAt&&<Text style={ss.small}>Approval date: {new Date(record.authorizedAt).toLocaleString()}</Text>}
-            {!!record.method&&<Text style={ss.small}>
-              Destination: {record.method.toUpperCase()} (TEST) ·•••• {record.walletLast4}
-            </Text>}
-            {!!record.method&&<Text style={ss.small}>
-              Processing: VolunServe internal TEST ledger · No external wallet transfer
-            </Text>}
+            {(record.method==="gcash"||record.method==="maya")&&<View style={ss.walletReceipt}>
+              <WalletBrandLogo brand={record.method} width={82} height={27}/>
+              <View style={{flex:1}}>
+                <Text style={ss.small}>Wallet ending •••• {record.walletLast4||"—"}</Text>
+                <Text style={ss.muted}>Internal release record · Not an external wallet transfer</Text>
+              </View>
+            </View>}
             {!!record.simulationReference&&<Text style={ss.small}>
-              Test transaction reference: {record.simulationReference}
+              Release record reference: {record.simulationReference}
             </Text>}
             {!!record.acknowledgmentNote&&<Text style={ss.small}>
               Resident response: {record.acknowledgmentNote}
@@ -368,6 +366,8 @@ const ss=StyleSheet.create({
   empty:{gap:10,alignItems:"center",padding:30},
   emptyText:{color:"#719084",fontFamily:"FundInterRegular",fontSize:11,textAlign:"center"},
   infoBlock:{backgroundColor:"#F6FAF7",borderRadius:9,padding:12,gap:3},
+  walletReceipt:{backgroundColor:"#FFFFFF",borderColor:"#DFEDE5",borderWidth:1,borderRadius:10,
+    padding:10,gap:12,flexDirection:"row",alignItems:"center",flexWrap:"wrap"},
   statusText:{fontFamily:"FundInterSemiBold",color:"#0A886A",fontSize:12},
   actionBlock:{paddingTop:10,borderTopWidth:1,borderTopColor:"#E9EFEB",gap:8},
   fieldLabel:{fontFamily:"FundInterSemiBold",fontSize:11,color:"#315B55"},

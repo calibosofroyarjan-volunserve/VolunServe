@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import WalletBrandLogo from "./WalletBrandLogo";
 
 type Channel = "gcash" | "maya";
 type Request = { method:Channel; testWalletNumber:string; confirmedSandbox:true };
@@ -29,10 +30,10 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
   return <View style={st.wrap}>
     <View style={st.head}>
       <View style={st.flex}>
-        <Text style={st.title}>Release assistance funds</Text>
-        <Text style={st.sub}>Set up the destination for an approved Resident assistance release.</Text>
+        <Text style={st.title}>Recipient payment details</Text>
+        <Text style={st.sub}>Choose a wallet channel and review the authorized release instruction.</Text>
       </View>
-      <View style={st.badge}><Text style={st.badgeText}>TEST MODE</Text></View>
+
     </View>
     <View style={st.steps}>
       <View style={[st.step,stage==="entry"&&st.stepActive]}>
@@ -48,30 +49,30 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
         <Text style={st.amount}>{php(amount)}</Text>
         <Text style={st.sub}>Fixed by the reviewed and approved assistance goal</Text>
       </View>
-      <Text style={st.label}>Destination e-wallet</Text>
+      <Text style={st.label}>Select wallet channel</Text>
       <View style={st.channels}>
         {(["gcash","maya"] as const).map(value=>
           <Pressable key={value} accessibilityRole="radio"
             accessibilityState={{selected:channel===value}}
             onPress={()=>setChannel(value)}
             style={[st.channel,channel===value&&st.selected]}>
-            <Ionicons name="wallet-outline" size={19} color="#177B60"/>
-            <Text style={st.channelName}>{value==="gcash"?"GCash":"Maya"}</Text>
-            <Ionicons name={channel===value?"radio-button-on":"radio-button-off"}
-              size={18} color={channel===value?"#0C8768":"#A1B5AC"}/>
+            <View style={st.brandLogo}>
+              <WalletBrandLogo brand={value} width={88} height={30}/>
+            </View>
+            <View style={st.channelCheck}>
+              <Ionicons name={channel===value?"checkmark-circle":"ellipse-outline"}
+                size={20} color={channel===value?"#0C8768":"#A1B5AC"}/>
+            </View>
           </Pressable>)}
       </View>
-      <Text style={st.label}>Recipient e-wallet number (test details)</Text>
+      <Text style={st.label}>Wallet destination</Text>
       <TextInput style={st.input} accessibilityLabel="Test wallet mobile number"
         keyboardType="phone-pad" value={testNumber} maxLength={11}
         onChangeText={value=>setTestNumber(value.replace(/\D/g,"").slice(0,11))}
         placeholder="09XXXXXXXXX" placeholderTextColor="#9CAFA7"/>
-      <Text style={st.sub}>Enter an 11-digit test number beginning with 09. Only the final four digits are retained.</Text>
+      <Text style={st.sub}>Use an 11-digit fictional test number starting with 09. Only the last four digits are stored.</Text>
       {testNumber.length>0&&!valid&&<Text style={st.error}>Enter a valid 11-digit TEST mobile number starting with 09.</Text>}
-      <View style={st.warning}>
-        <Ionicons name="information-circle-outline" size={18} color="#16745C"/>
-        <Text style={st.warningText}>Test workflow · No external transfer is initiated. The entry appears in the Admin ledger and the verified Resident’s Donations page.</Text>
-      </View>
+
       <Pressable accessibilityRole="button" disabled={!valid||disabled||amount<=0}
         onPress={()=>{setAccepted(false);setStage("confirm");}}
         style={[st.primary,(!valid||disabled||amount<=0)&&st.disabled]}>
@@ -79,19 +80,22 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
         <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF"/>
       </Pressable>
     </>:<>
-      <Text style={st.label}>Review payment instruction</Text>
+      <View style={st.confirmHead}>
+        <Text style={st.label}>Review release instruction</Text>
+        <Text style={st.confirmTag}>TEST · NO REAL TRANSFER</Text>
+      </View>
       <View style={st.review}>
         <View style={st.row}><Text style={st.muted}>Recipient</Text><Text style={st.value}>Verified requesting Resident</Text></View>
-        <View style={st.row}><Text style={st.muted}>Channel</Text><Text style={st.value}>{channel==="gcash"?"GCash":"Maya"} (test)</Text></View>
-        <View style={st.row}><Text style={st.muted}>Test wallet</Text><Text style={st.value}>{mask(testNumber)}</Text></View>
+        <View style={st.row}><Text style={st.muted}>Destination wallet</Text><WalletBrandLogo brand={channel} width={80} height={25}/></View>
+        <View style={st.row}><Text style={st.muted}>Recipient number</Text><Text style={st.value}>{mask(testNumber)}</Text></View>
         <View style={st.row}><Text style={st.muted}>Release amount</Text><Text style={st.value}>{php(amount)}</Text></View>
-        <View style={st.row}><Text style={st.muted}>Processing</Text><Text style={st.value}>Internal test ledger</Text></View>
+        <View style={st.row}><Text style={st.muted}>Transaction type</Text><Text style={st.value}>Internal release record</Text></View>
       </View>
       <Pressable accessibilityRole="checkbox" accessibilityState={{checked:accepted}}
         style={st.checkRow} onPress={()=>setAccepted(v=>!v)}>
         <Ionicons name={accepted?"checkbox-outline":"square-outline"} size={22}
           color={accepted?"#0B8063":"#809A90"}/>
-        <Text style={st.checkText}>I confirm this is a TEST release instruction. No actual GCash/Maya payment will be sent.</Text>
+        <Text style={st.checkText}>This records a test-only release in VolunServe. It does not initiate a real GCash or Maya transfer.</Text>
       </Pressable>
       <View style={st.buttons}>
         <Pressable accessibilityRole="button" onPress={reset} disabled={disabled} style={st.secondary}>
@@ -103,7 +107,7 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
           onPress={()=>void onSubmit({method:channel,testWalletNumber:testNumber,confirmedSandbox:true})}>
           {disabled?<ActivityIndicator size="small" color="#FFFFFF"/>:
             <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={17}/>}
-          <Text style={st.primaryText}>Record test release</Text>
+          <Text style={st.primaryText}>Confirm release record</Text>
         </Pressable>
       </View>
     </>}
@@ -117,6 +121,9 @@ const st=StyleSheet.create({
   sub:{fontFamily:"FundInterRegular",fontSize:11,color:"#658578",lineHeight:17},
   badge:{borderWidth:1,borderColor:"#CDEBDF",borderRadius:8,backgroundColor:"#EAF8EF",paddingHorizontal:9,paddingVertical:6},
   badgeText:{fontFamily:"FundInterSemiBold",fontSize:9,color:"#168568",letterSpacing:0.6},
+  confirmHead:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"},
+  confirmTag:{fontFamily:"FundInterSemiBold",fontSize:9,letterSpacing:0.5,color:"#3F7769",
+    backgroundColor:"#EDF8F2",paddingHorizontal:9,paddingVertical:6,borderRadius:7},
   steps:{flexDirection:"row",flexWrap:"wrap",gap:7},
   step:{backgroundColor:"#F0F5F1",borderRadius:8,paddingHorizontal:11,paddingVertical:8},
   stepActive:{backgroundColor:"#DDF4E7"},
@@ -125,9 +132,12 @@ const st=StyleSheet.create({
   label:{fontFamily:"FundInterSemiBold",color:"#2C5851",fontSize:11},
   amount:{fontFamily:"FundInterBold",fontSize:24,color:"#0A7C5D"},
   channels:{flexDirection:"row",flexWrap:"wrap",gap:9},
-  channel:{flex:1,minWidth:125,flexDirection:"row",gap:8,alignItems:"center",padding:12,
-    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DCE9E2",borderRadius:9},
-  selected:{backgroundColor:"#EAF9F1",borderColor:"#3EA885"},
+  channel:{flex:1,minWidth:150,minHeight:66,flexDirection:"row",gap:10,
+    justifyContent:"space-between",alignItems:"center",padding:12,
+    backgroundColor:"#FFFFFF",borderWidth:1.3,borderColor:"#DEEAE5",borderRadius:12},
+  selected:{backgroundColor:"#F1FBF6",borderColor:"#188569"},
+  brandLogo:{flex:1,justifyContent:"center"},
+  channelCheck:{width:24,alignItems:"flex-end"},
   channelName:{flex:1,fontFamily:"FundInterSemiBold",fontSize:12,color:"#2A5B51"},
   input:{padding:12,borderRadius:9,borderWidth:1,borderColor:"#CDDCD4",backgroundColor:"#FFFFFF",
     fontFamily:"FundInterRegular",fontSize:13,color:"#244C42"},
