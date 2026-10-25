@@ -137,6 +137,9 @@ function installFundReleaseDemoRoutes({
       if (!sourceSnap.exists) reject("source_missing", "Linked assistance request not found.", 409);
       const source = sourceSnap.data() || {};
       const recipientUid = safe(source.requesterUid, 180);
+      if (!recipientUid || !/^[A-Za-z0-9_-]{6,180}$/.test(recipientUid)) {
+        reject("requester_missing", "A verified requesting Resident is required.", 409);
+      }
       validateSource({...campaign, campaignId}, source, recipientUid);
       await approvedRecipient(recipientUid);
 
@@ -261,7 +264,8 @@ function installFundReleaseDemoRoutes({
   async function requireVerifiedRequester(req,res,next){
     try {
       const profile=await loadUserProfile(req.firebaseUser.uid);
-      if(!isVerifiedResidentProfile(profile)){
+      if(!isVerifiedResidentProfile(profile) ||
+        ["admin","superadmin","lgu_personnel"].includes(getProfileRole(profile))){
         return res.status(403).json({ok:false,message:"Identity-verified Resident access is required."});
       }
       req.releaseResidentProfile=profile;
@@ -273,7 +277,16 @@ function installFundReleaseDemoRoutes({
       const snap=await releases.where("recipientUid","==",req.firebaseUser.uid).limit(100).get();
       return res.json({ok:true,releases:snap.docs
         .filter(doc=>["simulated_sent","acknowledged_demo","disputed"].includes(doc.data()?.status))
-        .map(publicRecord)});
+        .map(doc=>{
+          const p=publicRecord(doc);
+          return {
+            id:p.id,campaignId:p.campaignId,campaignTitle:p.campaignTitle,
+            status:p.status,amount:p.amount,method:p.method,
+            walletLast4:p.walletLast4,simulationReference:p.simulationReference,
+            simulatedAt:p.simulatedAt,acknowledgedAt:p.acknowledgedAt,
+            acknowledgmentNote:p.acknowledgmentNote,simulation:true,
+          };
+        })});
     }catch(error){return send(res,error);}
   });
   app.post("/api/funds/my-releases/:id/acknowledge",requireFirebaseUser,requireVerifiedRequester,
