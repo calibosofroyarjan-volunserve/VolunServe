@@ -2,6 +2,10 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
+} from "@expo-google-fonts/inter";
 import {
   ActivityIndicator, Image, Pressable, ScrollView, StyleSheet,
   Text, TextInput, useWindowDimensions, View,
@@ -90,9 +94,15 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   mode: "admin" | "superadmin"; initialView?: Section;
 }) {
   const { user, profile, loading } = useUserSession();
+  const [fontsLoaded, fontsError] = useFonts({
+    AdminInterRegular: Inter_400Regular,
+    AdminInterMedium: Inter_500Medium,
+    AdminInterSemiBold: Inter_600SemiBold,
+    AdminInterBold: Inter_700Bold,
+  });
   const allowed = !!user && !!profile && isApprovedProfile(profile) && profile.role === mode;
   const { width } = useWindowDimensions();
-  const compact = width < 1450;
+  const compact = width < 1320;
   const [records, setRecords] = useState<DonationRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
@@ -173,12 +183,12 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           : r.status === statusFilter)));
   }), [records, search, statusFilter]);
 
-  if (loading) return <View style={s.center}><ActivityIndicator color="#078F82" /></View>;
+  if (loading || (!fontsLoaded && !fontsError)) return <View style={s.center}><ActivityIndicator color="#078F82" /></View>;
   if (!allowed) return <View style={s.center}><Text style={s.info}>Authorized {mode} account required.</Text></View>;
 
   const row = (r: DonationRow) => <Pressable key={r.id}
     accessibilityRole="button" accessibilityLabel={"View donation from " + donorLabel(r)}
-    onPress={() => setSelectedId(r.id)}
+    onPress={() => { setSelectedId(r.id); setView("all"); }}
     style={[s.tableRow, selectedId === r.id && s.selectedRow]}>
     <View style={s.donorCell}><View style={s.avatar}><Ionicons name="person" color="#087F72" size={16}/></View>
       <View style={s.flex}><Text numberOfLines={1} style={s.tableMain}>{donorLabel(r)}</Text>
@@ -191,143 +201,312 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <Ionicons name="eye-outline" size={18} color="#148577" />
   </Pressable>;
 
-  const campaignsPanel = <View style={s.panel}>
-    <View style={s.panelHeading}><Text style={s.panelTitle}>Active Campaigns</Text>
-      <SmallButton text="View All" onPress={() => setView("campaigns")} /></View>
-    {activeCampaigns.length ? activeCampaigns.slice(0, view === "campaigns" ? undefined : 5).map(c => {
-      const target = numeric(c.monetaryGoal);
-      const amount = numeric(c.verifiedAmountReceived);
-      const ratio = target > 0 ? Math.min(100, Math.round(amount / target * 100)) : 0;
-      const photo = campaignImage(c);
-      return <View key={c.id} style={s.campaignItem}>
-        {photo ? <Image source={{ uri: photo }} style={s.campaignImage}/> :
-          <View style={[s.campaignImage, s.fallbackImage]}><Ionicons name="heart" color="#087F72" size={23}/></View>}
-        <View style={s.flex}><Text style={s.tableMain} numberOfLines={2}>{c.title || "Untitled campaign"}</Text>
-          <Text style={s.tableSecondary}>{peso(amount)} / {peso(target)} · {ratio}%</Text>
-          <View style={s.track}><View style={[s.fill, { width: ratio + "%" as any }]}/></View>
-        </View></View>;
-    }) : <Text style={s.info}>No published campaigns.</Text>}
+  const campaignList = (items: CampaignRow[], preview: boolean) =>
+    <View style={s.panel}>
+      <View style={s.panelHeading}>
+        <View style={s.flex}>
+          <Text style={s.panelTitle}>{preview ? "Open campaigns" : "Campaign register"}</Text>
+          {!preview && <Text style={s.info}>Review campaign goals and progress. Approval remains in Campaign Operations.</Text>}
+        </View>
+        {preview && <SmallButton text="See campaigns" onPress={() => setView("campaigns")} />}
+        {!preview && mode === "admin" && <SmallButton text="Manage campaigns" primary
+          onPress={() => router.push("/(admin)/donation-list" as any)} />}
+      </View>
+      {items.length ? items.map(c => {
+        const target = numeric(c.monetaryGoal);
+        const amount = numeric(c.verifiedAmountReceived);
+        const percent = target > 0 ? Math.min(100, Math.round(amount / target * 100)) : 0;
+        const completed = c.status === "closed" || (target > 0 && amount >= target - 0.01);
+        const photo = campaignImage(c);
+        return <View key={c.id} style={s.campaignItem}>
+          {photo ? <Image source={{ uri: photo }} style={s.campaignImage}/> :
+            <View style={[s.campaignImage, s.fallbackImage]}>
+              <Ionicons name="heart-outline" color="#08896E" size={23}/>
+            </View>}
+          <View style={s.flex}>
+            <View style={s.campaignNameRow}>
+              <Text style={[s.tableMain, s.campaignName]} numberOfLines={2}>{c.title || "Untitled campaign"}</Text>
+              <Text style={[s.campaignStatus, completed ? s.campaignComplete : s.campaignActive]}>
+                {completed ? "Goal reached" : c.status === "published" ? "Open" : c.status || "Draft"}
+              </Text>
+            </View>
+            <View style={s.campaignMoneyRow}>
+              <Text style={s.tableSecondary}>{peso(amount)} of {peso(target)}</Text>
+              <Text style={s.campaignPercent}>{target ? percent + "%" : "—"}</Text>
+            </View>
+            <View style={s.track}><View style={[s.fill, { width: percent + "%" as any }]}/></View>
+          </View>
+        </View>;
+      }) : <View style={s.smallEmpty}><Ionicons name="heart-outline" size={20} color="#8AA99B"/>
+        <Text style={s.info}>No campaigns in this category.</Text></View>}
+    </View>;
+
+  const stepLinks: {
+    label: string; detail: string; icon: React.ComponentProps<typeof Ionicons>["name"];
+    open: () => void;
+  }[] = [
+    {
+      label: "Request review", detail: "Verify evidence and approved assistance needs",
+      icon: "shield-checkmark-outline",
+      open: () => mode === "admin"
+        ? router.push("/(admin)/assistance-requests" as any)
+        : setView("campaigns"),
+    },
+    {
+      label: "Campaigns", detail: "Review published needs and approved funding goals",
+      icon: "heart-outline",
+      open: () => setView("campaigns"),
+    },
+    {
+      label: "Transactions", detail: "Check paid, pending and failed donation records",
+      icon: "receipt-outline",
+      open: () => setView("all"),
+    },
+    {
+      label: "Fund management", detail: "Review fund status before any release",
+      icon: "wallet-outline",
+      open: () => setView("payouts"),
+    },
+  ];
+
+  const detailsPanel = <View style={s.panel}>
+    <View style={s.panelHeading}>
+      <Text style={s.panelTitle}>Transaction details</Text>
+      {selected && <SmallButton text="Clear" onPress={() => setSelectedId("")}/>}
+    </View>
+    {!selected ? <View style={s.empty}>
+      <Ionicons name="receipt-outline" size={30} color="#0D9170"/>
+      <Text style={s.emptyTitle}>Select a donation</Text>
+      <Text style={s.info}>Click a transaction to view its payment record and registered donor.</Text>
+    </View> : <>
+      <View style={s.donorHeader}>
+        {donor?.photoURL || donor?.profilePhotoUrl ?
+          <Image source={{ uri: String(donor.photoURL || donor.profilePhotoUrl) }} style={s.profileImage}/> :
+          <View style={s.profileImageFallback}><Ionicons name="person" size={22} color="#087F72"/></View>}
+        <View style={s.flex}>
+          <Text style={s.panelTitle}>{donor?.fullName || donorLabel(selected)}</Text>
+          <Text style={s.info}>{donorLoading ? "Loading linked profile…" :
+            selected.donorUid ? "Registered donor" : "Unlinked record"}</Text>
+        </View>
+      </View>
+      {([
+        ["Campaign", selected.campaignTitle || campaigns.find(c => c.id === selected.campaignId)?.title || "Campaign"],
+        ["Requested donation", peso(selected.amount)],
+        ["Confirmed received", peso(amountReceived(selected))],
+        ["Payment status", statusText(selected)],
+        ["Payment source", payMode(selected)],
+        ["Payment reference", selected.transactionReference || selected.paymongoCheckoutSessionId || "Not provided"],
+        ["Donation record ID", selected.id],
+        ["Date", dateText(selected.paidAt || selected.createdAt)],
+        ["Donor barangay", donor?.barangay || "Not available"],
+      ] as const).map(([label, value]) => <View key={label} style={s.detailRow}>
+        <Text style={s.detailLabel}>{label}</Text>
+        <Text selectable style={s.detailValue}>{value}</Text>
+      </View>)}
+      {!!selected.donorNote && <View style={s.note}>
+        <Text style={s.detailLabel}>Donor message</Text>
+        <Text style={s.tableMain}>{selected.donorNote}</Text>
+      </View>}
+      {selected.paymentProvider === "paymongo" && selected.paymongoLivemode === false &&
+        <Text style={s.testFlag}>TEST TRANSACTION · PayMongo Sandbox · no real funds transferred</Text>}
+      {donor && <View style={s.note}><Text style={s.detailLabel}>Linked account</Text>
+        <Text style={s.tableMain}>{donor.fullName || donorLabel(selected)}</Text>
+        <Text style={s.info}>{donor.email || "Email not available"} · {donor.city || "City not available"}</Text>
+      </View>}
+      <Text style={s.privacy}>Private ID files, card details and beneficiary wallet numbers are not displayed.</Text>
+    </>}
   </View>;
 
-  return <ScrollView style={s.screen} contentContainerStyle={s.content}>
+  return <ScrollView style={s.screen} contentContainerStyle={s.content} showsVerticalScrollIndicator>
     <View style={s.head}>
-      <View style={s.flex}><Text style={s.title}>Donation Management</Text>
-        <Text style={s.subtitle}>Verified campaign donations, donor profiles and payment monitoring.</Text></View>
-      {mode === "admin" ? <SmallButton text="Campaign Operations" primary
-        onPress={() => router.push("/(admin)/donation-list" as any)}/> : null}
-    </View>
-    <View style={s.notice}><Ionicons name="shield-checkmark-outline" size={18} color="#087665"/>
-      <Text style={s.noticeText}>PayMongo Sandbox payments are test transactions, not funds in a bank account. A checkout is only counted after confirmed receipt. Settlement and beneficiary releases require separate records.</Text>
+      <View style={s.flex}>
+        <Text style={s.eyebrow}>VOLUNSERVE · LGU DONATIONS</Text>
+        <Text style={s.title}>Donation Management</Text>
+        <Text style={s.subtitle}>Verified assistance campaigns, donor payments and transparent fund monitoring.</Text>
+      </View>
+      <View style={s.demoLabel}>
+        <Ionicons name="flask-outline" size={14} color="#128064"/>
+        <Text style={s.demoLabelText}>PAYMONGO SANDBOX · DEMO</Text>
+      </View>
     </View>
     {!!problem && <Text style={s.error}>{problem}</Text>}
-    <View style={s.metrics}>
-      {[
-        ["Confirmed test donations", peso(testReceived), "wallet-outline"],
-        ["Unique confirmed donors", String(donors), "people-outline"],
-        ["Active campaigns", String(activeCampaigns.length), "heart-outline"],
-        ["Pending / for review", String(pending), "time-outline"],
-      ].map(([name, value, icon]) => <View key={name} style={s.metric}>
-        <Ionicons name={icon as any} size={21} color="#009776"/>
-        <Text style={s.metricLabel}>{name}</Text>
-        <Text style={s.metricValue}>{ready ? value : "…"}</Text>
-      </View>)}
-    </View>
+
     <View style={s.tabs}>
       {([
-        ["overview", "Overview"], ["all", "All Donations"], ["campaigns", "Campaigns"],
-        ["payouts", "Fund Management"], ["notifications", "Notifications" + (unreadCount ? " (" + unreadCount + ")" : "")],
-      ] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab"
-        accessibilityState={{ selected: view === key }} onPress={() => setView(key)}
-        style={[s.tab, view === key && s.tabActive]}>
+        ["overview", "Overview", "grid-outline"],
+        ["all", "Transactions", "receipt-outline"],
+        ["campaigns", "Campaigns", "heart-outline"],
+        ["payouts", "Fund Management", "wallet-outline"],
+        ["notifications", "Alerts" + (unreadCount ? " (" + unreadCount + ")" : ""), "notifications-outline"],
+      ] as const).map(([key, label, icon]) => <Pressable key={key}
+        accessibilityRole="tab" accessibilityState={{selected: view === key}}
+        onPress={() => setView(key)} style={[s.tab, view === key && s.tabActive]}>
+        <Ionicons name={icon} size={15} color={view === key ? "#FFFFFF" : "#698078"}/>
         <Text style={[s.tabText, view === key && s.tabTextActive]}>{label}</Text>
       </Pressable>)}
     </View>
-    {view === "payouts" && (
-      <FundReconciliationPanel
-        campaigns={campaigns}
-        donations={records}
-        ready={ready && campaignReady && !problem}
-      />
-    )}
-    {view === "notifications" ? <View style={s.panel}>
-      <Text style={s.panelTitle}>Admin Donation Notifications</Text>
-      <Text style={s.info}>Each authorized Admin receives a separate alert when the signed PayMongo webhook confirms payment.</Text>
-      {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
-        key={alert.id} style={[s.activity, !alert.read && s.selectedRow]} onPress={() => {
-          if (alert.donationId) setSelectedId(alert.donationId);
-          setView("all");
-          if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), { read: true }).catch(() => {});
-        }}>
-        <Ionicons name={alert.read ? "notifications-outline" : "notifications"} size={20} color="#009776"/>
-        <View style={s.flex}><Text style={s.tableMain}>{alert.title || "Confirmed donation"}</Text>
-        <Text style={s.tableSecondary}>{alert.message || "A donation was received."}</Text>
-        <Text style={s.tableSecondary}>{dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}</Text></View>
-        <Ionicons name="chevron-forward" size={17} color="#667D8A"/>
-      </Pressable>) : <Text style={s.info}>No donation notifications yet.</Text>}
-    </View> : view === "payouts" ? null : <View style={[s.columns, compact && s.columnsCompact]}>
-      <View style={s.mainColumn}>
-        {view === "overview" ? <View style={s.topPanels}>
-          <View style={s.recentColumn}><View style={s.panel}>
-            <View style={s.panelHeading}><Text style={s.panelTitle}>Recent Donations</Text>
-              <SmallButton text="View All" onPress={() => setView("all")} /></View>
-            {recent.length ? recent.map(row) : <Text style={s.info}>No confirmed donations yet.</Text>}
-          </View></View>
-          <View style={s.campaignColumn}>{campaignsPanel}</View>
-        </View> : view === "campaigns" ? campaignsPanel : null}
-        {view === "all" || view === "overview" ?
+
+    {view === "overview" && <>
+      <View style={s.sectionIntro}>
+        <View style={s.flex}><Text style={s.sectionEyebrow}>ADMIN WORKSPACE</Text>
+          <Text style={s.sectionTitle}>Overview</Text>
+          <Text style={s.sectionDescription}>Start here for a quick status check, then open the appropriate tab to complete a task.</Text>
+        </View>
+      </View>
+      <View style={s.metrics}>
+        {([
+          ["Verified test payments", peso(testReceived), "card-outline", "Confirmed sandbox payments only"],
+          ["Payments to review", String(pending), "time-outline", "Pending or submitted records"],
+          ["Open campaigns", String(activeCampaigns.length), "heart-outline", "Published and accepting donations"],
+          ["Confirmed donors", String(donors), "people-outline", "Unique recorded donor accounts"],
+        ] as const).map(([name, value, icon, description]) =>
+          <View key={name} style={s.metric}>
+            <View style={s.metricTop}>
+              <Text style={s.metricLabel}>{name}</Text>
+              <Ionicons name={icon} size={19} color="#0D8F70"/>
+            </View>
+            <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
+            <Text style={s.metricDescription}>{description}</Text>
+          </View>)}
+      </View>
+      <View style={s.workflow}>
+        <View style={s.panelHeading}>
+          <View style={s.flex}>
+            <Text style={s.panelTitle}>Quick workflow</Text>
+            <Text style={s.info}>Select the next action. Financial approval and wallet payouts are not enabled in this demo.</Text>
+          </View>
+        </View>
+        <View style={s.quickGrid}>
+          {stepLinks.map((step, index) => <Pressable key={step.label}
+            accessibilityRole="button" accessibilityLabel={"Open " + step.label}
+            onPress={step.open} style={s.quickCard}>
+            <View style={s.quickIcon}><Ionicons name={step.icon} color="#0A8C6A" size={21}/></View>
+            <View style={s.flex}>
+              <Text style={s.quickStep}>STEP 0{index + 1}</Text>
+              <Text style={s.quickTitle}>{step.label}</Text>
+              <Text style={s.quickDescription}>{step.detail}</Text>
+            </View>
+            <Ionicons name="arrow-forward-outline" size={17} color="#709687"/>
+          </Pressable>)}
+        </View>
+      </View>
+      <View style={s.topPanels}>
+        <View style={s.recentColumn}>
           <View style={s.panel}>
-            <View style={s.panelHeading}><View style={s.flex}><Text style={s.panelTitle}>All Donations</Text>
-              <Text style={s.info}>Search, filter and open actual transaction records.</Text></View></View>
+            <View style={s.panelHeading}>
+              <View style={s.flex}><Text style={s.panelTitle}>Latest verified transactions</Text>
+                <Text style={s.info}>Confirmed donations only · click to inspect the record</Text>
+              </View>
+              <SmallButton text="View transactions" onPress={() => setView("all")}/>
+            </View>
+            {recent.length ? recent.map(row) : <Text style={s.info}>No confirmed donations yet.</Text>}
+          </View>
+        </View>
+        <View style={s.campaignColumn}>{campaignList(activeCampaigns.slice(0, 3), true)}</View>
+      </View>
+      <View style={s.slimNote}>
+        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
+        <Text style={s.slimNoteText}>
+          Demo data: PayMongo Sandbox payments are simulated, not funds in an LGU bank account.
+          Legacy/admin-recorded receipts are reviewed separately under Transactions and Fund Management.
+        </Text>
+      </View>
+    </>}
+
+    {view === "all" && <>
+      <View style={s.sectionIntro}>
+        <View style={s.flex}>
+          <Text style={s.sectionEyebrow}>DONOR PAYMENT RECORDS</Text>
+          <Text style={s.sectionTitle}>Transactions</Text>
+          <Text style={s.sectionDescription}>Search every donation, verify its payment status, and inspect the associated donor profile.</Text>
+        </View>
+        <Text style={s.sectionCount}>{records.length} records</Text>
+      </View>
+      <View style={[s.columns, compact && s.columnsCompact]}>
+        <View style={s.mainColumn}>
+          <View style={s.panel}>
+            <View style={s.panelHeading}>
+              <Text style={s.panelTitle}>All donation transactions</Text>
+              <Text style={s.info}>{filtered.length} matched</Text>
+            </View>
+            <TextInput style={s.search} value={search} onChangeText={setSearch}
+              placeholder="Search donor, campaign or payment reference"
+              placeholderTextColor="#8A9D9B"/>
             <View style={s.searchRow}>
-              <TextInput style={s.search} value={search} onChangeText={setSearch}
-                placeholder="Search donor, campaign or reference ID" placeholderTextColor="#8B9BAA"/>
               {(["all", "paid", "pending", "rejected"] as const).map(name =>
-                <SmallButton key={name} text={name === "all" ? "All" : name === "paid" ? "Paid" :
-                  name === "pending" ? "Pending" : "Failed / Rejected"}
+                <SmallButton key={name} text={name === "all" ? "All records" :
+                  name === "paid" ? "Confirmed" : name === "pending" ? "Pending" : "Failed / Rejected"}
                   primary={statusFilter === name} onPress={() => setStatusFilter(name)}/>)}
             </View>
             {filtered.length ? filtered.slice(0, 100).map(row) :
               <Text style={s.info}>No matching donations.</Text>}
-            {filtered.length > 100 && <Text style={s.info}>Showing newest 100 of {filtered.length} transactions.</Text>}
-          </View> : null}
-        <View style={s.balance}><Text style={s.info}>Recorded live PayMongo received: {peso(liveReceived)} · Manual/mode-unknown: {peso(otherReceived)}. These categories are kept separate from sandbox totals.</Text></View>
-      </View>
-      <View style={s.detailsColumn}><View style={s.panel}>
-        <Text style={s.panelTitle}>Donation Details</Text>
-        {!selected ? <View style={s.empty}><Ionicons name="receipt-outline" size={32} color="#009776"/>
-          <Text style={s.info}>Select a donation to view its payment and linked donor record.</Text></View> : <>
-          <View style={s.donorHeader}>
-            {donor?.photoURL || donor?.profilePhotoUrl ?
-              <Image source={{ uri: String(donor.photoURL || donor.profilePhotoUrl) }} style={s.profileImage}/> :
-              <View style={s.profileImageFallback}><Ionicons name="person" size={22} color="#087F72"/></View>}
-            <View style={s.flex}><Text style={s.panelTitle}>{donor?.fullName || donorLabel(selected)}</Text>
-              <Text style={s.info}>{donorLoading ? "Loading linked profile…" :
-                selected.donorUid ? "Registered donor" : "Unlinked record"}</Text></View>
+            {filtered.length > 100 && <Text style={s.info}>Showing latest 100 of {filtered.length} donations.</Text>}
           </View>
-          {([
-            ["Campaign", selected.campaignTitle || campaigns.find(x => x.id === selected.campaignId)?.title || "Campaign"],
-            ["Donation amount", peso(selected.amount)],
-            ["Confirmed received", peso(amountReceived(selected))],
-            ["Status", statusText(selected)],
-            ["Payment", payMode(selected)],
-            ["Transaction reference", selected.transactionReference || selected.paymongoCheckoutSessionId || selected.id],
-            ["Date", dateText(selected.paidAt || selected.createdAt)],
-            ["Donor barangay", donor?.barangay || "Not available"],
-          ] as const).map(([label, value]) => <View key={label} style={s.detailRow}>
-            <Text style={s.detailLabel}>{label}</Text><Text selectable style={s.detailValue}>{value}</Text>
-          </View>)}
-          {selected.donorNote ? <View style={s.note}><Text style={s.detailLabel}>Donor message</Text>
-            <Text style={s.tableMain}>{selected.donorNote}</Text></View> : null}
-          {selected.paymentProvider === "paymongo" && selected.paymongoLivemode === false &&
-            <Text style={s.testFlag}>Sandbox transaction — not real money</Text>}
-          {donor && <View style={s.note}><Text style={s.detailLabel}>Linked account</Text>
-            <Text style={s.tableMain}>{donor.fullName || donorLabel(selected)}</Text>
-            <Text style={s.info}>{donor.email || "Email not available"} · {donor.city || "City not available"}</Text>
-          </View>}
-          <Text style={s.privacy}>Private ID files and card information are never displayed.</Text>
-        </>}
-      </View></View>
-    </View>}
+        </View>
+        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{detailsPanel}</View>
+      </View>
+      <View style={s.slimNote}>
+        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
+        <Text style={s.slimNoteText}>
+          PayMongo Sandbox confirmed: {peso(testReceived)} · Live confirmed: {peso(liveReceived)} · Other recorded: {peso(otherReceived)}.
+          Payment confirmation alone does not establish settled funds.
+        </Text>
+      </View>
+    </>}
+
+    {view === "campaigns" && <>
+      <View style={s.sectionIntro}>
+        <View style={s.flex}>
+          <Text style={s.sectionEyebrow}>VERIFIED FUNDRAISING</Text>
+          <Text style={s.sectionTitle}>Campaigns</Text>
+          <Text style={s.sectionDescription}>Published and completed cases, approved goals, and recorded donation progress.</Text>
+        </View>
+      </View>
+      {campaignList(
+        [...campaigns].sort((a, b) => Number(b.status === "published") - Number(a.status === "published")),
+        false,
+      )}
+    </>}
+
+    {view === "payouts" && <FundReconciliationPanel
+      campaigns={campaigns} donations={records}
+      ready={ready && campaignReady && !problem}
+    />}
+
+    {view === "notifications" && <>
+      <View style={s.sectionIntro}>
+        <View style={s.flex}>
+          <Text style={s.sectionEyebrow}>ADMIN NOTIFICATIONS</Text>
+          <Text style={s.sectionTitle}>Donation alerts</Text>
+          <Text style={s.sectionDescription}>Confirmed payment events sent to authorized administrators. Select an alert to inspect its donation record.</Text>
+        </View>
+        <Text style={s.sectionCount}>{unreadCount} unread</Text>
+      </View>
+      <View style={s.panel}>
+        {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
+          key={alert.id} style={[s.activity, !alert.read && s.selectedRow]}
+          accessibilityRole="button"
+          onPress={() => {
+            if (alert.donationId) setSelectedId(alert.donationId);
+            setView("all");
+            if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), {read: true}).catch(() => {});
+          }}>
+          <View style={s.alertIcon}>
+            <Ionicons name={alert.read ? "notifications-outline" : "notifications"} size={19} color="#098B70"/>
+          </View>
+          <View style={s.flex}>
+            <Text style={s.tableMain}>{alert.title || "Donation confirmed"}</Text>
+            <Text style={s.tableSecondary}>{alert.message || "A payment was confirmed."}</Text>
+            <Text style={s.tableSecondary}>{dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#7C9890"/>
+        </Pressable>) : <View style={s.empty}>
+          <Ionicons name="notifications-outline" size={31} color="#8EACA2"/>
+          <Text style={s.emptyTitle}>No donation alerts</Text>
+          <Text style={s.info}>Verified payment alerts will appear here.</Text>
+        </View>}
+      </View>
+    </>}
   </ScrollView>;
 }
 
