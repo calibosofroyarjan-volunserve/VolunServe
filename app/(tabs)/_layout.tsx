@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React from "react";
 import {
   ActivityIndicator,
@@ -359,6 +360,7 @@ export default function TabLayout() {
               accessibilityLabel="Close navigation drawer"
             />
             <LinearGradient colors={["#073A37", "#064D47", "#036151"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawer}>
+              <SidebarBotanicalDecor />
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -495,6 +497,7 @@ function DesktopTabBar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
+      <SidebarBotanicalDecor />
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
