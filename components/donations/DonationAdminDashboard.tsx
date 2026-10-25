@@ -114,6 +114,9 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [expandedReviewKey, setExpandedReviewKey] = useState("");
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const [selectedAlertId, setSelectedAlertId] = useState("");
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
 
@@ -188,6 +191,10 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   ];
   const recentActivity = records.slice(0, 3);
   const unreadCount = alerts.filter(a => !a.read).length;
+  const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
+  const relatedAlertDonation = selectedAlert?.donationId
+    ? records.find(r => r.id === selectedAlert.donationId) || null
+    : null;
   const filtered = useMemo(() => records.filter(r => {
     const term = search.trim().toLowerCase();
     const match = !term || [donorLabel(r), r.campaignTitle, r.id, r.transactionReference]
@@ -433,25 +440,99 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
             </View>
             {!ready || !campaignReady ? <Text style={s.info}>Reviewing records…</Text> :
               reviewItems.length ? <>
-                {reviewItems.slice(0, 3).map(item => <Pressable
-                  key={item.key} accessibilityRole="button"
-                  accessibilityLabel={item.title + ": " + item.detail}
-                  style={s.reviewRow}
+                {reviewItems.slice(0, showAllReviews ? reviewItems.length : 3).map(item => {
+                  const expanded = expandedReviewKey === item.key;
+                  const flaggedCampaign = item.kind === "campaign"
+                    ? campaigns.find(c => c.id === item.id) : null;
+                  const flaggedDonation = item.kind === "donation"
+                    ? records.find(r => r.id === item.id) : null;
+                  return <View key={item.key} style={s.reviewItem}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{expanded}}
+                      accessibilityLabel={(expanded ? "Collapse " : "Expand ") + item.title + ": " + item.detail}
+                      style={[s.reviewRow, expanded && s.reviewRowExpanded]}
+                      onPress={() => setExpandedReviewKey(expanded ? "" : item.key)}>
+                      <View style={s.reviewIcon}>
+                        <Ionicons name={item.icon} size={18} color="#A07835"/>
+                      </View>
+                      <View style={s.flex}>
+                        <Text style={s.reviewTitle}>{item.title}</Text>
+                        <Text style={s.reviewDetail} numberOfLines={2}>{item.detail}</Text>
+                      </View>
+                      <Ionicons name={expanded ? "chevron-up" : "chevron-down"}
+                        color="#78938A" size={16}/>
+                    </Pressable>
+                    {expanded && <View style={s.reviewExpanded}>
+                      {flaggedCampaign ? <>
+                        <Text style={s.reviewExpandedHeading}>Campaign funding review</Text>
+                        <Text style={s.reviewExpandedCopy}>
+                          This published record does not have a positive approved monetary goal.
+                          Check whether it is a historical or goods-based relief campaign
+                          before deciding that a financial goal is required.
+                        </Text>
+                        <View style={s.reviewDetailRow}>
+                          <Text style={s.reviewDetailLabel}>Recorded goal</Text>
+                          <Text style={s.reviewDetailValue}>
+                            {numeric(flaggedCampaign.monetaryGoal) > 0
+                              ? peso(flaggedCampaign.monetaryGoal) : "Not recorded"}
+                          </Text>
+                        </View>
+                        <View style={s.reviewDetailRow}>
+                          <Text style={s.reviewDetailLabel}>Assistance source</Text>
+                          <Text selectable style={s.reviewDetailValue}>
+                            {flaggedCampaign.sourceAssistanceRequestId || "No assistance link recorded"}
+                          </Text>
+                        </View>
+                        <Text style={s.reviewExpandedFoot}>
+                          Any changes to a financial goal must follow a verified assistance review.
+                          Expanding this item does not change the campaign.
+                        </Text>
+                      </> : flaggedDonation ? <>
+                        <Text style={s.reviewExpandedHeading}>
+                          {item.key.startsWith("legacy:") ? "Manual receipt review" : "Payment exception review"}
+                        </Text>
+                        <Text style={s.reviewExpandedCopy}>
+                          {item.key.startsWith("legacy:")
+                            ? "This is a submitted manual/legacy donation, not a verified PayMongo payment. An authorized reviewer must inspect actual supporting evidence before confirming receipt."
+                            : "This payment was rejected or failed. Check the provider record and payment reference; it is not eligible to increase the confirmed funding total."}
+                        </Text>
+                        <View style={s.reviewDetailRow}>
+                          <Text style={s.reviewDetailLabel}>Record status</Text>
+                          <Text style={s.reviewDetailValue}>{statusText(flaggedDonation)}</Text>
+                        </View>
+                        <View style={s.reviewDetailRow}>
+                          <Text style={s.reviewDetailLabel}>Payment source</Text>
+                          <Text style={s.reviewDetailValue}>{payMode(flaggedDonation)}</Text>
+                        </View>
+                        <View style={s.reviewDetailRow}>
+                          <Text style={s.reviewDetailLabel}>Record reference</Text>
+                          <Text selectable style={s.reviewDetailValue}>
+                            {flaggedDonation.transactionReference || flaggedDonation.id}
+                          </Text>
+                        </View>
+                        <Text style={s.reviewExpandedFoot}>
+                          This panel provides read-only review context; it cannot approve,
+                          reverse, or falsely confirm a payment.
+                        </Text>
+                      </> : <Text style={s.reviewExpandedCopy}>This record is no longer available.</Text>}
+                    </View>}
+                  </View>;
+                })}
+                {reviewItems.length > 3 && <Pressable
+                  accessibilityRole="button"
                   onPress={() => {
-                    if (item.kind === "campaign") openCampaignRecord(item.id);
-                    else { setSelectedId(item.id); setView("all"); }
-                  }}>
-                  <View style={s.reviewIcon}>
-                    <Ionicons name={item.icon} size={18} color="#A07835"/>
-                  </View>
-                  <View style={s.flex}>
-                    <Text style={s.reviewTitle}>{item.title}</Text>
-                    <Text style={s.reviewDetail} numberOfLines={2}>{item.detail}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" color="#78938A" size={16}/>
-                </Pressable>)}
-                {reviewItems.length > 3 &&
-                  <Text style={s.reviewFoot}>{reviewItems.length - 3} additional flagged record(s) in Campaigns or Transactions.</Text>}
+                    setShowAllReviews(!showAllReviews);
+                    setExpandedReviewKey("");
+                  }}
+                  style={s.reviewExpandMore}>
+                  <Text style={s.reviewExpandMoreText}>
+                    {showAllReviews ? "Show fewer flagged records" :
+                      "Show all " + reviewItems.length + " flagged records"}
+                  </Text>
+                  <Ionicons name={showAllReviews ? "chevron-up" : "chevron-down"}
+                    color="#0D8366" size={15}/>
+                </Pressable>}
               </> : <View style={s.overviewEmpty}>
                 <Ionicons name="checkmark-circle-outline" size={22} color="#108565"/>
                 <View style={s.flex}>
@@ -470,11 +551,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
               </View>
             </View>
             {!ready ? <Text style={s.info}>Loading activity…</Text> :
-              recentActivity.length ? recentActivity.map(item => <Pressable
-                key={item.id} accessibilityRole="button"
-                accessibilityLabel={"Inspect donation " + item.id}
-                onPress={() => { setSelectedId(item.id); setView("all"); }}
-                style={s.activityFeedRow}>
+              recentActivity.length ? recentActivity.map(item => <View
+                key={item.id} style={s.activityFeedRow}>
                 <View style={[s.activityFeedIcon, !isConfirmed(item) && s.activityFeedIconPending]}>
                   <Ionicons name={isConfirmed(item) ? "checkmark-circle-outline" : "time-outline"}
                     color={isConfirmed(item) ? "#0A8C6A" : "#A57830"} size={19}/>
@@ -492,9 +570,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 </View>
                 <View style={s.activityAmountColumn}>
                   <Text style={s.activityAmount}>{peso(isConfirmed(item) ? amountReceived(item) : item.amount)}</Text>
-                  <Ionicons name="chevron-forward" color="#829D92" size={15}/>
                 </View>
-              </Pressable>) : <Text style={s.info}>No donation activity recorded yet.</Text>}
+              </View>) : <Text style={s.info}>No donation activity recorded yet.</Text>}
           </View>
         </View>
       </View>
@@ -574,39 +651,111 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     {view === "notifications" && <>
       <View style={s.sectionIntro}>
         <View style={s.flex}>
-          <Text style={s.sectionEyebrow}>ADMIN NOTIFICATIONS</Text>
-          <Text style={s.sectionTitle}>Donation alerts</Text>
-          <Text style={s.sectionDescription}>Confirmed payment events sent to authorized administrators. Select an alert to inspect its donation record.</Text>
+          <Text style={s.sectionEyebrow}>DONATION NOTIFICATIONS</Text>
+          <Text style={s.sectionTitle}>Alerts</Text>
+          <Text style={s.sectionDescription}>
+            View notification details and acknowledge messages here,
+            without being redirected to another tab.
+          </Text>
         </View>
         <Text style={s.sectionCount}>{unreadCount} unread</Text>
       </View>
-      <View style={s.panel}>
-        {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
-          key={alert.id} style={[s.activity, !alert.read && s.selectedRow]}
-          accessibilityRole="button"
-          onPress={() => {
-            if (alert.donationId) {
-              setSelectedId(alert.donationId);
-              setView("all");
-            }
-            if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), {read: true}).catch(() => {});
-          }}>
-          <View style={s.alertIcon}>
-            <Ionicons name={alert.read ? "notifications-outline" : "notifications"} size={19} color="#098B70"/>
+      <View style={[s.columns, compact && s.columnsCompact]}>
+        <View style={s.mainColumn}>
+          <View style={s.panel}>
+            <View style={s.panelHeading}>
+              <Text style={s.panelTitle}>Notification inbox</Text>
+              <Text style={s.info}>{alerts.length} notifications</Text>
+            </View>
+            {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
+              key={alert.id}
+              style={[s.activity, selectedAlertId === alert.id && s.selectedRow]}
+              accessibilityRole="button"
+              accessibilityLabel={"Read notification " + (alert.title || "Donation")}
+              onPress={() => {
+                setSelectedAlertId(alert.id);
+                if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), {
+                  read: true,
+                }).catch(() => {});
+              }}>
+              <View style={s.alertIcon}>
+                <Ionicons name={alert.read ? "notifications-outline" : "notifications"}
+                  size={19} color="#098B70"/>
+              </View>
+              <View style={s.flex}>
+                <Text style={s.tableMain}>{alert.title || "Donation update"}</Text>
+                <Text style={s.tableSecondary} numberOfLines={2}>
+                  {alert.message || "A donation update was recorded."}
+                </Text>
+                <Text style={s.tableSecondary}>
+                  {dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}
+                </Text>
+              </View>
+              <Ionicons name={selectedAlertId === alert.id ? "chevron-down" : "chevron-right"}
+                size={18} color="#7C9890"/>
+            </Pressable>) : <View style={s.empty}>
+              <Ionicons name="notifications-outline" size={31} color="#8EACA2"/>
+              <Text style={s.emptyTitle}>No donation alerts</Text>
+              <Text style={s.info}>Verified payment alerts will appear here.</Text>
+            </View>}
           </View>
-          <View style={s.flex}>
-            <Text style={s.tableMain}>{alert.title || "Donation confirmed"}</Text>
-            <Text style={s.tableSecondary}>{alert.message || "A payment was confirmed."}</Text>
-            <Text style={s.tableSecondary}>{dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}</Text>
+        </View>
+        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>
+          <View style={s.panel}>
+            <View style={s.panelHeading}>
+              <Text style={s.panelTitle}>Alert details</Text>
+              {selectedAlert && <SmallButton text="Close" onPress={() => setSelectedAlertId("")}/>}
+            </View>
+            {!selectedAlert ? <View style={s.empty}>
+              <Ionicons name="mail-open-outline" size={30} color="#83A89A"/>
+              <Text style={s.emptyTitle}>Select an alert</Text>
+              <Text style={s.info}>Its message and linked transaction status will appear here.</Text>
+            </View> : <>
+              <Text style={s.inspectorEyebrow}>
+                {selectedAlert.read ? "ACKNOWLEDGED" : "UNREAD NOTIFICATION"}
+              </Text>
+              <Text style={s.inspectorHeading}>{selectedAlert.title || "Donation update"}</Text>
+              <Text style={s.reviewExpandedCopy}>
+                {selectedAlert.message || "A donation update was recorded."}
+              </Text>
+              <View style={s.detailRow}>
+                <Text style={s.detailLabel}>Received</Text>
+                <Text style={s.detailValue}>{dateText(selectedAlert.createdAt)}</Text>
+              </View>
+              <View style={s.detailRow}>
+                <Text style={s.detailLabel}>Linked donation</Text>
+                <Text selectable style={s.detailValue}>
+                  {selectedAlert.donationId || "No linked payment record"}
+                </Text>
+              </View>
+              {relatedAlertDonation && <>
+                <View style={s.detailRow}>
+                  <Text style={s.detailLabel}>Campaign</Text>
+                  <Text style={s.detailValue}>
+                    {relatedAlertDonation.campaignTitle || "Donation campaign"}
+                  </Text>
+                </View>
+                <View style={s.detailRow}>
+                  <Text style={s.detailLabel}>Payment status</Text>
+                  <Text style={s.detailValue}>{statusText(relatedAlertDonation)}</Text>
+                </View>
+                <View style={s.detailRow}>
+                  <Text style={s.detailLabel}>Recorded amount</Text>
+                  <Text style={s.detailValue}>
+                    {peso(isConfirmed(relatedAlertDonation)
+                      ? amountReceived(relatedAlertDonation) : relatedAlertDonation.amount)}
+                  </Text>
+                </View>
+              </>}
+              <Text style={s.privacy}>
+                This is a notification review, not a payment verification or financial release action.
+              </Text>
+            </>}
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#7C9890"/>
-        </Pressable>) : <View style={s.empty}>
-          <Ionicons name="notifications-outline" size={31} color="#8EACA2"/>
-          <Text style={s.emptyTitle}>No donation alerts</Text>
-          <Text style={s.info}>Verified payment alerts will appear here.</Text>
-        </View>}
+        </View>
       </View>
     </>}
+
   </ScrollView>;
 }
 
@@ -734,5 +883,17 @@ const s = StyleSheet.create({
   activityTime: {fontFamily: "AdminInterRegular", fontSize: 9.5, color: "#93A39E", marginTop: 5},
   activityAmountColumn: {alignItems: "flex-end", gap: 6},
   activityAmount: {fontFamily: "AdminInterSemiBold", fontSize: 11.2, color: "#225049"},
+
+  reviewItem: {borderBottomWidth: 1, borderBottomColor: "#E8F0EA"},
+  reviewRowExpanded: {backgroundColor: "#F7FAF8"},
+  reviewExpanded: {paddingHorizontal: 15, paddingVertical: 13, borderRadius: 9, backgroundColor: "#F8FCFA", borderWidth: 1, borderColor: "#E1EEE7", marginBottom: 10, gap: 8},
+  reviewExpandedHeading: {fontFamily: "AdminInterSemiBold", fontSize: 11.8, color: "#275148"},
+  reviewExpandedCopy: {fontFamily: "AdminInterRegular", fontSize: 10.7, lineHeight: 18, color: "#607F77"},
+  reviewDetailRow: {flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "flex-start", paddingVertical: 6},
+  reviewDetailLabel: {fontFamily: "AdminInterRegular", fontSize: 10.2, color: "#738B83", flex: 1},
+  reviewDetailValue: {fontFamily: "AdminInterSemiBold", fontSize: 10.2, color: "#31574F", flex: 1.4, textAlign: "right"},
+  reviewExpandedFoot: {fontFamily: "AdminInterRegular", fontSize: 9.8, lineHeight: 16, color: "#80968E", marginTop: 4},
+  reviewExpandMore: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12},
+  reviewExpandMoreText: {fontFamily: "AdminInterSemiBold", color: "#0D8366", fontSize: 10.5},
 
 });
