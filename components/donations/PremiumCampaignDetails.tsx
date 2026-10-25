@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from "@expo-google-fonts/inter";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 type PublicCampaign = {
@@ -83,6 +91,10 @@ function CampaignGallery({ photos, campaign }: { photos: string[]; campaign: Pub
       <View style={styles.photoStage}>
         <Image source={{ uri: current }} style={styles.mainPhoto} resizeMode="contain" />
         <View style={styles.counter}><Text style={styles.counterText}>{active + 1}/{photos.length}</Text></View>
+        <View style={styles.photoCaption}>
+          <Ionicons name="images-outline" size={13} color="#D9ECE6" />
+          <Text style={styles.photoCaptionText}>Public campaign photo</Text>
+        </View>
         {photos.length > 1 && (
           <View style={styles.galleryArrows}>
             <TouchableOpacity
@@ -123,6 +135,13 @@ export default function PremiumCampaignDetails({
   campaign, photos, wide, area, category, group,
   raised, goal, percent, finished, money, children,
 }: Props) {
+  useFonts({
+    DonationInterRegular: Inter_400Regular,
+    DonationInterMedium: Inter_500Medium,
+    DonationInterSemiBold: Inter_600SemiBold,
+    DonationInterBold: Inter_700Bold,
+    DonationInterExtraBold: Inter_800ExtraBold,
+  });
   const coord = publicCoordinationPoint(campaign);
   const posted = campaignDate(campaign.createdAt);
   const ended = campaign.status === "closed";
@@ -142,12 +161,9 @@ export default function PremiumCampaignDetails({
             <Ionicons name="people-outline" size={14} color="#A85714" />
             <Text style={styles.categoryText}>{group === "community_needs_help" ? "COMMUNITY NEED" : "DISASTER SUPPORT"}</Text>
           </View>
-          <View style={[styles.badge, styles.pastBadge]}>
-            <Ionicons name={finished ? "checkmark-circle" : "heart-outline"} size={14} color="#087D56" />
-            <Text style={styles.verifiedText}>{ended ? "CLOSED CAMPAIGN" : finished ? "GOAL REACHED" : "ACTIVE CAMPAIGN"}</Text>
-          </View>
         </View>
 
+        <Text style={styles.campaignEyebrow}>CAMPAIGN PROFILE</Text>
         <Text style={styles.campaignTitle}>{campaign.title || "Donation Campaign"}</Text>
         <View style={styles.areaLine}>
           <Ionicons name="location-outline" size={19} color="#0A9471" />
@@ -156,7 +172,7 @@ export default function PremiumCampaignDetails({
         <Text style={styles.privacyNote}>General barangay/city area only. Exact beneficiary location remains private.</Text>
 
         <View style={styles.overviewCard}>
-          <SectionTitle name="Campaign Overview" icon="document-text-outline" />
+          <SectionTitle name="About this campaign" icon="document-text-outline" />
           <Text style={styles.overviewText}>
             {description || "This LGU-verified campaign has been published for community support."}
           </Text>
@@ -165,14 +181,14 @@ export default function PremiumCampaignDetails({
           <View style={styles.infoCard}>
             <View style={styles.infoIcon}><Ionicons name="people-outline" size={23} color="#078864" /></View>
             <View style={styles.infoCopy}>
-              <Text style={styles.infoLabel}>Beneficiary Area</Text>
+              <Text style={styles.infoLabel}>Beneficiary area</Text>
               <Text style={styles.infoValue}>{area}</Text>
             </View>
           </View>
           <View style={styles.infoCard}>
             <View style={styles.infoIcon}><Ionicons name="heart-outline" size={23} color="#078864" /></View>
             <View style={styles.infoCopy}>
-              <Text style={styles.infoLabel}>Type of Support</Text>
+              <Text style={styles.infoLabel}>Support type</Text>
               <Text style={styles.infoValue}>Monetary Donation</Text>
               <Text style={styles.infoHint}>{category}</Text>
             </View>
@@ -184,7 +200,7 @@ export default function PremiumCampaignDetails({
         <View style={styles.fundingCard}>
           <View style={styles.fundingHeading}>
             <View style={styles.sectionIcon}><Ionicons name="layers-outline" size={20} color="#087E61" /></View>
-            <Text style={[styles.sectionTitle, { flex: 1 }]}>Funding Progress</Text>
+            <Text style={[styles.sectionTitle, { flex: 1 }]}>Funding progress</Text>
             <View style={styles.statusChip}>
               <Ionicons name={finished ? "checkmark-circle" : "ellipse"} size={12} color="#038958" />
               <Text style={styles.statusText}>{status}</Text>
@@ -225,8 +241,8 @@ export default function PremiumCampaignDetails({
 
         {!!coord && (
           <View style={styles.coordinationCard}>
-            <SectionTitle name="LGU Coordination" icon="business-outline" />
-            <Text style={styles.coordinationLabel}>Official coordination point</Text>
+            <SectionTitle name="LGU coordination" icon="business-outline" />
+            <Text style={styles.coordinationLabel}>DESIGNATED PUBLIC SERVICE POINT</Text>
             <Text style={styles.coordinationName}>{coord}</Text>
             <View style={styles.coordPrivacy}>
               <Ionicons name="lock-closed-outline" size={17} color="#2874B4" />
@@ -236,7 +252,7 @@ export default function PremiumCampaignDetails({
         )}
 
         <View style={styles.detailsCard}>
-          <SectionTitle name="Campaign Details" icon="calendar-outline" />
+          <SectionTitle name="Campaign information" icon="calendar-outline" />
           {!!posted && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Date Posted</Text>
@@ -262,73 +278,250 @@ export default function PremiumCampaignDetails({
 }
 
 const styles = StyleSheet.create({
-  columns: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
-  stacked: { flexDirection: "column", gap: 16 },
-  leftColumn: { flex: 1.45, minWidth: 0, gap: 0 },
-  rightColumn: { flex: 1, minWidth: 0, gap: 13 },
+  // Quiet editorial system: Inter text, deliberate weights, fewer painted cards.
+  columns: { flexDirection: "row", alignItems: "flex-start", gap: 27 },
+  stacked: { flexDirection: "column", gap: 24 },
+  leftColumn: { flex: 1.47, minWidth: 0 },
+  rightColumn: { flex: 1, minWidth: 0, gap: 15 },
   stackColumn: { flex: 0, width: "100%" },
+
   gallery: { gap: 9 },
-  photoStage: { width: "100%", height: 254, overflow: "hidden", borderRadius: 15, backgroundColor: "#17352F" },
+  photoStage: {
+    width: "100%", height: 244, overflow: "hidden",
+    borderRadius: 14, backgroundColor: "#18352F",
+    borderWidth: 1, borderColor: "#D4E4DF",
+  },
   mainPhoto: { width: "100%", height: "100%" },
-  counter: { position: "absolute", left: 13, top: 13, borderRadius: 999, backgroundColor: "rgba(4,35,34,0.78)", paddingHorizontal: 12, paddingVertical: 7 },
-  counterText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
-  galleryArrows: { position: "absolute", left: 10, right: 10, top: "44%", flexDirection: "row", justifyContent: "space-between" },
-  galleryArrow: { width: 35, height: 35, borderRadius: 18, backgroundColor: "rgba(2,48,40,0.86)", alignItems: "center", justifyContent: "center" },
-  thumbs: { gap: 9, paddingVertical: 2 },
-  thumbFrame: { width: 78, height: 62, overflow: "hidden", borderRadius: 9, borderWidth: 2, borderColor: "transparent", backgroundColor: "#F3F7F5" },
-  thumbActive: { borderColor: "#019C6A" },
+  counter: {
+    position: "absolute", top: 13, left: 13,
+    paddingHorizontal: 11, paddingVertical: 6,
+    backgroundColor: "rgba(6,37,33,0.84)", borderRadius: 7,
+  },
+  counterText: {
+    fontFamily: "DonationInterSemiBold", fontSize: 10.5, color: "#FFFFFF",
+  },
+  galleryArrows: {
+    position: "absolute", top: "42%", left: 10, right: 10,
+    flexDirection: "row", justifyContent: "space-between",
+  },
+  galleryArrow: {
+    width: 37, height: 37, borderRadius: 19,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(8,55,46,0.86)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.24)",
+  },
+  photoCaption: {
+    position: "absolute", bottom: 10, left: 11,
+    flexDirection: "row", gap: 6, alignItems: "center",
+    borderRadius: 7, backgroundColor: "rgba(4,38,33,0.79)",
+    paddingHorizontal: 9, paddingVertical: 6,
+  },
+  photoCaptionText: {
+    fontFamily: "DonationInterMedium", fontSize: 9, color: "#EAF8F2",
+  },
+  thumbs: { paddingVertical: 3, gap: 9 },
+  thumbFrame: {
+    height: 65, width: 83, borderRadius: 9,
+    borderWidth: 2, borderColor: "transparent",
+    overflow: "hidden", backgroundColor: "#EFF4F1",
+  },
+  thumbActive: { borderColor: "#0B906C" },
   thumbImage: { width: "100%", height: "100%" },
-  photoFallback: { height: 190, borderRadius: 15, backgroundColor: "#E8F6EF", alignItems: "center", justifyContent: "center", padding: 18, gap: 4 },
-  photoFallbackTitle: { fontSize: 12, fontWeight: "800", color: "#115642" },
-  photoFallbackNote: { fontSize: 10, color: "#5D837B" },
-  badges: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 19 },
-  badge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 7 },
-  verifiedBadge: { backgroundColor: "#DDF9E9" },
-  verifiedText: { fontSize: 9, fontWeight: "900", color: "#067349" },
-  categoryBadge: { backgroundColor: "#FFF0E4" },
-  categoryText: { fontSize: 9, fontWeight: "900", color: "#AF5412" },
-  pastBadge: { backgroundColor: "#E7F8F0" },
-  campaignTitle: { fontSize: 27, lineHeight: 34, fontWeight: "900", color: "#103347", letterSpacing: -0.65, marginTop: 12 },
-  areaLine: { flexDirection: "row", gap: 7, alignItems: "flex-start", marginTop: 11 },
-  area: { fontSize: 12, lineHeight: 18, fontWeight: "800", color: "#476982", flex: 1 },
-  privacyNote: { marginTop: 3, fontSize: 10, lineHeight: 16, color: "#728593", marginLeft: 26 },
-  overviewCard: { marginTop: 18, borderWidth: 1, borderColor: "#E1EAE9", borderRadius: 15, backgroundColor: "#F8FBFB", padding: 15 },
-  sectionHead: { flexDirection: "row", gap: 9, alignItems: "center" },
-  sectionIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#DEF8EC", justifyContent: "center", alignItems: "center" },
-  sectionTitle: { fontSize: 14, fontWeight: "900", color: "#123648" },
-  overviewText: { marginTop: 10, fontSize: 11.5, lineHeight: 18, color: "#597187" },
+  photoFallback: {
+    height: 198, borderRadius: 14, backgroundColor: "#EDF7F2",
+    borderWidth: 1, borderColor: "#D9E9E1",
+    alignItems: "center", justifyContent: "center", gap: 5, padding: 18,
+  },
+  photoFallbackTitle: {
+    fontFamily: "DonationInterSemiBold", color: "#245844", fontSize: 13,
+  },
+  photoFallbackNote: {
+    fontFamily: "DonationInterRegular", fontSize: 11, color: "#627E73",
+  },
+  badges: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap",
+    gap: 8, marginTop: 20,
+  },
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    borderRadius: 6, paddingHorizontal: 10, paddingVertical: 7,
+  },
+  verifiedBadge: { backgroundColor: "#E3F5EB" },
+  verifiedText: {
+    fontFamily: "DonationInterSemiBold", color: "#11734F", fontSize: 9,
+    letterSpacing: 0.2,
+  },
+  categoryBadge: { backgroundColor: "#FFF2E8" },
+  categoryText: {
+    fontFamily: "DonationInterSemiBold", color: "#9C572B", fontSize: 9,
+    letterSpacing: 0.2,
+  },
+  pastBadge: { backgroundColor: "#E9F8EF" },
+  campaignEyebrow: {
+    fontFamily: "DonationInterSemiBold", color: "#0C8A65",
+    fontSize: 10, letterSpacing: 1.4, marginTop: 21,
+  },
+  campaignTitle: {
+    marginTop: 6, color: "#173744",
+    fontFamily: "DonationInterBold", fontSize: 28,
+    lineHeight: 37, letterSpacing: -0.35,
+  },
+  areaLine: { flexDirection: "row", gap: 7, alignItems: "flex-start", marginTop: 13 },
+  area: {
+    flex: 1, fontFamily: "DonationInterSemiBold",
+    fontSize: 12, lineHeight: 19, color: "#3C6270",
+  },
+  privacyNote: {
+    marginTop: 5, marginLeft: 26, fontFamily: "DonationInterRegular",
+    fontSize: 10.5, lineHeight: 16.5, color: "#778F94",
+  },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  sectionIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "#E6F6ED", alignItems: "center", justifyContent: "center",
+  },
+  sectionTitle: {
+    fontFamily: "DonationInterSemiBold", fontSize: 14,
+    lineHeight: 21, color: "#203D48", letterSpacing: -0.15,
+  },
+  overviewCard: {
+    marginTop: 22, paddingVertical: 18, paddingHorizontal: 18,
+    borderRadius: 12, borderWidth: 1, borderColor: "#DDEAE6",
+    backgroundColor: "#FCFEFD", borderLeftWidth: 3, borderLeftColor: "#1BAA80",
+  },
+  overviewText: {
+    marginTop: 12, fontFamily: "DonationInterRegular",
+    fontSize: 12, lineHeight: 20, color: "#4D6772",
+  },
   infoCards: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
-  infoCard: { flex: 1, minWidth: 185, borderRadius: 13, backgroundColor: "#F7FAFA", borderWidth: 1, borderColor: "#E1E8E9", flexDirection: "row", gap: 10, padding: 11, alignItems: "center" },
-  infoIcon: { width: 41, height: 41, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F8ED" },
-  infoCopy: { flex: 1, minWidth: 0 },
-  infoLabel: { fontSize: 10.5, fontWeight: "800", color: "#3C5971" },
-  infoValue: { fontSize: 10.5, fontWeight: "700", color: "#547086", marginTop: 3 },
-  infoHint: { fontSize: 9, color: "#79909F", marginTop: 3 },
-  fundingCard: { borderWidth: 1, borderColor: "#D5E6E5", borderRadius: 16, backgroundColor: "#FFFFFF", padding: 16 },
-  fundingHeading: { flexDirection: "row", alignItems: "center", gap: 9, flexWrap: "wrap" },
-  statusChip: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 99, paddingHorizontal: 9, paddingVertical: 6, backgroundColor: "#DEF8E8" },
-  statusText: { fontSize: 9, color: "#087246", fontWeight: "900" },
-  bigAmount: { fontSize: 27, fontWeight: "900", color: "#102F43", marginTop: 16 },
-  goalLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 3, gap: 8 },
-  goalText: { fontSize: 11, color: "#678098" },
-  percentText: { fontSize: 14, fontWeight: "900", color: "#123649" },
-  track: { height: 11, borderRadius: 999, backgroundColor: "#DDEBE6", overflow: "hidden", marginTop: 12 },
+  infoCard: {
+    flex: 1, minWidth: 188, padding: 13, borderWidth: 1,
+    borderColor: "#E2EBE8", borderRadius: 11, backgroundColor: "#FFFFFF",
+    flexDirection: "row", alignItems: "center", gap: 11,
+  },
+  infoIcon: {
+    height: 39, width: 39, backgroundColor: "#EAF7F1",
+    borderRadius: 12, alignItems: "center", justifyContent: "center",
+  },
+  infoCopy: { minWidth: 0, flex: 1 },
+  infoLabel: {
+    fontFamily: "DonationInterMedium", fontSize: 10, color: "#6B8490",
+  },
+  infoValue: {
+    fontFamily: "DonationInterSemiBold", fontSize: 11.5,
+    lineHeight: 17, color: "#294D59", marginTop: 4,
+  },
+  infoHint: {
+    fontFamily: "DonationInterRegular", fontSize: 10, lineHeight: 15,
+    color: "#82949A", marginTop: 2,
+  },
+
+  fundingCard: {
+    borderWidth: 1, borderColor: "#CFE7DA", borderRadius: 14,
+    backgroundColor: "#F5FBF8", padding: 20,
+    shadowColor: "#0A654E", shadowOpacity: 0.055,
+    shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 1,
+  },
+  fundingHeading: {
+    flexDirection: "row", gap: 9, flexWrap: "wrap", alignItems: "center",
+  },
+  statusChip: {
+    flexDirection: "row", gap: 5, alignItems: "center",
+    borderRadius: 6, backgroundColor: "#DCEFE4",
+    paddingHorizontal: 8, paddingVertical: 6,
+  },
+  statusText: {
+    fontFamily: "DonationInterSemiBold", fontSize: 9, color: "#086D4C",
+  },
+  bigAmount: {
+    fontFamily: "DonationInterBold", fontSize: 30,
+    lineHeight: 39, letterSpacing: -0.55,
+    color: "#163947", marginTop: 22,
+  },
+  goalLine: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginTop: 4, gap: 8,
+  },
+  goalText: {
+    fontFamily: "DonationInterRegular", fontSize: 11, color: "#587685",
+  },
+  percentText: {
+    fontFamily: "DonationInterSemiBold", fontSize: 13, color: "#0B7455",
+  },
+  track: {
+    height: 9, borderRadius: 999, overflow: "hidden",
+    backgroundColor: "#D3E7DC", marginTop: 17,
+  },
   fill: { height: "100%", borderRadius: 999 },
-  fundingStats: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, gap: 6 },
+  fundingStats: {
+    flexDirection: "row", justifyContent: "space-between",
+    gap: 9, marginTop: 21, paddingTop: 17,
+    borderTopWidth: 1, borderColor: "#DCEDE4",
+  },
   fundingStat: { flex: 1, minWidth: 0 },
-  fundingStatAmount: { fontSize: 12, fontWeight: "900", color: "#163447" },
-  fundingStatLabel: { fontSize: 10, color: "#71869C", marginTop: 3 },
-  testNotice: { marginTop: 17, flexDirection: "row", gap: 7, alignItems: "flex-start", borderTopWidth: 1, borderColor: "#EDF1F2", paddingTop: 11 },
-  testNoticeText: { fontSize: 9.5, lineHeight: 14, color: "#688392", flex: 1 },
-  coordinationCard: { borderWidth: 1, borderColor: "#DCE8E7", borderRadius: 15, backgroundColor: "#FFFFFF", padding: 15 },
-  coordinationLabel: { marginTop: 13, fontSize: 10, color: "#6E8499" },
-  coordinationName: { marginTop: 3, fontSize: 15, fontWeight: "900", color: "#123648" },
-  coordPrivacy: { flexDirection: "row", gap: 9, alignItems: "flex-start", backgroundColor: "#EFF7FF", borderRadius: 11, padding: 11, marginTop: 12, borderWidth: 1, borderColor: "#E3EDFA" },
-  coordPrivacyText: { fontSize: 10.5, lineHeight: 16, color: "#356B9A", flex: 1 },
-  detailsCard: { borderWidth: 1, borderColor: "#DCE8E7", borderRadius: 15, backgroundColor: "#FFFFFF", padding: 15 },
-  detailRow: { flexDirection: "row", gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#EFF3F2" },
-  detailLabel: { flex: 1, minWidth: 0, color: "#698095", fontSize: 10 },
-  detailValue: { flex: 1.2, minWidth: 0, color: "#26495D", fontWeight: "800", fontSize: 10, textAlign: "right" },
-  detailId: { flex: 1.2, minWidth: 0, color: "#426577", fontSize: 9.5, textAlign: "right" },
-  detailVerified: { flex: 1.2, color: "#058458", fontWeight: "800", fontSize: 10, textAlign: "right" },
+  fundingStatAmount: {
+    fontFamily: "DonationInterSemiBold", fontSize: 12,
+    color: "#294954", fontVariant: ["tabular-nums"],
+  },
+  fundingStatLabel: {
+    fontFamily: "DonationInterRegular", fontSize: 10,
+    color: "#78909A", marginTop: 5,
+  },
+  testNotice: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    marginTop: 19, paddingTop: 12,
+    borderTopWidth: 1, borderColor: "#DCEDE4",
+  },
+  testNoticeText: {
+    flex: 1, fontFamily: "DonationInterRegular",
+    fontSize: 9.7, lineHeight: 15, color: "#627C84",
+  },
+
+  coordinationCard: {
+    backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#E0EAE7", borderRadius: 13, padding: 18,
+  },
+  coordinationLabel: {
+    fontFamily: "DonationInterMedium", fontSize: 9,
+    color: "#63818A", marginTop: 15, letterSpacing: 0.75,
+  },
+  coordinationName: {
+    fontFamily: "DonationInterBold", fontSize: 16,
+    color: "#234753", marginTop: 4,
+  },
+  coordPrivacy: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    borderTopWidth: 1, borderColor: "#E8EFED",
+    paddingTop: 13, marginTop: 15,
+  },
+  coordPrivacyText: {
+    flex: 1, fontFamily: "DonationInterRegular",
+    fontSize: 10.5, lineHeight: 16.5, color: "#5B7F90",
+  },
+
+  detailsCard: {
+    borderWidth: 1, borderColor: "#E0EAE7",
+    borderRadius: 13, padding: 18, backgroundColor: "#FFFFFF",
+  },
+  detailRow: {
+    flexDirection: "row", gap: 11,
+    paddingVertical: 12, borderBottomWidth: 1, borderColor: "#ECF1EF",
+  },
+  detailLabel: {
+    flex: 1, minWidth: 0, fontFamily: "DonationInterRegular",
+    color: "#718893", fontSize: 10.5, lineHeight: 16,
+  },
+  detailValue: {
+    flex: 1.2, minWidth: 0, fontFamily: "DonationInterSemiBold",
+    color: "#2E535D", fontSize: 10.5,
+    lineHeight: 16, textAlign: "right",
+  },
+  detailId: {
+    flex: 1.2, minWidth: 0, fontFamily: "DonationInterRegular",
+    color: "#53707B", fontSize: 10, lineHeight: 16, textAlign: "right",
+  },
+  detailVerified: {
+    flex: 1.2, fontFamily: "DonationInterSemiBold",
+    color: "#087D5E", fontSize: 10.5, lineHeight: 16, textAlign: "right",
+  },
 });
