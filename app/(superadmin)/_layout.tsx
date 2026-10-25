@@ -6,6 +6,7 @@ import {
   usePathname,
 } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -242,9 +243,7 @@ function SuperAdminSidebar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.sidebar, compact && styles.sidebarCompact]}>
-      <View pointerEvents="none" style={{ position: "absolute", bottom: 50, left: -45, opacity: 0.055 }}>
-        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
-      </View>
+      <SidebarBotanicalDecor />
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"

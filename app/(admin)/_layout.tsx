@@ -8,6 +8,7 @@ import {
   usePathname,
 } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React, {
   useMemo,
   useState,
@@ -445,9 +446,7 @@ export default function AdminLayout() {
 
   const sidebar = (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.sidebar}>
-      <View pointerEvents="none" style={{ position: "absolute", bottom: 50, left: -45, opacity: 0.055 }}>
-        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
-      </View>
+      <SidebarBotanicalDecor />
       <View style={styles.brand}>
         <Image
           source={require("../../assets/images/logo.png")}
