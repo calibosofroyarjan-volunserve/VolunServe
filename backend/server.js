@@ -393,11 +393,11 @@ const finalizePaymongoDonation = async (session) => {
   // Fetch authorized recipients before the Firestore transaction; never trust
   // a client-supplied admin list, and do not notify on failed checkouts.
   const adminUsers = await db.collection("users")
-    .where("role", "in", ["admin", "superadmin"])
+    .where("role", "==", "admin")
     .limit(200).get();
   const adminRecipients = adminUsers.docs.filter((item) => {
     const p = item.data() || {};
-    return p.status === "approved" && ["admin", "superadmin"].includes(p.role);
+    return p.status === "approved" && getProfileRole(p) === "admin";
   });
   return db.runTransaction(async (transaction) => {
     const donationSnapshot = await transaction.get(donationRef);
@@ -505,7 +505,7 @@ const finalizePaymongoDonation = async (session) => {
       timestamp: FieldValue.serverTimestamp(),
     });
     // A single confirmed payment creates one unread alert for EACH approved
-    // Admin/Super Admin. Repeated PayMongo webhook delivery cannot duplicate it.
+    // LGU Admin only. Repeated PayMongo webhook delivery cannot duplicate it.
     for (const recipient of adminRecipients) {
       const recipientRole = String(recipient.data()?.role || "admin");
       const notificationId = donationAlertId(donationId, recipient.id);
@@ -1156,6 +1156,19 @@ require("./fundReleaseDemoRoutes").installFundReleaseDemoRoutes({
   isVerifiedTestPaymongoDonation,
 });
 
+// Donations financial alerts belong to approved LGU Admin accounts, not
+// the Super Admin programmer/maintenance role.
+function requireLguDonationAdmin(request, response, next) {
+  if (getProfileRole(request.volunServeProfile) !== "admin") {
+    return response.status(403).json({
+      ok: false,
+      error: "lgu_admin_required",
+      message: "Only an approved LGU Admin can manage donation alerts.",
+    });
+  }
+  return next();
+}
+
 // Admin-controlled recovery for previously VERIFIED PayMongo Sandbox transactions.
 // It only repairs the requesting approved Admin's inbox, never payment records,
 // campaign totals, recipient accounts, or previously-read notifications.
@@ -1163,6 +1176,7 @@ app.post(
   "/api/admin/donations/alerts/sync",
   requireFirebaseUser,
   requireAdminOrSuperAdmin,
+  requireLguDonationAdmin,
   async (request, response) => {
     try {
       const uid = request.firebaseUser.uid;
