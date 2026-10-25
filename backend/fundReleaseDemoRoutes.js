@@ -42,7 +42,7 @@ function installFundReleaseDemoRoutes({
       message: code >= 500 ? "Fund review is unavailable. Please retry." : safe(err.message, 350),
     });
   };
-  const iso = (stamp) => stamp?.toDate?.()?.toISOString?.() || null;
+  const iso = (stamp) => typeof stamp === "string" ? stamp : stamp?.toDate?.()?.toISOString?.() || null;
   const publicRecord = (snapshot) => {
     const a = snapshot.data() || {};
     return {
@@ -172,6 +172,10 @@ function installFundReleaseDemoRoutes({
           fresh.sourceAssistanceRequestId !== sourceId)
           reject("campaign_changed", "Campaign figures or verification link changed; review again.", 409);
         validateSource({...fresh,campaignId}, freshSource.data() || {}, recipientUid);
+        if (amount(fresh.verifiedAmountReceived) !== amount(campaign.verifiedAmountReceived)) {
+          reject("campaign_funding_changed",
+            "Campaign funding changed during review. Refresh and reconcile again.", 409);
+        }
         const at = FieldValue.serverTimestamp();
         tx.create(releaseRef, {
           campaignId, campaignTitle: safe(campaign.title, 160),
@@ -180,7 +184,7 @@ function installFundReleaseDemoRoutes({
           status: "reviewed", reviewerUid: uid, reviewNote,
           reviewSource: "provider_verified_paymongo_sandbox_only",
           simulated: true, createdAt: at, reviewedAt: at, updatedAt: at,
-          audit: [{stage:"reviewed",actorUid:uid,at}],
+          audit: [{stage:"reviewed",actorUid:uid,at:new Date().toISOString()}],
         });
         sendAdminNotices(tx, recipients, campaignId, "reviewed", "Fund review submitted",
           "A verified test donation fund review is ready for independent authorization.");
@@ -212,7 +216,7 @@ function installFundReleaseDemoRoutes({
         tx.update(ref, {
           status:stage, authorizerUid:uid,decisionReason:reason,
           authorizedAt:at,updatedAt:at,
-          audit: FieldValue.arrayUnion({stage,actorUid:uid,at}),
+          audit: FieldValue.arrayUnion({stage,actorUid:uid,at:new Date().toISOString()}),
         });
         sendAdminNotices(tx,recipients,campaignId,stage,
           decision === "approve" ? "Fund release authorized" : "Fund release rejected",
@@ -292,7 +296,7 @@ function installFundReleaseDemoRoutes({
           const stage=decision==="acknowledge"?"acknowledged_demo":"disputed";
           tx.update(ref,{
             status:stage,acknowledgmentNote:note,acknowledgedAt:at,updatedAt:at,
-            audit:FieldValue.arrayUnion({stage,actorUid:uid,at}),
+            audit:FieldValue.arrayUnion({stage,actorUid:uid,at:new Date().toISOString()}),
           });
           sendAdminNotices(tx,recipients,campaignId,stage,
             decision==="acknowledge"?"Resident acknowledged demo record":"Resident disputed demo release",
