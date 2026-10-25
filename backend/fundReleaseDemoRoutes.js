@@ -34,6 +34,7 @@ function installFundReleaseDemoRoutes({
     return id;
   };
   const releases = db.collection("fundReleaseDemos");
+  const residentWallets = db.collection("fundReleaseWalletProfiles");
   const send = (res, err) => {
     const code = Number(err?.statusCode) || 500;
     if (code >= 500) console.error("Fund release demo endpoint:", err);
@@ -440,6 +441,37 @@ function installFundReleaseDemoRoutes({
       next();
     }catch(error){return send(res,error);}
   }
+  // A Resident can create a fictional TEST-only wallet alias for the LGU
+  // release demonstration. It is NOT an actual GCash/Maya account validation.
+  // Do not collect or persist a full phone number or account credentials.
+  app.get("/api/funds/my-release-wallet",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
+    try {
+      const snap=await residentWallets.doc(req.firebaseUser.uid).get();
+      const data=snap.exists?(snap.data()||{}):{};
+      return res.json({ok:true,wallet:snap.exists&&
+        ["gcash","maya"].includes(data.method)&&/^[0-9]{4}$/.test(data.walletLast4||"")
+        ? {configured:true,method:data.method,walletLast4:data.walletLast4,testOnly:true}
+        : {configured:false,testOnly:true}});
+    }catch(error){return send(res,error);}
+  });
+  app.post("/api/funds/my-release-wallet",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
+    try {
+      const method=safe(req.body?.method,20).toLowerCase();
+      const walletLast4=safe(req.body?.walletLast4,10);
+      if(!["gcash","maya"].includes(method))reject("invalid_method","Choose GCash or Maya.");
+      if(!/^[0-9]{4}$/.test(walletLast4))
+        reject("invalid_wallet_alias","Use four fictional digits for the test wallet alias.");
+      if(req.body?.confirmedTestOnly!==true)
+        reject("test_only_confirmation_required",
+          "Confirm this is only a fictional wallet alias, not a verified real wallet.");
+      await residentWallets.doc(req.firebaseUser.uid).set({
+        ownerUid:req.firebaseUser.uid,method,walletLast4,testOnly:true,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      return res.json({ok:true,wallet:{configured:true,method,walletLast4,testOnly:true}});
+    }catch(error){return send(res,error);}
+  });
+
   app.get("/api/funds/my-releases",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
     try{
       const snap=await releases.where("recipientUid","==",req.firebaseUser.uid).limit(100).get();
