@@ -91,10 +91,13 @@ function fixture() {
       Number(d.actualAmountReceived)>0,
   });
   async function invoke(method,path,body={},role="admin"){
-    const handlers=routes.get(method+" "+path);
+    const template=path.replace("/"+verifiedId+"/","/:id/")
+      .replace("/"+manualId+"/","/:id/");
+    const handlers=routes.get(method+" "+template);
     assert.ok(handlers,path+" missing");
     const request={
-      firebaseUser:{uid:"Admin00001"},volunServeProfile:{role},body,params:{}
+      firebaseUser:{uid:"Admin00001"},volunServeProfile:{role},body,
+      params:{id:path.includes("/"+verifiedId+"/")?verifiedId:manualId}
     };
     const response={
       statusCode:200,payload:null,
@@ -146,4 +149,61 @@ test("programmer Super Admin cannot access LGU financial records",async()=>{
   const response=await invoke("GET","/api/admin/donations/fund-releases",{},"superadmin");
   assert.equal(response.statusCode,403);
   assert.equal(response.payload.error,"lgu_admin_required");
+});
+
+test("professional demo release requires confirmation, records masked destination, and blocks replay",async()=>{
+  const {invoke,tables}=fixture();
+  const base="/api/admin/donations/fund-releases";
+  const review=await invoke("POST",base+"/review",{
+    campaignId:verifiedId,amount:5000,
+    reviewNote:"Reviewed the verified assistance request and two paid Sandbox receipts.",
+  });
+  assert.equal(review.statusCode,201);
+  const authorize=await invoke("POST",base+"/"+verifiedId+"/authorize",{
+    decision:"approve",reason:"Verified goal and provider-backed test receipt records reviewed.",
+  });
+  assert.equal(authorize.statusCode,200);
+  assert.equal(tables.fundReleaseDemos.get(verifiedId).status,"authorized");
+
+  const invalid=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"gcash",testWalletNumber:"09123",confirmedSandbox:true,
+  });
+  assert.equal(invalid.statusCode,400);
+  assert.equal(invalid.payload.error,"invalid_demo_account");
+  const noConsent=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"maya",testWalletNumber:"09990001234",
+  });
+  assert.equal(noConsent.statusCode,400);
+  assert.equal(noConsent.payload.error,"sandbox_confirmation_required");
+
+  const result=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"maya",testWalletNumber:"09990001234",confirmedSandbox:true,
+  });
+  assert.equal(result.statusCode,200);
+  const stored=tables.fundReleaseDemos.get(verifiedId);
+  assert.equal(stored.status,"simulated_sent");
+  assert.equal(stored.method,"maya");
+  assert.equal(stored.walletLast4,"1234");
+  assert.equal(stored.releaseProcessor,"volunserve_internal_sandbox");
+  assert.equal(stored.deliveryStatus,"simulation_only");
+  assert.equal(Object.hasOwn(stored,"testWalletNumber"),false);
+  assert.equal(Object.hasOwn(stored,"walletNumber"),false);
+  assert.ok(stored.simulationReference.startsWith("VS-DEMO-"));
+  assert.ok(tables.notifications.has(
+    "fund_demo_"+verifiedId+"_simulated_sent_resident_"+residentId));
+
+  const replay=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"maya",testWalletNumber:"09990001234",confirmedSandbox:true,
+  });
+  assert.equal(replay.statusCode,409);
+  assert.equal(replay.payload.error,"already_released");
+});
+test("Super Admin cannot submit a simulated GCash/Maya payout",async()=>{
+  const {invoke}=fixture();
+  const r=await invoke("POST",
+    "/api/admin/donations/fund-releases/"+verifiedId+"/simulate",{
+      method:"gcash",testWalletNumber:"09990001234",confirmedSandbox:true,
+    },"superadmin");
+  assert.equal(r.statusCode,403);
+  assert.equal(r.payload.error,"lgu_admin_required");
 });
