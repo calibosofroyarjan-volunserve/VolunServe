@@ -29,10 +29,10 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
   return <View style={st.wrap}>
     <View style={st.head}>
       <View style={st.flex}>
-        <Text style={st.title}>Sandbox disbursement</Text>
-        <Text style={st.sub}>Prepare a GCash or Maya test release to the verified beneficiary.</Text>
+        <Text style={st.title}>Release assistance funds</Text>
+        <Text style={st.sub}>Set up the destination for an approved Resident assistance release.</Text>
       </View>
-      <View style={st.badge}><Text style={st.badgeText}>INTERNAL TEST</Text></View>
+      <View style={st.badge}><Text style={st.badgeText}>TEST MODE</Text></View>
     </View>
     <View style={st.steps}>
       <View style={[st.step,stage==="entry"&&st.stepActive]}>
@@ -44,7 +44,7 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
     </View>
     {stage==="entry"?<>
       <View style={st.amountCard}>
-        <Text style={st.label}>Authorized test release</Text>
+        <Text style={st.label}>Authorized amount</Text>
         <Text style={st.amount}>{php(amount)}</Text>
         <Text style={st.sub}>Fixed by the reviewed and approved assistance goal</Text>
       </View>
@@ -61,37 +61,37 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
               size={18} color={channel===value?"#0C8768":"#A1B5AC"}/>
           </Pressable>)}
       </View>
-      <Text style={st.label}>TEST wallet mobile number</Text>
+      <Text style={st.label}>Recipient e-wallet number (test details)</Text>
       <TextInput style={st.input} accessibilityLabel="Test wallet mobile number"
         keyboardType="phone-pad" value={testNumber} maxLength={11}
         onChangeText={value=>setTestNumber(value.replace(/\D/g,"").slice(0,11))}
         placeholder="09XXXXXXXXX" placeholderTextColor="#9CAFA7"/>
-      <Text style={st.sub}>Use 11 digits beginning with 09. Enter test data only, never someone's real wallet number. The backend stores only the last 4 digits.</Text>
+      <Text style={st.sub}>Enter an 11-digit test number beginning with 09. Only the final four digits are retained.</Text>
       {testNumber.length>0&&!valid&&<Text style={st.error}>Enter a valid 11-digit TEST mobile number starting with 09.</Text>}
       <View style={st.warning}>
         <Ionicons name="information-circle-outline" size={18} color="#16745C"/>
-        <Text style={st.warningText}>This is VolunServe's internal release simulation. No PayMongo outbound transfer is submitted, and no GCash/Maya funds move.</Text>
+        <Text style={st.warningText}>Test workflow · No external transfer is initiated. The entry appears in the Admin ledger and the verified Resident’s Donations page.</Text>
       </View>
       <Pressable accessibilityRole="button" disabled={!valid||disabled||amount<=0}
         onPress={()=>{setAccepted(false);setStage("confirm");}}
         style={[st.primary,(!valid||disabled||amount<=0)&&st.disabled]}>
-        <Text style={st.primaryText}>Review test transfer</Text>
+        <Text style={st.primaryText}>Review release details</Text>
         <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF"/>
       </Pressable>
     </>:<>
-      <Text style={st.label}>Confirm sandbox release details</Text>
+      <Text style={st.label}>Review payment instruction</Text>
       <View style={st.review}>
         <View style={st.row}><Text style={st.muted}>Recipient</Text><Text style={st.value}>Verified requesting Resident</Text></View>
         <View style={st.row}><Text style={st.muted}>Channel</Text><Text style={st.value}>{channel==="gcash"?"GCash":"Maya"} (test)</Text></View>
         <View style={st.row}><Text style={st.muted}>Test wallet</Text><Text style={st.value}>{mask(testNumber)}</Text></View>
         <View style={st.row}><Text style={st.muted}>Release amount</Text><Text style={st.value}>{php(amount)}</Text></View>
-        <View style={st.row}><Text style={st.muted}>Processing</Text><Text style={st.value}>VolunServe internal demo</Text></View>
+        <View style={st.row}><Text style={st.muted}>Processing</Text><Text style={st.value}>Internal test ledger</Text></View>
       </View>
       <Pressable accessibilityRole="checkbox" accessibilityState={{checked:accepted}}
         style={st.checkRow} onPress={()=>setAccepted(v=>!v)}>
         <Ionicons name={accepted?"checkbox-outline":"square-outline"} size={22}
           color={accepted?"#0B8063":"#809A90"}/>
-        <Text style={st.checkText}>I confirm these are test details and this action records a simulated release only. It is not a real GCash/Maya payment.</Text>
+        <Text style={st.checkText}>I confirm this is a TEST release instruction. No actual GCash/Maya payment will be sent.</Text>
       </Pressable>
       <View style={st.buttons}>
         <Pressable accessibilityRole="button" onPress={reset} disabled={disabled} style={st.secondary}>
@@ -103,7 +103,7 @@ export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
           onPress={()=>void onSubmit({method:channel,testWalletNumber:testNumber,confirmedSandbox:true})}>
           {disabled?<ActivityIndicator size="small" color="#FFFFFF"/>:
             <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={17}/>}
-          <Text style={st.primaryText}>Confirm demo release</Text>
+          <Text style={st.primaryText}>Record test release</Text>
         </Pressable>
       </View>
     </>}
