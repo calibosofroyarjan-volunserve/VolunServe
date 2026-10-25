@@ -1,0 +1,46 @@
+name: Verify LGU Admin Fund Permissions
+on:
+  push:
+    branches: [fix/fund-management-lgu-admin-only-20261026]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Admin-only release authorization
+        run: |
+          node --check backend/server.js
+          node --check backend/fundReleaseDemoRoutes.js
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const api = fs.readFileSync('backend/fundReleaseDemoRoutes.js','utf8');
+          const ui = fs.readFileSync('components/donations/FundReleaseControls.tsx','utf8');
+          const panel = fs.readFileSync('components/donations/FundReconciliationPanel.tsx','utf8');
+          const assert = require('node:assert/strict');
+          assert.match(api, /const withAdmin = \[requireFirebaseUser, requireAdminOrSuperAdmin, requireLguAdmin\]/);
+          assert.match(api, /getProfileRole\(request\.volunServeProfile\) !== "admin"/);
+          assert.match(api, /if \(reason\.length < 10\)/);
+          assert.doesNotMatch(api, /superadmin_required|independent_approval_required/);
+          assert.match(api, /\.where\("role", "==", "admin"\)/);
+          assert.match(panel, /mode === "admin" && <FundReleaseControls/);
+          assert.doesNotMatch(ui, /Super Admin|mode==="superadmin"/);
+          console.log('LGU Admin-only invariants verified');
+          NODE
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Expo production web
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Verify dist
+        run: test -f dist/index.html
