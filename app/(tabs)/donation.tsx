@@ -992,23 +992,100 @@ export default function Donation() {
             )}
             {campaignsReady ? (
               <View style={styles.webHowItWorks}>
-                <Text style={styles.webHowItWorksTitle}>How donations work</Text>
+                <View style={styles.donationHowHeading}>
+                  <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
+                  <View style={{flex:1}}>
+                    <Text style={styles.webHowItWorksTitle}>How Donations Work</Text>
+                    <Text style={styles.donationHowSubtitle}>Simple, transparent support for verified community causes.</Text>
+                  </View>
+                </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "shield-checkmark-outline" as const, title: "1. Choose a cause", body: "Browse LGU-verified campaigns and their confirmed funding progress." },
-                    { icon: "card-outline" as const, title: "2. Test checkout", body: "Enter a donation amount and use PayMongo Sandbox." },
-                    { icon: "receipt-outline" as const, title: "3. Track your support", body: "My Donations updates after backend confirmation." },
+                    { icon: "heart-outline" as const, title: "1. Choose a Cause", body: "Select a verified campaign to view details and progress." },
+                    { icon: "card-outline" as const, title: "2. Make a Donation", body: "Choose an amount in PayMongo Test Mode." },
+                    { icon: "shield-checkmark-outline" as const, title: "3. Verify Payment", body: "We wait for signed webhook confirmation." },
+                    { icon: "people-outline" as const, title: "4. Track Your Support", body: "See the verified transaction in My Donations." },
                   ].map((step) => (
                     <View key={step.title} style={styles.webHowStep}>
-                      <Ionicons name={step.icon} size={24} color="#009474" />
-                      <Text style={styles.webHowStepTitle}>{step.title}</Text>
-                      <Text style={styles.webHowStepBody}>{step.body}</Text>
+                      <View style={styles.donationHowStepIcon}>
+                        <Ionicons name={step.icon} size={24} color="#009474" />
+                      </View>
+                      <View style={styles.donationHowStepCopy}>
+                        <Text style={styles.webHowStepTitle}>{step.title}</Text>
+                        <Text style={styles.webHowStepBody}>{step.body}</Text>
+                      </View>
                     </View>
                   ))}
                 </View>
                 <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
               </View>
             ) : null}
+            <View style={styles.donationRecentPanel}>
+              <View style={styles.donationRecentHeading}>
+                <View style={styles.donationHowIcon}>
+                  <Ionicons name="receipt-outline" size={21} color="#07916D"/>
+                </View>
+                <View style={{flex:1}}>
+                  <Text style={styles.webHowItWorksTitle}>Recent Donations (My History)</Text>
+                  <Text style={styles.donationHowSubtitle}>Your own donation records, confirmed payment status, and receipts.</Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="View all my donations"
+                  style={styles.donationRecentViewAll}
+                  onPress={()=>{setSelectedCampaignId("");setShowHistory(true);pageScrollRef.current?.scrollTo({y:0,animated:true});}}>
+                  <Text style={styles.donationRecentViewText}>View All</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#2675D2"/>
+                </TouchableOpacity>
+              </View>
+              {!historyReady ? (
+                <ActivityIndicator style={{marginVertical:18}} color="#008B6A"/>
+              ) : myDonations.length === 0 ? (
+                <View style={styles.donationRecentEmpty}>
+                  <Ionicons name="receipt-outline" size={23} color="#8AA5A3"/>
+                  <Text style={styles.donationRecentEmptyText}>No donations yet. Your confirmed and pending support will appear here.</Text>
+                </View>
+              ) : (
+                <View style={styles.donationRecentTable}>
+                  {medium && (
+                    <View style={styles.donationRecentTableHead}>
+                      {["Date", "Campaign", "Amount", "Status", "Receipt"].map(label=>(
+                        <Text key={label} style={styles.donationRecentHeadText}>{label}</Text>
+                      ))}
+                    </View>
+                  )}
+                  {myDonations.slice(0,3).map(d=>{
+                    const paid = d.status === "received" &&
+                      (d.paymentProvider !== "paymongo" || d.paymentStatus === "paid");
+                    const sandbox = paid && d.paymentProvider === "paymongo" && d.paymongoLivemode === false;
+                    const label = paid ? (sandbox ? "Paid (Test)" : "Confirmed") :
+                      d.status === "payment_failed" ? "Failed" :
+                      d.status === "rejected" ? "Rejected" : "Pending";
+                    const date = timestampMillis(d.createdAt);
+                    return (
+                      <View key={d.id} style={[styles.donationRecentRow,!medium&&styles.donationRecentRowMobile]}>
+                        <Text style={styles.donationRecentCellText}>
+                          {date ? new Date(date).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}) : "—"}
+                        </Text>
+                        <Text style={[styles.donationRecentCellText,styles.donationRecentCampaignText]} numberOfLines={2}>
+                          {d.campaignTitle || "Donation campaign"}
+                        </Text>
+                        <Text style={styles.donationRecentAmount}>{money(Number(d.amount || 0))}</Text>
+                        <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
+                          {label}
+                        </Text>
+                        {paid ? (
+                          <TouchableOpacity accessibilityRole="button"
+                            accessibilityLabel={`View receipt for ${d.campaignTitle || "donation"}`}
+                            style={styles.donationReceiptLink}
+                            onPress={()=>router.push({pathname:"/receipt/[id]",params:{id:d.id}})}>
+                            <Text style={styles.donationReceiptLinkText}>View Receipt</Text>
+                          </TouchableOpacity>
+                        ) : <Text style={styles.donationRecentCellText}>—</Text>}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Campaign details are only available after selecting a card. */}
