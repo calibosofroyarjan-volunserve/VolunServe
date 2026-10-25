@@ -58,9 +58,13 @@ export default function FundReleaseControls({campaigns,donations,ready,mode}:{
     .filter(d=>d.campaignId===selection.id && (!d.donationType || d.donationType==="monetary") && isVerified(d))
     .reduce((sum,d)=>sum+Number(d.actualAmountReceived||0),0) : 0,
   [selection,donations]);
-  const maxReview = selection ? Math.max(0,Math.min(
-    Number(selection.monetaryGoal||0),
-    Number(selection.verifiedAmountReceived||0),verified)) : 0;
+  // One-time release is eligible only after the entire approved monetary
+  // goal is met by provider-verified Sandbox donations, not legacy records.
+  const maxReview = selection &&
+    Number(selection.monetaryGoal||0)>0 &&
+    Number(selection.verifiedAmountReceived||0)>=Number(selection.monetaryGoal||0) &&
+    verified>=Number(selection.monetaryGoal||0)
+      ? Number(selection.monetaryGoal||0) : 0;
   const request = useCallback(async(path:string,body?:Record<string,unknown>)=>{
     const token=await auth.currentUser?.getIdToken();
     if(!token)throw new Error("Please sign in again.");
@@ -99,8 +103,9 @@ export default function FundReleaseControls({campaigns,donations,ready,mode}:{
     const c=eligibleCampaigns.find(x=>x.id===id);
     const eligible = donations.filter(d=>d.campaignId===id && isVerified(d))
       .reduce((sum,d)=>sum+Number(d.actualAmountReceived||0),0);
-    setInputAmount(String(Math.min(Number(c?.monetaryGoal||0),
-      Number(c?.verifiedAmountReceived||0),eligible).toFixed(2)));
+    const goal=Number(c?.monetaryGoal||0);
+    const complete=goal>0 && Number(c?.verifiedAmountReceived||0)>=goal && eligible>=goal;
+    setInputAmount(String((complete?goal:0).toFixed(2)));
     setError("");setNotice("");
   };
   return <View style={ss.panel}>
@@ -179,7 +184,9 @@ export default function FundReleaseControls({campaigns,donations,ready,mode}:{
             <TextInput accessibilityLabel="Fund review amount" keyboardType="decimal-pad"
               style={ss.input} value={inputAmount} onChangeText={setInputAmount}
               placeholder="0.00"/>
-            <Text style={ss.small}>Estimated maximum eligible test amount: {php(maxReview)}</Text>
+            <Text style={ss.small}>{maxReview>0
+              ? "Eligible verified test amount: "+php(maxReview)
+              : "Waiting for the full approved goal to be reached through verified PayMongo test payments."}</Text>
             <Text style={ss.fieldLabel}>Evidence review notes</Text>
             <TextInput accessibilityLabel="Evidence review notes" multiline
               style={[ss.input,ss.textarea]} value={reviewNote} onChangeText={setReviewNote}
