@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { useFonts } from "expo-font";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
 } from "@expo-google-fonts/inter";
@@ -116,6 +117,10 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("all");
+  const [campaignFilterOpen, setCampaignFilterOpen] = useState(false);
+  const [campaignPage, setCampaignPage] = useState(1);
   const [expandedReviewKey, setExpandedReviewKey] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showAllCampaigns, setShowAllCampaigns] = useState(false);
@@ -205,6 +210,58 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const campaignDonorCount = (campaignId: string) =>
     new Set(records.filter(r => r.campaignId === campaignId && isConfirmed(r))
       .map(r => r.donorUid || "unlinked:" + r.id)).size;
+  // All dashboard counts and statuses come from the existing Firestore records.
+  // A published campaign without a monetary goal is not considered fundable.
+  const fundedCampaigns = campaigns.filter(c => numeric(c.monetaryGoal) > 0);
+  const countGoalReached = fundedCampaigns.filter(c =>
+    numeric(c.verifiedAmountReceived) >= numeric(c.monetaryGoal) - 0.01).length;
+  const countActiveFundraisers = fundedCampaigns.filter(c =>
+    c.status === "published" &&
+    numeric(c.verifiedAmountReceived) < numeric(c.monetaryGoal) - 0.01).length;
+  const linkedCampaignIds = new Set(campaigns.map(c => c.id));
+  const campaignDonors = new Set(records.filter(r =>
+    isConfirmed(r) && !!r.campaignId && linkedCampaignIds.has(r.campaignId))
+    .map(r => r.donorUid || "unlinked:" + r.id)).size;
+  const campaignFilterOptions = [
+    {value: "all", label: "All Status"},
+    {value: "published", label: "Published"},
+    {value: "goal_reached", label: "Goal Reached"},
+    {value: "closed", label: "Closed"},
+    {value: "needs_goal", label: "Needs Goal Review"},
+  ];
+  const campaignFilterLabel =
+    campaignFilterOptions.find(option => option.value === campaignFilter)?.label || "All Status";
+  const filteredCampaigns = campaigns.filter(c => {
+    const term = campaignSearch.trim().toLowerCase();
+    const matchesSearch = !term || [
+      c.title, c.generalArea, c.id, c.sourceAssistanceRequestId,
+    ].some(value => String(value || "").toLowerCase().includes(term));
+    const goal = numeric(c.monetaryGoal);
+    const reached = goal > 0 && numeric(c.verifiedAmountReceived) >= goal - 0.01;
+    const matchesStatus = campaignFilter === "all" ||
+      (campaignFilter === "goal_reached" && reached) ||
+      (campaignFilter === "published" && c.status === "published" && !reached) ||
+      (campaignFilter === "closed" && c.status === "closed") ||
+      (campaignFilter === "needs_goal" && goal === 0);
+    return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    const getPriority = (c: CampaignRow) => {
+      const goal = numeric(c.monetaryGoal);
+      const reached = goal > 0 &&
+        numeric(c.verifiedAmountReceived) >= goal - 0.01;
+      return c.status === "published" && !reached ? 0 : reached ? 1 :
+        c.status === "closed" ? 2 : 3;
+    };
+    return getPriority(a) - getPriority(b) ||
+      millis(b.publishedAt || b.updatedAt || b.createdAt) -
+      millis(a.publishedAt || a.updatedAt || a.createdAt) ||
+      String(a.title || "").localeCompare(String(b.title || ""));
+  });
+  const campaignPageSize = 5;
+  const totalCampaignPages = Math.max(1, Math.ceil(filteredCampaigns.length / campaignPageSize));
+  const currentCampaignPage = Math.min(campaignPage, totalCampaignPages);
+  const visibleCampaigns = filteredCampaigns.slice(
+    (currentCampaignPage - 1) * campaignPageSize, currentCampaignPage * campaignPageSize);
   const unreadCount = alerts.filter(a => !a.read).length;
   const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
   const relatedAlertDonation = selectedAlert?.donationId
