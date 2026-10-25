@@ -1000,29 +1000,9 @@ export default function ReliefOperations() {
       setAllocationQuantity("");
     };
 
-  const openDonationCampaigns = (assessmentId?: string) => {
-    if (allocationModalVisible) {
-      closeAllocationModal();
-    }
-
-    const cleanAssessmentId =
-      typeof assessmentId === "string"
-        ? assessmentId.trim()
-        : "";
-
-    if (cleanAssessmentId) {
-      router.push({
-        pathname: "/donation-list",
-        params: {
-          assessmentId: cleanAssessmentId,
-        },
-      } as any);
-      return;
-    }
-
-    router.push(
-      "/donation-list" as any,
-    );
+  const openAssistanceReview = () => {
+    if (allocationModalVisible) closeAllocationModal();
+    router.push("/assistance-requests" as any);
   };
 
   const openDonationSupportForSummary = (
@@ -1043,16 +1023,14 @@ export default function ReliefOperations() {
       return;
     }
 
-    openDonationCampaigns(
-      assessmentId,
-    );
+    openAssistanceReview();
   };
 
   const confirmShortageAndOpenDonation = (
     summary: BarangaySummary,
   ) => {
     const message =
-      `Use Donation Support only if LGU confirms that available government resources cannot fully cover this verified ${summary.reliefScope === "household" ? "household" : "community"} relief need in ${summary.barangay}.`;
+      `If LGU stock is insufficient for this verified ${summary.reliefScope === "household" ? "household" : "community"} relief need in ${summary.barangay}, open Request Assistance for separate strict eligibility and financial need review. This action does not create a donation campaign.`;
 
     // React Native Web does not reliably support multi-button Alert callbacks.
     // On web, use the browser confirmation dialog so the route action always fires.
@@ -2359,28 +2337,7 @@ export default function ReliefOperations() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={
-              styles.headerAction
-            }
-            activeOpacity={0.82}
-            onPress={() =>
-              openDonationCampaigns()
-            }
-          >
-            <Ionicons
-              name="heart-outline"
-              size={17}
-              color="#0F766E"
-            />
-            <Text
-              style={
-                styles.headerActionText
-              }
-            >
-              Donation Support
-            </Text>
-          </TouchableOpacity>
+
         </View>
 
         <TouchableOpacity
@@ -2424,7 +2381,7 @@ export default function ReliefOperations() {
                   styles.startHereText
                 }
               >
-                Verified need → check LGU stock → allocate and distribute → request Donation Support only if a shortage remains.
+                Verify relief need → check LGU stock → allocate → distribute and document receipt.
               </Text>
             )}
           </View>
@@ -2678,12 +2635,10 @@ export default function ReliefOperations() {
                           ),
                       );
 
-                    let nextLabel =
-                      "Request Donation Support";
+                    let nextLabel = "Review Assistance Need";
                     let nextTitle =
                       "LGU stock does not currently match this need";
-                    let nextText =
-                      "Request Donation Support only after LGU confirms that available resources cannot cover this verified need.";
+                    let nextText = "Record any verified shortage and process monetary fundraising through a separate approved Assistance Request.";
                     let nextIcon:
                       React.ComponentProps<
                         typeof Ionicons
@@ -3681,7 +3636,7 @@ export default function ReliefOperations() {
                               >
                                 {hasMatchingStock
                                   ? "Request Donation for Shortage"
-                                  : "Confirm Shortage & Request Donation"}
+                                  : "Open Assistance Requests"}
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -3805,7 +3760,7 @@ export default function ReliefOperations() {
                   styles.inventoryNoticeText
                 }
               >
-                Add official LGU-controlled stock here. Donated goods enter inventory only after LGU confirms actual receipt through Donation Support.
+                Add official LGU-controlled stock here. Donated goods enter inventory only after LGU confirms their physical receipt and documented inventory intake.
               </Text>
             </View>
 
@@ -4651,7 +4606,7 @@ export default function ReliefOperations() {
                       styles.emptyText
                     }
                   >
-                    No matching LGU stock is available for this verified relief need. Add official LGU stock or confirm a shortage before requesting Donation Support.
+                    No matching LGU stock is available. Review official stock or use verified Request Assistance for a separate monetary need.
                   </Text>
 
                   <TouchableOpacity
@@ -4664,7 +4619,7 @@ export default function ReliefOperations() {
                           selectedSummary,
                         );
                       } else {
-                        openDonationCampaigns();
+                        openAssistanceReview();
                       }
                     }}
                   >
