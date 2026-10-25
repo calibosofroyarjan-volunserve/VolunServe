@@ -35,6 +35,8 @@ export type ReconciliationDonation = {
   paymentProvider?: string;
   paymongoLivemode?: boolean;
   actualAmountReceived?: number;
+  verifiedBy?: string;
+  paymongoCheckoutSessionId?: string;
 };
 type Source = "sandbox" | "live" | "legacy" | "pending" | "failed" | "unverified";
 const positive = (raw: unknown) => {
