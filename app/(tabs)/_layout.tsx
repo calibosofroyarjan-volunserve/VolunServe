@@ -358,7 +358,7 @@ export default function TabLayout() {
               onPress={() => setMobileMenuOpen(false)}
               accessibilityLabel="Close navigation drawer"
             />
-            <View style={styles.mobileDrawer}>
+            <LinearGradient colors={["#073A37", "#064D47", "#036151"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawer}>
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -372,26 +372,32 @@ export default function TabLayout() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.mobileDrawerLabel}>MAIN MENU</Text>
+              <Text style={styles.mobileDrawerLabel}>MAIN MODULES</Text>
               <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
-                {menuItems.map((item) => (
-                  <Pressable
-                    key={item.name}
-                    accessibilityRole="button"
-                    onPress={() => visit(item.name)}
-                    style={({ pressed }) => [
-                      styles.mobileDrawerItem,
-                      item.name === (segments[segments.length - 1] || "index") && styles.mobileDrawerActive,
-                      pressed && styles.mobilePressed,
-                    ]}
-                  >
-                    <Ionicons name={item.icon as any} size={20} color="#0C7068" />
-                    <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
-                  </Pressable>
-                ))}
+                {menuItems.map((item) => {
+                  const theme = (mode === "volunteer" ? volunteerModuleIdentity : residentModuleIdentity)[item.name];
+                  const active = item.name === (segments[segments.length - 1] || "index");
+                  return (
+                    <Pressable key={item.name} accessibilityRole="button"
+                      onPress={() => visit(item.name)}
+                      style={({ pressed }) => [styles.mobileDrawerItem, active && styles.mobileDrawerActive, pressed && styles.mobilePressed]}>
+                      {active ? <LinearGradient pointerEvents="none" colors={["#04987A", "#32B883"]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.5 }}
+                        style={styles.mobileDrawerItemOverlay} /> : null}
+                      <LinearGradient colors={theme ? [...theme.colors] : ["#08766B", "#0BA69A"]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawerIconBadge}>
+                        <Ionicons name={item.icon as any} size={19} color="#FFFFFF" />
+                      </LinearGradient>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
+                        {theme ? <Text numberOfLines={1} style={styles.mobileDrawerSubtitle}>{theme.subtitle}</Text> : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
                 {canSwitchMode ? (
                   <Pressable onPress={() => void switchMobileMode()} style={styles.mobileDrawerItem}>
-                    <Ionicons name="swap-horizontal-outline" size={20} color="#0C7068" />
+                    <Ionicons name="swap-horizontal-outline" size={20} color="#BDEDE2" />
                     <Text style={styles.mobileDrawerItemText}>
                       Switch to {mode === "volunteer" ? "Resident" : "Volunteer"} Mode
                     </Text>
@@ -418,7 +424,7 @@ export default function TabLayout() {
                   <Text style={[styles.mobileDrawerItemText, { color: "#C3303D" }]}>Log Out</Text>
                 </Pressable>
               </ScrollView>
-            </View>
+            </LinearGradient>
           </View>
         ) : null}
       </View>
@@ -843,17 +849,20 @@ const styles = StyleSheet.create({
   mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
   mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
   mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
-  mobileDrawer: { height: "100%", width: "79%", maxWidth: 298, backgroundColor: "#FFFFFF", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
-  mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "#E7EEF4" },
+  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#073A37", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
+  mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.16)" },
   mobileDrawerLogo: { width: 44, height: 44 },
   mobileDrawerBrandCopy: { flex: 1 },
-  mobileDrawerTitle: { color: "#006859", fontSize: 18, fontWeight: "900" },
-  mobileDrawerSub: { color: "#75869B", fontSize: 9, fontWeight: "800" },
-  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#8493A7", fontWeight: "800", letterSpacing: 1.2, fontSize: 10 },
+  mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
+  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
   mobileDrawerScroll: { flex: 1 },
-  mobileDrawerItem: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 3 },
-  mobileDrawerActive: { backgroundColor: "#E5F7F2" },
-  mobileDrawerItemText: { color: "#18375C", fontWeight: "700", fontSize: 12.5, flex: 1 },
+  mobileDrawerItem: { minHeight: 55, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
+  mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
+  mobileDrawerIconBadge: { width: 37, height: 37, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
+  mobileDrawerActive: { backgroundColor: "#079776" },
+  mobileDrawerItemText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12.5 },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
