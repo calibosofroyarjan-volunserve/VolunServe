@@ -29,6 +29,7 @@ import {
   activeModeForProfile,
   hasResidentAccess,
   hasVolunteerAccess,
+  logoutUser,
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -152,6 +153,8 @@ export default function WebHome() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState(false);
   const [mobileSlide, setMobileSlide] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const compact = width < 1040;
   const narrow = width < 760;
@@ -178,7 +181,8 @@ export default function WebHome() {
   const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
   const canSwitchMode =
     hasResidentAccess(profile) && hasVolunteerAccess(profile);
-  const profileRole = volunteerMode ? "Volunteer" : "Community Member";
+  const profileRole = volunteerMode ? "Volunteer" : "Resident";
+  const profileVerified = profile?.identityVerified === true || profile?.identityStatus === "verified";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
@@ -418,6 +422,7 @@ export default function WebHome() {
 
   const handleModeSwitch = async () => {
     if (!user || !canSwitchMode) return;
+    setProfileMenuOpen(false);
 
     const nextMode = volunteerMode ? "resident" : "volunteer";
     try {
@@ -431,6 +436,29 @@ export default function WebHome() {
     }
   };
 
+  const openAccountDestination = (destination: "profile" | "my-cases" | "settings") => {
+    setProfileMenuOpen(false);
+    if (destination === "settings") {
+      router.push({ pathname: "/profile", params: { edit: "1" } });
+    } else {
+      router.push(destination === "profile" ? "/profile" : "/my-cases");
+    }
+  };
+
+  const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    if (loggingOut || !window.confirm("Are you sure you want to log out of VolunServe?")) return;
+    setLoggingOut(true);
+    try {
+      await logoutUser();
+      router.replace("/login");
+    } catch (error: any) {
+      Alert.alert("Log out failed", error?.message || "Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -438,6 +466,10 @@ export default function WebHome() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={[styles.page, narrow && styles.pageMobile]}>
+          {profileMenuOpen && !narrow ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Close account menu"
+              onPress={() => setProfileMenuOpen(false)} style={styles.profileMenuDismiss} />
+          ) : null}
           {narrow ? (
             <ImageBackground
               source={require("../../assets/images/sjdm-aerial.png")}
@@ -519,7 +551,7 @@ export default function WebHome() {
               </View>
 
               <View style={styles.topActions}>
-                {compact && canSwitchMode ? (
+                {compact && canSwitchMode && volunteerMode ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
@@ -567,12 +599,14 @@ export default function WebHome() {
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open profile"
+                  accessibilityLabel={profileMenuOpen ? "Close account menu" : "Open account menu"}
+                  accessibilityState={{ expanded: profileMenuOpen }}
                   style={({ pressed }) => [
                     styles.profileButton,
+                    profileMenuOpen && styles.profileButtonOpen,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() => router.push("/profile")}
+                  onPress={() => setProfileMenuOpen(current => !current)}
                 >
                   {profile?.profilePictureUrl ? (
                     <Image
@@ -596,7 +630,44 @@ export default function WebHome() {
                 </Pressable>
               </View>
             </View>
-
+            {profileMenuOpen ? (
+              <View style={styles.profileDropdown}>
+                <View style={styles.dropdownIdentity}>
+                  {profile?.profilePictureUrl ? (
+                    <Image source={{ uri: profile.profilePictureUrl }} style={styles.dropdownAvatar} />
+                  ) : (
+                    <View style={styles.dropdownAvatarFallback}>
+                      <Text style={styles.dropdownAvatarInitial}>{profileInitial}</Text>
+                    </View>
+                  )}
+                  <View style={styles.dropdownIdentityCopy}>
+                    <Text numberOfLines={1} style={styles.dropdownName}>{displayName}</Text>
+                    <Text style={styles.dropdownRole}>{volunteerMode ? "Volunteer Account" : "Resident Account"}</Text>
+                  </View>
+                  {profileVerified ? (
+                    <View style={styles.dropdownVerified}>
+                      <Ionicons name="checkmark-circle" size={12} color="#087B55" />
+                      <Text style={styles.dropdownVerifiedText}>Verified</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <ProfileDropdownAction icon="person-outline" title="My Profile"
+                  onPress={() => openAccountDestination("profile")} />
+                {!volunteerMode ? (
+                  <ProfileDropdownAction icon="document-text-outline" title="My Reports"
+                    onPress={() => openAccountDestination("my-cases")} />
+                ) : null}
+                <ProfileDropdownAction icon="settings-outline" title="Account Settings"
+                  onPress={() => openAccountDestination("settings")} />
+                {canSwitchMode ? (
+                  <ProfileDropdownAction icon="swap-horizontal" title={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
+                    onPress={() => void handleModeSwitch()} />
+                ) : null}
+                <View style={styles.dropdownDivider} />
+                <ProfileDropdownAction icon="log-out-outline" title={loggingOut ? "Logging out..." : "Log Out"}
+                  destructive disabled={loggingOut} onPress={() => void handleLogout()} />
+              </View>
+            ) : null}
 
             </View>
           <ImageBackground
@@ -878,6 +949,25 @@ export default function WebHome() {
   );
 }
 
+function ProfileDropdownAction({
+  icon, title, onPress, destructive = false, disabled = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title}
+      disabled={disabled} onPress={onPress}
+      style={({ pressed }) => [styles.dropdownAction, pressed && styles.dropdownActionPressed]}>
+      <Ionicons name={icon} size={19} color={destructive ? "#D82D40" : "#1B3662"} />
+      <Text style={[styles.dropdownActionText, destructive && styles.dropdownActionDanger]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 function PanelTitle({
   icon,
   title,
@@ -1021,50 +1111,53 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
   };
   return (
     <LinearGradient
-      colors={local ? ["#FFF7F6", "#FFE9EA"] : ["#F2F9FF", "#E1F2FE"]}
+      colors={local ? ["#FFF4F5", "#FFE9ED"] : ["#F2F9FF", "#E0F1FE"]}
       start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
       style={[styles.contactCard, local ? styles.localContactCard : styles.nationalContactCard]}
     >
       <View style={[styles.contactIcon, !local && styles.nationalContactIcon]}>
-        <Ionicons name={local ? "medkit" : "call"} size={25} color={local ? "#EC3449" : "#1475DF"} />
+        <Ionicons name={local ? "medkit" : "call"} size={28}
+          color={local ? "#EE334B" : "#167BF2"} />
       </View>
       <View style={styles.contactCopy}>
-        <Text style={styles.contactTitle}>
-          {local ? "CDRRMO Hotline" : "National Emergency Hotline"}
+        <Text style={[styles.contactTitle, local && styles.localContactTitle]}>
+          {local ? "CDRRMO – San Jose del Monte" : "National Emergency Hotline"}
         </Text>
         {local ? (
           <>
-            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO landline 044-306-6234"
-              onPress={() => dial("0443066234")}>
-              <Text style={styles.contactLocalNumber}>
-                Landline: <Text style={styles.contactLocalNumberStrong}>044-306-6234</Text>
-              </Text>
-            </Pressable>
-            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO mobile 0932-600-0119"
-              onPress={() => dial("09326000119")}>
-              <Text style={styles.contactLocalNumber}>
-                Phone Number: <Text style={styles.contactLocalNumberStrong}>0932-600-0119</Text>
-              </Text>
-            </Pressable>
+            <Text style={styles.contactAgency}>City Disaster Risk Reduction and Management Office</Text>
+            <View style={styles.contactNumberGrid}>
+              <Pressable accessibilityRole="link"
+                accessibilityLabel="Call CDRRMO landline 044-306-6234"
+                onPress={() => dial("0443066234")} style={styles.contactNumberGroup}>
+                <Ionicons name="call" size={19} color="#F03A4E" />
+                <View style={styles.contactNumberCopy}>
+                  <Text style={styles.contactNumberLabel}>Landline</Text>
+                  <Text style={styles.contactLocalNumberStrong}>044-306-6234</Text>
+                </View>
+              </Pressable>
+              <View style={styles.contactNumberDivider} />
+              <Pressable accessibilityRole="link"
+                accessibilityLabel="Call CDRRMO mobile 0932-600-0119"
+                onPress={() => dial("09326000119")} style={styles.contactNumberGroup}>
+                <Ionicons name="phone-portrait-outline" size={19} color="#F03A4E" />
+                <View style={styles.contactNumberCopy}>
+                  <Text style={styles.contactNumberLabel}>Phone Number</Text>
+                  <Text style={styles.contactLocalNumberStrong}>0932-600-0119</Text>
+                </View>
+              </Pressable>
+            </View>
           </>
         ) : (
           <>
             <Pressable accessibilityRole="link" accessibilityLabel="Call National Emergency Hotline 911"
               onPress={() => dial("911")}>
-              <Text style={styles.contactValue}>911</Text>
+              <Text style={styles.nationalHotlineValue}>911</Text>
             </Pressable>
             <Text style={styles.contactSubtitle}>Available nationwide 24/7</Text>
           </>
         )}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={local ? "Call CDRRMO mobile 0932-600-0119" : "Call National Emergency Hotline 911"}
-        onPress={() => dial(local ? "09326000119" : "911")}
-        style={[styles.contactCallAction, !local && styles.nationalCallAction]}
-      >
-        <Ionicons name="call" size={21} color={local ? "#E83D50" : "#177ADE"} />
-      </Pressable>
     </LinearGradient>
   );
 }
@@ -1142,11 +1235,63 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(3, 18, 31, 0.20)",
   },
   desktopHeaderStrip: {
+    zIndex: 80,
+    overflow: "visible",
     flexDirection: "row",
     justifyContent: "flex-end",
     paddingHorizontal: 3,
     paddingBottom: 13,
   },
+  profileMenuDismiss: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 70,
+  },
+  profileDropdown: {
+    position: "absolute",
+    top: 57,
+    right: 3,
+    width: 300,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E5EDF3",
+    padding: 11,
+    zIndex: 90,
+    shadowColor: "#112F4C",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 25,
+    elevation: 20,
+  },
+  dropdownIdentity: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 5, paddingVertical: 9,
+    paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#EAF0F4",
+    marginBottom: 7,
+  },
+  dropdownAvatar: { width: 38, height: 38, borderRadius: 19 },
+  dropdownAvatarFallback: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: "center", justifyContent: "center", backgroundColor: "#E1F1FD",
+  },
+  dropdownAvatarInitial: { color: "#1178CE", fontSize: 19, fontWeight: "900" },
+  dropdownIdentityCopy: { flex: 1, minWidth: 0 },
+  dropdownName: { fontSize: 12.5, fontWeight: "900", color: "#102850" },
+  dropdownRole: { fontSize: 10.5, color: "#647C9B", marginTop: 3 },
+  dropdownVerified: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 7, paddingVertical: 5,
+    borderRadius: 16, backgroundColor: "#DDF8EB",
+  },
+  dropdownVerifiedText: { color: "#087B55", fontSize: 9, fontWeight: "800" },
+  dropdownAction: {
+    flexDirection: "row", alignItems: "center", gap: 13,
+    minHeight: 45, paddingHorizontal: 12, borderRadius: 11,
+  },
+  dropdownActionPressed: { backgroundColor: "#F0F8F8" },
+  dropdownActionText: { color: "#1A3156", fontSize: 12.5, fontWeight: "700" },
+  dropdownActionDanger: { color: "#D53242" },
+  dropdownDivider: { height: 1, backgroundColor: "#E7EDF2", marginVertical: 8, marginHorizontal: 9 },
   heroTop: {
     zIndex: 3,
     flexDirection: "row",
@@ -1231,6 +1376,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
+  profileButtonOpen: { borderColor: "#77C9C0", backgroundColor: "#FFFFFF" },
   profileButton: {
     minHeight: 50,
     minWidth: 198,
@@ -1510,7 +1656,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   mainGrid: {
-    marginTop: 18,
+    marginTop: 16,
     flexDirection: "row",
     alignItems: "stretch",
     gap: 16,
@@ -1521,7 +1667,7 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 22,
+    padding: 21,
     borderRadius: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
@@ -1712,12 +1858,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   emergencyPanel: {
-    marginTop: 18,
-    padding: 21,
+    marginTop: 16,
+    padding: 20,
     borderRadius: 20,
-    backgroundColor: "#FFFDFD",
+    backgroundColor: "#FFF9FA",
     borderWidth: 1,
-    borderColor: "#DEEDF2",
+    borderColor: "#F8DDE3",
     shadowColor: "#0D506A",
     shadowOpacity: 0.05,
     shadowRadius: 12,
@@ -1759,7 +1905,7 @@ const styles = StyleSheet.create({
   },
   contactCard: {
     flex: 1,
-    minHeight: 100,
+    minHeight: 112,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
@@ -1780,6 +1926,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFE3E8",
   },
   nationalContactIcon: { backgroundColor: "#DDEFFC" },
+  localContactTitle: { color: "#8F1528" },
+  contactAgency: { color: "#6B5261", fontSize: 10.5, marginTop: 3 },
+  contactNumberGrid: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 11, marginTop: 13,
+  },
+  contactNumberGroup: {
+    flexDirection: "row", alignItems: "center", gap: 7, minWidth: 130,
+  },
+  contactNumberDivider: {
+    width: 1, height: 31, backgroundColor: "#F6BFCA",
+  },
+  contactNumberCopy: { gap: 2 },
+  contactNumberLabel: { color: "#5B6580", fontSize: 10 },
+  nationalHotlineValue: {
+    marginTop: 2, fontSize: 30, lineHeight: 34,
+    color: "#E92F47", fontWeight: "900",
+  },
   contactCopy: {
     flex: 1,
     minWidth: 0,
@@ -1797,7 +1961,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   contactLocalNumber: { color: "#24405B", fontSize: 12.5, lineHeight: 20 },
-  contactLocalNumberStrong: { fontWeight: "900", color: "#143052" },
+  contactLocalNumberStrong: { fontWeight: "900", fontSize: 14, color: "#143052" },
   contactCallAction: {
     width: 43, height: 43, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
