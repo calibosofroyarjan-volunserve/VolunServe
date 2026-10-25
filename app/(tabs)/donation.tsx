@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import {
   collection,
@@ -969,13 +970,35 @@ export default function Donation() {
                 <ActivityIndicator color="#0F766E" />
               </View>
             ) : listedCampaigns.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="search-outline" size={28} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
-                <Text style={styles.emptyText}>{showCompletedCampaigns
-                  ? "Fully funded and Admin-closed campaigns will appear here."
-                  : "Try another filter or check back for newly approved campaigns."}</Text>
-              </View>
+              <LinearGradient colors={["#F3FFF9","#EDFAF5","#DDF5EB"]} style={styles.donationEmptyState}>
+                <View style={styles.donationEmptyDecoRight}>
+                  <Ionicons name="leaf-outline" color="rgba(15,137,94,0.2)" size={92} />
+                </View>
+                <View style={styles.donationEmptyIconRing}>
+                  <Ionicons name={showCompletedCampaigns ? "ribbon-outline" : "heart-outline"} size={33} color="#078D6A" />
+                </View>
+                <View style={styles.donationEmptyCopy}>
+                  <Text style={styles.donationEmptyTitle}>
+                    {showCompletedCampaigns ? "No completed campaigns yet" : searchText.trim() ? "No campaigns match your search" : "Every act of giving starts somewhere"}
+                  </Text>
+                  <Text style={styles.donationEmptyDescription}>
+                    {showCompletedCampaigns
+                      ? "Closed or fully funded campaigns will appear here once verified."
+                      : searchText.trim()
+                        ? "Try a different keyword or clear your search to see available causes."
+                        : "There are no open verified fundraising campaigns right now. Explore completed causes while new campaigns are being approved."}
+                  </Text>
+                </View>
+                {!showCompletedCampaigns && !searchText.trim() ? (
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityLabel="Explore completed donation campaigns"
+                    onPress={() => setShowCompletedCampaigns(true)}
+                    style={styles.donationEmptyExplore}>
+                    <Text style={styles.donationEmptyExploreText}>Explore completed campaigns</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF"/>
+                  </TouchableOpacity>
+                ) : null}
+              </LinearGradient>
             ) : (
               <View style={[styles.campaignGrid, styles.campaignGridFull]}>
                 {listedCampaigns.map((campaign) => (
@@ -984,14 +1007,15 @@ export default function Donation() {
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={true}
+                    fullGrid={width >= 1390}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
               </View>
             )}
             {campaignsReady ? (
-              <View style={styles.webHowItWorks}>
+              <LinearGradient colors={["#F4FFFC","#FFFFFF","#F3FBF6"]}
+                start={{x:0,y:0}} end={{x:1,y:1}} style={styles.webHowItWorks}>
                 <View style={styles.donationHowHeading}>
                   <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
                   <View style={{flex:1}}>
@@ -1001,26 +1025,32 @@ export default function Donation() {
                 </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "heart-outline" as const, title: "1. Choose a Cause", body: "Select a verified campaign to view details and progress." },
-                    { icon: "card-outline" as const, title: "2. Make a Donation", body: "Choose an amount in PayMongo Test Mode." },
-                    { icon: "shield-checkmark-outline" as const, title: "3. Verify Payment", body: "We wait for signed webhook confirmation." },
-                    { icon: "people-outline" as const, title: "4. Track Your Support", body: "See the verified transaction in My Donations." },
-                  ].map((step) => (
-                    <View key={step.title} style={styles.webHowStep}>
+                    { icon: "heart-outline" as const, title: "Choose a Cause", body: "Select a verified campaign and view its progress.", gradient:["#EAFBF4","#F9FFFC"] as const },
+                    { icon: "card-outline" as const, title: "Make a Donation", body: "Choose an amount using PayMongo Test Mode.", gradient:["#E9F6FF","#F8FCFF"] as const },
+                    { icon: "shield-checkmark-outline" as const, title: "Verify Payment", body: "We wait for secure webhook confirmation.", gradient:["#EAF8EF","#F7FFF9"] as const },
+                    { icon: "people-outline" as const, title: "Track Your Support", body: "View your donation history and receipts.", gradient:["#F5FAE4","#FCFFF7"] as const },
+                  ].map((step,index) => (
+                    <LinearGradient key={step.title}
+                      colors={step.gradient} start={{x:0,y:0}} end={{x:1,y:1}}
+                      style={styles.webHowStep}>
                       <View style={styles.donationHowStepIcon}>
-                        <Ionicons name={step.icon} size={24} color="#009474" />
+                        <Ionicons name={step.icon} size={23} color={index===1?"#1577C9":"#009474"} />
+                      </View>
+                      <View style={styles.donationStepNumber}>
+                        <Text style={styles.donationStepNumberText}>{index+1}</Text>
                       </View>
                       <View style={styles.donationHowStepCopy}>
                         <Text style={styles.webHowStepTitle}>{step.title}</Text>
                         <Text style={styles.webHowStepBody}>{step.body}</Text>
                       </View>
-                    </View>
+                    </LinearGradient>
                   ))}
                 </View>
                 <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
-              </View>
+              </LinearGradient>
             ) : null}
-            <View style={styles.donationRecentPanel}>
+            <LinearGradient colors={["#FFFFFF","#F8FFFC"]} start={{x:0,y:0}} end={{x:1,y:1}}
+              style={styles.donationRecentPanel}>
               <View style={styles.donationRecentHeading}>
                 <View style={styles.donationHowIcon}>
                   <Ionicons name="receipt-outline" size={21} color="#07916D"/>
@@ -1069,9 +1099,12 @@ export default function Donation() {
                           {d.campaignTitle || "Donation campaign"}
                         </Text>
                         <Text style={styles.donationRecentAmount}>{money(Number(d.amount || 0))}</Text>
-                        <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
-                          {label}
-                        </Text>
+                        <View style={[styles.donationRecentStatusChip,paid?styles.donationRecentChipPaid:styles.donationRecentChipPending]}>
+                          <Ionicons name={paid?"checkmark-circle":"time-outline"} size={14} color={paid?"#007C5C":"#AA7A17"} />
+                          <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
+                            {label}
+                          </Text>
+                        </View>
                         {paid ? (
                           <TouchableOpacity accessibilityRole="button"
                             accessibilityLabel={`View receipt for ${d.campaignTitle || "donation"}`}
@@ -1085,7 +1118,7 @@ export default function Donation() {
                   })}
                 </View>
               )}
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Campaign details are only available after selecting a card. */}
@@ -1391,12 +1424,14 @@ function CampaignCard({
   const goal = campaignGoal(campaign);
   const percentage = goal > 0 ? clampPercent((raised / goal) * 100) : 0;
   const group = campaignGroupOf(campaign);
+  const landscape = wide && fullGrid;
 
   return (
     <TouchableOpacity
       style={[
         styles.campaignCard,
         wide && (fullGrid ? styles.campaignCardFull : styles.campaignCardWide),
+        landscape && styles.donationCardLandscape,
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
@@ -1404,9 +1439,12 @@ function CampaignCard({
       accessibilityLabel={`View details for ${campaign.title || "donation campaign"}`}
       onPress={onPress}
     >
-      <CampaignVisual campaign={campaign} photoUrl={photos[0]} />
+      <LinearGradient colors={["#FFFFFF", "#FBFFFD", "#F2FAF8"]}
+        start={{x:0,y:0}} end={{x:1,y:1}}
+        style={[styles.donationCardContent,landscape&&styles.donationCardContentLandscape]}>
+        <CampaignVisual campaign={campaign} photoUrl={photos[0]} landscape={landscape} />
 
-      <View style={styles.campaignCardBody}>
+        <View style={[styles.campaignCardBody,landscape&&styles.donationCardBodyLandscape]}>
         <View style={styles.badgeRow}>
           <View style={[styles.groupBadge,group==="community_needs_help"&&styles.groupBadgeCommunity]}>
             <Ionicons name={group==="community_needs_help"?"heart-outline":"shield-checkmark-outline"} size={12}
@@ -1415,7 +1453,10 @@ function CampaignCard({
               {campaignCategoryLabel(campaign)}
             </Text>
           </View>
-          <Ionicons name="shield-checkmark" size={16} color="#07966D"/>
+          <View style={styles.donationVerifiedBadge}>
+            <Ionicons name="checkmark-circle" size={12} color="#007E59"/>
+            {!landscape && <Text style={styles.donationVerifiedText}>LGU verified</Text>}
+          </View>
         </View>
 
         <Text style={styles.campaignTitle} numberOfLines={2}>
@@ -1438,23 +1479,26 @@ function CampaignCard({
             <Text style={styles.cardProgressGoal}>of {money(goal)}</Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${percentage}%` as any }]} />
+            <LinearGradient colors={["#007E70","#09BC78"]} start={{x:0,y:0}} end={{x:1,y:0}}
+              style={[styles.progressFill, { width: `${percentage}%` as any }]} />
           </View>
-          <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
+          <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% of funding goal</Text>
         </View>
 
         <View style={styles.donationCardFooter}>
-          <View style={styles.donationCardFooterCopy}>
-            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"eye-outline"} size={16} color="#05896B"/>
-            <Text style={styles.donationCardFooterText}>
-              {campaignFinished(campaign) ? "Past campaign" : "View campaign details"}
+          <View style={[styles.donationCardFooterCopy,landscape&&styles.donationCardFooterCompact]}>
+            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"heart-outline"} size={15} color="#05896B"/>
+            <Text style={styles.donationCardFooterText} numberOfLines={2}>
+              {campaignFinished(campaign) ? "Past campaign" : "View details to support"}
             </Text>
           </View>
-          <View style={styles.donationCardFooterArrow}>
+          <LinearGradient colors={["#03B981","#007C66"]} start={{x:0,y:0}} end={{x:1,y:1}}
+            style={styles.donationCardFooterArrow}>
             <Ionicons name="arrow-forward" size={17} color="#FFFFFF"/>
-          </View>
+          </LinearGradient>
         </View>
-      </View>
+        </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
@@ -1462,13 +1506,15 @@ function CampaignCard({
 function CampaignVisual({
   campaign,
   photoUrl,
+  landscape = false,
 }: {
   campaign: DonationCampaign;
   photoUrl?: string;
+  landscape?: boolean;
 }) {
   if (photoUrl) {
     return (
-      <View style={styles.campaignVisualWrap}>
+      <View style={[styles.campaignVisualWrap,landscape&&styles.donationCardVisualLandscape]}>
         <Image source={{ uri: photoUrl }} style={styles.campaignVisualImage} resizeMode="cover" />
         <View style={styles.photoApprovalBadge}>
           <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
@@ -1485,6 +1531,7 @@ function CampaignVisual({
       style={[
         styles.campaignVisualPlaceholder,
         group === "community_needs_help" && styles.campaignVisualPlaceholderCommunity,
+        landscape && styles.donationCardVisualLandscape,
       ]}
     >
       <View style={styles.campaignVisualIconCircle}>
@@ -2350,12 +2397,12 @@ const styles = StyleSheet.create({
     width: "100%",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#DDE6EC",
-    borderRadius: 16,
+    borderColor: "#D2EAE3",
+    borderRadius: 17,
     backgroundColor: "#FFFFFF",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
+    shadowColor: "#075540",
+    shadowOpacity: 0.085,
+    shadowRadius: 17,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
@@ -2363,7 +2410,7 @@ const styles = StyleSheet.create({
     width: "48.8%",
     minWidth: 255,
   },
-  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 490 },
+  campaignCardFull: { width: "31.8%", minWidth: 300, maxWidth: 490 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
@@ -2426,7 +2473,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 17,
+    padding: 16,
+    flex: 1,
   },
   badgeRow: {
     flexDirection: "row",
@@ -4032,21 +4080,71 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F766E",
   },
+  // Premium botanical donation layout, with responsive and data-grounded surfaces.
+  donationCardContent: { flex: 1 },
+  donationCardContentLandscape: { flexDirection: "row", minHeight: 242 },
+  donationCardLandscape: { minHeight: 242, maxHeight: 272 },
+  donationCardBodyLandscape: { flex: 1, minWidth: 0, padding: 12, justifyContent: "space-between" },
+  donationCardVisualLandscape: {
+    width: "33.5%", height: "100%", minHeight: 242,
+    flexShrink: 0, alignItems: "center", justifyContent: "center",
+  },
+  donationVerifiedBadge: {
+    flexDirection: "row", gap: 4, alignItems: "center", paddingHorizontal: 7,
+    minHeight: 24, borderRadius: 99, backgroundColor: "#DBF8EA",
+  },
+  donationVerifiedText: { color: "#00825D", fontSize: 9.5, fontWeight: "900" },
+  donationCardFooterCompact: { flex: 1, minWidth: 0, marginRight: 6 },
+  donationEmptyState: {
+    minHeight: 170, borderRadius: 18, borderWidth: 1,
+    borderColor: "#C5EADA", flexDirection: "row", flexWrap: "wrap",
+    alignItems: "center", gap: 17, paddingVertical: 25,
+    paddingHorizontal: 26, marginTop: 14, overflow: "hidden",
+  },
+  donationEmptyDecoRight: { position: "absolute", right: 5, top: -19 },
+  donationEmptyIconRing: {
+    width: 74, height: 74, borderRadius: 24,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#D3F8E6", borderWidth: 1, borderColor: "#B7EFD5",
+  },
+  donationEmptyCopy: { flex: 1, minWidth: 210, gap: 6 },
+  donationEmptyTitle: { fontSize: 18, fontWeight: "900", color: "#064D41" },
+  donationEmptyDescription: {
+    maxWidth: 510, fontSize: 11.5, lineHeight: 18, color: "#4F786F",
+  },
+  donationEmptyExplore: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+    minHeight: 42, borderRadius: 11,
+    paddingHorizontal: 14, backgroundColor: "#008A69",
+  },
+  donationEmptyExploreText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
+  donationStepNumber: {
+    height: 22, width: 22, borderRadius: 11, marginLeft: -6, marginTop: -29,
+    alignItems: "center", justifyContent: "center", backgroundColor: "#079B77",
+  },
+  donationStepNumberText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
+  donationRecentStatusChip: {
+    flex: 1, minWidth: 86, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 5,
+    paddingVertical: 7, paddingHorizontal: 7, borderRadius: 99,
+  },
+  donationRecentChipPaid: { backgroundColor: "#DDF8EA" },
+  donationRecentChipPending: { backgroundColor: "#FFF2CE" },
   // Premium Donations layout: live data on top of original vector-only artwork.
   donationHero: {
     position: "relative",
-    minHeight: 192,
-    borderRadius: 20,
+    minHeight: 193,
+    borderRadius: 22,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#CBEADD",
-    marginBottom: 15,
-    shadowColor: "#095D4B",
-    shadowOpacity: 0.07,
-    shadowRadius: 20,
+    borderColor: "#9AE5BF",
+    marginBottom: 16,
+    shadowColor: "#075A42",
+    shadowOpacity: 0.17,
+    shadowRadius: 23,
     shadowOffset: {width:0,height:7},
     elevation: 2,
   },
@@ -4061,8 +4159,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     zIndex: 1,
-    paddingLeft: 165,
-    paddingRight: 8,
+    paddingLeft: 172,
+    paddingRight: 14,
     paddingVertical: 23,
   },
   donationHeroBodyMobile: { flex: 0, paddingLeft: 118, paddingRight: 15, paddingTop: 13, paddingBottom: 10 },
@@ -4070,8 +4168,8 @@ const styles = StyleSheet.create({
     fontSize: 10, letterSpacing: 1.2, fontWeight: "900", color: "#087D5A",
   },
   donationHeroTitle: {
-    marginTop: 1, fontSize: 49, lineHeight: 54, letterSpacing: -1.8,
-    color: "#064838", fontWeight: "900",
+    marginTop: 1, fontSize: 49, lineHeight: 55, letterSpacing: -1.75,
+    color: "#064A38", fontWeight: "900",
   },
   donationHeroTitleMobile: { fontSize: 30, lineHeight: 36, letterSpacing: -0.8 },
   donationHeroTagline: {
@@ -4099,13 +4197,15 @@ const styles = StyleSheet.create({
   donationHeroStat: {
     flexGrow: 1, flexShrink: 1, minWidth: 103,
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 9, paddingVertical: 12,
-    borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 15,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.86)",
-    backgroundColor: "rgba(255,255,255,.84)",
+    borderColor: "rgba(255,255,255,0.98)",
+    backgroundColor: "rgba(255,255,255,0.93)",
+    shadowColor: "#064D40", shadowOpacity: 0.11,
+    shadowRadius: 14, shadowOffset: {width:0,height:5}, elevation: 2,
   },
-  donationHeroStatNumber: { color: "#102E46", fontSize: 16, fontWeight: "900" },
+  donationHeroStatNumber: { color: "#073E3C", fontSize: 17, fontWeight: "900" },
   donationHeroStatCaption: { color: "#5B7A83", fontSize: 8.5, marginTop: 1 },
   donationToolbar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -4135,13 +4235,13 @@ const styles = StyleSheet.create({
   donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
   donationFilterOptionText: { color: "#26465A", fontWeight: "700", fontSize: 11 },
   donationPastHint: { color:"#567580",fontSize:11,lineHeight:18,marginVertical:6 },
-  donationCardDescription: { color: "#5E7687", fontSize: 11, lineHeight: 17, marginTop: 9, minHeight: 34 },
+  donationCardDescription: { color: "#5A7882", fontSize: 10.8, lineHeight: 16, marginTop: 6, minHeight: 30 },
   donationCardFooter: {
-    borderTopWidth: 1, borderColor: "#E9F0F2", paddingTop: 12, marginTop: 12,
+    borderTopWidth: 1, borderColor: "#DFEEE9", paddingTop: 8, marginTop: 9,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
-  donationCardFooterText: { color:"#087A66",fontWeight:"800",fontSize:11 },
+  donationCardFooterText: { color:"#087A66",fontWeight:"900",fontSize:10 },
   donationCardFooterArrow: {
     width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: "#009879",
@@ -4153,13 +4253,15 @@ const styles = StyleSheet.create({
   },
   donationHowSubtitle: { fontSize: 10.5, color:"#718A98",marginTop:3 },
   donationHowStepIcon: {
-    width: 42,height:42,borderRadius:22,alignItems:"center",justifyContent:"center",
-    backgroundColor:"#E0F7ED",
+    width: 45,height:45,borderRadius:23,alignItems:"center",justifyContent:"center",
+    backgroundColor:"rgba(39,198,132,0.15)",
   },
   donationHowStepCopy: { flex:1, minWidth:0 },
   donationRecentPanel: {
-    marginTop:14,padding:18,backgroundColor:"#FFFFFF",borderRadius:17,
-    borderWidth:1,borderColor:"#D9E9E8",
+    marginTop:14,padding:19,backgroundColor:"#FFFFFF",borderRadius:19,
+    borderWidth:1,borderColor:"#C9EAE0",
+    shadowColor:"#064C40",shadowOpacity:.055,shadowRadius:17,
+    shadowOffset:{width:0,height:5},elevation:1,
   },
   donationRecentHeading: {flexDirection:"row",alignItems:"center",gap:10,marginBottom:12},
   donationRecentViewAll: {flexDirection:"row",alignItems:"center",gap:5,padding:6},
@@ -4171,7 +4273,7 @@ const styles = StyleSheet.create({
   donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16 },
   donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
   donationRecentTableHead: {
-    flexDirection:"row",alignItems:"center",backgroundColor:"#F0F7FA",padding:12,gap:10,
+    flexDirection:"row",alignItems:"center",backgroundColor:"#EAF7F5",padding:12,gap:10,
   },
   donationRecentHeadText: {flex:1,fontSize:10,fontWeight:"800",color:"#678095"},
   donationRecentRow: {
@@ -4182,7 +4284,7 @@ const styles = StyleSheet.create({
   donationRecentCellText: {flex:1,color:"#61798C",fontSize:10.5},
   donationRecentCampaignText: {flex:1,color:"#102E50",fontWeight:"800"},
   donationRecentAmount: {flex:1,color:"#0B2C49",fontWeight:"900",fontSize:11},
-  donationRecentStatus: {flex:1,fontSize:10,fontWeight:"900"},
+  donationRecentStatus: {fontSize:10,fontWeight:"900"},
   donationRecentStatusPaid: {color:"#008B69"},
   donationRecentStatusPending: {color:"#A7730D"},
   donationReceiptLink: {
@@ -4313,7 +4415,9 @@ const styles = StyleSheet.create({
     gap: 8, paddingHorizontal: 17, minHeight: 42, borderWidth: 1,
     borderColor: "#DCE8E9", borderRadius: 10, backgroundColor: "#FFFFFF",
   },
-  webPrimaryTabActive: { borderColor: "#009879", backgroundColor: "#009879" },
+  webPrimaryTabActive: { borderColor: "#00A67C", backgroundColor: "#008E70",
+    shadowColor:"#047554",shadowOpacity:.22,shadowRadius:12,
+    shadowOffset:{width:0,height:4},elevation:2 },
   webPrimaryTabText: { color: "#355267", fontSize: 12, fontWeight: "800" },
   webPrimaryTabTextActive: { color: "#FFFFFF" },
   webTabCount: {
@@ -4420,16 +4524,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   webHowItWorks: {
-    marginTop: 17, padding: 18, borderRadius: 17, backgroundColor: "#FAFEFC",
-    borderColor: "#D5EAE5", borderWidth: 1,
+    marginTop: 17, padding: 19, borderRadius: 19, backgroundColor: "#FAFEFC",
+    borderColor: "#CEEDE1", borderWidth: 1,
+    shadowColor:"#115B45",shadowOpacity:.05,shadowRadius:14,
+    shadowOffset:{width:0,height:5},elevation:1,
   },
   webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
-  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 13 },
+  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 },
   webHowStep: {
-    flexGrow: 1, flexBasis: 196, padding: 14, borderRadius: 12,
+    flexGrow: 1, flexBasis: 196, padding: 13, borderRadius: 13,
     flexDirection: "row", alignItems: "center",
     backgroundColor: "#F4F9FA", minWidth: 190, gap: 9,
-    borderWidth: 1, borderColor: "#E8F0F2",
+    borderWidth: 1, borderColor: "#E2F1EC",
   },
   webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
   webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
