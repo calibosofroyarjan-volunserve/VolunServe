@@ -27,12 +27,22 @@ const showStatus = (s:string) => ({
   acknowledged_demo:"Resident acknowledged demo",
   disputed:"Resident disputed demo",
 }[s] || s);
-const isVerified = (d:ReconciliationDonation) =>
-  d.paymentProvider==="paymongo" && d.paymongoLivemode===false &&
-  d.status==="received" && d.paymentStatus==="paid" &&
-  d.verifiedBy==="paymongo_webhook" && !!d.paymongoCheckoutSessionId &&
-  // Do not trust a frontend figure to authorize release; backend revalidates.
-  Number(d.actualAmountReceived)>0;
+type FundingSummary = {
+  campaignId:string;approvedGoal:number;recordedFunding:number;
+  providerVerifiedTestAmount:number;manualLegacyAmount:number;eligibleAmount:number;
+  providerVerifiedCount:number;pendingCount:number;otherCount:number;
+  ready:boolean;reason:string;
+};
+const statusDetail = (reason:string) => ({
+  ready:"Goal funded by verified PayMongo test payments.",
+  manual_records_only:"This campaign has manual/legacy donations, not webhook-confirmed PayMongo test payments.",
+  no_verified_provider_payment:"No webhook-confirmed PayMongo test payments are linked to this campaign.",
+  provider_payments_below_goal:"Verified test payments have not yet reached this campaign's approved goal.",
+  recorded_funding_below_goal:"Recorded campaign funding is below the approved goal. Reconcile payment records.",
+  assistance_link_not_verified:"The linked Assistance Request does not match the verified LGU records.",
+  requester_identity_not_verified:"The requesting Resident must complete identity verification.",
+  approved_goal_missing:"An approved funding goal is required.",
+}[reason] || "Reconciliation requires LGU review.");
 
 export default function FundReleaseControls({campaigns,donations,ready}:{
   campaigns:ReconciliationCampaign[];
@@ -40,6 +50,8 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
   ready:boolean;
 }) {
   const [rows,setRows] = useState<Release[]>([]);
+  const [funding,setFunding] = useState<FundingSummary[]>([]);
+  const [fundingLoaded,setFundingLoaded] = useState(false);
   const [busy,setBusy] = useState(false);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
@@ -51,20 +63,17 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
   const [method,setMethod] = useState<"gcash"|"maya">("gcash");
   const [walletLast4,setWalletLast4] = useState("");
   const eligibleCampaigns = useMemo(()=>campaigns.filter(c =>
-    !!c.sourceAssistanceRequestId && Number(c.monetaryGoal||0)>0),[campaigns]);
+    !!c.sourceAssistanceRequestId && Number(c.monetaryGoal||0)>0)
+    .sort((a,b)=>
+      Number(!!funding.find(x=>x.campaignId===b.id)?.ready)-
+      Number(!!funding.find(x=>x.campaignId===a.id)?.ready)),
+    [campaigns,funding]);
   const selection = eligibleCampaigns.find(c=>c.id===selectedId) || null;
   const record = rows.find(a=>a.campaignId===selectedId) || null;
-  const verified = useMemo(()=>selection ? donations
-    .filter(d=>d.campaignId===selection.id && (!d.donationType || d.donationType==="monetary") && isVerified(d))
-    .reduce((sum,d)=>sum+Number(d.actualAmountReceived||0),0) : 0,
-  [selection,donations]);
-  // One-time release is eligible only after the entire approved monetary
-  // goal is met by provider-verified Sandbox donations, not legacy records.
-  const maxReview = selection &&
-    Number(selection.monetaryGoal||0)>0 &&
-    Number(selection.verifiedAmountReceived||0)>=Number(selection.monetaryGoal||0) &&
-    verified>=Number(selection.monetaryGoal||0)
-      ? Number(selection.monetaryGoal||0) : 0;
+  const activeFunding = funding.find(x=>x.campaignId===selectedId) || null;
+  // UI cannot authorize releases from client-computed totals.
+  const maxReview = fundingLoaded && activeFunding?.ready
+    ? activeFunding.approvedGoal : 0;
   const request = useCallback(async(path:string,body?:Record<string,unknown>)=>{
     const token=await auth.currentUser?.getIdToken();
     if(!token)throw new Error("Please sign in again.");
@@ -84,10 +93,27 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
     try {
       const data=await request("");
       setRows(Array.isArray(data.releases)?data.releases:[]);
-    } catch (e:any) {setError(e?.message||"Unable to load fund records.");}
+      if(!Array.isArray(data.funding))throw new Error(
+        "Render is running the old reconciliation API. Update the backend before reviewing funds.");
+      setFunding(data.funding);
+      setFundingLoaded(true);
+    } catch (e:any) {
+      setFundingLoaded(false);
+      setFunding([]);
+      setError(e?.message||"Unable to load fund records.");
+    }
     finally {setLoading(false);}
   },[request]);
   useEffect(()=>{if(ready)void reload();},[ready,reload]);
+  useEffect(()=>{
+    if(!fundingLoaded||!eligibleCampaigns.length)return;
+    if(selectedId&&eligibleCampaigns.some(c=>c.id===selectedId))return;
+    // Choose a truly eligible campaign before an older same-title legacy record.
+    setSelectedId(eligibleCampaigns[0].id);
+  },[eligibleCampaigns,fundingLoaded,selectedId]);
+  useEffect(()=>{
+    setInputAmount(String((maxReview>0?maxReview:0).toFixed(2)));
+  },[selectedId,maxReview]);
   const action=async(path:string,body:Record<string,unknown>,success:string)=>{
     if(busy)return;
     setBusy(true);setError("");setNotice("");
@@ -100,12 +126,8 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
   };
   const pick=(id:string)=>{
     setSelectedId(id);
-    const c=eligibleCampaigns.find(x=>x.id===id);
-    const eligible = donations.filter(d=>d.campaignId===id && isVerified(d))
-      .reduce((sum,d)=>sum+Number(d.actualAmountReceived||0),0);
-    const goal=Number(c?.monetaryGoal||0);
-    const complete=goal>0 && Number(c?.verifiedAmountReceived||0)>=goal && eligible>=goal;
-    setInputAmount(String((complete?goal:0).toFixed(2)));
+    const summary=funding.find(x=>x.campaignId===id);
+    setInputAmount(String((summary?.ready?summary.approvedGoal:0).toFixed(2)));
     setError("");setNotice("");
   };
   return <View style={ss.panel}>
@@ -138,14 +160,19 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
       <View style={ss.list}>
         {eligibleCampaigns.map(c=>{
           const existing=rows.find(x=>x.campaignId===c.id);
+          const check=funding.find(x=>x.campaignId===c.id);
           return <Pressable key={c.id} onPress={()=>pick(c.id)}
             accessibilityRole="button" accessibilityState={{selected:selectedId===c.id}}
             style={[ss.campaign,selectedId===c.id&&ss.campaignActive]}>
             <View style={ss.flex}>
               <Text style={ss.campaignTitle}>{c.title||"Donation campaign"}</Text>
-              <Text style={ss.muted}>{existing ? showStatus(existing.status) : "Ready for LGU review"}</Text>
-              <Text style={ss.small}>{existing ? "Review amount: "+php(existing.amount):
-                "Recorded campaign funding: "+php(Number(c.verifiedAmountReceived||0))}</Text>
+              <Text style={ss.muted}>Campaign {c.id.slice(0,8)} · {existing ?
+                showStatus(existing.status) : !fundingLoaded ? "Checking payments…" :
+                check?.ready ? "Eligible for LGU review" : "Not yet eligible"}</Text>
+              <Text style={ss.small}>{existing ? "Review amount: "+php(existing.amount) :
+                "Verified PayMongo test: "+php(check?.providerVerifiedTestAmount||0)+
+                " · Manual/legacy: "+php(check?.manualLegacyAmount||0)}</Text>
+              {!!check&&!check.ready&&<Text style={ss.muted}>{statusDetail(check.reason)}</Text>
             </View>
             <Ionicons name="chevron-forward" size={17} color="#477C71"/>
           </Pressable>;
