@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
+import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
 import {
   collection,
   onSnapshot,
@@ -404,6 +405,7 @@ export default function Donation() {
   const medium = width >= 760;
   const spacious = width >= 1280;
   const compactHero = width < 600;
+  const modalWide = width >= 1050;
 
   const { loading, user, profile } = useUserSession();
 
@@ -1134,122 +1136,66 @@ export default function Donation() {
           {/* Campaign details are only available after selecting a card. */}
         </View>
       )}
-      <Modal visible={!!selectedCampaign && !showHistory}
-        transparent animationType="fade" onRequestClose={closeMobileCampaignDetails}>
+      <Modal
+        visible={!!selectedCampaign && !showHistory}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMobileCampaignDetails}
+      >
         <View style={styles.donationModalShade}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject}
-            accessible={false} activeOpacity={1} onPress={closeMobileCampaignDetails}/>
-          <View style={[styles.donationModalSurface,!medium&&styles.donationModalSurfaceMobile]}>
-            <View style={styles.donationModalTopbar}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            accessible={false}
+            activeOpacity={1}
+            onPress={closeMobileCampaignDetails}
+          />
+          <View style={[styles.donationModalSurface, !medium && styles.donationModalSurfaceMobile]}>
+            <LinearGradient
+              colors={["#E8FAF1", "#F9FFFC", "#F0FBF6"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.donationModalTopbar}
+            >
               <View style={styles.donationModalTopbarLeft}>
-                <Ionicons name="shield-checkmark" size={18} color="#078869"/>
-                <Text style={styles.donationModalTopTitle}>LGU-verified campaign details</Text>
-              </View>
-              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close donation details"
-                onPress={closeMobileCampaignDetails} style={styles.webCloseButton}>
-                <Ionicons name="close" size={19} color="#1B4350"/>
-              </TouchableOpacity>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
-              style={styles.donationModalScroller}
-              contentContainerStyle={styles.donationModalScroll}>
-          {selectedCampaign ? <View style={[styles.webDetailPane,styles.donationModalDetailPane]}>
-            <View style={styles.webDetailCard}>
-                <View style={styles.webDetailNavRow}>
-                  <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
-                    <Ionicons name="arrow-back" size={15} color="#087E69" />
-                    <Text style={styles.webBackToCampaignsText}>All campaigns</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.webDetailNavLabel}>Campaign Details</Text>
+                <View style={styles.premiumModalHeaderShield}>
+                  <Ionicons name="shield-checkmark" size={23} color="#008A5D" />
                 </View>
-                <PublicPhotoGallery
-                  photos={selectedPhotoUrls}
-                  title={selectedCampaign.title || "Donation Campaign"}
+                <View style={styles.premiumModalHeaderText}>
+                  <Text style={styles.donationModalTopTitle}>LGU Verified Campaign</Text>
+                  <Text style={styles.premiumModalHeaderSubtitle}>
+                    Verified community support in San Jose del Monte
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Close campaign details"
+                onPress={closeMobileCampaignDetails}
+                style={styles.premiumModalClose}
+              >
+                <Ionicons name="close" size={21} color="#173E47" />
+              </TouchableOpacity>
+            </LinearGradient>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+              style={styles.donationModalScroller}
+              contentContainerStyle={styles.donationModalScroll}
+            >
+              {selectedCampaign ? (
+                <PremiumCampaignDetails
                   campaign={selectedCampaign}
-                />
-
-                <View style={styles.webDetailBody}>
-                  <View style={styles.webBadgeRow}>
-                    <View style={styles.verifiedBadge}>
-                      <Ionicons name="shield-checkmark" size={12} color="#15803D" />
-                      <Text style={styles.verifiedBadgeText}>LGU VERIFIED</Text>
-                    </View>
-                    <View style={styles.webCategoryBadge}>
-                      <Text style={styles.webCategoryBadgeText}>
-                        {campaignGroupOf(selectedCampaign) === "community_needs_help"
-                          ? "COMMUNITY NEED"
-                          : "DISASTER"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.webDetailTitle}>
-                    {selectedCampaign.title || "Donation Campaign"}
-                  </Text>
-
-                  <View style={styles.webGeneralAreaCard}>
-                    <Text style={styles.webGeneralAreaEyebrow}>BENEFICIARY GENERAL AREA</Text>
-                    <View style={styles.webLocationLine}>
-                      <Ionicons name="location-outline" size={15} color="#0F766E" />
-                      <Text style={styles.webLocationText} numberOfLines={2}>
-                        {campaignAreaLabel(selectedCampaign)}
-                      </Text>
-                    </View>
-                    <Text style={styles.webGeneralAreaNote}>
-                      General barangay/city area only. Exact beneficiary location is coordinated privately with the LGU when needed.
-                    </Text>
-                  </View>
-
-                  <Text style={styles.webStoryText} numberOfLines={4}>
-                    {selectedCampaign.publicStory ||
-                      selectedCampaign.description ||
-                      "LGU-verified campaign open for public support."}
-                  </Text>
-
-                  <View style={styles.webProgressCard}>
-                    <View style={styles.webProgressTop}>
-                      <View>
-                        <Text style={styles.webRaisedAmount}>{money(selectedRaised)}</Text>
-                        <Text style={styles.webProgressLabel}>
-                          raised of {money(selectedGoal)}
-                        </Text>
-                      </View>
-                      <Text style={styles.webProgressPercent}>
-                        {Math.round(selectedPercent)}%
-                      </Text>
-                    </View>
-                    <View style={styles.progressTrackLarge}>
-                      <View
-                        style={[
-                          styles.progressFillLarge,
-                          { width: `${selectedPercent}%` as any },
-                        ]}
-                      />
-                    </View>
-                  </View>
-
-                  {/* The public beneficiary area is shown above. Show the LGU
-                      coordination point unobtrusively, without Google Maps or
-                      exposing any private beneficiary address. */}
-                  {!!selectedCampaign.handoffLocationName?.trim() && (
-                    <View style={styles.webCoordinationRow}>
-                      <Ionicons name="business-outline" size={15} color="#0B8064" />
-                      <Text style={styles.webCoordinationText} numberOfLines={2}>
-                        LGU coordination:{" "}
-                        <Text style={styles.webCoordinationName}>
-                          {selectedCampaign.handoffLocationName}
-                        </Text>
-                      </Text>
-                    </View>
-                  )}
-
-                  <View style={styles.webSupportTypesRow}>
-                    <View style={styles.webSupportTypeChip}>
-                      <Ionicons name="cash-outline" size={14} color="#0F766E" />
-                      <Text style={styles.webSupportTypeText}>Monetary</Text>
-                    </View>
-                  </View>
-
+                  photos={selectedPhotoUrls}
+                  wide={modalWide}
+                  area={campaignAreaLabel(selectedCampaign)}
+                  category={campaignCategoryLabel(selectedCampaign)}
+                  group={campaignGroupOf(selectedCampaign)}
+                  raised={selectedRaised}
+                  goal={selectedGoal}
+                  percent={selectedPercent}
+                  finished={selectedFunded}
+                  money={money}
+                >
                   {selectedFunded ? (
                     <View style={styles.webFundedNotice}>
                       <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
@@ -1374,9 +1320,8 @@ export default function Donation() {
                         </TouchableOpacity>
                     </View>
                   )}
-                </View>
-              </View>
-          </View> : null}
+                </PremiumCampaignDetails>
+              ) : null}
             </ScrollView>
           </View>
         </View>
@@ -3947,26 +3892,38 @@ const styles = StyleSheet.create({
   },
   donationReceiptLinkText: {color:"#2477D2",fontWeight:"900",fontSize:10},
   donationModalShade: {
-    flex:1,justifyContent:"center",alignItems:"center",
-    backgroundColor:"rgba(5,23,32,0.66)",padding:16,
+    flex: 1, justifyContent: "center", alignItems: "center",
+    backgroundColor: "rgba(7,31,38,0.76)", padding: 14,
   },
   donationModalSurface: {
-    width:"100%",maxWidth:860,height:"90%",maxHeight:"92%",backgroundColor:"#FFFFFF",
-    borderRadius:19,borderWidth:1,borderColor:"#D8E9E6",
-    shadowColor:"#021A1C",shadowOpacity:.24,shadowRadius:30,elevation:20,
-    overflow:"hidden",
+    width: "100%", maxWidth: 1160, height: "94%",
+    backgroundColor: "#FFFFFF", borderRadius: 21,
+    borderWidth: 1, borderColor: "#D4E7E0",
+    shadowColor: "#041D21", shadowOpacity: 0.29, shadowRadius: 31,
+    shadowOffset: { width: 0, height: 13 }, elevation: 21, overflow: "hidden",
   },
-  donationModalSurfaceMobile: {height:"94%",maxHeight:"96%",borderRadius:14},
+  donationModalSurfaceMobile: { height: "96%", borderRadius: 14 },
   donationModalTopbar: {
-    flexDirection:"row",alignItems:"center",justifyContent:"space-between",
-    backgroundColor:"#F5FCF9",paddingHorizontal:15,paddingVertical:11,
-    borderBottomWidth:1,borderColor:"#E3EEEA",
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderColor: "#DDEFE6", gap: 12,
   },
-  donationModalTopbarLeft: {flexDirection:"row",alignItems:"center",gap:8,flex:1},
-  donationModalTopTitle: {fontSize:12,color:"#0E604F",fontWeight:"900"},
-  donationModalScroller: {flex:1},
-  donationModalScroll: {padding:13,paddingBottom:26},
-  donationModalDetailPane: {flex:0,width:"100%"},
+  donationModalTopbarLeft: { flexDirection: "row", alignItems: "center", gap: 11, flex: 1 },
+  premiumModalHeaderShield: {
+    height: 44, width: 44, borderRadius: 22, backgroundColor: "#D8F6E5",
+    alignItems: "center", justifyContent: "center",
+  },
+  premiumModalHeaderText: { flex: 1, minWidth: 0 },
+  donationModalTopTitle: { fontSize: 16, color: "#16384A", fontWeight: "900" },
+  premiumModalHeaderSubtitle: { fontSize: 10.5, lineHeight: 16, color: "#5B788C", marginTop: 3 },
+  premiumModalClose: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#DCEBE8", backgroundColor: "#FFFFFF",
+  },
+  donationModalScroller: { flex: 1 },
+  donationModalScroll: { paddingHorizontal: 23, paddingVertical: 22, paddingBottom: 32 },
+  donationModalDetailPane: { flex: 0, width: "100%" },
   webContainer: {
     width: "100%",
     maxWidth: 1660,
