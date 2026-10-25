@@ -1,0 +1,33 @@
+name: Verify Professional Sandbox Fund Release
+
+on:
+  push:
+    branches:
+      - feat/professional-sandbox-payout-20261026
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci --no-audit --no-fund
+      - name: Node syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/fundReleaseDemoRoutes.js
+      - name: Donation reconciliation and sandbox release tests
+        run: node --test backend/tests/fundReleaseReconciliation.test.js
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Expo web production export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
