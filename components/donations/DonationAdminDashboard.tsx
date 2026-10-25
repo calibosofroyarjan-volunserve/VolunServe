@@ -1035,10 +1035,10 @@ const s = StyleSheet.create({
   tabActive: {backgroundColor:"#F1F9F6",borderBottomColor:"#0C8F6F"},
   tabText: {fontFamily:"AdminInterSemiBold",fontSize:11.7,color:"#4D6576"},
   tabTextActive: {color:"#08775D"},
-  columns: {flexDirection: "row", alignItems: "flex-start", gap: 15},
+  columns: {flexDirection:"row",alignItems:"flex-start",gap:16},
   columnsCompact: { flexDirection: "column" },
   mainColumn: {flex: 1, minWidth: 0, gap: 13},
-  detailsColumn: {width: 345, maxWidth: "100%"},
+  detailsColumn: {width: 350, maxWidth: "100%"},
   topPanels: {flexDirection: "row", alignItems: "stretch", gap: 15, flexWrap: "wrap"},
   recentColumn: {flexGrow: 1.3, flexBasis: 420, minWidth: 0},
   campaignColumn: {flexGrow: 1, flexBasis: 350, minWidth: 0},
@@ -1111,7 +1111,7 @@ const s = StyleSheet.create({
   campaignPercent: {fontFamily: "AdminInterSemiBold", fontSize: 10.5, color: "#0B8667"},
   smallEmpty: {flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 15},
   emptyTitle: {fontFamily: "AdminInterSemiBold", fontSize: 12, color: "#325D54"},
-  detailsColumnCompact: {width: "100%", maxWidth: "100%"},
+  detailsColumnCompact: {width:"100%",maxWidth:"100%"},
   alertIcon: {width: 36, height: 36, borderRadius: 10, backgroundColor: "#EBF8F1", alignItems: "center", justifyContent: "center"},
 
   countTag: {fontFamily: "AdminInterSemiBold", fontSize: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#EDF8F1", borderRadius: 8, color: "#0C8366"},
@@ -1178,5 +1178,166 @@ const s = StyleSheet.create({
   progressDonorCol: {flex:0.55,minWidth:41},
   showMoreCampaigns: {alignSelf:"flex-end",flexDirection:"row",gap:7,alignItems:"center",paddingVertical:10,paddingHorizontal:9},
   showMoreCampaignsText: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#0E8062"},
+
+  campaignPremiumBanner: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",
+    gap:18,minHeight:125,paddingVertical:25,paddingHorizontal:23,
+    borderWidth:1,borderColor:"#D9EDE6",borderRadius:14,overflow:"hidden",
+    shadowColor:"#135943",shadowOpacity:0.035,shadowRadius:14,shadowOffset:{width:0,height:6},
+  },
+  campaignBannerInfo: {flexGrow:1,flexBasis:330,minWidth:240,gap:6},
+  campaignBannerTitle: {
+    fontFamily:"AdminInterBold",fontSize:29,color:"#153847",letterSpacing:-0.75,
+  },
+  campaignBannerSubtitle: {
+    fontFamily:"AdminInterRegular",fontSize:11.8,lineHeight:19,color:"#688395",maxWidth:490,
+  },
+  campaignBannerStats: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",
+    justifyContent:"flex-end",gap:2,flexGrow:1,
+  },
+  campaignBannerStat: {
+    flexDirection:"row",alignItems:"center",justifyContent:"center",
+    gap:9,minWidth:120,flexGrow:1,flexBasis:116,paddingVertical:10,
+    borderRightWidth:1,borderRightColor:"#D7EAE3",
+  },
+  campaignBannerStatText: {gap:3},
+  campaignBannerStatValue: {
+    fontFamily:"AdminInterBold",fontSize:20,color:"#173E4B",letterSpacing:-0.45,
+  },
+  campaignBannerStatLabel: {
+    fontFamily:"AdminInterRegular",fontSize:9.6,color:"#76909C",
+  },
+  campaignRegister: {padding:0,gap:0,overflow:"hidden",minHeight:440},
+  registerToolbar: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    flexWrap:"wrap",gap:13,paddingHorizontal:19,paddingTop:19,paddingBottom:16,
+  },
+  registerTitleArea: {flexGrow:1,flexBasis:250,minWidth:190,gap:5},
+  registerTools: {flexDirection:"row",flexWrap:"wrap",gap:9,alignItems:"center"},
+  campaignSearchBox: {
+    flexDirection:"row",alignItems:"center",gap:9,
+    minWidth:170,width:205,maxWidth:"100%",
+    borderWidth:1,borderColor:"#DAE7ED",backgroundColor:"#FFFFFF",
+    paddingHorizontal:12,borderRadius:10,height:41,
+  },
+  campaignSearchInput: {
+    fontFamily:"AdminInterRegular",fontSize:11.1,color:"#234857",
+    minWidth:80,flex:1,paddingVertical:9,outlineStyle:"none",
+  },
+  campaignFilterButton: {
+    height:41,flexDirection:"row",alignItems:"center",gap:8,
+    borderWidth:1,borderColor:"#DAE7ED",paddingHorizontal:12,
+    borderRadius:10,backgroundColor:"#FFFFFF",
+  },
+  campaignFilterButtonOpen: {borderColor:"#80CAB3",backgroundColor:"#F4FBF8"},
+  campaignFilterLabel: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#294D5E",
+  },
+  campaignFilterOptions: {
+    flexDirection:"row",flexWrap:"wrap",gap:7,
+    paddingHorizontal:17,paddingTop:4,paddingBottom:13,
+    borderBottomWidth:1,borderBottomColor:"#EBF0F1",
+  },
+  campaignFilterOption: {
+    paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:"#E0E9EB",
+    borderRadius:8,backgroundColor:"#FFFFFF",
+  },
+  campaignFilterOptionActive: {backgroundColor:"#E4F7EC",borderColor:"#95D9BC"},
+  campaignFilterOptionText: {
+    fontFamily:"AdminInterMedium",fontSize:10.3,color:"#607986",
+  },
+  campaignFilterOptionTextActive: {fontFamily:"AdminInterSemiBold",color:"#0A7959"},
+  registerBlank: {
+    minHeight:275,alignItems:"center",justifyContent:"center",
+    padding:30,gap:11,borderTopWidth:1,borderTopColor:"#EAF0F2",
+  },
+  registerList: {borderTopWidth:1,borderTopColor:"#EBF0F1"},
+  premiumCampaignRow: {
+    flexDirection:"row",alignItems:"center",gap:13,
+    paddingHorizontal:18,paddingVertical:12,
+    borderBottomWidth:1,borderBottomColor:"#EBF0F2",
+    minHeight:92,backgroundColor:"#FFFFFF",
+  },
+  premiumCampaignRowSelected: {
+    backgroundColor:"#F0FAF5",borderLeftWidth:3,borderLeftColor:"#06966E",
+    paddingLeft:15,
+  },
+  premiumCampaignImage: {
+    width:73,height:70,borderRadius:10,backgroundColor:"#EAF6EF",
+  },
+  premiumCampaignImageEmpty: {alignItems:"center",justifyContent:"center"},
+  premiumCampaignContent: {flex:1,minWidth:0,gap:7},
+  premiumCampaignTitleLine: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10,
+  },
+  premiumCampaignName: {
+    fontFamily:"AdminInterSemiBold",fontSize:11.6,lineHeight:17,color:"#1C3D50",
+  },
+  premiumCampaignCategory: {
+    fontFamily:"AdminInterRegular",fontSize:10,color:"#8498A5",marginTop:3,
+  },
+  premiumCampaignBadge: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.6,borderRadius:7,
+    overflow:"hidden",paddingVertical:6,paddingHorizontal:9,
+    textAlign:"center",minWidth:63,
+  },
+  premiumBadgeReached: {backgroundColor:"#DFF7EB",color:"#087A57"},
+  premiumBadgeClosed: {backgroundColor:"#ECF0F4",color:"#516A76"},
+  premiumBadgePublished: {backgroundColor:"#E4F8ED",color:"#0D8064"},
+  premiumCampaignRaised: {
+    fontFamily:"AdminInterMedium",fontSize:10.4,color:"#577788",
+  },
+  premiumCampaignProgress: {
+    flexDirection:"row",alignItems:"center",gap:9,
+  },
+  premiumCampaignProgressTrack: {
+    height:8,flex:1,backgroundColor:"#E5EDF0",borderRadius:6,overflow:"hidden",
+  },
+  premiumCampaignProgressFill: {
+    height:"100%",backgroundColor:"#0DA77A",borderRadius:6,
+  },
+  premiumCampaignPercent: {
+    minWidth:32,textAlign:"right",
+    fontFamily:"AdminInterSemiBold",fontSize:10.5,color:"#0B8068",
+  },
+  registerFooter: {
+    flexDirection:"row",justifyContent:"space-between",alignItems:"center",
+    flexWrap:"wrap",gap:10,paddingHorizontal:18,paddingVertical:13,minHeight:58,
+  },
+  registerFooterText: {
+    fontFamily:"AdminInterRegular",fontSize:10.5,color:"#78909E",
+  },
+  campaignPageControls: {flexDirection:"row",alignItems:"center",gap:8},
+  campaignPageButton: {
+    width:33,height:33,borderWidth:1,borderColor:"#DFE9ED",
+    borderRadius:9,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#FFFFFF",
+  },
+  campaignPageDisabled: {opacity:0.4},
+  campaignPageCurrent: {
+    width:33,height:33,borderRadius:9,alignItems:"center",
+    justifyContent:"center",backgroundColor:"#07664D",
+  },
+  campaignPageCurrentText: {
+    fontFamily:"AdminInterBold",fontSize:11.5,color:"#FFFFFF",
+  },
+  campaignInspectorPanel: {padding:19,minHeight:440},
+  campaignInspectorEmpty: {
+    flex:1,minHeight:345,alignItems:"center",justifyContent:"center",
+    paddingHorizontal:20,gap:11,
+  },
+  campaignInspectorEmptyIcon: {
+    width:78,height:78,borderRadius:39,backgroundColor:"#EFF7F5",
+    justifyContent:"center",alignItems:"center",marginBottom:8,
+  },
+  campaignInspectorEmptyTitle: {
+    fontFamily:"AdminInterBold",fontSize:14.8,color:"#183F4A",
+    textAlign:"center",
+  },
+  campaignInspectorEmptyBody: {
+    fontFamily:"AdminInterRegular",fontSize:11,lineHeight:19,
+    textAlign:"center",color:"#7E94A1",maxWidth:260,
+  },
 
 });
