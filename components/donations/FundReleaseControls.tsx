@@ -67,6 +67,7 @@ export default function FundReleaseControls({campaigns,ready}:{
   const [beneficiary,setBeneficiary] = useState<VerifiedBeneficiary|null>(null);
   const [beneficiaryBusy,setBeneficiaryBusy] = useState(false);
   const [beneficiaryError,setBeneficiaryError] = useState("");
+  const [walletRefreshKey,setWalletRefreshKey] = useState(0);
   const eligibleCampaigns = useMemo(()=>campaigns.filter(c =>
     !!c.sourceAssistanceRequestId && Number(c.monetaryGoal||0)>0)
     .sort((a,b)=>
@@ -130,7 +131,7 @@ export default function FundReleaseControls({campaigns,ready}:{
       }finally{if(current)setBeneficiaryBusy(false);}
     })();
     return ()=>{current=false;};
-  },[ready,selectedId,request]);
+  },[ready,selectedId,request,walletRefreshKey]);
   // Keep payment operations status fresh without modifying any transaction records.
   useEffect(()=>{
     if(!ready||busy)return;
@@ -245,6 +246,12 @@ export default function FundReleaseControls({campaigns,ready}:{
           <Text style={ss.small}>Recorded campaign funding: {php(activeFunding?.recordedFunding||0)}</Text>
           <Text style={ss.small}>PayMongo-confirmed payments (Test Mode): {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
           <Text style={ss.small}>Manual/legacy contributions: {php(activeFunding?.manualLegacyAmount||0)}</Text>
+          <Pressable accessibilityRole="button" disabled={beneficiaryBusy}
+            style={[ss.subtle,{alignSelf:"flex-start"}]}
+            onPress={()=>setWalletRefreshKey(k=>k+1)}>
+            <Ionicons name="refresh-outline" color="#087A60" size={15}/>
+            <Text style={ss.subtleText}>Refresh Resident profile and wallet</Text>
+          </Pressable>
           {beneficiaryBusy?<View style={ss.beneficiaryPending}>
             <ActivityIndicator size="small" color="#168568"/>
             <Text style={ss.small}>Checking verified Resident profile…</Text>
@@ -347,10 +354,22 @@ export default function FundReleaseControls({campaigns,ready}:{
 
           </View>}
           {record?.status==="authorized"&&beneficiary?.verified&&
-            beneficiary.campaignId===selection.id&&<SandboxPayoutForm key={selection.id}
-            amount={record.amount} disabled={busy}
-            onSubmit={details=>action("/"+selection.id+"/simulate",details,
-              "TEST release recorded. The verified requesting Resident has a release notice to review.")}/>}
+            beneficiary.campaignId===selection.id&&beneficiary.wallet?.configured&&
+            beneficiary.wallet.method&&beneficiary.wallet.walletLast4&&
+            <SandboxPayoutForm key={selection.id+"-"+beneficiary.wallet.walletLast4}
+              amount={record.amount} disabled={busy}
+              wallet={{configured:true,method:beneficiary.wallet.method,
+                walletLast4:beneficiary.wallet.walletLast4,testOnly:true}}
+              recipientName={beneficiary.displayName}
+              onSubmit={details=>action("/"+selection.id+"/simulate",details,
+                "TEST release record saved using the Resident-owned wallet alias. Resident can review the notice.")}/>}
+          {record?.status==="authorized"&&beneficiary?.verified&&
+            !beneficiary.wallet?.configured&&<View style={ss.beneficiaryAlert}>
+              <Ionicons name="lock-closed-outline" color="#9D632C" size={18}/>
+              <Text style={ss.beneficiaryAlertText}>
+                Release is locked until the Verified Resident chooses a test GCash/Maya wallet in My Donations.
+              </Text>
+            </View>}
           {!!record?.audit?.length&&<View style={ss.actionBlock}>
             <Text style={ss.fieldLabel}>Transaction and approval history</Text>
             {record.audit.map((row,i)=><Text key={i} style={ss.small}>
