@@ -1108,6 +1108,7 @@ export default function Donation() {
               </TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
+              style={styles.donationModalScroller}
               contentContainerStyle={styles.donationModalScroll}>
           {selectedCampaign ? <View style={[styles.webDetailPane,styles.donationModalDetailPane]}>
             <View style={styles.webDetailCard}>
@@ -4194,12 +4195,12 @@ const styles = StyleSheet.create({
     backgroundColor:"rgba(5,23,32,0.66)",padding:16,
   },
   donationModalSurface: {
-    width:"100%",maxWidth:860,maxHeight:"92%",backgroundColor:"#FFFFFF",
+    width:"100%",maxWidth:860,height:"90%",maxHeight:"92%",backgroundColor:"#FFFFFF",
     borderRadius:19,borderWidth:1,borderColor:"#D8E9E6",
     shadowColor:"#021A1C",shadowOpacity:.24,shadowRadius:30,elevation:20,
     overflow:"hidden",
   },
-  donationModalSurfaceMobile: {maxHeight:"96%",borderRadius:14},
+  donationModalSurfaceMobile: {height:"94%",maxHeight:"96%",borderRadius:14},
   donationModalTopbar: {
     flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     backgroundColor:"#F5FCF9",paddingHorizontal:15,paddingVertical:11,
@@ -4207,6 +4208,7 @@ const styles = StyleSheet.create({
   },
   donationModalTopbarLeft: {flexDirection:"row",alignItems:"center",gap:8,flex:1},
   donationModalTopTitle: {fontSize:12,color:"#0E604F",fontWeight:"900"},
+  donationModalScroller: {flex:1},
   donationModalScroll: {padding:13,paddingBottom:26},
   donationModalDetailPane: {flex:0,width:"100%"},
   webContainer: {
