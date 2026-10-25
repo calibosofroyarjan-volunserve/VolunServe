@@ -235,7 +235,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <View style={s.tabs}>
       {([
         ["overview", "Overview"], ["all", "All Donations"], ["campaigns", "Campaigns"],
-        ["payouts", "Payout & Fund Tracking"], ["notifications", "Notifications" + (unreadCount ? " (" + unreadCount + ")" : "")],
+        ["payouts", "Fund Management"], ["notifications", "Notifications" + (unreadCount ? " (" + unreadCount + ")" : "")],
       ] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="tab"
         accessibilityState={{ selected: view === key }} onPress={() => setView(key)}
         style={[s.tab, view === key && s.tabActive]}>
@@ -264,7 +264,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
         <Text style={s.tableSecondary}>{dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}</Text></View>
         <Ionicons name="chevron-forward" size={17} color="#667D8A"/>
       </Pressable>) : <Text style={s.info}>No donation notifications yet.</Text>}
-    </View> : <View style={[s.columns, compact && s.columnsCompact]}>
+    </View> : view === "payouts" ? null : <View style={[s.columns, compact && s.columnsCompact]}>
       <View style={s.mainColumn}>
         {view === "overview" ? <View style={s.topPanels}>
           <View style={s.recentColumn}><View style={s.panel}>
@@ -274,7 +274,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           </View></View>
           <View style={s.campaignColumn}>{campaignsPanel}</View>
         </View> : view === "campaigns" ? campaignsPanel : null}
-        {view === "all" || view === "overview" || view === "payouts" ?
+        {view === "all" || view === "overview" ?
           <View style={s.panel}>
             <View style={s.panelHeading}><View style={s.flex}><Text style={s.panelTitle}>All Donations</Text>
               <Text style={s.info}>Search, filter and open actual transaction records.</Text></View></View>
