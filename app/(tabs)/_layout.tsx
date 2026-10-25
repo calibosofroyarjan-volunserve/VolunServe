@@ -67,12 +67,6 @@ const residentDesktopTabs: TabDefinition[] = [
     activeIcon: "heart",
   },
   {
-    name: "my-cases",
-    label: "My Reports",
-    icon: "document-text-outline",
-    activeIcon: "document-text",
-  },
-  {
     name: "community-events",
     label: "Community Events",
     icon: "calendar-outline",
@@ -247,6 +241,7 @@ export default function TabLayout() {
   const segments = useSegments();
   const isDesktopWeb = Platform.OS === "web" && width >= 1040;
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [mobileProfileOpen, setMobileProfileOpen] = React.useState(false);
 
   const mode = profile ? activeModeForProfile(profile) : "resident";
   const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
@@ -255,12 +250,14 @@ export default function TabLayout() {
 
   const visit = (name: string) => {
     setMobileMenuOpen(false);
+    setMobileProfileOpen(false);
     router.push((name === "index" ? "/(tabs)" : `/(tabs)/${name}`) as Href);
   };
 
   const switchMobileMode = async () => {
     if (!canSwitchMode) return;
     setMobileMenuOpen(false);
+    setMobileProfileOpen(false);
     try {
       await setActiveUserMode(mode === "volunteer" ? "resident" : "volunteer");
       router.replace("/(tabs)");
@@ -312,7 +309,7 @@ export default function TabLayout() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={mobileMenuOpen ? "Close sidebar" : "Open sidebar"}
-            onPress={() => setMobileMenuOpen((current) => !current)}
+            onPress={() => { setMobileProfileOpen(false); setMobileMenuOpen((current) => !current); }}
             style={styles.mobileHeaderButton}
           >
             <Ionicons name={mobileMenuOpen ? "close" : "menu"} size={22} color="#12365B" />
@@ -342,8 +339,9 @@ export default function TabLayout() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Profile"
-            onPress={() => visit("profile")}
+            accessibilityLabel={mobileProfileOpen ? "Close account menu" : "Open account menu"}
+            accessibilityState={{ expanded: mobileProfileOpen }}
+            onPress={() => { setMobileMenuOpen(false); setMobileProfileOpen(value => !value); }}
             style={styles.mobileHeaderButton}
           >
             <Ionicons name="person-circle-outline" size={23} color="#12365B" />
@@ -352,6 +350,60 @@ export default function TabLayout() {
         <View style={styles.mobileMain}>
           <Tabs screenOptions={{ headerShown: false, tabBarPosition: "bottom" }} tabBar={() => null} />
         </View>
+        {mobileProfileOpen ? (
+          <View style={styles.mobileAccountOverlay}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close account menu"
+              onPress={() => setMobileProfileOpen(false)} style={styles.mobileAccountBackdrop} />
+            <View style={styles.mobileAccountMenu}>
+              <View style={styles.mobileAccountHeader}>
+                <Ionicons name="person-circle" size={35} color="#127CCC" />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.mobileAccountName} numberOfLines={1}>{profile.fullName || user.displayName || user.email || "VolunServe Member"}</Text>
+                  <Text style={styles.mobileAccountRole}>{mode === "volunteer" ? "Volunteer Account" : "Resident Account"}</Text>
+                </View>
+              </View>
+              <Pressable onPress={() => visit("profile")} style={styles.mobileAccountAction}>
+                <Ionicons name="person-outline" size={18} color="#12325D" />
+                <Text style={styles.mobileAccountActionText}>My Profile</Text>
+              </Pressable>
+              {mode === "resident" ? (
+                <Pressable onPress={() => visit("my-cases")} style={styles.mobileAccountAction}>
+                  <Ionicons name="document-text-outline" size={18} color="#12325D" />
+                  <Text style={styles.mobileAccountActionText}>My Reports</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={() => visit("profile")} style={styles.mobileAccountAction}>
+                <Ionicons name="settings-outline" size={18} color="#12325D" />
+                <Text style={styles.mobileAccountActionText}>Account Settings</Text>
+              </Pressable>
+              {canSwitchMode ? (
+                <Pressable onPress={() => void switchMobileMode()} style={styles.mobileAccountAction}>
+                  <Ionicons name="swap-horizontal" size={18} color="#12325D" />
+                  <Text style={styles.mobileAccountActionText}>Switch to {mode === "volunteer" ? "Resident" : "Volunteer"} Mode</Text>
+                </Pressable>
+              ) : null}
+              {adminRoute ? (
+                <Pressable onPress={() => { setMobileProfileOpen(false); router.push(adminRoute as Href); }} style={styles.mobileAccountAction}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#12325D" />
+                  <Text style={styles.mobileAccountActionText}>Admin Portal</Text>
+                </Pressable>
+              ) : null}
+              <View style={styles.mobileAccountDivider} />
+              <Pressable onPress={() => {
+                setMobileProfileOpen(false);
+                Alert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Log Out", style: "destructive", onPress: () => {
+                    void logoutUser().then(() => router.replace("/login")).catch(() => Alert.alert("Log out failed", "Please try again."));
+                  }},
+                ]);
+              }} style={styles.mobileAccountAction}>
+                <Ionicons name="log-out-outline" size={18} color="#D93545" />
+                <Text style={[styles.mobileAccountActionText, { color: "#C52B3C" }]}>Log Out</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         {mobileMenuOpen ? (
           <View style={[styles.mobileDrawerLayer, { top: 60 + insets.top }]}>
             <Pressable
@@ -396,34 +448,6 @@ export default function TabLayout() {
                     </Pressable>
                   );
                 })}
-                {canSwitchMode ? (
-                  <Pressable onPress={() => void switchMobileMode()} style={styles.mobileDrawerItem}>
-                    <Ionicons name="swap-horizontal-outline" size={20} color="#BDEDE2" />
-                    <Text style={styles.mobileDrawerItemText}>
-                      Switch to {mode === "volunteer" ? "Resident" : "Volunteer"} Mode
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {adminRoute ? (
-                  <Pressable onPress={() => {setMobileMenuOpen(false); router.push(adminRoute as Href);}} style={styles.mobileDrawerItem}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#0C7068" />
-                    <Text style={styles.mobileDrawerItemText}>Admin Portal</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={() => visit("profile")} style={styles.mobileDrawerItem}>
-                  <Ionicons name="settings-outline" size={20} color="#0C7068" />
-                  <Text style={styles.mobileDrawerItemText}>Account Settings</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    void logoutUser().then(() => router.replace("/login")).catch(() => Alert.alert("Log out failed", "Please try again."));
-                  }}
-                  style={styles.mobileDrawerItem}
-                >
-                  <Ionicons name="log-out-outline" size={20} color="#E43D48" />
-                  <Text style={[styles.mobileDrawerItemText, { color: "#C3303D" }]}>Log Out</Text>
-                </Pressable>
               </ScrollView>
             </LinearGradient>
           </View>
@@ -596,7 +620,7 @@ function DesktopTabBar({
         })}
       </ScrollView>
 
-      <View style={styles.desktopUtilityArea}>
+      {mode === "volunteer" ? <View style={styles.desktopUtilityArea}>
         {canSwitchMode ? (
           <Pressable
             style={({ pressed }) => [
@@ -669,7 +693,7 @@ function DesktopTabBar({
             Log Out
           </Text>
         </Pressable>
-      </View>
+      </View> : null}
     </LinearGradient>
   );
 }
@@ -850,6 +874,33 @@ const styles = StyleSheet.create({
   mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.16)" },
   mobileDrawerLogo: { width: 44, height: 44 },
   mobileDrawerBrandCopy: { flex: 1 },
+  mobileAccountOverlay: {
+    ...StyleSheet.absoluteFillObject, zIndex: 60,
+  },
+  mobileAccountBackdrop: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(15,30,42,0.05)",
+  },
+  mobileAccountMenu: {
+    position: "absolute", right: 12, top: 66,
+    width: 284, maxWidth: "95%",
+    borderRadius: 16, padding: 12, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#E5EFF2",
+    shadowColor: "#061F32", shadowOffset: { width: 0, height: 9 },
+    shadowOpacity: 0.18, shadowRadius: 25, elevation: 14,
+  },
+  mobileAccountHeader: {
+    flexDirection: "row", gap: 10, alignItems: "center",
+    paddingHorizontal: 8, paddingVertical: 11,
+    borderBottomWidth: 1, borderBottomColor: "#E7EEF4", marginBottom: 6,
+  },
+  mobileAccountName: { fontSize: 13, fontWeight: "900", color: "#102B53" },
+  mobileAccountRole: { fontSize: 10, color: "#6B829D", marginTop: 3 },
+  mobileAccountAction: {
+    flexDirection: "row", alignItems: "center", gap: 13,
+    minHeight: 44, paddingHorizontal: 13, borderRadius: 10,
+  },
+  mobileAccountActionText: { fontSize: 12.5, color: "#1A345D", fontWeight: "700" },
+  mobileAccountDivider: { height: 1, backgroundColor: "#E6EDF2", marginVertical: 7 },
   mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
   mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
   mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
@@ -1056,7 +1107,7 @@ const styles = StyleSheet.create({
   desktopResidentNavigation: {
     flexGrow: 1,
     justifyContent: "space-evenly",
-    paddingVertical: 10,
+    paddingVertical: 16,
   },
   desktopNavItem: {
     minHeight: 50,
