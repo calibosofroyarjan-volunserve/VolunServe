@@ -2899,6 +2899,11 @@ service cloud.firestore {
             ])
         );
     }
+    // Backend Admin SDK only: private review/approval/acknowledgment audit.
+    // Clients must use role-validated API, never write or inspect direct records.
+    match /fundReleaseDemos/{releaseId} {
+      allow read, write: if false;
+    }
     match /donationCampaigns/{campaignId} {
       function campaignSourceNeed() {
         return get(
