@@ -1107,50 +1107,53 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
   };
   return (
     <LinearGradient
-      colors={local ? ["#FFF7F6", "#FFE9EA"] : ["#F2F9FF", "#E1F2FE"]}
+      colors={local ? ["#FFF4F5", "#FFE9ED"] : ["#F2F9FF", "#E0F1FE"]}
       start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
       style={[styles.contactCard, local ? styles.localContactCard : styles.nationalContactCard]}
     >
       <View style={[styles.contactIcon, !local && styles.nationalContactIcon]}>
-        <Ionicons name={local ? "medkit" : "call"} size={25} color={local ? "#EC3449" : "#1475DF"} />
+        <Ionicons name={local ? "medkit" : "call"} size={28}
+          color={local ? "#EE334B" : "#167BF2"} />
       </View>
       <View style={styles.contactCopy}>
-        <Text style={styles.contactTitle}>
-          {local ? "CDRRMO Hotline" : "National Emergency Hotline"}
+        <Text style={[styles.contactTitle, local && styles.localContactTitle]}>
+          {local ? "CDRRMO – San Jose del Monte" : "National Emergency Hotline"}
         </Text>
         {local ? (
           <>
-            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO landline 044-306-6234"
-              onPress={() => dial("0443066234")}>
-              <Text style={styles.contactLocalNumber}>
-                Landline: <Text style={styles.contactLocalNumberStrong}>044-306-6234</Text>
-              </Text>
-            </Pressable>
-            <Pressable accessibilityRole="link" accessibilityLabel="Call CDRRMO mobile 0932-600-0119"
-              onPress={() => dial("09326000119")}>
-              <Text style={styles.contactLocalNumber}>
-                Phone Number: <Text style={styles.contactLocalNumberStrong}>0932-600-0119</Text>
-              </Text>
-            </Pressable>
+            <Text style={styles.contactAgency}>City Disaster Risk Reduction and Management Office</Text>
+            <View style={styles.contactNumberGrid}>
+              <Pressable accessibilityRole="link"
+                accessibilityLabel="Call CDRRMO landline 044-306-6234"
+                onPress={() => dial("0443066234")} style={styles.contactNumberGroup}>
+                <Ionicons name="call" size={19} color="#F03A4E" />
+                <View style={styles.contactNumberCopy}>
+                  <Text style={styles.contactNumberLabel}>Landline</Text>
+                  <Text style={styles.contactLocalNumberStrong}>044-306-6234</Text>
+                </View>
+              </Pressable>
+              <View style={styles.contactNumberDivider} />
+              <Pressable accessibilityRole="link"
+                accessibilityLabel="Call CDRRMO mobile 0932-600-0119"
+                onPress={() => dial("09326000119")} style={styles.contactNumberGroup}>
+                <Ionicons name="phone-portrait-outline" size={19} color="#F03A4E" />
+                <View style={styles.contactNumberCopy}>
+                  <Text style={styles.contactNumberLabel}>Phone Number</Text>
+                  <Text style={styles.contactLocalNumberStrong}>0932-600-0119</Text>
+                </View>
+              </Pressable>
+            </View>
           </>
         ) : (
           <>
             <Pressable accessibilityRole="link" accessibilityLabel="Call National Emergency Hotline 911"
               onPress={() => dial("911")}>
-              <Text style={styles.contactValue}>911</Text>
+              <Text style={styles.nationalHotlineValue}>911</Text>
             </Pressable>
             <Text style={styles.contactSubtitle}>Available nationwide 24/7</Text>
           </>
         )}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={local ? "Call CDRRMO mobile 0932-600-0119" : "Call National Emergency Hotline 911"}
-        onPress={() => dial(local ? "09326000119" : "911")}
-        style={[styles.contactCallAction, !local && styles.nationalCallAction]}
-      >
-        <Ionicons name="call" size={21} color={local ? "#E83D50" : "#177ADE"} />
-      </Pressable>
     </LinearGradient>
   );
 }
@@ -1856,7 +1859,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#FFF9FA",
     borderWidth: 1,
-    borderColor: "#DEEDF2",
+    borderColor: "#F8DDE3",
     shadowColor: "#0D506A",
     shadowOpacity: 0.05,
     shadowRadius: 12,
@@ -1898,7 +1901,7 @@ const styles = StyleSheet.create({
   },
   contactCard: {
     flex: 1,
-    minHeight: 100,
+    minHeight: 112,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
@@ -1919,6 +1922,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFE3E8",
   },
   nationalContactIcon: { backgroundColor: "#DDEFFC" },
+  localContactTitle: { color: "#8F1528" },
+  contactAgency: { color: "#6B5261", fontSize: 10.5, marginTop: 3 },
+  contactNumberGrid: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 11, marginTop: 13,
+  },
+  contactNumberGroup: {
+    flexDirection: "row", alignItems: "center", gap: 7, minWidth: 130,
+  },
+  contactNumberDivider: {
+    width: 1, height: 31, backgroundColor: "#F6BFCA",
+  },
+  contactNumberCopy: { gap: 2 },
+  contactNumberLabel: { color: "#5B6580", fontSize: 10 },
+  nationalHotlineValue: {
+    marginTop: 2, fontSize: 30, lineHeight: 34,
+    color: "#E92F47", fontWeight: "900",
+  },
   contactCopy: {
     flex: 1,
     minWidth: 0,
@@ -1936,7 +1957,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   contactLocalNumber: { color: "#24405B", fontSize: 12.5, lineHeight: 20 },
-  contactLocalNumberStrong: { fontWeight: "900", color: "#143052" },
+  contactLocalNumberStrong: { fontWeight: "900", fontSize: 14, color: "#143052" },
   contactCallAction: {
     width: 43, height: 43, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
