@@ -186,6 +186,10 @@ test("professional demo release requires confirmation, records masked destinatio
   assert.equal(stored.walletLast4,"1234");
   assert.equal(stored.releaseProcessor,"volunserve_internal_sandbox");
   assert.equal(stored.deliveryStatus,"simulation_only");
+  // Firestore forbids FieldValue.serverTimestamp() nested inside arrayUnion.
+  // Audit entries use ISO strings; top-level simulatedAt still uses serverTimestamp.
+  assert.equal(typeof stored.audit.at,"string");
+  assert.ok(!Number.isNaN(Date.parse(stored.audit.at)));
   assert.equal(Object.hasOwn(stored,"testWalletNumber"),false);
   assert.equal(Object.hasOwn(stored,"walletNumber"),false);
   assert.ok(stored.simulationReference.startsWith("VS-DEMO-"));
