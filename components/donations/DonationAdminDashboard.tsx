@@ -12,7 +12,7 @@ import {
   Text, TextInput, useWindowDimensions, View,
 } from "react-native";
 
-import { db } from "../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
 import FundReconciliationPanel from "./FundReconciliationPanel";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -128,6 +128,11 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState("");
+  const [alertsReady, setAlertsReady] = useState(false);
+  const [alertsProblem, setAlertsProblem] = useState("");
+  const [alertsNotice, setAlertsNotice] = useState("");
+  const [alertsSyncing, setAlertsSyncing] = useState(false);
+  const [alertsFilter, setAlertsFilter] = useState<"all" | "unread" | "read">("all");
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
 
@@ -151,10 +156,18 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
 
   useEffect(() => {
     if (!allowed || !user?.uid) return;
+    setAlertsReady(false);
     return onSnapshot(query(collection(db, "notifications"), where("userId", "==", user.uid)),
-      snapshot => setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as { id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any; type?:string }))
-        .filter(a => a.type === "donation_received")
-        .sort((a, b) => millis(b.createdAt) - millis(a.createdAt))), () => {});
+      snapshot => {
+        setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as { id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any; type?:string }))
+          .filter(a => a.type === "donation_received")
+          .sort((a, b) => millis(b.createdAt) - millis(a.createdAt)));
+        setAlertsReady(true);
+        setAlertsProblem("");
+      }, () => {
+        setAlertsReady(true);
+        setAlertsProblem("Notifications could not be loaded. Check your connection or account permissions.");
+      });
   }, [allowed, user?.uid]);
 
   const selected = records.find(r => r.id === selectedId) || null;
@@ -266,6 +279,42 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const visibleCampaigns = filteredCampaigns.slice(
     (currentCampaignPage - 1) * campaignPageSize, currentCampaignPage * campaignPageSize);
   const unreadCount = alerts.filter(a => !a.read).length;
+  const visibleAlerts = alerts.filter(alert =>
+    alertsFilter === "all" || (alertsFilter === "unread" ? !alert.read : !!alert.read));
+  const syncConfirmedDonationAlerts = async () => {
+    if (!allowed || alertsSyncing) return;
+    setAlertsSyncing(true);
+    setAlertsProblem("");
+    setAlertsNotice("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Sign in again.");
+      const response = await fetch("https://volunserve.onrender.com/api/admin/donations/alerts/sync", {
+        method: "POST",
+        headers: {Authorization: "Bearer " + token, "Content-Type": "application/json"},
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(response.status === 404 ?
+          "Alert recovery is not deployed to the backend yet." :
+          payload?.message || "Unable to synchronize notifications.");
+      }
+      const restored = Number(payload.restored || 0);
+      setAlertsNotice(restored > 0 ?
+        restored + " missing confirmed-payment alert" + (restored === 1 ? "" : "s") +
+        " restored to your inbox." :
+        "Your existing verified test payment alerts are up to date.");
+      if (payload.hasMoreToReview) {
+        setAlertsNotice(previous => previous +
+          " Older payments may need an additional authorized review.");
+      }
+    } catch (error: any) {
+      setAlertsProblem(error?.message || "Unable to synchronize donation alerts.");
+    } finally {
+      setAlertsSyncing(false);
+    }
+  };
   const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
   const relatedAlertDonation = selectedAlert?.donationId
     ? records.find(r => r.id === selectedAlert.donationId) || null
@@ -1108,12 +1157,32 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <Text style={s.sectionEyebrow}>DONATION NOTIFICATIONS</Text>
           <Text style={s.sectionTitle}>Alerts</Text>
           <Text style={s.sectionDescription}>
-            View notification details and acknowledge messages here,
-            without being redirected to another tab.
+            Review confirmed donations and keep track of payment notifications.
           </Text>
         </View>
-        <Text style={s.sectionCount}>{unreadCount} unread</Text>
+        <View style={s.alertHeaderActions}>
+          <Text style={s.sectionCount}>{unreadCount} unread</Text>
+          <Pressable accessibilityRole="button"
+            accessibilityLabel="Restore missing notifications for confirmed test payments"
+            disabled={alertsSyncing}
+            style={[s.alertSyncButton, alertsSyncing && s.alertSyncButtonDisabled]}
+            onPress={() => { void syncConfirmedDonationAlerts(); }}>
+            {alertsSyncing ? <ActivityIndicator size="small" color="#087B60"/> :
+              <Ionicons name="refresh-outline" size={16} color="#087B60"/>}
+            <Text style={s.alertSyncText}>
+              {alertsSyncing ? "Checking…" : "Sync confirmed payments"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
+      {!!alertsProblem && <View style={s.alertErrorPanel}>
+        <Ionicons name="alert-circle-outline" size={17} color="#B45335"/>
+        <Text style={s.alertErrorText}>{alertsProblem}</Text>
+      </View>}
+      {!!alertsNotice && <View style={s.alertSuccessPanel}>
+        <Ionicons name="checkmark-circle-outline" size={17} color="#087D60"/>
+        <Text style={s.alertSuccessText}>{alertsNotice}</Text>
+      </View>}
       <View style={[s.columns, compact && s.columnsCompact]}>
         <View style={s.mainColumn}>
           <View style={s.panel}>
@@ -1121,7 +1190,25 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
               <Text style={s.panelTitle}>Notification inbox</Text>
               <Text style={s.info}>{alerts.length} notifications</Text>
             </View>
-            {alerts.length ? alerts.slice(0, 100).map(alert => <Pressable
+            <View style={s.alertStatusFilters}>
+              {([
+                ["all","All",alerts.length],
+                ["unread","Unread",unreadCount],
+                ["read","Read",alerts.length-unreadCount],
+              ] as const).map(([value,label,count]) =>
+                <Pressable key={value} accessibilityRole="button"
+                  accessibilityState={{selected:alertsFilter === value}}
+                  onPress={() => setAlertsFilter(value)}
+                  style={[s.alertFilterButton, alertsFilter === value && s.alertFilterActive]}>
+                  <Text style={[s.alertFilterText, alertsFilter === value && s.alertFilterTextActive]}>
+                    {label} ({count})
+                  </Text>
+                </Pressable>)}
+            </View>
+            {!alertsReady ? <View style={s.empty}>
+              <ActivityIndicator color="#0B856A"/>
+              <Text style={s.info}>Loading notifications…</Text>
+            </View> : visibleAlerts.length ? visibleAlerts.slice(0, 100).map(alert => <Pressable
               key={alert.id}
               style={[s.activity, selectedAlertId === alert.id && s.selectedRow]}
               accessibilityRole="button"
@@ -1130,7 +1217,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 setSelectedAlertId(alert.id);
                 if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), {
                   read: true,
-                }).catch(() => {});
+                }).catch(() => setAlertsProblem("Unable to mark this alert as read. Please try again."));
               }}>
               <View style={s.alertIcon}>
                 <Ionicons name={alert.read ? "notifications-outline" : "notifications"}
@@ -1149,8 +1236,15 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 size={18} color="#7C9890"/>
             </Pressable>) : <View style={s.empty}>
               <Ionicons name="notifications-outline" size={31} color="#8EACA2"/>
-              <Text style={s.emptyTitle}>No donation alerts</Text>
-              <Text style={s.info}>Verified payment alerts will appear here.</Text>
+              <Text style={s.emptyTitle}>
+                {alertsFilter === "all" ? "No donation alerts" :
+                  alertsFilter === "unread" ? "No unread alerts" : "No read alerts"}
+              </Text>
+              <Text style={s.info}>
+                {alertsFilter === "all" ?
+                  "New confirmed payment notifications will appear here." :
+                  "There are no notifications with this status."}
+              </Text>
             </View>}
           </View>
         </View>
@@ -1734,5 +1828,23 @@ const s = StyleSheet.create({
   txInspectorFeatureLabel: {
     fontFamily:"AdminInterRegular",fontSize:10.7,color:"#718AA1",
   },
+
+  alertHeaderActions: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10},
+  alertSyncButton: {flexDirection:"row",gap:7,alignItems:"center",paddingHorizontal:12,
+    paddingVertical:10,borderWidth:1,borderColor:"#C8E5D9",backgroundColor:"#F0FAF5",borderRadius:9},
+  alertSyncButtonDisabled: {opacity:0.58},
+  alertSyncText: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#087B60"},
+  alertErrorPanel: {flexDirection:"row",alignItems:"center",gap:9,padding:12,
+    borderRadius:10,borderWidth:1,borderColor:"#F6D8C9",backgroundColor:"#FFF7F2"},
+  alertErrorText: {fontFamily:"AdminInterRegular",fontSize:11,color:"#A0472B",lineHeight:18,flex:1},
+  alertSuccessPanel: {flexDirection:"row",alignItems:"center",gap:9,padding:12,
+    borderRadius:10,borderWidth:1,borderColor:"#C8E6D8",backgroundColor:"#F3FCF7"},
+  alertSuccessText: {fontFamily:"AdminInterRegular",fontSize:11,color:"#116C52",lineHeight:18,flex:1},
+  alertStatusFilters: {flexDirection:"row",gap:7,flexWrap:"wrap",marginBottom:9},
+  alertFilterButton: {borderWidth:1,borderColor:"#DDE9E9",borderRadius:9,
+    backgroundColor:"#FFFFFF",paddingVertical:8,paddingHorizontal:12},
+  alertFilterActive: {borderColor:"#0B8A6C",backgroundColor:"#EAF8F2"},
+  alertFilterText: {fontFamily:"AdminInterSemiBold",fontSize:10.6,color:"#5F7585"},
+  alertFilterTextActive: {color:"#0A8264"},
 
 });
