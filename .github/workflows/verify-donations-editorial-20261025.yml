@@ -1,0 +1,29 @@
+name: Validate Editorial Donation Modal
+on:
+  push:
+    branches: [feat/donations-editorial-modal-polish-20261025]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Backend syntax
+        run: node --check backend/server.js
+      - name: Expo web production export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Verify production files
+        run: test -f dist/index.html
