@@ -610,11 +610,16 @@ export default function WebHome() {
           >
             <LinearGradient
               pointerEvents="none"
-              colors={["rgba(3,35,52,0.80)", "rgba(5,45,61,0.26)", "rgba(4,31,43,0.63)"]}
+              colors={["rgba(5,32,45,0.72)", "rgba(8,51,55,0.15)", "rgba(5,34,44,0.65)"]}
               start={{ x: 0, y: 0.45 }} end={{ x: 1, y: 0.58 }}
               style={styles.heroGradientOverlay}
             />
-
+            {/* Same original SJDM aerial photo; subtly lighten the existing cloud area. */}
+            <LinearGradient pointerEvents="none"
+              colors={["rgba(244,251,255,0.23)", "rgba(245,251,252,0.08)", "rgba(255,255,255,0)"]}
+              start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
+              style={styles.heroSkyHighlight}
+            />
             <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
               <View style={styles.heroLeft}>
                 <Text style={styles.eyebrow}>
@@ -685,15 +690,11 @@ export default function WebHome() {
               </View>
 
               <View style={[styles.heroRight, compact && styles.heroRightCompact]}>
-                <Text style={styles.heroRightTitle}>Your community{`\n`}at a glance</Text>
+                <Text style={styles.heroRightTitle}>A Safer, Stronger{`\n`}San Jose del Monte</Text>
                 <Text style={styles.heroRightText}>
-                  Stay informed through official community announcements and local response updates.
+                  One community. One platform. Greater impact.
                 </Text>
-                <View style={styles.sloganRow}>
-                  <Ionicons name="leaf" size={17} color="#94EAC7" />
-                  <Text style={styles.slogan}>Together for a Safer Tomorrow</Text>
-                  <Ionicons name="arrow-forward" size={15} color="#D4FFF1" />
-                </View>
+                <View style={styles.heroRightAccent} />
               </View>
             </View>
           </ImageBackground>
@@ -1118,7 +1119,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   hero: {
-    minHeight: 325,
+    minHeight: 306,
     overflow: "hidden",
     borderRadius: 20,
     paddingHorizontal: 32,
@@ -1133,6 +1134,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   heroGradientOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 20 },
+  heroSkyHighlight: { position: "absolute", top: 0, left: "30%", width: "48%", height: "53%", borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(3, 18, 31, 0.20)",
@@ -1277,10 +1279,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 26,
+    gap: 18,
     flex: 1,
-    paddingTop: 26,
-    paddingBottom: 2,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   heroContentCompact: {
     flexDirection: "column",
@@ -1288,39 +1290,39 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   heroLeft: {
-    flex: 1.25,
+    flex: 1.4,
     minWidth: 0,
     maxWidth: 650,
-    paddingTop: 18,
+    paddingTop: 2,
   },
   eyebrow: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 2.3,
-    opacity: 0.92,
+    color: "#E4FFF5",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2,
+    opacity: 0.96,
   },
   greeting: {
     marginTop: 7,
     color: "#FFFFFF",
-    fontSize: 47,
-    lineHeight: 52,
+    fontSize: 42,
+    lineHeight: 47,
     fontWeight: "900",
-    letterSpacing: -1.4,
+    letterSpacing: -1.25,
     textShadowColor: "rgba(0,0,0,0.24)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  greetingAccent: { color: "#79F2C7" },
+  greetingAccent: { color: "#75F2BC" },
   greetingNarrow: {
     fontSize: 38,
     lineHeight: 44,
   },
   heroSubtitle: {
-    marginTop: 4,
-    color: "#FFFFFF",
-    fontSize: 17,
-    lineHeight: 23,
+    marginTop: 7,
+    color: "#F3FFFD",
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "500",
     textShadowColor: "rgba(0,0,0,0.22)",
     textShadowOffset: { width: 0, height: 1 },
@@ -1391,13 +1393,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   heroCenter: {
-    width: 226,
-    minWidth: 226,
-    height: 230,
+    width: 204,
+    minWidth: 204,
+    height: 214,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
-    marginTop: 22,
+    marginTop: 4,
   },
   heroCenterCompact: {
     width: "100%",
@@ -1408,12 +1410,12 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   heroRight: {
-    width: 330,
-    minWidth: 290,
+    width: 262,
+    minWidth: 210,
     alignItems: "flex-start",
     justifyContent: "center",
-    paddingRight: 8,
-    paddingTop: 22,
+    paddingRight: 2,
+    paddingTop: 4,
   },
   heroRightCompact: {
     width: "100%",
@@ -1422,9 +1424,9 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   citySeal: {
-    width: 184,
-    height: 184,
-    borderRadius: 92,
+    width: 174,
+    height: 174,
+    borderRadius: 87,
   },
   citySealCompact: {
     width: 150,
@@ -1433,11 +1435,11 @@ const styles = StyleSheet.create({
   },
   citySealGlow: {
     position: "absolute",
-    width: 212,
-    height: 212,
-    borderRadius: 106,
-    backgroundColor: "rgba(255, 165, 0, 0.18)",
-    borderWidth: 3,
+    width: 202,
+    height: 202,
+    borderRadius: 101,
+    backgroundColor: "rgba(255, 183, 44, 0.09)",
+    borderWidth: 2,
     borderColor: "rgba(255, 180, 35, 0.88)",
     zIndex: 1,
   },
@@ -1447,9 +1449,9 @@ const styles = StyleSheet.create({
     borderRadius: 88,
   },
   citySealFrame: {
-    width: 188,
-    height: 188,
-    borderRadius: 94,
+    width: 178,
+    height: 178,
+    borderRadius: 89,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -1464,23 +1466,25 @@ const styles = StyleSheet.create({
   heroRightTitle: {
     marginTop: 0,
     color: "#FFFFFF",
-    fontSize: 27,
+    fontSize: 25,
     lineHeight: 29,
     fontWeight: "900",
-    textShadowColor: "rgba(0,0,0,0.30)",
+    letterSpacing: -0.6,
+    textShadowColor: "rgba(0,0,0,0.25)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   heroRightText: {
     marginTop: 7,
-    maxWidth: 310,
-    color: "rgba(255,255,255,0.97)",
-    fontSize: 12.5,
-    lineHeight: 18,
+    maxWidth: 260,
+    color: "#F0FFF9",
+    fontSize: 12,
+    lineHeight: 19,
     textShadowColor: "rgba(0,0,0,0.28)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  heroRightAccent: { marginTop: 14, width: 48, height: 4, borderRadius: 3, backgroundColor: "#82F39D" },
   sloganRow: {
     marginTop: 14,
     flexDirection: "row",
@@ -1551,15 +1555,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   panelTitle: {
-    color: "#092665",
-    fontSize: 18,
+    color: "#102C50",
+    fontSize: 17,
     fontWeight: "900",
+    letterSpacing: -0.3,
   },
   panelSubtitle: {
-    marginTop: 3,
-    color: "#6A7FA3",
-    fontSize: 11.5,
-    lineHeight: 16,
+    marginTop: 4,
+    color: "#6B8297",
+    fontSize: 11,
+    lineHeight: 17,
   },
   viewAll: {
     color: "#1178F3",
@@ -1601,9 +1606,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   activityTitle: {
-    color: "#092665",
-    fontSize: 13,
-    fontWeight: "900",
+    color: "#12315A",
+    fontSize: 12.5,
+    fontWeight: "800",
   },
   activitySubtitle: {
     marginTop: 3,
@@ -1708,7 +1713,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 20,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFFDFD",
     borderWidth: 1,
     borderColor: "#DEEDF2",
     shadowColor: "#0D506A",

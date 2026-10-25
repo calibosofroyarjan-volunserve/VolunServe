@@ -137,7 +137,8 @@ const volunteerDesktopTabs: TabDefinition[] = [
   },
 ];
 
-const residentModuleIdentity: Record<string, { subtitle: string; colors: readonly [string, string] }> = {
+type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
+const residentModuleIdentity: Record<string, ModuleIdentity> = {
   index: { subtitle: "Platform Overview", colors: ["#00846B", "#04B78F"] },
   "map-tracking": { subtitle: "Real-Time Tracking", colors: ["#00587C", "#168BC8"] },
   "disaster-response": { subtitle: "Report and Get Help", colors: ["#963C2F", "#D86747"] },
@@ -145,6 +146,18 @@ const residentModuleIdentity: Record<string, { subtitle: string; colors: readonl
   donation: { subtitle: "Give and Make an Impact", colors: ["#227943", "#50A95B"] },
   "my-cases": { subtitle: "Track Your Requests", colors: ["#135679", "#308DC6"] },
   "community-events": { subtitle: "Join Local Activities", colors: ["#516A28", "#86A83E"] },
+};
+
+const volunteerModuleIdentity: Record<string, ModuleIdentity> = {
+  index: { subtitle: "Volunteer Overview", colors: ["#00846B", "#04B78F"] },
+  "map-tracking": { subtitle: "Response Tracking", colors: ["#0756AC", "#436FD6"] },
+  volunteer: { subtitle: "Assigned Response Tasks", colors: ["#037B83", "#0AB6A6"] },
+  "community-events": { subtitle: "Join Community Activities", colors: ["#567326", "#99B645"] },
+  donation: { subtitle: "Community Support", colors: ["#1A8244", "#55BA5E"] },
+  "volunteer-impact": { subtitle: "Your Contributions", colors: ["#7B56BC", "#A683D8"] },
+  certificate: { subtitle: "Verified Service Records", colors: ["#1D6DA6", "#429CD4"] },
+  notifications: { subtitle: "Volunteer Alerts", colors: ["#9363B9", "#BC93D4"] },
+  announcements: { subtitle: "Official Community News", colors: ["#BE762F", "#E6A956"] },
 };
 
 const residentMobileTabs: TabDefinition[] = [
@@ -345,7 +358,7 @@ export default function TabLayout() {
               onPress={() => setMobileMenuOpen(false)}
               accessibilityLabel="Close navigation drawer"
             />
-            <View style={styles.mobileDrawer}>
+            <LinearGradient colors={["#073A37", "#064D47", "#036151"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawer}>
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -359,26 +372,32 @@ export default function TabLayout() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.mobileDrawerLabel}>MAIN MENU</Text>
+              <Text style={styles.mobileDrawerLabel}>MAIN MODULES</Text>
               <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
-                {menuItems.map((item) => (
-                  <Pressable
-                    key={item.name}
-                    accessibilityRole="button"
-                    onPress={() => visit(item.name)}
-                    style={({ pressed }) => [
-                      styles.mobileDrawerItem,
-                      item.name === (segments[segments.length - 1] || "index") && styles.mobileDrawerActive,
-                      pressed && styles.mobilePressed,
-                    ]}
-                  >
-                    <Ionicons name={item.icon as any} size={20} color="#0C7068" />
-                    <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
-                  </Pressable>
-                ))}
+                {menuItems.map((item) => {
+                  const theme = (mode === "volunteer" ? volunteerModuleIdentity : residentModuleIdentity)[item.name];
+                  const active = item.name === (segments[segments.length - 1] || "index");
+                  return (
+                    <Pressable key={item.name} accessibilityRole="button"
+                      onPress={() => visit(item.name)}
+                      style={({ pressed }) => [styles.mobileDrawerItem, active && styles.mobileDrawerActive, pressed && styles.mobilePressed]}>
+                      {active ? <LinearGradient pointerEvents="none" colors={["#04987A", "#32B883"]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.5 }}
+                        style={styles.mobileDrawerItemOverlay} /> : null}
+                      <LinearGradient colors={theme ? [...theme.colors] : ["#08766B", "#0BA69A"]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawerIconBadge}>
+                        <Ionicons name={item.icon as any} size={19} color="#FFFFFF" />
+                      </LinearGradient>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
+                        {theme ? <Text numberOfLines={1} style={styles.mobileDrawerSubtitle}>{theme.subtitle}</Text> : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
                 {canSwitchMode ? (
                   <Pressable onPress={() => void switchMobileMode()} style={styles.mobileDrawerItem}>
-                    <Ionicons name="swap-horizontal-outline" size={20} color="#0C7068" />
+                    <Ionicons name="swap-horizontal-outline" size={20} color="#BDEDE2" />
                     <Text style={styles.mobileDrawerItemText}>
                       Switch to {mode === "volunteer" ? "Resident" : "Volunteer"} Mode
                     </Text>
@@ -405,7 +424,7 @@ export default function TabLayout() {
                   <Text style={[styles.mobileDrawerItemText, { color: "#C3303D" }]}>Log Out</Text>
                 </Pressable>
               </ScrollView>
-            </View>
+            </LinearGradient>
           </View>
         ) : null}
       </View>
@@ -489,15 +508,13 @@ function DesktopTabBar({
         <View style={styles.desktopBrandCopy}>
           <Text style={styles.desktopBrandTitle}>VolunServe</Text>
           <Text style={styles.desktopBrandSubtitle}>
-            {mode === "volunteer" ? "VOLUNTEER MODE" : "CITY OF SAN JOSE DEL MONTE"}
+            CITY OF SAN JOSE DEL MONTE
           </Text>
         </View>
       </View>
 
-      {mode === "resident" ? <Text style={styles.residentModeLabel}>RESIDENT MODE</Text> : null}
-      <Text style={[styles.desktopSectionLabel, mode === "resident" && styles.residentSectionLabel]}>
-        {mode === "resident" ? "MAIN MODULES" : "MAIN MENU"}
-      </Text>
+      <Text style={styles.residentModeLabel}>{mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}</Text>
+      <Text style={[styles.desktopSectionLabel, styles.residentSectionLabel]}>MAIN MODULES</Text>
 
       <ScrollView
         style={styles.desktopNavigationScroll}
@@ -514,7 +531,9 @@ function DesktopTabBar({
           if (routeIndex === -1) return null;
 
           const focused = state.index === routeIndex;
-          const identity = mode === "resident" ? residentModuleIdentity[item.name] : null;
+          const identity = mode === "resident"
+            ? residentModuleIdentity[item.name]
+            : volunteerModuleIdentity[item.name];
 
           return (
             <Pressable
@@ -531,7 +550,7 @@ function DesktopTabBar({
               {focused && identity ? (
                 <LinearGradient
                   pointerEvents="none"
-                  colors={["#00947A", "#087D72", "#48B36D"]}
+                  colors={["#00947A", "#068F74", "#43BC71"]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.6 }}
                   style={styles.residentNavSelectedGradient}
                 />
@@ -653,26 +672,7 @@ function DesktopTabBar({
           </Text>
         </Pressable>
       </View>
-      {mode === "resident" ? (
-        <View pointerEvents="none" style={styles.residentCivicFooter}>
-          <LinearGradient
-            colors={["rgba(4,83,73,0.55)", "rgba(9,128,104,0.72)"]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={styles.residentCivicFooterGradient}
-          >
-            <View style={styles.residentCivicIllustration}>
-              <Ionicons name="business-outline" size={37} color="#7BD5B9" />
-              <Ionicons name="partly-sunny-outline" size={26} color="#A3E9BD" />
-            </View>
-            <View style={styles.residentCivicFooterCopy}>
-              <Ionicons name="leaf" size={23} color="#75E6B2" />
-              <Text style={styles.residentCivicSlogan}>
-                BAGONG SJDM{"\n"}MAS LIGTAS,{"\n"}MAS MATATAG.
-              </Text>
-            </View>
-          </LinearGradient>
-        </View>
-      ) : null}
+remove motto footer
     </LinearGradient>
   );
 }
@@ -849,17 +849,20 @@ const styles = StyleSheet.create({
   mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
   mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
   mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
-  mobileDrawer: { height: "100%", width: "79%", maxWidth: 298, backgroundColor: "#FFFFFF", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
-  mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "#E7EEF4" },
+  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#073A37", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
+  mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.16)" },
   mobileDrawerLogo: { width: 44, height: 44 },
   mobileDrawerBrandCopy: { flex: 1 },
-  mobileDrawerTitle: { color: "#006859", fontSize: 18, fontWeight: "900" },
-  mobileDrawerSub: { color: "#75869B", fontSize: 9, fontWeight: "800" },
-  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#8493A7", fontWeight: "800", letterSpacing: 1.2, fontSize: 10 },
+  mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
+  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
   mobileDrawerScroll: { flex: 1 },
-  mobileDrawerItem: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 3 },
-  mobileDrawerActive: { backgroundColor: "#E5F7F2" },
-  mobileDrawerItemText: { color: "#18375C", fontWeight: "700", fontSize: 12.5, flex: 1 },
+  mobileDrawerItem: { minHeight: 55, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
+  mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
+  mobileDrawerIconBadge: { width: 37, height: 37, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
+  mobileDrawerActive: { backgroundColor: "#079776" },
+  mobileDrawerItemText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12.5 },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
@@ -994,7 +997,7 @@ const styles = StyleSheet.create({
   },
   desktopBrandTitle: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "900",
   },
   desktopBrandSubtitle: {
@@ -1047,7 +1050,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   desktopNavigation: {
-    gap: 4,
+    gap: 5,
     paddingRight: 5,
     paddingBottom: 8,
   },
@@ -1091,7 +1094,7 @@ const styles = StyleSheet.create({
   },
   desktopUtilityArea: {
     flexShrink: 0,
-    marginTop: 0,
+    marginTop: 8,
     paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.18)",
@@ -1123,22 +1126,22 @@ const styles = StyleSheet.create({
   desktopLogoutText: {
     color: "#C92537",
   },
-  residentSidebarAmbient: { position: "absolute", bottom: 125, left: -50, opacity: 0.10 },
+  residentSidebarAmbient: { position: "absolute", bottom: 20, left: -50, opacity: 0.055 },
   residentModeLabel: {
     marginTop: 22, paddingHorizontal: 10, color: "#80E8D1",
     fontSize: 9.5, letterSpacing: 2.1, fontWeight: "900",
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
-  residentNavItem: { minHeight: 56, overflow: "hidden", gap: 11, paddingHorizontal: 8 },
-  residentNavItemActive: { backgroundColor: "#087F71" },
-  residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
+  residentNavItem: { minHeight: 58, overflow: "hidden", gap: 11, paddingHorizontal: 8 },
+  residentNavItemActive: { backgroundColor: "#079776" },
+  residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {
     width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#064F53",
   },
-  residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 0.89 },
+  residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 12.5, color: "#FFFFFF", fontWeight: "900" },
-  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#B2DFD5", marginTop: 3 },
+  residentNavTitle: { fontSize: 12.5, color: "#FFFFFF", fontWeight: "800" },
+  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
   residentCivicFooter: {
     marginTop: 8, borderRadius: 13, overflow: "hidden",
     borderWidth: 1, borderColor: "rgba(117,218,182,0.19)",

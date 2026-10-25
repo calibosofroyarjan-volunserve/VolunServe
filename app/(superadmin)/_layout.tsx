@@ -37,6 +37,16 @@ type NavItem = {
   match: string;
 };
 
+const SUPERADMIN_MODULE_COLORS: Record<string, readonly [string, string]> = {
+  Dashboard: ["#009D7C", "#42BF8F"],
+  "Admin Accounts": ["#1876BD", "#57A5DE"],
+  "All Records": ["#336EAA", "#74A8D7"],
+  "Donation Management": ["#198B5A", "#59BC7B"],
+  "Donation Notifications": ["#9564B0", "#B889D6"],
+  "Audit Logs": ["#A66A3C", "#DBAD70"],
+  "System Settings": ["#667286", "#9DACBC"],
+};
+
 const navItems: NavItem[] = [
   {
     label: "Dashboard",
@@ -232,7 +242,7 @@ function SuperAdminSidebar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.sidebar, compact && styles.sidebarCompact]}>
-      <View pointerEvents="none" style={{ position: "absolute", bottom: 60, left: -30, opacity: 0.13 }}>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 50, left: -45, opacity: 0.055 }}>
         <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
       </View>
       <TouchableOpacity
@@ -264,6 +274,7 @@ function SuperAdminSidebar({
       >
         {navItems.map((item) => {
           const active = isActive(item);
+          const identity = SUPERADMIN_MODULE_COLORS[item.label] || (["#0A8179", "#41B49E"] as const);
           return (
             <TouchableOpacity
               key={item.route}
@@ -273,7 +284,16 @@ function SuperAdminSidebar({
               activeOpacity={0.82}
               onPress={() => onNavigate(item.route)}
             >
+              {active ? <LinearGradient pointerEvents="none"
+                colors={["#009A7C", "#078D74", "#3DBB86"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.7 }}
+                style={styles.navSelectedGradient}
+              /> : null}
               <View style={[styles.navIcon, active && styles.navIconActive]}>
+                <LinearGradient pointerEvents="none" colors={[...identity]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={styles.navIconGradient}
+                />
                 <Ionicons
                   name={item.icon}
                   size={19}
@@ -390,25 +410,29 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   navItem: {
-    minHeight: 48,
+    minHeight: 49,
     marginBottom: 3,
     paddingHorizontal: 9,
-    borderRadius: 12,
+    borderRadius: 13,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
+    overflow: "hidden",
   },
+  navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
     backgroundColor: "#049C7B",
   },
   navIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    width: 35,
+    height: 35,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#0C6B68",
     alignItems: "center",
     justifyContent: "center",
   },
+  navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   navIconActive: {
     backgroundColor: "#078F82",
   },
@@ -426,7 +450,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 22,
     borderRadius: 3,
-    backgroundColor: "#078F82",
+    backgroundColor: "#E1FFF6",
   },
   sidebarUtility: {
     flexShrink: 0,
