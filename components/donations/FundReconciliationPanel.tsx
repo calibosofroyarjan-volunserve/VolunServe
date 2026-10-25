@@ -228,7 +228,7 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
       Fund reviews and releases below are recorded simulations. Only Admin-approved records and verified requesting Residents can complete the workflow.
     </Text>
 
-    <FundReleaseControls campaigns={campaigns} donations={donations} ready={ready} mode={mode}/>
+    {mode === "admin" && <FundReleaseControls campaigns={campaigns} donations={donations} ready={ready}/>}
 
     <View style={styles.sectionHeading}>
       <View style={styles.flex}>

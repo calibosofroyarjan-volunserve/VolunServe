@@ -20,7 +20,7 @@ const php = (n: number) => "₱" + Number(n||0).toLocaleString("en-PH",{
   minimumFractionDigits:2, maximumFractionDigits:2,
 });
 const showStatus = (s:string) => ({
-  reviewed:"Awaiting independent approval",
+  reviewed:"Awaiting LGU Admin decision",
   authorized:"Authorized · Ready for demo release",
   rejected:"Rejected",
   simulated_sent:"Demo release recorded · Awaiting Resident",
@@ -34,11 +34,10 @@ const isVerified = (d:ReconciliationDonation) =>
   // Do not trust a frontend figure to authorize release; backend revalidates.
   Number(d.actualAmountReceived)>0;
 
-export default function FundReleaseControls({campaigns,donations,ready,mode}:{
+export default function FundReleaseControls({campaigns,donations,ready}:{
   campaigns:ReconciliationCampaign[];
   donations:ReconciliationDonation[];
   ready:boolean;
-  mode:"admin"|"superadmin";
 }) {
   const [rows,setRows] = useState<Release[]>([]);
   const [busy,setBusy] = useState(false);
@@ -114,7 +113,7 @@ export default function FundReleaseControls({campaigns,donations,ready,mode}:{
       <View style={ss.flex}>
         <Text style={ss.head}>Fund release records</Text>
         <Text style={ss.muted}>
-          Review verified test donations, record independent authorization, and simulate a release.
+          Review verified test payments, approve or reject the fund review, and record a simulated release.
         </Text>
       </View>
       <Pressable accessibilityRole="button" onPress={()=>void reload()}
@@ -196,35 +195,35 @@ export default function FundReleaseControls({campaigns,donations,ready,mode}:{
               style={[ss.primary,(busy||maxReview<=0)&&ss.disabled]}
               onPress={()=>void action("/review",{
                 campaignId:selection.id,amount:Number(inputAmount),reviewNote,
-              },"Fund review submitted for independent approval.")}>
+              },"Fund review saved. Review the evidence and record your Admin decision.")}>
               <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={17}/>
               <Text style={ss.primaryText}>Submit fund review</Text>
             </Pressable>
           </View>}
           {record?.status==="reviewed"&&<View style={ss.actionBlock}>
-            <Text style={ss.fieldLabel}>Independent authorization</Text>
-            {mode==="superadmin"&&auth.currentUser?.uid!==record.reviewerUid?<>
+            <Text style={ss.fieldLabel}>LGU Admin release decision</Text>
+            <Text style={ss.muted}>Review the verified funding and submit an explicit decision. Each action is saved in the audit history.</Text>
               <TextInput style={[ss.input,ss.textarea]}
                 accessibilityLabel="Decision note" multiline
-                placeholder="Reason (required if rejecting)" value={decisionNote}
+                placeholder="Enter the reason for your decision (at least 10 characters)" value={decisionNote}
                 onChangeText={setDecisionNote}/>
               <View style={ss.actionRow}>
-                <Pressable style={ss.primary} disabled={busy}
+                <Pressable style={[ss.primary,(busy||decisionNote.trim().length<10)&&ss.disabled]}
+                  disabled={busy||decisionNote.trim().length<10}
                   accessibilityRole="button" onPress={()=>void action(
                     "/"+selection.id+"/authorize",{decision:"approve",reason:decisionNote},
                     "Simulated release approved.")}>
-                  <Text style={ss.primaryText}>Authorize</Text>
+                  <Text style={ss.primaryText}>Approve release (demo)</Text>
                 </Pressable>
-                <Pressable style={ss.secondary} disabled={busy}
+                <Pressable style={[ss.secondary,(busy||decisionNote.trim().length<10)&&ss.disabled]}
+                  disabled={busy||decisionNote.trim().length<10}
                   accessibilityRole="button" onPress={()=>void action(
                     "/"+selection.id+"/authorize",{decision:"reject",reason:decisionNote},
                     "Review rejected.")}>
                   <Text style={ss.secondaryText}>Reject</Text>
                 </Pressable>
               </View>
-            </>:<Text style={ss.muted}>
-              A different approved Super Admin must review and authorize this request.
-            </Text>}
+
           </View>}
           {record?.status==="authorized"&&<View style={ss.actionBlock}>
             <Text style={ss.fieldLabel}>Simulated payout channel</Text>
