@@ -1014,7 +1014,8 @@ export default function Donation() {
               </View>
             )}
             {campaignsReady ? (
-              <View style={styles.webHowItWorks}>
+              <LinearGradient colors={["#F4FFFC","#FFFFFF","#F3FBF6"]}
+                start={{x:0,y:0}} end={{x:1,y:1}} style={styles.webHowItWorks}>
                 <View style={styles.donationHowHeading}>
                   <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
                   <View style={{flex:1}}>
@@ -1024,26 +1025,32 @@ export default function Donation() {
                 </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "heart-outline" as const, title: "1. Choose a Cause", body: "Select a verified campaign to view details and progress." },
-                    { icon: "card-outline" as const, title: "2. Make a Donation", body: "Choose an amount in PayMongo Test Mode." },
-                    { icon: "shield-checkmark-outline" as const, title: "3. Verify Payment", body: "We wait for signed webhook confirmation." },
-                    { icon: "people-outline" as const, title: "4. Track Your Support", body: "See the verified transaction in My Donations." },
-                  ].map((step) => (
-                    <View key={step.title} style={styles.webHowStep}>
+                    { icon: "heart-outline" as const, title: "Choose a Cause", body: "Select a verified campaign and view its progress.", gradient:["#EAFBF4","#F9FFFC"] as const },
+                    { icon: "card-outline" as const, title: "Make a Donation", body: "Choose an amount using PayMongo Test Mode.", gradient:["#E9F6FF","#F8FCFF"] as const },
+                    { icon: "shield-checkmark-outline" as const, title: "Verify Payment", body: "We wait for secure webhook confirmation.", gradient:["#EAF8EF","#F7FFF9"] as const },
+                    { icon: "people-outline" as const, title: "Track Your Support", body: "View your donation history and receipts.", gradient:["#F5FAE4","#FCFFF7"] as const },
+                  ].map((step,index) => (
+                    <LinearGradient key={step.title}
+                      colors={step.gradient} start={{x:0,y:0}} end={{x:1,y:1}}
+                      style={styles.webHowStep}>
                       <View style={styles.donationHowStepIcon}>
-                        <Ionicons name={step.icon} size={24} color="#009474" />
+                        <Ionicons name={step.icon} size={23} color={index===1?"#1577C9":"#009474"} />
+                      </View>
+                      <View style={styles.donationStepNumber}>
+                        <Text style={styles.donationStepNumberText}>{index+1}</Text>
                       </View>
                       <View style={styles.donationHowStepCopy}>
                         <Text style={styles.webHowStepTitle}>{step.title}</Text>
                         <Text style={styles.webHowStepBody}>{step.body}</Text>
                       </View>
-                    </View>
+                    </LinearGradient>
                   ))}
                 </View>
                 <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
-              </View>
+              </LinearGradient>
             ) : null}
-            <View style={styles.donationRecentPanel}>
+            <LinearGradient colors={["#FFFFFF","#F8FFFC"]} start={{x:0,y:0}} end={{x:1,y:1}}
+              style={styles.donationRecentPanel}>
               <View style={styles.donationRecentHeading}>
                 <View style={styles.donationHowIcon}>
                   <Ionicons name="receipt-outline" size={21} color="#07916D"/>
@@ -1092,9 +1099,12 @@ export default function Donation() {
                           {d.campaignTitle || "Donation campaign"}
                         </Text>
                         <Text style={styles.donationRecentAmount}>{money(Number(d.amount || 0))}</Text>
-                        <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
-                          {label}
-                        </Text>
+                        <View style={[styles.donationRecentStatusChip,paid?styles.donationRecentChipPaid:styles.donationRecentChipPending]}>
+                          <Ionicons name={paid?"checkmark-circle":"time-outline"} size={14} color={paid?"#007C5C":"#AA7A17"} />
+                          <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
+                            {label}
+                          </Text>
+                        </View>
                         {paid ? (
                           <TouchableOpacity accessibilityRole="button"
                             accessibilityLabel={`View receipt for ${d.campaignTitle || "donation"}`}
@@ -1108,7 +1118,7 @@ export default function Donation() {
                   })}
                 </View>
               )}
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Campaign details are only available after selecting a card. */}
