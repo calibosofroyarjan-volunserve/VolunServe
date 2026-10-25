@@ -11,6 +11,7 @@ import {
 } from "@expo-google-fonts/inter";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
+import ResidentReleaseAcknowledgment from "../../components/donations/ResidentReleaseAcknowledgment";
 import {
   collection,
   onSnapshot,
@@ -842,6 +843,11 @@ export default function Donation() {
           ))}
         </View>
       </View>
+
+      <ResidentReleaseAcknowledgment enabled={
+        !!profile && profile.residentAccess === true &&
+        (profile.identityVerified === true || profile.identityStatus === "verified")
+      } />
 
       <View style={[styles.donationToolbar, !medium && styles.donationToolbarMobile]}>
       <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
