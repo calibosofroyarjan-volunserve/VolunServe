@@ -574,7 +574,7 @@ export default function Donation() {
 
   // No automatic campaign selection: a donor must open the campaign card first.
   // This prevents "Donate Now" from appearing before the donor chooses a campaign.
-  const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
+  const mobileDetailOpen = false; // Details open in a responsive overlay on all screen sizes.
 
   const selectedGoal = campaignGoal(selectedCampaign);
   const selectedFunded = campaignFinished(selectedCampaign);
@@ -830,6 +830,8 @@ export default function Donation() {
             onPress={() => {
               if (tab.key === "history") {
                 setShowHistory(true);
+                setSelectedCampaignId("");
+                setShowDonationPanel(false);
               } else {
                 setShowHistory(false);
                 setShowCompletedCampaigns(tab.key === "completed");
@@ -1009,7 +1011,28 @@ export default function Donation() {
             ) : null}
           </View>
 
-          {selectedCampaign ? <View style={[styles.webDetailPane, !wide && styles.webPaneStacked]}>
+          {/* Campaign details are only available after selecting a card. */}
+        </View>
+      )}
+      <Modal visible={!!selectedCampaign && !showHistory}
+        transparent animationType="fade" onRequestClose={closeMobileCampaignDetails}>
+        <View style={styles.donationModalShade}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject}
+            accessible={false} activeOpacity={1} onPress={closeMobileCampaignDetails}/>
+          <View style={[styles.donationModalSurface,!medium&&styles.donationModalSurfaceMobile]}>
+            <View style={styles.donationModalTopbar}>
+              <View style={styles.donationModalTopbarLeft}>
+                <Ionicons name="shield-checkmark" size={18} color="#078869"/>
+                <Text style={styles.donationModalTopTitle}>LGU-verified campaign details</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close donation details"
+                onPress={closeMobileCampaignDetails} style={styles.webCloseButton}>
+                <Ionicons name="close" size={19} color="#1B4350"/>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
+              contentContainerStyle={styles.donationModalScroll}>
+          {selectedCampaign ? <View style={styles.webDetailPane}>
             <View style={styles.webDetailCard}>
                 <View style={styles.webDetailNavRow}>
                   <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
@@ -1234,8 +1257,10 @@ export default function Donation() {
                 </View>
               </View>
           </View> : null}
+            </ScrollView>
+          </View>
         </View>
-      )}
+      </Modal>
     </ScrollView>
   );
 }
@@ -1297,31 +1322,22 @@ function CampaignCard({
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={`View details for ${campaign.title || "donation campaign"}`}
       onPress={onPress}
     >
       <CampaignVisual campaign={campaign} photoUrl={photos[0]} />
 
       <View style={styles.campaignCardBody}>
         <View style={styles.badgeRow}>
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="shield-checkmark" size={12} color="#15803D" />
-            <Text style={styles.verifiedBadgeText}>LGU VERIFIED</Text>
-          </View>
-          <View
-            style={[
-              styles.groupBadge,
-              group === "community_needs_help" && styles.groupBadgeCommunity,
-            ]}
-          >
-            <Text
-              style={[
-                styles.groupBadgeText,
-                group === "community_needs_help" && styles.groupBadgeTextCommunity,
-              ]}
-            >
-              {group === "community_needs_help" ? "COMMUNITY NEED" : "DISASTER"}
+          <View style={[styles.groupBadge,group==="community_needs_help"&&styles.groupBadgeCommunity]}>
+            <Ionicons name={group==="community_needs_help"?"heart-outline":"shield-checkmark-outline"} size={12}
+              color={group==="community_needs_help"?"#225BC3":"#C03935"}/>
+            <Text style={[styles.groupBadgeText,group==="community_needs_help"&&styles.groupBadgeTextCommunity]}>
+              {campaignCategoryLabel(campaign)}
             </Text>
           </View>
+          <Ionicons name="shield-checkmark" size={16} color="#07966D"/>
         </View>
 
         <Text style={styles.campaignTitle} numberOfLines={2}>
@@ -1335,6 +1351,9 @@ function CampaignCard({
           </Text>
         </View>
 
+        <Text numberOfLines={2} style={styles.donationCardDescription}>
+          {campaign.publicStory || campaign.description || "Explore this verified community campaign and its current funding progress."}
+        </Text>
         <View style={styles.cardProgressWrap}>
           <View style={styles.cardProgressTop}>
             <Text style={styles.cardProgressRaised}>{money(raised)} raised</Text>
@@ -1346,17 +1365,16 @@ function CampaignCard({
           <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
         </View>
 
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <Text style={campaignFinished(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
-            {campaign.status === "closed" ? "Closed" : campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
-          </Text>
-        </View>
-        <View style={styles.cardPrimaryAction}>
-          <Text style={styles.cardPrimaryActionText}>
-            {selected ? "Viewing Details" : campaignFinished(campaign) ? "View Past Campaign" : "View Campaign"}
-          </Text>
-          <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
+        <View style={styles.donationCardFooter}>
+          <View style={styles.donationCardFooterCopy}>
+            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"eye-outline"} size={16} color="#05896B"/>
+            <Text style={styles.donationCardFooterText}>
+              {campaignFinished(campaign) ? "Past campaign" : "View campaign details"}
+            </Text>
+          </View>
+          <View style={styles.donationCardFooterArrow}>
+            <Ionicons name="arrow-forward" size={17} color="#FFFFFF"/>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
