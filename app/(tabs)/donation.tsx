@@ -1,6 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from "@expo-google-fonts/inter";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
 import {
@@ -405,6 +413,13 @@ export default function Donation() {
   const medium = width >= 760;
   const spacious = width >= 1280;
   const compactHero = width < 600;
+  const [donationFontsLoaded, donationFontError] = useFonts({
+    DonationInterRegular: Inter_400Regular,
+    DonationInterMedium: Inter_500Medium,
+    DonationInterSemiBold: Inter_600SemiBold,
+    DonationInterBold: Inter_700Bold,
+    DonationInterExtraBold: Inter_800ExtraBold,
+  });
   const modalWide = width >= 1050;
 
   const { loading, user, profile } = useUserSession();
@@ -756,7 +771,7 @@ export default function Donation() {
     }
   };
 
-  if (loading) {
+  if (loading || (!donationFontsLoaded && !donationFontError)) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0F766E" />
@@ -943,7 +958,7 @@ export default function Donation() {
           <View style={styles.webSectionHeaderRow}>
             <View>
               <Text style={styles.webSectionTitle}>My Donations</Text>
-              <Text style={styles.webSectionSubtitle}>Your submitted donation records.</Text>
+              <Text style={styles.webSectionSubtitle}>Your donation activity, payment verification, and history.</Text>
             </View>
             <TouchableOpacity
               style={styles.webCloseButton}
@@ -974,7 +989,7 @@ export default function Donation() {
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
           <View style={[styles.webCampaignPane, styles.webFullCampaignPane]}>
             {showCompletedCampaigns && (
-              <Text style={styles.donationPastHint}>Past campaigns stay visible for transparency. Donations to closed or fully funded causes are unavailable.</Text>
+              <Text style={styles.donationPastHint}>Completed campaigns are shown for transparency. Closed or fully funded campaigns cannot accept new donations.</Text>
             )}
 
             {!campaignsReady ? (
@@ -998,7 +1013,7 @@ export default function Donation() {
                       ? "Closed or fully funded campaigns will appear here once verified."
                       : searchText.trim()
                         ? "Try a different keyword or clear your search to see available causes."
-                        : "There are no open verified fundraising campaigns right now. Explore completed causes while new campaigns are being approved."}
+                        : "No verified campaigns are currently open for donations. You can still explore previously completed causes."}
                   </Text>
                 </View>
                 {!showCompletedCampaigns && !searchText.trim() ? (
@@ -1019,7 +1034,7 @@ export default function Donation() {
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={width >= 1390}
+                    fullGrid={width >= 1390 && listedCampaigns.length >= 3}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
@@ -1032,21 +1047,21 @@ export default function Donation() {
                   <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
                   <View style={{flex:1}}>
                     <Text style={styles.webHowItWorksTitle}>How Donations Work</Text>
-                    <Text style={styles.donationHowSubtitle}>Simple, transparent support for verified community causes.</Text>
+                    <Text style={styles.donationHowSubtitle}>A clear and secure way to support verified community causes.</Text>
                   </View>
                 </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "heart-outline" as const, title: "Choose a Cause", body: "Select a verified campaign and view its progress.", gradient:["#EAFBF4","#F9FFFC"] as const },
-                    { icon: "card-outline" as const, title: "Make a Donation", body: "Choose an amount using PayMongo Test Mode.", gradient:["#E9F6FF","#F8FCFF"] as const },
-                    { icon: "shield-checkmark-outline" as const, title: "Verify Payment", body: "We wait for secure webhook confirmation.", gradient:["#EAF8EF","#F7FFF9"] as const },
-                    { icon: "people-outline" as const, title: "Track Your Support", body: "View your donation history and receipts.", gradient:["#F5FAE4","#FCFFF7"] as const },
+                    { icon: "heart-outline" as const, title: "Choose a cause", body: "Explore an approved campaign and its verified progress.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "card-outline" as const, title: "Make a donation", body: "Select an amount through PayMongo Sandbox checkout.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "shield-checkmark-outline" as const, title: "Verify payment", body: "Payment is recorded only after secure confirmation.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "receipt-outline" as const, title: "Review your support", body: "Check your donation status and available receipts.", gradient:["#FFFFFF","#FBFEFC"] as const },
                   ].map((step,index) => (
                     <LinearGradient key={step.title}
                       colors={step.gradient} start={{x:0,y:0}} end={{x:1,y:1}}
                       style={styles.webHowStep}>
                       <View style={styles.donationHowStepIcon}>
-                        <Ionicons name={step.icon} size={23} color={index===1?"#1577C9":"#009474"} />
+                        <Ionicons name={step.icon} size={23} color="#0B8A69" />
                       </View>
                       <View style={styles.donationStepNumber}>
                         <Text style={styles.donationStepNumberText}>{index+1}</Text>
@@ -1068,14 +1083,14 @@ export default function Donation() {
                   <Ionicons name="receipt-outline" size={21} color="#07916D"/>
                 </View>
                 <View style={{flex:1}}>
-                  <Text style={styles.webHowItWorksTitle}>Recent Donations (My History)</Text>
-                  <Text style={styles.donationHowSubtitle}>Your own donation records, confirmed payment status, and receipts.</Text>
+                  <Text style={styles.webHowItWorksTitle}>Recent donations</Text>
+                  <Text style={styles.donationHowSubtitle}>Your recent payments, verification status, and available receipts.</Text>
                 </View>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="View all my donations"
                   style={styles.donationRecentViewAll}
                   onPress={()=>{setSelectedCampaignId("");setShowHistory(true);pageScrollRef.current?.scrollTo({y:0,animated:true});}}>
                   <Text style={styles.donationRecentViewText}>View All</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#2675D2"/>
+                  <Ionicons name="arrow-forward" size={14} color="#138363"/>
                 </TouchableOpacity>
               </View>
               {!historyReady ? (
@@ -1444,7 +1459,7 @@ function CampaignCard({
           <View style={[styles.donationCardFooterCopy,landscape&&styles.donationCardFooterCompact]}>
             <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"heart-outline"} size={15} color="#05896B"/>
             <Text style={styles.donationCardFooterText} numberOfLines={2}>
-              {campaignFinished(campaign) ? "Past campaign" : "View details to support"}
+              {campaignFinished(campaign) ? "Completed campaign" : "View campaign details"}
             </Text>
           </View>
           <LinearGradient colors={["#03B981","#007C66"]} start={{x:0,y:0}} end={{x:1,y:1}}
@@ -1473,7 +1488,7 @@ function CampaignVisual({
         <Image source={{ uri: photoUrl }} style={styles.campaignVisualImage} resizeMode="cover" />
         <View style={styles.photoApprovalBadge}>
           <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
-          <Text style={styles.photoApprovalText}>LGU-approved photo</Text>
+          <Text style={styles.photoApprovalText}>Approved photo</Text>
         </View>
       </View>
     );
@@ -1812,6 +1827,7 @@ function ProcessPoint({
 }
 
 function DonationHistoryCard({ donation }: { donation: MyDonation }) {
+  const router = useRouter();
   const status = String(donation.status || "submitted").toLowerCase();
   const rejected = status === "rejected" || status === "payment_failed";
   const paymongo = donation.paymentProvider === "paymongo";
@@ -1854,17 +1870,39 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           <Text style={styles.statusText}>{sandboxPaid ? "PAID · TEST" : received && paymongo ? "PAID" : statusLabel(status)}</Text>
         </View>
       </View>
+      {received && (
+        <TouchableOpacity
+          style={styles.historyReceiptAction}
+          accessibilityRole="button"
+          accessibilityLabel={"View verified receipt for " + (donation.campaignTitle || "donation")}
+          onPress={() => router.push({ pathname: "/receipt/[id]", params: { id: donation.id } })}
+        >
+          <Ionicons name="receipt-outline" size={15} color="#087D5E" />
+          <Text style={styles.historyReceiptActionText}>View verified receipt</Text>
+          <Ionicons name="arrow-forward" size={14} color="#087D5E" />
+        </TouchableOpacity>
+      )}
 
       {!rejected && (
         <View style={styles.historyTracker}>
-          <TrackerStep icon="send-outline" label="Submitted" complete active={!received} />
-          <View style={styles.trackerLine} />
-          <TrackerStep
-            icon="shield-checkmark-outline"
-            label="Verified"
-            complete={received}
-            active={received}
-          />
+          <View style={styles.historyMilestone}>
+            <Ionicons name="checkmark-circle" size={17} color="#077E61" />
+            <Text style={styles.historyMilestoneText}>Submitted</Text>
+          </View>
+          <View style={styles.historyMilestoneDivider} />
+          <View style={[styles.historyMilestone, received ? styles.historyMilestoneVerified : styles.historyMilestonePending]}>
+            <Ionicons
+              name={received ? "shield-checkmark" : "time-outline"}
+              size={17}
+              color={received ? "#087D59" : "#A77520"}
+            />
+            <Text style={[
+              styles.historyMilestoneText,
+              !received && styles.historyMilestonePendingText,
+            ]}>
+              {received ? "Payment verified" : "Awaiting payment verification"}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -1903,35 +1941,6 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
   );
 }
 
-function TrackerStep({
-  icon,
-  label,
-  complete,
-  active,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  label: string;
-  complete: boolean;
-  active: boolean;
-}) {
-  return (
-    <View style={styles.trackerStep}>
-      <View
-        style={[
-          styles.trackerDot,
-          complete && styles.trackerDotComplete,
-          active && styles.trackerDotActive,
-        ]}
-      >
-        <Ionicons name={icon} size={14} color={complete || active ? "#FFFFFF" : "#94A3B8"} />
-      </View>
-      <Text style={[styles.trackerLabel, (complete || active) && styles.trackerLabelActive]}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -1955,8 +1964,9 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#64748B",
     fontSize: 13,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
 
   heroCard: {
     flexDirection: "row",
@@ -1984,22 +1994,25 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: "#0F766E",
     fontSize: 10,
-    fontWeight: "900",
+    
     letterSpacing: 0.9,
-  },
+  
+    fontFamily: "DonationInterBold",},
   title: {
     marginTop: 4,
     color: "#0F172A",
     fontSize: 27,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   subtitle: {
     maxWidth: 820,
     marginTop: 7,
     color: "#64748B",
     fontSize: 13,
     lineHeight: 20,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   heroTrustBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2012,8 +2025,9 @@ const styles = StyleSheet.create({
   heroTrustText: {
     color: "#0F766E",
     fontSize: 9,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   summaryGrid: {
     flexDirection: "row",
@@ -2054,14 +2068,16 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: "#0F172A",
     fontSize: 22,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   summaryLabel: {
     marginTop: 2,
     color: "#64748B",
     fontSize: 10.5,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   filterPanel: {
     marginTop: 22,
@@ -2074,22 +2090,25 @@ const styles = StyleSheet.create({
   sectionEyebrow: {
     color: "#0F766E",
     fontSize: 9,
-    fontWeight: "900",
+    
     letterSpacing: 0.8,
-  },
+  
+    fontFamily: "DonationInterBold",},
   sectionTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: 20,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   sectionSubtitle: {
     maxWidth: 850,
     marginTop: 5,
     color: "#64748B",
     fontSize: 11.5,
     lineHeight: 18,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2114,8 +2133,9 @@ const styles = StyleSheet.create({
   filterChipText: {
     color: "#475569",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   filterChipTextActive: {
     color: "#FFFFFF",
   },
@@ -2134,8 +2154,9 @@ const styles = StyleSheet.create({
   filterCountText: {
     color: "#64748B",
     fontSize: 9,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   filterCountTextActive: {
     color: "#FFFFFF",
   },
@@ -2156,7 +2177,8 @@ const styles = StyleSheet.create({
     color: "#B42318",
     fontSize: 10.5,
     lineHeight: 16,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   campaignGrid: {
     flexDirection: "row",
@@ -2165,53 +2187,38 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   campaignCard: {
-    width: "100%",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#D2EAE3",
-    borderRadius: 17,
+    width: "100%", overflow: "hidden",
+    borderWidth: 1, borderColor: "#DAEAE2", borderRadius: 17,
     backgroundColor: "#FFFFFF",
-    shadowColor: "#075540",
-    shadowOpacity: 0.085,
-    shadowRadius: 17,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    shadowColor: "#125947", shadowOpacity: 0.075,
+    shadowRadius: 18, shadowOffset: { width: 0, height: 5 }, elevation: 1,
   },
-  campaignCardWide: {
-    width: "48.8%",
-    minWidth: 255,
-  },
-  campaignCardFull: { width: "31.8%", minWidth: 300, maxWidth: 490 },
+  campaignCardWide: { width: "48.5%", minWidth: 255 },
+  campaignCardFull: { width: "31.8%", minWidth: 295, maxWidth: 490 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
   },
   campaignVisualWrap: {
-    position: "relative",
-    height: 148,
-    backgroundColor: "#DDE7E5",
+    position: "relative", height: 167,
+    backgroundColor: "#EAF1EB",
   },
   campaignVisualImage: {
     width: "100%",
     height: "100%",
   },
   photoApprovalBadge: {
-    position: "absolute",
-    left: 11,
-    bottom: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,118,110,0.92)",
+    position: "absolute", left: 11, bottom: 11,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 9, paddingVertical: 6, borderRadius: 7,
+    backgroundColor: "rgba(12,91,72,0.89)",
   },
   photoApprovalText: {
     color: "#FFFFFF",
     fontSize: 8.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   campaignVisualPlaceholder: {
     height: 148,
     alignItems: "center",
@@ -2234,19 +2241,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "#0F172A",
     fontSize: 12,
-    fontWeight: "900",
+    
     textTransform: "capitalize",
-  },
+  
+    fontFamily: "DonationInterBold",},
   campaignVisualPlaceholderText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 9.3,
     textAlign: "center",
-  },
-  campaignCardBody: {
-    padding: 16,
-    flex: 1,
-  },
+  
+    fontFamily: "DonationInterRegular",},
+  campaignCardBody: { padding: 18, flex: 1 },
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2264,9 +2270,10 @@ const styles = StyleSheet.create({
   },
   verifiedBadgeText: {
     color: "#15803D",
-    fontSize: 7.8,
-    fontWeight: "900",
-  },
+    fontSize: 9.1,
+    
+  
+    fontFamily: "DonationInterBold",},
   groupBadge: {
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -2278,19 +2285,21 @@ const styles = StyleSheet.create({
   },
   groupBadgeText: {
     color: "#B45309",
-    fontSize: 7.8,
-    fontWeight: "900",
-  },
+    fontSize: 9.1,
+    
+  
+    fontFamily: "DonationInterBold",},
   groupBadgeTextCommunity: {
     color: "#7C3AED",
   },
   campaignTitle: {
     marginTop: 10,
     color: "#0F172A",
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: "900",
-  },
+    fontSize: 16.5,
+    lineHeight: 23,
+    
+  
+    fontFamily: "DonationInterBold",},
   locationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -2300,15 +2309,17 @@ const styles = StyleSheet.create({
   campaignLocation: {
     flex: 1,
     color: "#64748B",
-    fontSize: 9.5,
-    fontWeight: "700",
-  },
+    fontSize: 10.5,
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   campaignDescription: {
     marginTop: 9,
     color: "#64748B",
     fontSize: 10,
     lineHeight: 15.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   cardProgressWrap: {
     marginTop: 13,
   },
@@ -2319,14 +2330,16 @@ const styles = StyleSheet.create({
   },
   cardProgressRaised: {
     color: "#0F172A",
-    fontSize: 11,
-    fontWeight: "900",
-  },
+    fontSize: 11.2,
+    
+  
+    fontFamily: "DonationInterBold",},
   cardProgressGoal: {
     color: "#94A3B8",
-    fontSize: 8.7,
-    fontWeight: "700",
-  },
+    fontSize: 10,
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   progressTrack: {
     height: 7,
     overflow: "hidden",
@@ -2342,9 +2355,10 @@ const styles = StyleSheet.create({
   cardProgressPercent: {
     marginTop: 5,
     color: "#64748B",
-    fontSize: 8.5,
-    fontWeight: "800",
-  },
+    fontSize: 9.5,
+    
+  
+    fontFamily: "DonationInterBold",},
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -2359,16 +2373,20 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#64748B",
     fontSize: 8.8,
-    fontWeight: "800",
+    
     textTransform: "capitalize",
-  },
-  campaignStatusFunded: { color: "#8D5300", fontSize: 10, fontWeight: "900" },
-  campaignStatusActive: { color: "#087F67", fontSize: 10, fontWeight: "900" },
+  
+    fontFamily: "DonationInterBold",},
+  campaignStatusFunded: { color: "#8D5300", fontSize: 10, 
+    fontFamily: "DonationInterBold",},
+  campaignStatusActive: { color: "#087F67", fontSize: 10, 
+    fontFamily: "DonationInterBold",},
   cardPrimaryAction: {
     minHeight: 43, marginTop: 13, borderRadius: 9, backgroundColor: "#009775",
     flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9,
   },
-  cardPrimaryActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  cardPrimaryActionText: { color: "#FFFFFF", fontSize: 12, 
+    fontFamily: "DonationInterBold",},
   viewCampaignButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -2377,8 +2395,9 @@ const styles = StyleSheet.create({
   viewCampaignText: {
     color: "#0F766E",
     fontSize: 9.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   detailShell: {
     marginTop: 24,
@@ -2399,21 +2418,24 @@ const styles = StyleSheet.create({
   detailEyebrow: {
     color: "#0F766E",
     fontSize: 9,
-    fontWeight: "900",
+    
     letterSpacing: 0.8,
-  },
+  
+    fontFamily: "DonationInterBold",},
   detailTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: 21,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   detailLocation: {
     flex: 1,
     color: "#64748B",
     fontSize: 10.5,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   openSupportBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2432,8 +2454,9 @@ const styles = StyleSheet.create({
   openSupportText: {
     color: "#15803D",
     fontSize: 8.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   detailGrid: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2471,9 +2494,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: "#0F172A",
     fontSize: 15,
-    fontWeight: "900",
+    
     textTransform: "capitalize",
-  },
+  
+    fontFamily: "DonationInterBold",},
   detailPhotoPlaceholderText: {
     maxWidth: 520,
     marginTop: 6,
@@ -2481,7 +2505,8 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     lineHeight: 16,
     textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterRegular",},
   galleryWrap: {
     position: "relative",
     overflow: "hidden",
@@ -2507,8 +2532,9 @@ const styles = StyleSheet.create({
   galleryBadgeText: {
     color: "#FFFFFF",
     fontSize: 8.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   galleryVerifiedBadge: {
     position: "absolute",
     left: 12,
@@ -2524,8 +2550,9 @@ const styles = StyleSheet.create({
   galleryVerifiedBadgeText: {
     color: "#FFFFFF",
     fontSize: 8.4,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   galleryThumbRow: {
     gap: 8,
     padding: 10,
@@ -2568,21 +2595,24 @@ const styles = StyleSheet.create({
   storyEyebrow: {
     color: "#0F766E",
     fontSize: 8.3,
-    fontWeight: "900",
+    
     letterSpacing: 0.7,
-  },
+  
+    fontFamily: "DonationInterBold",},
   storyTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: 13,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   storyText: {
     marginTop: 13,
     color: "#475569",
     fontSize: 11,
     lineHeight: 18,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   factGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2612,16 +2642,18 @@ const styles = StyleSheet.create({
   factLabel: {
     color: "#94A3B8",
     fontSize: 7.8,
-    fontWeight: "900",
+    
     textTransform: "uppercase",
-  },
+  
+    fontFamily: "DonationInterBold",},
   factValue: {
     marginTop: 2,
     color: "#334155",
     fontSize: 9.5,
     lineHeight: 13,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   updatesCard: {
     padding: 16,
@@ -2646,14 +2678,16 @@ const styles = StyleSheet.create({
   blockTitle: {
     color: "#0F172A",
     fontSize: 12.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   blockSubtitle: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 9.5,
     lineHeight: 14.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   noUpdatesBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2666,14 +2700,16 @@ const styles = StyleSheet.create({
   noUpdatesTitle: {
     color: "#334155",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   noUpdatesText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 9.3,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   storyTimeline: {
     marginTop: 13,
     gap: 10,
@@ -2704,24 +2740,28 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#0F172A",
     fontSize: 10.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   storyUpdateDate: {
     color: "#94A3B8",
     fontSize: 8,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   storyUpdateBody: {
     marginTop: 5,
     color: "#475569",
     fontSize: 9.8,
     lineHeight: 15,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   storyUpdateAuthor: {
     marginTop: 6,
     color: "#0F766E",
     fontSize: 8.3,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   needsCard: {
     padding: 16,
@@ -2759,19 +2799,22 @@ const styles = StyleSheet.create({
   needCardTitle: {
     color: "#334155",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   needCardMeta: {
     marginTop: 2,
     color: "#64748B",
     fontSize: 8.5,
     lineHeight: 12.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   needEmptyText: {
     color: "#64748B",
     fontSize: 9.5,
     lineHeight: 15,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   fundingCard: {
     padding: 16,
@@ -2796,27 +2839,31 @@ const styles = StyleSheet.create({
   fundingEyebrow: {
     color: "#0F766E",
     fontSize: 8,
-    fontWeight: "900",
+    
     letterSpacing: 0.7,
-  },
+  
+    fontFamily: "DonationInterBold",},
   fundingTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: 11,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   fundingAmount: {
     marginTop: 15,
     color: "#0F172A",
     fontSize: 27,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   fundingGoal: {
     marginTop: 2,
     color: "#64748B",
     fontSize: 10,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   progressTrackLarge: {
     height: 10,
     overflow: "hidden",
@@ -2838,14 +2885,16 @@ const styles = StyleSheet.create({
   fundingStatValue: {
     color: "#0F172A",
     fontSize: 11,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   fundingStatLabel: {
     marginTop: 2,
     color: "#94A3B8",
     fontSize: 8.2,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   fundingStatDivider: {
     width: 1,
     height: 30,
@@ -2865,7 +2914,8 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9.4,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   fundingTrustNote: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2880,7 +2930,8 @@ const styles = StyleSheet.create({
     color: "#49646F",
     fontSize: 8.8,
     lineHeight: 13.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   locationCard: {
     padding: 16,
@@ -2905,16 +2956,18 @@ const styles = StyleSheet.create({
   locationCardEyebrow: {
     color: "#0F766E",
     fontSize: 8,
-    fontWeight: "900",
+    
     letterSpacing: 0.7,
-  },
+  
+    fontFamily: "DonationInterBold",},
   locationCardTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: 12,
-    fontWeight: "900",
+    
     lineHeight: 16,
-  },
+  
+    fontFamily: "DonationInterBold",},
   locationInfoRows: {
     marginTop: 12,
     borderTopWidth: 1,
@@ -2928,16 +2981,18 @@ const styles = StyleSheet.create({
   infoRowLabel: {
     color: "#94A3B8",
     fontSize: 7.8,
-    fontWeight: "900",
+    
     textTransform: "uppercase",
-  },
+  
+    fontFamily: "DonationInterBold",},
   infoRowValue: {
     marginTop: 3,
     color: "#334155",
     fontSize: 9.5,
     lineHeight: 14,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   handoffNotesBox: {
     marginTop: 10,
     padding: 10,
@@ -2947,15 +3002,17 @@ const styles = StyleSheet.create({
   handoffNotesLabel: {
     color: "#0F766E",
     fontSize: 8,
-    fontWeight: "900",
+    
     textTransform: "uppercase",
-  },
+  
+    fontFamily: "DonationInterBold",},
   handoffNotesText: {
     marginTop: 4,
     color: "#64748B",
     fontSize: 9.2,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   privacyNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2970,7 +3027,8 @@ const styles = StyleSheet.create({
     color: "#49646F",
     fontSize: 8.8,
     lineHeight: 13.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   areaCard: {
     padding: 15,
@@ -2987,20 +3045,23 @@ const styles = StyleSheet.create({
   areaTitle: {
     color: "#0F172A",
     fontSize: 11,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   areaValue: {
     marginTop: 9,
     color: "#0F766E",
     fontSize: 12,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   areaHelp: {
     marginTop: 4,
     color: "#64748B",
     fontSize: 8.8,
     lineHeight: 13,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   supportSection: {
     marginTop: 18,
@@ -3011,22 +3072,25 @@ const styles = StyleSheet.create({
   supportSectionEyebrow: {
     color: "#0F766E",
     fontSize: 9,
-    fontWeight: "900",
+    
     letterSpacing: 0.8,
-  },
+  
+    fontFamily: "DonationInterBold",},
   supportSectionTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: 18,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   supportSectionText: {
     maxWidth: 800,
     marginTop: 5,
     color: "#64748B",
     fontSize: 10.5,
     lineHeight: 16,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   supportTypeGrid: {
     flexDirection: "row",
     gap: 10,
@@ -3062,8 +3126,9 @@ const styles = StyleSheet.create({
   supportTypeTitle: {
     color: "#0F172A",
     fontSize: 11.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   supportTypeTitleSelected: {
     color: "#0F766E",
   },
@@ -3072,7 +3137,8 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9.3,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3087,7 +3153,8 @@ const styles = StyleSheet.create({
     color: "#49646F",
     fontSize: 9.3,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   donationFormCard: {
     marginTop: 13,
@@ -3115,19 +3182,22 @@ const styles = StyleSheet.create({
   stepBadgeText: {
     color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   stepTitle: {
     color: "#0F172A",
     fontSize: 11.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   stepText: {
     marginTop: 2,
     color: "#64748B",
     fontSize: 9.2,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   instructionsBox: {
     marginTop: 8,
@@ -3141,29 +3211,33 @@ const styles = StyleSheet.create({
   instructionsEyebrow: {
     color: "#0F766E",
     fontSize: 7.8,
-    fontWeight: "900",
+    
     letterSpacing: 0.6,
-  },
+  
+    fontFamily: "DonationInterBold",},
   instructionsTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: 10.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   instructionsText: {
     marginTop: 5,
     color: "#64748B",
     fontSize: 9.8,
     lineHeight: 15,
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   label: {
     marginTop: 12,
     marginBottom: 5,
     color: "#334155",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   input: {
     minHeight: 43,
     paddingHorizontal: 11,
@@ -3174,13 +3248,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     color: "#0F172A",
     fontSize: 11,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   helperText: {
     marginTop: 5,
     color: "#64748B",
     fontSize: 9.2,
     lineHeight: 14,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   multiline: {
     minHeight: 82,
     textAlignVertical: "top",
@@ -3216,9 +3292,10 @@ const styles = StyleSheet.create({
   choiceText: {
     color: "#64748B",
     fontSize: 9.5,
-    fontWeight: "800",
+    
     textTransform: "capitalize",
-  },
+  
+    fontFamily: "DonationInterBold",},
   choiceTextSelected: {
     color: "#0F766E",
   },
@@ -3243,12 +3320,14 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#0F172A",
     fontSize: 10.5,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   selectFieldPlaceholder: {
     color: "#94A3B8",
-    fontWeight: "500",
-  },
+    
+  
+    fontFamily: "DonationInterMedium",},
   modalOverlay: {
     flex: 1,
     alignItems: "center",
@@ -3275,8 +3354,9 @@ const styles = StyleSheet.create({
   selectModalTitle: {
     color: "#0F172A",
     fontSize: 13,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   selectModalScroll: {
     maxHeight: 430,
   },
@@ -3297,18 +3377,21 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#334155",
     fontSize: 10.5,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   selectOptionTextActive: {
     color: "#0F766E",
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   selectModalEmpty: {
     padding: 18,
     color: "#64748B",
     fontSize: 10,
     textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterRegular",},
 
   removeProofButton: {
     alignSelf: "flex-start",
@@ -3320,8 +3403,9 @@ const styles = StyleSheet.create({
   removeProofText: {
     color: "#B42318",
     fontSize: 9.5,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   handoffSummaryCard: {
     marginTop: 6,
@@ -3349,15 +3433,17 @@ const styles = StyleSheet.create({
   handoffSummaryEyebrow: {
     color: "#0F766E",
     fontSize: 7.8,
-    fontWeight: "900",
+    
     letterSpacing: 0.6,
-  },
+  
+    fontFamily: "DonationInterBold",},
   handoffSummaryTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: 10.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
 
   submitSection: {
     marginTop: 13,
@@ -3394,9 +3480,10 @@ const styles = StyleSheet.create({
     maxWidth: 86,
     color: "#475569",
     fontSize: 7.8,
-    fontWeight: "800",
+    
     textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterBold",},
   submitButton: {
     marginTop: 12,
     minHeight: 48,
@@ -3411,9 +3498,10 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#FFFFFF",
     fontSize: 10.5,
-    fontWeight: "900",
+    
     textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterBold",},
   disabled: {
     opacity: 0.5,
   },
@@ -3421,16 +3509,10 @@ const styles = StyleSheet.create({
   historySection: {
     marginTop: 28,
   },
-  historyList: {
-    gap: 10,
-    marginTop: 12,
-  },
+  historyList: { gap: 13, marginTop: 17 },
   historyCard: {
-    padding: 13,
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    padding: 17, borderWidth: 1, borderColor: "#DDEAE6",
+    borderRadius: 13, backgroundColor: "#FFFFFF",
   },
   historyTop: {
     flexDirection: "row",
@@ -3438,90 +3520,75 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   historyIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: "#ECFDF5",
+    width: 39, height: 39,
+    alignItems: "center", justifyContent: "center",
+    borderRadius: 11, backgroundColor: "#E7F7EF",
   },
   historyTitle: {
-    color: "#0F172A",
-    fontSize: 12,
-    fontWeight: "900",
-  },
+    color: "#203E49",
+    fontSize: 13.3,
+    
+  
+    fontFamily: "DonationInterBold",},
   historyMeta: {
     marginTop: 2,
-    color: "#94A3B8",
-    fontSize: 9,
-  },
+    color: "#779098",
+    fontSize: 10,
+  
+    fontFamily: "DonationInterRegular",},
   historyValue: {
-    marginTop: 9,
-    color: "#334155",
-    fontSize: 11,
-    fontWeight: "800",
-  },
+    marginTop: 10,
+    color: "#194B45",
+    fontSize: 15,
+    
+  
+    fontFamily: "DonationInterBold",},
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7,
   },
-  statusSubmitted: {
-    backgroundColor: "#B7791F",
-  },
-  statusReceived: {
-    backgroundColor: "#15803D",
-  },
+  statusSubmitted: { backgroundColor: "#AA7625" },
+  statusReceived: { backgroundColor: "#0C7E5D" },
   statusRejected: {
     backgroundColor: "#B42318",
   },
   statusText: {
     color: "#FFFFFF",
-    fontSize: 8,
-    fontWeight: "900",
+    fontSize: 9.5,
+    
+  
+    fontFamily: "DonationInterBold",},
+  historyReceiptAction: {
+    alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 12, paddingVertical: 10, marginTop: 12,
+    borderRadius: 9, backgroundColor: "#EFF9F4",
+    borderWidth: 1, borderColor: "#D6EBDD",
+  },
+  historyReceiptActionText: {
+    fontSize: 10.8, fontFamily: "DonationInterSemiBold", color: "#087D5E",
   },
   historyTracker: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 11, marginTop: 15, paddingVertical: 11, paddingHorizontal: 12,
+    borderRadius: 10, backgroundColor: "#F5F9F7",
+    borderWidth: 1, borderColor: "#E6EFE9",
   },
-  trackerStep: {
-    width: 88,
-    alignItems: "center",
+  historyMilestone: {
+    flexDirection: "row", alignItems: "center", gap: 7,
   },
-  trackerDot: {
-    width: 29,
-    height: 29,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
+  historyMilestoneVerified: {
+    borderRadius: 6,
   },
-  trackerDotComplete: {
-    backgroundColor: "#0F766E",
+  historyMilestonePending: {
+    borderRadius: 6,
   },
-  trackerDotActive: {
-    backgroundColor: "#2563EB",
+  historyMilestoneText: {
+    color: "#39645D", fontSize: 11, fontFamily: "DonationInterMedium",
   },
-  trackerLabel: {
-    marginTop: 5,
-    color: "#94A3B8",
-    fontSize: 7.5,
-    fontWeight: "800",
-    textAlign: "center",
+  historyMilestonePendingText: {
+    color: "#907035",
   },
-  trackerLabelActive: {
-    color: "#334155",
-  },
-  trackerLine: {
-    flex: 1,
-    minWidth: 10,
-    height: 2,
-    marginTop: 14,
-    backgroundColor: "#CBD5E1",
+  historyMilestoneDivider: {
+    width: 18, height: 1, backgroundColor: "#BBD3C9",
   },
   historyMessagePending: {
     flexDirection: "row",
@@ -3535,9 +3602,10 @@ const styles = StyleSheet.create({
   historyMessagePendingText: {
     flex: 1,
     color: "#7A5A12",
-    fontSize: 9.2,
-    lineHeight: 14,
-  },
+    fontSize: 10.3,
+    lineHeight: 16,
+  
+    fontFamily: "DonationInterRegular",},
   historyMessageReceived: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3549,16 +3617,18 @@ const styles = StyleSheet.create({
   },
   historyMessageReceivedText: {
     color: "#166534",
-    fontSize: 9.2,
-    lineHeight: 14,
-    fontWeight: "800",
-  },
+    fontSize: 10.3,
+    lineHeight: 16,
+    
+  
+    fontFamily: "DonationInterBold",},
   receiptReferenceText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 8.8,
     lineHeight: 13,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   historyMessageRejected: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3571,9 +3641,10 @@ const styles = StyleSheet.create({
   historyMessageRejectedText: {
     flex: 1,
     color: "#B42318",
-    fontSize: 9.2,
-    lineHeight: 14,
-  },
+    fontSize: 10.3,
+    lineHeight: 16,
+  
+    fontFamily: "DonationInterRegular",},
 
   emptyCard: {
     minHeight: 145,
@@ -3590,8 +3661,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: "#0F172A",
     fontSize: 12.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   emptyText: {
     maxWidth: 580,
     marginTop: 4,
@@ -3599,7 +3671,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterRegular",},
   // Mobile-only overrides; preserve existing desktop layout and donation behavior.
   mobileContainer: {
     paddingHorizontal: 14,
@@ -3640,14 +3713,18 @@ const styles = StyleSheet.create({
   },
   mobileBackText: {
     fontSize: 13,
-    fontWeight: "800",
+    
     color: "#0F766E",
-  },
+  
+    fontFamily: "DonationInterBold",},
   // Premium botanical donation layout, with responsive and data-grounded surfaces.
   donationCardContent: { flex: 1 },
   donationCardContentLandscape: { flexDirection: "row", minHeight: 242 },
   donationCardLandscape: { minHeight: 242, maxHeight: 272 },
-  donationCardBodyLandscape: { flex: 1, minWidth: 0, padding: 12, justifyContent: "space-between" },
+  donationCardBodyLandscape: {
+    flex: 1, minWidth: 0, padding: 14,
+    justifyContent: "space-between",
+  },
   donationCardVisualLandscape: {
     width: "33.5%", height: "100%", minHeight: 242,
     flexShrink: 0, alignItems: "center", justifyContent: "center",
@@ -3656,7 +3733,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", gap: 4, alignItems: "center", paddingHorizontal: 7,
     minHeight: 24, borderRadius: 99, backgroundColor: "#DBF8EA",
   },
-  donationVerifiedText: { color: "#00825D", fontSize: 9.5, fontWeight: "900" },
+  donationVerifiedText: { color: "#00825D", fontSize: 9, 
+    fontFamily: "DonationInterBold",},
   donationCardFooterCompact: { flex: 1, minWidth: 0, marginRight: 6 },
   donationEmptyState: {
     minHeight: 132, borderRadius: 17, borderWidth: 1,
@@ -3671,25 +3749,31 @@ const styles = StyleSheet.create({
     backgroundColor: "#DDF8E9", borderWidth: 1, borderColor: "#C9EAD8",
   },
   donationEmptyCopy: { flex: 1, minWidth: 210, gap: 6 },
-  donationEmptyTitle: { fontSize: 18, fontWeight: "900", color: "#064D41" },
+  donationEmptyTitle: { fontSize: 18.5,  color: "#064D41", 
+    fontFamily: "DonationInterBold",},
   donationEmptyDescription: {
-    maxWidth: 510, fontSize: 11.5, lineHeight: 18, color: "#4F786F",
-  },
+    maxWidth: 510, fontSize: 11.7, lineHeight: 19, color: "#4F786F",
+  
+    fontFamily: "DonationInterRegular",},
   donationEmptyExplore: {
     flexDirection: "row", alignItems: "center", gap: 9,
     minHeight: 42, borderRadius: 11,
     paddingHorizontal: 14, backgroundColor: "#008A69",
   },
-  donationEmptyExploreText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
+  donationEmptyExploreText: { fontSize: 11,  color: "#FFFFFF", 
+    fontFamily: "DonationInterBold",},
   donationStepNumber: {
-    height: 22, width: 22, borderRadius: 11, marginLeft: -6, marginTop: -29,
-    alignItems: "center", justifyContent: "center", backgroundColor: "#079B77",
+    position: "absolute", top: 9, right: 9,
+    height: 23, width: 23, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#0B8E70",
   },
-  donationStepNumberText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
+  donationStepNumberText: { fontSize: 11,  color: "#FFFFFF", 
+    fontFamily: "DonationInterBold",},
   donationRecentStatusChip: {
     flex: 1, minWidth: 86, flexDirection: "row",
-    alignItems: "center", justifyContent: "center", gap: 5,
-    paddingVertical: 7, paddingHorizontal: 7, borderRadius: 99,
+    alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 8, paddingHorizontal: 8, borderRadius: 8,
   },
   donationRecentChipPaid: { backgroundColor: "#DDF8EA" },
   donationRecentChipPending: { backgroundColor: "#FFF2CE" },
@@ -3740,24 +3824,28 @@ const styles = StyleSheet.create({
     paddingBottom: 11,
   },
   donationHeroEyebrow: {
-    fontSize: 10, letterSpacing: 1.1,
-    fontWeight: "800", color: "#08724F",
-  },
+    fontSize: 10.2, letterSpacing: 1.2,
+     color: "#08724F",
+  
+    fontFamily: "DonationInterBold",},
   donationHeroTitle: {
-    marginTop: 2, fontSize: 45, lineHeight: 52,
-    letterSpacing: -1.55, color: "#07442F", fontWeight: "900",
-  },
+    marginTop: 2, fontSize: 43, lineHeight: 51,
+    letterSpacing: -1.25, color: "#07442F", 
+  
+    fontFamily: "DonationInterBold",},
   donationHeroTitleMobile: {
     fontSize: 30, lineHeight: 37, letterSpacing: -0.9,
   },
   donationHeroTagline: {
-    fontSize: 14, fontWeight: "800",
-    lineHeight: 20, color: "#0A5A43", marginTop: 1,
-  },
+    fontSize: 14, 
+    lineHeight: 21, color: "#0A5A43", marginTop: 1,
+  
+    fontFamily: "DonationInterBold",},
   donationHeroDescription: {
-    fontSize: 11.5, lineHeight: 17, color: "#4F7274",
+    fontSize: 11.7, lineHeight: 18, color: "#4F7274",
     marginTop: 6, maxWidth: 415,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   donationHeroStats: {
     zIndex: 1,
     width: "43%",
@@ -3800,13 +3888,15 @@ const styles = StyleSheet.create({
   donationHeroStatCopy: { minWidth: 0, flexShrink: 1, alignItems: "center" },
   donationHeroStatNumber: {
     color: "#16354B", fontSize: 17,
-    fontWeight: "900", fontVariant: ["tabular-nums"],
-  },
+     fontVariant: ["tabular-nums"],
+  
+    fontFamily: "DonationInterBold",},
   donationHeroAmountValue: { fontSize: 14.5 },
   donationHeroStatCaption: {
-    color: "#557A82", fontSize: 9,
+    color: "#557A82", fontSize: 9.5,
     marginTop: 2, textAlign: "center",
-  },
+  
+    fontFamily: "DonationInterRegular",},
   donationToolbar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     flexWrap: "wrap", gap: 12, marginTop: 2, marginBottom: 5,
@@ -3818,10 +3908,12 @@ const styles = StyleSheet.create({
   donationToolbarActionsMobile: { alignItems: "stretch", width: "100%" },
   donationFilterButton: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, minHeight: 44, paddingHorizontal: 13,
-    borderRadius: 12, borderWidth: 1, borderColor: "#D6E9E8", backgroundColor: "#FFFFFF",
+    gap: 8, minHeight: 45, paddingHorizontal: 13,
+    borderRadius: 11, borderWidth: 1, borderColor: "#DCE8E6",
+    backgroundColor: "#FFFFFF",
   },
-  donationFilterButtonText: { color: "#193951", fontWeight: "800", fontSize: 11 },
+  donationFilterButtonText: { color: "#193951",  fontSize: 11.5, 
+    fontFamily: "DonationInterBold",},
   donationFilterMenu: {
     flexDirection: "row", flexWrap: "wrap", gap: 6,
     alignSelf: "flex-end", marginBottom: 10, padding: 8,
@@ -3833,15 +3925,19 @@ const styles = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9,
   },
   donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
-  donationFilterOptionText: { color: "#26465A", fontWeight: "700", fontSize: 11 },
-  donationPastHint: { color:"#567580",fontSize:11,lineHeight:18,marginVertical:6 },
-  donationCardDescription: { color: "#5A7882", fontSize: 10.8, lineHeight: 16, marginTop: 6, minHeight: 30 },
+  donationFilterOptionText: { color: "#26465A",  fontSize: 11, 
+    fontFamily: "DonationInterSemiBold",},
+  donationPastHint: { color:"#567580",fontSize: 11.5,lineHeight: 18.5,marginVertical:6, 
+    fontFamily: "DonationInterRegular",},
+  donationCardDescription: { color: "#5A7882", fontSize: 11, lineHeight: 17, marginTop: 6, minHeight: 34, 
+    fontFamily: "DonationInterRegular",},
   donationCardFooter: {
     borderTopWidth: 1, borderColor: "#DFEEE9", paddingTop: 8, marginTop: 9,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
-  donationCardFooterText: { color:"#087A66",fontWeight:"900",fontSize:10 },
+  donationCardFooterText: { color:"#087A66",fontSize: 10.5, 
+    fontFamily: "DonationInterBold",},
   donationCardFooterArrow: {
     width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: "#009879",
@@ -3851,47 +3947,64 @@ const styles = StyleSheet.create({
     width: 39,height:39,borderRadius:12,alignItems:"center",justifyContent:"center",
     backgroundColor:"#DDF8EC",
   },
-  donationHowSubtitle: { fontSize: 10.5, color:"#718A98",marginTop:3 },
+  donationHowSubtitle: { fontSize: 10.8, color:"#718A98",marginTop:3, 
+    fontFamily: "DonationInterRegular",},
   donationHowStepIcon: {
-    width: 45,height:45,borderRadius:23,alignItems:"center",justifyContent:"center",
-    backgroundColor:"rgba(39,198,132,0.15)",
+    width: 44, height: 44, borderRadius: 13,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#E7F7EF",
   },
   donationHowStepCopy: { flex:1, minWidth:0 },
   donationRecentPanel: {
-    marginTop:14,padding:19,backgroundColor:"#FFFFFF",borderRadius:19,
-    borderWidth:1,borderColor:"#C9EAE0",
-    shadowColor:"#064C40",shadowOpacity:.055,shadowRadius:17,
-    shadowOffset:{width:0,height:5},elevation:1,
+    marginTop: 16, padding: 21,
+    backgroundColor: "#FFFFFF", borderRadius: 17,
+    borderWidth: 1, borderColor: "#D8E9E3",
+    shadowColor: "#145F49", shadowOpacity: 0.04,
+    shadowRadius: 15, shadowOffset: { width: 0, height: 5 }, elevation: 1,
   },
   donationRecentHeading: {flexDirection:"row",alignItems:"center",gap:10,marginBottom:12},
-  donationRecentViewAll: {flexDirection:"row",alignItems:"center",gap:5,padding:6},
-  donationRecentViewText: { color:"#2877C8",fontSize:10.5,fontWeight:"900" },
+  donationRecentViewAll: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9,
+    backgroundColor: "#F1FAF6",
+  },
+  donationRecentViewText: { color:"#187F65",fontSize: 11,
+    fontFamily: "DonationInterBold",},
   donationRecentEmpty: {
     flexDirection:"row",gap:11,alignItems:"center",backgroundColor:"#F7FAFB",
     borderRadius:10,padding:16,
   },
-  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16 },
+  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16, 
+    fontFamily: "DonationInterRegular",},
   donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
   donationRecentTableHead: {
-    flexDirection:"row",alignItems:"center",backgroundColor:"#EAF7F5",padding:12,gap:10,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#F3F8F5", padding: 13,
   },
-  donationRecentHeadText: {flex:1,fontSize:10,fontWeight:"800",color:"#678095"},
+  donationRecentHeadText: {flex:1,fontSize: 10.3,color:"#6D8991",
+    fontFamily: "DonationInterBold",},
   donationRecentRow: {
-    flexDirection:"row",alignItems:"center",gap:10,padding:12,
-    borderTopWidth:1,borderColor:"#EFF3F5",
+    flexDirection: "row", alignItems: "center", gap: 10, padding: 13,
+    borderTopWidth: 1, borderColor: "#ECF1EF",
   },
   donationRecentRowMobile: {flexWrap:"wrap",gap:8},
-  donationRecentCellText: {flex:1,color:"#61798C",fontSize:10.5},
-  donationRecentCampaignText: {flex:1,color:"#102E50",fontWeight:"800"},
-  donationRecentAmount: {flex:1,color:"#0B2C49",fontWeight:"900",fontSize:11},
-  donationRecentStatus: {fontSize:10,fontWeight:"900"},
+  donationRecentCellText: {flex:1,color:"#61798C",fontSize: 10.7,
+    fontFamily: "DonationInterRegular",},
+  donationRecentCampaignText: {flex:1,color:"#1C4952",
+    fontFamily: "DonationInterBold",
+    fontSize: 11,},
+  donationRecentAmount: {flex:1,color:"#21414A",fontSize: 11.3,
+    fontFamily: "DonationInterBold",},
+  donationRecentStatus: {fontSize: 10,
+    fontFamily: "DonationInterBold",},
   donationRecentStatusPaid: {color:"#008B69"},
   donationRecentStatusPending: {color:"#A7730D"},
   donationReceiptLink: {
-    flex:1,paddingVertical:8,borderRadius:9,backgroundColor:"#EEF6FF",
-    alignItems:"center",justifyContent:"center",
+    flex: 1, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: "#EAF6F0", alignItems: "center", justifyContent: "center",
   },
-  donationReceiptLinkText: {color:"#2477D2",fontWeight:"900",fontSize:10},
+  donationReceiptLinkText: {color:"#167D63",fontSize: 10.3,
+    fontFamily: "DonationInterBold",},
   donationModalShade: {
     flex: 1, justifyContent: "center", alignItems: "center",
     backgroundColor: "rgba(7,31,38,0.76)", padding: 14,
@@ -3957,22 +4070,25 @@ const styles = StyleSheet.create({
   webEyebrow: {
     color: "#0F766E",
     fontSize: 9,
-    fontWeight: "900",
+    
     letterSpacing: 0.9,
-  },
+  
+    fontFamily: "DonationInterBold",},
   webPageTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: 30,
     lineHeight: 38,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webPageSubtitle: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 11,
     lineHeight: 16,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -3984,24 +4100,20 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   webSearchBox: {
-    minWidth: 230,
-    maxWidth: 345,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 13,
-    borderWidth: 1,
-    borderColor: "#DDE5EA",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    minWidth: 230, maxWidth: 345,
+    flexDirection: "row", alignItems: "center", gap: 9,
+    paddingHorizontal: 14, minHeight: 45,
+    borderWidth: 1, borderColor: "#DCE8E6",
+    borderRadius: 11, backgroundColor: "#FFFFFF",
   },
   webSearchInput: {
     flex: 1,
     minHeight: 42,
     color: "#0F172A",
-    fontSize: 10.5,
+    fontSize: 11.3,
     outlineStyle: "none" as any,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webHistoryButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -4021,8 +4133,9 @@ const styles = StyleSheet.create({
   webHistoryButtonText: {
     color: "#0F766E",
     fontSize: 10,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webHistoryButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -4032,19 +4145,24 @@ const styles = StyleSheet.create({
   },
   webPrimaryTab: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, paddingHorizontal: 17, minHeight: 42, borderWidth: 1,
-    borderColor: "#DCE8E9", borderRadius: 10, backgroundColor: "#FFFFFF",
+    gap: 8, paddingHorizontal: 16, minHeight: 44,
+    borderWidth: 1, borderColor: "#DDE9E6", borderRadius: 10,
+    backgroundColor: "#FFFFFF",
   },
-  webPrimaryTabActive: { borderColor: "#00A67C", backgroundColor: "#008E70",
-    shadowColor:"#047554",shadowOpacity:.22,shadowRadius:12,
-    shadowOffset:{width:0,height:4},elevation:2 },
-  webPrimaryTabText: { color: "#355267", fontSize: 12, fontWeight: "800" },
+  webPrimaryTabActive: {
+    borderColor: "#0D8B6E", backgroundColor: "#0B8E71",
+    shadowColor: "#06684C", shadowOpacity: 0.13, shadowRadius: 11,
+    shadowOffset: { width: 0, height: 3 }, elevation: 1,
+  },
+  webPrimaryTabText: { color: "#294A52", fontSize: 11.5, 
+    fontFamily: "DonationInterBold",},
   webPrimaryTabTextActive: { color: "#FFFFFF" },
   webTabCount: {
     paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden",
     borderRadius: 99, backgroundColor: "#F0F5F6", color: "#64748B",
-    fontSize: 9.5, fontWeight: "900",
-  },
+    fontSize: 9.5, 
+  
+    fontFamily: "DonationInterBold",},
   webTabCountActive: { backgroundColor: "rgba(255,255,255,0.22)", color: "#FFFFFF" },
   webFilterBar: {
     flexDirection: "row",
@@ -4072,8 +4190,9 @@ const styles = StyleSheet.create({
   webFilterChipText: {
     color: "#475569",
     fontSize: 9.5,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webFilterChipTextActive: {
     color: "#FFFFFF",
   },
@@ -4091,8 +4210,9 @@ const styles = StyleSheet.create({
   webFilterCountText: {
     color: "#64748B",
     fontSize: 8,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webFilterCountTextActive: {
     color: "#FFFFFF",
   },
@@ -4121,16 +4241,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   webSectionTitle: {
-    color: "#0F172A",
-    fontSize: 15,
-    fontWeight: "900",
-  },
+    color: "#203D47",
+    fontSize: 19,
+    
+  
+    fontFamily: "DonationInterBold",},
   webSectionSubtitle: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 11,
-    lineHeight: 16,
-  },
+    fontSize: 11.7,
+    lineHeight: 18,
+  
+    fontFamily: "DonationInterRegular",},
   webCampaignCount: {
     minWidth: 30,
     paddingHorizontal: 9,
@@ -4141,33 +4263,43 @@ const styles = StyleSheet.create({
     color: "#0F766E",
     backgroundColor: "#E8F6F3",
     fontSize: 9,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webHowItWorks: {
-    marginTop: 17, padding: 19, borderRadius: 19, backgroundColor: "#FAFEFC",
-    borderColor: "#CEEDE1", borderWidth: 1,
-    shadowColor:"#115B45",shadowOpacity:.05,shadowRadius:14,
-    shadowOffset:{width:0,height:5},elevation:1,
+    marginTop: 18, padding: 21, borderRadius: 17,
+    backgroundColor: "#FCFEFD",
+    borderColor: "#D8EAE2", borderWidth: 1,
+    shadowColor: "#165E4D", shadowOpacity: 0.035, shadowRadius: 13,
+    shadowOffset: { width: 0, height: 4 }, elevation: 1,
   },
-  webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
+  webHowItWorksTitle: { color: "#21434A", fontSize: 17, 
+    fontFamily: "DonationInterBold",},
   webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 },
   webHowStep: {
-    flexGrow: 1, flexBasis: 196, padding: 13, borderRadius: 13,
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#F4F9FA", minWidth: 190, gap: 9,
-    borderWidth: 1, borderColor: "#E2F1EC",
+    position: "relative",
+    flexGrow: 1, flexBasis: 196, minWidth: 185,
+    paddingVertical: 16, paddingLeft: 13, paddingRight: 32,
+    borderRadius: 12, flexDirection: "row", alignItems: "center",
+    backgroundColor: "#FFFFFF", gap: 10,
+    borderWidth: 1, borderColor: "#E4EEE9",
   },
-  webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
-  webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
-  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.5 },
+  webHowStepTitle: { fontSize: 12,  color: "#173B49", 
+    fontFamily: "DonationInterBold",},
+  webHowStepBody: { fontSize: 10.8, lineHeight: 16.8, color: "#557383", 
+    fontFamily: "DonationInterRegular",},
+  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.3, 
+    fontFamily: "DonationInterRegular",},
   webDetailNavRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingVertical: 12, paddingHorizontal: 15, gap: 10,
     borderBottomWidth: 1, borderColor: "#ECF1F2",
   },
   webBackToCampaigns: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
-  webBackToCampaignsText: { color: "#087E69", fontSize: 11, fontWeight: "900" },
-  webDetailNavLabel: { color: "#77909D", fontSize: 10.5, fontWeight: "800" },
+  webBackToCampaignsText: { color: "#087E69", fontSize: 11, 
+    fontFamily: "DonationInterBold",},
+  webDetailNavLabel: { color: "#77909D", fontSize: 10.5, 
+    fontFamily: "DonationInterBold",},
   webDetailCard: {
     overflow: "hidden",
     borderWidth: 1,
@@ -4193,15 +4325,17 @@ const styles = StyleSheet.create({
   webCategoryBadgeText: {
     color: "#B45309",
     fontSize: 7.8,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webDetailTitle: {
     marginTop: 10,
     color: "#0F172A",
     fontSize: 21,
     lineHeight: 26,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webGeneralAreaCard: {
     marginTop: 8,
     padding: 10,
@@ -4213,15 +4347,17 @@ const styles = StyleSheet.create({
   webGeneralAreaEyebrow: {
     color: "#0F766E",
     fontSize: 7.5,
-    fontWeight: "900",
+    
     letterSpacing: 0.7,
-  },
+  
+    fontFamily: "DonationInterBold",},
   webGeneralAreaNote: {
     marginTop: 5,
     color: "#64748B",
     fontSize: 8.4,
     lineHeight: 12,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webLocationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -4232,14 +4368,16 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#64748B",
     fontSize: 10,
-    fontWeight: "700",
-  },
+    
+  
+    fontFamily: "DonationInterSemiBold",},
   webStoryText: {
     marginTop: 10,
     color: "#475569",
     fontSize: 10.3,
     lineHeight: 16,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webProgressCard: {
     marginTop: 13,
     padding: 12,
@@ -4256,18 +4394,21 @@ const styles = StyleSheet.create({
   webRaisedAmount: {
     color: "#0F172A",
     fontSize: 16,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webProgressLabel: {
     marginTop: 1,
     color: "#64748B",
     fontSize: 8.8,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webProgressPercent: {
     color: "#0F766E",
     fontSize: 12,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webCoordinationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -4283,11 +4424,13 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     lineHeight: 16,
     color: "#52766B",
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webCoordinationName: {
     color: "#0A5947",
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webSupportTypesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4306,8 +4449,9 @@ const styles = StyleSheet.create({
   webSupportTypeText: {
     color: "#0F766E",
     fontSize: 8.5,
-    fontWeight: "800",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webDonateButton: {
     minHeight: 46,
     flexDirection: "row",
@@ -4321,8 +4465,9 @@ const styles = StyleSheet.create({
   webDonateButtonText: {
     color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webFundedNotice: {
     marginTop: 0, padding: 16, flexDirection: "row", alignItems: "flex-start",
     gap: 11, borderRadius: 12, backgroundColor: "#FAFDFB",
@@ -4343,9 +4488,11 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", backgroundColor: "#E3E9EE",
   },
   webStepperCircleActive: { backgroundColor: "#009879" },
-  webStepperNumber: { color: "#64748B", fontSize: 12, fontWeight: "900" },
+  webStepperNumber: { color: "#64748B", fontSize: 12, 
+    fontFamily: "DonationInterBold",},
   webStepperNumberActive: { color: "#FFFFFF" },
-  webStepperLabel: { color: "#677E90", fontSize: 10, fontWeight: "800" },
+  webStepperLabel: { color: "#677E90", fontSize: 10, 
+    fontFamily: "DonationInterBold",},
   webDonatePanel: {
     marginTop: 13,
     paddingTop: 13,
@@ -4357,7 +4504,8 @@ const styles = StyleSheet.create({
     padding: 11, borderRadius: 11, borderWidth: 1,
     borderColor: "#DCE7E9", backgroundColor: "#F8FAFB",
     fontSize: 12, color: "#162E41",
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webDonatePanelHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -4367,8 +4515,9 @@ const styles = StyleSheet.create({
   webDonatePanelTitle: {
     color: "#0F172A",
     fontSize: 17,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webCloseButton: {
     width: 34,
     height: 34,
@@ -4403,8 +4552,9 @@ const styles = StyleSheet.create({
   webDonationTypeText: {
     color: "#0F766E",
     fontSize: 9.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webDonationTypeTextActive: {
     color: "#FFFFFF",
   },
@@ -4415,8 +4565,9 @@ const styles = StyleSheet.create({
   webFieldLabel: {
     color: "#334155",
     fontSize: 9.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webAmountGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4440,8 +4591,9 @@ const styles = StyleSheet.create({
   webAmountButtonText: {
     color: "#334155",
     fontSize: 9.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webAmountButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -4456,14 +4608,16 @@ const styles = StyleSheet.create({
   webOfficialChannelTitle: {
     color: "#0F172A",
     fontSize: 9.8,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webOfficialChannelText: {
     marginTop: 2,
     color: "#64748B",
     fontSize: 8.8,
     lineHeight: 13,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webSubmitButton: {
     minHeight: 44,
     flexDirection: "row",
@@ -4477,8 +4631,9 @@ const styles = StyleSheet.create({
   webSubmitButtonText: {
     color: "#FFFFFF",
     fontSize: 10.5,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webDetailEmpty: {
     minHeight: 300,
     alignItems: "center",
@@ -4493,27 +4648,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: "#0F172A",
     fontSize: 14,
-    fontWeight: "900",
-  },
+    
+  
+    fontFamily: "DonationInterBold",},
   webDetailEmptyText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: 9.5,
-  },
+  
+    fontFamily: "DonationInterRegular",},
   webReturnBanner: {
     flexDirection: "row", alignItems: "flex-start", gap: 12,
     borderRadius: 13, padding: 14, marginBottom: 13,
     backgroundColor: "#EAF9F2", borderWidth: 1, borderColor: "#C6EEDB",
   },
   webReturnCancelled: { backgroundColor: "#FFF8E9", borderColor: "#F2DEAF" },
-  webReturnTitle: { color: "#0E4C42", fontSize: 14, fontWeight: "900" },
-  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11 },
+  webReturnTitle: { color: "#0E4C42", fontSize: 14, 
+    fontFamily: "DonationInterBold",},
+  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11, 
+    fontFamily: "DonationInterRegular",},
   webHistoryPanel: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#DDE5EA",
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
+    padding: 20, borderWidth: 1, borderColor: "#DFEBE6",
+    borderRadius: 16, backgroundColor: "#FFFFFF",
   },
 
 });
