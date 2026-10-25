@@ -402,6 +402,7 @@ export default function Donation() {
   const { width } = useWindowDimensions();
   const wide = width >= 1080;
   const medium = width >= 760;
+  const spacious = width >= 1300;
 
   const { loading, user, profile } = useUserSession();
 
@@ -788,17 +789,17 @@ export default function Donation() {
           <Text style={styles.mobileBackText}>Back to Campaigns</Text>
         </TouchableOpacity>
       )}
-      <View style={[styles.donationHero, !medium && styles.donationHeroMobile]}>
+      <View style={[styles.donationHero, !spacious && styles.donationHeroMobile]}>
         <DonationHeroArt />
-        <View style={[styles.donationHeroBody, !medium && styles.donationHeroBodyMobile]}>
+        <View style={[styles.donationHeroBody, !spacious && styles.donationHeroBodyMobile]}>
           <Text style={styles.donationHeroEyebrow}>VOLUNSERVE  ·  LGU VERIFIED</Text>
-          <Text style={[styles.donationHeroTitle, !medium && styles.donationHeroTitleMobile]}>Donations</Text>
+          <Text style={[styles.donationHeroTitle, !spacious && styles.donationHeroTitleMobile]}>Donations</Text>
           <Text style={styles.donationHeroTagline}>Give hope. Support your community.</Text>
           <Text style={styles.donationHeroDescription}>
             Support verified community campaigns and help build a safer, stronger San Jose del Monte.
           </Text>
         </View>
-        <View style={[styles.donationHeroStats, !medium && styles.donationHeroStatsMobile]}>
+        <View style={[styles.donationHeroStats, !spacious && styles.donationHeroStatsMobile]}>
           {([
             {icon:"heart" as const, value:String(activeCampaignCount), caption:"Active campaigns"},
             {icon:"checkmark-circle" as const, value:String(completedCampaignCount), caption:"Past campaigns"},
@@ -4031,6 +4032,183 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F766E",
   },
+  // Premium Donations layout: live data on top of original vector-only artwork.
+  donationHero: {
+    position: "relative",
+    minHeight: 192,
+    borderRadius: 20,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#CBEADD",
+    marginBottom: 15,
+    shadowColor: "#095D4B",
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    shadowOffset: {width:0,height:7},
+    elevation: 2,
+  },
+  donationHeroMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+    paddingTop: 17,
+    paddingBottom: 14,
+  },
+  donationHeroBody: {
+    flex: 1,
+    minWidth: 0,
+    zIndex: 1,
+    paddingLeft: 165,
+    paddingRight: 8,
+    paddingVertical: 23,
+  },
+  donationHeroBodyMobile: { flex: 0, paddingLeft: 118, paddingRight: 15, paddingTop: 13, paddingBottom: 10 },
+  donationHeroEyebrow: {
+    fontSize: 10, letterSpacing: 1.2, fontWeight: "900", color: "#087D5A",
+  },
+  donationHeroTitle: {
+    marginTop: 1, fontSize: 49, lineHeight: 54, letterSpacing: -1.8,
+    color: "#064838", fontWeight: "900",
+  },
+  donationHeroTitleMobile: { fontSize: 30, lineHeight: 36, letterSpacing: -0.8 },
+  donationHeroTagline: {
+    fontSize: 15, fontWeight: "900", lineHeight: 21, color: "#105D4D", marginTop: 2,
+  },
+  donationHeroDescription: {
+    fontSize: 11, lineHeight: 16, color: "#426B6D", marginTop: 7, maxWidth: 420,
+  },
+  donationHeroStats: {
+    zIndex: 1,
+    flexDirection: "row",
+    gap: 7,
+    alignItems: "center",
+    paddingHorizontal: 17,
+    maxWidth: "49%",
+  },
+  donationHeroStatsMobile: {
+    maxWidth: "100%",
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    flexWrap: "wrap",
+    alignSelf: "stretch",
+    justifyContent: "space-between",
+  },
+  donationHeroStat: {
+    flexGrow: 1, flexShrink: 1, minWidth: 103,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 9, paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.86)",
+    backgroundColor: "rgba(255,255,255,.84)",
+  },
+  donationHeroStatNumber: { color: "#102E46", fontSize: 16, fontWeight: "900" },
+  donationHeroStatCaption: { color: "#5B7A83", fontSize: 8.5, marginTop: 1 },
+  donationToolbar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    flexWrap: "wrap", gap: 12, marginTop: 2, marginBottom: 5,
+  },
+  donationToolbarMobile: { flexDirection: "column", alignItems: "stretch" },
+  donationToolbarActions: {
+    flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", flexShrink: 1,
+  },
+  donationToolbarActionsMobile: { alignItems: "stretch", width: "100%" },
+  donationFilterButton: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, minHeight: 44, paddingHorizontal: 13,
+    borderRadius: 12, borderWidth: 1, borderColor: "#D6E9E8", backgroundColor: "#FFFFFF",
+  },
+  donationFilterButtonText: { color: "#193951", fontWeight: "800", fontSize: 11 },
+  donationFilterMenu: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6,
+    alignSelf: "flex-end", marginBottom: 10, padding: 8,
+    borderRadius: 12, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#DAEAE8",
+  },
+  donationFilterOption: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9,
+  },
+  donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
+  donationFilterOptionText: { color: "#26465A", fontWeight: "700", fontSize: 11 },
+  donationPastHint: { color:"#567580",fontSize:11,lineHeight:18,marginVertical:6 },
+  donationCardDescription: { color: "#5E7687", fontSize: 11, lineHeight: 17, marginTop: 9, minHeight: 34 },
+  donationCardFooter: {
+    borderTopWidth: 1, borderColor: "#E9F0F2", paddingTop: 12, marginTop: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
+  donationCardFooterText: { color:"#087A66",fontWeight:"800",fontSize:11 },
+  donationCardFooterArrow: {
+    width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    backgroundColor: "#009879",
+  },
+  donationHowHeading: { flexDirection:"row",alignItems:"center",gap:11 },
+  donationHowIcon: {
+    width: 39,height:39,borderRadius:12,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#DDF8EC",
+  },
+  donationHowSubtitle: { fontSize: 10.5, color:"#718A98",marginTop:3 },
+  donationHowStepIcon: {
+    width: 42,height:42,borderRadius:22,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#E0F7ED",
+  },
+  donationHowStepCopy: { flex:1, minWidth:0 },
+  donationRecentPanel: {
+    marginTop:14,padding:18,backgroundColor:"#FFFFFF",borderRadius:17,
+    borderWidth:1,borderColor:"#D9E9E8",
+  },
+  donationRecentHeading: {flexDirection:"row",alignItems:"center",gap:10,marginBottom:12},
+  donationRecentViewAll: {flexDirection:"row",alignItems:"center",gap:5,padding:6},
+  donationRecentViewText: { color:"#2877C8",fontSize:10.5,fontWeight:"900" },
+  donationRecentEmpty: {
+    flexDirection:"row",gap:11,alignItems:"center",backgroundColor:"#F7FAFB",
+    borderRadius:10,padding:16,
+  },
+  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16 },
+  donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
+  donationRecentTableHead: {
+    flexDirection:"row",alignItems:"center",backgroundColor:"#F0F7FA",padding:12,gap:10,
+  },
+  donationRecentHeadText: {flex:1,fontSize:10,fontWeight:"800",color:"#678095"},
+  donationRecentRow: {
+    flexDirection:"row",alignItems:"center",gap:10,padding:12,
+    borderTopWidth:1,borderColor:"#EFF3F5",
+  },
+  donationRecentRowMobile: {flexWrap:"wrap",gap:8},
+  donationRecentCellText: {flex:1,color:"#61798C",fontSize:10.5},
+  donationRecentCampaignText: {flex:1,color:"#102E50",fontWeight:"800"},
+  donationRecentAmount: {flex:1,color:"#0B2C49",fontWeight:"900",fontSize:11},
+  donationRecentStatus: {flex:1,fontSize:10,fontWeight:"900"},
+  donationRecentStatusPaid: {color:"#008B69"},
+  donationRecentStatusPending: {color:"#A7730D"},
+  donationReceiptLink: {
+    flex:1,paddingVertical:8,borderRadius:9,backgroundColor:"#EEF6FF",
+    alignItems:"center",justifyContent:"center",
+  },
+  donationReceiptLinkText: {color:"#2477D2",fontWeight:"900",fontSize:10},
+  donationModalShade: {
+    flex:1,justifyContent:"center",alignItems:"center",
+    backgroundColor:"rgba(5,23,32,0.66)",padding:16,
+  },
+  donationModalSurface: {
+    width:"100%",maxWidth:860,maxHeight:"92%",backgroundColor:"#FFFFFF",
+    borderRadius:19,borderWidth:1,borderColor:"#D8E9E6",
+    shadowColor:"#021A1C",shadowOpacity:.24,shadowRadius:30,elevation:20,
+    overflow:"hidden",
+  },
+  donationModalSurfaceMobile: {maxHeight:"96%",borderRadius:14},
+  donationModalTopbar: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    backgroundColor:"#F5FCF9",paddingHorizontal:15,paddingVertical:11,
+    borderBottomWidth:1,borderColor:"#E3EEEA",
+  },
+  donationModalTopbarLeft: {flexDirection:"row",alignItems:"center",gap:8,flex:1},
+  donationModalTopTitle: {fontSize:12,color:"#0E604F",fontWeight:"900"},
+  donationModalScroll: {padding:13,paddingBottom:26},
   webContainer: {
     width: "100%",
     maxWidth: 1660,
