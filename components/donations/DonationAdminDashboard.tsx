@@ -1223,7 +1223,7 @@ const s = StyleSheet.create({
   },
   campaignSearchInput: {
     fontFamily:"AdminInterRegular",fontSize:11.1,color:"#234857",
-    minWidth:80,flex:1,paddingVertical:9,outlineStyle:"none",
+    minWidth:80,flex:1,paddingVertical:9,
   },
   campaignFilterButton: {
     height:41,flexDirection:"row",alignItems:"center",gap:8,
