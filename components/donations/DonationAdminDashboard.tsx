@@ -47,15 +47,21 @@ const dateText = (value: any) => {
   }) : "Not available";
 };
 const statusText = (record: DonationRow) => {
-  if (record.status === "received" && record.paymentStatus === "paid") return "Paid";
+  if (record.status === "received" && record.paymentStatus === "paid") {
+    return record.paymentProvider === "paymongo" && record.paymongoLivemode === false
+      ? "Paid (Test)" : "Paid";
+  }
   if (record.status === "received") return "Received";
   if (record.status === "submitted") return "For review";
   if (record.status === "payment_creating") return "Creating checkout";
   if (record.status === "payment_pending") return "Pending";
   if (record.status === "rejected") return "Rejected";
+  if (record.status === "payment_failed") return "Checkout failed";
   return record.status || "Unknown";
 };
-const isConfirmed = (r: DonationRow) => r.status === "received";
+const isConfirmed = (r: DonationRow) =>
+  r.status === "received" &&
+  (r.paymentProvider !== "paymongo" || r.paymentStatus === "paid");
 const amountReceived = (r: DonationRow) =>
   isConfirmed(r) ? numeric(r.actualAmountReceived) : 0;
 const donorLabel = (r: DonationRow) =>
@@ -144,7 +150,11 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     .reduce((sum, r) => sum + amountReceived(r), 0);
   const donors = new Set(records.filter(isConfirmed).map(r => r.donorUid || "unlinked:" + r.id)).size;
   const pending = records.filter(r => ["payment_creating", "payment_pending", "submitted"].includes(r.status || "")).length;
-  const activeCampaigns = campaigns.filter(c => c.status === "published");
+  const activeCampaigns = campaigns.filter(c =>
+    c.status === "published" &&
+    !(Number(c.monetaryGoal || 0) > 0 &&
+      Number(c.verifiedAmountReceived || 0) >= Number(c.monetaryGoal || 0) - 0.01),
+  );
   const recent = paid.slice(0, 5);
   const unreadCount = alerts.filter(a => !a.read).length;
   const filtered = useMemo(() => records.filter(r => {
@@ -154,7 +164,9 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     return match && (statusFilter === "all" ||
       (statusFilter === "paid" ? isConfirmed(r) : statusFilter === "pending" ?
         ["payment_creating", "payment_pending", "submitted"].includes(r.status || "") :
-        r.status === statusFilter));
+        (statusFilter === "rejected"
+          ? ["rejected", "payment_failed"].includes(r.status || "")
+          : r.status === statusFilter)));
   }), [records, search, statusFilter]);
 
   if (loading) return <View style={s.center}><ActivityIndicator color="#078F82" /></View>;
@@ -263,7 +275,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 placeholder="Search donor, campaign or reference ID" placeholderTextColor="#8B9BAA"/>
               {(["all", "paid", "pending", "rejected"] as const).map(name =>
                 <SmallButton key={name} text={name === "all" ? "All" : name === "paid" ? "Paid" :
-                  name === "pending" ? "Pending" : "Rejected"}
+                  name === "pending" ? "Pending" : "Failed / Rejected"}
                   primary={statusFilter === name} onPress={() => setStatusFilter(name)}/>)}
             </View>
             {filtered.length ? filtered.slice(0, 100).map(row) :

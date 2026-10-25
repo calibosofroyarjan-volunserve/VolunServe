@@ -390,6 +390,10 @@ const campaignFullyFunded = (campaign?: DonationCampaign) => {
   const goal = campaignGoal(campaign);
   return goal > 0 && campaignRaised(campaign) >= goal - 0.01;
 };
+// Admin-closed campaigns are no longer eligible for new donations, regardless
+// of whether they reached their funding goal. Show them in the past tab.
+const campaignFinished = (campaign?: DonationCampaign) =>
+  campaign?.status === "closed" || campaignFullyFunded(campaign);
 
 export default function Donation() {
   const { width } = useWindowDimensions();
@@ -448,7 +452,7 @@ export default function Donation() {
             const photoReady = validPublicPhotoUrls(item).length > 0;
 
             return (
-              item.status === "published" &&
+              (item.status === "published" || item.status === "closed") &&
               monetaryReady &&
               goalReady &&
               locationReady &&
@@ -529,22 +533,30 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
-  const completedCampaignCount = campaigns.filter(campaignFullyFunded).length;
-  const listedCampaigns = useMemo(() => showCompletedCampaigns
-    ? filteredCampaigns.filter(campaignFullyFunded)
-    : filteredCampaigns, [filteredCampaigns, showCompletedCampaigns]);
+  const completedCampaignCount = campaigns.filter(campaignFinished).length;
+  const activeCampaignCount = campaigns.length - completedCampaignCount;
+  // Keep funded campaigns out of Active Campaigns. They remain inspectable
+  // under Completed Campaigns, with their verified amount and outcome.
+  const visibleCampaigns = useMemo(
+    () => campaigns.filter(campaign => campaignFinished(campaign) === showCompletedCampaigns),
+    [campaigns, showCompletedCampaigns],
+  );
+  const listedCampaigns = useMemo(
+    () => filteredCampaigns.filter(campaign => campaignFinished(campaign) === showCompletedCampaigns),
+    [filteredCampaigns, showCompletedCampaigns],
+  );
   const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
   const returnIsConfirmed = returnedDonation?.status === "received" && returnedDonation?.paymentStatus === "paid";
 
   const disasterCount = useMemo(
-    () => campaigns.filter((campaign) => campaignGroupOf(campaign) === "disaster_affected").length,
-    [campaigns],
+    () => visibleCampaigns.filter((campaign) => campaignGroupOf(campaign) === "disaster_affected").length,
+    [visibleCampaigns],
   );
 
   const communityCount = useMemo(
     () =>
-      campaigns.filter((campaign) => campaignGroupOf(campaign) === "community_needs_help").length,
-    [campaigns],
+      visibleCampaigns.filter((campaign) => campaignGroupOf(campaign) === "community_needs_help").length,
+    [visibleCampaigns],
   );
 
   const selectedCampaign = useMemo(
@@ -557,7 +569,7 @@ export default function Donation() {
   const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
 
   const selectedGoal = campaignGoal(selectedCampaign);
-  const selectedFunded = campaignFullyFunded(selectedCampaign);
+  const selectedFunded = campaignFinished(selectedCampaign);
   const selectedRaised = campaignRaised(selectedCampaign);
   const selectedPercent =
     selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
@@ -818,7 +830,7 @@ export default function Donation() {
 
       <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
         {[
-          { key: "active", label: "Active Campaigns", count: campaigns.length },
+          { key: "active", label: "Active Campaigns", count: activeCampaignCount },
           { key: "history", label: "My Donations", count: myDonations.length },
           { key: "completed", label: "Completed Campaigns", count: completedCampaignCount },
         ].map(tab => {
@@ -848,7 +860,7 @@ export default function Donation() {
           const active = filter === option.value;
           const count =
             option.value === "all"
-              ? campaigns.length
+              ? visibleCampaigns.length
               : option.value === "disaster_affected"
                 ? disasterCount
                 : communityCount;
@@ -962,9 +974,11 @@ export default function Donation() {
           <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden, !selectedCampaign && styles.webFullCampaignPane]}>
             <View style={styles.webSectionHeaderRow}>
               <View>
-                <Text style={styles.webSectionTitle}>Active Campaigns</Text>
+                <Text style={styles.webSectionTitle}>{showCompletedCampaigns ? "Completed Campaigns" : "Active Campaigns"}</Text>
                 <Text style={styles.webSectionSubtitle}>
-                  Select an LGU-verified campaign to view its details and available support.
+                  {showCompletedCampaigns
+                    ? "View fully funded or Admin-closed campaigns. Closed campaigns no longer accept donations."
+                    : "Select an LGU-verified campaign to view its details and available support."}
                 </Text>
               </View>
               <Text style={styles.webCampaignCount}>{listedCampaigns.length}</Text>
@@ -978,7 +992,9 @@ export default function Donation() {
               <View style={styles.emptyCard}>
                 <Ionicons name="search-outline" size={28} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
-                <Text style={styles.emptyText}>Try another filter or check back for newly approved campaigns.</Text>
+                <Text style={styles.emptyText}>{showCompletedCampaigns
+                  ? "Fully funded and Admin-closed campaigns will appear here."
+                  : "Try another filter or check back for newly approved campaigns."}</Text>
               </View>
             ) : (
               <View style={[styles.campaignGrid, !selectedCampaign && styles.campaignGridFull]}>
@@ -1117,8 +1133,14 @@ export default function Donation() {
                     <View style={styles.webFundedNotice}>
                       <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.webFundedTitle}>Funding goal reached</Text>
-                        <Text style={styles.webFundedText}>This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support.</Text>
+                        <Text style={styles.webFundedTitle}>
+                          {selectedCampaign?.status === "closed" ? "Campaign closed" : "Funding goal reached"}
+                        </Text>
+                        <Text style={styles.webFundedText}>
+                          {selectedCampaign?.status === "closed"
+                            ? "The authorized Admin has closed this campaign. Its verified funding progress remains visible, but new donations are no longer accepted."
+                            : "This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support."}
+                        </Text>
                       </View>
                     </View>
                   ) : !showDonationPanel ? (
@@ -1348,13 +1370,13 @@ function CampaignCard({
 
         <View style={styles.cardFooter}>
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <Text style={campaignFullyFunded(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
-            {campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
+          <Text style={campaignFinished(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
+            {campaign.status === "closed" ? "Closed" : campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
           </Text>
         </View>
         <View style={styles.cardPrimaryAction}>
           <Text style={styles.cardPrimaryActionText}>
-            {selected ? "Viewing Details" : campaignFullyFunded(campaign) ? "View Completed Campaign" : "View Campaign"}
+            {selected ? "Viewing Details" : campaignFinished(campaign) ? "View Past Campaign" : "View Campaign"}
           </Text>
           <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
         </View>
@@ -1899,8 +1921,13 @@ function ProcessPoint({
 
 function DonationHistoryCard({ donation }: { donation: MyDonation }) {
   const status = String(donation.status || "submitted").toLowerCase();
-  const rejected = status === "rejected";
-  const received = ["received", "verified", "completed"].includes(status);
+  const rejected = status === "rejected" || status === "payment_failed";
+  const paymongo = donation.paymentProvider === "paymongo";
+  // Never call a checkout "paid" from a redirect or an unverified record.
+  const received = paymongo
+    ? status === "received" && donation.paymentStatus === "paid"
+    : ["received", "verified", "completed"].includes(status);
+  const sandboxPaid = received && paymongo && donation.paymongoLivemode === false;
   const valueText = money(Number(donation.amount || 0));
 
   return (
@@ -1932,7 +1959,7 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
                 : styles.statusSubmitted,
           ]}
         >
-          <Text style={styles.statusText}>{statusLabel(status)}</Text>
+          <Text style={styles.statusText}>{sandboxPaid ? "PAID · TEST" : received && paymongo ? "PAID" : statusLabel(status)}</Text>
         </View>
       </View>
 
@@ -1962,7 +1989,11 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           <Ionicons name="checkmark-circle-outline" size={16} color="#15803D" />
           <View style={{ flex: 1 }}>
             <Text style={styles.historyMessageReceivedText}>
-              The LGU has verified actual receipt of this donation.
+              {sandboxPaid
+                ? "PayMongo confirmed this sandbox payment. No real money was received or transferred."
+                : paymongo
+                  ? "PayMongo confirmed this payment through the verified backend webhook."
+                  : "This donation has a confirmed receipt recorded by the authorized team."}
             </Text>
           </View>
         </View>
@@ -1970,8 +2001,9 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
         <View style={styles.historyMessagePending}>
           <Ionicons name="time-outline" size={16} color="#B7791F" />
           <Text style={styles.historyMessagePendingText}>
-            This submission is not counted as confirmed support until the LGU verifies actual
-            receipt or payment.
+            {paymongo
+              ? "Payment is not confirmed yet. VolunServe waits for PayMongo webhook verification before counting this donation. Sandbox checkout never transfers real funds."
+              : "This donation is not counted until its receipt is verified by the authorized team."}
           </Text>
         </View>
       )}
