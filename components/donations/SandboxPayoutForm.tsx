@@ -1,161 +1,141 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import React, { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, {useState} from "react";
+import {ActivityIndicator,Pressable,StyleSheet,Text,View} from "react-native";
 import WalletBrandLogo from "./WalletBrandLogo";
 
-type Channel = "gcash" | "maya";
-type Request = { method:Channel; testWalletNumber:string; confirmedSandbox:true };
-type Props = {
-  amount:number;
-  disabled:boolean;
-  onSubmit:(request:Request)=>Promise<void>;
+type Channel="gcash"|"maya";
+export type ResidentReleaseWallet={
+  configured:true;method:Channel;walletLast4:string;testOnly:true;
+};
+type Props={
+  amount:number;disabled:boolean;wallet:ResidentReleaseWallet;
+  recipientName:string;
+  onSubmit:(details:{method:Channel;confirmedSandbox:true})=>Promise<void>;
 };
 const php=(n:number)=>"₱"+Number(n||0).toLocaleString("en-PH",{
   minimumFractionDigits:2,maximumFractionDigits:2,
 });
-const mask=(n:string)=>"09•• ••• "+n.slice(-4);
-
-/**
- * Authoritative amount, beneficiary and approval come from the secure Admin API.
- * This is an INTERNAL sandbox ledger, NOT PayMongo Disbursements / real GCash/Maya.
- * Never persist a full demo mobile number: the server retains last four only.
+/** This is an internal test release record, never a provider-backed payout.
+ * The LGU Admin can see a Resident-owned fictional wallet alias, not edit it.
  */
-export default function SandboxPayoutForm({amount,disabled,onSubmit}:Props) {
-  const [channel,setChannel]=useState<Channel>("gcash");
-  const [testNumber,setTestNumber]=useState("");
-  const [stage,setStage]=useState<"entry"|"confirm">("entry");
+export default function SandboxPayoutForm({
+  amount,disabled,wallet,recipientName,onSubmit,
+}:Props){
+  const [stage,setStage]=useState<"preview"|"confirm">("preview");
   const [accepted,setAccepted]=useState(false);
-  const valid=/^09\d{9}$/.test(testNumber);
-  const reset=()=>{setStage("entry");setAccepted(false);};
-  return <View style={st.wrap}>
-    <View style={st.head}>
-      <View style={st.flex}>
-        <Text style={st.title}>Recipient payment details</Text>
-        <Text style={st.sub}>Choose a wallet channel and review the authorized release instruction.</Text>
+  return <View style={s.card}>
+    <View style={s.header}>
+      <View style={s.heading}>
+        <Text style={s.eyebrow}>LGU RELEASE OPERATIONS</Text>
+        <Text style={s.title}>Assistance release instruction</Text>
+        <Text style={s.desc}>Destination provided by the identity-verified requesting Resident.</Text>
       </View>
-
+      <View style={s.mode}><Text style={s.modeText}>INTERNAL TEST</Text></View>
     </View>
-    <View style={st.steps}>
-      <View style={[st.step,stage==="entry"&&st.stepActive]}>
-        <Text style={st.stepText}>01 · Destination</Text>
+    <View style={s.steps}>
+      <View style={[s.step,stage==="preview"&&s.stepSelected]}>
+        <Text style={s.stepText}>01 · Resident destination</Text>
       </View>
-      <View style={[st.step,stage==="confirm"&&st.stepActive]}>
-        <Text style={st.stepText}>02 · Review & confirm</Text>
+      <View style={[s.step,stage==="confirm"&&s.stepSelected]}>
+        <Text style={s.stepText}>02 · Confirm test release</Text>
       </View>
     </View>
-    {stage==="entry"?<>
-      <View style={st.amountCard}>
-        <Text style={st.label}>Authorized amount</Text>
-        <Text style={st.amount}>{php(amount)}</Text>
-        <Text style={st.sub}>Fixed by the reviewed and approved assistance goal</Text>
+    <View style={s.amountWrap}>
+      <Text style={s.label}>Authorized assistance amount</Text>
+      <Text style={s.amount}>{php(amount)}</Text>
+      <Text style={s.desc}>Fixed by the approved request and provider-confirmed test donations</Text>
+    </View>
+    <View style={s.wallet}>
+      <View style={s.provider}>
+        <WalletBrandLogo brand={wallet.method} width={92} height={31}/>
+        <View style={s.verified}>
+          <Ionicons name="lock-closed-outline" color="#168362" size={15}/>
+          <Text style={s.verifiedText}>Resident-provided alias</Text>
+        </View>
       </View>
-      <Text style={st.label}>Select wallet channel</Text>
-      <View style={st.channels}>
-        {(["gcash","maya"] as const).map(value=>
-          <Pressable key={value} accessibilityRole="radio"
-            accessibilityState={{selected:channel===value}}
-            onPress={()=>setChannel(value)}
-            style={[st.channel,channel===value&&st.selected]}>
-            <View style={st.brandLogo}>
-              <WalletBrandLogo brand={value} width={88} height={30}/>
-            </View>
-            <View style={st.channelCheck}>
-              <Ionicons name={channel===value?"checkmark-circle":"ellipse-outline"}
-                size={20} color={channel===value?"#0C8768":"#A1B5AC"}/>
-            </View>
-          </Pressable>)}
+      <View style={s.line}>
+        <Text style={s.label}>Verified account</Text>
+        <Text style={s.value}>{recipientName}</Text>
       </View>
-      <Text style={st.label}>Wallet destination</Text>
-      <TextInput style={st.input} accessibilityLabel="Test wallet mobile number"
-        keyboardType="phone-pad" value={testNumber} maxLength={11}
-        onChangeText={value=>setTestNumber(value.replace(/\D/g,"").slice(0,11))}
-        placeholder="09XXXXXXXXX" placeholderTextColor="#9CAFA7"/>
-      <Text style={st.sub}>Use an 11-digit fictional test number starting with 09. Only the last four digits are stored.</Text>
-      {testNumber.length>0&&!valid&&<Text style={st.error}>Enter a valid 11-digit TEST mobile number starting with 09.</Text>}
-
-      <Pressable accessibilityRole="button" disabled={!valid||disabled||amount<=0}
+      <View style={s.line}>
+        <Text style={s.label}>Wallet reference</Text>
+        <Text style={s.value}>•••• {wallet.walletLast4}</Text>
+      </View>
+      <Text style={s.note}>Destination is locked to the matched Resident profile. Admin cannot change this wallet.</Text>
+    </View>
+    {stage==="preview"?
+      <Pressable accessibilityRole="button" disabled={disabled||amount<=0}
         onPress={()=>{setAccepted(false);setStage("confirm");}}
-        style={[st.primary,(!valid||disabled||amount<=0)&&st.disabled]}>
-        <Text style={st.primaryText}>Review release details</Text>
-        <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF"/>
-      </Pressable>
-    </>:<>
-      <View style={st.confirmHead}>
-        <Text style={st.label}>Review release instruction</Text>
-        <Text style={st.confirmTag}>TEST · NO REAL TRANSFER</Text>
-      </View>
-      <View style={st.review}>
-        <View style={st.row}><Text style={st.muted}>Recipient</Text><Text style={st.value}>Verified requesting Resident</Text></View>
-        <View style={st.row}><Text style={st.muted}>Destination wallet</Text><WalletBrandLogo brand={channel} width={80} height={25}/></View>
-        <View style={st.row}><Text style={st.muted}>Recipient number</Text><Text style={st.value}>{mask(testNumber)}</Text></View>
-        <View style={st.row}><Text style={st.muted}>Release amount</Text><Text style={st.value}>{php(amount)}</Text></View>
-        <View style={st.row}><Text style={st.muted}>Transaction type</Text><Text style={st.value}>Internal release record</Text></View>
-      </View>
-      <Pressable accessibilityRole="checkbox" accessibilityState={{checked:accepted}}
-        style={st.checkRow} onPress={()=>setAccepted(v=>!v)}>
-        <Ionicons name={accepted?"checkbox-outline":"square-outline"} size={22}
-          color={accepted?"#0B8063":"#809A90"}/>
-        <Text style={st.checkText}>This records a test-only release in VolunServe. It does not initiate a real GCash or Maya transfer.</Text>
-      </Pressable>
-      <View style={st.buttons}>
-        <Pressable accessibilityRole="button" onPress={reset} disabled={disabled} style={st.secondary}>
-          <Ionicons name="arrow-back-outline" color="#0D7860" size={16}/>
-          <Text style={st.secondaryText}>Edit details</Text>
+        style={[s.primary,(disabled||amount<=0)&&s.disabled]}>
+        <Text style={s.primaryText}>Review test release</Text>
+        <Ionicons name="arrow-forward-outline" size={17} color="#FFF"/>
+      </Pressable>:
+      <>
+        <View style={s.disclosure}>
+          <Ionicons name="information-circle-outline" size={18} color="#257E60"/>
+          <Text style={s.disclosureText}>This action creates a VolunServe internal test record only. No GCash or Maya transfer is initiated, and recipient confirmation refers to the notice, not actual receipt of money.</Text>
+        </View>
+        <Pressable accessibilityRole="checkbox" accessibilityState={{checked:accepted}}
+          onPress={()=>setAccepted(a=>!a)} style={s.check}>
+          <Ionicons name={accepted?"checkbox-outline":"square-outline"}
+            color={accepted?"#0B8265":"#85A095"} size={22}/>
+          <Text style={s.checkText}>I reviewed the recipient and the locked test destination and understand no real funds will be sent.</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" disabled={!accepted||disabled}
-          style={[st.primary,(!accepted||disabled)&&st.disabled]}
-          onPress={()=>void onSubmit({method:channel,testWalletNumber:testNumber,confirmedSandbox:true})}>
-          {disabled?<ActivityIndicator size="small" color="#FFFFFF"/>:
-            <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={17}/>}
-          <Text style={st.primaryText}>Confirm release record</Text>
-        </Pressable>
-      </View>
-    </>}
+        <View style={s.actions}>
+          <Pressable accessibilityRole="button" disabled={disabled}
+            onPress={()=>setStage("preview")} style={s.secondary}>
+            <Text style={s.secondaryText}>Back</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={!accepted||disabled}
+            style={[s.primary,(!accepted||disabled)&&s.disabled]}
+            onPress={()=>void onSubmit({method:wallet.method,confirmedSandbox:true})}>
+            {disabled?<ActivityIndicator size="small" color="#FFF"/>:
+              <Ionicons name="shield-checkmark-outline" size={17} color="#FFF"/>}
+            <Text style={s.primaryText}>Record test release</Text>
+          </Pressable>
+        </View>
+      </>}
   </View>;
 }
-const st=StyleSheet.create({
-  wrap:{padding:15,backgroundColor:"#F9FCFA",borderWidth:1,borderColor:"#DDEDE5",borderRadius:12,gap:12},
-  head:{flexDirection:"row",alignItems:"flex-start",gap:9,flexWrap:"wrap"},
-  flex:{flex:1,minWidth:200},
-  title:{fontFamily:"FundInterBold",fontSize:15,color:"#1D4B45"},
-  sub:{fontFamily:"FundInterRegular",fontSize:11,color:"#658578",lineHeight:17},
-  badge:{borderWidth:1,borderColor:"#CDEBDF",borderRadius:8,backgroundColor:"#EAF8EF",paddingHorizontal:9,paddingVertical:6},
-  badgeText:{fontFamily:"FundInterSemiBold",fontSize:9,color:"#168568",letterSpacing:0.6},
-  confirmHead:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"},
-  confirmTag:{fontFamily:"FundInterSemiBold",fontSize:9,letterSpacing:0.5,color:"#3F7769",
-    backgroundColor:"#EDF8F2",paddingHorizontal:9,paddingVertical:6,borderRadius:7},
-  steps:{flexDirection:"row",flexWrap:"wrap",gap:7},
-  step:{backgroundColor:"#F0F5F1",borderRadius:8,paddingHorizontal:11,paddingVertical:8},
-  stepActive:{backgroundColor:"#DDF4E7"},
-  stepText:{fontFamily:"FundInterSemiBold",fontSize:10,color:"#346E60"},
-  amountCard:{backgroundColor:"#FFFFFF",padding:14,borderWidth:1,borderColor:"#E0ECE5",borderRadius:9,gap:4},
-  label:{fontFamily:"FundInterSemiBold",color:"#2C5851",fontSize:11},
-  amount:{fontFamily:"FundInterBold",fontSize:24,color:"#0A7C5D"},
-  channels:{flexDirection:"row",flexWrap:"wrap",gap:9},
-  channel:{flex:1,minWidth:150,minHeight:66,flexDirection:"row",gap:10,
-    justifyContent:"space-between",alignItems:"center",padding:12,
-    backgroundColor:"#FFFFFF",borderWidth:1.3,borderColor:"#DEEAE5",borderRadius:12},
-  selected:{backgroundColor:"#F1FBF6",borderColor:"#188569"},
-  brandLogo:{flex:1,justifyContent:"center"},
-  channelCheck:{width:24,alignItems:"flex-end"},
-  channelName:{flex:1,fontFamily:"FundInterSemiBold",fontSize:12,color:"#2A5B51"},
-  input:{padding:12,borderRadius:9,borderWidth:1,borderColor:"#CDDCD4",backgroundColor:"#FFFFFF",
-    fontFamily:"FundInterRegular",fontSize:13,color:"#244C42"},
-  error:{fontFamily:"FundInterRegular",color:"#A74333",fontSize:11},
-  warning:{flexDirection:"row",alignItems:"flex-start",gap:8,backgroundColor:"#EAF7F0",padding:11,borderRadius:8},
-  warningText:{flex:1,fontFamily:"FundInterRegular",fontSize:10.5,lineHeight:17,color:"#386E5D"},
-  primary:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,padding:12,
-    borderRadius:9,backgroundColor:"#08795C",alignSelf:"flex-start"},
-  primaryText:{fontFamily:"FundInterSemiBold",fontSize:11,color:"#FFFFFF"},
+const s=StyleSheet.create({
+  card:{backgroundColor:"#F9FCFA",borderRadius:13,padding:16,gap:13,
+    borderWidth:1,borderColor:"#DAEAE2"},
+  header:{flexDirection:"row",alignItems:"flex-start",gap:10,flexWrap:"wrap"},
+  heading:{flex:1,minWidth:180,gap:4},
+  eyebrow:{fontSize:9,fontWeight:"700",color:"#128162",letterSpacing:0.7},
+  title:{fontFamily:"FundInterBold",fontSize:16,color:"#205146"},
+  desc:{fontFamily:"FundInterRegular",fontSize:11,color:"#64877B",lineHeight:17},
+  mode:{paddingHorizontal:9,paddingVertical:6,borderRadius:7,backgroundColor:"#EDF8F1"},
+  modeText:{fontSize:9,fontWeight:"700",color:"#327B66"},
+  steps:{flexDirection:"row",gap:7,flexWrap:"wrap"},
+  step:{backgroundColor:"#F0F4F2",borderRadius:8,paddingHorizontal:10,paddingVertical:8},
+  stepSelected:{backgroundColor:"#DDF3E7"},
+  stepText:{fontSize:10,fontWeight:"600",color:"#457668"},
+  amountWrap:{padding:14,backgroundColor:"#FFF",borderRadius:10,
+    borderWidth:1,borderColor:"#E0ECE4",gap:5},
+  label:{fontSize:11,color:"#71877D"},
+  amount:{fontSize:25,fontFamily:"FundInterBold",color:"#0C8262"},
+  wallet:{backgroundColor:"#FFF",borderWidth:1,borderColor:"#D9EBE0",
+    padding:13,borderRadius:10,gap:10},
+  provider:{flexDirection:"row",gap:10,alignItems:"center",justifyContent:"space-between",
+    flexWrap:"wrap"},
+  verified:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:"#EDF9F0",
+    padding:7,borderRadius:8},
+  verifiedText:{fontSize:10,color:"#248264",fontWeight:"600"},
+  line:{flexDirection:"row",justifyContent:"space-between",gap:12,flexWrap:"wrap"},
+  value:{fontSize:11,color:"#214F43",fontWeight:"700"},
+  note:{fontSize:10,lineHeight:16,color:"#658879"},
+  disclosure:{flexDirection:"row",gap:9,padding:12,backgroundColor:"#EDF9F1",
+    borderRadius:9,alignItems:"flex-start"},
+  disclosureText:{fontSize:11,color:"#396E5A",lineHeight:18,flex:1},
+  check:{flexDirection:"row",gap:9,alignItems:"flex-start"},
+  checkText:{flex:1,fontSize:11,lineHeight:18,color:"#4A7062"},
+  actions:{flexDirection:"row",flexWrap:"wrap",gap:9},
+  primary:{flexDirection:"row",alignItems:"center",justifyContent:"center",
+    gap:8,backgroundColor:"#08785C",padding:13,borderRadius:9,alignSelf:"flex-start"},
+  primaryText:{fontSize:11,fontWeight:"700",color:"#FFF"},
+  secondary:{padding:12,borderRadius:9,borderWidth:1,borderColor:"#D2E4D7",
+    backgroundColor:"#FFF"},
+  secondaryText:{fontSize:11,fontWeight:"600",color:"#167960"},
   disabled:{opacity:0.45},
-  review:{backgroundColor:"#FFFFFF",padding:13,gap:11,borderWidth:1,borderColor:"#E0EBE4",borderRadius:10},
-  row:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"},
-  muted:{fontFamily:"FundInterRegular",fontSize:11,color:"#799186"},
-  value:{fontFamily:"FundInterSemiBold",fontSize:11,color:"#244E45",textAlign:"right",flexShrink:1},
-  checkRow:{flexDirection:"row",alignItems:"flex-start",gap:10,paddingVertical:7},
-  checkText:{fontFamily:"FundInterRegular",flex:1,fontSize:11,lineHeight:18,color:"#486E60"},
-  buttons:{flexDirection:"row",flexWrap:"wrap",gap:9},
-  secondary:{flexDirection:"row",alignItems:"center",gap:6,padding:11,borderRadius:9,
-    borderWidth:1,borderColor:"#CCE2D6",backgroundColor:"#FFFFFF"},
-  secondaryText:{fontFamily:"FundInterSemiBold",fontSize:11,color:"#0D7860"},
 });
