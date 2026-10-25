@@ -691,7 +691,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                   {dateText(alert.createdAt)} · {alert.read ? "Read" : "Unread"}
                 </Text>
               </View>
-              <Ionicons name={selectedAlertId === alert.id ? "chevron-down" : "chevron-right"}
+              <Ionicons name={selectedAlertId === alert.id ? "chevron-down" : "chevron-forward"}
                 size={18} color="#7C9890"/>
             </Pressable>) : <View style={s.empty}>
               <Ionicons name="notifications-outline" size={31} color="#8EACA2"/>
