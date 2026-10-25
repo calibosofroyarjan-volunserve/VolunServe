@@ -177,21 +177,13 @@ export default function PremiumCampaignDetails({
             {description || "This LGU-verified campaign has been published for community support."}
           </Text>
         </View>
-        <View style={styles.infoCards}>
-          <View style={styles.infoCard}>
-            <View style={styles.infoIcon}><Ionicons name="people-outline" size={23} color="#078864" /></View>
-            <View style={styles.infoCopy}>
-              <Text style={styles.infoLabel}>Beneficiary area</Text>
-              <Text style={styles.infoValue}>{area}</Text>
-            </View>
+        <View style={styles.supportStrip}>
+          <View style={styles.supportStripIcon}>
+            <Ionicons name="heart-outline" size={20} color="#0B8C66" />
           </View>
-          <View style={styles.infoCard}>
-            <View style={styles.infoIcon}><Ionicons name="heart-outline" size={23} color="#078864" /></View>
-            <View style={styles.infoCopy}>
-              <Text style={styles.infoLabel}>Support type</Text>
-              <Text style={styles.infoValue}>Monetary Donation</Text>
-              <Text style={styles.infoHint}>{category}</Text>
-            </View>
+          <View style={styles.supportStripCopy}>
+            <Text style={styles.supportStripLabel}>SUPPORT CATEGORY</Text>
+            <Text style={styles.supportStripValue}>Monetary donation  ·  {category}</Text>
           </View>
         </View>
       </View>
@@ -393,27 +385,24 @@ const styles = StyleSheet.create({
     marginTop: 12, fontFamily: "DonationInterRegular",
     fontSize: 12, lineHeight: 20, color: "#4D6772",
   },
-  infoCards: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
-  infoCard: {
-    flex: 1, minWidth: 188, padding: 13, borderWidth: 1,
-    borderColor: "#E2EBE8", borderRadius: 11, backgroundColor: "#FFFFFF",
+  supportStrip: {
     flexDirection: "row", alignItems: "center", gap: 11,
+    marginTop: 13, paddingVertical: 13, paddingHorizontal: 15,
+    borderWidth: 1, borderColor: "#E0EAE7",
+    backgroundColor: "#F8FCFA", borderRadius: 10,
   },
-  infoIcon: {
-    height: 39, width: 39, backgroundColor: "#EAF7F1",
-    borderRadius: 12, alignItems: "center", justifyContent: "center",
+  supportStripIcon: {
+    width: 35, height: 35, borderRadius: 10,
+    backgroundColor: "#E7F7EC", alignItems: "center", justifyContent: "center",
   },
-  infoCopy: { minWidth: 0, flex: 1 },
-  infoLabel: {
-    fontFamily: "DonationInterMedium", fontSize: 10, color: "#6B8490",
+  supportStripCopy: { flex: 1, minWidth: 0 },
+  supportStripLabel: {
+    fontFamily: "DonationInterSemiBold", color: "#728B90",
+    fontSize: 9, letterSpacing: 0.8,
   },
-  infoValue: {
-    fontFamily: "DonationInterSemiBold", fontSize: 11.5,
-    lineHeight: 17, color: "#294D59", marginTop: 4,
-  },
-  infoHint: {
-    fontFamily: "DonationInterRegular", fontSize: 10, lineHeight: 15,
-    color: "#82949A", marginTop: 2,
+  supportStripValue: {
+    fontFamily: "DonationInterMedium", color: "#355864",
+    fontSize: 11, lineHeight: 18, marginTop: 3,
   },
 
   fundingCard: {
