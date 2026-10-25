@@ -35,12 +35,16 @@ function fixture() {
         supportDecision:"donation_support",donationCampaignId:verifiedId}],
     ]),
     fundReleaseDemos:new Map(),
-    users:new Map([["Admin00001",{role:"admin",status:"approved"}]]),
+    fundReleaseWalletProfiles:new Map(),
+    users:new Map([["Admin00001",{role:"admin",status:"approved"}],
+      [residentId,{role:"resident",status:"approved",identityVerified:true}]]),
     notifications:new Map(),
   };
   const snapshot=(id,data)=>({id,exists:!!data,data:()=>data});
   const reference=(name,id)=>({
-    name,id,async get(){return snapshot(id,tables[name].get(id));}
+    name,id,async get(){return snapshot(id,tables[name].get(id));},
+    async set(data,opts={}){tables[name].set(id,opts.merge
+      ? {...(tables[name].get(id)||{}),...data}:data);},
   });
   const query=(name,filters=[],max=Infinity)=>({
     where(field,op,value){return query(name,[...filters,[field,op,value]],max);},
@@ -96,12 +100,13 @@ function fixture() {
       Number(d.actualAmountReceived)>0,
   });
   async function invoke(method,path,body={},role="admin"){
+    const uid=role==="resident"?residentId:"Admin00001";
     const template=path.replace("/"+verifiedId+"/","/:id/")
       .replace("/"+manualId+"/","/:id/");
     const handlers=routes.get(method+" "+template);
     assert.ok(handlers,path+" missing");
     const request={
-      firebaseUser:{uid:"Admin00001"},volunServeProfile:{role},body,
+      firebaseUser:{uid},volunServeProfile:{role},body,
       params:{id:path.includes("/"+verifiedId+"/")?verifiedId:manualId}
     };
     const response={
@@ -156,33 +161,69 @@ test("programmer Super Admin cannot access LGU financial records",async()=>{
   assert.equal(response.payload.error,"lgu_admin_required");
 });
 
-test("professional demo release requires confirmation, records masked destination, and blocks replay",async()=>{
+test("Resident owns their fictional wallet alias; Admin cannot override release destination",async()=>{
   const {invoke,tables}=fixture();
   const base="/api/admin/donations/fund-releases";
   const review=await invoke("POST",base+"/review",{
     campaignId:verifiedId,amount:5000,
-    reviewNote:"Reviewed the verified assistance request and two paid Sandbox receipts.",
+    reviewNote:"Reviewed the linked assistance and provider confirmed test donations.",
   });
   assert.equal(review.statusCode,201);
-  const authorize=await invoke("POST",base+"/"+verifiedId+"/authorize",{
-    decision:"approve",reason:"Verified goal and provider-backed test receipt records reviewed.",
+  const auth=await invoke("POST",base+"/"+verifiedId+"/authorize",{
+    decision:"approve",reason:"Matched all verified test transactions with the approved request.",
   });
-  assert.equal(authorize.statusCode,200);
-  assert.equal(tables.fundReleaseDemos.get(verifiedId).status,"authorized");
+  assert.equal(auth.statusCode,200);
 
-  const invalid=await invoke("POST",base+"/"+verifiedId+"/simulate",{
-    method:"gcash",testWalletNumber:"09123",confirmedSandbox:true,
+  const before=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"maya",confirmedSandbox:true,
   });
-  assert.equal(invalid.statusCode,400);
-  assert.equal(invalid.payload.error,"invalid_demo_account");
-  const noConsent=await invoke("POST",base+"/"+verifiedId+"/simulate",{
-    method:"maya",testWalletNumber:"09990001234",
-  });
+  assert.equal(before.statusCode,409);
+  assert.equal(before.payload.error,"resident_wallet_required");
+
+  const short=await invoke("POST","/api/funds/my-release-wallet",{
+    method:"gcash",walletLast4:"12",confirmedTestOnly:true,
+  },"resident");
+  assert.equal(short.statusCode,400);
+  assert.equal(short.payload.error,"invalid_wallet_alias");
+  const noConsent=await invoke("POST","/api/funds/my-release-wallet",{
+    method:"gcash",walletLast4:"1234",
+  },"resident");
   assert.equal(noConsent.statusCode,400);
-  assert.equal(noConsent.payload.error,"sandbox_confirmation_required");
+  assert.equal(noConsent.payload.error,"test_only_confirmation_required");
+
+  const saved=await invoke("POST","/api/funds/my-release-wallet",{
+    method:"maya",walletLast4:"1234",confirmedTestOnly:true,
+    ownerUid:"Attacker0001",
+  },"resident");
+  assert.equal(saved.statusCode,200);
+  assert.equal(saved.payload.wallet.method,"maya");
+  const storedWallet=tables.fundReleaseWalletProfiles.get(residentId);
+  assert.equal(storedWallet.ownerUid,residentId);
+  assert.equal(storedWallet.walletLast4,"1234");
+  assert.equal(Object.hasOwn(storedWallet,"fullWalletNumber"),false);
+  assert.equal(Object.hasOwn(storedWallet,"testWalletNumber"),false);
+
+  const self=await invoke("GET","/api/funds/my-release-wallet",{},"resident");
+  assert.equal(self.payload.wallet.configured,true);
+  const beneficiary=await invoke("GET",base+"/"+verifiedId+"/beneficiary");
+  assert.equal(beneficiary.payload.beneficiary.wallet.method,"maya");
+  assert.equal(beneficiary.payload.beneficiary.wallet.walletLast4,"1234");
+  assert.equal(Object.hasOwn(beneficiary.payload.beneficiary.wallet,"ownerUid"),false);
+
+  const override=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"gcash",confirmedSandbox:true,testWalletNumber:"09990001234",
+  });
+  assert.equal(override.statusCode,400);
+  assert.equal(override.payload.error,"admin_wallet_override_blocked");
+
+  const mismatch=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"gcash",confirmedSandbox:true,
+  });
+  assert.equal(mismatch.statusCode,409);
+  assert.equal(mismatch.payload.error,"resident_wallet_mismatch");
 
   const result=await invoke("POST",base+"/"+verifiedId+"/simulate",{
-    method:"maya",testWalletNumber:"09990001234",confirmedSandbox:true,
+    method:"maya",confirmedSandbox:true,
   });
   assert.equal(result.statusCode,200);
   const stored=tables.fundReleaseDemos.get(verifiedId);
@@ -191,8 +232,6 @@ test("professional demo release requires confirmation, records masked destinatio
   assert.equal(stored.walletLast4,"1234");
   assert.equal(stored.releaseProcessor,"volunserve_internal_sandbox");
   assert.equal(stored.deliveryStatus,"simulation_only");
-  // Firestore forbids FieldValue.serverTimestamp() nested inside arrayUnion.
-  // Audit entries use ISO strings; top-level simulatedAt still uses serverTimestamp.
   assert.equal(typeof stored.audit.at,"string");
   assert.ok(!Number.isNaN(Date.parse(stored.audit.at)));
   assert.equal(Object.hasOwn(stored,"testWalletNumber"),false);
@@ -202,10 +241,34 @@ test("professional demo release requires confirmation, records masked destinatio
     "fund_demo_"+verifiedId+"_simulated_sent_resident_"+residentId));
 
   const replay=await invoke("POST",base+"/"+verifiedId+"/simulate",{
-    method:"maya",testWalletNumber:"09990001234",confirmedSandbox:true,
+    method:"maya",confirmedSandbox:true,
   });
   assert.equal(replay.statusCode,409);
   assert.equal(replay.payload.error,"already_released");
+});
+test("release stops if requesting Resident becomes unverified or linked request changes",async()=>{
+  const {invoke,tables}=fixture();
+  const base="/api/admin/donations/fund-releases";
+  await invoke("POST",base+"/review",{campaignId:verifiedId,amount:5000,
+    reviewNote:"Matched linked assistance and two provider confirmed test transactions."});
+  await invoke("POST",base+"/"+verifiedId+"/authorize",{
+    decision:"approve",reason:"Approved verified assistance release for internal test."});
+  await invoke("POST","/api/funds/my-release-wallet",{
+    method:"gcash",walletLast4:"8888",confirmedTestOnly:true,
+  },"resident");
+
+  tables.users.get(residentId).identityVerified=false;
+  const unverified=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"gcash",confirmedSandbox:true});
+  assert.equal(unverified.statusCode,409);
+  assert.equal(unverified.payload.error,"recipient_not_verified");
+  tables.users.get(residentId).identityVerified=true;
+
+  tables.assistanceRequests.get(sourceId).donationCampaignId=manualId;
+  const brokenLink=await invoke("POST",base+"/"+verifiedId+"/simulate",{
+    method:"gcash",confirmedSandbox:true});
+  assert.equal(brokenLink.statusCode,409);
+  assert.equal(brokenLink.payload.error,"verified_beneficiary_required");
 });
 test("Super Admin cannot submit a simulated GCash/Maya payout",async()=>{
   const {invoke}=fixture();
