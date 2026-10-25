@@ -556,7 +556,7 @@ function DesktopTabBar({
       <Text style={styles.residentModeLabel}>{mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}</Text>
 
       <ScrollView
-        style={styles.desktopNavigationScroll}
+        style={[styles.desktopNavigationScroll, mode === "resident" && styles.desktopResidentNavigationRaised]}
         contentContainerStyle={[styles.desktopNavigation, mode === "resident" && styles.desktopResidentNavigation]}
         showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
@@ -1113,6 +1113,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     marginTop: 0,
+  },
+  // Gently raise all six Resident modules by 10px without altering their
+  // relative spacing, the botanical sidebar or other account modes.
+  desktopResidentNavigationRaised: {
+    marginTop: -10,
+    marginBottom: 10,
   },
   desktopNavigation: {
     gap: 7,
