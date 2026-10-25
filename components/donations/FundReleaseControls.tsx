@@ -30,6 +30,7 @@ const showStatus = (s:string) => ({
 const isVerified = (d:ReconciliationDonation) =>
   d.paymentProvider==="paymongo" && d.paymongoLivemode===false &&
   d.status==="received" && d.paymentStatus==="paid" &&
+  d.verifiedBy==="paymongo_webhook" && !!d.paymongoCheckoutSessionId &&
   // Do not trust a frontend figure to authorize release; backend revalidates.
   Number(d.actualAmountReceived)>0;
 
