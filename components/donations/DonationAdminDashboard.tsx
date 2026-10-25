@@ -26,7 +26,8 @@ type DonationRow = {
 };
 type CampaignRow = {
   id: string; title?: string; status?: string; monetaryGoal?: number;
-  verifiedAmountReceived?: number; publicPhotoUrls?: string[];
+  verifiedAmountReceived?: number; updatedAt?: any; publishedAt?: any; createdAt?: any;
+  publicPhotoUrls?: string[];
   photoUrls?: string[]; imageUrls?: string[]; generalArea?: string;
   sourceAssistanceRequestId?: string;
 };
@@ -103,6 +104,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const allowed = !!user && !!profile && isApprovedProfile(profile) && profile.role === mode;
   const { width } = useWindowDimensions();
   const compact = width < 1320;
+  const narrow = width < 970;
   const [records, setRecords] = useState<DonationRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
@@ -116,6 +118,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [expandedReviewKey, setExpandedReviewKey] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState("");
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
@@ -190,6 +193,18 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       icon: "alert-circle-outline" as const})),
   ];
   const recentActivity = records.slice(0, 3);
+  const progressCampaigns = campaigns
+    .filter(c => numeric(c.monetaryGoal) > 0)
+    .sort((a,b) => {
+      const aDone = numeric(a.verifiedAmountReceived) >= numeric(a.monetaryGoal);
+      const bDone = numeric(b.verifiedAmountReceived) >= numeric(b.monetaryGoal);
+      return Number(aDone) - Number(bDone) ||
+        String(a.title || "").localeCompare(String(b.title || ""));
+    });
+  const progressVisible = showAllCampaigns ? progressCampaigns : progressCampaigns.slice(0,3);
+  const campaignDonorCount = (campaignId: string) =>
+    new Set(records.filter(r => r.campaignId === campaignId && isConfirmed(r))
+      .map(r => r.donorUid || "unlinked:" + r.id)).size;
   const unreadCount = alerts.filter(a => !a.read).length;
   const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
   const relatedAlertDonation = selectedAlert?.donationId
@@ -376,12 +391,12 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <View style={s.head}>
       <View style={s.flex}>
         <Text style={s.eyebrow}>VOLUNSERVE · LGU DONATIONS</Text>
-        <Text style={s.title}>Donation Management</Text>
-        <Text style={s.subtitle}>Verified assistance campaigns, donor payments and transparent fund monitoring.</Text>
+        <Text style={s.title}>Donations</Text>
+        <Text style={s.subtitle}>Manage verified donations, campaigns, and fund records.</Text>
       </View>
       <View style={s.demoLabel}>
         <Ionicons name="flask-outline" size={14} color="#128064"/>
-        <Text style={s.demoLabelText}>PAYMONGO SANDBOX · DEMO</Text>
+        <Text style={s.demoLabelText}>PayMongo · Test Mode</Text>
       </View>
     </View>
     {!!problem && <Text style={s.error}>{problem}</Text>}
@@ -389,14 +404,14 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <View style={s.tabs}>
       {([
         ["overview", "Overview", "grid-outline"],
-        ["all", "Transactions", "receipt-outline"],
         ["campaigns", "Campaigns", "heart-outline"],
+        ["all", "Transactions", "receipt-outline"],
         ["payouts", "Fund Management", "wallet-outline"],
         ["notifications", "Alerts" + (unreadCount ? " (" + unreadCount + ")" : ""), "notifications-outline"],
       ] as const).map(([key, label, icon]) => <Pressable key={key}
         accessibilityRole="tab" accessibilityState={{selected: view === key}}
         onPress={() => setView(key)} style={[s.tab, view === key && s.tabActive]}>
-        <Ionicons name={icon} size={15} color={view === key ? "#FFFFFF" : "#698078"}/>
+        <Ionicons name={icon} size={16} color={view === key ? "#08775D" : "#68818B"}/>
         <Text style={[s.tabText, view === key && s.tabTextActive]}>{label}</Text>
       </Pressable>)}
     </View>
@@ -404,28 +419,36 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     {view === "overview" && <>
       <View style={s.sectionIntro}>
         <View style={s.flex}>
-          <Text style={s.sectionEyebrow}>DONATION OPERATIONS · AT A GLANCE</Text>
+          <Text style={s.sectionEyebrow}>LGU DONATION OPERATIONS</Text>
           <Text style={s.sectionTitle}>Overview</Text>
           <Text style={s.sectionDescription}>
-            Key figures, records that need attention, and the latest activity. Complete each task in its dedicated workspace.
+            Donation activity and records requiring review.
           </Text>
         </View>
       </View>
       <View style={s.metrics}>
         {([
-          ["Verified test payments", peso(testReceived), "card-outline", "PayMongo Sandbox · not real funds"],
-          ["Pending records", String(pending), "time-outline", "Provider pending and legacy submissions"],
+          ["Verified test payments", peso(testReceived), "card-outline", "Confirmed test transactions"],
+          ["Pending payments", String(pending), "time-outline", "Pending and submitted records"],
           ["Published campaigns", String(campaigns.filter(c => c.status === "published").length),
-            "heart-outline", "Includes campaigns that may need goal review"],
-          ["Recorded donors", String(donors), "people-outline", "Unique accounts with confirmed donations"],
+            "layers-outline", "Published campaign records"],
+          ["Confirmed donors", String(donors), "people-outline", "Unique confirmed donor accounts"],
         ] as const).map(([title, value, icon, description]) =>
           <View key={title} style={s.metric}>
-            <View style={s.metricTop}>
-              <Text style={s.metricLabel}>{title}</Text>
-              <Ionicons name={icon} size={19} color="#0D8F70"/>
+            <View style={s.metricLine}>
+              <View style={[s.metricIcon,
+                title === "Pending payments" && s.metricIconAmber,
+                title === "Confirmed donors" && s.metricIconBlue]}>
+                <Ionicons name={icon} size={21}
+                  color={title === "Pending payments" ? "#AD751A" :
+                    title === "Confirmed donors" ? "#176DAB" : "#078C69"}/>
+              </View>
+              <View style={s.flex}>
+                <Text style={s.metricLabel}>{title}</Text>
+                <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
+                <Text style={s.metricDescription}>{description}</Text>
+              </View>
             </View>
-            <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
-            <Text style={s.metricDescription}>{description}</Text>
           </View>)}
       </View>
       <View style={s.overviewSummary}>
@@ -433,8 +456,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <View style={s.panel}>
             <View style={s.panelHeading}>
               <View style={s.flex}>
-                <Text style={s.panelTitle}>Needs attention</Text>
-                <Text style={s.info}>Actual records flagged for LGU review.</Text>
+                <Text style={s.panelTitle}>Needs Attention</Text>
+                <Text style={s.info}>Records requiring LGU review.</Text>
               </View>
               <Text style={s.reviewCount}>{ready && campaignReady ? reviewItems.length : "—"} flagged</Text>
             </View>
@@ -546,8 +569,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <View style={s.panel}>
             <View style={s.panelHeading}>
               <View style={s.flex}>
-                <Text style={s.panelTitle}>Recent activity</Text>
-                <Text style={s.info}>Latest three transactions, shown as a brief activity feed.</Text>
+                <Text style={s.panelTitle}>Recent Activity</Text>
+                <Text style={s.info}>Latest recorded donation transactions.</Text>
               </View>
             </View>
             {!ready ? <Text style={s.info}>Loading activity…</Text> :
@@ -575,11 +598,73 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           </View>
         </View>
       </View>
-      <View style={s.slimNote}>
-        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
-        <Text style={s.slimNoteText}>
-          PayMongo Sandbox payments are simulated. Recorded donations are not proof of settled LGU funds or completed beneficiary transfers.
-        </Text>
+      <View style={[s.panel, s.progressPanel]}>
+        <View style={s.panelHeading}>
+          <View style={s.progressHeaderLeft}>
+            <View style={s.progressHeadingIcon}>
+              <Ionicons name="stats-chart-outline" size={19} color="#058764"/>
+            </View>
+            <View style={s.flex}>
+              <Text style={s.panelTitle}>Campaign Progress</Text>
+              <Text style={s.info}>Approved fundraising goals and recorded contributions.</Text>
+            </View>
+          </View>
+          <Text style={s.progressCount}>{progressCampaigns.length} funded goal{progressCampaigns.length === 1 ? "" : "s"}</Text>
+        </View>
+        {!ready || !campaignReady ? <Text style={s.info}>Loading campaign progress…</Text> :
+          progressVisible.length ? <>
+            <ScrollView horizontal={narrow} showsHorizontalScrollIndicator={false}>
+              <View style={s.progressTable}>
+                <View style={s.progressTableHead}>
+                  <Text style={[s.progressTh, s.progressCampaignCol]}>Campaign</Text>
+                  <Text style={[s.progressTh, s.progressAmountCol]}>Goal</Text>
+                  <Text style={[s.progressTh, s.progressAmountCol]}>Raised</Text>
+                  <Text style={[s.progressTh, s.progressBarCol]}>Progress</Text>
+                  <Text style={[s.progressTh, s.progressStatusCol]}>Status</Text>
+                  <Text style={[s.progressTh, s.progressDonorCol]}>Donors</Text>
+                </View>
+                {progressVisible.map(c => {
+                  const goal = numeric(c.monetaryGoal);
+                  const raised = numeric(c.verifiedAmountReceived);
+                  const fraction = goal > 0 ? Math.min(100, raised / goal * 100) : 0;
+                  const completed = goal > 0 && raised >= goal - 0.01;
+                  const donorCount = campaignDonorCount(c.id);
+                  return <View key={c.id} style={s.progressTableRow}>
+                    <View style={s.progressCampaignCol}>
+                      <Text style={s.progressCampaignName} numberOfLines={2}>
+                        {c.title || "Untitled campaign"}
+                      </Text>
+                    </View>
+                    <Text style={[s.progressCell, s.progressAmountCol]}>{peso(goal)}</Text>
+                    <Text style={[s.progressCell, s.progressAmountCol]}>{peso(raised)}</Text>
+                    <View style={s.progressBarCol}>
+                      <View style={s.progressMeter}>
+                        <View style={[s.progressMeterFill, {width: (fraction + "%") as any}]}/>
+                      </View>
+                      <Text style={s.progressPct}>{Math.round(fraction)}%</Text>
+                    </View>
+                    <View style={s.progressStatusCol}>
+                      <Text style={[s.progressStatus, completed ? s.progressReached : s.progressOngoing]}>
+                        {completed ? "Goal reached" : c.status === "closed" ? "Closed" : "In progress"}
+                      </Text>
+                    </View>
+                    <Text style={[s.progressCell, s.progressDonorCol]}>{donorCount}</Text>
+                  </View>;
+                })}
+              </View>
+            </ScrollView>
+            {progressCampaigns.length > 3 && <Pressable accessibilityRole="button"
+              onPress={() => setShowAllCampaigns(!showAllCampaigns)}
+              style={s.showMoreCampaigns}>
+              <Text style={s.showMoreCampaignsText}>
+                {showAllCampaigns ? "Show fewer campaigns" : "Show all " + progressCampaigns.length + " campaigns"}
+              </Text>
+              <Ionicons name={showAllCampaigns ? "chevron-up" : "chevron-down"} size={15} color="#087D60"/>
+            </Pressable>}
+          </> : <View style={s.overviewEmpty}>
+            <Ionicons name="layers-outline" size={22} color="#87A399"/>
+            <Text style={s.info}>No campaigns with an approved monetary goal recorded.</Text>
+          </View>}
       </View>
     </>}
 
