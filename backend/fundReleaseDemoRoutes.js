@@ -216,6 +216,61 @@ function installFundReleaseDemoRoutes({
     } catch (error) { return send(res, error); }
   });
 
+  // Read-only LGU Admin beneficiary card. Resolve each campaign by its *own*
+  // source request, never by campaign title, donor metadata or Admin input.
+  // Private documents, email, street address and full phone number are excluded.
+  app.get(BASE + "/:id/beneficiary", ...withAdmin, async (req, res) => {
+    try {
+      const campaignId = validId(req.params.id);
+      const campaignSnap = await db.collection("donationCampaigns").doc(campaignId).get();
+      if (!campaignSnap.exists) reject("campaign_not_found","Campaign not found.",404);
+      const campaign = campaignSnap.data() || {};
+      if (campaign.sourceType !== "community_assistance_request" ||
+        !campaign.sourceAssistanceRequestId) {
+        reject("assistance_link_required","This campaign has no linked Assistance Request.",409);
+      }
+      const requestId = validId(campaign.sourceAssistanceRequestId);
+      const sourceSnap = await db.collection("assistanceRequests").doc(requestId).get();
+      if (!sourceSnap.exists) reject("source_missing","Linked Assistance Request was not found.",409);
+      const source = sourceSnap.data() || {};
+      const uid = safe(source.requesterUid,180);
+      if (!/^[A-Za-z0-9_-]{6,180}$/.test(uid))
+        reject("requester_missing","A verified requesting Resident is required.",409);
+      validateSource({...campaign,campaignId},source,uid);
+      const profile = await loadUserProfile(uid);
+      if (!isVerifiedResidentProfile(profile))
+        reject("recipient_not_verified","The requesting Resident is not currently identity-verified.",409);
+      // Once a fund review exists it MUST still point to this same original
+      // Assistance Request and Resident; never silently swap beneficiaries.
+      const existing = await releases.doc(campaignId).get();
+      if (existing.exists) {
+        const record = existing.data() || {};
+        if (record.assistanceRequestId !== requestId || record.recipientUid !== uid)
+          reject("recipient_record_mismatch","Fund review recipient no longer matches the verified source.",409);
+      }
+      const name = safe(profile.fullName || [profile.firstName,profile.lastName]
+        .filter(Boolean).join(" ") || source.requesterName,110);
+      const photoCandidate = safe(profile.profilePictureUrl,1500);
+      const photoUrl = /^https:\/\//i.test(photoCandidate) ? photoCandidate : "";
+      // Display only the already-approved requesting Resident. A different
+      // medical beneficiary named in the source request is not a wallet payee.
+      return res.json({ok:true,beneficiary:{
+        displayName:name || "Verified Resident",
+        barangay:safe(profile.barangay || source.requesterBarangay,100),
+        photoUrl,
+        verified:true,
+        verifiedLabel:"Identity-verified Resident",
+        assistanceRequestId:requestId,
+        requestNumber:safe(source.requestId || requestId,100),
+        assistanceTitle:safe(source.title || campaign.title,150),
+        assistanceCategory:safe(source.categoryLabel || source.category || "",100),
+        campaignId,
+        reviewStatus:"verified",
+        payeeRole:"requesting_resident",
+      }});
+    }catch(error){return send(res,error);}
+  });
+
   app.post(BASE + "/review", ...withAdmin, async (req, res) => {
     try {
       const uid = req.firebaseUser.uid;
