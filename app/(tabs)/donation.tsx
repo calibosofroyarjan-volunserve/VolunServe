@@ -3758,7 +3758,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#DDF8E9", borderWidth: 1, borderColor: "#C9EAD8",
   },
   donationEmptyCopy: { flex: 1, minWidth: 210, gap: 6 },
-  donationEmptyTitle: { fontSize: 18.5,  color: "#064D41" 
+  donationEmptyTitle: { fontSize: 18.5,  color: "#064D41", 
     fontFamily: "DonationInterBold",},
   donationEmptyDescription: {
     maxWidth: 510, fontSize: 11.7, lineHeight: 19, color: "#4F786F",
@@ -3769,13 +3769,13 @@ const styles = StyleSheet.create({
     minHeight: 42, borderRadius: 11,
     paddingHorizontal: 14, backgroundColor: "#008A69",
   },
-  donationEmptyExploreText: { fontSize: 11,  color: "#FFFFFF" 
+  donationEmptyExploreText: { fontSize: 11,  color: "#FFFFFF", 
     fontFamily: "DonationInterBold",},
   donationStepNumber: {
     height: 22, width: 22, borderRadius: 11, marginLeft: -6, marginTop: -29,
     alignItems: "center", justifyContent: "center", backgroundColor: "#079B77",
   },
-  donationStepNumberText: { fontSize: 11,  color: "#FFFFFF" 
+  donationStepNumberText: { fontSize: 11,  color: "#FFFFFF", 
     fontFamily: "DonationInterBold",},
   donationRecentStatusChip: {
     flex: 1, minWidth: 86, flexDirection: "row",
@@ -3899,7 +3899,7 @@ const styles = StyleSheet.create({
      fontVariant: ["tabular-nums"],
   
     fontFamily: "DonationInterBold",},
-  donationHeroAmountValue: { fontSize: 14.5 
+  donationHeroAmountValue: { fontSize: 14.5, 
     fontFamily: "DonationInterRegular",},
   donationHeroStatCaption: {
     color: "#557A82", fontSize: 9.5,
@@ -3920,7 +3920,7 @@ const styles = StyleSheet.create({
     gap: 8, minHeight: 44, paddingHorizontal: 13,
     borderRadius: 12, borderWidth: 1, borderColor: "#D6E9E8", backgroundColor: "#FFFFFF",
   },
-  donationFilterButtonText: { color: "#193951",  fontSize: 11.5 
+  donationFilterButtonText: { color: "#193951",  fontSize: 11.5, 
     fontFamily: "DonationInterBold",},
   donationFilterMenu: {
     flexDirection: "row", flexWrap: "wrap", gap: 6,
@@ -3933,18 +3933,18 @@ const styles = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9,
   },
   donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
-  donationFilterOptionText: { color: "#26465A",  fontSize: 11 
+  donationFilterOptionText: { color: "#26465A",  fontSize: 11, 
     fontFamily: "DonationInterSemiBold",},
-  donationPastHint: { color:"#567580",fontSize: 11.5,lineHeight: 18.5,marginVertical:6 
+  donationPastHint: { color:"#567580",fontSize: 11.5,lineHeight: 18.5,marginVertical:6, 
     fontFamily: "DonationInterRegular",},
-  donationCardDescription: { color: "#5A7882", fontSize: 11, lineHeight: 17, marginTop: 6, minHeight: 34 
+  donationCardDescription: { color: "#5A7882", fontSize: 11, lineHeight: 17, marginTop: 6, minHeight: 34, 
     fontFamily: "DonationInterRegular",},
   donationCardFooter: {
     borderTopWidth: 1, borderColor: "#DFEEE9", paddingTop: 8, marginTop: 9,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
-  donationCardFooterText: { color:"#087A66",fontSize: 10.5 
+  donationCardFooterText: { color:"#087A66",fontSize: 10.5, 
     fontFamily: "DonationInterBold",},
   donationCardFooterArrow: {
     width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
@@ -3955,7 +3955,7 @@ const styles = StyleSheet.create({
     width: 39,height:39,borderRadius:12,alignItems:"center",justifyContent:"center",
     backgroundColor:"#DDF8EC",
   },
-  donationHowSubtitle: { fontSize: 10.8, color:"#718A98",marginTop:3 
+  donationHowSubtitle: { fontSize: 10.8, color:"#718A98",marginTop:3, 
     fontFamily: "DonationInterRegular",},
   donationHowStepIcon: {
     width: 45,height:45,borderRadius:23,alignItems:"center",justifyContent:"center",
@@ -3976,25 +3976,25 @@ const styles = StyleSheet.create({
     flexDirection:"row",gap:11,alignItems:"center",backgroundColor:"#F7FAFB",
     borderRadius:10,padding:16,
   },
-  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16 
+  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16, 
     fontFamily: "DonationInterRegular",},
   donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
   donationRecentTableHead: {
     flexDirection:"row",alignItems:"center",backgroundColor:"#EAF7F5",padding:12,gap:10,
   },
-  donationRecentHeadText: {flex:1,fontSize: 10.3,color:"#678095"
+  donationRecentHeadText: {flex:1,fontSize: 10.3,color:"#678095",
     fontFamily: "DonationInterBold",},
   donationRecentRow: {
     flexDirection:"row",alignItems:"center",gap:10,padding:12,
     borderTopWidth:1,borderColor:"#EFF3F5",
   },
   donationRecentRowMobile: {flexWrap:"wrap",gap:8},
-  donationRecentCellText: {flex:1,color:"#61798C",fontSize: 10.7
+  donationRecentCellText: {flex:1,color:"#61798C",fontSize: 10.7,
     fontFamily: "DonationInterRegular",},
   donationRecentCampaignText: {flex:1,color:"#102E50",
     fontFamily: "DonationInterBold",
     fontSize: 11,},
-  donationRecentAmount: {flex:1,color:"#0B2C49",fontSize: 11.3
+  donationRecentAmount: {flex:1,color:"#0B2C49",fontSize: 11.3,
     fontFamily: "DonationInterBold",},
   donationRecentStatus: {fontSize: 10,
     fontFamily: "DonationInterBold",},
@@ -4004,7 +4004,7 @@ const styles = StyleSheet.create({
     flex:1,paddingVertical:8,borderRadius:9,backgroundColor:"#EEF6FF",
     alignItems:"center",justifyContent:"center",
   },
-  donationReceiptLinkText: {color:"#2477D2",fontSize: 10.3
+  donationReceiptLinkText: {color:"#2477D2",fontSize: 10.3,
     fontFamily: "DonationInterBold",},
   donationModalShade: {
     flex: 1, justifyContent: "center", alignItems: "center",
@@ -4284,11 +4284,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F9FA", minWidth: 190, gap: 9,
     borderWidth: 1, borderColor: "#E2F1EC",
   },
-  webHowStepTitle: { fontSize: 12,  color: "#173B49" 
+  webHowStepTitle: { fontSize: 12,  color: "#173B49", 
     fontFamily: "DonationInterBold",},
-  webHowStepBody: { fontSize: 10.8, lineHeight: 16.8, color: "#557383" 
+  webHowStepBody: { fontSize: 10.8, lineHeight: 16.8, color: "#557383", 
     fontFamily: "DonationInterRegular",},
-  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.3 
+  webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: 10.3, 
     fontFamily: "DonationInterRegular",},
   webDetailNavRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
@@ -4665,7 +4665,7 @@ const styles = StyleSheet.create({
   webReturnCancelled: { backgroundColor: "#FFF8E9", borderColor: "#F2DEAF" },
   webReturnTitle: { color: "#0E4C42", fontSize: 14, 
     fontFamily: "DonationInterBold",},
-  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11 
+  webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: 11, 
     fontFamily: "DonationInterRegular",},
   webHistoryPanel: {
     padding: 16,
