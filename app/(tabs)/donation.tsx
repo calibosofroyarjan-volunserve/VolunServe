@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import {
   collection,
@@ -969,13 +970,35 @@ export default function Donation() {
                 <ActivityIndicator color="#0F766E" />
               </View>
             ) : listedCampaigns.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="search-outline" size={28} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
-                <Text style={styles.emptyText}>{showCompletedCampaigns
-                  ? "Fully funded and Admin-closed campaigns will appear here."
-                  : "Try another filter or check back for newly approved campaigns."}</Text>
-              </View>
+              <LinearGradient colors={["#F3FFF9","#EDFAF5","#DDF5EB"]} style={styles.donationEmptyState}>
+                <View style={styles.donationEmptyDecoRight}>
+                  <Ionicons name="leaf-outline" color="rgba(15,137,94,0.2)" size={92} />
+                </View>
+                <View style={styles.donationEmptyIconRing}>
+                  <Ionicons name={showCompletedCampaigns ? "ribbon-outline" : "heart-outline"} size={33} color="#078D6A" />
+                </View>
+                <View style={styles.donationEmptyCopy}>
+                  <Text style={styles.donationEmptyTitle}>
+                    {showCompletedCampaigns ? "No completed campaigns yet" : searchText.trim() ? "No campaigns match your search" : "Every act of giving starts somewhere"}
+                  </Text>
+                  <Text style={styles.donationEmptyDescription}>
+                    {showCompletedCampaigns
+                      ? "Closed or fully funded campaigns will appear here once verified."
+                      : searchText.trim()
+                        ? "Try a different keyword or clear your search to see available causes."
+                        : "There are no open verified fundraising campaigns right now. Explore completed causes while new campaigns are being approved."}
+                  </Text>
+                </View>
+                {!showCompletedCampaigns && !searchText.trim() ? (
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityLabel="Explore completed donation campaigns"
+                    onPress={() => setShowCompletedCampaigns(true)}
+                    style={styles.donationEmptyExplore}>
+                    <Text style={styles.donationEmptyExploreText}>Explore completed campaigns</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF"/>
+                  </TouchableOpacity>
+                ) : null}
+              </LinearGradient>
             ) : (
               <View style={[styles.campaignGrid, styles.campaignGridFull]}>
                 {listedCampaigns.map((campaign) => (
@@ -984,7 +1007,7 @@ export default function Donation() {
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={true}
+                    fullGrid={width >= 1390}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
