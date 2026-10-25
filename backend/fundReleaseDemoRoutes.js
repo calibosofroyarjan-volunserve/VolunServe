@@ -74,10 +74,10 @@ function installFundReleaseDemoRoutes({
     };
   };
   const getAdmins = async () => {
-    const snap = await db.collection("users").where("role", "in", ["admin", "superadmin"]).limit(200).get();
+    const snap = await db.collection("users").where("role", "==", "admin").limit(200).get();
     return snap.docs.filter(doc => {
       const p = doc.data() || {};
-      return p.status === "approved" && ["admin", "superadmin"].includes(p.role);
+      return p.status === "approved" && getProfileRole(p) === "admin";
     }).map(doc => ({ uid: doc.id }));
   };
   const sendAdminNotices = (tx, recipients, campaignId, stage, title, message) => {
@@ -107,7 +107,19 @@ function installFundReleaseDemoRoutes({
     if (!isVerifiedResidentProfile(p)) reject("recipient_not_verified",
       "The requesting Resident must still be approved and identity-verified.", 409);
   };
-  const withAdmin = [requireFirebaseUser, requireAdminOrSuperAdmin];
+  // Financial demo operations belong to LGU Admin accounts only.
+  // Super Admin is a programmer/system-maintenance role, not an LGU cashier.
+  function requireLguAdmin(request, response, next) {
+    if (getProfileRole(request.volunServeProfile) !== "admin") {
+      return response.status(403).json({
+        ok: false,
+        error: "lgu_admin_required",
+        message: "Only an approved LGU Admin can manage donation fund releases.",
+      });
+    }
+    return next();
+  }
+  const withAdmin = [requireFirebaseUser, requireAdminOrSuperAdmin, requireLguAdmin];
 
   app.get(BASE, ...withAdmin, async (req, res) => {
     try {
@@ -193,7 +205,7 @@ function installFundReleaseDemoRoutes({
           audit: [{stage:"reviewed",actorUid:uid,at:new Date().toISOString()}],
         });
         sendAdminNotices(tx, recipients, campaignId, "reviewed", "Fund review submitted",
-          "A verified test donation fund review is ready for independent authorization.");
+          "An LGU Admin fund review is ready for an explicit release decision.");
       });
       return res.status(201).json({ok:true,campaignId,status:"reviewed",simulation:true});
     } catch(error) {return send(res,error);}
@@ -202,12 +214,10 @@ function installFundReleaseDemoRoutes({
   app.post(BASE + "/:id/authorize", ...withAdmin, async (req, res) => {
     try {
       const uid = req.firebaseUser.uid, campaignId = validId(req.params.id);
-      if (getProfileRole(req.volunServeProfile) !== "superadmin") reject(
-        "superadmin_required", "A separate approved Super Admin must authorize the demo release.", 403);
       const decision = safe(req.body?.decision, 20);
       const reason = safe(req.body?.reason, 500);
       if (!["approve","reject"].includes(decision)) reject("invalid_decision","Choose approve or reject.");
-      if (decision === "reject" && reason.length < 10) reject("reason_required","Explain the rejection.");
+      if (reason.length < 10) reject("decision_reason_required","Record your reason for approving or rejecting the simulated release.");
       const recipients = await getAdmins();
       const ref = releases.doc(campaignId);
       await db.runTransaction(async tx => {
@@ -215,8 +225,6 @@ function installFundReleaseDemoRoutes({
         if (!snap.exists) reject("review_missing","No fund review found.",404);
         const data = snap.data() || {};
         if (data.status !== "reviewed") reject("already_decided","This review has already been decided.",409);
-        if (data.reviewerUid === uid) reject("independent_approval_required",
-          "A different authorized account must approve the review.",403);
         const stage = decision === "approve" ? "authorized" : "rejected";
         const at = FieldValue.serverTimestamp();
         tx.update(ref, {
