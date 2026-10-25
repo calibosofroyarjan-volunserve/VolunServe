@@ -254,6 +254,17 @@ function installFundReleaseDemoRoutes({
         sendAdminNotices(tx,recipients,campaignId,"simulated_sent",
           "Demo fund release recorded",
           "A simulated "+method.toUpperCase()+" release has been recorded for Resident review. No real funds were transferred.");
+        // Notify only the verified requester linked to the source Assistance Request.
+        if (d.recipientUid) {
+          tx.set(db.collection("notifications").doc(
+            "fund_demo_" + campaignId + "_simulated_sent_resident_" + d.recipientUid
+          ), {
+            userId:d.recipientUid, type:"fund_release_demo",
+            campaignId, title:"Assistance release demo ready for review",
+            message:"A simulated release record is available in Donations. No real funds were transferred.",
+            read:false,createdAt:FieldValue.serverTimestamp(),
+          });
+        }
       });
       return res.json({ok:true,status:"simulated_sent",simulation:true});
     }catch(error){return send(res,error);}
