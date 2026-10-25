@@ -171,7 +171,7 @@ export default function FundReleaseControls({campaigns,ready}:{
               <Text style={ss.small}>{existing ? "Review amount: "+php(existing.amount) :
                 "Verified PayMongo test: "+php(check?.providerVerifiedTestAmount||0)+
                 " · Manual/legacy: "+php(check?.manualLegacyAmount||0)}</Text>
-              {!!check&&!check.ready&&<Text style={ss.muted}>{statusDetail(check.reason)}</Text>
+              {!!check&&!check.ready&&<Text style={ss.muted}>{statusDetail(check.reason)}</Text>}
             </View>
             <Ionicons name="chevron-forward" size={17} color="#477C71"/>
           </Pressable>;
@@ -191,7 +191,7 @@ export default function FundReleaseControls({campaigns,ready}:{
           {!!activeFunding&&!activeFunding.ready&&<View style={ss.notice}>
             <Ionicons name="information-circle-outline" size={17} color="#16745C"/>
             <Text style={ss.noticeText}>{statusDetail(activeFunding.reason)}</Text>
-          </View>
+          </View>}
           {record?<View style={ss.infoBlock}>
             <Text style={ss.statusText}>{showStatus(record.status)}</Text>
             <Text style={ss.small}>Reviewed amount: {php(record.amount)}</Text>
