@@ -342,6 +342,35 @@ const verifyPaymongoWebhookSignature = (rawBody, signatureHeader) => {
     crypto.timingSafeEqual(expectedBuffer, providedBuffer)
   );
 };
+// Backfill eligibility is deliberately stricter than the generic "received" status.
+// Only provider-verified TEST checkout records may create historical donation alerts.
+const isVerifiedTestPaymongoDonation = (donation) =>
+  paymongoText(donation?.paymentProvider || "", 40).toLowerCase() === "paymongo" &&
+  paymongoText(donation?.status || "", 40).toLowerCase() === "received" &&
+  paymongoText(donation?.paymentStatus || "", 40).toLowerCase() === "paid" &&
+  donation?.paymongoLivemode === false &&
+  paymongoText(donation?.verifiedBy || "", 80) === "paymongo_webhook" &&
+  !!paymongoText(donation?.paymongoCheckoutSessionId || "", 180) &&
+  Number.isFinite(Number(donation?.actualAmountReceived)) &&
+  Number(donation?.actualAmountReceived) > 0;
+
+const donationAlertId = (donationId, userId) =>
+  "donation_" + donationId + "_" + userId;
+
+const confirmedDonationNotification = ({ donation, donationId, userId, role, amount }) => ({
+  userId,
+  audience: role,
+  type: "donation_received",
+  donationId,
+  campaignId: paymongoText(donation.campaignId || "", 160),
+  title: "New confirmed donation",
+  message: paymongoText(donation.donorName || "A resident", 110) +
+    " donated PHP " + amount.toFixed(2) + " to " +
+    paymongoText(donation.campaignTitle || "a campaign", 160) + ".",
+  read: false,
+  createdAt: FieldValue.serverTimestamp(),
+});
+
 const finalizePaymongoDonation = async (session) => {
   const sessionId = paymongoText(session?.id || "", 180);
   const attributes = session?.attributes || {};
@@ -479,20 +508,14 @@ const finalizePaymongoDonation = async (session) => {
     // Admin/Super Admin. Repeated PayMongo webhook delivery cannot duplicate it.
     for (const recipient of adminRecipients) {
       const recipientRole = String(recipient.data()?.role || "admin");
-      const notificationId = "donation_" + donationId + "_" + recipient.id;
-      transaction.set(db.collection("notifications").doc(notificationId), {
-        userId: recipient.id,
-        audience: recipientRole,
-        type: "donation_received",
-        donationId,
-        campaignId,
-        title: "New confirmed donation",
-        message: paymongoText(donation.donorName || "A resident", 110) +
-          " donated PHP " + amount.toFixed(2) + " to " +
-          paymongoText(donation.campaignTitle || "a campaign", 160) + ".",
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      const notificationId = donationAlertId(donationId, recipient.id);
+      transaction.set(
+        db.collection("notifications").doc(notificationId),
+        confirmedDonationNotification({
+          donation, donationId, userId: recipient.id,
+          role: recipientRole, amount,
+        }),
+      );
     }
     return {
       donationId,
@@ -1125,6 +1148,68 @@ async function requireAdminOrSuperAdmin(request, response, next) {
     });
   }
 }
+// Admin-controlled recovery for previously VERIFIED PayMongo Sandbox transactions.
+// It only repairs the requesting approved Admin's inbox, never payment records,
+// campaign totals, recipient accounts, or previously-read notifications.
+app.post(
+  "/api/admin/donations/alerts/sync",
+  requireFirebaseUser,
+  requireAdminOrSuperAdmin,
+  async (request, response) => {
+    try {
+      const uid = request.firebaseUser.uid;
+      const role = getProfileRole(request.volunServeProfile);
+      // Bound scans and transaction sizes; no composite Firestore index required.
+      const snapshot = await db.collection("donations")
+        .where("paymentProvider", "==", "paymongo")
+        .limit(250)
+        .get();
+      const candidates = snapshot.docs.filter(item =>
+        isVerifiedTestPaymongoDonation(item.data()));
+      let created = 0;
+      for (let i = 0; i < candidates.length; i += 25) {
+        const subset = candidates.slice(i, i + 25);
+        created += await db.runTransaction(async (transaction) => {
+          // All reads must complete before any transaction writes.
+          const refs = subset.map(item =>
+            db.collection("notifications").doc(donationAlertId(item.id, uid)));
+          const existing = await Promise.all(refs.map(ref => transaction.get(ref)));
+          let newCount = 0;
+          subset.forEach((item, j) => {
+            if (existing[j].exists) return;
+            const donation = item.data() || {};
+            transaction.set(refs[j], confirmedDonationNotification({
+              donation,
+              donationId: item.id,
+              userId: uid,
+              role,
+              amount: Number(donation.actualAmountReceived),
+            }));
+            newCount++;
+          });
+          return newCount;
+        });
+      }
+      return response.status(200).json({
+        ok: true,
+        examined: snapshot.size,
+        eligible: candidates.length,
+        restored: created,
+        alreadyPresent: candidates.length - created,
+        hasMoreToReview: snapshot.size >= 250,
+        testModeOnly: true,
+      });
+    } catch (error) {
+      console.error("Donation alert reconciliation failed:", error);
+      return response.status(Number(error?.statusCode) || 500).json({
+        ok: false,
+        error: paymongoText(error?.code || "donation_alert_sync_failed", 120),
+        message: "Unable to check prior confirmed payments. Please try again.",
+      });
+    }
+  },
+);
+
 async function requireVerifiedLguPersonnel(request, response, next) {
   try {
     const uid = request.firebaseUser.uid;
