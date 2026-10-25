@@ -22,7 +22,7 @@ type DonationRow = {
   donorDisplayName?: string; campaignId?: string; campaignTitle?: string;
   amount?: number; actualAmountReceived?: number; paymentProvider?: string;
   paymongoLivemode?: boolean; paymongoCheckoutSessionId?: string;
-  paymentStatus?: string; status?: string; donorNote?: string;
+  paymentStatus?: string; status?: string; verifiedBy?: string; donorNote?: string;
   transactionReference?: string; paidAt?: any; receivedAt?: any; createdAt?: any;
 };
 type CampaignRow = {
@@ -160,7 +160,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     return onSnapshot(query(collection(db, "notifications"), where("userId", "==", user.uid)),
       snapshot => {
         setAlerts(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as { id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any; type?:string }))
-          .filter(a => a.type === "donation_received")
+          .filter(a => ["donation_received", "fund_release_demo"].includes(a.type || ""))
           .sort((a, b) => millis(b.createdAt) - millis(a.createdAt)));
         setAlertsReady(true);
         setAlertsProblem("");
@@ -1148,7 +1148,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
 
     {view === "payouts" && <FundReconciliationPanel
       campaigns={campaigns} donations={records}
-      ready={ready && campaignReady && !problem}
+      ready={ready && campaignReady && !problem} mode={mode}
     />}
 
     {view === "notifications" && <>

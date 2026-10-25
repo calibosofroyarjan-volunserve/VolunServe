@@ -8,6 +8,7 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import React, { useMemo } from "react";
+import FundReleaseControls from "./FundReleaseControls";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 /**
@@ -34,6 +35,8 @@ export type ReconciliationDonation = {
   paymentProvider?: string;
   paymongoLivemode?: boolean;
   actualAmountReceived?: number;
+  verifiedBy?: string;
+  paymongoCheckoutSessionId?: string;
 };
 type Source = "sandbox" | "live" | "legacy" | "pending" | "failed" | "unverified";
 const positive = (raw: unknown) => {
@@ -111,10 +114,11 @@ function Stage({ number, name, detail, current }: {
   </View>;
 }
 
-export default function FundReconciliationPanel({ campaigns, donations, ready }: {
+export default function FundReconciliationPanel({ campaigns, donations, ready, mode }: {
   campaigns: ReconciliationCampaign[];
   donations: ReconciliationDonation[];
   ready: boolean;
+  mode: "admin" | "superadmin";
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 1020;
@@ -221,8 +225,10 @@ export default function FundReconciliationPanel({ campaigns, donations, ready }:
       <Stage number="04" name="Resident confirmation" detail="Confirm funds received or report an issue" />
     </View>
     <Text style={styles.workflowNote}>
-      Phase 1 is a read-only demonstration. Stages 2–4 require separate secure implementation and evidence.
+      Fund reviews and releases below are recorded simulations. Only Admin-approved records and verified requesting Residents can complete the workflow.
     </Text>
+
+    <FundReleaseControls campaigns={campaigns} donations={donations} ready={ready} mode={mode}/>
 
     <View style={styles.sectionHeading}>
       <View style={styles.flex}>
