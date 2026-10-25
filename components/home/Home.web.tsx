@@ -436,9 +436,13 @@ export default function WebHome() {
     }
   };
 
-  const openAccountDestination = (destination: "profile" | "my-cases") => {
+  const openAccountDestination = (destination: "profile" | "my-cases" | "settings") => {
     setProfileMenuOpen(false);
-    router.push(destination === "profile" ? "/profile" : "/my-cases");
+    if (destination === "settings") {
+      router.push({ pathname: "/profile", params: { edit: "1" } });
+    } else {
+      router.push(destination === "profile" ? "/profile" : "/my-cases");
+    }
   };
 
   const handleLogout = async () => {
@@ -654,7 +658,7 @@ export default function WebHome() {
                     onPress={() => openAccountDestination("my-cases")} />
                 ) : null}
                 <ProfileDropdownAction icon="settings-outline" title="Account Settings"
-                  onPress={() => openAccountDestination("profile")} />
+                  onPress={() => openAccountDestination("settings")} />
                 {canSwitchMode ? (
                   <ProfileDropdownAction icon="swap-horizontal" title={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
                     onPress={() => void handleModeSwitch()} />
