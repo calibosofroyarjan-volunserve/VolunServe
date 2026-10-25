@@ -253,6 +253,13 @@ function installFundReleaseDemoRoutes({
         .filter(Boolean).join(" ") || source.requesterName,110);
       const photoCandidate = safe(profile.profilePictureUrl,1500);
       const photoUrl = /^https:\/\//i.test(photoCandidate) ? photoCandidate : "";
+      const aliasSnapshot=await residentWallets.doc(uid).get();
+      const walletAlias=aliasSnapshot.exists?(aliasSnapshot.data()||{}):{};
+      const wallet=aliasSnapshot.exists&&
+        ["gcash","maya"].includes(walletAlias.method)&&
+        /^[0-9]{4}$/.test(walletAlias.walletLast4||"")&&walletAlias.ownerUid===uid
+        ? {configured:true,method:walletAlias.method,walletLast4:walletAlias.walletLast4,testOnly:true}
+        : {configured:false,testOnly:true};
       // Display only the already-approved requesting Resident. A different
       // medical beneficiary named in the source request is not a wallet payee.
       return res.json({ok:true,beneficiary:{
@@ -268,6 +275,7 @@ function installFundReleaseDemoRoutes({
         campaignId,
         reviewStatus:"verified",
         payeeRole:"requesting_resident",
+        wallet,
       }});
     }catch(error){return send(res,error);}
   });
