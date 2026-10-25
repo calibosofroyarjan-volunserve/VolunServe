@@ -390,6 +390,10 @@ const campaignFullyFunded = (campaign?: DonationCampaign) => {
   const goal = campaignGoal(campaign);
   return goal > 0 && campaignRaised(campaign) >= goal - 0.01;
 };
+// Admin-closed campaigns are no longer eligible for new donations, regardless
+// of whether they reached their funding goal. Show them in the past tab.
+const campaignFinished = (campaign?: DonationCampaign) =>
+  campaign?.status === "closed" || campaignFullyFunded(campaign);
 
 export default function Donation() {
   const { width } = useWindowDimensions();
@@ -448,7 +452,7 @@ export default function Donation() {
             const photoReady = validPublicPhotoUrls(item).length > 0;
 
             return (
-              item.status === "published" &&
+              (item.status === "published" || item.status === "closed") &&
               monetaryReady &&
               goalReady &&
               locationReady &&
@@ -529,16 +533,16 @@ export default function Donation() {
     });
   }, [campaigns, filter, searchText]);
 
-  const completedCampaignCount = campaigns.filter(campaignFullyFunded).length;
+  const completedCampaignCount = campaigns.filter(campaignFinished).length;
   const activeCampaignCount = campaigns.length - completedCampaignCount;
   // Keep funded campaigns out of Active Campaigns. They remain inspectable
   // under Completed Campaigns, with their verified amount and outcome.
   const visibleCampaigns = useMemo(
-    () => campaigns.filter(campaign => campaignFullyFunded(campaign) === showCompletedCampaigns),
+    () => campaigns.filter(campaign => campaignFinished(campaign) === showCompletedCampaigns),
     [campaigns, showCompletedCampaigns],
   );
   const listedCampaigns = useMemo(
-    () => filteredCampaigns.filter(campaign => campaignFullyFunded(campaign) === showCompletedCampaigns),
+    () => filteredCampaigns.filter(campaign => campaignFinished(campaign) === showCompletedCampaigns),
     [filteredCampaigns, showCompletedCampaigns],
   );
   const returnedDonation = myDonations.find((d) => d.id === returnedDonationId);
@@ -565,7 +569,7 @@ export default function Donation() {
   const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
 
   const selectedGoal = campaignGoal(selectedCampaign);
-  const selectedFunded = campaignFullyFunded(selectedCampaign);
+  const selectedFunded = campaignFinished(selectedCampaign);
   const selectedRaised = campaignRaised(selectedCampaign);
   const selectedPercent =
     selectedGoal > 0 ? clampPercent((selectedRaised / selectedGoal) * 100) : 0;
@@ -973,7 +977,7 @@ export default function Donation() {
                 <Text style={styles.webSectionTitle}>{showCompletedCampaigns ? "Completed Campaigns" : "Active Campaigns"}</Text>
                 <Text style={styles.webSectionSubtitle}>
                   {showCompletedCampaigns
-                    ? "View campaigns that reached their verified funding goals."
+                    ? "View fully funded or Admin-closed campaigns. Closed campaigns no longer accept donations."
                     : "Select an LGU-verified campaign to view its details and available support."}
                 </Text>
               </View>
@@ -989,7 +993,7 @@ export default function Donation() {
                 <Ionicons name="search-outline" size={28} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>{showCompletedCampaigns ? "No completed campaigns yet" : "No matching campaigns"}</Text>
                 <Text style={styles.emptyText}>{showCompletedCampaigns
-                  ? "Completed campaigns will appear here when their verified funding goals are reached."
+                  ? "Fully funded and Admin-closed campaigns will appear here."
                   : "Try another filter or check back for newly approved campaigns."}</Text>
               </View>
             ) : (
@@ -1360,13 +1364,13 @@ function CampaignCard({
 
         <View style={styles.cardFooter}>
           <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <Text style={campaignFullyFunded(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
-            {campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
+          <Text style={campaignFinished(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
+            {campaign.status === "closed" ? "Closed" : campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
           </Text>
         </View>
         <View style={styles.cardPrimaryAction}>
           <Text style={styles.cardPrimaryActionText}>
-            {selected ? "Viewing Details" : campaignFullyFunded(campaign) ? "View Completed Campaign" : "View Campaign"}
+            {selected ? "Viewing Details" : campaignFinished(campaign) ? "View Past Campaign" : "View Campaign"}
           </Text>
           <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
         </View>
