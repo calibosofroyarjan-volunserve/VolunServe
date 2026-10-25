@@ -1154,7 +1154,7 @@ export default function Donation() {
               colors={["#E8FAF1", "#F9FFFC", "#F0FBF6"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.donationModalTopbar}
+              style={[styles.donationModalTopbar, !medium && styles.donationModalTopbarMobile]}
             >
               <View style={styles.donationModalTopbarLeft}>
                 <View style={styles.premiumModalHeaderShield}>
@@ -1177,10 +1177,11 @@ export default function Donation() {
               </TouchableOpacity>
             </LinearGradient>
             <ScrollView
+              key={selectedCampaign?.id || "no-selected-campaign"}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
               style={styles.donationModalScroller}
-              contentContainerStyle={styles.donationModalScroll}
+              contentContainerStyle={[styles.donationModalScroll, !medium && styles.donationModalScrollMobile]}
             >
               {selectedCampaign ? (
                 <PremiumCampaignDetails
@@ -3908,21 +3909,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 16,
     borderBottomWidth: 1, borderColor: "#DDEFE6", gap: 12,
   },
+  donationModalTopbarMobile: { paddingHorizontal: 14, paddingVertical: 12 },
   donationModalTopbarLeft: { flexDirection: "row", alignItems: "center", gap: 11, flex: 1 },
   premiumModalHeaderShield: {
     height: 44, width: 44, borderRadius: 22, backgroundColor: "#D8F6E5",
     alignItems: "center", justifyContent: "center",
   },
   premiumModalHeaderText: { flex: 1, minWidth: 0 },
-  donationModalTopTitle: { fontSize: 16, color: "#16384A", fontWeight: "900" },
-  premiumModalHeaderSubtitle: { fontSize: 10.5, lineHeight: 16, color: "#5B788C", marginTop: 3 },
+  donationModalTopTitle: {
+    fontSize: 16, lineHeight: 22, color: "#21424D",
+    fontFamily: "DonationInterBold", letterSpacing: -0.25,
+  },
+  premiumModalHeaderSubtitle: {
+    fontSize: 10.5, lineHeight: 16, color: "#5D7A83", marginTop: 3,
+    fontFamily: "DonationInterRegular",
+  },
   premiumModalClose: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: "#DCEBE8", backgroundColor: "#FFFFFF",
   },
   donationModalScroller: { flex: 1 },
-  donationModalScroll: { paddingHorizontal: 23, paddingVertical: 22, paddingBottom: 32 },
+  donationModalScroll: { paddingHorizontal: 23, paddingVertical: 22, paddingBottom: 34 },
+  donationModalScrollMobile: { paddingHorizontal: 13, paddingVertical: 15, paddingBottom: 28 },
   donationModalDetailPane: { flex: 0, width: "100%" },
   webContainer: {
     width: "100%",
@@ -4315,12 +4324,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   webFundedNotice: {
-    marginTop: 14, padding: 15, flexDirection: "row", alignItems: "flex-start",
-    gap: 10, borderRadius: 11, backgroundColor: "#EAF9F0",
-    borderWidth: 1, borderColor: "#C8EBDC",
+    marginTop: 0, padding: 16, flexDirection: "row", alignItems: "flex-start",
+    gap: 11, borderRadius: 12, backgroundColor: "#FAFDFB",
+    borderWidth: 1, borderColor: "#DBECE3",
+    borderLeftWidth: 3, borderLeftColor: "#159E77",
   },
-  webFundedTitle: { fontSize: 12.5, fontWeight: "900", color: "#067554" },
-  webFundedText: { fontSize: 10.5, lineHeight: 16, color: "#3D7769", marginTop: 3 },
+  webFundedTitle: {
+    fontSize: 13, lineHeight: 20, fontFamily: "DonationInterSemiBold", color: "#17664F",
+  },
+  webFundedText: {
+    fontSize: 10.8, lineHeight: 17, fontFamily: "DonationInterRegular",
+    color: "#57756C", marginTop: 4,
+  },
   webDonationStepper: { flexDirection: "row", justifyContent: "space-between", gap: 7, marginBottom: 15 },
   webStepperItem: { flex: 1, justifyContent: "center", alignItems: "center", gap: 6 },
   webStepperCircle: {
