@@ -81,7 +81,12 @@ function fixture() {
     },
     requireFirebaseUser:(req,res,next)=>next(),
     requireAdminOrSuperAdmin:(req,res,next)=>next(),
-    loadUserProfile:async uid=>uid===residentId?{identityVerified:true}:null,
+    loadUserProfile:async uid=>uid===residentId?{
+      identityVerified:true,fullName:"Demo Verified Resident",
+      barangay:"Barangay Sample",photoUrl:"should-not-be-exposed",
+      profilePictureUrl:"https://cdn.example.org/profile.png",
+      email:"private@example.com",phoneNumber:"09991234567",
+    }:null,
     getProfileRole:p=>p?.role,
     isVerifiedResidentProfile:p=>p?.identityVerified===true,
     isVerifiedTestPaymongoDonation:d=>
@@ -210,4 +215,54 @@ test("Super Admin cannot submit a simulated GCash/Maya payout",async()=>{
     },"superadmin");
   assert.equal(r.statusCode,403);
   assert.equal(r.payload.error,"lgu_admin_required");
+});
+
+test("Admin beneficiary profile matches linked verified requester, not campaign title",async()=>{
+  const {invoke,tables}=fixture();
+  const route="/api/admin/donations/fund-releases/"+verifiedId+"/beneficiary";
+  const r=await invoke("GET",route);
+  assert.equal(r.statusCode,200);
+  assert.equal(r.payload.beneficiary.displayName,"Demo Verified Resident");
+  assert.equal(r.payload.beneficiary.barangay,"Barangay Sample");
+  assert.equal(r.payload.beneficiary.verified,true);
+  assert.equal(r.payload.beneficiary.assistanceRequestId,sourceId);
+  assert.equal(r.payload.beneficiary.campaignId,verifiedId);
+  assert.equal(r.payload.beneficiary.photoUrl,"https://cdn.example.org/profile.png");
+  assert.equal(Object.hasOwn(r.payload.beneficiary,"email"),false);
+  assert.equal(Object.hasOwn(r.payload.beneficiary,"phoneNumber"),false);
+  assert.equal(Object.hasOwn(r.payload.beneficiary,"documents"),false);
+  assert.equal(Object.hasOwn(r.payload.beneficiary,"requesterUid"),false);
+
+  const other=await invoke("GET",
+    "/api/admin/donations/fund-releases/"+manualId+"/beneficiary");
+  assert.equal(other.statusCode,200);
+  assert.notEqual(other.payload.beneficiary.assistanceRequestId,
+    r.payload.beneficiary.assistanceRequestId);
+  assert.equal(other.payload.beneficiary.campaignId,manualId);
+
+  tables.assistanceRequests.get(sourceId).donationCampaignId=manualId;
+  const invalid=await invoke("GET",route);
+  assert.equal(invalid.statusCode,409);
+  assert.equal(invalid.payload.error,"verified_beneficiary_required");
+});
+test("Super Admin cannot view private fund-release beneficiary profiles",async()=>{
+  const {invoke}=fixture();
+  const r=await invoke("GET",
+    "/api/admin/donations/fund-releases/"+verifiedId+"/beneficiary",
+    {},"superadmin");
+  assert.equal(r.statusCode,403);
+  assert.equal(r.payload.error,"lgu_admin_required");
+});
+test("existing release cannot silently change verified recipient",async()=>{
+  const {invoke,tables}=fixture();
+  const base="/api/admin/donations/fund-releases";
+  const review=await invoke("POST",base+"/review",{
+    campaignId:verifiedId,amount:5000,
+    reviewNote:"Reviewed authentic backend-confirmed test payment records."
+  });
+  assert.equal(review.statusCode,201);
+  tables.fundReleaseDemos.get(verifiedId).recipientUid="OtherResident00001";
+  const result=await invoke("GET",base+"/"+verifiedId+"/beneficiary");
+  assert.equal(result.statusCode,409);
+  assert.equal(result.payload.error,"recipient_record_mismatch");
 });
