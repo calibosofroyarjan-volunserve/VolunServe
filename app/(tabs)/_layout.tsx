@@ -266,6 +266,27 @@ export default function TabLayout() {
     }
   };
 
+  const confirmMobileLogout = () => {
+    const logOut = async () => {
+      try {
+        await logoutUser();
+        router.replace("/login");
+      } catch (error: any) {
+        Alert.alert("Log out failed", error?.message || "Please try again.");
+      }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to log out of VolunServe?")) {
+        void logOut();
+      }
+      return;
+    }
+    Alert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Log Out", style: "destructive", onPress: () => void logOut() },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
@@ -354,13 +375,16 @@ export default function TabLayout() {
           <View style={styles.mobileAccountOverlay}>
             <Pressable accessibilityRole="button" accessibilityLabel="Close account menu"
               onPress={() => setMobileProfileOpen(false)} style={styles.mobileAccountBackdrop} />
-            <View style={styles.mobileAccountMenu}>
+            <View style={[styles.mobileAccountMenu, { top: 66 + insets.top }]}>
               <View style={styles.mobileAccountHeader}>
                 <Ionicons name="person-circle" size={35} color="#127CCC" />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.mobileAccountName} numberOfLines={1}>{profile.fullName || user.displayName || user.email || "VolunServe Member"}</Text>
                   <Text style={styles.mobileAccountRole}>{mode === "volunteer" ? "Volunteer Account" : "Resident Account"}</Text>
                 </View>
+                {(profile.identityVerified === true || profile.identityStatus === "verified") ? (
+                  <Ionicons name="checkmark-circle" size={18} color="#0A9A6A" />
+                ) : null}
               </View>
               <Pressable onPress={() => visit("profile")} style={styles.mobileAccountAction}>
                 <Ionicons name="person-outline" size={18} color="#12325D" />
@@ -372,7 +396,7 @@ export default function TabLayout() {
                   <Text style={styles.mobileAccountActionText}>My Reports</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => visit("profile")} style={styles.mobileAccountAction}>
+              <Pressable onPress={() => {setMobileProfileOpen(false); router.push({ pathname: "/(tabs)/profile", params: { edit: "1" } });}} style={styles.mobileAccountAction}>
                 <Ionicons name="settings-outline" size={18} color="#12325D" />
                 <Text style={styles.mobileAccountActionText}>Account Settings</Text>
               </Pressable>
@@ -389,15 +413,8 @@ export default function TabLayout() {
                 </Pressable>
               ) : null}
               <View style={styles.mobileAccountDivider} />
-              <Pressable onPress={() => {
-                setMobileProfileOpen(false);
-                Alert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Log Out", style: "destructive", onPress: () => {
-                    void logoutUser().then(() => router.replace("/login")).catch(() => Alert.alert("Log out failed", "Please try again."));
-                  }},
-                ]);
-              }} style={styles.mobileAccountAction}>
+              <Pressable onPress={() => {setMobileProfileOpen(false); confirmMobileLogout();}}
+                style={styles.mobileAccountAction}>
                 <Ionicons name="log-out-outline" size={18} color="#D93545" />
                 <Text style={[styles.mobileAccountActionText, { color: "#C52B3C" }]}>Log Out</Text>
               </Pressable>
