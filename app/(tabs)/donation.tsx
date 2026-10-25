@@ -1228,21 +1228,20 @@ export default function Donation() {
                     </View>
                   </View>
 
-                  <View style={styles.webLocationCard}>
-                    <View style={styles.webLocationCardCopy}>
-                      <Text style={styles.webLocationCardEyebrow}>OFFICIAL LGU LOCATION</Text>
-                      <Text style={styles.webLocationCardTitle}>
-                        {selectedCampaign.handoffLocationName}
-                      </Text>
-                      <Text style={styles.webLocationCardAddress} numberOfLines={2}>
-                        {selectedCampaign.handoffAddress}
+                  {/* The public beneficiary area is shown above. Show the LGU
+                      coordination point unobtrusively, without Google Maps or
+                      exposing any private beneficiary address. */}
+                  {!!selectedCampaign.handoffLocationName?.trim() && (
+                    <View style={styles.webCoordinationRow}>
+                      <Ionicons name="business-outline" size={15} color="#0B8064" />
+                      <Text style={styles.webCoordinationText} numberOfLines={2}>
+                        LGU coordination:{" "}
+                        <Text style={styles.webCoordinationName}>
+                          {selectedCampaign.handoffLocationName}
+                        </Text>
                       </Text>
                     </View>
-                    <HandoffLocationMap
-                      locationName={selectedCampaign.handoffLocationName || "LGU public service point"}
-                      address={selectedCampaign.handoffAddress || ""}
-                    />
-                  </View>
+                  )}
 
                   <View style={styles.webSupportTypesRow}>
                     <View style={styles.webSupportTypeChip}>
@@ -1733,190 +1732,6 @@ function FundingProgressCard({ campaign }: { campaign: DonationCampaign }) {
         </Text>
       </View>
     </View>
-  );
-}
-
-function HandoffLocationMap({
-  locationName,
-  address,
-}: {
-  locationName: string;
-  address: string;
-}) {
-  const cleanName = String(locationName || "LGU public service point").trim();
-  const cleanAddress = String(address || "").trim();
-  const normalizedAddress = cleanAddress.toLowerCase();
-  const genericAddresses = new Set([
-    "public service address",
-    "official public service address",
-    "lgu public service address",
-    "barangay address",
-    "address pending",
-    "to be confirmed",
-  ]);
-  const hasSpecificPublicAddress =
-    cleanAddress.length >= 8 && !genericAddresses.has(normalizedAddress);
-
-  if (!hasSpecificPublicAddress) {
-    return (
-      <View style={styles.webMapUnavailableNote}>
-        <Ionicons name="information-circle-outline" size={15} color="#64748B" />
-        <Text style={styles.webMapUnavailableText}>
-          Google Maps will be available after the LGU saves the verified public address for this donation point.
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <LocationMapButton
-      eyebrow="OFFICIAL LGU DONATION LOCATION"
-      title={cleanName || "LGU public service point"}
-      address={cleanAddress}
-      mapQuery={[cleanName, cleanAddress].filter(Boolean).join(", ")}
-      buttonLabel="View Map"
-      privacyText="This is the LGU-approved public coordination or service point for the campaign. It is separate from the beneficiary's home and private verification location."
-    />
-  );
-}
-
-function LocationMapButton({
-  eyebrow,
-  title,
-  address,
-  mapQuery,
-  buttonLabel,
-  privacyText,
-}: {
-  eyebrow: string;
-  title: string;
-  address: string;
-  mapQuery: string;
-  buttonLabel: string;
-  privacyText: string;
-}) {
-  const [visible, setVisible] = useState(false);
-  const { height } = useWindowDimensions();
-
-  const cleanQuery = String(mapQuery || "").trim();
-  const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQuery)}`;
-  const embeddedMapUrl = `https://www.google.com/maps?q=${encodeURIComponent(cleanQuery)}&output=embed`;
-  const mapHeight = Math.max(280, Math.min(560, height - 280));
-
-  const openGoogleMaps = async () => {
-    if (!cleanQuery) return;
-
-    try {
-      const supported = await Linking.canOpenURL(externalMapUrl);
-      if (!supported) throw new Error("Google Maps is not available on this device.");
-      await Linking.openURL(externalMapUrl);
-    } catch (problem) {
-      Alert.alert(
-        "Unable to Open Map",
-        problem instanceof Error ? problem.message : "Unable to open Google Maps.",
-      );
-    }
-  };
-
-  return (
-    <>
-      <TouchableOpacity
-        style={styles.webOpenMapButton}
-        activeOpacity={0.84}
-        disabled={!cleanQuery}
-        onPress={() => setVisible(true)}
-      >
-        <Ionicons name="map-outline" size={16} color="#0F766E" />
-        <Text style={styles.webOpenMapButtonText}>{buttonLabel}</Text>
-        <Ionicons name="chevron-forward" size={14} color="#0F766E" />
-      </TouchableOpacity>
-
-      <Modal
-        visible={visible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setVisible(false)}
-      >
-        <View style={styles.mapModalOverlay}>
-          <View style={styles.mapModalCard}>
-            <View style={styles.mapModalHeader}>
-              <View style={styles.mapModalHeaderIcon}>
-                <Ionicons name="map-outline" size={18} color="#0F766E" />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.mapModalEyebrow}>{eyebrow}</Text>
-                <Text style={styles.mapModalTitle}>{title}</Text>
-                {!!address && <Text style={styles.mapModalAddress}>{address}</Text>}
-              </View>
-
-              <TouchableOpacity
-                style={styles.mapModalClose}
-                activeOpacity={0.82}
-                onPress={() => setVisible(false)}
-              >
-                <Ionicons name="close" size={19} color="#475569" />
-              </TouchableOpacity>
-            </View>
-
-            {Platform.OS === "web" ? (
-              <View style={[styles.mapModalFrame, { height: mapHeight }]}> 
-                {React.createElement(
-                  "iframe",
-                  {
-                    title: `${title} map`,
-                    src: embeddedMapUrl,
-                    loading: "lazy",
-                    allowFullScreen: true,
-                    referrerPolicy: "no-referrer-when-downgrade",
-                    style: {
-                      width: "100%",
-                      height: "100%",
-                      border: 0,
-                      display: "block",
-                    },
-                  } as any,
-                )}
-              </View>
-            ) : (
-              <View style={[styles.embeddedMapNativeFallback, { minHeight: mapHeight }]}> 
-                <Ionicons name="map-outline" size={34} color="#0F766E" />
-                <Text style={styles.embeddedMapNativeTitle}>Map preview</Text>
-                <Text style={styles.embeddedMapNativeText}>
-                  The map details are shown inside VolunServe. Use Google Maps below only when you need turn-by-turn directions.
-                </Text>
-                <Text style={styles.embeddedMapLocationName}>{title}</Text>
-                {!!address && <Text style={styles.embeddedMapLocationText}>{address}</Text>}
-              </View>
-            )}
-
-            <View style={styles.mapModalPrivacy}>
-              <Ionicons name="shield-checkmark-outline" size={17} color="#0F766E" />
-              <Text style={styles.mapModalPrivacyText}>{privacyText}</Text>
-            </View>
-
-            <View style={styles.mapModalFooter}>
-              <TouchableOpacity
-                style={styles.mapModalSecondaryButton}
-                activeOpacity={0.82}
-                onPress={() => setVisible(false)}
-              >
-                <Text style={styles.mapModalSecondaryButtonText}>Close</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.mapModalPrimaryButton}
-                activeOpacity={0.84}
-                onPress={() => void openGoogleMaps()}
-              >
-                <Ionicons name="navigate-outline" size={15} color="#FFFFFF" />
-                <Text style={styles.mapModalPrimaryButtonText}>Open in Google Maps</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </>
   );
 }
 
@@ -3241,214 +3056,6 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
 
-  embeddedMapCard: {
-    overflow: "hidden",
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "#DDE6EC",
-    borderRadius: 11,
-    backgroundColor: "#FFFFFF",
-  },
-  embeddedMapHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E7EDF1",
-  },
-  embeddedMapHeaderIcon: {
-    width: 31,
-    height: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    backgroundColor: "#ECFDF5",
-  },
-  embeddedMapEyebrow: {
-    color: "#0F766E",
-    fontSize: 7.4,
-    fontWeight: "900",
-    letterSpacing: 0.6,
-  },
-  embeddedMapTitle: {
-    marginTop: 1,
-    color: "#0F172A",
-    fontSize: 9.5,
-    fontWeight: "900",
-  },
-  expandMapButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#CFE2DD",
-    borderRadius: 8,
-    backgroundColor: "#F7FCFB",
-  },
-  expandMapButtonText: {
-    color: "#0F766E",
-    fontSize: 8,
-    fontWeight: "900",
-  },
-  embeddedMapFrame: {
-    overflow: "hidden",
-    backgroundColor: "#E2E8F0",
-  },
-  embeddedMapNativeFallback: {
-    minHeight: 170,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 18,
-    backgroundColor: "#F8FAFC",
-  },
-  embeddedMapNativeTitle: {
-    marginTop: 9,
-    color: "#0F172A",
-    fontSize: 11,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  embeddedMapNativeText: {
-    marginTop: 4,
-    color: "#64748B",
-    fontSize: 9.2,
-    lineHeight: 14,
-    textAlign: "center",
-  },
-  embeddedMapLocationRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 7,
-    padding: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#E7EDF1",
-  },
-  embeddedMapLocationName: {
-    color: "#334155",
-    fontSize: 9.5,
-    fontWeight: "900",
-  },
-  embeddedMapLocationText: {
-    marginTop: 2,
-    color: "#64748B",
-    fontSize: 8.5,
-    lineHeight: 12.5,
-  },
-  mapModalOverlay: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: "rgba(15,23,42,0.58)",
-  },
-  mapModalCard: {
-    width: "100%",
-    maxWidth: 1120,
-    maxHeight: "92%",
-    overflow: "hidden",
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  mapModalHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E7EDF1",
-  },
-  mapModalHeaderIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: "#ECFDF5",
-  },
-  mapModalEyebrow: {
-    color: "#0F766E",
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  mapModalTitle: {
-    marginTop: 2,
-    color: "#0F172A",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  mapModalAddress: {
-    marginTop: 4,
-    color: "#64748B",
-    fontSize: 10,
-  },
-  mapModalClose: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    backgroundColor: "#F1F5F9",
-  },
-  mapModalFrame: {
-    width: "100%",
-    backgroundColor: "#E2E8F0",
-  },
-  mapModalPrivacy: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 7,
-    padding: 12,
-    backgroundColor: "#F3FAF8",
-  },
-  mapModalPrivacyText: {
-    flex: 1,
-    color: "#49646F",
-    fontSize: 9,
-    lineHeight: 14,
-  },
-  mapModalFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    gap: 8,
-    padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E7EDF1",
-    backgroundColor: "#FFFFFF",
-  },
-  mapModalSecondaryButton: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 9,
-    backgroundColor: "#FFFFFF",
-  },
-  mapModalSecondaryButtonText: {
-    color: "#475569",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-  mapModalPrimaryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 9,
-    backgroundColor: "#0F766E",
-  },
-  mapModalPrimaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
   supportSection: {
     marginTop: 18,
     paddingTop: 18,
@@ -4695,67 +4302,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
-  webLocationCard: {
-    marginTop: 13,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#DDE5EA",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-  },
-  webLocationCardCopy: {
-    flex: 1,
-  },
-  webLocationCardEyebrow: {
-    color: "#0F766E",
-    fontSize: 7.5,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  webLocationCardTitle: {
-    marginTop: 3,
-    color: "#0F172A",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  webLocationCardAddress: {
-    marginTop: 3,
-    color: "#64748B",
-    fontSize: 9,
-    lineHeight: 13,
-  },
-  webMapUnavailableNote: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-    marginTop: 9,
-    padding: 9,
-    borderRadius: 9,
-    backgroundColor: "#F8FAFC",
-  },
-  webMapUnavailableText: {
-    flex: 1,
-    color: "#64748B",
-    fontSize: 8.5,
-    lineHeight: 12,
-  },
-  webOpenMapButton: {
-    alignSelf: "flex-start",
+  webCoordinationRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#B9D8D3",
-    borderRadius: 9,
-    backgroundColor: "#F5FBFA",
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F2FAF7",
   },
-  webOpenMapButtonText: {
-    color: "#0F766E",
-    fontSize: 8.8,
-    fontWeight: "900",
+  webCoordinationText: {
+    flex: 1,
+    fontSize: 10.5,
+    lineHeight: 16,
+    color: "#52766B",
+  },
+  webCoordinationName: {
+    color: "#0A5947",
+    fontWeight: "800",
   },
   webSupportTypesRow: {
     flexDirection: "row",
