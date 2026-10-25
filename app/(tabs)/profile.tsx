@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { User } from "firebase/auth";
 import {
   collection,
@@ -267,6 +267,7 @@ const statusPalette = (
 
 export default function Profile() {
   const router = useRouter();
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
 
   const {
     width,
@@ -306,7 +307,7 @@ export default function Profile() {
     editOpen,
     setEditOpen,
   ] =
-    useState(false);
+    useState(edit === "1");
 
   const [
     saving,
