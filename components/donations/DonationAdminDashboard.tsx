@@ -115,6 +115,9 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [alerts, setAlerts] = useState<{id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any}[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentSourceFilter, setPaymentSourceFilter] = useState("all");
+  const [sourceOptionsOpen, setSourceOptionsOpen] = useState(false);
+  const [transactionPage, setTransactionPage] = useState(1);
   const [selectedId, setSelectedId] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [campaignSearch, setCampaignSearch] = useState("");
@@ -271,30 +274,81 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     const term = search.trim().toLowerCase();
     const match = !term || [donorLabel(r), r.campaignTitle, r.id, r.transactionReference]
       .some(v => String(v || "").toLowerCase().includes(term));
-    return match && (statusFilter === "all" ||
+    const matchesSource = paymentSourceFilter === "all" ||
+      (paymentSourceFilter === "paymongo" && r.paymentProvider === "paymongo") ||
+      (paymentSourceFilter === "legacy" && r.paymentProvider !== "paymongo");
+    const matchesStatus = statusFilter === "all" ||
       (statusFilter === "paid" ? isConfirmed(r) : statusFilter === "pending" ?
         ["payment_creating", "payment_pending", "submitted"].includes(r.status || "") :
         (statusFilter === "rejected"
           ? ["rejected", "payment_failed"].includes(r.status || "")
-          : r.status === statusFilter)));
-  }), [records, search, statusFilter]);
+          : r.status === statusFilter));
+    return match && matchesSource && matchesStatus;
+  }), [records, search, statusFilter, paymentSourceFilter]);
+  const transactionPageSize = 5;
+  const transactionPageCount = Math.max(1, Math.ceil(filtered.length / transactionPageSize));
+  const currentTransactionPage = Math.min(transactionPage, transactionPageCount);
+  const pagedTransactions = filtered.slice(
+    (currentTransactionPage - 1) * transactionPageSize,
+    currentTransactionPage * transactionPageSize
+  );
+  const transactionSourceOptions = [
+    {value:"all",label:"All Sources"},
+    {value:"paymongo",label:"PayMongo"},
+    {value:"legacy",label:"Manual / Legacy"},
+  ];
+  const transactionSourceLabel = transactionSourceOptions.find(
+    option => option.value === paymentSourceFilter)?.label || "All Sources";
+  const transactionPending = records.filter(record =>
+    ["payment_creating","payment_pending","submitted"].includes(record.status || "")).length;
+  const transactionFailed = records.filter(record =>
+    ["rejected","payment_failed"].includes(record.status || "")).length;
+  const transactionVerified = records.filter(isConfirmed).length;
+  const transactionPaidTotal = records.filter(record =>
+    isConfirmed(record) && record.paymentProvider === "paymongo" &&
+    record.paymongoLivemode === false)
+    .reduce((sum,record) => sum + amountReceived(record), 0);
 
   if (loading || (!fontsLoaded && !fontsError)) return <View style={s.center}><ActivityIndicator color="#078F82" /></View>;
   if (!allowed) return <View style={s.center}><Text style={s.info}>Authorized {mode} account required.</Text></View>;
 
-  const row = (r: DonationRow) => <Pressable key={r.id}
-    accessibilityRole="button" accessibilityLabel={"View donation from " + donorLabel(r)}
-    onPress={() => { setSelectedId(r.id); setView("all"); }}
-    style={[s.tableRow, selectedId === r.id && s.selectedRow]}>
-    <View style={s.donorCell}><View style={s.avatar}><Ionicons name="person" color="#087F72" size={16}/></View>
-      <View style={s.flex}><Text numberOfLines={1} style={s.tableMain}>{donorLabel(r)}</Text>
-      <Text numberOfLines={1} style={s.tableSecondary}>{r.campaignTitle || "Donation Campaign"}</Text></View></View>
-    <View style={s.amountCell}><Text style={s.tableMain}>{peso(isConfirmed(r) ? amountReceived(r) : r.amount)}</Text>
-      <Text numberOfLines={1} style={s.tableSecondary}>{payMode(r)}</Text></View>
-    <View style={s.dateCell}><Text style={s.tableSecondary}>{dateText(r.paidAt || r.createdAt)}</Text></View>
-    <View style={s.statusCell}><Text style={[s.statusPill, isConfirmed(r) ? s.paidPill :
-      r.status === "rejected" ? s.failedPill : s.pendingPill]}>{statusText(r)}</Text></View>
-    <Ionicons name="eye-outline" size={18} color="#148577" />
+  const row = (record: DonationRow) => <Pressable
+    key={record.id} accessibilityRole="button"
+    accessibilityLabel={"Inspect transaction from " + donorLabel(record)}
+    accessibilityState={{selected:selectedId === record.id}}
+    onPress={() => setSelectedId(record.id)}
+    style={[s.txRow,selectedId === record.id && s.txSelectedRow]}>
+    <View style={[s.txCell,s.txDonorCol,s.txDonorDetails]}>
+      <View style={s.txAvatar}>
+        <Ionicons name="person" size={18} color="#087E67"/>
+      </View>
+      <View style={s.flex}>
+        <Text style={s.txPrimary} numberOfLines={1}>{donorLabel(record)}</Text>
+        <Text style={s.txSecondary} numberOfLines={1}>
+          {record.campaignTitle || "Donation campaign"}
+        </Text>
+      </View>
+    </View>
+    <View style={[s.txCell,s.txAmountCol]}>
+      <Text style={s.txAmount} numberOfLines={1}>
+        {peso(isConfirmed(record) ? amountReceived(record) : record.amount)}
+      </Text>
+    </View>
+    <View style={[s.txCell,s.txMethodCol]}>
+      <Text style={s.txSecondary} numberOfLines={2}>{payMode(record)}</Text>
+    </View>
+    <View style={[s.txCell,s.txDateCol]}>
+      <Text style={s.txSecondary}>{dateText(record.paidAt || record.createdAt)}</Text>
+    </View>
+    <View style={[s.txCell,s.txStatusCol]}>
+      <Text style={[s.statusPill,isConfirmed(record) ? s.paidPill :
+        ["rejected","payment_failed"].includes(record.status || "") ? s.failedPill : s.pendingPill]}>
+        {statusText(record)}
+      </Text>
+    </View>
+    <View style={[s.txCell,s.txActionCol]}>
+      <Ionicons name="eye-outline" size={20} color="#0E9179"/>
+    </View>
   </Pressable>;
 
   // The Overview previews are record-level drill-downs, never copies of the navigation tabs.
@@ -492,15 +546,34 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
   </View>;
 
-  const detailsPanel = <View style={s.panel}>
+  const detailsPanel = <View style={[s.panel,s.txInspectorPanel]}>
     <View style={s.panelHeading}>
       <Text style={s.panelTitle}>Transaction details</Text>
       {selected && <SmallButton text="Clear" onPress={() => setSelectedId("")}/>}
     </View>
-    {!selected ? <View style={s.empty}>
-      <Ionicons name="receipt-outline" size={30} color="#0D9170"/>
-      <Text style={s.emptyTitle}>Select a donation</Text>
-      <Text style={s.info}>Click a transaction to view its payment record and registered donor.</Text>
+    {!selected ? <View style={s.txInspectorEmpty}>
+      <View style={s.txInspectorIllustration}>
+        <Ionicons name="document-text-outline" size={43} color="#078A6E"/>
+        <View style={s.txInspectorMagnify}>
+          <Ionicons name="search" size={21} color="#FFFFFF"/>
+        </View>
+      </View>
+      <Text style={s.txInspectorTitle}>Select a transaction</Text>
+      <Text style={s.txInspectorDescription}>
+        Choose a payment record to review its status, donor details, and reference information.
+      </Text>
+      <View style={s.txInspectorFeatures}>
+        {([
+          ["card-outline","Payment information"],
+          ["person-outline","Registered donor"],
+          ["heart-outline","Campaign details"],
+          ["shield-checkmark-outline","Verification status"],
+          ["link-outline","Related records"],
+        ] as const).map(([icon,label]) => <View key={label} style={s.txInspectorFeature}>
+          <Ionicons name={icon} color="#07886D" size={17}/>
+          <Text style={s.txInspectorFeatureLabel}>{label}</Text>
+        </View>)}
+      </View>
     </View> : <>
       <View style={s.donorHeader}>
         {donor?.photoURL || donor?.profilePhotoUrl ?
