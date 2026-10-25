@@ -113,6 +113,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
 
@@ -143,6 +144,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   }, [allowed, user?.uid]);
 
   const selected = records.find(r => r.id === selectedId) || null;
+  const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId) || null;
   useEffect(() => {
     let active = true;
     setDonor(null);
@@ -164,12 +166,13 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     .reduce((sum, r) => sum + amountReceived(r), 0);
   const donors = new Set(records.filter(isConfirmed).map(r => r.donorUid || "unlinked:" + r.id)).size;
   const pending = records.filter(r => ["payment_creating", "payment_pending", "submitted"].includes(r.status || "")).length;
+  const legacyReview = records.filter(r => r.status === "submitted" && r.paymentProvider !== "paymongo").length;
   const activeCampaigns = campaigns.filter(c =>
     c.status === "published" &&
     !(Number(c.monetaryGoal || 0) > 0 &&
       Number(c.verifiedAmountReceived || 0) >= Number(c.monetaryGoal || 0) - 0.01),
   );
-  const recent = paid.slice(0, 5);
+  const recent = paid.slice(0, 3);
   const unreadCount = alerts.filter(a => !a.read).length;
   const filtered = useMemo(() => records.filter(r => {
     const term = search.trim().toLowerCase();
@@ -201,16 +204,23 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <Ionicons name="eye-outline" size={18} color="#148577" />
   </Pressable>;
 
+  // The Overview previews are record-level drill-downs, never copies of the navigation tabs.
+  const openCampaignRecord = (id: string) => {
+    setSelectedCampaignId(id);
+    setView("campaigns");
+  };
   const campaignList = (items: CampaignRow[], preview: boolean) =>
     <View style={s.panel}>
       <View style={s.panelHeading}>
         <View style={s.flex}>
-          <Text style={s.panelTitle}>{preview ? "Open campaigns" : "Campaign register"}</Text>
-          {!preview && <Text style={s.info}>Review campaign goals and progress. Approval remains in Campaign Operations.</Text>}
+          <Text style={s.panelTitle}>{preview ? "Published campaign snapshot" : "Campaign register"}</Text>
+          <Text style={s.info}>
+            {preview
+              ? "Select a campaign to inspect its approved goal and funding record."
+              : "Select a campaign for its unique funding, source and payment overview."}
+          </Text>
         </View>
-        {preview && <SmallButton text="See campaigns" onPress={() => setView("campaigns")} />}
-        {!preview && mode === "admin" && <SmallButton text="Manage campaigns" primary
-          onPress={() => router.push("/(admin)/donation-list" as any)} />}
+        <Text style={s.countTag}>{items.length} {preview ? "published" : "records"}</Text>
       </View>
       {items.length ? items.map(c => {
         const target = numeric(c.monetaryGoal);
@@ -218,7 +228,12 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
         const percent = target > 0 ? Math.min(100, Math.round(amount / target * 100)) : 0;
         const completed = c.status === "closed" || (target > 0 && amount >= target - 0.01);
         const photo = campaignImage(c);
-        return <View key={c.id} style={s.campaignItem}>
+        return <Pressable
+          key={c.id} accessibilityRole="button"
+          accessibilityLabel={"Inspect campaign " + (c.title || c.id)}
+          onPress={() => openCampaignRecord(c.id)}
+          style={[s.campaignItem, selectedCampaignId === c.id && !preview && s.selectedCampaignItem]}
+        >
           {photo ? <Image source={{ uri: photo }} style={s.campaignImage}/> :
             <View style={[s.campaignImage, s.fallbackImage]}>
               <Ionicons name="heart-outline" color="#08896E" size={23}/>
@@ -227,50 +242,66 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
             <View style={s.campaignNameRow}>
               <Text style={[s.tableMain, s.campaignName]} numberOfLines={2}>{c.title || "Untitled campaign"}</Text>
               <Text style={[s.campaignStatus, completed ? s.campaignComplete : s.campaignActive]}>
-                {completed ? "Goal reached" : c.status === "published" ? "Open" : c.status || "Draft"}
+                {completed ? "Goal reached" : c.status === "published" ? "Published" : c.status || "Draft"}
               </Text>
             </View>
             <View style={s.campaignMoneyRow}>
-              <Text style={s.tableSecondary}>{peso(amount)} of {peso(target)}</Text>
+              <Text style={s.tableSecondary}>{peso(amount)} of {target > 0 ? peso(target) : "No approved goal recorded"}</Text>
               <Text style={s.campaignPercent}>{target ? percent + "%" : "—"}</Text>
             </View>
             <View style={s.track}><View style={[s.fill, { width: percent + "%" as any }]}/></View>
           </View>
-        </View>;
+          <Ionicons name="chevron-forward" size={16} color="#688F82"/>
+        </Pressable>;
       }) : <View style={s.smallEmpty}><Ionicons name="heart-outline" size={20} color="#8AA99B"/>
-        <Text style={s.info}>No campaigns in this category.</Text></View>}
+        <Text style={s.info}>No published campaigns are available.</Text></View>}
     </View>;
 
-  const stepLinks: {
-    label: string; detail: string; icon: React.ComponentProps<typeof Ionicons>["name"];
-    open: () => void;
-  }[] = [
-    {
-      label: mode === "admin" ? "Request review" : "Campaign oversight",
-      detail: mode === "admin"
-        ? "Verify evidence and approved assistance needs"
-        : "Review fundraising activity and campaign status",
-      icon: "shield-checkmark-outline",
-      open: () => mode === "admin"
-        ? router.push("/(admin)/assistance-requests" as any)
-        : setView("campaigns"),
-    },
-    {
-      label: "Campaigns", detail: "Review published needs and approved funding goals",
-      icon: "heart-outline",
-      open: () => setView("campaigns"),
-    },
-    {
-      label: "Transactions", detail: "Check paid, pending and failed donation records",
-      icon: "receipt-outline",
-      open: () => setView("all"),
-    },
-    {
-      label: "Fund management", detail: "Review fund status before any release",
-      icon: "wallet-outline",
-      open: () => setView("payouts"),
-    },
-  ];
+  const campaignPayments = selectedCampaign ? records.filter(r => r.campaignId === selectedCampaign.id) : [];
+  const selectedCampaignPaid = campaignPayments.filter(isConfirmed);
+  const selectedCampaignAmount = selectedCampaignPaid.reduce(
+    (sum, payment) => sum + amountReceived(payment), 0);
+  const campaignDetailsPanel = <View style={s.panel}>
+    <View style={s.panelHeading}>
+      <Text style={s.panelTitle}>Campaign inspection</Text>
+      {selectedCampaign && <SmallButton text="Clear selection" onPress={() => setSelectedCampaignId("")}/>}
+    </View>
+    {!selectedCampaign ? <View style={s.empty}>
+      <Ionicons name="documents-outline" size={30} color="#82A79A"/>
+      <Text style={s.emptyTitle}>Select a campaign record</Text>
+      <Text style={s.info}>Inspect its approved funding goal, linked assistance source, and transaction records here.</Text>
+    </View> : <>
+      <Text style={s.inspectorEyebrow}>CAMPAIGN RECORD</Text>
+      <Text style={s.inspectorHeading}>{selectedCampaign.title || "Untitled campaign"}</Text>
+      <View style={s.inspectorStatus}>
+        <Ionicons name="shield-checkmark-outline" color="#0B805F" size={16}/>
+        <Text style={s.inspectorStatusText}>{selectedCampaign.status || "Status not recorded"}</Text>
+      </View>
+      {([
+        ["Approved funding goal", selectedCampaign.monetaryGoal ? peso(selectedCampaign.monetaryGoal) : "Not recorded"],
+        ["Stored campaign progress", peso(selectedCampaign.verifiedAmountReceived)],
+        ["Linked confirmed donations", peso(selectedCampaignAmount)],
+        ["Confirmed payment records", String(selectedCampaignPaid.length)],
+        ["Pending payment records", String(campaignPayments.filter(r => ["submitted", "payment_pending", "payment_creating"].includes(r.status || "")).length)],
+        ["Source assistance request", selectedCampaign.sourceAssistanceRequestId || "Not linked / legacy campaign"],
+        ["Campaign ID", selectedCampaign.id],
+      ] as const).map(([label, value]) => <View key={label} style={s.detailRow}>
+        <Text style={s.detailLabel}>{label}</Text>
+        <Text selectable style={s.detailValue}>{value}</Text>
+      </View>)}
+      <View style={s.inspectorHint}>
+        <Ionicons name="information-circle-outline" size={16} color="#557F72"/>
+        <Text style={s.inspectorHintText}>Verified donations are not proof of actual settlement to the LGU. Release approval is a separate financial process.</Text>
+      </View>
+      {mode === "admin" && <SmallButton text="Open Campaign Operations" primary onPress={() =>
+        selectedCampaign.sourceAssistanceRequestId
+          ? router.push({ pathname: "/(admin)/donation-list", params: {
+              assistanceRequestId: selectedCampaign.sourceAssistanceRequestId,
+            }} as any)
+          : router.push("/(admin)/donation-list" as any)
+      } />}
+    </>}
+  </View>;
 
   const detailsPanel = <View style={s.panel}>
     <View style={s.panelHeading}>
@@ -351,16 +382,16 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
 
     {view === "overview" && <>
       <View style={s.sectionIntro}>
-        <View style={s.flex}><Text style={s.sectionEyebrow}>ADMIN WORKSPACE</Text>
+        <View style={s.flex}><Text style={s.sectionEyebrow}>OPERATIONS MONITORING</Text>
           <Text style={s.sectionTitle}>Overview</Text>
-          <Text style={s.sectionDescription}>Start here for a quick status check, then open the appropriate tab to complete a task.</Text>
+          <Text style={s.sectionDescription}>One concise summary of donation activity. Select a specific record below to investigate it.</Text>
         </View>
       </View>
       <View style={s.metrics}>
         {([
           ["Verified test payments", peso(testReceived), "card-outline", "Confirmed sandbox payments only"],
-          ["Payments to review", String(pending), "time-outline", "Pending or submitted records"],
-          ["Open campaigns", String(activeCampaigns.length), "heart-outline", "Published and accepting donations"],
+          ["Pending payments", String(pending), "time-outline", "Provider pending + legacy submissions"],
+          ["Published campaigns", String(campaigns.filter(c => c.status === "published").length), "heart-outline", "Review actual goals before accepting payments"],
           ["Confirmed donors", String(donors), "people-outline", "Unique recorded donor accounts"],
         ] as const).map(([name, value, icon, description]) =>
           <View key={name} style={s.metric}>
@@ -372,35 +403,13 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
             <Text style={s.metricDescription}>{description}</Text>
           </View>)}
       </View>
-      <View style={s.workflow}>
-        <View style={s.panelHeading}>
-          <View style={s.flex}>
-            <Text style={s.panelTitle}>Quick workflow</Text>
-            <Text style={s.info}>Select the next action. Financial approval and wallet payouts are not enabled in this demo.</Text>
-          </View>
-        </View>
-        <View style={s.quickGrid}>
-          {stepLinks.map((step, index) => <Pressable key={step.label}
-            accessibilityRole="button" accessibilityLabel={"Open " + step.label}
-            onPress={step.open} style={s.quickCard}>
-            <View style={s.quickIcon}><Ionicons name={step.icon} color="#0A8C6A" size={21}/></View>
-            <View style={s.flex}>
-              <Text style={s.quickStep}>STEP 0{index + 1}</Text>
-              <Text style={s.quickTitle}>{step.label}</Text>
-              <Text style={s.quickDescription}>{step.detail}</Text>
-            </View>
-            <Ionicons name="arrow-forward-outline" size={17} color="#709687"/>
-          </Pressable>)}
-        </View>
-      </View>
       <View style={s.topPanels}>
         <View style={s.recentColumn}>
           <View style={s.panel}>
             <View style={s.panelHeading}>
               <View style={s.flex}><Text style={s.panelTitle}>Latest verified transactions</Text>
-                <Text style={s.info}>Confirmed donations only · click to inspect the record</Text>
+                <Text style={s.info}>Open a specific payment to inspect its transaction and donor evidence.</Text>
               </View>
-              <SmallButton text="View transactions" onPress={() => setView("all")}/>
             </View>
             {recent.length ? recent.map(row) : <Text style={s.info}>No confirmed donations yet.</Text>}
           </View>
@@ -410,8 +419,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       <View style={s.slimNote}>
         <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
         <Text style={s.slimNoteText}>
-          Demo data: PayMongo Sandbox payments are simulated, not funds in an LGU bank account.
-          Legacy/admin-recorded receipts are reviewed separately under Transactions and Fund Management.
+          PayMongo Sandbox payments are test records, not funds held by the LGU. {legacyReview} legacy submission(s)
+          await manual review; Fund Management reports recorded contributions separately from settled money.
         </Text>
       </View>
     </>}
@@ -465,10 +474,15 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <Text style={s.sectionDescription}>Published and completed cases, approved goals, and recorded donation progress.</Text>
         </View>
       </View>
-      {campaignList(
-        [...campaigns].sort((a, b) => Number(b.status === "published") - Number(a.status === "published")),
-        false,
-      )}
+      <View style={[s.columns, compact && s.columnsCompact]}>
+        <View style={s.mainColumn}>
+          {campaignList(
+            [...campaigns].sort((a, b) => Number(b.status === "published") - Number(a.status === "published")),
+            false,
+          )}
+        </View>
+        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{campaignDetailsPanel}</View>
+      </View>
     </>}
 
     {view === "payouts" && <FundReconciliationPanel
@@ -490,8 +504,10 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           key={alert.id} style={[s.activity, !alert.read && s.selectedRow]}
           accessibilityRole="button"
           onPress={() => {
-            if (alert.donationId) setSelectedId(alert.donationId);
-            setView("all");
+            if (alert.donationId) {
+              setSelectedId(alert.donationId);
+              setView("all");
+            }
             if (!alert.read) void updateDoc(doc(db, "notifications", alert.id), {read: true}).catch(() => {});
           }}>
           <View style={s.alertIcon}>
@@ -612,5 +628,14 @@ const s = StyleSheet.create({
   emptyTitle: {fontFamily: "AdminInterSemiBold", fontSize: 12, color: "#325D54"},
   detailsColumnCompact: {width: "100%", maxWidth: "100%"},
   alertIcon: {width: 36, height: 36, borderRadius: 10, backgroundColor: "#EBF8F1", alignItems: "center", justifyContent: "center"},
+
+  countTag: {fontFamily: "AdminInterSemiBold", fontSize: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#EDF8F1", borderRadius: 8, color: "#0C8366"},
+  selectedCampaignItem: {backgroundColor: "#F0FAF5", borderRadius: 9, paddingHorizontal: 8},
+  inspectorEyebrow: {fontFamily: "AdminInterSemiBold", fontSize: 9.3, color: "#0C8565", letterSpacing: 0.9, marginTop: 7},
+  inspectorHeading: {fontFamily: "AdminInterBold", fontSize: 16, lineHeight: 23, color: "#214B4B"},
+  inspectorStatus: {flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, backgroundColor: "#E9F8EF", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8},
+  inspectorStatusText: {fontFamily: "AdminInterSemiBold", fontSize: 10, textTransform: "capitalize", color: "#167458"},
+  inspectorHint: {flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#F3F9F5", padding: 11, borderRadius: 10, marginTop: 4},
+  inspectorHintText: {flex: 1, fontFamily: "AdminInterRegular", fontSize: 10, lineHeight: 16, color: "#608277"},
 
 });
