@@ -158,10 +158,7 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
           Track campaign funds, verify donation records, and review assistance-release readiness.
         </Text>
       </View>
-      <View style={styles.demoBadge}>
-        <Ionicons name="flask-outline" size={16} color="#0A7D5B" />
-        <Text style={styles.demoBadgeText}>TEST PAYMENT ENVIRONMENT</Text>
-      </View>
+
     </View>
 
     <View style={[styles.overview, compact && styles.overviewStack]}>
@@ -191,42 +188,41 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
           <View style={styles.reviewIcon}><Ionicons name="shield-checkmark-outline" size={19} color="#098565"/></View>
           <Text style={styles.reviewEyebrow}>LGU FUND VERIFICATION</Text>
         </View>
-        <Text style={styles.reviewTitle}>Settlement not confirmed</Text>
+        <Text style={styles.reviewTitle}>LGU settlement verification</Text>
         <Text style={styles.reviewCopy}>
-          Donor payment records are available for review. The actual amount
-          received by the LGU must be checked against authorized settlement evidence.
+          PayMongo payment confirmations and campaign records are tracked here.
+          Confirm actual LGU settlement separately before any real-money disbursement.
         </Text>
         <View style={styles.reviewBottom}>
           <Ionicons name="lock-closed-outline" size={16} color="#678679"/>
-          <Text style={styles.reviewBottomText}>Available for release: Not yet verified</Text>
+          <Text style={styles.reviewBottomText}>Actual cash available: Not verified</Text>
         </View>
       </View>
     </View>
 
     <View style={styles.demoNotice}>
-      <Ionicons name="information-circle-outline" size={18} color="#467C72"/>
+      <Ionicons name="information-circle-outline" size={17} color="#467C72"/>
       <Text style={styles.demoText}>
-        Payment records are tracked by their original source. PayMongo test charges are
-        not settled LGU funds; manual entries are never treated as provider-confirmed.
-        Release instructions are recorded separately from actual bank or wallet transfers.
+        Recorded funding includes PayMongo-confirmed test transactions and separate legacy entries.
+        Neither represents an actual settled LGU balance.
       </Text>
     </View>
 
     <View style={styles.sectionHeading}>
       <View style={styles.flex}>
         <Text style={styles.sectionTitle}>Fund release workflow</Text>
-        <Text style={styles.sectionSubtitle}>How an approved donation moves toward resident assistance</Text>
+        <Text style={styles.sectionSubtitle}>From donor confirmation to resident assistance</Text>
       </View>
     </View>
     <View style={styles.stages}>
       <Stage number="01" name="Donor payments" detail="PayMongo webhook verified" current/>
       <Stage number="02" name="LGU fund review" detail="Confirm funding and assistance eligibility" />
       <Stage number="03" name="Authorization" detail="Approve release for verified Resident" />
-      <Stage number="04" name="Release instruction" detail="Record GCash/Maya test transfer details" />
+      <Stage number="04" name="Release instruction" detail="Prepare a GCash/Maya release instruction" />
       <Stage number="05" name="Resident response" detail="Acknowledge release notice or report an issue" />
     </View>
     <Text style={styles.workflowNote}>
-      LGU Admin controls approval and release instructions. Only the verified Resident linked to the originating Assistance Request can review and respond.
+      LGU Admin reviews and authorizes releases; only the matched, identity-verified requesting Resident can acknowledge the record or raise an issue.
     </Text>
 
     {mode === "admin" && <FundReleaseControls campaigns={campaigns} ready={ready}/>}
