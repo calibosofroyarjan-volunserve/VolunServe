@@ -77,7 +77,7 @@ const donorLabel = (r: DonationRow) =>
 const payMode = (r: DonationRow) =>
   r.paymentProvider === "paymongo" ? (
     r.paymongoLivemode === true ? "PayMongo Live" :
-    r.paymongoLivemode === false ? "PayMongo Sandbox" : "PayMongo (mode unknown)"
+    r.paymongoLivemode === false ? "PayMongo (Test)" : "PayMongo (mode unknown)"
   ) : "Manual / legacy";
 const campaignImage = (c: CampaignRow) =>
   [ ...(c.publicPhotoUrls || []), ...(c.photoUrls || []), ...(c.imageUrls || [])]
@@ -653,7 +653,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
         <Text style={s.tableMain}>{selected.donorNote}</Text>
       </View>}
       {selected.paymentProvider === "paymongo" && selected.paymongoLivemode === false &&
-        <Text style={s.testFlag}>TEST TRANSACTION · PayMongo Sandbox · no real funds transferred</Text>}
+        <Text style={s.testFlag}>Provider-confirmed test payment · no actual funds transferred</Text>}
       {donor && <View style={s.note}><Text style={s.detailLabel}>Linked account</Text>
         <Text style={s.tableMain}>{donor.fullName || donorLabel(selected)}</Text>
         <Text style={s.info}>{donor.email || "Email not available"} · {donor.city || "City not available"}</Text>
@@ -667,12 +667,9 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       <View style={s.flex}>
         <Text style={s.eyebrow}>VOLUNSERVE · LGU DONATIONS</Text>
         <Text style={s.title}>Donations</Text>
-        <Text style={s.subtitle}>Manage verified donations, campaigns, and fund records.</Text>
+        <Text style={s.subtitle}>Monitor donor payments, campaigns, assistance releases, and LGU approvals.</Text>
       </View>
-      <View style={s.demoLabel}>
-        <Ionicons name="flask-outline" size={14} color="#128064"/>
-        <Text style={s.demoLabelText}>PayMongo · Test Mode</Text>
-      </View>
+
     </View>
     {!!problem && <Text style={s.error}>{problem}</Text>}
 
@@ -858,7 +855,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 <View style={s.flex}>
                   <Text style={s.reviewTitle} numberOfLines={1}>
                     {item.paymentProvider === "paymongo" && item.paymongoLivemode === false
-                      ? "Sandbox payment" : item.paymentProvider !== "paymongo"
+                      ? "Provider-confirmed (Test)" : item.paymentProvider !== "paymongo"
                         ? "Legacy donation" : "Payment"}
                   </Text>
                   <Text style={s.reviewDetail} numberOfLines={1}>
@@ -947,7 +944,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       <View style={s.transactionMetrics}>
         {([
           ["Total Verified Test Payments",peso(transactionPaidTotal),"wallet-outline",
-            "Confirmed PayMongo Sandbox payments"],
+            "Confirmed PayMongo (Test) payments"],
           ["Pending Payments",String(transactionPending),"time-outline",
             "Provider pending and legacy submissions"],
           ["Confirmed Donation Records",String(transactionVerified),"checkmark-circle-outline",
