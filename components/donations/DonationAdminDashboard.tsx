@@ -26,7 +26,8 @@ type DonationRow = {
 };
 type CampaignRow = {
   id: string; title?: string; status?: string; monetaryGoal?: number;
-  verifiedAmountReceived?: number; publicPhotoUrls?: string[];
+  verifiedAmountReceived?: number; updatedAt?: any; publishedAt?: any; createdAt?: any;
+  publicPhotoUrls?: string[];
   photoUrls?: string[]; imageUrls?: string[]; generalArea?: string;
   sourceAssistanceRequestId?: string;
 };
@@ -103,6 +104,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const allowed = !!user && !!profile && isApprovedProfile(profile) && profile.role === mode;
   const { width } = useWindowDimensions();
   const compact = width < 1320;
+  const narrow = width < 970;
   const [records, setRecords] = useState<DonationRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
@@ -116,6 +118,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [expandedReviewKey, setExpandedReviewKey] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState("");
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
@@ -190,6 +193,18 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       icon: "alert-circle-outline" as const})),
   ];
   const recentActivity = records.slice(0, 3);
+  const progressCampaigns = campaigns
+    .filter(c => numeric(c.monetaryGoal) > 0)
+    .sort((a,b) => {
+      const aDone = numeric(a.verifiedAmountReceived) >= numeric(a.monetaryGoal);
+      const bDone = numeric(b.verifiedAmountReceived) >= numeric(b.monetaryGoal);
+      return Number(aDone) - Number(bDone) ||
+        String(a.title || "").localeCompare(String(b.title || ""));
+    });
+  const progressVisible = showAllCampaigns ? progressCampaigns : progressCampaigns.slice(0,3);
+  const campaignDonorCount = (campaignId: string) =>
+    new Set(records.filter(r => r.campaignId === campaignId && isConfirmed(r))
+      .map(r => r.donorUid || "unlinked:" + r.id)).size;
   const unreadCount = alerts.filter(a => !a.read).length;
   const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
   const relatedAlertDonation = selectedAlert?.donationId
@@ -376,12 +391,12 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <View style={s.head}>
       <View style={s.flex}>
         <Text style={s.eyebrow}>VOLUNSERVE · LGU DONATIONS</Text>
-        <Text style={s.title}>Donation Management</Text>
-        <Text style={s.subtitle}>Verified assistance campaigns, donor payments and transparent fund monitoring.</Text>
+        <Text style={s.title}>Donations</Text>
+        <Text style={s.subtitle}>Manage verified donations, campaigns, and fund records.</Text>
       </View>
       <View style={s.demoLabel}>
         <Ionicons name="flask-outline" size={14} color="#128064"/>
-        <Text style={s.demoLabelText}>PAYMONGO SANDBOX · DEMO</Text>
+        <Text style={s.demoLabelText}>PayMongo · Test Mode</Text>
       </View>
     </View>
     {!!problem && <Text style={s.error}>{problem}</Text>}
@@ -389,14 +404,14 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     <View style={s.tabs}>
       {([
         ["overview", "Overview", "grid-outline"],
-        ["all", "Transactions", "receipt-outline"],
         ["campaigns", "Campaigns", "heart-outline"],
+        ["all", "Transactions", "receipt-outline"],
         ["payouts", "Fund Management", "wallet-outline"],
         ["notifications", "Alerts" + (unreadCount ? " (" + unreadCount + ")" : ""), "notifications-outline"],
       ] as const).map(([key, label, icon]) => <Pressable key={key}
         accessibilityRole="tab" accessibilityState={{selected: view === key}}
         onPress={() => setView(key)} style={[s.tab, view === key && s.tabActive]}>
-        <Ionicons name={icon} size={15} color={view === key ? "#FFFFFF" : "#698078"}/>
+        <Ionicons name={icon} size={16} color={view === key ? "#08775D" : "#68818B"}/>
         <Text style={[s.tabText, view === key && s.tabTextActive]}>{label}</Text>
       </Pressable>)}
     </View>
@@ -404,28 +419,36 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     {view === "overview" && <>
       <View style={s.sectionIntro}>
         <View style={s.flex}>
-          <Text style={s.sectionEyebrow}>DONATION OPERATIONS · AT A GLANCE</Text>
+          <Text style={s.sectionEyebrow}>LGU DONATION OPERATIONS</Text>
           <Text style={s.sectionTitle}>Overview</Text>
           <Text style={s.sectionDescription}>
-            Key figures, records that need attention, and the latest activity. Complete each task in its dedicated workspace.
+            Donation activity and records requiring review.
           </Text>
         </View>
       </View>
       <View style={s.metrics}>
         {([
-          ["Verified test payments", peso(testReceived), "card-outline", "PayMongo Sandbox · not real funds"],
-          ["Pending records", String(pending), "time-outline", "Provider pending and legacy submissions"],
+          ["Verified test payments", peso(testReceived), "card-outline", "Confirmed test transactions"],
+          ["Pending payments", String(pending), "time-outline", "Pending and submitted records"],
           ["Published campaigns", String(campaigns.filter(c => c.status === "published").length),
-            "heart-outline", "Includes campaigns that may need goal review"],
-          ["Recorded donors", String(donors), "people-outline", "Unique accounts with confirmed donations"],
+            "layers-outline", "Published campaign records"],
+          ["Confirmed donors", String(donors), "people-outline", "Unique confirmed donor accounts"],
         ] as const).map(([title, value, icon, description]) =>
           <View key={title} style={s.metric}>
-            <View style={s.metricTop}>
-              <Text style={s.metricLabel}>{title}</Text>
-              <Ionicons name={icon} size={19} color="#0D8F70"/>
+            <View style={s.metricLine}>
+              <View style={[s.metricIcon,
+                title === "Pending payments" && s.metricIconAmber,
+                title === "Confirmed donors" && s.metricIconBlue]}>
+                <Ionicons name={icon} size={21}
+                  color={title === "Pending payments" ? "#AD751A" :
+                    title === "Confirmed donors" ? "#176DAB" : "#078C69"}/>
+              </View>
+              <View style={s.flex}>
+                <Text style={s.metricLabel}>{title}</Text>
+                <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
+                <Text style={s.metricDescription}>{description}</Text>
+              </View>
             </View>
-            <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
-            <Text style={s.metricDescription}>{description}</Text>
           </View>)}
       </View>
       <View style={s.overviewSummary}>
@@ -433,8 +456,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <View style={s.panel}>
             <View style={s.panelHeading}>
               <View style={s.flex}>
-                <Text style={s.panelTitle}>Needs attention</Text>
-                <Text style={s.info}>Actual records flagged for LGU review.</Text>
+                <Text style={s.panelTitle}>Needs Attention</Text>
+                <Text style={s.info}>Records requiring LGU review.</Text>
               </View>
               <Text style={s.reviewCount}>{ready && campaignReady ? reviewItems.length : "—"} flagged</Text>
             </View>
@@ -546,8 +569,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           <View style={s.panel}>
             <View style={s.panelHeading}>
               <View style={s.flex}>
-                <Text style={s.panelTitle}>Recent activity</Text>
-                <Text style={s.info}>Latest three transactions, shown as a brief activity feed.</Text>
+                <Text style={s.panelTitle}>Recent Activity</Text>
+                <Text style={s.info}>Latest recorded donation transactions.</Text>
               </View>
             </View>
             {!ready ? <Text style={s.info}>Loading activity…</Text> :
@@ -575,11 +598,73 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           </View>
         </View>
       </View>
-      <View style={s.slimNote}>
-        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
-        <Text style={s.slimNoteText}>
-          PayMongo Sandbox payments are simulated. Recorded donations are not proof of settled LGU funds or completed beneficiary transfers.
-        </Text>
+      <View style={[s.panel, s.progressPanel]}>
+        <View style={s.panelHeading}>
+          <View style={s.progressHeaderLeft}>
+            <View style={s.progressHeadingIcon}>
+              <Ionicons name="stats-chart-outline" size={19} color="#058764"/>
+            </View>
+            <View style={s.flex}>
+              <Text style={s.panelTitle}>Campaign Progress</Text>
+              <Text style={s.info}>Approved fundraising goals and recorded contributions.</Text>
+            </View>
+          </View>
+          <Text style={s.progressCount}>{progressCampaigns.length} funded goal{progressCampaigns.length === 1 ? "" : "s"}</Text>
+        </View>
+        {!ready || !campaignReady ? <Text style={s.info}>Loading campaign progress…</Text> :
+          progressVisible.length ? <>
+            <ScrollView horizontal={narrow} showsHorizontalScrollIndicator={false}>
+              <View style={s.progressTable}>
+                <View style={s.progressTableHead}>
+                  <Text style={[s.progressTh, s.progressCampaignCol]}>Campaign</Text>
+                  <Text style={[s.progressTh, s.progressAmountCol]}>Goal</Text>
+                  <Text style={[s.progressTh, s.progressAmountCol]}>Raised</Text>
+                  <Text style={[s.progressTh, s.progressBarCol]}>Progress</Text>
+                  <Text style={[s.progressTh, s.progressStatusCol]}>Status</Text>
+                  <Text style={[s.progressTh, s.progressDonorCol]}>Donors</Text>
+                </View>
+                {progressVisible.map(c => {
+                  const goal = numeric(c.monetaryGoal);
+                  const raised = numeric(c.verifiedAmountReceived);
+                  const fraction = goal > 0 ? Math.min(100, raised / goal * 100) : 0;
+                  const completed = goal > 0 && raised >= goal - 0.01;
+                  const donorCount = campaignDonorCount(c.id);
+                  return <View key={c.id} style={s.progressTableRow}>
+                    <View style={s.progressCampaignCol}>
+                      <Text style={s.progressCampaignName} numberOfLines={2}>
+                        {c.title || "Untitled campaign"}
+                      </Text>
+                    </View>
+                    <Text style={[s.progressCell, s.progressAmountCol]}>{peso(goal)}</Text>
+                    <Text style={[s.progressCell, s.progressAmountCol]}>{peso(raised)}</Text>
+                    <View style={s.progressBarCol}>
+                      <View style={s.progressMeter}>
+                        <View style={[s.progressMeterFill, {width: (fraction + "%") as any}]}/>
+                      </View>
+                      <Text style={s.progressPct}>{Math.round(fraction)}%</Text>
+                    </View>
+                    <View style={s.progressStatusCol}>
+                      <Text style={[s.progressStatus, completed ? s.progressReached : s.progressOngoing]}>
+                        {completed ? "Goal reached" : c.status === "closed" ? "Closed" : "In progress"}
+                      </Text>
+                    </View>
+                    <Text style={[s.progressCell, s.progressDonorCol]}>{donorCount}</Text>
+                  </View>;
+                })}
+              </View>
+            </ScrollView>
+            {progressCampaigns.length > 3 && <Pressable accessibilityRole="button"
+              onPress={() => setShowAllCampaigns(!showAllCampaigns)}
+              style={s.showMoreCampaigns}>
+              <Text style={s.showMoreCampaignsText}>
+                {showAllCampaigns ? "Show fewer campaigns" : "Show all " + progressCampaigns.length + " campaigns"}
+              </Text>
+              <Ionicons name={showAllCampaigns ? "chevron-up" : "chevron-down"} size={15} color="#087D60"/>
+            </Pressable>}
+          </> : <View style={s.overviewEmpty}>
+            <Ionicons name="layers-outline" size={22} color="#87A399"/>
+            <Text style={s.info}>No campaigns with an approved monetary goal recorded.</Text>
+          </View>}
       </View>
     </>}
 
@@ -760,26 +845,26 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
 }
 
 const s = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: "#F5F9F7"},
-  content: {width: "100%", maxWidth: 1600, alignSelf: "center", padding: 22, paddingBottom: 55, gap: 17},
+  screen: {flex:1,backgroundColor:"#F8FAFB"},
+  content: {width:"100%",maxWidth:1660,alignSelf:"center",paddingHorizontal:24,paddingTop:20,paddingBottom:55,gap:17},
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   flex: { flex: 1, minWidth: 0 },
-  head: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 3},
-  title: {fontFamily: "AdminInterBold", fontSize: 27, color: "#193A45", letterSpacing: -0.65, marginTop: 4},
-  subtitle: {fontFamily: "AdminInterRegular", marginTop: 6, color: "#65828B", fontSize: 11.6, lineHeight: 19},
+  head: {flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:14,paddingBottom:8},
+  title: {fontFamily:"AdminInterBold",fontSize:34,letterSpacing:-0.95,color:"#153644",marginTop:6},
+  subtitle: {fontFamily:"AdminInterRegular",marginTop:6,color:"#647E90",fontSize:12.6,lineHeight:20},
   notice: { padding: 12, borderRadius: 13, backgroundColor: "#EAF9F2",
     borderWidth: 1, borderColor: "#C6EEDD", flexDirection: "row", gap: 9, alignItems: "center" },
   noticeText: { color: "#276155", flex: 1, fontSize: 11, lineHeight: 17 },
   error: {fontFamily: "AdminInterMedium", color: "#BB2C36", padding: 12, backgroundColor: "#FFF0F1", borderRadius: 9},
-  metrics: {flexDirection: "row", flexWrap: "wrap", gap: 12},
-  metric: {flexGrow: 1, flexBasis: 204, minWidth: 167, borderRadius: 14, borderWidth: 1, borderColor: "#DBE8E3", backgroundColor: "#FFFFFF", padding: 18, gap: 7, shadowColor: "#135744", shadowOpacity: 0.035, shadowRadius: 11, shadowOffset: {width: 0,height: 4}, elevation: 1},
-  metricValue: {fontFamily: "AdminInterBold", fontSize: 24, color: "#116A51", marginTop: 3},
-  metricLabel: {fontFamily: "AdminInterSemiBold", fontSize: 11, color: "#52746D", flex: 1},
-  tabs: {flexDirection: "row", flexWrap: "wrap", gap: 8, borderBottomWidth: 1, borderBottomColor: "#E3EDE8", paddingBottom: 13},
-  tab: {flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 12, paddingHorizontal: 15, backgroundColor: "#FFFFFF", borderColor: "#DEEAE4", borderWidth: 1, borderRadius: 10},
-  tabActive: {backgroundColor: "#098C6E", borderColor: "#098C6E", shadowColor: "#067E5B", shadowOpacity: 0.11, shadowRadius: 10, shadowOffset: {width:0,height:4}, elevation: 1},
-  tabText: {fontFamily: "AdminInterSemiBold", fontSize: 11, color: "#4A6A66"},
-  tabTextActive: {color: "#FFFFFF"},
+  metrics: {flexDirection:"row",flexWrap:"wrap",gap:13},
+  metric: {flexGrow:1,flexBasis:210,minWidth:170,paddingVertical:21,paddingHorizontal:17,minHeight:123,borderWidth:1,borderColor:"#E2EAED",backgroundColor:"#FFFFFF",borderRadius:14,shadowColor:"#173F4C",shadowOpacity:0.045,shadowRadius:15,shadowOffset:{width:0,height:6},elevation:1},
+  metricValue: {fontFamily:"AdminInterBold",fontSize:24,letterSpacing:-0.5,color:"#153F3B",marginTop:5},
+  metricLabel: {fontFamily:"AdminInterSemiBold",fontSize:11.5,color:"#53697F"},
+  tabs: {flexDirection:"row",flexWrap:"wrap",gap:8,borderBottomWidth:1,borderBottomColor:"#E1EBEE",paddingBottom:0,marginBottom:3},
+  tab: {flexDirection:"row",alignItems:"center",gap:9,paddingVertical:15,paddingHorizontal:17,backgroundColor:"transparent",borderBottomColor:"transparent",borderBottomWidth:2,borderTopLeftRadius:6,borderTopRightRadius:6},
+  tabActive: {backgroundColor:"#F1F9F6",borderBottomColor:"#0C8F6F"},
+  tabText: {fontFamily:"AdminInterSemiBold",fontSize:11.7,color:"#4D6576"},
+  tabTextActive: {color:"#08775D"},
   columns: {flexDirection: "row", alignItems: "flex-start", gap: 15},
   columnsCompact: { flexDirection: "column" },
   mainColumn: {flex: 1, minWidth: 0, gap: 13},
@@ -787,14 +872,14 @@ const s = StyleSheet.create({
   topPanels: {flexDirection: "row", alignItems: "stretch", gap: 15, flexWrap: "wrap"},
   recentColumn: {flexGrow: 1.3, flexBasis: 420, minWidth: 0},
   campaignColumn: {flexGrow: 1, flexBasis: 350, minWidth: 0},
-  panel: {backgroundColor: "#FFFFFF", borderColor: "#DDEAE5", borderWidth: 1, borderRadius: 15, padding: 18, gap: 12, shadowColor: "#114D38", shadowOpacity: 0.024, shadowRadius: 12, shadowOffset: {width:0,height:4}, elevation: 1},
-  panelHeading: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap"},
-  panelTitle: {fontFamily: "AdminInterSemiBold", fontSize: 15.5, color: "#1E4149", letterSpacing: -0.15},
+  panel: {backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E1E9ED",borderRadius:15,padding:18,gap:11,shadowColor:"#1D4959",shadowOpacity:0.032,shadowRadius:14,shadowOffset:{width:0,height:5},elevation:1},
+  panelHeading: {flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",minHeight:44},
+  panelTitle: {fontFamily:"AdminInterBold",fontSize:16.2,color:"#203E50",letterSpacing:-0.22},
   smallButton: {paddingHorizontal: 13, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: "#CFE7DB", backgroundColor: "#F8FCFA", alignSelf: "center"},
   primaryButton: {backgroundColor: "#098D6C", borderColor: "#098D6C"},
   smallButtonText: {fontFamily: "AdminInterSemiBold", fontSize: 10.6, color: "#0B7C5E"},
   primaryButtonText: { color: "white" },
-  info: {fontFamily: "AdminInterRegular", fontSize: 10.8, lineHeight: 17, color: "#728990"},
+  info: {fontFamily:"AdminInterRegular",fontSize:11.2,lineHeight:17,color:"#778FA0"},
   tableRow: {flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: "#EAF1EC", paddingVertical: 13, minHeight: 66},
   selectedRow: {backgroundColor: "#F0F9F5", borderRadius: 9, paddingHorizontal: 8},
   donorCell: {flex: 2, flexDirection: "row", gap: 9, alignItems: "center", minWidth: 0},
@@ -828,16 +913,16 @@ const s = StyleSheet.create({
   empty: {minHeight: 155, justifyContent: "center", alignItems: "center", padding: 17, gap: 9},
   activity: {flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: "#E8EFEB"},
   balance: { paddingHorizontal: 4 },
-  eyebrow: {fontFamily: "AdminInterSemiBold", fontSize: 9.5, letterSpacing: 1.15, color: "#0C8366"},
-  demoLabel: {flexDirection: "row", gap: 6, alignItems: "center", paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#EAF8F0", borderWidth: 1, borderColor: "#D4EADC"},
-  demoLabelText: {fontFamily: "AdminInterSemiBold", color: "#168060", fontSize: 9.5, letterSpacing: 0.4},
-  sectionIntro: {flexDirection: "row", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", marginTop: 4},
-  sectionEyebrow: {fontFamily: "AdminInterSemiBold", fontSize: 9.5, color: "#0C8465", letterSpacing: 1.1},
-  sectionTitle: {fontFamily: "AdminInterBold", fontSize: 21, letterSpacing: -0.38, color: "#1D4349", marginTop: 5},
-  sectionDescription: {fontFamily: "AdminInterRegular", color: "#738B90", fontSize: 11, lineHeight: 18, marginTop: 5},
+  eyebrow: {fontFamily:"AdminInterSemiBold",fontSize:10.5,letterSpacing:1.18,color:"#617C82"},
+  demoLabel: {flexDirection:"row",alignItems:"center",gap:7,borderRadius:8,borderWidth:1,borderColor:"#D0E7DC",backgroundColor:"#F0F9F5",paddingHorizontal:12,paddingVertical:10},
+  demoLabelText: {fontFamily:"AdminInterSemiBold",fontSize:10.5,color:"#0E8064"},
+  sectionIntro: {flexDirection:"row",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginTop:0},
+  sectionEyebrow: {fontFamily:"AdminInterSemiBold",fontSize:10,letterSpacing:1.15,color:"#0B8A68"},
+  sectionTitle: {fontFamily:"AdminInterBold",fontSize:25,color:"#163847",letterSpacing:-0.55,marginTop:5},
+  sectionDescription: {fontFamily:"AdminInterRegular",fontSize:12.2,color:"#708699",lineHeight:20,marginTop:4},
   sectionCount: {fontFamily: "AdminInterSemiBold", fontSize: 10.5, color: "#47816F", padding: 10, borderRadius: 8, backgroundColor: "#EBF7F0"},
   metricTop: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8},
-  metricDescription: {fontFamily: "AdminInterRegular", fontSize: 9.7, lineHeight: 16, color: "#84979B"},
+  metricDescription: {fontFamily:"AdminInterRegular",fontSize:10.3,lineHeight:16,color:"#8194A4",marginTop:6},
   workflow: {padding: 19, borderRadius: 15, backgroundColor: "#F9FCFA", borderWidth: 1, borderColor: "#DDEBE3", gap: 14},
   quickGrid: {flexDirection: "row", flexWrap: "wrap", gap: 11},
   quickCard: {flexDirection: "row", alignItems: "center", gap: 10, padding: 13, minWidth: 215, flexBasis: 222, flexGrow: 1, borderWidth: 1, borderColor: "#DEEDE4", borderRadius: 11, backgroundColor: "#FFFFFF"},
@@ -868,24 +953,24 @@ const s = StyleSheet.create({
   inspectorHint: {flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#F3F9F5", padding: 11, borderRadius: 10, marginTop: 4},
   inspectorHintText: {flex: 1, fontFamily: "AdminInterRegular", fontSize: 10, lineHeight: 16, color: "#608277"},
 
-  overviewSummary: {flexDirection: "row", flexWrap: "wrap", gap: 14, alignItems: "flex-start"},
-  overviewColumn: {flexBasis: 390, flexGrow: 1, minWidth: 0},
-  reviewCount: {fontFamily: "AdminInterSemiBold", fontSize: 10, color: "#906C31", paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#FFF3E3", borderRadius: 8},
-  reviewRow: {flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#E8F0EA"},
-  reviewIcon: {width: 38, height: 38, justifyContent: "center", alignItems: "center", borderRadius: 10, backgroundColor: "#FFF4E5"},
-  reviewTitle: {fontFamily: "AdminInterSemiBold", color: "#294A4C", fontSize: 11.1},
-  reviewDetail: {fontFamily: "AdminInterRegular", color: "#718C88", fontSize: 10.2, lineHeight: 16, marginTop: 4},
+  overviewSummary: {flexDirection:"row",flexWrap:"wrap",gap:15,alignItems:"stretch"},
+  overviewColumn: {flexBasis:390,flexGrow:1,minWidth:0},
+  reviewCount: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#9C691E",backgroundColor:"#FFF4E6",paddingHorizontal:12,paddingVertical:8,borderRadius:10},
+  reviewRow: {flexDirection:"row",alignItems:"center",gap:10,paddingVertical:13,borderBottomWidth:0},
+  reviewIcon: {width:39,height:39,borderRadius:11,alignItems:"center",justifyContent:"center",backgroundColor:"#FFF3E7"},
+  reviewTitle: {fontFamily:"AdminInterSemiBold",fontSize:11.7,color:"#264559"},
+  reviewDetail: {fontFamily:"AdminInterRegular",fontSize:10.5,lineHeight:16,color:"#7A8EA2",marginTop:4},
   reviewFoot: {fontFamily: "AdminInterRegular", color: "#946F37", fontSize: 10, lineHeight: 16, paddingTop: 4},
   overviewEmpty: {flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 15},
-  activityFeedRow: {flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E9F0ED"},
-  activityFeedIcon: {width: 38, height: 38, borderRadius: 10, backgroundColor: "#EAF8F0", alignItems: "center", justifyContent: "center"},
-  activityFeedIconPending: {backgroundColor: "#FFF3E4"},
-  activityTime: {fontFamily: "AdminInterRegular", fontSize: 9.5, color: "#93A39E", marginTop: 5},
+  activityFeedRow: {flexDirection:"row",alignItems:"center",gap:10,paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#E8EFF1"},
+  activityFeedIcon: {width:40,height:40,borderRadius:11,alignItems:"center",justifyContent:"center",backgroundColor:"#EAF9F2"},
+  activityFeedIconPending: {backgroundColor:"#FFF3E5"},
+  activityTime: {fontFamily:"AdminInterRegular",fontSize:9.7,color:"#90A1B0",marginTop:5},
   activityAmountColumn: {alignItems: "flex-end", gap: 6},
-  activityAmount: {fontFamily: "AdminInterSemiBold", fontSize: 11.2, color: "#225049"},
+  activityAmount: {fontFamily:"AdminInterBold",fontSize:11.7,color:"#214455"},
 
-  reviewItem: {borderBottomWidth: 1, borderBottomColor: "#E8F0EA"},
-  reviewRowExpanded: {backgroundColor: "#F7FAF8"},
+  reviewItem: {borderBottomWidth:1,borderBottomColor:"#E8EFF1"},
+  reviewRowExpanded: {backgroundColor:"#F5FAF8",borderRadius:8},
   reviewExpanded: {paddingHorizontal: 15, paddingVertical: 13, borderRadius: 9, backgroundColor: "#F8FCFA", borderWidth: 1, borderColor: "#E1EEE7", marginBottom: 10, gap: 8},
   reviewExpandedHeading: {fontFamily: "AdminInterSemiBold", fontSize: 11.8, color: "#275148"},
   reviewExpandedCopy: {fontFamily: "AdminInterRegular", fontSize: 10.7, lineHeight: 18, color: "#607F77"},
@@ -893,7 +978,35 @@ const s = StyleSheet.create({
   reviewDetailLabel: {fontFamily: "AdminInterRegular", fontSize: 10.2, color: "#738B83", flex: 1},
   reviewDetailValue: {fontFamily: "AdminInterSemiBold", fontSize: 10.2, color: "#31574F", flex: 1.4, textAlign: "right"},
   reviewExpandedFoot: {fontFamily: "AdminInterRegular", fontSize: 9.8, lineHeight: 16, color: "#80968E", marginTop: 4},
-  reviewExpandMore: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12},
-  reviewExpandMoreText: {fontFamily: "AdminInterSemiBold", color: "#0D8366", fontSize: 10.5},
+  reviewExpandMore: {flexDirection:"row",alignItems:"center",justifyContent:"flex-start",gap:7,paddingVertical:12},
+  reviewExpandMoreText: {fontFamily:"AdminInterSemiBold",fontSize:10.9,color:"#0A8668"},
+
+  metricLine: {flexDirection:"row",alignItems:"flex-start",gap:13},
+  metricIcon: {width:49,height:49,borderRadius:12,backgroundColor:"#E8F8EF",alignItems:"center",justifyContent:"center"},
+  metricIconAmber: {backgroundColor:"#FFF4E3"},
+  metricIconBlue: {backgroundColor:"#E7F4FF"},
+  progressPanel: {paddingVertical:18,paddingHorizontal:19,gap:13},
+  progressHeaderLeft: {flexDirection:"row",alignItems:"center",gap:12,flex:1,minWidth:220},
+  progressHeadingIcon: {width:39,height:39,borderRadius:10,backgroundColor:"#E8F8F0",justifyContent:"center",alignItems:"center"},
+  progressCount: {fontFamily:"AdminInterSemiBold",fontSize:10.7,color:"#0E8163"},
+  progressTable: {width:"100%",minWidth:730,borderWidth:1,borderColor:"#E3EAEE",borderRadius:10,overflow:"hidden"},
+  progressTableHead: {flexDirection:"row",alignItems:"center",backgroundColor:"#F3F7F9",paddingHorizontal:13,minHeight:38,gap:12},
+  progressTableRow: {flexDirection:"row",alignItems:"center",gap:12,paddingVertical:15,paddingHorizontal:13,borderTopColor:"#EBF0F2",borderTopWidth:1,backgroundColor:"#FFFFFF",minHeight:55},
+  progressTh: {fontFamily:"AdminInterSemiBold",fontSize:10,color:"#6F8495"},
+  progressCampaignCol: {flex:2.25,minWidth:130},
+  progressCampaignName: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#284656"},
+  progressAmountCol: {flex:1,minWidth:74},
+  progressCell: {fontFamily:"AdminInterMedium",fontSize:10.8,color:"#32566B"},
+  progressBarCol: {flex:1.72,minWidth:118,flexDirection:"row",alignItems:"center",gap:9},
+  progressMeter: {flex:1,height:8,backgroundColor:"#E4EAF0",borderRadius:10,overflow:"hidden"},
+  progressMeterFill: {height:"100%",backgroundColor:"#0CA878",borderRadius:10},
+  progressPct: {fontFamily:"AdminInterSemiBold",fontSize:10,color:"#567181",minWidth:29,textAlign:"right"},
+  progressStatusCol: {flex:1.12,minWidth:82},
+  progressStatus: {fontFamily:"AdminInterSemiBold",fontSize:9.7,paddingVertical:6,paddingHorizontal:9,alignSelf:"flex-start",borderRadius:12,overflow:"hidden"},
+  progressReached: {backgroundColor:"#DCF6E4",color:"#087749"},
+  progressOngoing: {backgroundColor:"#E7F2FA",color:"#2876A5"},
+  progressDonorCol: {flex:0.55,minWidth:41},
+  showMoreCampaigns: {alignSelf:"flex-end",flexDirection:"row",gap:7,alignItems:"center",paddingVertical:10,paddingHorizontal:9},
+  showMoreCampaignsText: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#0E8062"},
 
 });
