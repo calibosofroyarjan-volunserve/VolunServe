@@ -403,6 +403,7 @@ export default function Donation() {
   const wide = width >= 1080;
   const medium = width >= 760;
   const spacious = width >= 1300;
+  const compactHero = width < 600;
 
   const { loading, user, profile } = useUserSession();
 
@@ -790,8 +791,12 @@ export default function Donation() {
         </TouchableOpacity>
       )}
       <View style={[styles.donationHero, !spacious && styles.donationHeroMobile]}>
-        <DonationHeroArt />
-        <View style={[styles.donationHeroBody, !spacious && styles.donationHeroBodyMobile]}>
+        <DonationHeroArt compact={compactHero} />
+        <View style={[
+          styles.donationHeroBody,
+          !spacious && styles.donationHeroBodyMobile,
+          compactHero && styles.donationHeroBodyCompact,
+        ]}>
           <Text style={styles.donationHeroEyebrow}>VOLUNSERVE  ·  LGU VERIFIED</Text>
           <Text style={[styles.donationHeroTitle, !spacious && styles.donationHeroTitleMobile]}>Donations</Text>
           <Text style={styles.donationHeroTagline}>Give hope. Support your community.</Text>
@@ -801,15 +806,20 @@ export default function Donation() {
         </View>
         <View style={[styles.donationHeroStats, !spacious && styles.donationHeroStatsMobile]}>
           {([
-            {icon:"heart" as const, value:String(activeCampaignCount), caption:"Active campaigns"},
-            {icon:"checkmark-circle" as const, value:String(completedCampaignCount), caption:"Past campaigns"},
-            {icon:"wallet" as const, value:money(verifiedRaisedTotal), caption:"Verified raised"},
+            {icon:"heart" as const, value:String(activeCampaignCount), caption:"Active Campaigns"},
+            {icon:"checkmark-circle" as const, value:String(completedCampaignCount), caption:"Past Campaigns"},
+            {icon:"layers" as const, value:money(verifiedRaisedTotal), caption:"Verified Raised"},
           ]).map(s=>(
-            <View key={s.caption} style={styles.donationHeroStat}>
-              <Ionicons name={s.icon} size={20} color="#05986E" />
-              <View style={{minWidth:0, flexShrink:1}}>
-                <Text style={styles.donationHeroStatNumber} numberOfLines={1}>{s.value}</Text>
-                <Text style={styles.donationHeroStatCaption}>{s.caption}</Text>
+            <View key={s.caption} style={[styles.donationHeroStat, !spacious && styles.donationHeroStatMobile]}>
+              <Ionicons name={s.icon} size={23} color="#079D67" />
+              <View style={styles.donationHeroStatCopy}>
+                <Text
+                  style={[styles.donationHeroStatNumber, s.caption === "Verified Raised" && styles.donationHeroAmountValue]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >{s.value}</Text>
+                <Text style={styles.donationHeroStatCaption} numberOfLines={1}>{s.caption}</Text>
               </View>
             </View>
           ))}
@@ -4130,83 +4140,145 @@ const styles = StyleSheet.create({
   },
   donationRecentChipPaid: { backgroundColor: "#DDF8EA" },
   donationRecentChipPending: { backgroundColor: "#FFF2CE" },
-  // Premium Donations layout: live data on top of original vector-only artwork.
+  // Reference-inspired light-mint botanical banner; only live Firestore values
+  // are rendered as text over this decorative SVG background.
   donationHero: {
     position: "relative",
-    minHeight: 193,
-    borderRadius: 22,
+    minHeight: 186,
+    borderRadius: 20,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#9AE5BF",
+    borderColor: "#B7EDD5",
     marginBottom: 16,
-    shadowColor: "#075A42",
-    shadowOpacity: 0.17,
-    shadowRadius: 23,
-    shadowOffset: {width:0,height:7},
+    shadowColor: "#075D42",
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   donationHeroMobile: {
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
-    paddingTop: 17,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingBottom: 13,
   },
   donationHeroBody: {
     flex: 1,
     minWidth: 0,
     zIndex: 1,
-    paddingLeft: 172,
-    paddingRight: 14,
-    paddingVertical: 23,
+    paddingLeft: 177,
+    paddingRight: 9,
+    paddingVertical: 21,
   },
-  donationHeroBodyMobile: { flex: 0, paddingLeft: 118, paddingRight: 15, paddingTop: 13, paddingBottom: 10 },
+  donationHeroBodyMobile: {
+    flex: 0,
+    paddingLeft: 173,
+    paddingRight: 14,
+    paddingTop: 12,
+    paddingBottom: 11,
+  },
+  donationHeroBodyCompact: {
+    paddingLeft: 114,
+    paddingRight: 12,
+    paddingTop: 15,
+    paddingBottom: 10,
+  },
   donationHeroEyebrow: {
-    fontSize: 10, letterSpacing: 1.2, fontWeight: "900", color: "#087D5A",
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontWeight: "900",
+    color: "#007755",
   },
   donationHeroTitle: {
-    marginTop: 1, fontSize: 49, lineHeight: 55, letterSpacing: -1.75,
-    color: "#064A38", fontWeight: "900",
+    marginTop: 1,
+    fontSize: 47,
+    lineHeight: 53,
+    letterSpacing: -1.8,
+    color: "#004A35",
+    fontWeight: "900",
   },
-  donationHeroTitleMobile: { fontSize: 30, lineHeight: 36, letterSpacing: -0.8 },
+  donationHeroTitleMobile: {
+    fontSize: 31,
+    lineHeight: 37,
+    letterSpacing: -0.9,
+  },
   donationHeroTagline: {
-    fontSize: 15, fontWeight: "900", lineHeight: 21, color: "#105D4D", marginTop: 2,
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 21,
+    color: "#075842",
+    marginTop: 1,
   },
   donationHeroDescription: {
-    fontSize: 11, lineHeight: 16, color: "#426B6D", marginTop: 7, maxWidth: 420,
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: "#456D70",
+    marginTop: 7,
+    maxWidth: 420,
   },
   donationHeroStats: {
     zIndex: 1,
+    width: "42%",
+    maxWidth: 570,
+    flexShrink: 0,
     flexDirection: "row",
-    gap: 7,
+    gap: 9,
     alignItems: "center",
-    paddingHorizontal: 17,
-    maxWidth: "49%",
+    paddingHorizontal: 13,
   },
   donationHeroStatsMobile: {
+    width: "100%",
     maxWidth: "100%",
+    flexShrink: 1,
     paddingHorizontal: 13,
-    paddingTop: 8,
+    paddingTop: 9,
     flexWrap: "wrap",
     alignSelf: "stretch",
     justifyContent: "space-between",
   },
   donationHeroStat: {
-    flexGrow: 1, flexShrink: 1, minWidth: 103,
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 15,
-    borderRadius: 15,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.98)",
-    backgroundColor: "rgba(255,255,255,0.93)",
-    shadowColor: "#064D40", shadowOpacity: 0.11,
-    shadowRadius: 14, shadowOffset: {width:0,height:5}, elevation: 2,
+    borderColor: "rgba(255,255,255,0.99)",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    shadowColor: "#0A6547",
+    shadowOpacity: 0.11,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  donationHeroStatNumber: { color: "#073E3C", fontSize: 17, fontWeight: "900" },
-  donationHeroStatCaption: { color: "#5B7A83", fontSize: 8.5, marginTop: 1 },
+  donationHeroStatMobile: {
+    flexBasis: 120,
+    minWidth: 120,
+    flexGrow: 1,
+  },
+  donationHeroStatCopy: { minWidth: 0, flexShrink: 1, alignItems: "center" },
+  donationHeroStatNumber: {
+    color: "#132D42",
+    fontSize: 17,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+  },
+  donationHeroAmountValue: { fontSize: 14.5 },
+  donationHeroStatCaption: {
+    color: "#4B7180",
+    fontSize: 9,
+    marginTop: 2,
+    textAlign: "center",
+  },
   donationToolbar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     flexWrap: "wrap", gap: 12, marginTop: 2, marginBottom: 5,
