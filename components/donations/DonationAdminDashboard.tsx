@@ -895,43 +895,169 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
 
     {view === "all" && <>
-      <View style={s.sectionIntro}>
-        <View style={s.flex}>
-          <Text style={s.sectionEyebrow}>DONOR PAYMENT RECORDS</Text>
-          <Text style={s.sectionTitle}>Transactions</Text>
-          <Text style={s.sectionDescription}>Search every donation, verify its payment status, and inspect the associated donor profile.</Text>
-        </View>
-        <Text style={s.sectionCount}>{records.length} records</Text>
+      <View style={s.transactionMetrics}>
+        {([
+          ["Total Verified Test Payments",peso(transactionPaidTotal),"wallet-outline",
+            "Confirmed PayMongo Sandbox payments"],
+          ["Pending Payments",String(transactionPending),"time-outline",
+            "Provider pending and legacy submissions"],
+          ["Confirmed Donation Records",String(transactionVerified),"checkmark-circle-outline",
+            "Confirmed provider and legacy records"],
+          ["Unique Donors",String(donors),"people-outline",
+            "Recorded accounts with confirmed donations"],
+        ] as const).map(([title,value,icon,caption]) =>
+          <View style={s.transactionMetric} key={title}>
+            <View style={s.transactionMetricIcon}>
+              <Ionicons name={icon} size={22} color="#098567"/>
+            </View>
+            <View style={s.transactionMetricText}>
+              <Text style={s.transactionMetricLabel}>{title}</Text>
+              <Text style={s.transactionMetricValue}>{ready ? value : "…"}</Text>
+              <Text style={s.transactionMetricDescription}>{caption}</Text>
+            </View>
+          </View>)}
       </View>
-      <View style={[s.columns, compact && s.columnsCompact]}>
+      <View style={[s.columns,compact && s.columnsCompact,s.txColumns]}>
         <View style={s.mainColumn}>
-          <View style={s.panel}>
-            <View style={s.panelHeading}>
-              <Text style={s.panelTitle}>All donation transactions</Text>
-              <Text style={s.info}>{filtered.length} matched</Text>
+          <View style={[s.panel,s.txRegister]}>
+            <View style={s.txRegisterHead}>
+              <View style={s.flex}>
+                <Text style={s.txPanelTitle}>All donation transactions</Text>
+                <Text style={s.txPanelDescription}>
+                  Search donation records, check payment statuses, and inspect donor information.
+                </Text>
+              </View>
+              <Text style={s.txRecordCount}>{records.length} records</Text>
             </View>
-            <TextInput style={s.search} value={search} onChangeText={setSearch}
-              placeholder="Search donor, campaign or payment reference"
-              placeholderTextColor="#8A9D9B"/>
-            <View style={s.searchRow}>
-              {(["all", "paid", "pending", "rejected"] as const).map(name =>
-                <SmallButton key={name} text={name === "all" ? "All records" :
-                  name === "paid" ? "Confirmed" : name === "pending" ? "Pending" : "Failed / Rejected"}
-                  primary={statusFilter === name} onPress={() => setStatusFilter(name)}/>)}
+            <View style={s.txTools}>
+              <View style={s.txSearchContainer}>
+                <Ionicons name="search-outline" size={18} color="#698599"/>
+                <TextInput
+                  style={s.txSearchInput}
+                  accessibilityLabel="Search donations"
+                  value={search}
+                  onChangeText={next => {setSearch(next);setTransactionPage(1);}}
+                  placeholder="Search donor, campaign, or payment reference…"
+                  placeholderTextColor="#90A3B2"/>
+                {!!search && <Pressable accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => {setSearch("");setTransactionPage(1);}}>
+                  <Ionicons name="close-circle" size={18} color="#8A9DAA"/>
+                </Pressable>}
+              </View>
+              <Pressable accessibilityRole="button"
+                accessibilityLabel={"Payment source: "+transactionSourceLabel}
+                accessibilityState={{expanded:sourceOptionsOpen}}
+                onPress={() => setSourceOptionsOpen(!sourceOptionsOpen)}
+                style={[s.txSourceButton,sourceOptionsOpen && s.txSourceButtonActive]}>
+                <Ionicons name="filter-outline" size={16} color="#315D6D"/>
+                <Text style={s.txSourceButtonText}>{transactionSourceLabel}</Text>
+                <Ionicons name={sourceOptionsOpen ? "chevron-up" : "chevron-down"}
+                  size={16} color="#385F73"/>
+              </Pressable>
             </View>
-            {filtered.length ? filtered.slice(0, 100).map(row) :
-              <Text style={s.info}>No matching donations.</Text>}
-            {filtered.length > 100 && <Text style={s.info}>Showing latest 100 of {filtered.length} donations.</Text>}
+            {sourceOptionsOpen && <View style={s.txSourceOptions}>
+              {transactionSourceOptions.map(option => <Pressable key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{selected:paymentSourceFilter === option.value}}
+                onPress={() => {
+                  setPaymentSourceFilter(option.value);
+                  setSourceOptionsOpen(false);
+                  setTransactionPage(1);
+                }}
+                style={[s.txSourceOption,
+                  paymentSourceFilter===option.value&&s.txSourceOptionActive]}>
+                <Text style={[s.txSourceOptionText,
+                  paymentSourceFilter===option.value&&s.txSourceOptionTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>)}
+            </View>}
+            <View style={s.txFilters}>
+              {([
+                ["all","All records",records.length],
+                ["paid","Confirmed",transactionVerified],
+                ["pending","Pending",transactionPending],
+                ["rejected","Failed / Rejected",transactionFailed],
+              ] as const).map(([value,label,count]) =>
+                <Pressable key={value} accessibilityRole="button"
+                  accessibilityState={{selected:statusFilter===value}}
+                  onPress={() => {setStatusFilter(value);setTransactionPage(1);}}
+                  style={[s.txFilterChip,statusFilter===value&&s.txFilterChipActive]}>
+                  <Text style={[s.txFilterChipText,
+                    statusFilter===value&&s.txFilterChipTextActive]}>{label}</Text>
+                  <View style={[s.txFilterCount,statusFilter===value&&s.txFilterCountActive]}>
+                    <Text style={[s.txFilterCountText,
+                      statusFilter===value&&s.txFilterCountTextActive]}>{count}</Text>
+                  </View>
+                </Pressable>)}
+            </View>
+            <ScrollView horizontal={narrow} showsHorizontalScrollIndicator={false}>
+              <View style={s.txTable}>
+                <View style={s.txTableHead}>
+                  <Text style={[s.txTableHeadText,s.txDonorCol]}>Donor / Campaign</Text>
+                  <Text style={[s.txTableHeadText,s.txAmountCol]}>Amount</Text>
+                  <Text style={[s.txTableHeadText,s.txMethodCol]}>Payment Method</Text>
+                  <Text style={[s.txTableHeadText,s.txDateCol]}>Date & Time</Text>
+                  <Text style={[s.txTableHeadText,s.txStatusCol]}>Status</Text>
+                  <Text style={[s.txTableHeadText,s.txActionCol]}>Action</Text>
+                </View>
+                {!ready ? <View style={s.txTableEmpty}>
+                  <ActivityIndicator color="#0A9971"/>
+                  <Text style={s.info}>Loading transactions…</Text>
+                </View> : pagedTransactions.length ? pagedTransactions.map(row) :
+                  <View style={s.txTableEmpty}>
+                    <Ionicons name="search-outline" size={27} color="#8AA59A"/>
+                    <Text style={s.emptyTitle}>No matching records</Text>
+                    <Text style={s.info}>Try another search or filter.</Text>
+                  </View>}
+              </View>
+            </ScrollView>
+            <View style={s.txPaginationFooter}>
+              <Text style={s.txPaginationText}>
+                {filtered.length
+                  ? "Showing " + ((currentTransactionPage-1)*transactionPageSize+1) +
+                    "–" + Math.min(currentTransactionPage*transactionPageSize,filtered.length) +
+                    " of " + filtered.length + " transactions"
+                  : "0 transactions"}
+              </Text>
+              <View style={s.txPageControls}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Previous transactions page"
+                  disabled={currentTransactionPage===1}
+                  onPress={() => setTransactionPage(currentTransactionPage-1)}
+                  style={[s.txPageButton,currentTransactionPage===1&&s.txPageDisabled]}>
+                  <Ionicons name="chevron-back" size={16} color="#376577"/>
+                </Pressable>
+                {Array.from({length:Math.min(transactionPageCount,5)},(_,i) => {
+                  const pageStart = Math.max(1,
+                    Math.min(currentTransactionPage-2,transactionPageCount-4));
+                  const pageNumber = pageStart+i;
+                  return <Pressable key={pageNumber} accessibilityRole="button"
+                    accessibilityLabel={"Transactions page "+pageNumber}
+                    accessibilityState={{selected:currentTransactionPage===pageNumber}}
+                    onPress={() => setTransactionPage(pageNumber)}
+                    style={[s.txPageButton,
+                      currentTransactionPage===pageNumber&&s.txPageButtonSelected]}>
+                    <Text style={[s.txPageNumber,
+                      currentTransactionPage===pageNumber&&s.txPageNumberSelected]}>
+                      {pageNumber}
+                    </Text>
+                  </Pressable>;
+                })}
+                <Pressable accessibilityRole="button" accessibilityLabel="Next transactions page"
+                  disabled={currentTransactionPage===transactionPageCount}
+                  onPress={() => setTransactionPage(currentTransactionPage+1)}
+                  style={[s.txPageButton,
+                    currentTransactionPage===transactionPageCount&&s.txPageDisabled]}>
+                  <Ionicons name="chevron-forward" size={16} color="#376577"/>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </View>
-        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{detailsPanel}</View>
-      </View>
-      <View style={s.slimNote}>
-        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
-        <Text style={s.slimNoteText}>
-          PayMongo Sandbox confirmed: {peso(testReceived)} · Live confirmed: {peso(liveReceived)} · Other recorded: {peso(otherReceived)}.
-          Payment confirmation alone does not establish settled funds.
-        </Text>
+        <View style={[s.detailsColumn,compact&&s.detailsColumnCompact]}>
+          {detailsPanel}
+        </View>
       </View>
     </>}
 
