@@ -8,6 +8,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import FundReconciliationPanel from "./FundReconciliationPanel";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -23,6 +24,7 @@ type CampaignRow = {
   id: string; title?: string; status?: string; monetaryGoal?: number;
   verifiedAmountReceived?: number; publicPhotoUrls?: string[];
   photoUrls?: string[]; imageUrls?: string[]; generalArea?: string;
+  sourceAssistanceRequestId?: string;
 };
 type DonorProfile = {
   fullName?: string; email?: string; barangay?: string; city?: string;
@@ -94,6 +96,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [records, setRecords] = useState<DonationRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [ready, setReady] = useState(false);
+  const [campaignReady, setCampaignReady] = useState(false);
   const [problem, setProblem] = useState("");
   const [view, setView] = useState<Section>(initialView);
   const [alerts, setAlerts] = useState<{id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any}[]>([]);
@@ -115,7 +118,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
       }, () => { setProblem("Unable to load donation records. Check Firestore access."); setReady(true); }),
       onSnapshot(collection(db, "donationCampaigns"), (snap) => {
         setCampaigns(snap.docs.map(d => ({ ...d.data(), id: d.id } as CampaignRow)));
-      }, () => setProblem("Unable to load campaign records.")),
+        setCampaignReady(true);
+      }, () => { setCampaignReady(false); setProblem("Unable to load campaign records."); }),
     ];
     return () => unsubs.forEach(stop => stop());
   }, [allowed]);
@@ -238,9 +242,13 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
         <Text style={[s.tabText, view === key && s.tabTextActive]}>{label}</Text>
       </Pressable>)}
     </View>
-    {view === "payouts" && <View style={s.notice}><Ionicons name="information-circle-outline" size={20} color="#087665"/>
-      <Text style={s.noticeText}>Verified payment is not equivalent to settlement or release. No bank settlement is inferred from PayMongo Sandbox records. Confirm settlement and distributions using official supporting documents.</Text>
-    </View>}
+    {view === "payouts" && (
+      <FundReconciliationPanel
+        campaigns={campaigns}
+        donations={records}
+        ready={ready && campaignReady && !problem}
+      />
+    )}
     {view === "notifications" ? <View style={s.panel}>
       <Text style={s.panelTitle}>Admin Donation Notifications</Text>
       <Text style={s.info}>Each authorized Admin receives a separate alert when the signed PayMongo webhook confirms payment.</Text>
