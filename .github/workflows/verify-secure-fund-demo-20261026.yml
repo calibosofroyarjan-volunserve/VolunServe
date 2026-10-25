@@ -1,0 +1,31 @@
+name: Verify Secure Donation Fund Demo
+on:
+  push:
+    branches: [feat/secure-demo-fund-release-20261026]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Backend syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/fundReleaseDemoRoutes.js
+      - name: Expo web export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Dist check
+        run: test -f dist/index.html
