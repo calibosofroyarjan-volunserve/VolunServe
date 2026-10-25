@@ -1,6 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from "@expo-google-fonts/inter";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
 import {
@@ -405,6 +413,13 @@ export default function Donation() {
   const medium = width >= 760;
   const spacious = width >= 1280;
   const compactHero = width < 600;
+  const [donationFontsLoaded, donationFontError] = useFonts({
+    DonationInterRegular: Inter_400Regular,
+    DonationInterMedium: Inter_500Medium,
+    DonationInterSemiBold: Inter_600SemiBold,
+    DonationInterBold: Inter_700Bold,
+    DonationInterExtraBold: Inter_800ExtraBold,
+  });
   const modalWide = width >= 1050;
 
   const { loading, user, profile } = useUserSession();
@@ -756,7 +771,7 @@ export default function Donation() {
     }
   };
 
-  if (loading) {
+  if (loading || (!donationFontsLoaded && !donationFontError)) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0F766E" />
@@ -943,7 +958,7 @@ export default function Donation() {
           <View style={styles.webSectionHeaderRow}>
             <View>
               <Text style={styles.webSectionTitle}>My Donations</Text>
-              <Text style={styles.webSectionSubtitle}>Your submitted donation records.</Text>
+              <Text style={styles.webSectionSubtitle}>Your donation activity, payment verification, and history.</Text>
             </View>
             <TouchableOpacity
               style={styles.webCloseButton}
@@ -974,7 +989,7 @@ export default function Donation() {
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
           <View style={[styles.webCampaignPane, styles.webFullCampaignPane]}>
             {showCompletedCampaigns && (
-              <Text style={styles.donationPastHint}>Past campaigns stay visible for transparency. Donations to closed or fully funded causes are unavailable.</Text>
+              <Text style={styles.donationPastHint}>Completed campaigns are shown for transparency. Closed or fully funded campaigns cannot accept new donations.</Text>
             )}
 
             {!campaignsReady ? (
@@ -998,7 +1013,7 @@ export default function Donation() {
                       ? "Closed or fully funded campaigns will appear here once verified."
                       : searchText.trim()
                         ? "Try a different keyword or clear your search to see available causes."
-                        : "There are no open verified fundraising campaigns right now. Explore completed causes while new campaigns are being approved."}
+                        : "No verified campaigns are currently open for donations. You can still explore previously completed causes."}
                   </Text>
                 </View>
                 {!showCompletedCampaigns && !searchText.trim() ? (
@@ -1019,7 +1034,7 @@ export default function Donation() {
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={width >= 1390}
+                    fullGrid={width >= 1390 && listedCampaigns.length >= 3}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
@@ -1032,21 +1047,21 @@ export default function Donation() {
                   <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
                   <View style={{flex:1}}>
                     <Text style={styles.webHowItWorksTitle}>How Donations Work</Text>
-                    <Text style={styles.donationHowSubtitle}>Simple, transparent support for verified community causes.</Text>
+                    <Text style={styles.donationHowSubtitle}>A clear and secure way to support verified community causes.</Text>
                   </View>
                 </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "heart-outline" as const, title: "Choose a Cause", body: "Select a verified campaign and view its progress.", gradient:["#EAFBF4","#F9FFFC"] as const },
-                    { icon: "card-outline" as const, title: "Make a Donation", body: "Choose an amount using PayMongo Test Mode.", gradient:["#E9F6FF","#F8FCFF"] as const },
-                    { icon: "shield-checkmark-outline" as const, title: "Verify Payment", body: "We wait for secure webhook confirmation.", gradient:["#EAF8EF","#F7FFF9"] as const },
-                    { icon: "people-outline" as const, title: "Track Your Support", body: "View your donation history and receipts.", gradient:["#F5FAE4","#FCFFF7"] as const },
+                    { icon: "heart-outline" as const, title: "Choose a cause", body: "Explore an approved campaign and its verified progress.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "card-outline" as const, title: "Make a donation", body: "Select an amount through PayMongo Sandbox checkout.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "shield-checkmark-outline" as const, title: "Verify payment", body: "Payment is recorded only after secure confirmation.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "receipt-outline" as const, title: "Review your support", body: "Check your donation status and available receipts.", gradient:["#FFFFFF","#FBFEFC"] as const },
                   ].map((step,index) => (
                     <LinearGradient key={step.title}
                       colors={step.gradient} start={{x:0,y:0}} end={{x:1,y:1}}
                       style={styles.webHowStep}>
                       <View style={styles.donationHowStepIcon}>
-                        <Ionicons name={step.icon} size={23} color={index===1?"#1577C9":"#009474"} />
+                        <Ionicons name={step.icon} size={23} color="#0B8A69" />
                       </View>
                       <View style={styles.donationStepNumber}>
                         <Text style={styles.donationStepNumberText}>{index+1}</Text>
@@ -1068,8 +1083,8 @@ export default function Donation() {
                   <Ionicons name="receipt-outline" size={21} color="#07916D"/>
                 </View>
                 <View style={{flex:1}}>
-                  <Text style={styles.webHowItWorksTitle}>Recent Donations (My History)</Text>
-                  <Text style={styles.donationHowSubtitle}>Your own donation records, confirmed payment status, and receipts.</Text>
+                  <Text style={styles.webHowItWorksTitle}>Recent donations</Text>
+                  <Text style={styles.donationHowSubtitle}>Your recent payments, verification status, and available receipts.</Text>
                 </View>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="View all my donations"
                   style={styles.donationRecentViewAll}
@@ -1444,7 +1459,7 @@ function CampaignCard({
           <View style={[styles.donationCardFooterCopy,landscape&&styles.donationCardFooterCompact]}>
             <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"heart-outline"} size={15} color="#05896B"/>
             <Text style={styles.donationCardFooterText} numberOfLines={2}>
-              {campaignFinished(campaign) ? "Past campaign" : "View details to support"}
+              {campaignFinished(campaign) ? "Completed campaign" : "View campaign details"}
             </Text>
           </View>
           <LinearGradient colors={["#03B981","#007C66"]} start={{x:0,y:0}} end={{x:1,y:1}}
@@ -1473,7 +1488,7 @@ function CampaignVisual({
         <Image source={{ uri: photoUrl }} style={styles.campaignVisualImage} resizeMode="cover" />
         <View style={styles.photoApprovalBadge}>
           <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
-          <Text style={styles.photoApprovalText}>LGU-approved photo</Text>
+          <Text style={styles.photoApprovalText}>Approved photo</Text>
         </View>
       </View>
     );
