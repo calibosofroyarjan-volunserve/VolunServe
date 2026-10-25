@@ -1,0 +1,29 @@
+name: Validate Premium Emerald Donations
+on:
+  push:
+    branches: [feat/donations-emerald-premium-refresh-20261025]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit --pretty false
+      - name: Backend syntax
+        run: node --check backend/server.js
+      - name: Expo production web export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Verify output
+        run: test -f dist/index.html
