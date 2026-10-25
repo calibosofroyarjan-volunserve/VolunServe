@@ -372,8 +372,7 @@ export default function TabLayout() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.mobileDrawerLabel}>MAIN MODULES</Text>
-              <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
+                            <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
                 {menuItems.map((item) => {
                   const theme = (mode === "volunteer" ? volunteerModuleIdentity : residentModuleIdentity)[item.name];
                   const active = item.name === (segments[segments.length - 1] || "index");
@@ -496,9 +495,6 @@ function DesktopTabBar({
 
   return (
     <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
-      <View pointerEvents="none" style={styles.residentSidebarAmbient}>
-        <Ionicons name="leaf-outline" size={200} color="#72D6BB" />
-      </View>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -514,11 +510,10 @@ function DesktopTabBar({
       </View>
 
       <Text style={styles.residentModeLabel}>{mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}</Text>
-      <Text style={[styles.desktopSectionLabel, styles.residentSectionLabel]}>MAIN MODULES</Text>
 
       <ScrollView
         style={styles.desktopNavigationScroll}
-        contentContainerStyle={styles.desktopNavigation}
+        contentContainerStyle={[styles.desktopNavigation, mode === "resident" && styles.desktopResidentNavigation]}
         showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Main menu navigation"
@@ -672,7 +667,6 @@ function DesktopTabBar({
           </Text>
         </Pressable>
       </View>
-remove motto footer
     </LinearGradient>
   );
 }
@@ -1050,9 +1044,16 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   desktopNavigation: {
-    gap: 5,
-    paddingRight: 5,
-    paddingBottom: 8,
+    gap: 7,
+    paddingRight: 3,
+    paddingBottom: 10,
+  },
+  // Fill remaining height on large desktop displays while allowing scrolling
+  // whenever the viewport is too short for all modules.
+  desktopResidentNavigation: {
+    flexGrow: 1,
+    justifyContent: "space-evenly",
+    paddingVertical: 10,
   },
   desktopNavItem: {
     minHeight: 50,
@@ -1094,8 +1095,8 @@ const styles = StyleSheet.create({
   },
   desktopUtilityArea: {
     flexShrink: 0,
-    marginTop: 8,
-    paddingTop: 14,
+    marginTop: 4,
+    paddingTop: 13,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.18)",
     gap: 4,
@@ -1128,11 +1129,16 @@ const styles = StyleSheet.create({
   },
   residentSidebarAmbient: { position: "absolute", bottom: 20, left: -50, opacity: 0.055 },
   residentModeLabel: {
-    marginTop: 22, paddingHorizontal: 10, color: "#80E8D1",
-    fontSize: 9.5, letterSpacing: 2.1, fontWeight: "900",
+    marginTop: 25,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    color: "#8EE6D1",
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: "800",
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
-  residentNavItem: { minHeight: 58, overflow: "hidden", gap: 11, paddingHorizontal: 8 },
+  residentNavItem: { minHeight: 57, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 14 },
   residentNavItemActive: { backgroundColor: "#079776" },
   residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {
@@ -1142,17 +1148,6 @@ const styles = StyleSheet.create({
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
   residentNavTitle: { fontSize: 12.5, color: "#FFFFFF", fontWeight: "800" },
   residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
-  residentCivicFooter: {
-    marginTop: 8, borderRadius: 13, overflow: "hidden",
-    borderWidth: 1, borderColor: "rgba(117,218,182,0.19)",
-  },
-  residentCivicFooterGradient: { paddingHorizontal: 12, paddingVertical: 9 },
-  residentCivicIllustration: {
-    flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
-    minHeight: 29, opacity: 0.75,
-  },
-  residentCivicFooterCopy: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
-  residentCivicSlogan: { color: "#D9FAE9", fontSize: 9.8, lineHeight: 13, fontWeight: "800", letterSpacing: 0.3 },
   desktopPressed: {
     opacity: 0.72,
   },

@@ -708,9 +708,11 @@ export default function WebHome() {
                 title="Your Current Activity"
                 subtitle={
                   volunteerMode
-                    ? "A quick summary of your response assignments and volunteer activity."
-                    : "A quick summary of your recent reports, requests, and volunteer access."
+                    ? "Your response assignments and volunteer activity."
+                    : "Your recent reports, requests, and volunteer access."
                 }
+                action="View All"
+                onAction={() => router.push(volunteerMode ? "/volunteer-impact" : "/my-cases")}
               />
 
               {loading ? (
@@ -1115,14 +1117,14 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1700,
     alignSelf: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 16,
   },
   hero: {
-    minHeight: 306,
+    minHeight: 302,
     overflow: "hidden",
     borderRadius: 20,
-    paddingHorizontal: 32,
+    paddingHorizontal: 30,
     paddingTop: 18,
     paddingBottom: 20,
     justifyContent: "space-between",
@@ -1305,10 +1307,10 @@ const styles = StyleSheet.create({
   greeting: {
     marginTop: 7,
     color: "#FFFFFF",
-    fontSize: 42,
-    lineHeight: 47,
-    fontWeight: "900",
-    letterSpacing: -1.25,
+    fontSize: 40,
+    lineHeight: 46,
+    fontWeight: "800",
+    letterSpacing: -1.1,
     textShadowColor: "rgba(0,0,0,0.24)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -1466,10 +1468,10 @@ const styles = StyleSheet.create({
   heroRightTitle: {
     marginTop: 0,
     color: "#FFFFFF",
-    fontSize: 25,
+    fontSize: 23,
     lineHeight: 29,
-    fontWeight: "900",
-    letterSpacing: -0.6,
+    fontWeight: "800",
+    letterSpacing: -0.5,
     textShadowColor: "rgba(0,0,0,0.25)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -1508,7 +1510,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   mainGrid: {
-    marginTop: 16,
+    marginTop: 18,
     flexDirection: "row",
     alignItems: "stretch",
     gap: 16,
@@ -1519,15 +1521,15 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 20,
+    padding: 22,
     borderRadius: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#DEEDF2",
     shadowColor: "#0D506A",
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.035,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   panelHeader: {
     flexDirection: "row",
@@ -1557,7 +1559,7 @@ const styles = StyleSheet.create({
   panelTitle: {
     color: "#102C50",
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "800",
     letterSpacing: -0.3,
   },
   panelSubtitle: {
@@ -1572,11 +1574,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   activityRow: {
-    minHeight: 74,
+    minHeight: 77,
     flexDirection: "row",
     alignItems: "center",
     gap: 13,
-    paddingVertical: 11,
+    paddingVertical: 12,
     paddingHorizontal: 4,
   },
   updateRow: {
@@ -1710,8 +1712,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   emergencyPanel: {
-    marginTop: 16,
-    padding: 20,
+    marginTop: 18,
+    padding: 21,
     borderRadius: 20,
     backgroundColor: "#FFFDFD",
     borderWidth: 1,
