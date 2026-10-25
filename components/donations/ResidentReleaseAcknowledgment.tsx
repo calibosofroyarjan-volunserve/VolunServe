@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth } from "../../lib/firebase";
 import WalletBrandLogo from "./WalletBrandLogo";
+import ResidentWalletSetup from "./ResidentWalletSetup";
 
 type Release = {
   id:string; campaignId:string; campaignTitle:string; status:string;
@@ -76,6 +77,7 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
         <Text style={st.refreshText}>Refresh</Text>
       </Pressable>
     </View>
+    <ResidentWalletSetup enabled={enabled}/>
     {!!error&&<Text style={st.error}>{error}</Text>}
     {!!notice&&<Text style={st.success}>{notice}</Text>}
     {!releases.length&&!loading?<Text style={st.empty}>
