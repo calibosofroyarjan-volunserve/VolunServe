@@ -1,6 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import {
   collection,
@@ -1110,7 +1109,7 @@ export default function Donation() {
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
               contentContainerStyle={styles.donationModalScroll}>
-          {selectedCampaign ? <View style={styles.webDetailPane}>
+          {selectedCampaign ? <View style={[styles.webDetailPane,styles.donationModalDetailPane]}>
             <View style={styles.webDetailCard}>
                 <View style={styles.webDetailNavRow}>
                   <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
@@ -2363,14 +2362,14 @@ const styles = StyleSheet.create({
     width: "48.8%",
     minWidth: 255,
   },
-  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 480 },
+  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 490 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
   },
   campaignVisualWrap: {
     position: "relative",
-    height: 178,
+    height: 148,
     backgroundColor: "#DDE7E5",
   },
   campaignVisualImage: {
@@ -2426,7 +2425,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 15,
+    padding: 17,
   },
   badgeRow: {
     flexDirection: "row",
@@ -4209,6 +4208,7 @@ const styles = StyleSheet.create({
   donationModalTopbarLeft: {flexDirection:"row",alignItems:"center",gap:8,flex:1},
   donationModalTopTitle: {fontSize:12,color:"#0E604F",fontWeight:"900"},
   donationModalScroll: {padding:13,paddingBottom:26},
+  donationModalDetailPane: {flex:0,width:"100%"},
   webContainer: {
     width: "100%",
     maxWidth: 1660,
@@ -4260,8 +4260,8 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   webSearchBox: {
-    minWidth: 300,
-    maxWidth: 440,
+    minWidth: 230,
+    maxWidth: 345,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -4304,7 +4304,7 @@ const styles = StyleSheet.create({
   },
   webPrimaryTabs: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
-    gap: 10, marginTop: 18, marginBottom: 5,
+    gap: 9, marginTop: 0, marginBottom: 0,
   },
   webPrimaryTab: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -4418,14 +4418,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   webHowItWorks: {
-    marginTop: 23, padding: 20, borderRadius: 16, backgroundColor: "#FFFFFF",
-    borderColor: "#DFEAEB", borderWidth: 1,
+    marginTop: 17, padding: 18, borderRadius: 17, backgroundColor: "#FAFEFC",
+    borderColor: "#D5EAE5", borderWidth: 1,
   },
   webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
-  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 13 },
+  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 13 },
   webHowStep: {
-    flexGrow: 1, flexBasis: 230, padding: 15, borderRadius: 12,
-    backgroundColor: "#F3F9F8", minWidth: 190, gap: 7,
+    flexGrow: 1, flexBasis: 196, padding: 14, borderRadius: 12,
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F4F9FA", minWidth: 190, gap: 9,
+    borderWidth: 1, borderColor: "#E8F0F2",
   },
   webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
   webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
