@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { useFonts } from "expo-font";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
 } from "@expo-google-fonts/inter";
@@ -116,6 +117,10 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("all");
+  const [campaignFilterOpen, setCampaignFilterOpen] = useState(false);
+  const [campaignPage, setCampaignPage] = useState(1);
   const [expandedReviewKey, setExpandedReviewKey] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showAllCampaigns, setShowAllCampaigns] = useState(false);
@@ -205,6 +210,58 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const campaignDonorCount = (campaignId: string) =>
     new Set(records.filter(r => r.campaignId === campaignId && isConfirmed(r))
       .map(r => r.donorUid || "unlinked:" + r.id)).size;
+  // All dashboard counts and statuses come from the existing Firestore records.
+  // A published campaign without a monetary goal is not considered fundable.
+  const fundedCampaigns = campaigns.filter(c => numeric(c.monetaryGoal) > 0);
+  const countGoalReached = fundedCampaigns.filter(c =>
+    numeric(c.verifiedAmountReceived) >= numeric(c.monetaryGoal) - 0.01).length;
+  const countActiveFundraisers = fundedCampaigns.filter(c =>
+    c.status === "published" &&
+    numeric(c.verifiedAmountReceived) < numeric(c.monetaryGoal) - 0.01).length;
+  const linkedCampaignIds = new Set(campaigns.map(c => c.id));
+  const campaignDonors = new Set(records.filter(r =>
+    isConfirmed(r) && !!r.campaignId && linkedCampaignIds.has(r.campaignId))
+    .map(r => r.donorUid || "unlinked:" + r.id)).size;
+  const campaignFilterOptions = [
+    {value: "all", label: "All Status"},
+    {value: "published", label: "Published"},
+    {value: "goal_reached", label: "Goal Reached"},
+    {value: "closed", label: "Closed"},
+    {value: "needs_goal", label: "Needs Goal Review"},
+  ];
+  const campaignFilterLabel =
+    campaignFilterOptions.find(option => option.value === campaignFilter)?.label || "All Status";
+  const filteredCampaigns = campaigns.filter(c => {
+    const term = campaignSearch.trim().toLowerCase();
+    const matchesSearch = !term || [
+      c.title, c.generalArea, c.id, c.sourceAssistanceRequestId,
+    ].some(value => String(value || "").toLowerCase().includes(term));
+    const goal = numeric(c.monetaryGoal);
+    const reached = goal > 0 && numeric(c.verifiedAmountReceived) >= goal - 0.01;
+    const matchesStatus = campaignFilter === "all" ||
+      (campaignFilter === "goal_reached" && reached) ||
+      (campaignFilter === "published" && c.status === "published" && !reached) ||
+      (campaignFilter === "closed" && c.status === "closed") ||
+      (campaignFilter === "needs_goal" && goal === 0);
+    return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    const getPriority = (c: CampaignRow) => {
+      const goal = numeric(c.monetaryGoal);
+      const reached = goal > 0 &&
+        numeric(c.verifiedAmountReceived) >= goal - 0.01;
+      return c.status === "published" && !reached ? 0 : reached ? 1 :
+        c.status === "closed" ? 2 : 3;
+    };
+    return getPriority(a) - getPriority(b) ||
+      millis(b.publishedAt || b.updatedAt || b.createdAt) -
+      millis(a.publishedAt || a.updatedAt || a.createdAt) ||
+      String(a.title || "").localeCompare(String(b.title || ""));
+  });
+  const campaignPageSize = 5;
+  const totalCampaignPages = Math.max(1, Math.ceil(filteredCampaigns.length / campaignPageSize));
+  const currentCampaignPage = Math.min(campaignPage, totalCampaignPages);
+  const visibleCampaigns = filteredCampaigns.slice(
+    (currentCampaignPage - 1) * campaignPageSize, currentCampaignPage * campaignPageSize);
   const unreadCount = alerts.filter(a => !a.read).length;
   const selectedAlert = alerts.find(a => a.id === selectedAlertId) || null;
   const relatedAlertDonation = selectedAlert?.donationId
@@ -245,67 +302,163 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     setSelectedCampaignId(id);
     setView("campaigns");
   };
-  const campaignList = (items: CampaignRow[], preview: boolean) =>
-    <View style={s.panel}>
-      <View style={s.panelHeading}>
-        <View style={s.flex}>
-          <Text style={s.panelTitle}>{preview ? "Published campaign snapshot" : "Campaign register"}</Text>
-          <Text style={s.info}>
-            {preview
-              ? "Select a campaign to inspect its approved goal and funding record."
-              : "Select a campaign for its unique funding, source and payment overview."}
-          </Text>
-        </View>
-        <Text style={s.countTag}>{items.length} {preview ? "published" : "records"}</Text>
+  const campaignList = <View style={[s.panel, s.campaignRegister]}>
+    <View style={s.registerToolbar}>
+      <View style={s.registerTitleArea}>
+        <Text style={s.panelTitle}>Campaign register</Text>
+        <Text style={s.info}>Select a campaign to review its progress and linked records.</Text>
       </View>
-      {items.length ? items.map(c => {
+      <View style={s.registerTools}>
+        <View style={s.campaignSearchBox}>
+          <Ionicons name="search-outline" size={18} color="#648195"/>
+          <TextInput
+            accessibilityLabel="Search campaigns"
+            value={campaignSearch}
+            onChangeText={next => {setCampaignSearch(next); setCampaignPage(1);}}
+            style={s.campaignSearchInput}
+            placeholder="Search campaigns…"
+            placeholderTextColor="#8DA0AD"
+          />
+          {!!campaignSearch && <Pressable accessibilityRole="button"
+            accessibilityLabel="Clear campaign search"
+            onPress={() => {setCampaignSearch("");setCampaignPage(1);}}>
+            <Ionicons name="close-circle" size={16} color="#8FA2A8"/>
+          </Pressable>}
+        </View>
+        <Pressable accessibilityRole="button"
+          accessibilityLabel={"Filter campaigns. Selected: " + campaignFilterLabel}
+          accessibilityState={{expanded:campaignFilterOpen}}
+          style={[s.campaignFilterButton,campaignFilterOpen && s.campaignFilterButtonOpen]}
+          onPress={() => setCampaignFilterOpen(!campaignFilterOpen)}>
+          <Ionicons name="filter-outline" size={17} color="#28536A"/>
+          <Text style={s.campaignFilterLabel}>{campaignFilterLabel}</Text>
+          <Ionicons name={campaignFilterOpen ? "chevron-up" : "chevron-down"}
+            size={15} color="#57778A"/>
+        </Pressable>
+      </View>
+    </View>
+    {campaignFilterOpen && <View style={s.campaignFilterOptions}>
+      {campaignFilterOptions.map(option => <Pressable key={option.value}
+        accessibilityRole="button"
+        accessibilityState={{selected:campaignFilter === option.value}}
+        style={[s.campaignFilterOption,campaignFilter === option.value && s.campaignFilterOptionActive]}
+        onPress={() => {
+          setCampaignFilter(option.value);
+          setCampaignPage(1);
+          setCampaignFilterOpen(false);
+        }}>
+        <Text style={[s.campaignFilterOptionText,
+          campaignFilter === option.value && s.campaignFilterOptionTextActive]}>
+          {option.label}
+        </Text>
+      </Pressable>)}
+    </View>}
+    {!campaignReady ? <View style={s.registerBlank}>
+      <ActivityIndicator color="#0B8C70"/>
+      <Text style={s.info}>Loading campaigns…</Text>
+    </View> : visibleCampaigns.length ? <View style={s.registerList}>
+      {visibleCampaigns.map(c => {
         const target = numeric(c.monetaryGoal);
         const amount = numeric(c.verifiedAmountReceived);
         const percent = target > 0 ? Math.min(100, Math.round(amount / target * 100)) : 0;
-        const completed = c.status === "closed" || (target > 0 && amount >= target - 0.01);
+        const completed = target > 0 && amount >= target - 0.01;
         const photo = campaignImage(c);
-        return <Pressable
-          key={c.id} accessibilityRole="button"
+        const statusLabel = completed ? "Goal reached" :
+          c.status === "closed" ? "Closed" :
+          c.status === "published" ? "Published" :
+          c.status || "Draft";
+        return <Pressable key={c.id}
+          accessibilityRole="button"
           accessibilityLabel={"Inspect campaign " + (c.title || c.id)}
+          accessibilityState={{selected:selectedCampaignId === c.id}}
           onPress={() => openCampaignRecord(c.id)}
-          style={[s.campaignItem, selectedCampaignId === c.id && !preview && s.selectedCampaignItem]}
-        >
-          {photo ? <Image source={{ uri: photo }} style={s.campaignImage}/> :
-            <View style={[s.campaignImage, s.fallbackImage]}>
-              <Ionicons name="heart-outline" color="#08896E" size={23}/>
+          style={[s.premiumCampaignRow,selectedCampaignId === c.id && s.premiumCampaignRowSelected]}>
+          {photo ? <Image source={{uri:photo}} style={s.premiumCampaignImage}/> :
+            <View style={[s.premiumCampaignImage,s.premiumCampaignImageEmpty]}>
+              <Ionicons name="heart-outline" size={24} color="#0E9271"/>
             </View>}
-          <View style={s.flex}>
-            <View style={s.campaignNameRow}>
-              <Text style={[s.tableMain, s.campaignName]} numberOfLines={2}>{c.title || "Untitled campaign"}</Text>
-              <Text style={[s.campaignStatus, completed ? s.campaignComplete : s.campaignActive]}>
-                {completed ? "Goal reached" : c.status === "published" ? "Published" : c.status || "Draft"}
+          <View style={s.premiumCampaignContent}>
+            <View style={s.premiumCampaignTitleLine}>
+              <View style={s.flex}>
+                <Text style={s.premiumCampaignName} numberOfLines={2}>
+                  {c.title || "Untitled campaign"}
+                </Text>
+                <Text style={s.premiumCampaignCategory} numberOfLines={1}>
+                  {c.generalArea || (c.sourceAssistanceRequestId
+                    ? "Linked assistance request" : "Campaign record")}
+                </Text>
+              </View>
+              <Text style={[s.premiumCampaignBadge,
+                completed ? s.premiumBadgeReached :
+                c.status === "closed" ? s.premiumBadgeClosed : s.premiumBadgePublished]}>
+                {statusLabel}
               </Text>
             </View>
-            <View style={s.campaignMoneyRow}>
-              <Text style={s.tableSecondary}>{peso(amount)} of {target > 0 ? peso(target) : "No approved goal recorded"}</Text>
-              <Text style={s.campaignPercent}>{target ? percent + "%" : "—"}</Text>
+            <Text style={s.premiumCampaignRaised} numberOfLines={2}>
+              {target > 0 ? peso(amount) + " raised of " + peso(target) :
+                peso(amount) + " recorded · No approved monetary goal"}
+            </Text>
+            <View style={s.premiumCampaignProgress}>
+              <View style={s.premiumCampaignProgressTrack}>
+                {target > 0 && <View style={[s.premiumCampaignProgressFill,
+                  {width:(percent+"%") as any}]}/>}
+              </View>
+              <Text style={s.premiumCampaignPercent}>{target > 0 ? percent + "%" : "—"}</Text>
             </View>
-            <View style={s.track}><View style={[s.fill, { width: percent + "%" as any }]}/></View>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#688F82"/>
+          <Ionicons name="chevron-forward" size={19} color="#456F7C"/>
         </Pressable>;
-      }) : <View style={s.smallEmpty}><Ionicons name="heart-outline" size={20} color="#8AA99B"/>
-        <Text style={s.info}>No published campaigns are available.</Text></View>}
-    </View>;
+      })}
+    </View> : <View style={s.registerBlank}>
+      <Ionicons name="search-outline" size={29} color="#8AABA2"/>
+      <Text style={s.emptyTitle}>No campaigns found</Text>
+      <Text style={s.info}>Try another search or status filter.</Text>
+    </View>}
+    <View style={s.registerFooter}>
+      <Text style={s.registerFooterText}>
+        {filteredCampaigns.length
+          ? "Showing " + ((currentCampaignPage-1)*campaignPageSize+1) + "–" +
+            Math.min(currentCampaignPage*campaignPageSize,filteredCampaigns.length) +
+            " of " + filteredCampaigns.length + " campaigns"
+          : "0 campaigns"}
+      </Text>
+      <View style={s.campaignPageControls}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous campaign page"
+          disabled={currentCampaignPage === 1} onPress={() => setCampaignPage(currentCampaignPage-1)}
+          style={[s.campaignPageButton,currentCampaignPage === 1 && s.campaignPageDisabled]}>
+          <Ionicons name="chevron-back" size={17} color="#2A6574"/>
+        </Pressable>
+        <View style={s.campaignPageCurrent}>
+          <Text style={s.campaignPageCurrentText}>{currentCampaignPage}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next campaign page"
+          disabled={currentCampaignPage === totalCampaignPages}
+          onPress={() => setCampaignPage(currentCampaignPage+1)}
+          style={[s.campaignPageButton,currentCampaignPage === totalCampaignPages && s.campaignPageDisabled]}>
+          <Ionicons name="chevron-forward" size={17} color="#2A6574"/>
+        </Pressable>
+      </View>
+    </View>
+  </View>;
 
   const campaignPayments = selectedCampaign ? records.filter(r => r.campaignId === selectedCampaign.id) : [];
   const selectedCampaignPaid = campaignPayments.filter(isConfirmed);
   const selectedCampaignAmount = selectedCampaignPaid.reduce(
     (sum, payment) => sum + amountReceived(payment), 0);
-  const campaignDetailsPanel = <View style={s.panel}>
+  const campaignDetailsPanel = <View style={[s.panel,s.campaignInspectorPanel]}>
     <View style={s.panelHeading}>
       <Text style={s.panelTitle}>Campaign inspection</Text>
       {selectedCampaign && <SmallButton text="Clear selection" onPress={() => setSelectedCampaignId("")}/>}
     </View>
-    {!selectedCampaign ? <View style={s.empty}>
-      <Ionicons name="documents-outline" size={30} color="#82A79A"/>
-      <Text style={s.emptyTitle}>Select a campaign record</Text>
-      <Text style={s.info}>Inspect its approved funding goal, linked assistance source, and transaction records here.</Text>
+    {!selectedCampaign ? <View style={s.campaignInspectorEmpty}>
+      <View style={s.campaignInspectorEmptyIcon}>
+        <Ionicons name="document-text-outline" size={33} color="#0B9471"/>
+      </View>
+      <Text style={s.campaignInspectorEmptyTitle}>No campaign selected</Text>
+      <Text style={s.campaignInspectorEmptyBody}>
+        Select a campaign from the register to review its funding progress,
+        linked assistance request, and payment records.
+      </Text>
     </View> : <>
       <Text style={s.inspectorEyebrow}>CAMPAIGN RECORD</Text>
       <Text style={s.inspectorHeading}>{selectedCampaign.title || "Untitled campaign"}</Text>
@@ -710,21 +863,38 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
 
     {view === "campaigns" && <>
-      <View style={s.sectionIntro}>
-        <View style={s.flex}>
+      <LinearGradient
+        colors={["#EAFBF5","#F6FFFA","#F5FBF9"]}
+        start={{x:0,y:0}} end={{x:1,y:1}}
+        style={s.campaignPremiumBanner}>
+        <View style={s.campaignBannerInfo}>
           <Text style={s.sectionEyebrow}>VERIFIED FUNDRAISING</Text>
-          <Text style={s.sectionTitle}>Campaigns</Text>
-          <Text style={s.sectionDescription}>Published and completed cases, approved goals, and recorded donation progress.</Text>
+          <Text style={s.campaignBannerTitle}>Campaigns</Text>
+          <Text style={s.campaignBannerSubtitle}>
+            Published and completed cases, approved goals, and recorded donation progress.
+          </Text>
         </View>
-      </View>
-      <View style={[s.columns, compact && s.columnsCompact]}>
-        <View style={s.mainColumn}>
-          {campaignList(
-            [...campaigns].sort((a, b) => Number(b.status === "published") - Number(a.status === "published")),
-            false,
-          )}
+        <View style={s.campaignBannerStats}>
+          {([
+            ["layers-outline",String(campaigns.length),"Total Campaigns"],
+            ["radio-button-on-outline",String(countActiveFundraisers),"Active Campaigns"],
+            ["checkmark-circle-outline",String(countGoalReached),"Goals Reached"],
+            ["people-outline",String(campaignDonors),"Confirmed Donors"],
+          ] as const).map(([icon,value,label]) =>
+            <View key={label} style={s.campaignBannerStat}>
+              <Ionicons name={icon} color="#0D8A71" size={23}/>
+              <View style={s.campaignBannerStatText}>
+                <Text style={s.campaignBannerStatValue}>{campaignReady && ready ? value : "…"}</Text>
+                <Text style={s.campaignBannerStatLabel}>{label}</Text>
+              </View>
+            </View>)}
         </View>
-        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{campaignDetailsPanel}</View>
+      </LinearGradient>
+      <View style={[s.columns,compact && s.columnsCompact]}>
+        <View style={s.mainColumn}>{campaignList}</View>
+        <View style={[s.detailsColumn,compact && s.detailsColumnCompact]}>
+          {campaignDetailsPanel}
+        </View>
       </View>
     </>}
 
@@ -865,10 +1035,10 @@ const s = StyleSheet.create({
   tabActive: {backgroundColor:"#F1F9F6",borderBottomColor:"#0C8F6F"},
   tabText: {fontFamily:"AdminInterSemiBold",fontSize:11.7,color:"#4D6576"},
   tabTextActive: {color:"#08775D"},
-  columns: {flexDirection: "row", alignItems: "flex-start", gap: 15},
+  columns: {flexDirection:"row",alignItems:"flex-start",gap:16},
   columnsCompact: { flexDirection: "column" },
   mainColumn: {flex: 1, minWidth: 0, gap: 13},
-  detailsColumn: {width: 345, maxWidth: "100%"},
+  detailsColumn: {width: 350, maxWidth: "100%"},
   topPanels: {flexDirection: "row", alignItems: "stretch", gap: 15, flexWrap: "wrap"},
   recentColumn: {flexGrow: 1.3, flexBasis: 420, minWidth: 0},
   campaignColumn: {flexGrow: 1, flexBasis: 350, minWidth: 0},
@@ -941,7 +1111,7 @@ const s = StyleSheet.create({
   campaignPercent: {fontFamily: "AdminInterSemiBold", fontSize: 10.5, color: "#0B8667"},
   smallEmpty: {flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 15},
   emptyTitle: {fontFamily: "AdminInterSemiBold", fontSize: 12, color: "#325D54"},
-  detailsColumnCompact: {width: "100%", maxWidth: "100%"},
+  detailsColumnCompact: {width:"100%",maxWidth:"100%"},
   alertIcon: {width: 36, height: 36, borderRadius: 10, backgroundColor: "#EBF8F1", alignItems: "center", justifyContent: "center"},
 
   countTag: {fontFamily: "AdminInterSemiBold", fontSize: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#EDF8F1", borderRadius: 8, color: "#0C8366"},
@@ -1008,5 +1178,166 @@ const s = StyleSheet.create({
   progressDonorCol: {flex:0.55,minWidth:41},
   showMoreCampaigns: {alignSelf:"flex-end",flexDirection:"row",gap:7,alignItems:"center",paddingVertical:10,paddingHorizontal:9},
   showMoreCampaignsText: {fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#0E8062"},
+
+  campaignPremiumBanner: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",
+    gap:18,minHeight:125,paddingVertical:25,paddingHorizontal:23,
+    borderWidth:1,borderColor:"#D9EDE6",borderRadius:14,overflow:"hidden",
+    shadowColor:"#135943",shadowOpacity:0.035,shadowRadius:14,shadowOffset:{width:0,height:6},
+  },
+  campaignBannerInfo: {flexGrow:1,flexBasis:330,minWidth:240,gap:6},
+  campaignBannerTitle: {
+    fontFamily:"AdminInterBold",fontSize:29,color:"#153847",letterSpacing:-0.75,
+  },
+  campaignBannerSubtitle: {
+    fontFamily:"AdminInterRegular",fontSize:11.8,lineHeight:19,color:"#688395",maxWidth:490,
+  },
+  campaignBannerStats: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",
+    justifyContent:"flex-end",gap:2,flexGrow:1,
+  },
+  campaignBannerStat: {
+    flexDirection:"row",alignItems:"center",justifyContent:"center",
+    gap:9,minWidth:120,flexGrow:1,flexBasis:116,paddingVertical:10,
+    borderRightWidth:1,borderRightColor:"#D7EAE3",
+  },
+  campaignBannerStatText: {gap:3},
+  campaignBannerStatValue: {
+    fontFamily:"AdminInterBold",fontSize:20,color:"#173E4B",letterSpacing:-0.45,
+  },
+  campaignBannerStatLabel: {
+    fontFamily:"AdminInterRegular",fontSize:9.6,color:"#76909C",
+  },
+  campaignRegister: {padding:0,gap:0,overflow:"hidden",minHeight:440},
+  registerToolbar: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    flexWrap:"wrap",gap:13,paddingHorizontal:19,paddingTop:19,paddingBottom:16,
+  },
+  registerTitleArea: {flexGrow:1,flexBasis:250,minWidth:190,gap:5},
+  registerTools: {flexDirection:"row",flexWrap:"wrap",gap:9,alignItems:"center"},
+  campaignSearchBox: {
+    flexDirection:"row",alignItems:"center",gap:9,
+    minWidth:170,width:205,maxWidth:"100%",
+    borderWidth:1,borderColor:"#DAE7ED",backgroundColor:"#FFFFFF",
+    paddingHorizontal:12,borderRadius:10,height:41,
+  },
+  campaignSearchInput: {
+    fontFamily:"AdminInterRegular",fontSize:11.1,color:"#234857",
+    minWidth:80,flex:1,paddingVertical:9,
+  },
+  campaignFilterButton: {
+    height:41,flexDirection:"row",alignItems:"center",gap:8,
+    borderWidth:1,borderColor:"#DAE7ED",paddingHorizontal:12,
+    borderRadius:10,backgroundColor:"#FFFFFF",
+  },
+  campaignFilterButtonOpen: {borderColor:"#80CAB3",backgroundColor:"#F4FBF8"},
+  campaignFilterLabel: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.8,color:"#294D5E",
+  },
+  campaignFilterOptions: {
+    flexDirection:"row",flexWrap:"wrap",gap:7,
+    paddingHorizontal:17,paddingTop:4,paddingBottom:13,
+    borderBottomWidth:1,borderBottomColor:"#EBF0F1",
+  },
+  campaignFilterOption: {
+    paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:"#E0E9EB",
+    borderRadius:8,backgroundColor:"#FFFFFF",
+  },
+  campaignFilterOptionActive: {backgroundColor:"#E4F7EC",borderColor:"#95D9BC"},
+  campaignFilterOptionText: {
+    fontFamily:"AdminInterMedium",fontSize:10.3,color:"#607986",
+  },
+  campaignFilterOptionTextActive: {fontFamily:"AdminInterSemiBold",color:"#0A7959"},
+  registerBlank: {
+    minHeight:275,alignItems:"center",justifyContent:"center",
+    padding:30,gap:11,borderTopWidth:1,borderTopColor:"#EAF0F2",
+  },
+  registerList: {borderTopWidth:1,borderTopColor:"#EBF0F1"},
+  premiumCampaignRow: {
+    flexDirection:"row",alignItems:"center",gap:13,
+    paddingHorizontal:18,paddingVertical:12,
+    borderBottomWidth:1,borderBottomColor:"#EBF0F2",
+    minHeight:92,backgroundColor:"#FFFFFF",
+  },
+  premiumCampaignRowSelected: {
+    backgroundColor:"#F0FAF5",borderLeftWidth:3,borderLeftColor:"#06966E",
+    paddingLeft:15,
+  },
+  premiumCampaignImage: {
+    width:73,height:70,borderRadius:10,backgroundColor:"#EAF6EF",
+  },
+  premiumCampaignImageEmpty: {alignItems:"center",justifyContent:"center"},
+  premiumCampaignContent: {flex:1,minWidth:0,gap:7},
+  premiumCampaignTitleLine: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10,
+  },
+  premiumCampaignName: {
+    fontFamily:"AdminInterSemiBold",fontSize:11.6,lineHeight:17,color:"#1C3D50",
+  },
+  premiumCampaignCategory: {
+    fontFamily:"AdminInterRegular",fontSize:10,color:"#8498A5",marginTop:3,
+  },
+  premiumCampaignBadge: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.6,borderRadius:7,
+    overflow:"hidden",paddingVertical:6,paddingHorizontal:9,
+    textAlign:"center",minWidth:63,
+  },
+  premiumBadgeReached: {backgroundColor:"#DFF7EB",color:"#087A57"},
+  premiumBadgeClosed: {backgroundColor:"#ECF0F4",color:"#516A76"},
+  premiumBadgePublished: {backgroundColor:"#E4F8ED",color:"#0D8064"},
+  premiumCampaignRaised: {
+    fontFamily:"AdminInterMedium",fontSize:10.4,color:"#577788",
+  },
+  premiumCampaignProgress: {
+    flexDirection:"row",alignItems:"center",gap:9,
+  },
+  premiumCampaignProgressTrack: {
+    height:8,flex:1,backgroundColor:"#E5EDF0",borderRadius:6,overflow:"hidden",
+  },
+  premiumCampaignProgressFill: {
+    height:"100%",backgroundColor:"#0DA77A",borderRadius:6,
+  },
+  premiumCampaignPercent: {
+    minWidth:32,textAlign:"right",
+    fontFamily:"AdminInterSemiBold",fontSize:10.5,color:"#0B8068",
+  },
+  registerFooter: {
+    flexDirection:"row",justifyContent:"space-between",alignItems:"center",
+    flexWrap:"wrap",gap:10,paddingHorizontal:18,paddingVertical:13,minHeight:58,
+  },
+  registerFooterText: {
+    fontFamily:"AdminInterRegular",fontSize:10.5,color:"#78909E",
+  },
+  campaignPageControls: {flexDirection:"row",alignItems:"center",gap:8},
+  campaignPageButton: {
+    width:33,height:33,borderWidth:1,borderColor:"#DFE9ED",
+    borderRadius:9,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#FFFFFF",
+  },
+  campaignPageDisabled: {opacity:0.4},
+  campaignPageCurrent: {
+    width:33,height:33,borderRadius:9,alignItems:"center",
+    justifyContent:"center",backgroundColor:"#07664D",
+  },
+  campaignPageCurrentText: {
+    fontFamily:"AdminInterBold",fontSize:11.5,color:"#FFFFFF",
+  },
+  campaignInspectorPanel: {padding:19,minHeight:440},
+  campaignInspectorEmpty: {
+    flex:1,minHeight:345,alignItems:"center",justifyContent:"center",
+    paddingHorizontal:20,gap:11,
+  },
+  campaignInspectorEmptyIcon: {
+    width:78,height:78,borderRadius:39,backgroundColor:"#EFF7F5",
+    justifyContent:"center",alignItems:"center",marginBottom:8,
+  },
+  campaignInspectorEmptyTitle: {
+    fontFamily:"AdminInterBold",fontSize:14.8,color:"#183F4A",
+    textAlign:"center",
+  },
+  campaignInspectorEmptyBody: {
+    fontFamily:"AdminInterRegular",fontSize:11,lineHeight:19,
+    textAlign:"center",color:"#7E94A1",maxWidth:260,
+  },
 
 });
