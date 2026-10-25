@@ -992,7 +992,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                   </View>
                 </Pressable>)}
             </View>
-            <ScrollView horizontal={narrow} showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={s.txTable}>
                 <View style={s.txTableHead}>
                   <Text style={[s.txTableHeadText,s.txDonorCol]}>Donor / Campaign</Text>
