@@ -703,7 +703,7 @@ export default function Donation() {
     if (!returnBaseUrl) {
       Alert.alert(
         "Web Checkout Required",
-        "PayMongo sandbox checkout is currently enabled on the VolunServe web app.",
+        "Secure PayMongo checkout is currently running in TEST MODE.",
       );
       return;
     }
@@ -711,7 +711,7 @@ export default function Donation() {
     try {
       setSubmitting(true);
       setError("");
-      setCheckoutProgress("Creating secure test checkout...");
+      setCheckoutProgress("Preparing secure donation checkout...");
 
       const campaignSnapshotCampaign = campaigns.find(
         (item) => item.id === selectedCampaign.id && item.status === "published",
@@ -750,7 +750,7 @@ export default function Donation() {
         throw new Error("PayMongo did not return a valid checkout URL.");
       }
 
-      setCheckoutProgress("Opening PayMongo Test Checkout...");
+      setCheckoutProgress("Opening secure payment checkout...");
 
       if (Platform.OS === "web") {
         const browserWindow = (globalThis as any)?.window;
@@ -931,17 +931,17 @@ export default function Donation() {
           />
           <View style={{ flex: 1 }}>
             <Text style={styles.webReturnTitle}>
-              {returnedPaymentState === "cancelled" ? "Test checkout cancelled" :
-                returnIsConfirmed ? "Donation confirmed — thank you!" : "Checking donation payment"}
+              {returnedPaymentState === "cancelled" ? "Checkout cancelled (TEST)" :
+                returnIsConfirmed ? "Test donation confirmed — thank you!" : "Checking donation payment"}
             </Text>
             <Text style={styles.webReturnText}>
               {returnedPaymentState === "cancelled"
                 ? "No payment was confirmed. You may choose another campaign."
                 : returnIsConfirmed
-                  ? "The PayMongo signed webhook verified this sandbox transaction. See My Donations for your receipt status."
+                  ? "PayMongo confirmed the TEST payment through a verified webhook. View My Donations for your receipt."
                   : "Payment is not counted yet. VolunServe is waiting for a verified PayMongo webhook; My Donations updates automatically."}
             </Text>
-            <Text style={styles.webReturnText}>Sandbox/Test Mode · No real funds are transferred.</Text>
+            <Text style={styles.webReturnText}>TEST MODE · No actual payment charged</Text>
           </View>
           <TouchableOpacity accessibilityLabel="Dismiss payment status" onPress={() => {
             setReturnedPaymentState("");
@@ -1059,7 +1059,7 @@ export default function Donation() {
                 <View style={styles.webHowSteps}>
                   {[
                     { icon: "heart-outline" as const, title: "Choose a cause", body: "Explore an approved campaign and its verified progress.", gradient:["#FFFFFF","#FBFEFC"] as const },
-                    { icon: "card-outline" as const, title: "Make a donation", body: "Select an amount through PayMongo Sandbox checkout.", gradient:["#FFFFFF","#FBFEFC"] as const },
+                    { icon: "card-outline" as const, title: "Make a donation", body: "Select an amount through secure PayMongo checkout.", gradient:["#FFFFFF","#FBFEFC"] as const },
                     { icon: "shield-checkmark-outline" as const, title: "Verify payment", body: "Payment is recorded only after secure confirmation.", gradient:["#FFFFFF","#FBFEFC"] as const },
                     { icon: "receipt-outline" as const, title: "Review your support", body: "Check your donation status and available receipts.", gradient:["#FFFFFF","#FBFEFC"] as const },
                   ].map((step,index) => (
@@ -1079,7 +1079,7 @@ export default function Donation() {
                     </LinearGradient>
                   ))}
                 </View>
-                <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
+                <Text style={styles.webHowDisclaimer}>TEST MODE · No real charges or money transfers.</Text>
               </LinearGradient>
             ) : null}
             <LinearGradient colors={["#FFFFFF","#F8FFFC"]} start={{x:0,y:0}} end={{x:1,y:1}}
@@ -1317,10 +1317,10 @@ export default function Donation() {
                             <Ionicons name="shield-checkmark-outline" size={18} color="#0F766E" />
                             <View style={{ flex: 1 }}>
                               <Text style={styles.webOfficialChannelTitle}>
-                                PayMongo Sandbox · GCash Test Checkout
+                                GCash Checkout · TEST MODE
                               </Text>
                               <Text style={styles.webOfficialChannelText}>
-                                Test mode only — no real money will be charged. Payment confirmation is handled automatically by the signed PayMongo webhook; no screenshot or manual transaction reference is required.
+                                Test transaction only. A signed PayMongo webhook updates the payment status automatically; screenshots or manual payment references are not accepted as proof.
                               </Text>
                             </View>
                           </View>
@@ -1926,7 +1926,7 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.historyMessageReceivedText}>
               {sandboxPaid
-                ? "PayMongo confirmed this sandbox payment. No real money was received or transferred."
+                ? "PayMongo verified the TEST payment. No actual funds moved."
                 : paymongo
                   ? "PayMongo confirmed this payment through the verified backend webhook."
                   : "This donation has a confirmed receipt recorded by the authorized team."}
@@ -1938,7 +1938,7 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           <Ionicons name="time-outline" size={16} color="#B7791F" />
           <Text style={styles.historyMessagePendingText}>
             {paymongo
-              ? "Payment is not confirmed yet. VolunServe waits for PayMongo webhook verification before counting this donation. Sandbox checkout never transfers real funds."
+              ? "Payment is pending webhook verification and is not counted yet. This is a TEST transaction."
               : "This donation is not counted until its receipt is verified by the authorized team."}
           </Text>
         </View>

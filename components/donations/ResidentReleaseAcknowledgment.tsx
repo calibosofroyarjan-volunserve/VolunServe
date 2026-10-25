@@ -7,6 +7,7 @@ type Release = {
   id:string; campaignId:string; campaignTitle:string; status:string;
   amount:number; method?:string;walletLast4?:string;
   simulationReference?:string;simulatedAt?:string;
+  releaseProcessor?:string;deliveryStatus?:string;
   acknowledgedAt?:string;acknowledgmentNote?:string;
 };
 const ROOT="https://volunserve.onrender.com/api/funds/my-releases";
@@ -49,10 +50,10 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
     setBusy(true);setError("");setNotice("");
     try {
       await request("/"+id+"/acknowledge",{decision,
-        note:decision==="dispute"?disputeNote:"Demo record reviewed; no real money received."});
+        note:decision==="dispute"?disputeNote:"Release instruction reviewed; no actual funds received."});
       setDisputeId("");setDisputeNote("");
       setNotice(decision==="acknowledge"?
-        "Demo release record acknowledged. This is not a confirmation of real money received.":
+        "Test release notice acknowledged. The LGU Admin can see your response.":
         "Dispute submitted to the LGU for review.");
       await refresh();
     }catch(e:any){setError(e?.message||"Unable to save your response.");}
@@ -63,9 +64,9 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
     <View style={st.head}>
       <View style={st.icon}><Ionicons name="shield-checkmark-outline" color="#078D69" size={21}/></View>
       <View style={st.flex}>
-        <Text style={st.title}>My assistance release records</Text>
+        <Text style={st.title}>My assistance releases</Text>
         <Text style={st.muted}>
-          Review any LGU-approved simulation related to your verified assistance request.
+          Track LGU-approved assistance releases and respond to notices linked to your verified request.
         </Text>
       </View>
       <Pressable accessibilityRole="button" onPress={()=>void refresh()} disabled={loading||busy} style={st.refresh}>
@@ -77,31 +78,34 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
     {!!error&&<Text style={st.error}>{error}</Text>}
     {!!notice&&<Text style={st.success}>{notice}</Text>}
     {!releases.length&&!loading?<Text style={st.empty}>
-      No simulated fund release records are waiting for your review.
+      No assistance release notices are available yet.
     </Text>:releases.map(r=><View key={r.id} style={st.card}>
       <View style={st.cardHeader}>
         <View style={st.flex}>
           <Text style={st.campaign}>{r.campaignTitle||"Donation campaign"}</Text>
           <Text style={st.amount}>{peso(r.amount)} <Text style={st.demo}>(TEST ONLY)</Text></Text>
         </View>
-        <Text style={st.status}>{r.status==="simulated_sent"?"Awaiting your response":
-          r.status==="acknowledged_demo"?"Acknowledged":r.status==="disputed"?"Disputed":r.status}</Text>
+        <Text style={st.status}>{r.status==="simulated_sent"?"Awaiting your review":
+          r.status==="acknowledged_demo"?"Notice acknowledged":r.status==="disputed"?"Issue reported":r.status}</Text>
       </View>
       <Text style={st.muted}>
-        {r.method?.toUpperCase()||"Demo wallet"} · TEST wallet ending {r.walletLast4||"—"}
+        {r.method?.toUpperCase()||"E-wallet"} · Destination ending •••• {r.walletLast4||"—"}
       </Text>
-      <Text style={st.muted}>Reference: {r.simulationReference||"—"}</Text>
+      <Text style={st.muted}>Release reference: {r.simulationReference||"—"}</Text>
+      {!!r.simulatedAt&&<Text style={st.muted}>
+        Recorded: {new Date(r.simulatedAt).toLocaleString("en-PH")}
+      </Text>}
       <View style={st.noticeBox}>
         <Ionicons name="information-circle-outline" size={17} color="#17785C"/>
         <Text style={st.noticeText}>
-          No real GCash or Maya funds have been sent. Acknowledgment confirms this demonstration record only.
+          TEST MODE: This is an LGU internal release record, not confirmation of an actual GCash/Maya transfer.
         </Text>
       </View>
       {r.status==="simulated_sent"&&<>
         <View style={st.actions}>
           <Pressable style={[st.approve,busy&&st.disabled]} disabled={busy} accessibilityRole="button"
             onPress={()=>void decide(r.id,"acknowledge")}>
-            <Text style={st.approveText}>Acknowledge demo record</Text>
+            <Text style={st.approveText}>Confirm notice reviewed</Text>
           </Pressable>
           <Pressable style={st.reject} accessibilityRole="button"
             onPress={()=>setDisputeId(disputeId===r.id?"":r.id)}>
@@ -111,12 +115,13 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
         {disputeId===r.id&&<View style={st.dispute}>
           <Text style={st.label}>Describe your concern</Text>
           <TextInput multiline value={disputeNote} onChangeText={setDisputeNote}
-            accessibilityLabel="Reason for disputing simulated release"
+            accessibilityLabel="Reason for reporting an issue"
             placeholder="Explain the issue with the record…"
             style={st.input}/>
-          <Pressable style={[st.reject,busy&&st.disabled]} disabled={busy}
+          <Pressable style={[st.reject,(busy||disputeNote.trim().length<10)&&st.disabled]}
+            disabled={busy||disputeNote.trim().length<10}
             accessibilityRole="button" onPress={()=>void decide(r.id,"dispute")}>
-            <Text style={st.rejectText}>Submit dispute</Text>
+            <Text style={st.rejectText}>Submit issue</Text>
           </Pressable>
         </View>}
       </>}

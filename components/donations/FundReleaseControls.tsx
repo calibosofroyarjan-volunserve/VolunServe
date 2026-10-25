@@ -14,6 +14,8 @@ type Release = {
   reviewerUid: string; authorizerUid?: string; method?: string;
   walletLast4?: string; simulationReference?: string; reviewNote?: string;
   decisionReason?: string; acknowledgmentNote?: string;
+  releaseProcessor?: string; deliveryStatus?: string;
+  assistanceRequestId?: string;
   reviewedAt?: string; authorizedAt?: string; simulatedAt?: string;
   acknowledgedAt?: string; audit?: {stage:string;actorUid:string;at?:string}[];
 };
@@ -22,11 +24,11 @@ const php = (n: number) => "₱" + Number(n||0).toLocaleString("en-PH",{
 });
 const showStatus = (s:string) => ({
   reviewed:"Awaiting LGU Admin decision",
-  authorized:"Authorized · Ready for demo release",
-  rejected:"Rejected",
-  simulated_sent:"Demo release recorded · Awaiting Resident",
-  acknowledged_demo:"Resident acknowledged demo",
-  disputed:"Resident disputed demo",
+  authorized:"Approved · Ready to prepare release",
+  rejected:"Review rejected",
+  simulated_sent:"Test release recorded · Awaiting Resident",
+  acknowledged_demo:"Resident confirmed release record",
+  disputed:"Resident raised an issue",
 }[s] || s);
 type FundingSummary = {
   campaignId:string;approvedGoal:number;recordedFunding:number;
@@ -98,11 +100,18 @@ export default function FundReleaseControls({campaigns,ready}:{
     } catch (e:any) {
       setFundingLoaded(false);
       setFunding([]);
+      setRows([]);
       setError(e?.message||"Unable to load fund records.");
     }
     finally {setLoading(false);}
   },[request]);
   useEffect(()=>{if(ready)void reload();},[ready,reload]);
+  // Keep payment operations status fresh without modifying any transaction records.
+  useEffect(()=>{
+    if(!ready||busy)return;
+    const timer=setInterval(()=>{void reload();},60_000);
+    return ()=>clearInterval(timer);
+  },[ready,busy,reload]);
   useEffect(()=>{
     if(!fundingLoaded||!eligibleCampaigns.length)return;
     if(selectedId&&eligibleCampaigns.some(c=>c.id===selectedId))return;
@@ -122,6 +131,22 @@ export default function FundReleaseControls({campaigns,ready}:{
     }catch(e:any){setError(e?.message||"Unable to save this action.");}
     finally{setBusy(false);}
   };
+  const counters = useMemo(()=>({
+    pending:rows.filter(r=>r.status==="reviewed").length,
+    approved:rows.filter(r=>r.status==="authorized").length,
+    awaiting:rows.filter(r=>r.status==="simulated_sent").length,
+    resolved:rows.filter(r=>["acknowledged_demo","disputed","rejected"].includes(r.status)).length,
+  }),[rows]);
+  const stageNames=["Donations verified","LGU review","Release authorized","Test release recorded","Resident response"];
+  const stageReached=(status:string,index:number)=>{
+    if(index===0)return true;
+    if(status==="rejected")return index===1;
+    const target=({
+      reviewed:1,authorized:2,simulated_sent:3,
+      acknowledged_demo:4,disputed:4,
+    } as Record<string,number>)[status]??0;
+    return index<=target;
+  };
   const pick=(id:string)=>{
     setSelectedId(id);
     const summary=funding.find(x=>x.campaignId===id);
@@ -131,9 +156,9 @@ export default function FundReleaseControls({campaigns,ready}:{
   return <View style={ss.panel}>
     <View style={ss.top}>
       <View style={ss.flex}>
-        <Text style={ss.head}>Fund release records</Text>
+        <Text style={ss.head}>Payment operations · Assistance releases</Text>
         <Text style={ss.muted}>
-          Review verified test payments, approve or reject the fund review, and record a simulated release.
+          Monitor verified campaign funding, authorize resident assistance, and track every release decision.
         </Text>
       </View>
       <Pressable accessibilityRole="button" onPress={()=>void reload()}
@@ -143,11 +168,23 @@ export default function FundReleaseControls({campaigns,ready}:{
         <Text style={ss.subtleText}>Refresh</Text>
       </Pressable>
     </View>
-    <View style={ss.notice}>
-      <Ionicons name="flask-outline" size={17} color="#16745C"/>
-      <Text style={ss.noticeText}>
-        PayMongo test payments only. This process records a simulation; no real GCash/Maya payment or LGU bank settlement takes place.
-      </Text>
+    <View style={ss.top}>
+      <View style={ss.noticeTag}>
+        <Ionicons name="shield-checkmark-outline" size={15} color="#16745C"/>
+        <Text style={ss.noticeTagText}>TEST MODE · No actual wallet transfer</Text>
+      </View>
+      <Text style={ss.muted}>Auto-refresh every 60 seconds · LGU Admin only</Text>
+    </View>
+    <View style={ss.metricGrid}>
+      {([
+        {label:"Awaiting approval",count:counters.pending,color:"#EAF6F1"},
+        {label:"Approved",count:counters.approved,color:"#EAF6F1"},
+        {label:"Awaiting Resident",count:counters.awaiting,color:"#EDF7F5"},
+        {label:"Closed / Issues",count:counters.resolved,color:"#F3F7F4"},
+      ]).map(item=><View key={item.label} style={[ss.metric,{backgroundColor:item.color}]}>
+        <Text style={ss.metricValue}>{fundingLoaded?item.count:"—"}</Text>
+        <Text style={ss.metricLabel}>{item.label}</Text>
+      </View>)}
     </View>
     {!!error&&<Text style={ss.error}>{error}</Text>}
     {!!notice&&<Text style={ss.success}>{notice}</Text>}
@@ -168,7 +205,7 @@ export default function FundReleaseControls({campaigns,ready}:{
                 showStatus(existing.status) : !fundingLoaded ? "Checking payments…" :
                 check?.ready ? "Eligible for LGU review" : "Not yet eligible"}</Text>
               <Text style={ss.small}>{existing ? "Review amount: "+php(existing.amount) :
-                "Verified PayMongo test: "+php(check?.providerVerifiedTestAmount||0)+
+                "Verified donor payments: "+php(check?.providerVerifiedTestAmount||0)+
                 " · Manual/legacy: "+php(check?.manualLegacyAmount||0)}</Text>
               {!!check&&!check.ready&&<Text style={ss.muted}>{statusDetail(check.reason)}</Text>}
             </View>
@@ -185,30 +222,47 @@ export default function FundReleaseControls({campaigns,ready}:{
           <Text style={ss.muted}>Campaign ID: {selection.id}</Text>
           <Text style={ss.small}>Approved goal: {php(Number(selection.monetaryGoal||0))}</Text>
           <Text style={ss.small}>Recorded campaign funding: {php(activeFunding?.recordedFunding||0)}</Text>
-          <Text style={ss.small}>Provider-confirmed test payments: {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
+          <Text style={ss.small}>PayMongo-confirmed donor payments (TEST): {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
           <Text style={ss.small}>Manual/legacy contributions: {php(activeFunding?.manualLegacyAmount||0)}</Text>
           {!!activeFunding&&!activeFunding.ready&&<View style={ss.notice}>
             <Ionicons name="information-circle-outline" size={17} color="#16745C"/>
             <Text style={ss.noticeText}>{statusDetail(activeFunding.reason)}</Text>
           </View>}
+          {record&&<View style={ss.stepStrip}>
+            {stageNames.map((label,index)=><View key={label}
+              style={[ss.stepTile,stageReached(record.status,index)&&ss.stepTileReached]}>
+              <Ionicons name={stageReached(record.status,index)?"checkmark-circle":"ellipse-outline"}
+                color={stageReached(record.status,index)?"#0C896B":"#91AAA0"} size={15}/>
+              <Text style={ss.stepText}>{label}</Text>
+            </View>)}
+          </View>}
           {record?<View style={ss.infoBlock}>
             <Text style={ss.statusText}>{showStatus(record.status)}</Text>
             <Text style={ss.small}>Reviewed amount: {php(record.amount)}</Text>
-            <Text style={ss.small}>Requesting beneficiary: verified against linked Assistance Request</Text>
-            <Text style={ss.small}>Reviewed by LGU Admin{record.authorizerUid?" · Authorized by LGU Admin":""}</Text>
+            <Text style={ss.small}>Beneficiary: linked, identity-verified requesting Resident</Text>
+            <Text style={ss.small}>Processing authority: LGU Admin{record.authorizerUid?" · Approval recorded":""}</Text>
+            {!!record.reviewedAt&&<Text style={ss.small}>Review filed: {new Date(record.reviewedAt).toLocaleString()}</Text>}
+            {!!record.authorizedAt&&<Text style={ss.small}>Approval date: {new Date(record.authorizedAt).toLocaleString()}</Text>}
             {!!record.method&&<Text style={ss.small}>
               Destination: {record.method.toUpperCase()} (TEST) ·•••• {record.walletLast4}
             </Text>}
             {!!record.method&&<Text style={ss.small}>
-              Processor: VolunServe internal sandbox · No external wallet transfer
+              Processing: VolunServe internal TEST ledger · No external wallet transfer
             </Text>}
             {!!record.simulationReference&&<Text style={ss.small}>
-              Internal demo reference: {record.simulationReference}
+              Test transaction reference: {record.simulationReference}
             </Text>}
             {!!record.acknowledgmentNote&&<Text style={ss.small}>
               Resident response: {record.acknowledgmentNote}
             </Text>}
-            <Text style={ss.muted}>All actions are recorded as a simulated audit trail.</Text>
+            {!!record.simulatedAt&&<Text style={ss.small}>Release entry recorded: {new Date(record.simulatedAt).toLocaleString()}</Text>}
+            {record.status==="simulated_sent"&&<Text style={ss.noticeText}>
+              Waiting for the verified Resident to review the release notice under Donations.
+            </Text>}
+            {record.status==="disputed"&&<Text style={ss.error}>
+              Resident reported an issue. LGU follow-up is required; do not treat this release as resolved.
+            </Text>}
+            <Text style={ss.muted}>Audit trail and statuses are loaded from the secured LGU backend.</Text>
           </View>:<Text style={ss.muted}>
             No review recorded for this campaign yet. The system will validate amounts and the verified requester's account.
           </Text>}
@@ -247,8 +301,8 @@ export default function FundReleaseControls({campaigns,ready}:{
                   disabled={busy||decisionNote.trim().length<10}
                   accessibilityRole="button" onPress={()=>void action(
                     "/"+selection.id+"/authorize",{decision:"approve",reason:decisionNote},
-                    "Simulated release approved.")}>
-                  <Text style={ss.primaryText}>Approve release (demo)</Text>
+                    "Release authorized for test processing.")}>
+                  <Text style={ss.primaryText}>Authorize release</Text>
                 </Pressable>
                 <Pressable style={[ss.secondary,(busy||decisionNote.trim().length<10)&&ss.disabled]}
                   disabled={busy||decisionNote.trim().length<10}
@@ -263,9 +317,9 @@ export default function FundReleaseControls({campaigns,ready}:{
           {record?.status==="authorized"&&<SandboxPayoutForm key={selection.id}
             amount={record.amount} disabled={busy}
             onSubmit={details=>action("/"+selection.id+"/simulate",details,
-              "Internal sandbox release recorded. The verified requesting Resident can review the demo receipt.")}/>}
+              "TEST release recorded. The verified requesting Resident has a release notice to review.")}/>}
           {!!record?.audit?.length&&<View style={ss.actionBlock}>
-            <Text style={ss.fieldLabel}>Audit history</Text>
+            <Text style={ss.fieldLabel}>Transaction and approval history</Text>
             {record.audit.map((row,i)=><Text key={i} style={ss.small}>
               {i+1}. {showStatus(row.stage)} · {row.at ? new Date(row.at).toLocaleString() : "Recorded"}
             </Text>)}
@@ -281,6 +335,19 @@ const ss=StyleSheet.create({
   top:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:11,flexWrap:"wrap"},
   flex:{flex:1,minWidth:0},
   head:{fontFamily:"FundInterBold",fontSize:16,color:"#24454E"},
+  noticeTag:{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:10,paddingVertical:7,
+    borderRadius:8,backgroundColor:"#EAF8F0",borderWidth:1,borderColor:"#CEE9DD"},
+  noticeTagText:{fontFamily:"FundInterSemiBold",fontSize:10,color:"#1C7C62"},
+  metricGrid:{flexDirection:"row",flexWrap:"wrap",gap:9},
+  metric:{flexGrow:1,flexBasis:130,minWidth:115,borderWidth:1,borderColor:"#E4EEE8",
+    borderRadius:10,padding:12,gap:4},
+  metricValue:{fontFamily:"FundInterBold",fontSize:20,color:"#155B4C"},
+  metricLabel:{fontFamily:"FundInterMedium",fontSize:10.5,color:"#648B7B"},
+  stepStrip:{flexDirection:"row",gap:5,flexWrap:"wrap",paddingVertical:3},
+  stepTile:{flexGrow:1,flexBasis:100,backgroundColor:"#F6F8F6",borderRadius:8,
+    padding:7,flexDirection:"row",gap:5,alignItems:"center"},
+  stepTileReached:{backgroundColor:"#E7F7EC"},
+  stepText:{flex:1,fontFamily:"FundInterMedium",fontSize:9.2,color:"#477569"},
   muted:{fontFamily:"FundInterRegular",fontSize:11,color:"#789388",lineHeight:17,marginTop:3},
   small:{fontFamily:"FundInterRegular",fontSize:11,color:"#4E7468",lineHeight:19},
   subtle:{flexDirection:"row",gap:6,alignItems:"center",padding:9,borderRadius:9,

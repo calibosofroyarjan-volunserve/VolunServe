@@ -160,7 +160,7 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
       </View>
       <View style={styles.demoBadge}>
         <Ionicons name="flask-outline" size={16} color="#0A7D5B" />
-        <Text style={styles.demoBadgeText}>DEFENSE DEMO · SIMULATED FUNDS</Text>
+        <Text style={styles.demoBadgeText}>TEST PAYMENT ENVIRONMENT</Text>
       </View>
     </View>
 
@@ -206,9 +206,9 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
     <View style={styles.demoNotice}>
       <Ionicons name="information-circle-outline" size={18} color="#467C72"/>
       <Text style={styles.demoText}>
-        Demonstration data only. PayMongo Sandbox payments do not transfer real money.
-        Existing legacy/manual records are shown together for reporting, but are not
-        relabeled as verified PayMongo payments. No wallet transfer is active.
+        Payment records are tracked by their original source. PayMongo test charges are
+        not settled LGU funds; manual entries are never treated as provider-confirmed.
+        Release instructions are recorded separately from actual bank or wallet transfers.
       </Text>
     </View>
 
@@ -219,13 +219,14 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
       </View>
     </View>
     <View style={styles.stages}>
-      <Stage number="01" name="Donations recorded" detail="Actual saved donation history" current/>
-      <Stage number="02" name="LGU fund review" detail="Reconcile payment and settlement" />
-      <Stage number="03" name="Authorize release" detail="Verify recipient and approval" />
-      <Stage number="04" name="Resident confirmation" detail="Confirm funds received or report an issue" />
+      <Stage number="01" name="Donor payments" detail="PayMongo webhook verified" current/>
+      <Stage number="02" name="LGU fund review" detail="Confirm funding and assistance eligibility" />
+      <Stage number="03" name="Authorization" detail="Approve release for verified Resident" />
+      <Stage number="04" name="Release instruction" detail="Record GCash/Maya test transfer details" />
+      <Stage number="05" name="Resident response" detail="Acknowledge release notice or report an issue" />
     </View>
     <Text style={styles.workflowNote}>
-      Fund reviews and releases below are recorded simulations. Only Admin-approved records and verified requesting Residents can complete the workflow.
+      LGU Admin controls approval and release instructions. Only the verified Resident linked to the originating Assistance Request can review and respond.
     </Text>
 
     {mode === "admin" && <FundReleaseControls campaigns={campaigns} ready={ready}/>}
