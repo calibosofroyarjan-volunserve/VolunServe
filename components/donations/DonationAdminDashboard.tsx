@@ -274,7 +274,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
           </View></View>
           <View style={s.campaignColumn}>{campaignsPanel}</View>
         </View> : view === "campaigns" ? campaignsPanel : null}
-        {view === "all" || view === "overview" || view === "payouts" ?
+        {view === "all" || view === "overview" ?
           <View style={s.panel}>
             <View style={s.panelHeading}><View style={s.flex}><Text style={s.panelTitle}>All Donations</Text>
               <Text style={s.info}>Search, filter and open actual transaction records.</Text></View></View>
