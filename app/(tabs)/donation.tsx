@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
+import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import {
   collection,
   onSnapshot,
@@ -396,9 +397,11 @@ const campaignFinished = (campaign?: DonationCampaign) =>
   campaign?.status === "closed" || campaignFullyFunded(campaign);
 
 export default function Donation() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= 1080;
   const medium = width >= 760;
+  const spacious = width >= 1300;
 
   const { loading, user, profile } = useUserSession();
 
@@ -412,6 +415,7 @@ export default function Donation() {
 
   const [filter, setFilter] = useState<CampaignFilter>("all");
   const [searchText, setSearchText] = useState("");
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -535,6 +539,10 @@ export default function Donation() {
 
   const completedCampaignCount = campaigns.filter(campaignFinished).length;
   const activeCampaignCount = campaigns.length - completedCampaignCount;
+  const verifiedRaisedTotal = useMemo(
+    () => campaigns.reduce((total, campaign) => total + campaignRaised(campaign), 0),
+    [campaigns],
+  );
   // Keep funded campaigns out of Active Campaigns. They remain inspectable
   // under Completed Campaigns, with their verified amount and outcome.
   const visibleCampaigns = useMemo(
@@ -566,7 +574,7 @@ export default function Donation() {
 
   // No automatic campaign selection: a donor must open the campaign card first.
   // This prevents "Donate Now" from appearing before the donor chooses a campaign.
-  const mobileDetailOpen = !medium && !!selectedCampaign && !showHistory;
+  const mobileDetailOpen = false; // Details open in a responsive overlay on all screen sizes.
 
   const selectedGoal = campaignGoal(selectedCampaign);
   const selectedFunded = campaignFinished(selectedCampaign);
@@ -600,7 +608,7 @@ export default function Donation() {
     setSelectedCampaignId(campaignId);
     setShowDonationPanel(false);
     resetDonationForm();
-    pageScrollRef.current?.scrollTo({ y: 0, animated: true });
+    // Keep the grid in place; the campaign opens in a dedicated detail overlay.
   };
 
   const closeMobileCampaignDetails = () => {
@@ -780,54 +788,34 @@ export default function Donation() {
           <Text style={styles.mobileBackText}>Back to Campaigns</Text>
         </TouchableOpacity>
       )}
-      <View style={[styles.webPageHeader, !medium && styles.mobilePageHeader, mobileDetailOpen && styles.mobileHidden]}>
-        <View style={styles.webHeaderCopy}>
-          <Text style={styles.webEyebrow}>VOLUNSERVE · LGU VERIFIED</Text>
-          <Text style={styles.webPageTitle}>Donations</Text>
-          <Text style={styles.webPageSubtitle}>
-            Help build a stronger and safer community through verified campaigns.
+      <View style={[styles.donationHero, !spacious && styles.donationHeroMobile]}>
+        <DonationHeroArt />
+        <View style={[styles.donationHeroBody, !spacious && styles.donationHeroBodyMobile]}>
+          <Text style={styles.donationHeroEyebrow}>VOLUNSERVE  ·  LGU VERIFIED</Text>
+          <Text style={[styles.donationHeroTitle, !spacious && styles.donationHeroTitleMobile]}>Donations</Text>
+          <Text style={styles.donationHeroTagline}>Give hope. Support your community.</Text>
+          <Text style={styles.donationHeroDescription}>
+            Support verified community campaigns and help build a safer, stronger San Jose del Monte.
           </Text>
         </View>
-
-        <View style={[styles.webHeaderActions, !medium && styles.webHeaderActionsStack]}>
-          <View style={[styles.webSearchBox, !medium && styles.mobileSearchBox]}>
-            <Ionicons name="search-outline" size={17} color="#64748B" />
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search campaigns or location"
-              placeholderTextColor="#94A3B8"
-              style={styles.webSearchInput}
-            />
-            {!!searchText && (
-              <TouchableOpacity onPress={() => setSearchText("")}>
-                <Ionicons name="close-circle" size={17} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.webHistoryButton, showHistory && styles.webHistoryButtonActive]}
-            activeOpacity={0.84}
-            onPress={() => setShowHistory((current) => !current)}
-          >
-            <Ionicons
-              name="receipt-outline"
-              size={16}
-              color={showHistory ? "#FFFFFF" : "#0F766E"}
-            />
-            <Text
-              style={[
-                styles.webHistoryButtonText,
-                showHistory && styles.webHistoryButtonTextActive,
-              ]}
-            >
-              My Donations{myDonations.length ? ` (${myDonations.length})` : ""}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.donationHeroStats, !spacious && styles.donationHeroStatsMobile]}>
+          {([
+            {icon:"heart" as const, value:String(activeCampaignCount), caption:"Active campaigns"},
+            {icon:"checkmark-circle" as const, value:String(completedCampaignCount), caption:"Past campaigns"},
+            {icon:"wallet" as const, value:money(verifiedRaisedTotal), caption:"Verified raised"},
+          ]).map(s=>(
+            <View key={s.caption} style={styles.donationHeroStat}>
+              <Ionicons name={s.icon} size={20} color="#05986E" />
+              <View style={{minWidth:0, flexShrink:1}}>
+                <Text style={styles.donationHeroStatNumber} numberOfLines={1}>{s.value}</Text>
+                <Text style={styles.donationHeroStatCaption}>{s.caption}</Text>
+              </View>
+            </View>
+          ))}
         </View>
       </View>
 
+      <View style={[styles.donationToolbar, !medium && styles.donationToolbarMobile]}>
       <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
         {[
           { key: "active", label: "Active Campaigns", count: activeCampaignCount },
@@ -842,6 +830,8 @@ export default function Donation() {
             onPress={() => {
               if (tab.key === "history") {
                 setShowHistory(true);
+                setSelectedCampaignId("");
+                setShowDonationPanel(false);
               } else {
                 setShowHistory(false);
                 setShowCompletedCampaigns(tab.key === "completed");
@@ -855,50 +845,48 @@ export default function Donation() {
           </TouchableOpacity>;
         })}
       </View>
-      {!showHistory && <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
-        {FILTER_OPTIONS.map((option) => {
-          const active = filter === option.value;
-          const count =
-            option.value === "all"
-              ? visibleCampaigns.length
-              : option.value === "disaster_affected"
-                ? disasterCount
-                : communityCount;
-
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.webFilterChip, active && styles.webFilterChipActive]}
-              activeOpacity={0.84}
-              onPress={() => chooseFilter(option.value)}
-            >
-              <Text
-                style={[
-                  styles.webFilterChipText,
-                  active && styles.webFilterChipTextActive,
-                ]}
-              >
-                {option.value === "all"
-                  ? "All"
-                  : option.value === "disaster_affected"
-                    ? "Disaster Affected"
-                    : "Community Needs Help"}
-              </Text>
-              <View style={[styles.webFilterCount, active && styles.webFilterCountActive]}>
-                <Text
-                  style={[
-                    styles.webFilterCountText,
-                    active && styles.webFilterCountTextActive,
-                  ]}
-                >
-                  {count}
-                </Text>
-              </View>
+      <View style={[styles.donationToolbarActions, !medium && styles.donationToolbarActionsMobile]}>
+        <View style={[styles.webSearchBox, !medium && styles.mobileSearchBox]}>
+          <Ionicons name="search-outline" size={18} color="#64748B" />
+          <TextInput
+            value={searchText} onChangeText={setSearchText}
+            placeholder="Search campaigns or location..."
+            placeholderTextColor="#94A3B8"
+            style={styles.webSearchInput}
+          />
+          {!!searchText && (
+            <TouchableOpacity accessibilityLabel="Clear campaign search" onPress={()=>setSearchText("")}>
+              <Ionicons name="close-circle" size={17} color="#94A3B8"/>
             </TouchableOpacity>
-          );
-        })}
-      </View>}
-
+          )}
+        </View>
+        {!showHistory && (
+          <TouchableOpacity
+            style={styles.donationFilterButton}
+            accessibilityRole="button"
+            accessibilityLabel="Filter donation campaigns"
+            onPress={()=>setFilterMenuOpen(open=>!open)}
+          >
+            <Ionicons name="funnel-outline" size={17} color="#164B55"/>
+            <Text style={styles.donationFilterButtonText}>
+              {filter === "all" ? "All Causes" : filter === "disaster_affected" ? "Disaster Relief" : "Community Needs"}
+            </Text>
+            <Ionicons name={filterMenuOpen ? "chevron-up" : "chevron-down"} size={14} color="#164B55" />
+          </TouchableOpacity>
+        )}
+      </View>
+      </View>
+      {!showHistory && filterMenuOpen && (
+        <View style={styles.donationFilterMenu}>
+          {FILTER_OPTIONS.map(option=>(
+            <TouchableOpacity key={option.value} style={[styles.donationFilterOption,filter===option.value && styles.donationFilterOptionActive]}
+              onPress={()=>{chooseFilter(option.value);setFilterMenuOpen(false);}}>
+              <Ionicons name={filter===option.value?"checkmark-circle":"ellipse-outline"} size={17} color="#078F73"/>
+              <Text style={styles.donationFilterOptionText}>{option.value==="all"?"All Causes":option.value==="disaster_affected"?"Disaster Relief":"Community Needs"}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {!!returnedPaymentState && (
         <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
           <Ionicons
@@ -971,18 +959,10 @@ export default function Donation() {
         </View>
       ) : (
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden, !selectedCampaign && styles.webFullCampaignPane]}>
-            <View style={styles.webSectionHeaderRow}>
-              <View>
-                <Text style={styles.webSectionTitle}>{showCompletedCampaigns ? "Completed Campaigns" : "Active Campaigns"}</Text>
-                <Text style={styles.webSectionSubtitle}>
-                  {showCompletedCampaigns
-                    ? "View fully funded or Admin-closed campaigns. Closed campaigns no longer accept donations."
-                    : "Select an LGU-verified campaign to view its details and available support."}
-                </Text>
-              </View>
-              <Text style={styles.webCampaignCount}>{listedCampaigns.length}</Text>
-            </View>
+          <View style={[styles.webCampaignPane, styles.webFullCampaignPane]}>
+            {showCompletedCampaigns && (
+              <Text style={styles.donationPastHint}>Past campaigns stay visible for transparency. Donations to closed or fully funded causes are unavailable.</Text>
+            )}
 
             {!campaignsReady ? (
               <View style={styles.emptyCard}>
@@ -997,41 +977,140 @@ export default function Donation() {
                   : "Try another filter or check back for newly approved campaigns."}</Text>
               </View>
             ) : (
-              <View style={[styles.campaignGrid, !selectedCampaign && styles.campaignGridFull]}>
+              <View style={[styles.campaignGrid, styles.campaignGridFull]}>
                 {listedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={campaign.id}
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={!selectedCampaign}
+                    fullGrid={true}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
               </View>
             )}
-            {!selectedCampaign && campaignsReady ? (
+            {campaignsReady ? (
               <View style={styles.webHowItWorks}>
-                <Text style={styles.webHowItWorksTitle}>How donations work</Text>
+                <View style={styles.donationHowHeading}>
+                  <View style={styles.donationHowIcon}><Ionicons name="gift-outline" size={21} color="#07916D"/></View>
+                  <View style={{flex:1}}>
+                    <Text style={styles.webHowItWorksTitle}>How Donations Work</Text>
+                    <Text style={styles.donationHowSubtitle}>Simple, transparent support for verified community causes.</Text>
+                  </View>
+                </View>
                 <View style={styles.webHowSteps}>
                   {[
-                    { icon: "shield-checkmark-outline" as const, title: "1. Choose a cause", body: "Browse LGU-verified campaigns and their confirmed funding progress." },
-                    { icon: "card-outline" as const, title: "2. Test checkout", body: "Enter a donation amount and use PayMongo Sandbox." },
-                    { icon: "receipt-outline" as const, title: "3. Track your support", body: "My Donations updates after backend confirmation." },
+                    { icon: "heart-outline" as const, title: "1. Choose a Cause", body: "Select a verified campaign to view details and progress." },
+                    { icon: "card-outline" as const, title: "2. Make a Donation", body: "Choose an amount in PayMongo Test Mode." },
+                    { icon: "shield-checkmark-outline" as const, title: "3. Verify Payment", body: "We wait for signed webhook confirmation." },
+                    { icon: "people-outline" as const, title: "4. Track Your Support", body: "See the verified transaction in My Donations." },
                   ].map((step) => (
                     <View key={step.title} style={styles.webHowStep}>
-                      <Ionicons name={step.icon} size={24} color="#009474" />
-                      <Text style={styles.webHowStepTitle}>{step.title}</Text>
-                      <Text style={styles.webHowStepBody}>{step.body}</Text>
+                      <View style={styles.donationHowStepIcon}>
+                        <Ionicons name={step.icon} size={24} color="#009474" />
+                      </View>
+                      <View style={styles.donationHowStepCopy}>
+                        <Text style={styles.webHowStepTitle}>{step.title}</Text>
+                        <Text style={styles.webHowStepBody}>{step.body}</Text>
+                      </View>
                     </View>
                   ))}
                 </View>
                 <Text style={styles.webHowDisclaimer}>PayMongo Sandbox · Test Mode only — no real money will be transferred.</Text>
               </View>
             ) : null}
+            <View style={styles.donationRecentPanel}>
+              <View style={styles.donationRecentHeading}>
+                <View style={styles.donationHowIcon}>
+                  <Ionicons name="receipt-outline" size={21} color="#07916D"/>
+                </View>
+                <View style={{flex:1}}>
+                  <Text style={styles.webHowItWorksTitle}>Recent Donations (My History)</Text>
+                  <Text style={styles.donationHowSubtitle}>Your own donation records, confirmed payment status, and receipts.</Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="View all my donations"
+                  style={styles.donationRecentViewAll}
+                  onPress={()=>{setSelectedCampaignId("");setShowHistory(true);pageScrollRef.current?.scrollTo({y:0,animated:true});}}>
+                  <Text style={styles.donationRecentViewText}>View All</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#2675D2"/>
+                </TouchableOpacity>
+              </View>
+              {!historyReady ? (
+                <ActivityIndicator style={{marginVertical:18}} color="#008B6A"/>
+              ) : myDonations.length === 0 ? (
+                <View style={styles.donationRecentEmpty}>
+                  <Ionicons name="receipt-outline" size={23} color="#8AA5A3"/>
+                  <Text style={styles.donationRecentEmptyText}>No donations yet. Your confirmed and pending support will appear here.</Text>
+                </View>
+              ) : (
+                <View style={styles.donationRecentTable}>
+                  {medium && (
+                    <View style={styles.donationRecentTableHead}>
+                      {["Date", "Campaign", "Amount", "Status", "Receipt"].map(label=>(
+                        <Text key={label} style={styles.donationRecentHeadText}>{label}</Text>
+                      ))}
+                    </View>
+                  )}
+                  {myDonations.slice(0,3).map(d=>{
+                    const paid = d.status === "received" &&
+                      (d.paymentProvider !== "paymongo" || d.paymentStatus === "paid");
+                    const sandbox = paid && d.paymentProvider === "paymongo" && d.paymongoLivemode === false;
+                    const label = paid ? (sandbox ? "Paid (Test)" : "Confirmed") :
+                      d.status === "payment_failed" ? "Failed" :
+                      d.status === "rejected" ? "Rejected" : "Pending";
+                    const date = timestampMillis(d.createdAt);
+                    return (
+                      <View key={d.id} style={[styles.donationRecentRow,!medium&&styles.donationRecentRowMobile]}>
+                        <Text style={styles.donationRecentCellText}>
+                          {date ? new Date(date).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}) : "—"}
+                        </Text>
+                        <Text style={[styles.donationRecentCellText,styles.donationRecentCampaignText]} numberOfLines={2}>
+                          {d.campaignTitle || "Donation campaign"}
+                        </Text>
+                        <Text style={styles.donationRecentAmount}>{money(Number(d.amount || 0))}</Text>
+                        <Text style={[styles.donationRecentStatus,paid?styles.donationRecentStatusPaid:styles.donationRecentStatusPending]}>
+                          {label}
+                        </Text>
+                        {paid ? (
+                          <TouchableOpacity accessibilityRole="button"
+                            accessibilityLabel={`View receipt for ${d.campaignTitle || "donation"}`}
+                            style={styles.donationReceiptLink}
+                            onPress={()=>router.push({pathname:"/receipt/[id]",params:{id:d.id}})}>
+                            <Text style={styles.donationReceiptLinkText}>View Receipt</Text>
+                          </TouchableOpacity>
+                        ) : <Text style={styles.donationRecentCellText}>—</Text>}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </View>
 
-          {selectedCampaign ? <View style={[styles.webDetailPane, !wide && styles.webPaneStacked]}>
+          {/* Campaign details are only available after selecting a card. */}
+        </View>
+      )}
+      <Modal visible={!!selectedCampaign && !showHistory}
+        transparent animationType="fade" onRequestClose={closeMobileCampaignDetails}>
+        <View style={styles.donationModalShade}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject}
+            accessible={false} activeOpacity={1} onPress={closeMobileCampaignDetails}/>
+          <View style={[styles.donationModalSurface,!medium&&styles.donationModalSurfaceMobile]}>
+            <View style={styles.donationModalTopbar}>
+              <View style={styles.donationModalTopbarLeft}>
+                <Ionicons name="shield-checkmark" size={18} color="#078869"/>
+                <Text style={styles.donationModalTopTitle}>LGU-verified campaign details</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close donation details"
+                onPress={closeMobileCampaignDetails} style={styles.webCloseButton}>
+                <Ionicons name="close" size={19} color="#1B4350"/>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
+              style={styles.donationModalScroller}
+              contentContainerStyle={styles.donationModalScroll}>
+          {selectedCampaign ? <View style={[styles.webDetailPane,styles.donationModalDetailPane]}>
             <View style={styles.webDetailCard}>
                 <View style={styles.webDetailNavRow}>
                   <TouchableOpacity style={styles.webBackToCampaigns} accessibilityRole="button" onPress={closeMobileCampaignDetails}>
@@ -1256,8 +1335,10 @@ export default function Donation() {
                 </View>
               </View>
           </View> : null}
+            </ScrollView>
+          </View>
         </View>
-      )}
+      </Modal>
     </ScrollView>
   );
 }
@@ -1319,31 +1400,22 @@ function CampaignCard({
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={`View details for ${campaign.title || "donation campaign"}`}
       onPress={onPress}
     >
       <CampaignVisual campaign={campaign} photoUrl={photos[0]} />
 
       <View style={styles.campaignCardBody}>
         <View style={styles.badgeRow}>
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="shield-checkmark" size={12} color="#15803D" />
-            <Text style={styles.verifiedBadgeText}>LGU VERIFIED</Text>
-          </View>
-          <View
-            style={[
-              styles.groupBadge,
-              group === "community_needs_help" && styles.groupBadgeCommunity,
-            ]}
-          >
-            <Text
-              style={[
-                styles.groupBadgeText,
-                group === "community_needs_help" && styles.groupBadgeTextCommunity,
-              ]}
-            >
-              {group === "community_needs_help" ? "COMMUNITY NEED" : "DISASTER"}
+          <View style={[styles.groupBadge,group==="community_needs_help"&&styles.groupBadgeCommunity]}>
+            <Ionicons name={group==="community_needs_help"?"heart-outline":"shield-checkmark-outline"} size={12}
+              color={group==="community_needs_help"?"#225BC3":"#C03935"}/>
+            <Text style={[styles.groupBadgeText,group==="community_needs_help"&&styles.groupBadgeTextCommunity]}>
+              {campaignCategoryLabel(campaign)}
             </Text>
           </View>
+          <Ionicons name="shield-checkmark" size={16} color="#07966D"/>
         </View>
 
         <Text style={styles.campaignTitle} numberOfLines={2}>
@@ -1357,6 +1429,9 @@ function CampaignCard({
           </Text>
         </View>
 
+        <Text numberOfLines={2} style={styles.donationCardDescription}>
+          {campaign.publicStory || campaign.description || "Explore this verified community campaign and its current funding progress."}
+        </Text>
         <View style={styles.cardProgressWrap}>
           <View style={styles.cardProgressTop}>
             <Text style={styles.cardProgressRaised}>{money(raised)} raised</Text>
@@ -1368,17 +1443,16 @@ function CampaignCard({
           <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
         </View>
 
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardCategory}>{campaignCategoryLabel(campaign)}</Text>
-          <Text style={campaignFinished(campaign) ? styles.campaignStatusFunded : styles.campaignStatusActive}>
-            {campaign.status === "closed" ? "Closed" : campaignFullyFunded(campaign) ? "Goal reached" : "Active"}
-          </Text>
-        </View>
-        <View style={styles.cardPrimaryAction}>
-          <Text style={styles.cardPrimaryActionText}>
-            {selected ? "Viewing Details" : campaignFinished(campaign) ? "View Past Campaign" : "View Campaign"}
-          </Text>
-          <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={17} color="#FFFFFF" />
+        <View style={styles.donationCardFooter}>
+          <View style={styles.donationCardFooterCopy}>
+            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"eye-outline"} size={16} color="#05896B"/>
+            <Text style={styles.donationCardFooterText}>
+              {campaignFinished(campaign) ? "Past campaign" : "View campaign details"}
+            </Text>
+          </View>
+          <View style={styles.donationCardFooterArrow}>
+            <Ionicons name="arrow-forward" size={17} color="#FFFFFF"/>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -2289,14 +2363,14 @@ const styles = StyleSheet.create({
     width: "48.8%",
     minWidth: 255,
   },
-  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 480 },
+  campaignCardFull: { width: "31.8%", minWidth: 270, maxWidth: 490 },
   campaignCardSelected: {
     borderColor: "#0F766E",
     shadowOpacity: 0.08,
   },
   campaignVisualWrap: {
     position: "relative",
-    height: 178,
+    height: 148,
     backgroundColor: "#DDE7E5",
   },
   campaignVisualImage: {
@@ -2352,7 +2426,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   campaignCardBody: {
-    padding: 15,
+    padding: 17,
   },
   badgeRow: {
     flexDirection: "row",
@@ -3958,6 +4032,185 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F766E",
   },
+  // Premium Donations layout: live data on top of original vector-only artwork.
+  donationHero: {
+    position: "relative",
+    minHeight: 192,
+    borderRadius: 20,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#CBEADD",
+    marginBottom: 15,
+    shadowColor: "#095D4B",
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    shadowOffset: {width:0,height:7},
+    elevation: 2,
+  },
+  donationHeroMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+    paddingTop: 17,
+    paddingBottom: 14,
+  },
+  donationHeroBody: {
+    flex: 1,
+    minWidth: 0,
+    zIndex: 1,
+    paddingLeft: 165,
+    paddingRight: 8,
+    paddingVertical: 23,
+  },
+  donationHeroBodyMobile: { flex: 0, paddingLeft: 118, paddingRight: 15, paddingTop: 13, paddingBottom: 10 },
+  donationHeroEyebrow: {
+    fontSize: 10, letterSpacing: 1.2, fontWeight: "900", color: "#087D5A",
+  },
+  donationHeroTitle: {
+    marginTop: 1, fontSize: 49, lineHeight: 54, letterSpacing: -1.8,
+    color: "#064838", fontWeight: "900",
+  },
+  donationHeroTitleMobile: { fontSize: 30, lineHeight: 36, letterSpacing: -0.8 },
+  donationHeroTagline: {
+    fontSize: 15, fontWeight: "900", lineHeight: 21, color: "#105D4D", marginTop: 2,
+  },
+  donationHeroDescription: {
+    fontSize: 11, lineHeight: 16, color: "#426B6D", marginTop: 7, maxWidth: 420,
+  },
+  donationHeroStats: {
+    zIndex: 1,
+    flexDirection: "row",
+    gap: 7,
+    alignItems: "center",
+    paddingHorizontal: 17,
+    maxWidth: "49%",
+  },
+  donationHeroStatsMobile: {
+    maxWidth: "100%",
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    flexWrap: "wrap",
+    alignSelf: "stretch",
+    justifyContent: "space-between",
+  },
+  donationHeroStat: {
+    flexGrow: 1, flexShrink: 1, minWidth: 103,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 9, paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.86)",
+    backgroundColor: "rgba(255,255,255,.84)",
+  },
+  donationHeroStatNumber: { color: "#102E46", fontSize: 16, fontWeight: "900" },
+  donationHeroStatCaption: { color: "#5B7A83", fontSize: 8.5, marginTop: 1 },
+  donationToolbar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    flexWrap: "wrap", gap: 12, marginTop: 2, marginBottom: 5,
+  },
+  donationToolbarMobile: { flexDirection: "column", alignItems: "stretch" },
+  donationToolbarActions: {
+    flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", flexShrink: 1,
+  },
+  donationToolbarActionsMobile: { alignItems: "stretch", width: "100%" },
+  donationFilterButton: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, minHeight: 44, paddingHorizontal: 13,
+    borderRadius: 12, borderWidth: 1, borderColor: "#D6E9E8", backgroundColor: "#FFFFFF",
+  },
+  donationFilterButtonText: { color: "#193951", fontWeight: "800", fontSize: 11 },
+  donationFilterMenu: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6,
+    alignSelf: "flex-end", marginBottom: 10, padding: 8,
+    borderRadius: 12, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#DAEAE8",
+  },
+  donationFilterOption: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9,
+  },
+  donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
+  donationFilterOptionText: { color: "#26465A", fontWeight: "700", fontSize: 11 },
+  donationPastHint: { color:"#567580",fontSize:11,lineHeight:18,marginVertical:6 },
+  donationCardDescription: { color: "#5E7687", fontSize: 11, lineHeight: 17, marginTop: 9, minHeight: 34 },
+  donationCardFooter: {
+    borderTopWidth: 1, borderColor: "#E9F0F2", paddingTop: 12, marginTop: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
+  donationCardFooterText: { color:"#087A66",fontWeight:"800",fontSize:11 },
+  donationCardFooterArrow: {
+    width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    backgroundColor: "#009879",
+  },
+  donationHowHeading: { flexDirection:"row",alignItems:"center",gap:11 },
+  donationHowIcon: {
+    width: 39,height:39,borderRadius:12,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#DDF8EC",
+  },
+  donationHowSubtitle: { fontSize: 10.5, color:"#718A98",marginTop:3 },
+  donationHowStepIcon: {
+    width: 42,height:42,borderRadius:22,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#E0F7ED",
+  },
+  donationHowStepCopy: { flex:1, minWidth:0 },
+  donationRecentPanel: {
+    marginTop:14,padding:18,backgroundColor:"#FFFFFF",borderRadius:17,
+    borderWidth:1,borderColor:"#D9E9E8",
+  },
+  donationRecentHeading: {flexDirection:"row",alignItems:"center",gap:10,marginBottom:12},
+  donationRecentViewAll: {flexDirection:"row",alignItems:"center",gap:5,padding:6},
+  donationRecentViewText: { color:"#2877C8",fontSize:10.5,fontWeight:"900" },
+  donationRecentEmpty: {
+    flexDirection:"row",gap:11,alignItems:"center",backgroundColor:"#F7FAFB",
+    borderRadius:10,padding:16,
+  },
+  donationRecentEmptyText: { flex:1,color:"#688293",fontSize:11,lineHeight:16 },
+  donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
+  donationRecentTableHead: {
+    flexDirection:"row",alignItems:"center",backgroundColor:"#F0F7FA",padding:12,gap:10,
+  },
+  donationRecentHeadText: {flex:1,fontSize:10,fontWeight:"800",color:"#678095"},
+  donationRecentRow: {
+    flexDirection:"row",alignItems:"center",gap:10,padding:12,
+    borderTopWidth:1,borderColor:"#EFF3F5",
+  },
+  donationRecentRowMobile: {flexWrap:"wrap",gap:8},
+  donationRecentCellText: {flex:1,color:"#61798C",fontSize:10.5},
+  donationRecentCampaignText: {flex:1,color:"#102E50",fontWeight:"800"},
+  donationRecentAmount: {flex:1,color:"#0B2C49",fontWeight:"900",fontSize:11},
+  donationRecentStatus: {flex:1,fontSize:10,fontWeight:"900"},
+  donationRecentStatusPaid: {color:"#008B69"},
+  donationRecentStatusPending: {color:"#A7730D"},
+  donationReceiptLink: {
+    flex:1,paddingVertical:8,borderRadius:9,backgroundColor:"#EEF6FF",
+    alignItems:"center",justifyContent:"center",
+  },
+  donationReceiptLinkText: {color:"#2477D2",fontWeight:"900",fontSize:10},
+  donationModalShade: {
+    flex:1,justifyContent:"center",alignItems:"center",
+    backgroundColor:"rgba(5,23,32,0.66)",padding:16,
+  },
+  donationModalSurface: {
+    width:"100%",maxWidth:860,height:"90%",maxHeight:"92%",backgroundColor:"#FFFFFF",
+    borderRadius:19,borderWidth:1,borderColor:"#D8E9E6",
+    shadowColor:"#021A1C",shadowOpacity:.24,shadowRadius:30,elevation:20,
+    overflow:"hidden",
+  },
+  donationModalSurfaceMobile: {height:"94%",maxHeight:"96%",borderRadius:14},
+  donationModalTopbar: {
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    backgroundColor:"#F5FCF9",paddingHorizontal:15,paddingVertical:11,
+    borderBottomWidth:1,borderColor:"#E3EEEA",
+  },
+  donationModalTopbarLeft: {flexDirection:"row",alignItems:"center",gap:8,flex:1},
+  donationModalTopTitle: {fontSize:12,color:"#0E604F",fontWeight:"900"},
+  donationModalScroller: {flex:1},
+  donationModalScroll: {padding:13,paddingBottom:26},
+  donationModalDetailPane: {flex:0,width:"100%"},
   webContainer: {
     width: "100%",
     maxWidth: 1660,
@@ -4009,8 +4262,8 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   webSearchBox: {
-    minWidth: 300,
-    maxWidth: 440,
+    minWidth: 230,
+    maxWidth: 345,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -4053,7 +4306,7 @@ const styles = StyleSheet.create({
   },
   webPrimaryTabs: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
-    gap: 10, marginTop: 18, marginBottom: 5,
+    gap: 9, marginTop: 0, marginBottom: 0,
   },
   webPrimaryTab: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -4167,14 +4420,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   webHowItWorks: {
-    marginTop: 23, padding: 20, borderRadius: 16, backgroundColor: "#FFFFFF",
-    borderColor: "#DFEAEB", borderWidth: 1,
+    marginTop: 17, padding: 18, borderRadius: 17, backgroundColor: "#FAFEFC",
+    borderColor: "#D5EAE5", borderWidth: 1,
   },
   webHowItWorksTitle: { color: "#163447", fontSize: 16, fontWeight: "900" },
-  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 13 },
+  webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 13 },
   webHowStep: {
-    flexGrow: 1, flexBasis: 230, padding: 15, borderRadius: 12,
-    backgroundColor: "#F3F9F8", minWidth: 190, gap: 7,
+    flexGrow: 1, flexBasis: 196, padding: 14, borderRadius: 12,
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F4F9FA", minWidth: 190, gap: 9,
+    borderWidth: 1, borderColor: "#E8F0F2",
   },
   webHowStepTitle: { fontSize: 12, fontWeight: "900", color: "#173B49" },
   webHowStepBody: { fontSize: 11, lineHeight: 17, color: "#557383" },
