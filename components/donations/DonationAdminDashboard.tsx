@@ -166,13 +166,27 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     .reduce((sum, r) => sum + amountReceived(r), 0);
   const donors = new Set(records.filter(isConfirmed).map(r => r.donorUid || "unlinked:" + r.id)).size;
   const pending = records.filter(r => ["payment_creating", "payment_pending", "submitted"].includes(r.status || "")).length;
-  const legacyReview = records.filter(r => r.status === "submitted" && r.paymentProvider !== "paymongo").length;
-  const activeCampaigns = campaigns.filter(c =>
-    c.status === "published" &&
-    !(Number(c.monetaryGoal || 0) > 0 &&
-      Number(c.verifiedAmountReceived || 0) >= Number(c.monetaryGoal || 0) - 0.01),
-  );
-  const recent = paid.slice(0, 3);
+  // Real record-backed review items, not a second campaign/transaction listing.
+  const missingGoal = campaigns.filter(c =>
+    c.status === "published" && numeric(c.monetaryGoal) === 0);
+  const manualPending = records.filter(r =>
+    r.status === "submitted" && r.paymentProvider !== "paymongo");
+  const paymentFailures = records.filter(r =>
+    r.status === "payment_failed" || r.status === "rejected");
+  const reviewItems = [
+    ...missingGoal.map(c => ({key: "campaign:" + c.id, id: c.id, kind: "campaign" as const,
+      title: "Published campaign missing approved goal",
+      detail: c.title || "Untitled campaign", icon: "alert-circle-outline" as const})),
+    ...manualPending.map(r => ({key: "legacy:" + r.id, id: r.id, kind: "donation" as const,
+      title: "Legacy donation requires review",
+      detail: (r.campaignTitle || "Donation") + " · " + peso(r.amount),
+      icon: "document-text-outline" as const})),
+    ...paymentFailures.map(r => ({key: "failed:" + r.id, id: r.id, kind: "donation" as const,
+      title: "Payment exception",
+      detail: (r.campaignTitle || "Donation") + " · " + statusText(r),
+      icon: "alert-circle-outline" as const})),
+  ];
+  const recentActivity = records.slice(0, 3);
   const unreadCount = alerts.filter(a => !a.read).length;
   const filtered = useMemo(() => records.filter(r => {
     const term = search.trim().toLowerCase();
@@ -382,45 +396,112 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
 
     {view === "overview" && <>
       <View style={s.sectionIntro}>
-        <View style={s.flex}><Text style={s.sectionEyebrow}>OPERATIONS MONITORING</Text>
+        <View style={s.flex}>
+          <Text style={s.sectionEyebrow}>DONATION OPERATIONS · AT A GLANCE</Text>
           <Text style={s.sectionTitle}>Overview</Text>
-          <Text style={s.sectionDescription}>One concise summary of donation activity. Select a specific record below to investigate it.</Text>
+          <Text style={s.sectionDescription}>
+            Key figures, records that need attention, and the latest activity. Complete each task in its dedicated workspace.
+          </Text>
         </View>
       </View>
       <View style={s.metrics}>
         {([
-          ["Verified test payments", peso(testReceived), "card-outline", "Confirmed sandbox payments only"],
-          ["Pending payments", String(pending), "time-outline", "Provider pending + legacy submissions"],
-          ["Published campaigns", String(campaigns.filter(c => c.status === "published").length), "heart-outline", "Review actual goals before accepting payments"],
-          ["Confirmed donors", String(donors), "people-outline", "Unique recorded donor accounts"],
-        ] as const).map(([name, value, icon, description]) =>
-          <View key={name} style={s.metric}>
+          ["Verified test payments", peso(testReceived), "card-outline", "PayMongo Sandbox · not real funds"],
+          ["Pending records", String(pending), "time-outline", "Provider pending and legacy submissions"],
+          ["Published campaigns", String(campaigns.filter(c => c.status === "published").length),
+            "heart-outline", "Includes campaigns that may need goal review"],
+          ["Recorded donors", String(donors), "people-outline", "Unique accounts with confirmed donations"],
+        ] as const).map(([title, value, icon, description]) =>
+          <View key={title} style={s.metric}>
             <View style={s.metricTop}>
-              <Text style={s.metricLabel}>{name}</Text>
+              <Text style={s.metricLabel}>{title}</Text>
               <Ionicons name={icon} size={19} color="#0D8F70"/>
             </View>
             <Text style={s.metricValue}>{ready && campaignReady ? value : "…"}</Text>
             <Text style={s.metricDescription}>{description}</Text>
           </View>)}
       </View>
-      <View style={s.topPanels}>
-        <View style={s.recentColumn}>
+      <View style={s.overviewSummary}>
+        <View style={s.overviewColumn}>
           <View style={s.panel}>
             <View style={s.panelHeading}>
-              <View style={s.flex}><Text style={s.panelTitle}>Latest verified transactions</Text>
-                <Text style={s.info}>Open a specific payment to inspect its transaction and donor evidence.</Text>
+              <View style={s.flex}>
+                <Text style={s.panelTitle}>Needs attention</Text>
+                <Text style={s.info}>Actual records flagged for LGU review.</Text>
               </View>
+              <Text style={s.reviewCount}>{ready && campaignReady ? reviewItems.length : "—"} flagged</Text>
             </View>
-            {recent.length ? recent.map(row) : <Text style={s.info}>No confirmed donations yet.</Text>}
+            {!ready || !campaignReady ? <Text style={s.info}>Reviewing records…</Text> :
+              reviewItems.length ? <>
+                {reviewItems.slice(0, 3).map(item => <Pressable
+                  key={item.key} accessibilityRole="button"
+                  accessibilityLabel={item.title + ": " + item.detail}
+                  style={s.reviewRow}
+                  onPress={() => {
+                    if (item.kind === "campaign") openCampaignRecord(item.id);
+                    else { setSelectedId(item.id); setView("all"); }
+                  }}>
+                  <View style={s.reviewIcon}>
+                    <Ionicons name={item.icon} size={18} color="#A07835"/>
+                  </View>
+                  <View style={s.flex}>
+                    <Text style={s.reviewTitle}>{item.title}</Text>
+                    <Text style={s.reviewDetail} numberOfLines={2}>{item.detail}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" color="#78938A" size={16}/>
+                </Pressable>)}
+                {reviewItems.length > 3 &&
+                  <Text style={s.reviewFoot}>{reviewItems.length - 3} additional flagged record(s) in Campaigns or Transactions.</Text>}
+              </> : <View style={s.overviewEmpty}>
+                <Ionicons name="checkmark-circle-outline" size={22} color="#108565"/>
+                <View style={s.flex}>
+                  <Text style={s.reviewTitle}>No flagged records in these checks</Text>
+                  <Text style={s.reviewDetail}>No published missing goals, legacy submissions awaiting review, or failed/rejected payments. Settlement is reviewed separately.</Text>
+                </View>
+              </View>}
           </View>
         </View>
-        <View style={s.campaignColumn}>{campaignList(activeCampaigns.slice(0, 3), true)}</View>
+        <View style={s.overviewColumn}>
+          <View style={s.panel}>
+            <View style={s.panelHeading}>
+              <View style={s.flex}>
+                <Text style={s.panelTitle}>Recent activity</Text>
+                <Text style={s.info}>Latest three transactions, shown as a brief activity feed.</Text>
+              </View>
+            </View>
+            {!ready ? <Text style={s.info}>Loading activity…</Text> :
+              recentActivity.length ? recentActivity.map(item => <Pressable
+                key={item.id} accessibilityRole="button"
+                accessibilityLabel={"Inspect donation " + item.id}
+                onPress={() => { setSelectedId(item.id); setView("all"); }}
+                style={s.activityFeedRow}>
+                <View style={[s.activityFeedIcon, !isConfirmed(item) && s.activityFeedIconPending]}>
+                  <Ionicons name={isConfirmed(item) ? "checkmark-circle-outline" : "time-outline"}
+                    color={isConfirmed(item) ? "#0A8C6A" : "#A57830"} size={19}/>
+                </View>
+                <View style={s.flex}>
+                  <Text style={s.reviewTitle} numberOfLines={1}>
+                    {item.paymentProvider === "paymongo" && item.paymongoLivemode === false
+                      ? "Sandbox payment" : item.paymentProvider !== "paymongo"
+                        ? "Legacy donation" : "Payment"}
+                  </Text>
+                  <Text style={s.reviewDetail} numberOfLines={1}>
+                    {item.campaignTitle || "Donation campaign"} · {statusText(item)}
+                  </Text>
+                  <Text style={s.activityTime}>{dateText(item.paidAt || item.createdAt)}</Text>
+                </View>
+                <View style={s.activityAmountColumn}>
+                  <Text style={s.activityAmount}>{peso(isConfirmed(item) ? amountReceived(item) : item.amount)}</Text>
+                  <Ionicons name="chevron-forward" color="#829D92" size={15}/>
+                </View>
+              </Pressable>) : <Text style={s.info}>No donation activity recorded yet.</Text>}
+          </View>
+        </View>
       </View>
       <View style={s.slimNote}>
         <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
         <Text style={s.slimNoteText}>
-          PayMongo Sandbox payments are test records, not funds held by the LGU. {legacyReview} legacy submission(s)
-          await manual review; Fund Management reports recorded contributions separately from settled money.
+          PayMongo Sandbox payments are simulated. Recorded donations are not proof of settled LGU funds or completed beneficiary transfers.
         </Text>
       </View>
     </>}
@@ -637,5 +718,21 @@ const s = StyleSheet.create({
   inspectorStatusText: {fontFamily: "AdminInterSemiBold", fontSize: 10, textTransform: "capitalize", color: "#167458"},
   inspectorHint: {flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#F3F9F5", padding: 11, borderRadius: 10, marginTop: 4},
   inspectorHintText: {flex: 1, fontFamily: "AdminInterRegular", fontSize: 10, lineHeight: 16, color: "#608277"},
+
+  overviewSummary: {flexDirection: "row", flexWrap: "wrap", gap: 14, alignItems: "flex-start"},
+  overviewColumn: {flexBasis: 390, flexGrow: 1, minWidth: 0},
+  reviewCount: {fontFamily: "AdminInterSemiBold", fontSize: 10, color: "#906C31", paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#FFF3E3", borderRadius: 8},
+  reviewRow: {flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#E8F0EA"},
+  reviewIcon: {width: 38, height: 38, justifyContent: "center", alignItems: "center", borderRadius: 10, backgroundColor: "#FFF4E5"},
+  reviewTitle: {fontFamily: "AdminInterSemiBold", color: "#294A4C", fontSize: 11.1},
+  reviewDetail: {fontFamily: "AdminInterRegular", color: "#718C88", fontSize: 10.2, lineHeight: 16, marginTop: 4},
+  reviewFoot: {fontFamily: "AdminInterRegular", color: "#946F37", fontSize: 10, lineHeight: 16, paddingTop: 4},
+  overviewEmpty: {flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 15},
+  activityFeedRow: {flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E9F0ED"},
+  activityFeedIcon: {width: 38, height: 38, borderRadius: 10, backgroundColor: "#EAF8F0", alignItems: "center", justifyContent: "center"},
+  activityFeedIconPending: {backgroundColor: "#FFF3E4"},
+  activityTime: {fontFamily: "AdminInterRegular", fontSize: 9.5, color: "#93A39E", marginTop: 5},
+  activityAmountColumn: {alignItems: "flex-end", gap: 6},
+  activityAmount: {fontFamily: "AdminInterSemiBold", fontSize: 11.2, color: "#225049"},
 
 });
