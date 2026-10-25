@@ -166,7 +166,6 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     .reduce((sum, r) => sum + amountReceived(r), 0);
   const donors = new Set(records.filter(isConfirmed).map(r => r.donorUid || "unlinked:" + r.id)).size;
   const pending = records.filter(r => ["payment_creating", "payment_pending", "submitted"].includes(r.status || "")).length;
-  const legacyReview = records.filter(r => r.status === "submitted" && r.paymentProvider !== "paymongo").length;
   // Real record-backed review items, not a second campaign/transaction listing.
   const missingGoal = campaigns.filter(c =>
     c.status === "published" && numeric(c.monetaryGoal) === 0);
