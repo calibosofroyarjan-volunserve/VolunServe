@@ -1,5 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import {
   collection,
   onSnapshot,
@@ -396,6 +398,7 @@ const campaignFinished = (campaign?: DonationCampaign) =>
   campaign?.status === "closed" || campaignFullyFunded(campaign);
 
 export default function Donation() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= 1080;
   const medium = width >= 760;
@@ -412,6 +415,7 @@ export default function Donation() {
 
   const [filter, setFilter] = useState<CampaignFilter>("all");
   const [searchText, setSearchText] = useState("");
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [showDonationPanel, setShowDonationPanel] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -535,6 +539,10 @@ export default function Donation() {
 
   const completedCampaignCount = campaigns.filter(campaignFinished).length;
   const activeCampaignCount = campaigns.length - completedCampaignCount;
+  const verifiedRaisedTotal = useMemo(
+    () => campaigns.reduce((total, campaign) => total + campaignRaised(campaign), 0),
+    [campaigns],
+  );
   // Keep funded campaigns out of Active Campaigns. They remain inspectable
   // under Completed Campaigns, with their verified amount and outcome.
   const visibleCampaigns = useMemo(
@@ -600,7 +608,7 @@ export default function Donation() {
     setSelectedCampaignId(campaignId);
     setShowDonationPanel(false);
     resetDonationForm();
-    pageScrollRef.current?.scrollTo({ y: 0, animated: true });
+    // Keep the grid in place; the campaign opens in a dedicated detail overlay.
   };
 
   const closeMobileCampaignDetails = () => {
@@ -780,54 +788,34 @@ export default function Donation() {
           <Text style={styles.mobileBackText}>Back to Campaigns</Text>
         </TouchableOpacity>
       )}
-      <View style={[styles.webPageHeader, !medium && styles.mobilePageHeader, mobileDetailOpen && styles.mobileHidden]}>
-        <View style={styles.webHeaderCopy}>
-          <Text style={styles.webEyebrow}>VOLUNSERVE · LGU VERIFIED</Text>
-          <Text style={styles.webPageTitle}>Donations</Text>
-          <Text style={styles.webPageSubtitle}>
-            Help build a stronger and safer community through verified campaigns.
+      <View style={[styles.donationHero, !medium && styles.donationHeroMobile]}>
+        <DonationHeroArt />
+        <View style={[styles.donationHeroBody, !medium && styles.donationHeroBodyMobile]}>
+          <Text style={styles.donationHeroEyebrow}>VOLUNSERVE  ·  LGU VERIFIED</Text>
+          <Text style={[styles.donationHeroTitle, !medium && styles.donationHeroTitleMobile]}>Donations</Text>
+          <Text style={styles.donationHeroTagline}>Give hope. Support your community.</Text>
+          <Text style={styles.donationHeroDescription}>
+            Support verified community campaigns and help build a safer, stronger San Jose del Monte.
           </Text>
         </View>
-
-        <View style={[styles.webHeaderActions, !medium && styles.webHeaderActionsStack]}>
-          <View style={[styles.webSearchBox, !medium && styles.mobileSearchBox]}>
-            <Ionicons name="search-outline" size={17} color="#64748B" />
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search campaigns or location"
-              placeholderTextColor="#94A3B8"
-              style={styles.webSearchInput}
-            />
-            {!!searchText && (
-              <TouchableOpacity onPress={() => setSearchText("")}>
-                <Ionicons name="close-circle" size={17} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.webHistoryButton, showHistory && styles.webHistoryButtonActive]}
-            activeOpacity={0.84}
-            onPress={() => setShowHistory((current) => !current)}
-          >
-            <Ionicons
-              name="receipt-outline"
-              size={16}
-              color={showHistory ? "#FFFFFF" : "#0F766E"}
-            />
-            <Text
-              style={[
-                styles.webHistoryButtonText,
-                showHistory && styles.webHistoryButtonTextActive,
-              ]}
-            >
-              My Donations{myDonations.length ? ` (${myDonations.length})` : ""}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.donationHeroStats, !medium && styles.donationHeroStatsMobile]}>
+          {([
+            {icon:"heart" as const, value:String(activeCampaignCount), caption:"Active campaigns"},
+            {icon:"checkmark-circle" as const, value:String(completedCampaignCount), caption:"Past campaigns"},
+            {icon:"wallet" as const, value:money(verifiedRaisedTotal), caption:"Verified raised"},
+          ]).map(s=>(
+            <View key={s.caption} style={styles.donationHeroStat}>
+              <Ionicons name={s.icon} size={20} color="#05986E" />
+              <View style={{minWidth:0, flexShrink:1}}>
+                <Text style={styles.donationHeroStatNumber} numberOfLines={1}>{s.value}</Text>
+                <Text style={styles.donationHeroStatCaption}>{s.caption}</Text>
+              </View>
+            </View>
+          ))}
         </View>
       </View>
 
+      <View style={[styles.donationToolbar, !medium && styles.donationToolbarMobile]}>
       <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
         {[
           { key: "active", label: "Active Campaigns", count: activeCampaignCount },
@@ -855,50 +843,48 @@ export default function Donation() {
           </TouchableOpacity>;
         })}
       </View>
-      {!showHistory && <View style={[styles.webFilterBar, mobileDetailOpen && styles.mobileHidden]}>
-        {FILTER_OPTIONS.map((option) => {
-          const active = filter === option.value;
-          const count =
-            option.value === "all"
-              ? visibleCampaigns.length
-              : option.value === "disaster_affected"
-                ? disasterCount
-                : communityCount;
-
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.webFilterChip, active && styles.webFilterChipActive]}
-              activeOpacity={0.84}
-              onPress={() => chooseFilter(option.value)}
-            >
-              <Text
-                style={[
-                  styles.webFilterChipText,
-                  active && styles.webFilterChipTextActive,
-                ]}
-              >
-                {option.value === "all"
-                  ? "All"
-                  : option.value === "disaster_affected"
-                    ? "Disaster Affected"
-                    : "Community Needs Help"}
-              </Text>
-              <View style={[styles.webFilterCount, active && styles.webFilterCountActive]}>
-                <Text
-                  style={[
-                    styles.webFilterCountText,
-                    active && styles.webFilterCountTextActive,
-                  ]}
-                >
-                  {count}
-                </Text>
-              </View>
+      <View style={[styles.donationToolbarActions, !medium && styles.donationToolbarActionsMobile]}>
+        <View style={[styles.webSearchBox, !medium && styles.mobileSearchBox]}>
+          <Ionicons name="search-outline" size={18} color="#64748B" />
+          <TextInput
+            value={searchText} onChangeText={setSearchText}
+            placeholder="Search campaigns or location..."
+            placeholderTextColor="#94A3B8"
+            style={styles.webSearchInput}
+          />
+          {!!searchText && (
+            <TouchableOpacity accessibilityLabel="Clear campaign search" onPress={()=>setSearchText("")}>
+              <Ionicons name="close-circle" size={17} color="#94A3B8"/>
             </TouchableOpacity>
-          );
-        })}
-      </View>}
-
+          )}
+        </View>
+        {!showHistory && (
+          <TouchableOpacity
+            style={styles.donationFilterButton}
+            accessibilityRole="button"
+            accessibilityLabel="Filter donation campaigns"
+            onPress={()=>setFilterMenuOpen(open=>!open)}
+          >
+            <Ionicons name="funnel-outline" size={17} color="#164B55"/>
+            <Text style={styles.donationFilterButtonText}>
+              {filter === "all" ? "All Causes" : filter === "disaster_affected" ? "Disaster Relief" : "Community Needs"}
+            </Text>
+            <Ionicons name={filterMenuOpen ? "chevron-up" : "chevron-down"} size={14} color="#164B55" />
+          </TouchableOpacity>
+        )}
+      </View>
+      </View>
+      {!showHistory && filterMenuOpen && (
+        <View style={styles.donationFilterMenu}>
+          {FILTER_OPTIONS.map(option=>(
+            <TouchableOpacity key={option.value} style={[styles.donationFilterOption,filter===option.value && styles.donationFilterOptionActive]}
+              onPress={()=>{chooseFilter(option.value);setFilterMenuOpen(false);}}>
+              <Ionicons name={filter===option.value?"checkmark-circle":"ellipse-outline"} size={17} color="#078F73"/>
+              <Text style={styles.donationFilterOptionText}>{option.value==="all"?"All Causes":option.value==="disaster_affected"?"Disaster Relief":"Community Needs"}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {!!returnedPaymentState && (
         <View style={[styles.webReturnBanner, returnedPaymentState === "cancelled" && styles.webReturnCancelled]}>
           <Ionicons
@@ -971,18 +957,10 @@ export default function Donation() {
         </View>
       ) : (
         <View style={[styles.webWorkspace, !wide && styles.webWorkspaceStack]}>
-          <View style={[styles.webCampaignPane, !wide && styles.webPaneStacked, mobileDetailOpen && styles.mobileHidden, !selectedCampaign && styles.webFullCampaignPane]}>
-            <View style={styles.webSectionHeaderRow}>
-              <View>
-                <Text style={styles.webSectionTitle}>{showCompletedCampaigns ? "Completed Campaigns" : "Active Campaigns"}</Text>
-                <Text style={styles.webSectionSubtitle}>
-                  {showCompletedCampaigns
-                    ? "View fully funded or Admin-closed campaigns. Closed campaigns no longer accept donations."
-                    : "Select an LGU-verified campaign to view its details and available support."}
-                </Text>
-              </View>
-              <Text style={styles.webCampaignCount}>{listedCampaigns.length}</Text>
-            </View>
+          <View style={[styles.webCampaignPane, styles.webFullCampaignPane]}>
+            {showCompletedCampaigns && (
+              <Text style={styles.donationPastHint}>Past campaigns stay visible for transparency. Donations to closed or fully funded causes are unavailable.</Text>
+            )}
 
             {!campaignsReady ? (
               <View style={styles.emptyCard}>
@@ -997,20 +975,20 @@ export default function Donation() {
                   : "Try another filter or check back for newly approved campaigns."}</Text>
               </View>
             ) : (
-              <View style={[styles.campaignGrid, !selectedCampaign && styles.campaignGridFull]}>
+              <View style={[styles.campaignGrid, styles.campaignGridFull]}>
                 {listedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={campaign.id}
                     campaign={campaign}
                     selected={selectedCampaignId === campaign.id}
                     wide={wide}
-                    fullGrid={!selectedCampaign}
+                    fullGrid={true}
                     onPress={() => chooseCampaign(campaign.id)}
                   />
                 ))}
               </View>
             )}
-            {!selectedCampaign && campaignsReady ? (
+            {campaignsReady ? (
               <View style={styles.webHowItWorks}>
                 <Text style={styles.webHowItWorksTitle}>How donations work</Text>
                 <View style={styles.webHowSteps}>
