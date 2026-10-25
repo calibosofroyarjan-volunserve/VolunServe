@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { auth } from "../../lib/firebase";
-import type { ReconciliationCampaign, ReconciliationDonation } from "./FundReconciliationPanel";
+import type { ReconciliationCampaign } from "./FundReconciliationPanel";
 
 const ROOT = "https://volunserve.onrender.com/api/admin/donations/fund-releases";
 type Release = {
@@ -44,9 +44,8 @@ const statusDetail = (reason:string) => ({
   approved_goal_missing:"An approved funding goal is required.",
 }[reason] || "Reconciliation requires LGU review.");
 
-export default function FundReleaseControls({campaigns,donations,ready}:{
+export default function FundReleaseControls({campaigns,ready}:{
   campaigns:ReconciliationCampaign[];
-  donations:ReconciliationDonation[];
   ready:boolean;
 }) {
   const [rows,setRows] = useState<Release[]>([]);
@@ -184,8 +183,15 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
           <Text style={ss.emptyText}>Select a campaign to manage its release record.</Text>
         </View>:<>
           <Text style={ss.campaignTitle}>{selection.title}</Text>
+          <Text style={ss.muted}>Campaign ID: {selection.id}</Text>
           <Text style={ss.small}>Approved goal: {php(Number(selection.monetaryGoal||0))}</Text>
-          <Text style={ss.small}>Provider-confirmed test payments: {php(verified)}</Text>
+          <Text style={ss.small}>Recorded campaign funding: {php(activeFunding?.recordedFunding||0)}</Text>
+          <Text style={ss.small}>Provider-confirmed test payments: {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
+          <Text style={ss.small}>Manual/legacy contributions: {php(activeFunding?.manualLegacyAmount||0)}</Text>
+          {!!activeFunding&&!activeFunding.ready&&<View style={ss.notice}>
+            <Ionicons name="information-circle-outline" size={17} color="#16745C"/>
+            <Text style={ss.noticeText}>{statusDetail(activeFunding.reason)}</Text>
+          </View>
           {record?<View style={ss.infoBlock}>
             <Text style={ss.statusText}>{showStatus(record.status)}</Text>
             <Text style={ss.small}>Reviewed amount: {php(record.amount)}</Text>
@@ -211,15 +217,17 @@ export default function FundReleaseControls({campaigns,donations,ready}:{
             <TextInput accessibilityLabel="Fund review amount" keyboardType="decimal-pad"
               style={ss.input} value={inputAmount} onChangeText={setInputAmount}
               placeholder="0.00"/>
-            <Text style={ss.small}>{maxReview>0
-              ? "Eligible verified test amount: "+php(maxReview)
-              : "Waiting for the full approved goal to be reached through verified PayMongo test payments."}</Text>
+            <Text style={ss.small}>{!fundingLoaded
+              ? "Backend reconciliation unavailable. Refresh after deploying Render."
+              : maxReview>0 ? "Eligible verified test amount: "+php(maxReview)
+              : activeFunding ? statusDetail(activeFunding.reason) :
+                "Select a campaign to check its verified funding."}</Text>
             <Text style={ss.fieldLabel}>Evidence review notes</Text>
             <TextInput accessibilityLabel="Evidence review notes" multiline
               style={[ss.input,ss.textarea]} value={reviewNote} onChangeText={setReviewNote}
               placeholder="Describe the confirmed donation receipts and verified assistance evidence."/>
-            <Pressable accessibilityRole="button" disabled={busy||maxReview<=0}
-              style={[ss.primary,(busy||maxReview<=0)&&ss.disabled]}
+            <Pressable accessibilityRole="button" disabled={busy||!fundingLoaded||maxReview<=0}
+              style={[ss.primary,(busy||!fundingLoaded||maxReview<=0)&&ss.disabled]}
               onPress={()=>void action("/review",{
                 campaignId:selection.id,amount:Number(inputAmount),reviewNote,
               },"Fund review saved. Review the evidence and record your Admin decision.")}>
