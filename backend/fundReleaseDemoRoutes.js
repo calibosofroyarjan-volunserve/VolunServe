@@ -181,8 +181,29 @@ function installFundReleaseDemoRoutes({
       });
       if (campaignSnap.size === 150) reject("campaign_review_limit",
         "Too many campaigns for this review screen; request paginated reconciliation.",409);
-      const funding = await Promise.all(reviewableCampaigns.map(c =>
-        reconcileCampaign(c.id, c.data() || {})));
+      const funding = await Promise.all(reviewableCampaigns.map(async c => {
+        const campaign = c.data() || {};
+        const funding = await reconcileCampaign(c.id, campaign);
+        if (funding.ready) {
+          const sourceId = safe(campaign.sourceAssistanceRequestId);
+          const source = await db.collection("assistanceRequests").doc(sourceId).get();
+          const requester = safe(source.data()?.requesterUid);
+          const linked = source.exists &&
+            campaign.sourceType === "community_assistance_request" &&
+            safe(source.data()?.donationCampaignId) === c.id &&
+            safe(source.data()?.verificationStatus) === "verified" &&
+            safe(source.data()?.supportDecision) === "donation_support" &&
+            /^[A-Za-z0-9_-]{6,180}$/.test(requester);
+          if (!linked) {
+            return {...funding, ready:false, reason:"assistance_link_not_verified"};
+          }
+          const profile = await loadUserProfile(requester);
+          if (!isVerifiedResidentProfile(profile)) {
+            return {...funding, ready:false, reason:"requester_identity_not_verified"};
+          }
+        }
+        return funding;
+      }));
       return res.json({
         ok:true, releases:snap.docs.map(publicRecord),
         funding,
