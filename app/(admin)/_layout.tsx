@@ -137,11 +137,6 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/donor-monitoring",
   },
   {
-    label: "Donation Notifications",
-    icon: "notifications-outline",
-    route: "/(admin)/donation-notifications",
-  },
-  {
     label: "Relief Operations",
     icon: "cube-outline",
     route:
