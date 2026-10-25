@@ -17,7 +17,7 @@ import Svg, {
  * campaign numbers, donation totals and headings stay as real React Native
  * text in donation.tsx, never baked into the background or fabricated here.
  */
-export default function DonationHeroArt() {
+export default function DonationHeroArt({ compact = false }: { compact?: boolean }) {
   return (
     <View pointerEvents="none" accessible={false} style={styles.layer}>
       <LinearGradient
@@ -140,7 +140,7 @@ export default function DonationHeroArt() {
       </Svg>
 
       {/* White-rimmed rotated tile with a single heart-in-open-hand pictogram. */}
-      <View style={styles.emblemShadow}>
+      <View style={[styles.emblemShadow, compact && styles.emblemShadowCompact]}>
         <View style={styles.emblemRim}>
           <LinearGradient
             colors={["#034730", "#087A4C", "#1DCF86"]}
@@ -148,7 +148,7 @@ export default function DonationHeroArt() {
             end={{ x: 0.84, y: 1 }}
             style={styles.emblemInner}
           >
-            <Svg viewBox="0 0 112 112" width="112" height="112">
+            <Svg viewBox="0 0 112 112" width="79%" height="79%">
               <Path
                 d="M56 48 C47 36 33 36 27 47 C18 66 44 83 56 90 C69 82 95 64 85 47 C79 36 65 36 56 48Z"
                 fill="#FFFFFF"
@@ -172,7 +172,7 @@ export default function DonationHeroArt() {
         </View>
       </View>
 
-      <View style={styles.rightHeart}>
+      <View style={[styles.rightHeart, compact && styles.rightHeartCompact]}>
         <Ionicons name="heart" size={43} color="rgba(255,255,255,0.96)" />
       </View>
     </View>
@@ -210,5 +210,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  emblemShadowCompact: { left: 10, top: 21, width: 92, height: 92, borderRadius: 23 },
   rightHeart: { position: "absolute", top: 15, right: 24 },
+  rightHeartCompact: { top: 10, right: 10, opacity: 0.55 },
 });
