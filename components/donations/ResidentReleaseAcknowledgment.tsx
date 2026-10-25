@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth } from "../../lib/firebase";
+import WalletBrandLogo from "./WalletBrandLogo";
 
 type Release = {
   id:string; campaignId:string; campaignTitle:string; status:string;
@@ -53,7 +54,7 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
         note:decision==="dispute"?disputeNote:"Release instruction reviewed; no actual funds received."});
       setDisputeId("");setDisputeNote("");
       setNotice(decision==="acknowledge"?
-        "Test release notice acknowledged. The LGU Admin can see your response.":
+        "Release notice acknowledged. The LGU Admin can see your response.":
         "Dispute submitted to the LGU for review.");
       await refresh();
     }catch(e:any){setError(e?.message||"Unable to save your response.");}
@@ -83,14 +84,17 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
       <View style={st.cardHeader}>
         <View style={st.flex}>
           <Text style={st.campaign}>{r.campaignTitle||"Donation campaign"}</Text>
-          <Text style={st.amount}>{peso(r.amount)} <Text style={st.demo}>(TEST ONLY)</Text></Text>
+          <Text style={st.amount}>{peso(r.amount)}</Text>
         </View>
         <Text style={st.status}>{r.status==="simulated_sent"?"Awaiting your review":
           r.status==="acknowledged_demo"?"Notice acknowledged":r.status==="disputed"?"Issue reported":r.status}</Text>
       </View>
-      <Text style={st.muted}>
-        {r.method?.toUpperCase()||"E-wallet"} · Destination ending •••• {r.walletLast4||"—"}
-      </Text>
+      <View style={st.walletRow}>
+        {(r.method==="gcash"||r.method==="maya")?
+          <WalletBrandLogo brand={r.method} width={78} height={24}/>:
+          <Text style={st.muted}>E-wallet</Text>}
+        <Text style={st.muted}>Destination ending •••• {r.walletLast4||"—"}</Text>
+      </View>
       <Text style={st.muted}>Release reference: {r.simulationReference||"—"}</Text>
       {!!r.simulatedAt&&<Text style={st.muted}>
         Recorded: {new Date(r.simulatedAt).toLocaleString("en-PH")}
@@ -98,7 +102,7 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
       <View style={st.noticeBox}>
         <Ionicons name="information-circle-outline" size={17} color="#17785C"/>
         <Text style={st.noticeText}>
-          TEST MODE: This is an LGU internal release record, not confirmation of an actual GCash/Maya transfer.
+          Test-only release record. No actual wallet transfer has occurred. Confirming this notice is not proof of receiving money.
         </Text>
       </View>
       {r.status==="simulated_sent"&&<>
@@ -147,6 +151,8 @@ const st=StyleSheet.create({
   empty:{fontFamily:"DonationInterRegular",fontSize:11.5,color:"#82978D",padding:12},
   card:{borderTopWidth:1,borderTopColor:"#EAF0ED",paddingVertical:12,gap:8},
   cardHeader:{flexDirection:"row",justifyContent:"space-between",gap:8,flexWrap:"wrap",alignItems:"center"},
+  walletRow:{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:12,
+    backgroundColor:"#F7FAF9",borderRadius:10,padding:9},
   campaign:{fontFamily:"DonationInterSemiBold",fontSize:12,color:"#284B45"},
   amount:{fontFamily:"DonationInterBold",fontSize:18,color:"#105B49",marginTop:4},
   demo:{fontFamily:"DonationInterRegular",fontSize:10,color:"#64887A"},
