@@ -1872,14 +1872,24 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
 
       {!rejected && (
         <View style={styles.historyTracker}>
-          <TrackerStep icon="send-outline" label="Submitted" complete active={!received} />
-          <View style={styles.trackerLine} />
-          <TrackerStep
-            icon="shield-checkmark-outline"
-            label="Verified"
-            complete={received}
-            active={received}
-          />
+          <View style={styles.historyMilestone}>
+            <Ionicons name="checkmark-circle" size={17} color="#077E61" />
+            <Text style={styles.historyMilestoneText}>Submitted</Text>
+          </View>
+          <View style={styles.historyMilestoneDivider} />
+          <View style={[styles.historyMilestone, received ? styles.historyMilestoneVerified : styles.historyMilestonePending]}>
+            <Ionicons
+              name={received ? "shield-checkmark" : "time-outline"}
+              size={17}
+              color={received ? "#087D59" : "#A77520"}
+            />
+            <Text style={[
+              styles.historyMilestoneText,
+              !received && styles.historyMilestonePendingText,
+            ]}>
+              {received ? "Payment verified" : "Awaiting payment verification"}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -1914,35 +1924,6 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           </Text>
         </View>
       )}
-    </View>
-  );
-}
-
-function TrackerStep({
-  icon,
-  label,
-  complete,
-  active,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  label: string;
-  complete: boolean;
-  active: boolean;
-}) {
-  return (
-    <View style={styles.trackerStep}>
-      <View
-        style={[
-          styles.trackerDot,
-          complete && styles.trackerDotComplete,
-          active && styles.trackerDotActive,
-        ]}
-      >
-        <Ionicons name={icon} size={14} color={complete || active ? "#FFFFFF" : "#94A3B8"} />
-      </View>
-      <Text style={[styles.trackerLabel, (complete || active) && styles.trackerLabelActive]}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -3496,47 +3477,28 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   historyTracker: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 11, marginTop: 15, paddingVertical: 11, paddingHorizontal: 12,
+    borderRadius: 10, backgroundColor: "#F5F9F7",
+    borderWidth: 1, borderColor: "#E6EFE9",
   },
-  trackerStep: {
-    width: 88,
-    alignItems: "center",
+  historyMilestone: {
+    flexDirection: "row", alignItems: "center", gap: 7,
   },
-  trackerDot: {
-    width: 29,
-    height: 29,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
+  historyMilestoneVerified: {
+    borderRadius: 6,
   },
-  trackerDotComplete: {
-    backgroundColor: "#0F766E",
+  historyMilestonePending: {
+    borderRadius: 6,
   },
-  trackerDotActive: {
-    backgroundColor: "#2563EB",
+  historyMilestoneText: {
+    color: "#39645D", fontSize: 11, fontFamily: "DonationInterMedium",
   },
-  trackerLabel: {
-    marginTop: 5,
-    color: "#94A3B8",
-    fontSize: 7.5,
-    fontWeight: "800",
-    textAlign: "center",
+  historyMilestonePendingText: {
+    color: "#907035",
   },
-  trackerLabelActive: {
-    color: "#334155",
-  },
-  trackerLine: {
-    flex: 1,
-    minWidth: 10,
-    height: 2,
-    marginTop: 14,
-    backgroundColor: "#CBD5E1",
+  historyMilestoneDivider: {
+    width: 18, height: 1, backgroundColor: "#BBD3C9",
   },
   historyMessagePending: {
     flexDirection: "row",
