@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { auth } from "../../lib/firebase";
+import SandboxPayoutForm from "./SandboxPayoutForm";
 import type { ReconciliationCampaign } from "./FundReconciliationPanel";
 
 const ROOT = "https://volunserve.onrender.com/api/admin/donations/fund-releases";
@@ -59,8 +60,6 @@ export default function FundReleaseControls({campaigns,ready}:{
   const [inputAmount,setInputAmount] = useState("");
   const [reviewNote,setReviewNote] = useState("");
   const [decisionNote,setDecisionNote] = useState("");
-  const [method,setMethod] = useState<"gcash"|"maya">("gcash");
-  const [walletLast4,setWalletLast4] = useState("");
   const eligibleCampaigns = useMemo(()=>campaigns.filter(c =>
     !!c.sourceAssistanceRequestId && Number(c.monetaryGoal||0)>0)
     .sort((a,b)=>
@@ -195,15 +194,16 @@ export default function FundReleaseControls({campaigns,ready}:{
           {record?<View style={ss.infoBlock}>
             <Text style={ss.statusText}>{showStatus(record.status)}</Text>
             <Text style={ss.small}>Reviewed amount: {php(record.amount)}</Text>
-            <Text style={ss.small}>Reviewer UID: {record.reviewerUid||"—"}</Text>
-            {!!record.authorizerUid&&<Text style={ss.small}>
-              Authorizer UID: {record.authorizerUid}
+            <Text style={ss.small}>Requesting beneficiary: verified against linked Assistance Request</Text>
+            <Text style={ss.small}>Reviewed by LGU Admin{record.authorizerUid?" · Authorized by LGU Admin":""}</Text>
+            {!!record.method&&<Text style={ss.small}>
+              Destination: {record.method.toUpperCase()} (TEST) ·•••• {record.walletLast4}
             </Text>}
             {!!record.method&&<Text style={ss.small}>
-              {record.method.toUpperCase()} · TEST wallet ending {record.walletLast4}
+              Processor: VolunServe internal sandbox · No external wallet transfer
             </Text>}
             {!!record.simulationReference&&<Text style={ss.small}>
-              Reference: {record.simulationReference}
+              Internal demo reference: {record.simulationReference}
             </Text>}
             {!!record.acknowledgmentNote&&<Text style={ss.small}>
               Resident response: {record.acknowledgmentNote}
@@ -260,27 +260,10 @@ export default function FundReleaseControls({campaigns,ready}:{
               </View>
 
           </View>}
-          {record?.status==="authorized"&&<View style={ss.actionBlock}>
-            <Text style={ss.fieldLabel}>Simulated payout channel</Text>
-            <View style={ss.actionRow}>
-              {(["gcash","maya"] as const).map(x=><Pressable key={x}
-                accessibilityRole="button" accessibilityState={{selected:method===x}}
-                style={[ss.secondary,method===x&&ss.picked]} onPress={()=>setMethod(x)}>
-                <Text style={ss.secondaryText}>{x==="gcash"?"GCash":"Maya"} (demo)</Text>
-              </Pressable>)}
-            </View>
-            <Text style={ss.fieldLabel}>Last 4 digits of TEST wallet only</Text>
-            <TextInput accessibilityLabel="Last 4 digits of test wallet" keyboardType="number-pad"
-              maxLength={4} value={walletLast4} onChangeText={setWalletLast4}
-              placeholder="0000" style={ss.input}/>
-            <Text style={ss.muted}>Do not enter real wallet numbers. No transfer will be performed.</Text>
-            <Pressable style={[ss.primary,busy&&ss.disabled]} disabled={busy}
-              accessibilityRole="button" onPress={()=>void action(
-                "/"+selection.id+"/simulate",{method,walletLast4},
-                "Simulated release recorded. The verified requester can now acknowledge it.")}>
-              <Text style={ss.primaryText}>Record simulated release</Text>
-            </Pressable>
-          </View>}
+          {record?.status==="authorized"&&<SandboxPayoutForm key={selection.id}
+            amount={record.amount} disabled={busy}
+            onSubmit={details=>action("/"+selection.id+"/simulate",details,
+              "Internal sandbox release recorded. The verified requesting Resident can review the demo receipt.")}/>}
           {!!record?.audit?.length&&<View style={ss.actionBlock}>
             <Text style={ss.fieldLabel}>Audit history</Text>
             {record.audit.map((row,i)=><Text key={i} style={ss.small}>
