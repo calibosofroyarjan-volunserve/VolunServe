@@ -29,6 +29,7 @@ import {
   activeModeForProfile,
   hasResidentAccess,
   hasVolunteerAccess,
+  logoutUser,
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -152,6 +153,8 @@ export default function WebHome() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState(false);
   const [mobileSlide, setMobileSlide] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const compact = width < 1040;
   const narrow = width < 760;
@@ -178,7 +181,8 @@ export default function WebHome() {
   const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
   const canSwitchMode =
     hasResidentAccess(profile) && hasVolunteerAccess(profile);
-  const profileRole = volunteerMode ? "Volunteer" : "Community Member";
+  const profileRole = volunteerMode ? "Volunteer" : "Resident";
+  const profileVerified = profile?.identityVerified === true || profile?.identityStatus === "verified";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
@@ -418,6 +422,7 @@ export default function WebHome() {
 
   const handleModeSwitch = async () => {
     if (!user || !canSwitchMode) return;
+    setProfileMenuOpen(false);
 
     const nextMode = volunteerMode ? "resident" : "volunteer";
     try {
@@ -431,6 +436,25 @@ export default function WebHome() {
     }
   };
 
+  const openAccountDestination = (destination: "profile" | "my-cases") => {
+    setProfileMenuOpen(false);
+    router.push(destination === "profile" ? "/profile" : "/my-cases");
+  };
+
+  const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    if (loggingOut || !window.confirm("Are you sure you want to log out of VolunServe?")) return;
+    setLoggingOut(true);
+    try {
+      await logoutUser();
+      router.replace("/login");
+    } catch (error: any) {
+      Alert.alert("Log out failed", error?.message || "Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -438,6 +462,10 @@ export default function WebHome() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={[styles.page, narrow && styles.pageMobile]}>
+          {profileMenuOpen && !narrow ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Close account menu"
+              onPress={() => setProfileMenuOpen(false)} style={styles.profileMenuDismiss} />
+          ) : null}
           {narrow ? (
             <ImageBackground
               source={require("../../assets/images/sjdm-aerial.png")}
@@ -519,7 +547,7 @@ export default function WebHome() {
               </View>
 
               <View style={styles.topActions}>
-                {compact && canSwitchMode ? (
+                {compact && canSwitchMode && volunteerMode ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
@@ -567,12 +595,14 @@ export default function WebHome() {
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open profile"
+                  accessibilityLabel={profileMenuOpen ? "Close account menu" : "Open account menu"}
+                  accessibilityState={{ expanded: profileMenuOpen }}
                   style={({ pressed }) => [
                     styles.profileButton,
+                    profileMenuOpen && styles.profileButtonOpen,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() => router.push("/profile")}
+                  onPress={() => setProfileMenuOpen(current => !current)}
                 >
                   {profile?.profilePictureUrl ? (
                     <Image
@@ -596,7 +626,44 @@ export default function WebHome() {
                 </Pressable>
               </View>
             </View>
-
+            {profileMenuOpen ? (
+              <View style={styles.profileDropdown}>
+                <View style={styles.dropdownIdentity}>
+                  {profile?.profilePictureUrl ? (
+                    <Image source={{ uri: profile.profilePictureUrl }} style={styles.dropdownAvatar} />
+                  ) : (
+                    <View style={styles.dropdownAvatarFallback}>
+                      <Text style={styles.dropdownAvatarInitial}>{profileInitial}</Text>
+                    </View>
+                  )}
+                  <View style={styles.dropdownIdentityCopy}>
+                    <Text numberOfLines={1} style={styles.dropdownName}>{displayName}</Text>
+                    <Text style={styles.dropdownRole}>{volunteerMode ? "Volunteer Account" : "Resident Account"}</Text>
+                  </View>
+                  {profileVerified ? (
+                    <View style={styles.dropdownVerified}>
+                      <Ionicons name="checkmark-circle" size={12} color="#087B55" />
+                      <Text style={styles.dropdownVerifiedText}>Verified</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <ProfileDropdownAction icon="person-outline" title="My Profile"
+                  onPress={() => openAccountDestination("profile")} />
+                {!volunteerMode ? (
+                  <ProfileDropdownAction icon="document-text-outline" title="My Reports"
+                    onPress={() => openAccountDestination("my-cases")} />
+                ) : null}
+                <ProfileDropdownAction icon="settings-outline" title="Account Settings"
+                  onPress={() => openAccountDestination("profile")} />
+                {canSwitchMode ? (
+                  <ProfileDropdownAction icon="swap-horizontal" title={`Switch to ${volunteerMode ? "Resident" : "Volunteer"} Mode`}
+                    onPress={() => void handleModeSwitch()} />
+                ) : null}
+                <View style={styles.dropdownDivider} />
+                <ProfileDropdownAction icon="log-out-outline" title={loggingOut ? "Logging out..." : "Log Out"}
+                  destructive disabled={loggingOut} onPress={() => void handleLogout()} />
+              </View>
+            ) : null}
 
             </View>
           <ImageBackground
@@ -875,6 +942,25 @@ export default function WebHome() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+function ProfileDropdownAction({
+  icon, title, onPress, destructive = false, disabled = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title}
+      disabled={disabled} onPress={onPress}
+      style={({ pressed }) => [styles.dropdownAction, pressed && styles.dropdownActionPressed]}>
+      <Ionicons name={icon} size={19} color={destructive ? "#D82D40" : "#1B3662"} />
+      <Text style={[styles.dropdownActionText, destructive && styles.dropdownActionDanger]}>{title}</Text>
+    </Pressable>
   );
 }
 
