@@ -1,0 +1,27 @@
+name: Validate Premium Role Dashboard UI
+on:
+  push:
+    branches: [feature/premium-role-dashboards-sidebar-20261025]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Verify Expo production web export
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo export --platform web --clear --max-workers 1
+      - name: Verify dist entry
+        run: test -f dist/index.html
