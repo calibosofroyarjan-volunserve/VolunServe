@@ -115,6 +115,9 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [alerts, setAlerts] = useState<{id:string; title?:string; message?:string; read?:boolean; donationId?:string; createdAt?:any}[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentSourceFilter, setPaymentSourceFilter] = useState("all");
+  const [sourceOptionsOpen, setSourceOptionsOpen] = useState(false);
+  const [transactionPage, setTransactionPage] = useState(1);
   const [selectedId, setSelectedId] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [campaignSearch, setCampaignSearch] = useState("");
@@ -271,30 +274,81 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     const term = search.trim().toLowerCase();
     const match = !term || [donorLabel(r), r.campaignTitle, r.id, r.transactionReference]
       .some(v => String(v || "").toLowerCase().includes(term));
-    return match && (statusFilter === "all" ||
+    const matchesSource = paymentSourceFilter === "all" ||
+      (paymentSourceFilter === "paymongo" && r.paymentProvider === "paymongo") ||
+      (paymentSourceFilter === "legacy" && r.paymentProvider !== "paymongo");
+    const matchesStatus = statusFilter === "all" ||
       (statusFilter === "paid" ? isConfirmed(r) : statusFilter === "pending" ?
         ["payment_creating", "payment_pending", "submitted"].includes(r.status || "") :
         (statusFilter === "rejected"
           ? ["rejected", "payment_failed"].includes(r.status || "")
-          : r.status === statusFilter)));
-  }), [records, search, statusFilter]);
+          : r.status === statusFilter));
+    return match && matchesSource && matchesStatus;
+  }), [records, search, statusFilter, paymentSourceFilter]);
+  const transactionPageSize = 5;
+  const transactionPageCount = Math.max(1, Math.ceil(filtered.length / transactionPageSize));
+  const currentTransactionPage = Math.min(transactionPage, transactionPageCount);
+  const pagedTransactions = filtered.slice(
+    (currentTransactionPage - 1) * transactionPageSize,
+    currentTransactionPage * transactionPageSize
+  );
+  const transactionSourceOptions = [
+    {value:"all",label:"All Sources"},
+    {value:"paymongo",label:"PayMongo"},
+    {value:"legacy",label:"Manual / Legacy"},
+  ];
+  const transactionSourceLabel = transactionSourceOptions.find(
+    option => option.value === paymentSourceFilter)?.label || "All Sources";
+  const transactionPending = records.filter(record =>
+    ["payment_creating","payment_pending","submitted"].includes(record.status || "")).length;
+  const transactionFailed = records.filter(record =>
+    ["rejected","payment_failed"].includes(record.status || "")).length;
+  const transactionVerified = records.filter(isConfirmed).length;
+  const transactionPaidTotal = records.filter(record =>
+    isConfirmed(record) && record.paymentProvider === "paymongo" &&
+    record.paymongoLivemode === false)
+    .reduce((sum,record) => sum + amountReceived(record), 0);
 
   if (loading || (!fontsLoaded && !fontsError)) return <View style={s.center}><ActivityIndicator color="#078F82" /></View>;
   if (!allowed) return <View style={s.center}><Text style={s.info}>Authorized {mode} account required.</Text></View>;
 
-  const row = (r: DonationRow) => <Pressable key={r.id}
-    accessibilityRole="button" accessibilityLabel={"View donation from " + donorLabel(r)}
-    onPress={() => { setSelectedId(r.id); setView("all"); }}
-    style={[s.tableRow, selectedId === r.id && s.selectedRow]}>
-    <View style={s.donorCell}><View style={s.avatar}><Ionicons name="person" color="#087F72" size={16}/></View>
-      <View style={s.flex}><Text numberOfLines={1} style={s.tableMain}>{donorLabel(r)}</Text>
-      <Text numberOfLines={1} style={s.tableSecondary}>{r.campaignTitle || "Donation Campaign"}</Text></View></View>
-    <View style={s.amountCell}><Text style={s.tableMain}>{peso(isConfirmed(r) ? amountReceived(r) : r.amount)}</Text>
-      <Text numberOfLines={1} style={s.tableSecondary}>{payMode(r)}</Text></View>
-    <View style={s.dateCell}><Text style={s.tableSecondary}>{dateText(r.paidAt || r.createdAt)}</Text></View>
-    <View style={s.statusCell}><Text style={[s.statusPill, isConfirmed(r) ? s.paidPill :
-      r.status === "rejected" ? s.failedPill : s.pendingPill]}>{statusText(r)}</Text></View>
-    <Ionicons name="eye-outline" size={18} color="#148577" />
+  const row = (record: DonationRow) => <Pressable
+    key={record.id} accessibilityRole="button"
+    accessibilityLabel={"Inspect transaction from " + donorLabel(record)}
+    accessibilityState={{selected:selectedId === record.id}}
+    onPress={() => setSelectedId(record.id)}
+    style={[s.txRow,selectedId === record.id && s.txSelectedRow]}>
+    <View style={[s.txCell,s.txDonorCol,s.txDonorDetails]}>
+      <View style={s.txAvatar}>
+        <Ionicons name="person" size={18} color="#087E67"/>
+      </View>
+      <View style={s.flex}>
+        <Text style={s.txPrimary} numberOfLines={1}>{donorLabel(record)}</Text>
+        <Text style={s.txSecondary} numberOfLines={1}>
+          {record.campaignTitle || "Donation campaign"}
+        </Text>
+      </View>
+    </View>
+    <View style={[s.txCell,s.txAmountCol]}>
+      <Text style={s.txAmount} numberOfLines={1}>
+        {peso(isConfirmed(record) ? amountReceived(record) : record.amount)}
+      </Text>
+    </View>
+    <View style={[s.txCell,s.txMethodCol]}>
+      <Text style={s.txSecondary} numberOfLines={2}>{payMode(record)}</Text>
+    </View>
+    <View style={[s.txCell,s.txDateCol]}>
+      <Text style={s.txSecondary}>{dateText(record.paidAt || record.createdAt)}</Text>
+    </View>
+    <View style={[s.txCell,s.txStatusCol]}>
+      <Text style={[s.statusPill,isConfirmed(record) ? s.paidPill :
+        ["rejected","payment_failed"].includes(record.status || "") ? s.failedPill : s.pendingPill]}>
+        {statusText(record)}
+      </Text>
+    </View>
+    <View style={[s.txCell,s.txActionCol]}>
+      <Ionicons name="eye-outline" size={20} color="#0E9179"/>
+    </View>
   </Pressable>;
 
   // The Overview previews are record-level drill-downs, never copies of the navigation tabs.
@@ -492,15 +546,34 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
   </View>;
 
-  const detailsPanel = <View style={s.panel}>
+  const detailsPanel = <View style={[s.panel,s.txInspectorPanel]}>
     <View style={s.panelHeading}>
       <Text style={s.panelTitle}>Transaction details</Text>
       {selected && <SmallButton text="Clear" onPress={() => setSelectedId("")}/>}
     </View>
-    {!selected ? <View style={s.empty}>
-      <Ionicons name="receipt-outline" size={30} color="#0D9170"/>
-      <Text style={s.emptyTitle}>Select a donation</Text>
-      <Text style={s.info}>Click a transaction to view its payment record and registered donor.</Text>
+    {!selected ? <View style={s.txInspectorEmpty}>
+      <View style={s.txInspectorIllustration}>
+        <Ionicons name="document-text-outline" size={43} color="#078A6E"/>
+        <View style={s.txInspectorMagnify}>
+          <Ionicons name="search" size={21} color="#FFFFFF"/>
+        </View>
+      </View>
+      <Text style={s.txInspectorTitle}>Select a transaction</Text>
+      <Text style={s.txInspectorDescription}>
+        Choose a payment record to review its status, donor details, and reference information.
+      </Text>
+      <View style={s.txInspectorFeatures}>
+        {([
+          ["card-outline","Payment information"],
+          ["person-outline","Registered donor"],
+          ["heart-outline","Campaign details"],
+          ["shield-checkmark-outline","Verification status"],
+          ["link-outline","Related records"],
+        ] as const).map(([icon,label]) => <View key={label} style={s.txInspectorFeature}>
+          <Ionicons name={icon} color="#07886D" size={17}/>
+          <Text style={s.txInspectorFeatureLabel}>{label}</Text>
+        </View>)}
+      </View>
     </View> : <>
       <View style={s.donorHeader}>
         {donor?.photoURL || donor?.profilePhotoUrl ?
@@ -822,43 +895,169 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
 
     {view === "all" && <>
-      <View style={s.sectionIntro}>
-        <View style={s.flex}>
-          <Text style={s.sectionEyebrow}>DONOR PAYMENT RECORDS</Text>
-          <Text style={s.sectionTitle}>Transactions</Text>
-          <Text style={s.sectionDescription}>Search every donation, verify its payment status, and inspect the associated donor profile.</Text>
-        </View>
-        <Text style={s.sectionCount}>{records.length} records</Text>
+      <View style={s.transactionMetrics}>
+        {([
+          ["Total Verified Test Payments",peso(transactionPaidTotal),"wallet-outline",
+            "Confirmed PayMongo Sandbox payments"],
+          ["Pending Payments",String(transactionPending),"time-outline",
+            "Provider pending and legacy submissions"],
+          ["Confirmed Donation Records",String(transactionVerified),"checkmark-circle-outline",
+            "Confirmed provider and legacy records"],
+          ["Unique Donors",String(donors),"people-outline",
+            "Recorded accounts with confirmed donations"],
+        ] as const).map(([title,value,icon,caption]) =>
+          <View style={s.transactionMetric} key={title}>
+            <View style={s.transactionMetricIcon}>
+              <Ionicons name={icon} size={22} color="#098567"/>
+            </View>
+            <View style={s.transactionMetricText}>
+              <Text style={s.transactionMetricLabel}>{title}</Text>
+              <Text style={s.transactionMetricValue}>{ready ? value : "…"}</Text>
+              <Text style={s.transactionMetricDescription}>{caption}</Text>
+            </View>
+          </View>)}
       </View>
-      <View style={[s.columns, compact && s.columnsCompact]}>
+      <View style={[s.columns,compact && s.columnsCompact,s.txColumns]}>
         <View style={s.mainColumn}>
-          <View style={s.panel}>
-            <View style={s.panelHeading}>
-              <Text style={s.panelTitle}>All donation transactions</Text>
-              <Text style={s.info}>{filtered.length} matched</Text>
+          <View style={[s.panel,s.txRegister]}>
+            <View style={s.txRegisterHead}>
+              <View style={s.flex}>
+                <Text style={s.txPanelTitle}>All donation transactions</Text>
+                <Text style={s.txPanelDescription}>
+                  Search donation records, check payment statuses, and inspect donor information.
+                </Text>
+              </View>
+              <Text style={s.txRecordCount}>{records.length} records</Text>
             </View>
-            <TextInput style={s.search} value={search} onChangeText={setSearch}
-              placeholder="Search donor, campaign or payment reference"
-              placeholderTextColor="#8A9D9B"/>
-            <View style={s.searchRow}>
-              {(["all", "paid", "pending", "rejected"] as const).map(name =>
-                <SmallButton key={name} text={name === "all" ? "All records" :
-                  name === "paid" ? "Confirmed" : name === "pending" ? "Pending" : "Failed / Rejected"}
-                  primary={statusFilter === name} onPress={() => setStatusFilter(name)}/>)}
+            <View style={s.txTools}>
+              <View style={s.txSearchContainer}>
+                <Ionicons name="search-outline" size={18} color="#698599"/>
+                <TextInput
+                  style={s.txSearchInput}
+                  accessibilityLabel="Search donations"
+                  value={search}
+                  onChangeText={next => {setSearch(next);setTransactionPage(1);}}
+                  placeholder="Search donor, campaign, or payment reference…"
+                  placeholderTextColor="#90A3B2"/>
+                {!!search && <Pressable accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => {setSearch("");setTransactionPage(1);}}>
+                  <Ionicons name="close-circle" size={18} color="#8A9DAA"/>
+                </Pressable>}
+              </View>
+              <Pressable accessibilityRole="button"
+                accessibilityLabel={"Payment source: "+transactionSourceLabel}
+                accessibilityState={{expanded:sourceOptionsOpen}}
+                onPress={() => setSourceOptionsOpen(!sourceOptionsOpen)}
+                style={[s.txSourceButton,sourceOptionsOpen && s.txSourceButtonActive]}>
+                <Ionicons name="filter-outline" size={16} color="#315D6D"/>
+                <Text style={s.txSourceButtonText}>{transactionSourceLabel}</Text>
+                <Ionicons name={sourceOptionsOpen ? "chevron-up" : "chevron-down"}
+                  size={16} color="#385F73"/>
+              </Pressable>
             </View>
-            {filtered.length ? filtered.slice(0, 100).map(row) :
-              <Text style={s.info}>No matching donations.</Text>}
-            {filtered.length > 100 && <Text style={s.info}>Showing latest 100 of {filtered.length} donations.</Text>}
+            {sourceOptionsOpen && <View style={s.txSourceOptions}>
+              {transactionSourceOptions.map(option => <Pressable key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{selected:paymentSourceFilter === option.value}}
+                onPress={() => {
+                  setPaymentSourceFilter(option.value);
+                  setSourceOptionsOpen(false);
+                  setTransactionPage(1);
+                }}
+                style={[s.txSourceOption,
+                  paymentSourceFilter===option.value&&s.txSourceOptionActive]}>
+                <Text style={[s.txSourceOptionText,
+                  paymentSourceFilter===option.value&&s.txSourceOptionTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>)}
+            </View>}
+            <View style={s.txFilters}>
+              {([
+                ["all","All records",records.length],
+                ["paid","Confirmed",transactionVerified],
+                ["pending","Pending",transactionPending],
+                ["rejected","Failed / Rejected",transactionFailed],
+              ] as const).map(([value,label,count]) =>
+                <Pressable key={value} accessibilityRole="button"
+                  accessibilityState={{selected:statusFilter===value}}
+                  onPress={() => {setStatusFilter(value);setTransactionPage(1);}}
+                  style={[s.txFilterChip,statusFilter===value&&s.txFilterChipActive]}>
+                  <Text style={[s.txFilterChipText,
+                    statusFilter===value&&s.txFilterChipTextActive]}>{label}</Text>
+                  <View style={[s.txFilterCount,statusFilter===value&&s.txFilterCountActive]}>
+                    <Text style={[s.txFilterCountText,
+                      statusFilter===value&&s.txFilterCountTextActive]}>{count}</Text>
+                  </View>
+                </Pressable>)}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={s.txTable}>
+                <View style={s.txTableHead}>
+                  <Text style={[s.txTableHeadText,s.txDonorCol]}>Donor / Campaign</Text>
+                  <Text style={[s.txTableHeadText,s.txAmountCol]}>Amount</Text>
+                  <Text style={[s.txTableHeadText,s.txMethodCol]}>Payment Method</Text>
+                  <Text style={[s.txTableHeadText,s.txDateCol]}>Date & Time</Text>
+                  <Text style={[s.txTableHeadText,s.txStatusCol]}>Status</Text>
+                  <Text style={[s.txTableHeadText,s.txActionCol]}>Action</Text>
+                </View>
+                {!ready ? <View style={s.txTableEmpty}>
+                  <ActivityIndicator color="#0A9971"/>
+                  <Text style={s.info}>Loading transactions…</Text>
+                </View> : pagedTransactions.length ? pagedTransactions.map(row) :
+                  <View style={s.txTableEmpty}>
+                    <Ionicons name="search-outline" size={27} color="#8AA59A"/>
+                    <Text style={s.emptyTitle}>No matching records</Text>
+                    <Text style={s.info}>Try another search or filter.</Text>
+                  </View>}
+              </View>
+            </ScrollView>
+            <View style={s.txPaginationFooter}>
+              <Text style={s.txPaginationText}>
+                {filtered.length
+                  ? "Showing " + ((currentTransactionPage-1)*transactionPageSize+1) +
+                    "–" + Math.min(currentTransactionPage*transactionPageSize,filtered.length) +
+                    " of " + filtered.length + " transactions"
+                  : "0 transactions"}
+              </Text>
+              <View style={s.txPageControls}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Previous transactions page"
+                  disabled={currentTransactionPage===1}
+                  onPress={() => setTransactionPage(currentTransactionPage-1)}
+                  style={[s.txPageButton,currentTransactionPage===1&&s.txPageDisabled]}>
+                  <Ionicons name="chevron-back" size={16} color="#376577"/>
+                </Pressable>
+                {Array.from({length:Math.min(transactionPageCount,5)},(_,i) => {
+                  const pageStart = Math.max(1,
+                    Math.min(currentTransactionPage-2,transactionPageCount-4));
+                  const pageNumber = pageStart+i;
+                  return <Pressable key={pageNumber} accessibilityRole="button"
+                    accessibilityLabel={"Transactions page "+pageNumber}
+                    accessibilityState={{selected:currentTransactionPage===pageNumber}}
+                    onPress={() => setTransactionPage(pageNumber)}
+                    style={[s.txPageButton,
+                      currentTransactionPage===pageNumber&&s.txPageButtonSelected]}>
+                    <Text style={[s.txPageNumber,
+                      currentTransactionPage===pageNumber&&s.txPageNumberSelected]}>
+                      {pageNumber}
+                    </Text>
+                  </Pressable>;
+                })}
+                <Pressable accessibilityRole="button" accessibilityLabel="Next transactions page"
+                  disabled={currentTransactionPage===transactionPageCount}
+                  onPress={() => setTransactionPage(currentTransactionPage+1)}
+                  style={[s.txPageButton,
+                    currentTransactionPage===transactionPageCount&&s.txPageDisabled]}>
+                  <Ionicons name="chevron-forward" size={16} color="#376577"/>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </View>
-        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{detailsPanel}</View>
-      </View>
-      <View style={s.slimNote}>
-        <Ionicons name="information-circle-outline" color="#47776C" size={16}/>
-        <Text style={s.slimNoteText}>
-          PayMongo Sandbox confirmed: {peso(testReceived)} · Live confirmed: {peso(liveReceived)} · Other recorded: {peso(otherReceived)}.
-          Payment confirmation alone does not establish settled funds.
-        </Text>
+        <View style={[s.detailsColumn,compact&&s.detailsColumnCompact]}>
+          {detailsPanel}
+        </View>
       </View>
     </>}
 
@@ -1338,6 +1537,202 @@ const s = StyleSheet.create({
   campaignInspectorEmptyBody: {
     fontFamily:"AdminInterRegular",fontSize:11,lineHeight:19,
     textAlign:"center",color:"#7E94A1",maxWidth:260,
+  },
+
+  transactionMetrics: {
+    flexDirection:"row",flexWrap:"wrap",gap:13,marginTop:2,
+  },
+  transactionMetric: {
+    flexGrow:1,flexBasis:215,minWidth:190,minHeight:136,
+    flexDirection:"row",alignItems:"flex-start",gap:14,
+    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E2EBEF",
+    borderRadius:14,paddingHorizontal:17,paddingVertical:20,
+    shadowColor:"#193F50",shadowOpacity:0.035,shadowRadius:13,
+    shadowOffset:{width:0,height:5},elevation:1,
+  },
+  transactionMetricIcon: {
+    height:48,width:48,borderRadius:12,backgroundColor:"#EAF7F1",
+    alignItems:"center",justifyContent:"center",
+  },
+  transactionMetricText: {flex:1,gap:6,minWidth:0},
+  transactionMetricLabel: {
+    fontFamily:"AdminInterSemiBold",color:"#485F72",fontSize:11.2,lineHeight:17,
+  },
+  transactionMetricValue: {
+    fontFamily:"AdminInterBold",color:"#1E4052",fontSize:23,
+    letterSpacing:-0.42,marginTop:1,
+  },
+  transactionMetricDescription: {
+    fontFamily:"AdminInterRegular",color:"#8196AA",fontSize:10.1,lineHeight:16,
+  },
+  txColumns: {marginTop:4},
+  txRegister: {padding:19,minHeight:595,gap:0},
+  txRegisterHead: {
+    flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between",
+    gap:12,marginBottom:16,flexWrap:"wrap",
+  },
+  txPanelTitle: {
+    fontFamily:"AdminInterBold",fontSize:16.5,letterSpacing:-0.2,color:"#17394B",
+  },
+  txPanelDescription: {
+    fontFamily:"AdminInterRegular",fontSize:10.9,color:"#8195A5",
+    lineHeight:18,marginTop:6,
+  },
+  txRecordCount: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.6,color:"#70859A",
+    paddingHorizontal:6,paddingVertical:5,
+  },
+  txTools: {
+    flexDirection:"row",alignItems:"center",gap:10,marginBottom:12,
+    flexWrap:"wrap",
+  },
+  txSearchContainer: {
+    flexDirection:"row",gap:10,alignItems:"center",height:42,
+    minWidth:195,flexBasis:285,flexGrow:1,
+    backgroundColor:"#FFFFFF",borderColor:"#DCE8EE",borderWidth:1,
+    borderRadius:10,paddingHorizontal:13,
+  },
+  txSearchInput: {
+    fontFamily:"AdminInterRegular",fontSize:11.2,color:"#25495E",
+    flex:1,minWidth:100,paddingVertical:10,
+  },
+  txSourceButton: {
+    flexDirection:"row",gap:9,alignItems:"center",justifyContent:"space-between",
+    height:42,borderColor:"#DDE8EE",borderWidth:1,
+    paddingHorizontal:13,borderRadius:10,backgroundColor:"#FFFFFF",
+    minWidth:139,
+  },
+  txSourceButtonActive: {
+    backgroundColor:"#F3FBF7",borderColor:"#8DD2B5",
+  },
+  txSourceButtonText: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.7,color:"#294A5C",
+  },
+  txSourceOptions: {
+    flexDirection:"row",gap:8,flexWrap:"wrap",
+    paddingBottom:12,
+  },
+  txSourceOption: {
+    paddingHorizontal:12,paddingVertical:8,
+    borderWidth:1,borderColor:"#E0E8EC",borderRadius:8,
+  },
+  txSourceOptionActive: {
+    backgroundColor:"#E6F8F0",borderColor:"#9DDFC3",
+  },
+  txSourceOptionText: {
+    fontFamily:"AdminInterMedium",fontSize:10.3,color:"#5A7483",
+  },
+  txSourceOptionTextActive: {color:"#087959"},
+  txFilters: {
+    flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:13,
+  },
+  txFilterChip: {
+    flexDirection:"row",alignItems:"center",gap:8,
+    paddingVertical:9,paddingHorizontal:12,
+    borderRadius:9,borderWidth:1,borderColor:"#DDE8E7",
+    backgroundColor:"#FFFFFF",minHeight:36,
+  },
+  txFilterChipActive: {backgroundColor:"#098A70",borderColor:"#098A70"},
+  txFilterChipText: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.6,color:"#15715C",
+  },
+  txFilterChipTextActive: {color:"#FFFFFF"},
+  txFilterCount: {
+    backgroundColor:"#EDF3F3",paddingHorizontal:6,paddingVertical:3,
+    borderRadius:6,minWidth:20,alignItems:"center",
+  },
+  txFilterCountActive: {backgroundColor:"#40AC93"},
+  txFilterCountText: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.4,color:"#6E8490",
+  },
+  txFilterCountTextActive: {color:"#FFFFFF"},
+  txTable: {
+    width:"100%",minWidth:760,borderColor:"#E3EAEE",borderWidth:1,
+    borderRadius:10,overflow:"hidden",backgroundColor:"#FFFFFF",
+  },
+  txTableHead: {
+    flexDirection:"row",alignItems:"center",
+    backgroundColor:"#F3F7F9",minHeight:40,
+    paddingHorizontal:12,gap:9,
+  },
+  txTableHeadText: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.7,color:"#6E869A",
+  },
+  txRow: {
+    flexDirection:"row",alignItems:"center",
+    minHeight:65,paddingHorizontal:12,paddingVertical:10,
+    gap:9,borderTopWidth:1,borderTopColor:"#E9EFF2",
+    backgroundColor:"#FFFFFF",
+  },
+  txSelectedRow: {backgroundColor:"#EDF9F3"},
+  txCell: {justifyContent:"center",minWidth:0},
+  txDonorCol: {flex:2.12,minWidth:140},
+  txAmountCol: {flex:1.08,minWidth:77},
+  txMethodCol: {flex:1.42,minWidth:90},
+  txDateCol: {flex:1.38,minWidth:94},
+  txStatusCol: {flex:1.10,minWidth:80},
+  txActionCol: {flex:0.46,minWidth:39,alignItems:"center"},
+  txDonorDetails: {flexDirection:"row",alignItems:"center",gap:8},
+  txAvatar: {
+    width:35,height:35,borderRadius:10,alignItems:"center",
+    justifyContent:"center",backgroundColor:"#EAF8F1",
+  },
+  txPrimary: {fontFamily:"AdminInterSemiBold",fontSize:10.9,color:"#254358"},
+  txSecondary: {
+    fontFamily:"AdminInterRegular",fontSize:9.8,color:"#768EA1",
+    lineHeight:16,marginTop:2,
+  },
+  txAmount: {fontFamily:"AdminInterSemiBold",fontSize:10.7,color:"#203E50"},
+  txTableEmpty: {
+    minHeight:260,alignItems:"center",justifyContent:"center",gap:10,padding:22,
+  },
+  txPaginationFooter: {
+    flexDirection:"row",justifyContent:"space-between",alignItems:"center",
+    paddingTop:16,gap:14,flexWrap:"wrap",
+  },
+  txPaginationText: {
+    fontFamily:"AdminInterRegular",fontSize:10.6,color:"#748B9E",
+  },
+  txPageControls: {flexDirection:"row",alignItems:"center",gap:7},
+  txPageButton: {
+    width:34,height:34,alignItems:"center",justifyContent:"center",
+    borderRadius:9,borderColor:"#DFE9EF",borderWidth:1,backgroundColor:"#FFFFFF",
+  },
+  txPageDisabled: {opacity:0.42},
+  txPageButtonSelected: {borderColor:"#0A8A70",backgroundColor:"#0A8A70"},
+  txPageNumber: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.9,color:"#4C697D",
+  },
+  txPageNumberSelected: {color:"#FFFFFF"},
+  txInspectorPanel: {minHeight:592,padding:17},
+  txInspectorEmpty: {
+    flex:1,alignItems:"center",justifyContent:"center",
+    minHeight:475,gap:12,paddingHorizontal:8,
+  },
+  txInspectorIllustration: {
+    height:101,width:101,borderRadius:51,backgroundColor:"#F0F7F6",
+    alignItems:"center",justifyContent:"center",marginBottom:2,
+  },
+  txInspectorMagnify: {
+    position:"absolute",right:13,bottom:16,width:29,height:29,
+    borderRadius:15,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#098C6E",borderWidth:2,borderColor:"#FFFFFF",
+  },
+  txInspectorTitle: {
+    fontFamily:"AdminInterBold",fontSize:15.6,color:"#1D3D51",textAlign:"center",
+  },
+  txInspectorDescription: {
+    fontFamily:"AdminInterRegular",fontSize:10.8,color:"#8195A7",
+    lineHeight:18,textAlign:"center",maxWidth:247,
+  },
+  txInspectorFeatures: {
+    backgroundColor:"#F5F8FA",borderWidth:1,borderColor:"#E8EFF1",
+    borderRadius:11,paddingHorizontal:14,paddingVertical:15,
+    alignSelf:"stretch",gap:11,marginTop:5,
+  },
+  txInspectorFeature: {flexDirection:"row",gap:10,alignItems:"center"},
+  txInspectorFeatureLabel: {
+    fontFamily:"AdminInterRegular",fontSize:10.7,color:"#718AA1",
   },
 
 });
