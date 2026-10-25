@@ -121,10 +121,75 @@ function installFundReleaseDemoRoutes({
   }
   const withAdmin = [requireFirebaseUser, requireAdminOrSuperAdmin, requireLguAdmin];
 
+
+  // Admin-facing reconciliation uses the exact same provider verification
+  // predicate as release authorization. No metadata is upgraded or fabricated.
+  const reconcileCampaign = async (campaignId, campaign) => {
+    const snap = await db.collection("donations").where("campaignId","==",campaignId)
+      .limit(1000).get();
+    if (snap.size >= 1000) reject("donation_review_limit",
+      "Too many donation records to safely reconcile; contact your LGU administrator.",409);
+    let providerCents = 0, legacyCents = 0, pendingCount = 0, testCount = 0;
+    let otherCount = 0;
+    for (const item of snap.docs) {
+      const d = item.data() || {};
+      if (d.donationType && d.donationType !== "monetary") continue;
+      const recorded = Math.max(0, amount(d.actualAmountReceived));
+      if (isVerifiedTestPaymongoDonation(d)) {
+        providerCents += recorded; testCount++;
+      } else if (d.status === "received" && d.paymentProvider !== "paymongo") {
+        legacyCents += recorded;
+      } else if (["submitted","payment_pending","payment_creating"].includes(d.status)) {
+        pendingCount++;
+      } else {
+        otherCount++;
+      }
+    }
+    const goalCents = cents(campaign.monetaryGoal);
+    const recordedCents = Math.max(0,amount(campaign.verifiedAmountReceived));
+    const eligibleCents = Number.isInteger(goalCents)
+      ? Math.min(goalCents, recordedCents, providerCents) : 0;
+    const ready = Number.isInteger(goalCents) && providerCents >= goalCents &&
+      recordedCents >= goalCents;
+    const reason = !Number.isInteger(goalCents) ? "approved_goal_missing" :
+      ready ? "ready" :
+      providerCents === 0 && legacyCents > 0 ? "manual_records_only" :
+      providerCents === 0 ? "no_verified_provider_payment" :
+      providerCents < goalCents ? "provider_payments_below_goal" :
+      "recorded_funding_below_goal";
+    return {
+      campaignId, approvedGoal: Number.isInteger(goalCents) ? goalCents / 100 : 0,
+      recordedFunding: recordedCents / 100,
+      providerVerifiedTestAmount: providerCents / 100,
+      manualLegacyAmount: legacyCents / 100,
+      eligibleAmount: eligibleCents / 100,
+      providerVerifiedCount: testCount, pendingCount, otherCount,
+      ready, reason,
+    };
+  };
+
   app.get(BASE, ...withAdmin, async (req, res) => {
     try {
-      const snap = await releases.limit(150).get();
-      return res.json({ok: true, releases: snap.docs.map(publicRecord)});
+      const [snap,campaignSnap] = await Promise.all([
+        releases.limit(150).get(),
+        db.collection("donationCampaigns").limit(150).get(),
+      ]);
+      const reviewableCampaigns = campaignSnap.docs.filter(c => {
+        const d = c.data() || {};
+        return d.sourceType === "community_assistance_request" &&
+          !!d.sourceAssistanceRequestId && Number(d.monetaryGoal || 0) > 0;
+      });
+      if (campaignSnap.size === 150) reject("campaign_review_limit",
+        "Too many campaigns for this review screen; request paginated reconciliation.",409);
+      const funding = await Promise.all(reviewableCampaigns.map(c =>
+        reconcileCampaign(c.id, c.data() || {})));
+      return res.json({
+        ok:true, releases:snap.docs.map(publicRecord),
+        funding,
+        // Each campaign has separate, source-backed accounting. Same-name
+        // campaigns MUST NOT be merged into one release balance.
+        reconciliationSource:"provider_verified_paymongo_sandbox_only",
+      });
     } catch (error) { return send(res, error); }
   });
 
@@ -157,23 +222,16 @@ function installFundReleaseDemoRoutes({
 
       const goal = cents(campaign.monetaryGoal);
       if (!Number.isInteger(goal)) reject("goal_missing", "A verified approved monetary goal is required.", 409);
-      // Query the real donations collection; pending, manual/legacy, failed and
-      // live funds are never counted as verified Sandbox test contributions.
-      const donationsSnap = await db.collection("donations")
-        .where("campaignId", "==", campaignId).limit(1000).get();
-      if (donationsSnap.size === 1000) reject("donation_review_limit", "Too many donation records; request a manual reconciliation.", 409);
-      const verifiedCents = donationsSnap.docs.reduce((sum, item) => {
-        const d = item.data() || {};
-        return sum + ((d.donationType === "monetary" && isVerifiedTestPaymongoDonation(d))
-          ? amount(d.actualAmountReceived) : 0);
-      }, 0);
-      const eligible = Math.min(goal, verifiedCents, amount(campaign.verifiedAmountReceived));
-      if (verifiedCents < goal || amount(campaign.verifiedAmountReceived) < goal)
+      // Same source-of-truth logic as Admin UI; legacy donations cannot
+      // impersonate webhook-confirmed Sandbox payments.
+      const check = await reconcileCampaign(campaignId, campaign);
+      const eligible = amount(check.eligibleAmount);
+      if (!check.ready)
         reject("funding_goal_not_reached",
-          "The approved goal must be fully reached by verified Sandbox payments before release simulation.", 409);
+          "Provider-confirmed test payments have not met the approved goal for this specific campaign.",409);
       if (requestedCents !== goal || eligible !== goal)
         reject("release_must_match_approved_goal",
-          "This one-time simulation must use exactly the verified approved funding goal.", 409);
+          "Release review must use exactly the funded, approved goal.",409);
       const releaseRef = releases.doc(campaignId);
       const recipients = await getAdmins();
       await db.runTransaction(async tx => {
