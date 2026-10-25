@@ -74,12 +74,6 @@ const navItems: NavItem[] = [
     match: "/donations",
   },
   {
-    label: "Donation Notifications",
-    icon: "notifications-outline",
-    route: "/(superadmin)/donation-notifications",
-    match: "/donation-notifications",
-  },
-  {
     label: "Audit Logs",
     icon: "time-outline",
     route: "/(superadmin)/admin-logs",
