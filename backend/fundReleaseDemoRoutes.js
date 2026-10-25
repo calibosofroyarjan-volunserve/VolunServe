@@ -156,9 +156,12 @@ function installFundReleaseDemoRoutes({
           ? amount(d.actualAmountReceived) : 0);
       }, 0);
       const eligible = Math.min(goal, verifiedCents, amount(campaign.verifiedAmountReceived));
-      if (eligible <= 0 || requestedCents > eligible)
-        reject("insufficient_verified_test_payments",
-          "This amount exceeds verified Sandbox payments and the campaign's recorded approved funding.", 409);
+      if (verifiedCents < goal || amount(campaign.verifiedAmountReceived) < goal)
+        reject("funding_goal_not_reached",
+          "The approved goal must be fully reached by verified Sandbox payments before release simulation.", 409);
+      if (requestedCents !== goal || eligible !== goal)
+        reject("release_must_match_approved_goal",
+          "This one-time simulation must use exactly the verified approved funding goal.", 409);
       const releaseRef = releases.doc(campaignId);
       const recipients = await getAdmins();
       await db.runTransaction(async tx => {
