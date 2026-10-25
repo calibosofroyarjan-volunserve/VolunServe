@@ -1,12 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
+import WalletBrandLogo from "./WalletBrandLogo";
 
 export type VerifiedBeneficiary = {
   displayName:string; barangay?:string; photoUrl?:string;
   verified:boolean; verifiedLabel:string;
   requestNumber:string; assistanceTitle:string;
   assistanceCategory?:string; campaignId:string; payeeRole:string;
+  wallet?:{configured:boolean;method?:"gcash"|"maya";walletLast4?:string;testOnly:true};
 };
 export default function BeneficiaryReviewCard({person}:{
   person:VerifiedBeneficiary;
@@ -46,6 +48,24 @@ export default function BeneficiaryReviewCard({person}:{
         <Text style={s.key}>Category</Text><Text style={s.val}>{person.assistanceCategory}</Text>
       </View>}
     </View>
+    <View style={s.walletSection}>
+      <Text style={s.walletTitle}>Resident-owned wallet destination</Text>
+      {person.wallet?.configured&&person.wallet.method?
+        <View style={s.walletRow}>
+          <WalletBrandLogo brand={person.wallet.method} width={82} height={26}/>
+          <View style={s.walletDetails}>
+            <Text style={s.walletAlias}>Fictional alias •••• {person.wallet.walletLast4}</Text>
+            <Text style={s.walletCaption}>Saved by this verified Resident for internal testing</Text>
+          </View>
+          <Ionicons name="lock-closed-outline" color="#168362" size={17}/>
+        </View>:
+        <View style={s.missingWallet}>
+          <Ionicons name="alert-circle-outline" color="#9D632C" size={18}/>
+          <Text style={s.missingWalletText}>
+            Resident wallet not configured. The Resident must select a test wallet in Donations before LGU release.
+          </Text>
+        </View>}
+    </View>
     <View style={s.footer}>
       <Ionicons name="lock-closed-outline" color="#637F74" size={15}/>
       <Text style={s.footerText}>
@@ -76,6 +96,14 @@ const s=StyleSheet.create({
   row:{flexDirection:"row",gap:10,justifyContent:"space-between",flexWrap:"wrap"},
   key:{fontSize:11,color:"#6B8379"},
   val:{fontSize:11,fontWeight:"600",color:"#214D43",flexShrink:1,textAlign:"right"},
+  walletSection:{backgroundColor:"#F5FAF7",borderRadius:11,padding:12,gap:9},
+  walletTitle:{fontWeight:"700",fontSize:11,color:"#2B5D50"},
+  walletRow:{flexDirection:"row",flexWrap:"wrap",gap:11,alignItems:"center"},
+  walletDetails:{flex:1,minWidth:140,gap:4},
+  walletAlias:{fontSize:11,fontWeight:"700",color:"#275847"},
+  walletCaption:{fontSize:10,color:"#6B8A7B"},
+  missingWallet:{flexDirection:"row",gap:9,alignItems:"center"},
+  missingWalletText:{flex:1,fontSize:11,lineHeight:17,color:"#9D632C"},
   footer:{flexDirection:"row",alignItems:"flex-start",gap:7},
   footerText:{flex:1,fontSize:10,color:"#658278",lineHeight:16},
 });

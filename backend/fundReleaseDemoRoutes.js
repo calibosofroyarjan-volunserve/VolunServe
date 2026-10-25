@@ -34,6 +34,7 @@ function installFundReleaseDemoRoutes({
     return id;
   };
   const releases = db.collection("fundReleaseDemos");
+  const residentWallets = db.collection("fundReleaseWalletProfiles");
   const send = (res, err) => {
     const code = Number(err?.statusCode) || 500;
     if (code >= 500) console.error("Fund release demo endpoint:", err);
@@ -252,6 +253,13 @@ function installFundReleaseDemoRoutes({
         .filter(Boolean).join(" ") || source.requesterName,110);
       const photoCandidate = safe(profile.profilePictureUrl,1500);
       const photoUrl = /^https:\/\//i.test(photoCandidate) ? photoCandidate : "";
+      const aliasSnapshot=await residentWallets.doc(uid).get();
+      const walletAlias=aliasSnapshot.exists?(aliasSnapshot.data()||{}):{};
+      const wallet=aliasSnapshot.exists&&
+        ["gcash","maya"].includes(walletAlias.method)&&
+        /^[0-9]{4}$/.test(walletAlias.walletLast4||"")&&walletAlias.ownerUid===uid
+        ? {configured:true,method:walletAlias.method,walletLast4:walletAlias.walletLast4,testOnly:true}
+        : {configured:false,testOnly:true};
       // Display only the already-approved requesting Resident. A different
       // medical beneficiary named in the source request is not a wallet payee.
       return res.json({ok:true,beneficiary:{
@@ -267,6 +275,7 @@ function installFundReleaseDemoRoutes({
         campaignId,
         reviewStatus:"verified",
         payeeRole:"requesting_resident",
+        wallet,
       }});
     }catch(error){return send(res,error);}
   });
@@ -379,20 +388,15 @@ function installFundReleaseDemoRoutes({
   app.post(BASE + "/:id/simulate", ...withAdmin, async (req,res) => {
     try {
       const uid=req.firebaseUser.uid,campaignId=validId(req.params.id);
-      const method=safe(req.body?.method,20).toLowerCase();
-      // New checkout-style demo interface accepts 11 digits, but NEVER persists
-      // the full test identifier. Previous APK clients may still supply last4.
-      const testWalletNumber=safe(req.body?.testWalletNumber,30);
-      const walletLast4=testWalletNumber
-        ? testWalletNumber.slice(-4) : safe(req.body?.walletLast4,4);
-      if (!["gcash","maya"].includes(method)) reject("invalid_method","Choose a demo GCash or Maya channel.");
-      if (testWalletNumber) {
-        if (!/^09[0-9]{9}$/.test(testWalletNumber)) reject("invalid_demo_account",
-          "Enter an 11-digit TEST wallet number beginning with 09.");
-        if (req.body?.confirmedSandbox !== true) reject("sandbox_confirmation_required",
-          "Explicitly confirm this is an internal sandbox record, not a wallet transfer.");
-      } else if (!/^[0-9]{4}$/.test(walletLast4)) reject("invalid_demo_account",
-        "Only last four digits of a TEST wallet are allowed for legacy demo clients.");
+      // The LGU Admin cannot choose or override a resident's destination.
+      // Provider + fictional last-four alias must come from the verified
+      // requesting Resident's private, server-held wallet profile.
+      if(req.body?.confirmedSandbox!==true)
+        reject("sandbox_confirmation_required","Confirm this is only an internal test record.");
+      if(req.body?.testWalletNumber!=null || req.body?.walletLast4!=null ||
+        req.body?.recipientUid!=null)
+        reject("admin_wallet_override_blocked",
+          "Wallet details are set by the verified requesting Resident, not the Admin.");
       const recipients=await getAdmins();
       const ref=releases.doc(campaignId);
       await db.runTransaction(async tx=>{
@@ -400,6 +404,29 @@ function installFundReleaseDemoRoutes({
         if (!snap.exists) reject("approval_missing","No authorized review found.",404);
         const d=snap.data()||{};
         if(d.status!=="authorized")reject("already_released","Only authorized and not-yet-recorded releases can be simulated.",409);
+        const [walletSnap,sourceSnap,campaignSnap,profileSnap]=await Promise.all([
+          tx.get(residentWallets.doc(d.recipientUid)),
+          tx.get(db.collection("assistanceRequests").doc(d.assistanceRequestId)),
+          tx.get(db.collection("donationCampaigns").doc(campaignId)),
+          tx.get(db.collection("users").doc(d.recipientUid)),
+        ]);
+        const campaign=campaignSnap.exists?(campaignSnap.data()||{}):{};
+        if(!sourceSnap.exists||!campaignSnap.exists||
+          campaign.sourceAssistanceRequestId!==d.assistanceRequestId)
+          reject("beneficiary_link_changed","Assistance linkage changed. Refresh LGU review.",409);
+        validateSource({...campaign,campaignId},sourceSnap.data()||{},d.recipientUid);
+        if(!profileSnap.exists||!isVerifiedResidentProfile(profileSnap.data()||{}))
+          reject("recipient_not_verified","Verified requesting Resident is no longer eligible.",409);
+        const wallet=walletSnap.exists?(walletSnap.data()||{}):{};
+        if(wallet.ownerUid!==d.recipientUid||wallet.testOnly!==true||
+          !["gcash","maya"].includes(wallet.method)||
+          !/^[0-9]{4}$/.test(wallet.walletLast4||""))
+          reject("resident_wallet_required",
+            "The verified Resident must configure a TEST wallet alias before release.",409);
+        const method=wallet.method,walletLast4=wallet.walletLast4;
+        if(req.body?.method && req.body.method!==method)
+          reject("resident_wallet_mismatch",
+            "Selected channel does not match the Resident's registered wallet.",409);
         const at=FieldValue.serverTimestamp();
         tx.update(ref,{
           status:"simulated_sent",method,walletLast4,releaseRecorderUid:uid,
@@ -440,6 +467,37 @@ function installFundReleaseDemoRoutes({
       next();
     }catch(error){return send(res,error);}
   }
+  // A Resident can create a fictional TEST-only wallet alias for the LGU
+  // release demonstration. It is NOT an actual GCash/Maya account validation.
+  // Do not collect or persist a full phone number or account credentials.
+  app.get("/api/funds/my-release-wallet",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
+    try {
+      const snap=await residentWallets.doc(req.firebaseUser.uid).get();
+      const data=snap.exists?(snap.data()||{}):{};
+      return res.json({ok:true,wallet:snap.exists&&
+        ["gcash","maya"].includes(data.method)&&/^[0-9]{4}$/.test(data.walletLast4||"")
+        ? {configured:true,method:data.method,walletLast4:data.walletLast4,testOnly:true}
+        : {configured:false,testOnly:true}});
+    }catch(error){return send(res,error);}
+  });
+  app.post("/api/funds/my-release-wallet",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
+    try {
+      const method=safe(req.body?.method,20).toLowerCase();
+      const walletLast4=safe(req.body?.walletLast4,10);
+      if(!["gcash","maya"].includes(method))reject("invalid_method","Choose GCash or Maya.");
+      if(!/^[0-9]{4}$/.test(walletLast4))
+        reject("invalid_wallet_alias","Use four fictional digits for the test wallet alias.");
+      if(req.body?.confirmedTestOnly!==true)
+        reject("test_only_confirmation_required",
+          "Confirm this is only a fictional wallet alias, not a verified real wallet.");
+      await residentWallets.doc(req.firebaseUser.uid).set({
+        ownerUid:req.firebaseUser.uid,method,walletLast4,testOnly:true,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      return res.json({ok:true,wallet:{configured:true,method,walletLast4,testOnly:true}});
+    }catch(error){return send(res,error);}
+  });
+
   app.get("/api/funds/my-releases",requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
     try{
       const snap=await releases.where("recipientUid","==",req.firebaseUser.uid).limit(100).get();
