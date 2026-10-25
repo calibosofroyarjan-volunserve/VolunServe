@@ -1275,10 +1275,10 @@ export default function DonationAdministration() {
   const createCampaign = async () => {
     if (!user || !isAdmin || busyKey) return;
 
-    if (!openedFromVerifiedSource) {
+    if (!openedFromAssistance) {
       Alert.alert(
-        "Verified Source Required",
-        "Open Donation Support from either Relief Operations or a verified Assistance Request with a confirmed shortage.",
+        "Verified Assistance Request Required",
+        "New donation campaigns must begin from an LGU-verified Request Assistance with documented uncovered costs.",
       );
       return;
     }
@@ -1704,17 +1704,13 @@ export default function DonationAdministration() {
       ? !!assistanceSource && !assistanceSourceIsEligible(assistanceSource)
       : !!requestedAssessment && !assessmentIsActive(requestedAssessment);
   const sourceReadyForCampaign =
-    openedFromVerifiedSource &&
+    openedFromAssistance &&
     !sourceUnavailable &&
     !sourceFinalized &&
     selectedAssessmentActive &&
     !selectedPublishedCampaign;
-  const sourceBackPath = openedFromAssistance
-    ? "/assistance-requests"
-    : "/relief-operations";
-  const sourceBackLabel = openedFromAssistance
-    ? "Back to Assistance"
-    : "Back to Relief";
+  const sourceBackPath = "/assistance-requests";
+  const sourceBackLabel = "Back to Assistance";
 
   return (
     <ScrollView
@@ -1733,175 +1729,11 @@ export default function DonationAdministration() {
 
         <View style={styles.headerTextWrap}>
           <Text style={styles.eyebrow}>ADMIN · DONATION OPERATIONS</Text>
-          <Text style={styles.title}>Donation Support</Text>
+          <Text style={styles.title}>Donation Campaigns</Text>
           <Text style={styles.subtitle}>
-            Publish and monitor LGU-verified donation campaigns only after a legitimate need is verified and an actual support shortage remains.
+            Manage approved donation campaigns linked to LGU-verified Assistance Requests and evidence-backed funding goals.
           </Text>
         </View>
-      </View>
-
-      <View style={styles.flowCard}>
-        <FlowStep
-          number="1"
-          title="Verified Need"
-          text="LGU confirms the beneficiary, documents, and legitimate remaining need."
-        />
-        <FlowConnector />
-        <FlowStep
-          number="2"
-          title="Confirmed Shortage"
-          text="LGU or partner resources are not enough, so controlled public support is opened."
-        />
-        <FlowConnector />
-        <FlowStep
-          number="3"
-          title="Verify Actual Receipt"
-          text="Only monetary donations actually confirmed by the LGU are counted."
-        />
-      </View>
-
-      <View style={styles.nextActionCard}>
-        <View style={styles.nextActionIcon}>
-          <Ionicons
-            name={
-              sourceFinalized || sourceUnavailable
-                ? "checkmark-circle-outline"
-                : sourceReadyForCampaign
-                  ? openedFromAssistance
-                    ? "heart-outline"
-                    : "megaphone-outline"
-                  : selectedPublishedCampaign && selectedPendingDonations.length > 0
-                    ? "receipt-outline"
-                    : selectedPublishedCampaign
-                      ? "pulse-outline"
-                      : pendingDonations.length > 0
-                        ? "receipt-outline"
-                        : publishedCampaigns.length > 0
-                          ? "pulse-outline"
-                          : "checkmark-circle-outline"
-            }
-            size={21}
-            color="#0F766E"
-          />
-        </View>
-
-        <View style={styles.nextActionBody}>
-          <Text style={styles.nextActionEyebrow}>NEXT LGU ACTION</Text>
-
-          {sourceUnavailable ? (
-            <>
-              <Text style={styles.nextActionTitle}>Verified source is unavailable</Text>
-              <Text style={styles.nextActionText}>
-                Return to the source module and open Donation Support again from the verified case.
-              </Text>
-            </>
-          ) : sourceFinalized && !selectedPublishedCampaign ? (
-            <>
-              <Text style={styles.nextActionTitle}>This verified source is no longer eligible</Text>
-              <Text style={styles.nextActionText}>
-                No new campaign should be created because the source no longer has an active confirmed shortage.
-              </Text>
-            </>
-          ) : sourceReadyForCampaign ? (
-            <>
-              <Text style={styles.nextActionTitle}>
-                {openedFromAssistance
-                  ? "Publish Community Need Donation Support"
-                  : `Publish donation support for ${selectedReliefScope.toLowerCase()}`}
-              </Text>
-              <Text style={styles.nextActionText}>
-                {openedFromAssistance
-                  ? "The Assistance Request is LGU-verified, Donation Support Needed is confirmed, and the public service location is controlled by the LGU. Complete the privacy-safe campaign details below."
-                  : "Relief Operations already selected this exact verified need after the LGU confirmed a resource shortage. Complete the monetary campaign details below."}
-              </Text>
-            </>
-          ) : selectedPublishedCampaign && selectedPendingDonations.length > 0 ? (
-            <>
-              <Text style={styles.nextActionTitle}>
-                Verify {selectedPendingDonations.length} pending donation
-                {selectedPendingDonations.length === 1 ? "" : "s"}
-              </Text>
-              <Text style={styles.nextActionText}>
-                Check each submission against the official LGU transaction record before counting it as verified.
-              </Text>
-            </>
-          ) : selectedPublishedCampaign ? (
-            <>
-              <Text style={styles.nextActionTitle}>Campaign is active</Text>
-              <Text style={styles.nextActionText}>
-                Keep it open only while the verified shortage still needs public support. Close it once the LGU no longer needs additional donations.
-              </Text>
-            </>
-          ) : pendingDonations.length > 0 ? (
-            <>
-              <Text style={styles.nextActionTitle}>
-                Verify {pendingDonations.length} pending donation
-                {pendingDonations.length === 1 ? "" : "s"}
-              </Text>
-              <Text style={styles.nextActionText}>
-                These submissions are not yet counted as LGU resources.
-              </Text>
-            </>
-          ) : publishedCampaigns.length > 0 ? (
-            <>
-              <Text style={styles.nextActionTitle}>Monitor active donation support</Text>
-              <Text style={styles.nextActionText}>
-                There is no receipt waiting for review. Keep campaigns open only while their verified shortages remain active.
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.nextActionTitle}>No donation action required right now</Text>
-              <Text style={styles.nextActionText}>
-                Campaign creation starts only from a verified LGU source with a confirmed remaining shortage.
-              </Text>
-            </>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={styles.nextActionButton}
-          onPress={() => {
-            if (sourceUnavailable || (sourceFinalized && !selectedPublishedCampaign)) {
-              router.push(sourceBackPath as any);
-              return;
-            }
-
-            if (sourceReadyForCampaign) {
-              openCampaignSetup();
-              return;
-            }
-
-            if (
-              (selectedPublishedCampaign && selectedPendingDonations.length > 0) ||
-              pendingDonations.length > 0
-            ) {
-              setActiveView("verification");
-              return;
-            }
-
-            if (selectedPublishedCampaign || publishedCampaigns.length > 0) {
-              setActiveView("campaigns");
-              return;
-            }
-
-            router.push(sourceBackPath as any);
-          }}
-        >
-          <Text style={styles.nextActionButtonText}>
-            {sourceUnavailable || (sourceFinalized && !selectedPublishedCampaign)
-              ? sourceBackLabel
-              : sourceReadyForCampaign
-                ? "Continue Setup"
-                : (selectedPublishedCampaign && selectedPendingDonations.length > 0) ||
-                    pendingDonations.length > 0
-                  ? "Review Pending"
-                  : selectedPublishedCampaign || publishedCampaigns.length > 0
-                    ? "View Campaigns"
-                    : sourceBackLabel}
-          </Text>
-          <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       {!!error && (
@@ -1939,7 +1771,7 @@ export default function DonationAdministration() {
             color={activeView === "verification" ? "#0F766E" : "#64748B"}
           />
           <Text style={[styles.viewTabText, activeView === "verification" && styles.viewTabTextActive]}>
-            Verify Receipts
+            Manual Reviews
           </Text>
           <View style={[styles.tabCountBadge, pendingDonations.length > 0 && styles.pendingCountBadge]}>
             <Text style={styles.tabCountText}>{pendingDonations.length}</Text>
@@ -1954,7 +1786,7 @@ export default function DonationAdministration() {
               <Text style={styles.sectionEyebrow}>DONATION SUPPORT</Text>
               <Text style={styles.sectionTitle}>Campaign Operations</Text>
               <Text style={styles.helperText}>
-                Every campaign must be tied to one verified LGU source and a confirmed unmet need. Both Disaster / Relief and Verified Community Assistance sources use this controlled flow.
+                New fundraising campaigns begin in Request Assistance, after a strict LGU review and confirmation of actual unmet expenses. Existing historical campaigns remain available.
               </Text>
             </View>
           </View>
@@ -1970,17 +1802,35 @@ export default function DonationAdministration() {
                 <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Campaign creation starts from a verified LGU source</Text>
+                <Text style={styles.gateTitle}>Start with an approved Assistance Request</Text>
                 <Text style={styles.gateText}>
-                  Do not create a public campaign from an unverified request. Open Donation Support only from Relief Operations after a confirmed disaster shortage or from an LGU-verified Assistance Request after Donation Support Needed is recorded.
+                  Open Request Assistance, review the resident identity, supporting evidence and actual costs, then approve Donation Support Needed. This protects donors and residents from unverified campaigns.
                 </Text>
               </View>
               <TouchableOpacity
                 style={styles.gateButton}
                 onPress={() => router.push(sourceBackPath as any)}
               >
-                <Text style={styles.gateButtonText}>Open Relief Action Center</Text>
+                <Text style={styles.gateButtonText}>Open Assistance Requests</Text>
                 <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : openedFromRelief && !openedFromAssistance && !selectedPublishedCampaign ? (
+            <View style={styles.gateCard}>
+              <View style={styles.gateIcon}>
+                <Ionicons name="shield-checkmark-outline" size={23} color="#0F766E"/>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gateTitle}>Use verified Assistance Requests for new campaigns</Text>
+                <Text style={styles.gateText}>
+                  This older relief-source path remains accessible for historical records.
+                  New fundraising campaigns now start in the strict Request Assistance review workflow.
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.gateButton}
+                onPress={() => router.push("/assistance-requests" as any)}>
+                <Text style={styles.gateButtonText}>Open Assistance Requests</Text>
+                <Ionicons name="arrow-forward" size={15} color="#FFFFFF"/>
               </TouchableOpacity>
             </View>
           ) : !selectedAssessment ? (
@@ -3139,7 +2989,7 @@ export default function DonationAdministration() {
           <View style={styles.sectionTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionEyebrow}>LGU RECEIPT CHECK</Text>
-              <Text style={styles.sectionTitle}>Donation Verification</Text>
+              <Text style={styles.sectionTitle}>Manual Donation Reviews</Text>
               <Text style={styles.helperText}>
                 PayMongo sandbox payments are confirmed automatically by the signed webhook. This section remains only for older manual submissions that still require LGU review.
               </Text>
