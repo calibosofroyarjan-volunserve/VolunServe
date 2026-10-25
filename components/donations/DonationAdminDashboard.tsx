@@ -302,67 +302,163 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     setSelectedCampaignId(id);
     setView("campaigns");
   };
-  const campaignList = (items: CampaignRow[], preview: boolean) =>
-    <View style={s.panel}>
-      <View style={s.panelHeading}>
-        <View style={s.flex}>
-          <Text style={s.panelTitle}>{preview ? "Published campaign snapshot" : "Campaign register"}</Text>
-          <Text style={s.info}>
-            {preview
-              ? "Select a campaign to inspect its approved goal and funding record."
-              : "Select a campaign for its unique funding, source and payment overview."}
-          </Text>
-        </View>
-        <Text style={s.countTag}>{items.length} {preview ? "published" : "records"}</Text>
+  const campaignList = <View style={[s.panel, s.campaignRegister]}>
+    <View style={s.registerToolbar}>
+      <View style={s.registerTitleArea}>
+        <Text style={s.panelTitle}>Campaign register</Text>
+        <Text style={s.info}>Select a campaign to review its progress and linked records.</Text>
       </View>
-      {items.length ? items.map(c => {
+      <View style={s.registerTools}>
+        <View style={s.campaignSearchBox}>
+          <Ionicons name="search-outline" size={18} color="#648195"/>
+          <TextInput
+            accessibilityLabel="Search campaigns"
+            value={campaignSearch}
+            onChangeText={next => {setCampaignSearch(next); setCampaignPage(1);}}
+            style={s.campaignSearchInput}
+            placeholder="Search campaigns…"
+            placeholderTextColor="#8DA0AD"
+          />
+          {!!campaignSearch && <Pressable accessibilityRole="button"
+            accessibilityLabel="Clear campaign search"
+            onPress={() => {setCampaignSearch("");setCampaignPage(1);}}>
+            <Ionicons name="close-circle" size={16} color="#8FA2A8"/>
+          </Pressable>}
+        </View>
+        <Pressable accessibilityRole="button"
+          accessibilityLabel={"Filter campaigns. Selected: " + campaignFilterLabel}
+          accessibilityState={{expanded:campaignFilterOpen}}
+          style={[s.campaignFilterButton,campaignFilterOpen && s.campaignFilterButtonOpen]}
+          onPress={() => setCampaignFilterOpen(!campaignFilterOpen)}>
+          <Ionicons name="filter-outline" size={17} color="#28536A"/>
+          <Text style={s.campaignFilterLabel}>{campaignFilterLabel}</Text>
+          <Ionicons name={campaignFilterOpen ? "chevron-up" : "chevron-down"}
+            size={15} color="#57778A"/>
+        </Pressable>
+      </View>
+    </View>
+    {campaignFilterOpen && <View style={s.campaignFilterOptions}>
+      {campaignFilterOptions.map(option => <Pressable key={option.value}
+        accessibilityRole="button"
+        accessibilityState={{selected:campaignFilter === option.value}}
+        style={[s.campaignFilterOption,campaignFilter === option.value && s.campaignFilterOptionActive]}
+        onPress={() => {
+          setCampaignFilter(option.value);
+          setCampaignPage(1);
+          setCampaignFilterOpen(false);
+        }}>
+        <Text style={[s.campaignFilterOptionText,
+          campaignFilter === option.value && s.campaignFilterOptionTextActive]}>
+          {option.label}
+        </Text>
+      </Pressable>)}
+    </View>}
+    {!campaignReady ? <View style={s.registerBlank}>
+      <ActivityIndicator color="#0B8C70"/>
+      <Text style={s.info}>Loading campaigns…</Text>
+    </View> : visibleCampaigns.length ? <View style={s.registerList}>
+      {visibleCampaigns.map(c => {
         const target = numeric(c.monetaryGoal);
         const amount = numeric(c.verifiedAmountReceived);
         const percent = target > 0 ? Math.min(100, Math.round(amount / target * 100)) : 0;
-        const completed = c.status === "closed" || (target > 0 && amount >= target - 0.01);
+        const completed = target > 0 && amount >= target - 0.01;
         const photo = campaignImage(c);
-        return <Pressable
-          key={c.id} accessibilityRole="button"
+        const statusLabel = completed ? "Goal reached" :
+          c.status === "closed" ? "Closed" :
+          c.status === "published" ? "Published" :
+          c.status || "Draft";
+        return <Pressable key={c.id}
+          accessibilityRole="button"
           accessibilityLabel={"Inspect campaign " + (c.title || c.id)}
+          accessibilityState={{selected:selectedCampaignId === c.id}}
           onPress={() => openCampaignRecord(c.id)}
-          style={[s.campaignItem, selectedCampaignId === c.id && !preview && s.selectedCampaignItem]}
-        >
-          {photo ? <Image source={{ uri: photo }} style={s.campaignImage}/> :
-            <View style={[s.campaignImage, s.fallbackImage]}>
-              <Ionicons name="heart-outline" color="#08896E" size={23}/>
+          style={[s.premiumCampaignRow,selectedCampaignId === c.id && s.premiumCampaignRowSelected]}>
+          {photo ? <Image source={{uri:photo}} style={s.premiumCampaignImage}/> :
+            <View style={[s.premiumCampaignImage,s.premiumCampaignImageEmpty]}>
+              <Ionicons name="heart-outline" size={24} color="#0E9271"/>
             </View>}
-          <View style={s.flex}>
-            <View style={s.campaignNameRow}>
-              <Text style={[s.tableMain, s.campaignName]} numberOfLines={2}>{c.title || "Untitled campaign"}</Text>
-              <Text style={[s.campaignStatus, completed ? s.campaignComplete : s.campaignActive]}>
-                {completed ? "Goal reached" : c.status === "published" ? "Published" : c.status || "Draft"}
+          <View style={s.premiumCampaignContent}>
+            <View style={s.premiumCampaignTitleLine}>
+              <View style={s.flex}>
+                <Text style={s.premiumCampaignName} numberOfLines={2}>
+                  {c.title || "Untitled campaign"}
+                </Text>
+                <Text style={s.premiumCampaignCategory} numberOfLines={1}>
+                  {c.generalArea || (c.sourceAssistanceRequestId
+                    ? "Linked assistance request" : "Campaign record")}
+                </Text>
+              </View>
+              <Text style={[s.premiumCampaignBadge,
+                completed ? s.premiumBadgeReached :
+                c.status === "closed" ? s.premiumBadgeClosed : s.premiumBadgePublished]}>
+                {statusLabel}
               </Text>
             </View>
-            <View style={s.campaignMoneyRow}>
-              <Text style={s.tableSecondary}>{peso(amount)} of {target > 0 ? peso(target) : "No approved goal recorded"}</Text>
-              <Text style={s.campaignPercent}>{target ? percent + "%" : "—"}</Text>
+            <Text style={s.premiumCampaignRaised} numberOfLines={2}>
+              {target > 0 ? peso(amount) + " raised of " + peso(target) :
+                peso(amount) + " recorded · No approved monetary goal"}
+            </Text>
+            <View style={s.premiumCampaignProgress}>
+              <View style={s.premiumCampaignProgressTrack}>
+                {target > 0 && <View style={[s.premiumCampaignProgressFill,
+                  {width:(percent+"%") as any}]}/>}
+              </View>
+              <Text style={s.premiumCampaignPercent}>{target > 0 ? percent + "%" : "—"}</Text>
             </View>
-            <View style={s.track}><View style={[s.fill, { width: percent + "%" as any }]}/></View>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#688F82"/>
+          <Ionicons name="chevron-forward" size={19} color="#456F7C"/>
         </Pressable>;
-      }) : <View style={s.smallEmpty}><Ionicons name="heart-outline" size={20} color="#8AA99B"/>
-        <Text style={s.info}>No published campaigns are available.</Text></View>}
-    </View>;
+      })}
+    </View> : <View style={s.registerBlank}>
+      <Ionicons name="search-outline" size={29} color="#8AABA2"/>
+      <Text style={s.emptyTitle}>No campaigns found</Text>
+      <Text style={s.info}>Try another search or status filter.</Text>
+    </View>}
+    <View style={s.registerFooter}>
+      <Text style={s.registerFooterText}>
+        {filteredCampaigns.length
+          ? "Showing " + ((currentCampaignPage-1)*campaignPageSize+1) + "–" +
+            Math.min(currentCampaignPage*campaignPageSize,filteredCampaigns.length) +
+            " of " + filteredCampaigns.length + " campaigns"
+          : "0 campaigns"}
+      </Text>
+      <View style={s.campaignPageControls}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous campaign page"
+          disabled={currentCampaignPage === 1} onPress={() => setCampaignPage(currentCampaignPage-1)}
+          style={[s.campaignPageButton,currentCampaignPage === 1 && s.campaignPageDisabled]}>
+          <Ionicons name="chevron-back" size={17} color="#2A6574"/>
+        </Pressable>
+        <View style={s.campaignPageCurrent}>
+          <Text style={s.campaignPageCurrentText}>{currentCampaignPage}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next campaign page"
+          disabled={currentCampaignPage === totalCampaignPages}
+          onPress={() => setCampaignPage(currentCampaignPage+1)}
+          style={[s.campaignPageButton,currentCampaignPage === totalCampaignPages && s.campaignPageDisabled]}>
+          <Ionicons name="chevron-forward" size={17} color="#2A6574"/>
+        </Pressable>
+      </View>
+    </View>
+  </View>;
 
   const campaignPayments = selectedCampaign ? records.filter(r => r.campaignId === selectedCampaign.id) : [];
   const selectedCampaignPaid = campaignPayments.filter(isConfirmed);
   const selectedCampaignAmount = selectedCampaignPaid.reduce(
     (sum, payment) => sum + amountReceived(payment), 0);
-  const campaignDetailsPanel = <View style={s.panel}>
+  const campaignDetailsPanel = <View style={[s.panel,s.campaignInspectorPanel]}>
     <View style={s.panelHeading}>
       <Text style={s.panelTitle}>Campaign inspection</Text>
       {selectedCampaign && <SmallButton text="Clear selection" onPress={() => setSelectedCampaignId("")}/>}
     </View>
-    {!selectedCampaign ? <View style={s.empty}>
-      <Ionicons name="documents-outline" size={30} color="#82A79A"/>
-      <Text style={s.emptyTitle}>Select a campaign record</Text>
-      <Text style={s.info}>Inspect its approved funding goal, linked assistance source, and transaction records here.</Text>
+    {!selectedCampaign ? <View style={s.campaignInspectorEmpty}>
+      <View style={s.campaignInspectorEmptyIcon}>
+        <Ionicons name="document-text-outline" size={33} color="#0B9471"/>
+      </View>
+      <Text style={s.campaignInspectorEmptyTitle}>No campaign selected</Text>
+      <Text style={s.campaignInspectorEmptyBody}>
+        Select a campaign from the register to review its funding progress,
+        linked assistance request, and payment records.
+      </Text>
     </View> : <>
       <Text style={s.inspectorEyebrow}>CAMPAIGN RECORD</Text>
       <Text style={s.inspectorHeading}>{selectedCampaign.title || "Untitled campaign"}</Text>
@@ -767,21 +863,38 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     </>}
 
     {view === "campaigns" && <>
-      <View style={s.sectionIntro}>
-        <View style={s.flex}>
+      <LinearGradient
+        colors={["#EAFBF5","#F6FFFA","#F5FBF9"]}
+        start={{x:0,y:0}} end={{x:1,y:1}}
+        style={s.campaignPremiumBanner}>
+        <View style={s.campaignBannerInfo}>
           <Text style={s.sectionEyebrow}>VERIFIED FUNDRAISING</Text>
-          <Text style={s.sectionTitle}>Campaigns</Text>
-          <Text style={s.sectionDescription}>Published and completed cases, approved goals, and recorded donation progress.</Text>
+          <Text style={s.campaignBannerTitle}>Campaigns</Text>
+          <Text style={s.campaignBannerSubtitle}>
+            Published and completed cases, approved goals, and recorded donation progress.
+          </Text>
         </View>
-      </View>
-      <View style={[s.columns, compact && s.columnsCompact]}>
-        <View style={s.mainColumn}>
-          {campaignList(
-            [...campaigns].sort((a, b) => Number(b.status === "published") - Number(a.status === "published")),
-            false,
-          )}
+        <View style={s.campaignBannerStats}>
+          {([
+            ["layers-outline",String(campaigns.length),"Total Campaigns"],
+            ["radio-button-on-outline",String(countActiveFundraisers),"Active Campaigns"],
+            ["checkmark-circle-outline",String(countGoalReached),"Goals Reached"],
+            ["people-outline",String(campaignDonors),"Confirmed Donors"],
+          ] as const).map(([icon,value,label]) =>
+            <View key={label} style={s.campaignBannerStat}>
+              <Ionicons name={icon} color="#0D8A71" size={23}/>
+              <View style={s.campaignBannerStatText}>
+                <Text style={s.campaignBannerStatValue}>{campaignReady && ready ? value : "…"}</Text>
+                <Text style={s.campaignBannerStatLabel}>{label}</Text>
+              </View>
+            </View>)}
         </View>
-        <View style={[s.detailsColumn, compact && s.detailsColumnCompact]}>{campaignDetailsPanel}</View>
+      </LinearGradient>
+      <View style={[s.columns,compact && s.columnsCompact]}>
+        <View style={s.mainColumn}>{campaignList}</View>
+        <View style={[s.detailsColumn,compact && s.detailsColumnCompact]}>
+          {campaignDetailsPanel}
+        </View>
       </View>
     </>}
 
