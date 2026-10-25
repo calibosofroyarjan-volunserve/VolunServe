@@ -3283,7 +3283,7 @@ export default function ReliefOperations() {
                               {formatNumber(
                                 summary.affectedPeople,
                               )}{" "}
-                              affected people. Donation campaigns show only privacy-safe totals; beneficiary identities remain under LGU/barangay verification and distribution records.
+                              affected people. Public campaigns use approved summaries only; beneficiary identities remain protected inside LGU records.
                             </Text>
                           </View>
 
@@ -3571,8 +3571,8 @@ export default function ReliefOperations() {
                               }
                             >
                               {hasMatchingStock
-                                ? "Allocate LGU stock first. Request Donation Support only if a verified shortage remains."
-                                : "If LGU confirms this need cannot be covered by available resources, request Donation Support."}
+                                ? "Allocate available LGU stock first. Financial help requests are reviewed separately under Request Assistance."
+                                : "If LGU stock is insufficient, record the shortage and open Request Assistance for separate monetary eligibility review."}
                             </Text>
                           </View>
 
@@ -3635,7 +3635,7 @@ export default function ReliefOperations() {
                                 }
                               >
                                 {hasMatchingStock
-                                  ? "Request Donation for Shortage"
+                                  ? "Refer to Assistance Review"
                                   : "Open Assistance Requests"}
                               </Text>
                             </TouchableOpacity>
@@ -4633,7 +4633,7 @@ export default function ReliefOperations() {
                         styles.inlineDonationButtonText
                       }
                     >
-                      Confirm Shortage & Request Donation
+                      Open Assistance Requests
                     </Text>
                   </TouchableOpacity>
                 </View>
