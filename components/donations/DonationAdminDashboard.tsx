@@ -275,7 +275,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
                 placeholder="Search donor, campaign or reference ID" placeholderTextColor="#8B9BAA"/>
               {(["all", "paid", "pending", "rejected"] as const).map(name =>
                 <SmallButton key={name} text={name === "all" ? "All" : name === "paid" ? "Paid" :
-                  name === "pending" ? "Pending" : "Rejected"}
+                  name === "pending" ? "Pending" : "Failed / Rejected"}
                   primary={statusFilter === name} onPress={() => setStatusFilter(name)}/>)}
             </View>
             {filtered.length ? filtered.slice(0, 100).map(row) :
