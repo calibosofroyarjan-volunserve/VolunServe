@@ -351,7 +351,7 @@ function installFundReleaseDemoRoutes({
           releaseProcessor:"volunserve_internal_sandbox",deliveryStatus:"simulation_only",
           simulationReference:"VS-DEMO-"+campaignId.slice(0,25).toUpperCase(),
           simulatedAt:at,updatedAt:at,
-          audit:FieldValue.arrayUnion({stage:"simulated_sent",actorUid:uid,at}),
+          audit:FieldValue.arrayUnion({stage:"simulated_sent",actorUid:uid,at:new Date().toISOString()}),
         });
         sendAdminNotices(tx,recipients,campaignId,"simulated_sent",
           "Demo fund release recorded",
