@@ -6,6 +6,7 @@ import {
 import { auth } from "../../lib/firebase";
 import SandboxPayoutForm from "./SandboxPayoutForm";
 import WalletBrandLogo from "./WalletBrandLogo";
+import BeneficiaryReviewCard, {type VerifiedBeneficiary} from "./BeneficiaryReviewCard";
 import type { ReconciliationCampaign } from "./FundReconciliationPanel";
 
 const ROOT = "https://volunserve.onrender.com/api/admin/donations/fund-releases";
@@ -63,6 +64,9 @@ export default function FundReleaseControls({campaigns,ready}:{
   const [inputAmount,setInputAmount] = useState("");
   const [reviewNote,setReviewNote] = useState("");
   const [decisionNote,setDecisionNote] = useState("");
+  const [beneficiary,setBeneficiary] = useState<VerifiedBeneficiary|null>(null);
+  const [beneficiaryBusy,setBeneficiaryBusy] = useState(false);
+  const [beneficiaryError,setBeneficiaryError] = useState("");
   const eligibleCampaigns = useMemo(()=>campaigns.filter(c =>
     !!c.sourceAssistanceRequestId && Number(c.monetaryGoal||0)>0)
     .sort((a,b)=>
@@ -107,6 +111,26 @@ export default function FundReleaseControls({campaigns,ready}:{
     finally {setLoading(false);}
   },[request]);
   useEffect(()=>{if(ready)void reload();},[ready,reload]);
+  useEffect(()=>{
+    let current=true;
+    setBeneficiary(null);setBeneficiaryError("");
+    if(!ready||!selectedId)return ()=>{current=false;};
+    setBeneficiaryBusy(true);
+    (async()=>{
+      try {
+        const response=await request("/"+encodeURIComponent(selectedId)+"/beneficiary");
+        if(!current)return;
+        const person=response.beneficiary as VerifiedBeneficiary;
+        if(!person?.verified||person.campaignId!==selectedId)
+          throw new Error("Beneficiary verification did not match this campaign.");
+        setBeneficiary(person);
+      }catch(e:any){
+        if(current){setBeneficiary(null);
+          setBeneficiaryError(e?.message||"Unable to verify the requesting Resident.");}
+      }finally{if(current)setBeneficiaryBusy(false);}
+    })();
+    return ()=>{current=false;};
+  },[ready,selectedId,request]);
   // Keep payment operations status fresh without modifying any transaction records.
   useEffect(()=>{
     if(!ready||busy)return;
@@ -221,6 +245,16 @@ export default function FundReleaseControls({campaigns,ready}:{
           <Text style={ss.small}>Recorded campaign funding: {php(activeFunding?.recordedFunding||0)}</Text>
           <Text style={ss.small}>PayMongo-confirmed payments (Test Mode): {php(activeFunding?.providerVerifiedTestAmount||0)} ({activeFunding?.providerVerifiedCount||0} transactions)</Text>
           <Text style={ss.small}>Manual/legacy contributions: {php(activeFunding?.manualLegacyAmount||0)}</Text>
+          {beneficiaryBusy?<View style={ss.beneficiaryPending}>
+            <ActivityIndicator size="small" color="#168568"/>
+            <Text style={ss.small}>Checking verified Resident profile…</Text>
+          </View>:beneficiary?<BeneficiaryReviewCard person={beneficiary}/>:
+            <View style={ss.beneficiaryAlert}>
+              <Ionicons name="alert-circle-outline" size={17} color="#A05D31"/>
+              <Text style={ss.beneficiaryAlertText}>
+                {beneficiaryError||"Beneficiary details unavailable. Select a linked verified request."}
+              </Text>
+            </View>}
           {!!activeFunding&&!activeFunding.ready&&<View style={ss.notice}>
             <Ionicons name="information-circle-outline" size={17} color="#16745C"/>
             <Text style={ss.noticeText}>{statusDetail(activeFunding.reason)}</Text>
@@ -236,7 +270,7 @@ export default function FundReleaseControls({campaigns,ready}:{
           {record?<View style={ss.infoBlock}>
             <Text style={ss.statusText}>{showStatus(record.status)}</Text>
             <Text style={ss.small}>Reviewed amount: {php(record.amount)}</Text>
-            <Text style={ss.small}>Beneficiary: linked, identity-verified requesting Resident</Text>
+            <Text style={ss.small}>Beneficiary: {beneficiary?.displayName||"Verification required"}</Text>
             <Text style={ss.small}>Processing authority: LGU Admin{record.authorizerUid?" · Approval recorded":""}</Text>
             {!!record.reviewedAt&&<Text style={ss.small}>Review filed: {new Date(record.reviewedAt).toLocaleString()}</Text>}
             {!!record.authorizedAt&&<Text style={ss.small}>Approval date: {new Date(record.authorizedAt).toLocaleString()}</Text>}
@@ -312,7 +346,8 @@ export default function FundReleaseControls({campaigns,ready}:{
               </View>
 
           </View>}
-          {record?.status==="authorized"&&<SandboxPayoutForm key={selection.id}
+          {record?.status==="authorized"&&beneficiary?.verified&&
+            beneficiary.campaignId===selection.id&&<SandboxPayoutForm key={selection.id}
             amount={record.amount} disabled={busy}
             onSubmit={details=>action("/"+selection.id+"/simulate",details,
               "TEST release recorded. The verified requesting Resident has a release notice to review.")}/>}
@@ -366,6 +401,11 @@ const ss=StyleSheet.create({
   empty:{gap:10,alignItems:"center",padding:30},
   emptyText:{color:"#719084",fontFamily:"FundInterRegular",fontSize:11,textAlign:"center"},
   infoBlock:{backgroundColor:"#F6FAF7",borderRadius:9,padding:12,gap:3},
+  beneficiaryPending:{flexDirection:"row",gap:9,alignItems:"center",padding:13,
+    borderRadius:10,backgroundColor:"#F1F9F4"},
+  beneficiaryAlert:{flexDirection:"row",gap:8,alignItems:"center",padding:12,
+    borderRadius:10,backgroundColor:"#FFF8EE"},
+  beneficiaryAlertText:{flex:1,color:"#84532A",fontSize:11,lineHeight:17},
   walletReceipt:{backgroundColor:"#FFFFFF",borderColor:"#DFEDE5",borderWidth:1,borderRadius:10,
     padding:10,gap:12,flexDirection:"row",alignItems:"center",flexWrap:"wrap"},
   statusText:{fontFamily:"FundInterSemiBold",color:"#0A886A",fontSize:12},
