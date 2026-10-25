@@ -22,7 +22,7 @@ type DonationRow = {
   donorDisplayName?: string; campaignId?: string; campaignTitle?: string;
   amount?: number; actualAmountReceived?: number; paymentProvider?: string;
   paymongoLivemode?: boolean; paymongoCheckoutSessionId?: string;
-  paymentStatus?: string; status?: string; donorNote?: string;
+  paymentStatus?: string; status?: string; verifiedBy?: string; donorNote?: string;
   transactionReference?: string; paidAt?: any; receivedAt?: any; createdAt?: any;
 };
 type CampaignRow = {
