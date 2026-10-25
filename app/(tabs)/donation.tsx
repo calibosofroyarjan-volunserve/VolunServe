@@ -1827,6 +1827,7 @@ function ProcessPoint({
 }
 
 function DonationHistoryCard({ donation }: { donation: MyDonation }) {
+  const router = useRouter();
   const status = String(donation.status || "submitted").toLowerCase();
   const rejected = status === "rejected" || status === "payment_failed";
   const paymongo = donation.paymentProvider === "paymongo";
@@ -1869,6 +1870,18 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
           <Text style={styles.statusText}>{sandboxPaid ? "PAID · TEST" : received && paymongo ? "PAID" : statusLabel(status)}</Text>
         </View>
       </View>
+      {received && (
+        <TouchableOpacity
+          style={styles.historyReceiptAction}
+          accessibilityRole="button"
+          accessibilityLabel={"View verified receipt for " + (donation.campaignTitle || "donation")}
+          onPress={() => router.push({ pathname: "/receipt/[id]", params: { id: donation.id } })}
+        >
+          <Ionicons name="receipt-outline" size={15} color="#087D5E" />
+          <Text style={styles.historyReceiptActionText}>View verified receipt</Text>
+          <Ionicons name="arrow-forward" size={14} color="#087D5E" />
+        </TouchableOpacity>
+      )}
 
       {!rejected && (
         <View style={styles.historyTracker}>
@@ -3544,6 +3557,15 @@ const styles = StyleSheet.create({
     
   
     fontFamily: "DonationInterBold",},
+  historyReceiptAction: {
+    alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 12, paddingVertical: 10, marginTop: 12,
+    borderRadius: 9, backgroundColor: "#EFF9F4",
+    borderWidth: 1, borderColor: "#D6EBDD",
+  },
+  historyReceiptActionText: {
+    fontSize: 10.8, fontFamily: "DonationInterSemiBold", color: "#087D5E",
+  },
   historyTracker: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     gap: 11, marginTop: 15, paddingVertical: 11, paddingHorizontal: 12,
@@ -3813,8 +3835,7 @@ const styles = StyleSheet.create({
     fontFamily: "DonationInterBold",},
   donationHeroTitleMobile: {
     fontSize: 30, lineHeight: 37, letterSpacing: -0.9,
-  
-    fontFamily: "DonationInterRegular",},
+  },
   donationHeroTagline: {
     fontSize: 14, 
     lineHeight: 21, color: "#0A5A43", marginTop: 1,
@@ -3870,8 +3891,7 @@ const styles = StyleSheet.create({
      fontVariant: ["tabular-nums"],
   
     fontFamily: "DonationInterBold",},
-  donationHeroAmountValue: { fontSize: 14.5, 
-    fontFamily: "DonationInterRegular",},
+  donationHeroAmountValue: { fontSize: 14.5 },
   donationHeroStatCaption: {
     color: "#557A82", fontSize: 9.5,
     marginTop: 2, textAlign: "center",
