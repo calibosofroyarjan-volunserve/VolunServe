@@ -1539,4 +1539,200 @@ const s = StyleSheet.create({
     textAlign:"center",color:"#7E94A1",maxWidth:260,
   },
 
+  transactionMetrics: {
+    flexDirection:"row",flexWrap:"wrap",gap:13,marginTop:2,
+  },
+  transactionMetric: {
+    flexGrow:1,flexBasis:215,minWidth:190,minHeight:136,
+    flexDirection:"row",alignItems:"flex-start",gap:14,
+    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E2EBEF",
+    borderRadius:14,paddingHorizontal:17,paddingVertical:20,
+    shadowColor:"#193F50",shadowOpacity:0.035,shadowRadius:13,
+    shadowOffset:{width:0,height:5},elevation:1,
+  },
+  transactionMetricIcon: {
+    height:48,width:48,borderRadius:12,backgroundColor:"#EAF7F1",
+    alignItems:"center",justifyContent:"center",
+  },
+  transactionMetricText: {flex:1,gap:6,minWidth:0},
+  transactionMetricLabel: {
+    fontFamily:"AdminInterSemiBold",color:"#485F72",fontSize:11.2,lineHeight:17,
+  },
+  transactionMetricValue: {
+    fontFamily:"AdminInterBold",color:"#1E4052",fontSize:23,
+    letterSpacing:-0.42,marginTop:1,
+  },
+  transactionMetricDescription: {
+    fontFamily:"AdminInterRegular",color:"#8196AA",fontSize:10.1,lineHeight:16,
+  },
+  txColumns: {marginTop:4},
+  txRegister: {padding:19,minHeight:595,gap:0},
+  txRegisterHead: {
+    flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between",
+    gap:12,marginBottom:16,flexWrap:"wrap",
+  },
+  txPanelTitle: {
+    fontFamily:"AdminInterBold",fontSize:16.5,letterSpacing:-0.2,color:"#17394B",
+  },
+  txPanelDescription: {
+    fontFamily:"AdminInterRegular",fontSize:10.9,color:"#8195A5",
+    lineHeight:18,marginTop:6,
+  },
+  txRecordCount: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.6,color:"#70859A",
+    paddingHorizontal:6,paddingVertical:5,
+  },
+  txTools: {
+    flexDirection:"row",alignItems:"center",gap:10,marginBottom:12,
+    flexWrap:"wrap",
+  },
+  txSearchContainer: {
+    flexDirection:"row",gap:10,alignItems:"center",height:42,
+    minWidth:195,flexBasis:285,flexGrow:1,
+    backgroundColor:"#FFFFFF",borderColor:"#DCE8EE",borderWidth:1,
+    borderRadius:10,paddingHorizontal:13,
+  },
+  txSearchInput: {
+    fontFamily:"AdminInterRegular",fontSize:11.2,color:"#25495E",
+    flex:1,minWidth:100,paddingVertical:10,
+  },
+  txSourceButton: {
+    flexDirection:"row",gap:9,alignItems:"center",justifyContent:"space-between",
+    height:42,borderColor:"#DDE8EE",borderWidth:1,
+    paddingHorizontal:13,borderRadius:10,backgroundColor:"#FFFFFF",
+    minWidth:139,
+  },
+  txSourceButtonActive: {
+    backgroundColor:"#F3FBF7",borderColor:"#8DD2B5",
+  },
+  txSourceButtonText: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.7,color:"#294A5C",
+  },
+  txSourceOptions: {
+    flexDirection:"row",gap:8,flexWrap:"wrap",
+    paddingBottom:12,
+  },
+  txSourceOption: {
+    paddingHorizontal:12,paddingVertical:8,
+    borderWidth:1,borderColor:"#E0E8EC",borderRadius:8,
+  },
+  txSourceOptionActive: {
+    backgroundColor:"#E6F8F0",borderColor:"#9DDFC3",
+  },
+  txSourceOptionText: {
+    fontFamily:"AdminInterMedium",fontSize:10.3,color:"#5A7483",
+  },
+  txSourceOptionTextActive: {color:"#087959"},
+  txFilters: {
+    flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:13,
+  },
+  txFilterChip: {
+    flexDirection:"row",alignItems:"center",gap:8,
+    paddingVertical:9,paddingHorizontal:12,
+    borderRadius:9,borderWidth:1,borderColor:"#DDE8E7",
+    backgroundColor:"#FFFFFF",minHeight:36,
+  },
+  txFilterChipActive: {backgroundColor:"#098A70",borderColor:"#098A70"},
+  txFilterChipText: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.6,color:"#15715C",
+  },
+  txFilterChipTextActive: {color:"#FFFFFF"},
+  txFilterCount: {
+    backgroundColor:"#EDF3F3",paddingHorizontal:6,paddingVertical:3,
+    borderRadius:6,minWidth:20,alignItems:"center",
+  },
+  txFilterCountActive: {backgroundColor:"#40AC93"},
+  txFilterCountText: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.4,color:"#6E8490",
+  },
+  txFilterCountTextActive: {color:"#FFFFFF"},
+  txTable: {
+    width:"100%",minWidth:760,borderColor:"#E3EAEE",borderWidth:1,
+    borderRadius:10,overflow:"hidden",backgroundColor:"#FFFFFF",
+  },
+  txTableHead: {
+    flexDirection:"row",alignItems:"center",
+    backgroundColor:"#F3F7F9",minHeight:40,
+    paddingHorizontal:12,gap:9,
+  },
+  txTableHeadText: {
+    fontFamily:"AdminInterSemiBold",fontSize:9.7,color:"#6E869A",
+  },
+  txRow: {
+    flexDirection:"row",alignItems:"center",
+    minHeight:65,paddingHorizontal:12,paddingVertical:10,
+    gap:9,borderTopWidth:1,borderTopColor:"#E9EFF2",
+    backgroundColor:"#FFFFFF",
+  },
+  txSelectedRow: {backgroundColor:"#EDF9F3"},
+  txCell: {justifyContent:"center",minWidth:0},
+  txDonorCol: {flex:2.12,minWidth:140},
+  txAmountCol: {flex:1.08,minWidth:77},
+  txMethodCol: {flex:1.42,minWidth:90},
+  txDateCol: {flex:1.38,minWidth:94},
+  txStatusCol: {flex:1.10,minWidth:80},
+  txActionCol: {flex:0.46,minWidth:39,alignItems:"center"},
+  txDonorDetails: {flexDirection:"row",alignItems:"center",gap:8},
+  txAvatar: {
+    width:35,height:35,borderRadius:10,alignItems:"center",
+    justifyContent:"center",backgroundColor:"#EAF8F1",
+  },
+  txPrimary: {fontFamily:"AdminInterSemiBold",fontSize:10.9,color:"#254358"},
+  txSecondary: {
+    fontFamily:"AdminInterRegular",fontSize:9.8,color:"#768EA1",
+    lineHeight:16,marginTop:2,
+  },
+  txAmount: {fontFamily:"AdminInterSemiBold",fontSize:10.7,color:"#203E50"},
+  txTableEmpty: {
+    minHeight:260,alignItems:"center",justifyContent:"center",gap:10,padding:22,
+  },
+  txPaginationFooter: {
+    flexDirection:"row",justifyContent:"space-between",alignItems:"center",
+    paddingTop:16,gap:14,flexWrap:"wrap",
+  },
+  txPaginationText: {
+    fontFamily:"AdminInterRegular",fontSize:10.6,color:"#748B9E",
+  },
+  txPageControls: {flexDirection:"row",alignItems:"center",gap:7},
+  txPageButton: {
+    width:34,height:34,alignItems:"center",justifyContent:"center",
+    borderRadius:9,borderColor:"#DFE9EF",borderWidth:1,backgroundColor:"#FFFFFF",
+  },
+  txPageDisabled: {opacity:0.42},
+  txPageButtonSelected: {borderColor:"#0A8A70",backgroundColor:"#0A8A70"},
+  txPageNumber: {
+    fontFamily:"AdminInterSemiBold",fontSize:10.9,color:"#4C697D",
+  },
+  txPageNumberSelected: {color:"#FFFFFF"},
+  txInspectorPanel: {minHeight:592,padding:17},
+  txInspectorEmpty: {
+    flex:1,alignItems:"center",justifyContent:"center",
+    minHeight:475,gap:12,paddingHorizontal:8,
+  },
+  txInspectorIllustration: {
+    height:101,width:101,borderRadius:51,backgroundColor:"#F0F7F6",
+    alignItems:"center",justifyContent:"center",marginBottom:2,
+  },
+  txInspectorMagnify: {
+    position:"absolute",right:13,bottom:16,width:29,height:29,
+    borderRadius:15,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#098C6E",borderWidth:2,borderColor:"#FFFFFF",
+  },
+  txInspectorTitle: {
+    fontFamily:"AdminInterBold",fontSize:15.6,color:"#1D3D51",textAlign:"center",
+  },
+  txInspectorDescription: {
+    fontFamily:"AdminInterRegular",fontSize:10.8,color:"#8195A7",
+    lineHeight:18,textAlign:"center",maxWidth:247,
+  },
+  txInspectorFeatures: {
+    backgroundColor:"#F5F8FA",borderWidth:1,borderColor:"#E8EFF1",
+    borderRadius:11,paddingHorizontal:14,paddingVertical:15,
+    alignSelf:"stretch",gap:11,marginTop:5,
+  },
+  txInspectorFeature: {flexDirection:"row",gap:10,alignItems:"center"},
+  txInspectorFeatureLabel: {
+    fontFamily:"AdminInterRegular",fontSize:10.7,color:"#718AA1",
+  },
+
 });
