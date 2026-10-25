@@ -58,6 +58,8 @@ function installFundReleaseDemoRoutes({
       releaseRecorderUid: a.releaseRecorderUid || "",
       method: a.method || "", walletLast4: a.walletLast4 || "",
       simulationReference: a.simulationReference || "",
+      releaseProcessor: a.releaseProcessor || "volunserve_internal_sandbox",
+      deliveryStatus: a.deliveryStatus || "simulation_only",
       reviewNote: a.reviewNote || "",
       decisionReason: a.decisionReason || "",
       acknowledgmentNote: a.acknowledgmentNote || "",
@@ -323,10 +325,19 @@ function installFundReleaseDemoRoutes({
     try {
       const uid=req.firebaseUser.uid,campaignId=validId(req.params.id);
       const method=safe(req.body?.method,20).toLowerCase();
-      const walletLast4=safe(req.body?.walletLast4,4);
+      // New checkout-style demo interface accepts 11 digits, but NEVER persists
+      // the full test identifier. Previous APK clients may still supply last4.
+      const testWalletNumber=safe(req.body?.testWalletNumber,30);
+      const walletLast4=testWalletNumber
+        ? testWalletNumber.slice(-4) : safe(req.body?.walletLast4,4);
       if (!["gcash","maya"].includes(method)) reject("invalid_method","Choose a demo GCash or Maya channel.");
-      if (!/^[0-9]{4}$/.test(walletLast4)) reject("invalid_demo_account",
-        "Enter only the last 4 digits of a TEST wallet, not a full real account number.");
+      if (testWalletNumber) {
+        if (!/^09[0-9]{9}$/.test(testWalletNumber)) reject("invalid_demo_account",
+          "Enter an 11-digit TEST wallet number beginning with 09.");
+        if (req.body?.confirmedSandbox !== true) reject("sandbox_confirmation_required",
+          "Explicitly confirm this is an internal sandbox record, not a wallet transfer.");
+      } else if (!/^[0-9]{4}$/.test(walletLast4)) reject("invalid_demo_account",
+        "Only last four digits of a TEST wallet are allowed for legacy demo clients.");
       const recipients=await getAdmins();
       const ref=releases.doc(campaignId);
       await db.runTransaction(async tx=>{
@@ -337,13 +348,14 @@ function installFundReleaseDemoRoutes({
         const at=FieldValue.serverTimestamp();
         tx.update(ref,{
           status:"simulated_sent",method,walletLast4,releaseRecorderUid:uid,
+          releaseProcessor:"volunserve_internal_sandbox",deliveryStatus:"simulation_only",
           simulationReference:"VS-DEMO-"+campaignId.slice(0,25).toUpperCase(),
           simulatedAt:at,updatedAt:at,
           audit:FieldValue.arrayUnion({stage:"simulated_sent",actorUid:uid,at}),
         });
         sendAdminNotices(tx,recipients,campaignId,"simulated_sent",
           "Demo fund release recorded",
-          "A simulated "+method.toUpperCase()+" release has been recorded for Resident review. No real funds were transferred.");
+          "A VolunServe INTERNAL SANDBOX "+method.toUpperCase()+" release has been recorded for Resident review. No external payout was attempted.");
         // Notify only the verified requester linked to the source Assistance Request.
         if (d.recipientUid) {
           tx.set(db.collection("notifications").doc(
@@ -351,7 +363,7 @@ function installFundReleaseDemoRoutes({
           ), {
             userId:d.recipientUid, type:"fund_release_demo",
             campaignId, title:"Assistance release demo ready for review",
-            message:"A simulated release record is available in Donations. No real funds were transferred.",
+            message:"A VolunServe internal sandbox release receipt is available for review in Donations. No real wallet transfer took place.",
             read:false,createdAt:FieldValue.serverTimestamp(),
           });
         }
@@ -384,6 +396,7 @@ function installFundReleaseDemoRoutes({
             id:p.id,campaignId:p.campaignId,campaignTitle:p.campaignTitle,
             status:p.status,amount:p.amount,method:p.method,
             walletLast4:p.walletLast4,simulationReference:p.simulationReference,
+            releaseProcessor:p.releaseProcessor,deliveryStatus:p.deliveryStatus,
             simulatedAt:p.simulatedAt,acknowledgedAt:p.acknowledgedAt,
             acknowledgmentNote:p.acknowledgmentNote,simulation:true,
           };
