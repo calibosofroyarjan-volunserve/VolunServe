@@ -1133,8 +1133,14 @@ export default function Donation() {
                     <View style={styles.webFundedNotice}>
                       <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.webFundedTitle}>Funding goal reached</Text>
-                        <Text style={styles.webFundedText}>This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support.</Text>
+                        <Text style={styles.webFundedTitle}>
+                          {selectedCampaign?.status === "closed" ? "Campaign closed" : "Funding goal reached"}
+                        </Text>
+                        <Text style={styles.webFundedText}>
+                          {selectedCampaign?.status === "closed"
+                            ? "The authorized Admin has closed this campaign. Its verified funding progress remains visible, but new donations are no longer accepted."
+                            : "This campaign has reached its verified target. New donations are unavailable. Browse other approved campaigns to support."}
+                        </Text>
                       </View>
                     </View>
                   ) : !showDonationPanel ? (
