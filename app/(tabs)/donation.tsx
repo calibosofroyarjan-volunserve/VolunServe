@@ -1414,12 +1414,14 @@ function CampaignCard({
   const goal = campaignGoal(campaign);
   const percentage = goal > 0 ? clampPercent((raised / goal) * 100) : 0;
   const group = campaignGroupOf(campaign);
+  const landscape = wide && fullGrid;
 
   return (
     <TouchableOpacity
       style={[
         styles.campaignCard,
         wide && (fullGrid ? styles.campaignCardFull : styles.campaignCardWide),
+        landscape && styles.donationCardLandscape,
         selected && styles.campaignCardSelected,
       ]}
       activeOpacity={0.88}
@@ -1427,9 +1429,12 @@ function CampaignCard({
       accessibilityLabel={`View details for ${campaign.title || "donation campaign"}`}
       onPress={onPress}
     >
-      <CampaignVisual campaign={campaign} photoUrl={photos[0]} />
+      <LinearGradient colors={["#FFFFFF", "#FBFFFD", "#F2FAF8"]}
+        start={{x:0,y:0}} end={{x:1,y:1}}
+        style={[styles.donationCardContent,landscape&&styles.donationCardContentLandscape]}>
+        <CampaignVisual campaign={campaign} photoUrl={photos[0]} landscape={landscape} />
 
-      <View style={styles.campaignCardBody}>
+        <View style={[styles.campaignCardBody,landscape&&styles.donationCardBodyLandscape]}>
         <View style={styles.badgeRow}>
           <View style={[styles.groupBadge,group==="community_needs_help"&&styles.groupBadgeCommunity]}>
             <Ionicons name={group==="community_needs_help"?"heart-outline":"shield-checkmark-outline"} size={12}
@@ -1438,7 +1443,10 @@ function CampaignCard({
               {campaignCategoryLabel(campaign)}
             </Text>
           </View>
-          <Ionicons name="shield-checkmark" size={16} color="#07966D"/>
+          <View style={styles.donationVerifiedBadge}>
+            <Ionicons name="checkmark-circle" size={12} color="#007E59"/>
+            {!landscape && <Text style={styles.donationVerifiedText}>LGU verified</Text>}
+          </View>
         </View>
 
         <Text style={styles.campaignTitle} numberOfLines={2}>
@@ -1461,23 +1469,26 @@ function CampaignCard({
             <Text style={styles.cardProgressGoal}>of {money(goal)}</Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${percentage}%` as any }]} />
+            <LinearGradient colors={["#007E70","#09BC78"]} start={{x:0,y:0}} end={{x:1,y:0}}
+              style={[styles.progressFill, { width: `${percentage}%` as any }]} />
           </View>
-          <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% verified</Text>
+          <Text style={styles.cardProgressPercent}>{Math.round(percentage)}% of funding goal</Text>
         </View>
 
         <View style={styles.donationCardFooter}>
-          <View style={styles.donationCardFooterCopy}>
-            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"eye-outline"} size={16} color="#05896B"/>
-            <Text style={styles.donationCardFooterText}>
-              {campaignFinished(campaign) ? "Past campaign" : "View campaign details"}
+          <View style={[styles.donationCardFooterCopy,landscape&&styles.donationCardFooterCompact]}>
+            <Ionicons name={campaignFinished(campaign)?"checkmark-circle":"heart-outline"} size={15} color="#05896B"/>
+            <Text style={styles.donationCardFooterText} numberOfLines={2}>
+              {campaignFinished(campaign) ? "Past campaign" : "View details to support"}
             </Text>
           </View>
-          <View style={styles.donationCardFooterArrow}>
+          <LinearGradient colors={["#03B981","#007C66"]} start={{x:0,y:0}} end={{x:1,y:1}}
+            style={styles.donationCardFooterArrow}>
             <Ionicons name="arrow-forward" size={17} color="#FFFFFF"/>
-          </View>
+          </LinearGradient>
         </View>
-      </View>
+        </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
@@ -1485,13 +1496,15 @@ function CampaignCard({
 function CampaignVisual({
   campaign,
   photoUrl,
+  landscape = false,
 }: {
   campaign: DonationCampaign;
   photoUrl?: string;
+  landscape?: boolean;
 }) {
   if (photoUrl) {
     return (
-      <View style={styles.campaignVisualWrap}>
+      <View style={[styles.campaignVisualWrap,landscape&&styles.donationCardVisualLandscape]}>
         <Image source={{ uri: photoUrl }} style={styles.campaignVisualImage} resizeMode="cover" />
         <View style={styles.photoApprovalBadge}>
           <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
@@ -1508,6 +1521,7 @@ function CampaignVisual({
       style={[
         styles.campaignVisualPlaceholder,
         group === "community_needs_help" && styles.campaignVisualPlaceholderCommunity,
+        landscape && styles.donationCardVisualLandscape,
       ]}
     >
       <View style={styles.campaignVisualIconCircle}>
