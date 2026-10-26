@@ -38,6 +38,7 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
       const initial = ${initial};
       const token = initial.token;
       let map, marker = null;
+      let acceptedPoint = null;
       const showFallback = () => { document.getElementById("fallback").style.display = "grid"; };
       const valid = (lat,lng) => typeof lat === "number" && typeof lng === "number" &&
         Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
@@ -50,6 +51,8 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
         // Mirror backend's existing SJDM service-area bounds. An out-of-area
         // click reports validation feedback but never displays a false venue pin.
         if (lat < 14.65 || lat > 15.0 || lng < 120.88 || lng > 121.30) {
+          // A drag may have moved the marker; restore its last valid position.
+          if (marker && acceptedPoint) marker.setLngLat(acceptedPoint);
           if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
           return;
         }
@@ -60,6 +63,7 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
             const p=marker.getLngLat();move(p.lat,p.lng,true);
           });
         } else marker.setLngLat([lng,lat]);
+        acceptedPoint = [lng,lat];
         if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
         map.easeTo({center:[lng,lat],duration:280});
       }
@@ -69,6 +73,7 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
         const p=event.data;
         if (p.latitude == null || p.longitude == null) {
           if (marker) {marker.remove();marker=null;}
+          acceptedPoint = null;
         } else move(p.latitude,p.longitude,false);
       });
       if (!window.maplibregl) {showFallback();return;}
