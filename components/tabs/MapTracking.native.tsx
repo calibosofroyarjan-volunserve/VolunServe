@@ -29,7 +29,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
-import { isVerifiedActiveCenter } from "../../lib/emergencyMapTypes";
+import { isVerifiedActiveCenter, vehicleInfo } from "../../lib/emergencyMapTypes";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -64,9 +64,20 @@ type Incident = {
   assignedVolunteerIds?: string[];
   assignedVolunteerId?: string;
   assignedVolunteerName?: string;
+  responseVehicleType?: string;
+  activeLguResponderUid?: string;
   distanceKm?: number;
   etaMinutes?: number;
   createdAt?: any;
+};
+
+type RealLguGps = {
+  caseId: string;
+  responderUid: string;
+  responderRole: string;
+  latitude: number;
+  longitude: number;
+  updatedAt?: { toMillis?: () => number };
 };
 
 type EvacuationCenter = {
@@ -125,6 +136,8 @@ export default function MapTracking() {
   const [location, setLocation] = useState<UserLocation | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
+  const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
+  const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [routeCoords, setRouteCoords] = useState<UserLocation[]>([]);
@@ -281,6 +294,66 @@ export default function MapTracking() {
     () => incidents.filter((i) => i.status !== "resolved").length,
     [incidents]
   );
+
+  // Subscribe only to case-specific LGU GPS docs for emergencies owned by this
+  // Resident. No collection-wide responder GPS reads and no simulated positions.
+  const trackedLguCaseIds = incidents
+    .filter(item => userRole === "resident" &&
+      item.reportedBy === CURRENT_USER_ID &&
+      ["reported", "validated", "assigned", "in_progress"].includes(item.status || ""))
+    .map(item => item.id).sort().join("|");
+  useEffect(() => {
+    if (!trackedLguCaseIds || userRole !== "resident" || !CURRENT_USER_ID) {
+      setLiveLguPins({});
+      return;
+    }
+    const ids = trackedLguCaseIds.split("|");
+    setLiveLguPins({});
+    const unsubs = ids.map(caseId => onSnapshot(
+      doc(db, "lguResponseLocations", caseId),
+      snapshot => {
+        const raw = snapshot.exists() ? snapshot.data() : null;
+        const point = raw && {
+          caseId: String(raw.caseId || ""),
+          responderUid: String(raw.responderUid || ""),
+          responderRole: String(raw.responderRole || ""),
+          latitude: Number(raw.latitude), longitude: Number(raw.longitude),
+          updatedAt: raw.updatedAt,
+        };
+        const valid = point && point.caseId === caseId &&
+          point.responderRole === "lgu" &&
+          point.responderUid.length > 0 &&
+          Number.isFinite(point.latitude) && Number.isFinite(point.longitude) &&
+          Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;
+        setLiveLguPins(previous => {
+          const next = { ...previous };
+          if (valid) next[caseId] = point as RealLguGps;
+          else delete next[caseId];
+          return next;
+        });
+      },
+      () => setLiveLguPins(previous => {
+        const next = { ...previous };
+        delete next[caseId];
+        return next;
+      }),
+    ));
+    return () => unsubs.forEach(unsubscribe => unsubscribe());
+  }, [trackedLguCaseIds, userRole, CURRENT_USER_ID]);
+  useEffect(() => {
+    const interval = setInterval(() => setGpsClock(Date.now()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+  const visibleLguVehiclePins = incidents.flatMap(incident => {
+    const point = liveLguPins[incident.id];
+    if (userRole !== "resident" || incident.reportedBy !== CURRENT_USER_ID ||
+      !point || !incident.activeLguResponderUid ||
+      point.responderUid !== incident.activeLguResponderUid ||
+      !["reported", "validated", "assigned", "in_progress"].includes(incident.status || "")) return [];
+    const lastReading = point.updatedAt?.toMillis?.() || 0;
+    if (!lastReading || gpsClock - lastReading > 120_000 || lastReading > gpsClock + 10_000) return [];
+    return [{ ...point, vehicle: vehicleInfo(incident.responseVehicleType) }];
+  });
 
   const nearestCenter = useMemo(() => {
     if (!location || centers.length === 0) return null;
@@ -777,6 +850,8 @@ export default function MapTracking() {
                 : [],
               assignedVolunteerId: raw.assignedVolunteerId ?? "",
               assignedVolunteerName: raw.assignedVolunteerName ?? "",
+              responseVehicleType: raw.responseVehicleType ?? "",
+              activeLguResponderUid: raw.activeLguResponderUid ?? "",
               distanceKm: Number(raw.distanceKm ?? 0),
               etaMinutes: Number(raw.etaMinutes ?? 0),
               createdAt: raw.createdAt,
@@ -1275,6 +1350,22 @@ export default function MapTracking() {
                     : "shield-checkmark"
                 }
               />
+            </Marker>
+          ))}
+
+          {/* Real assigned LGU GPS only: icon identifies actual dispatched vehicle.
+              No icon appears without a fresh authorized GPS reading. */}
+          {visibleLguVehiclePins.map(point => (
+            <Marker key={"lgu-" + point.caseId}
+              coordinate={{ latitude:point.latitude, longitude:point.longitude }}
+              title={"LGU responder · " + point.vehicle.label}
+              description="Current assigned response GPS (updated within two minutes)">
+              <View style={{
+                width:44,height:44,borderRadius:24,alignItems:"center",justifyContent:"center",
+                backgroundColor:point.vehicle.color,borderWidth:2,borderColor:"#FFFFFF",
+              }}>
+                <Text style={{fontSize:23,color:"#FFFFFF"}}>{point.vehicle.symbol}</Text>
+              </View>
             </Marker>
           ))}
 
