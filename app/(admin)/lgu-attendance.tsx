@@ -377,12 +377,12 @@ export default function LguAttendanceScreen() {
   );
 }
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#F5F7FB" },
+  page: { flex: 1, backgroundColor: "#F6F8F7" },
   content: { padding: 24, paddingBottom: 40 },
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 18 },
   headerCopy: { flex: 1, minWidth: 0 },
   eyebrow: { color: "#0F766E", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
-  title: { marginTop: 4, color: "#0F172A", fontSize: 29, fontWeight: "900" },
+  title: { marginTop: 4, color: "#173D32", fontSize: 29, fontWeight: "700" },
   subtitle: { marginTop: 6, color: "#64748B", fontSize: 13.5, lineHeight: 20, maxWidth: 790 },
   refreshButton: { minHeight: 40, paddingHorizontal: 13, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 6 },
   refreshText: { color: "#334155", fontSize: 12, fontWeight: "800" },
