@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts } from "expo-font";
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { useRouter } from "expo-router";
 import {
   browserLocalPersistence,
@@ -31,6 +33,12 @@ import {
   logoutUser,
 } from "../lib/firebaseAuth";
 
+// Keep original VolunServe photography; no generated imagery.
+const FEATURES = [
+  { icon: "alert-circle-outline" as const, title: "Emergency reports", subtitle: "Connect with responders" },
+  { icon: "hand-left-outline" as const, title: "Assistance requests", subtitle: "Support when needed" },
+  { icon: "people-outline" as const, title: "Community events", subtitle: "Make an impact" },
+];
 const SLIDES = [
   {
     image: require("../assets/images/slide1.jpg"),
@@ -54,8 +62,15 @@ const SLIDES = [
 
 export default function WebLogin() {
   const router = useRouter();
+  useFonts({
+    LoginInter: Inter_400Regular,
+    LoginInterMedium: Inter_500Medium,
+    LoginInterSemiBold: Inter_600SemiBold,
+    LoginInterBold: Inter_700Bold,
+    LoginInterExtraBold: Inter_800ExtraBold,
+  });
   const { width, height } = useWindowDimensions();
-  const compact = width < 900;
+  const compact = width < 960;
   const mobile = width < 640;
   const narrowMobile = width < 360;
   const [slideIndex, setSlideIndex] = useState(0);
@@ -71,7 +86,7 @@ export default function WebLogin() {
   useEffect(() => {
     const timer = setInterval(() => {
       setSlideIndex((current) => (current + 1) % SLIDES.length);
-    }, 5000);
+    }, 7000;
     return () => clearInterval(timer);
   }, []);
   const changeSlide = (direction: number) => {
@@ -282,7 +297,7 @@ export default function WebLogin() {
               color="#10b981"
             />
             <Text style={[styles.statusText, mobile && styles.statusTextMobile]}>
-              Community Response System
+              BUILT FOR A SAFER COMMUNITY
             </Text>
           </View>
           <Text
@@ -304,69 +319,54 @@ export default function WebLogin() {
           </Text>
         </View>
         {!compact && (
-          <>
-            <TouchableOpacity
-              style={[styles.arrowButton, styles.leftArrow]}
-              onPress={() => changeSlide(-1)}
-            >
-              <Ionicons
-                name="chevron-back"
-                size={25}
-                color="#0f172a"
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.arrowButton, styles.rightArrow]}
-              onPress={() => changeSlide(1)}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={25}
-                color="#0f172a"
-              />
-            </TouchableOpacity>
-          </>
+          <View style={styles.featureRow}>
+            {FEATURES.map((item) => (
+              <View key={item.title} style={styles.featureItem}>
+                <View style={styles.featureIcon}>
+                  <Ionicons name={item.icon} size={19} color="#5AF0C0" />
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>{item.title}</Text>
+                  <Text style={styles.featureSubtitle}>{item.subtitle}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
         <View style={[styles.carouselFooter, mobile && styles.carouselFooterMobile]}>
-          {mobile && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Previous carousel slide"
-              onPress={() => changeSlide(-1)}
-              style={styles.mobileSlideArrow}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chevron-back" size={19} color="#ffffff" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Previous slide"
+            style={[styles.footerArrow, mobile && styles.footerArrowMobile]}
+            onPress={() => changeSlide(-1)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-back" size={18} color="#ffffff" />
+          </TouchableOpacity>
           <View style={styles.dots}>
             {SLIDES.map((_, index) => (
               <Pressable
                 key={index}
                 accessibilityRole="button"
                 accessibilityLabel={`Show carousel slide ${index + 1} of ${SLIDES.length}`}
+                accessibilityState={{ selected: index === slideIndex }}
                 onPress={() => setSlideIndex(index)}
-                style={[
-                  styles.dot,
-                  index === slideIndex && styles.activeDot,
-                ]}
+                style={[styles.dot,index === slideIndex && styles.activeDot]}
               />
             ))}
           </View>
           <Text style={[styles.slideCounter, mobile && styles.slideCounterMobile]}>
-            {slideIndex + 1} / {SLIDES.length}
+            {String(slideIndex + 1).padStart(2,"0")} / {String(SLIDES.length).padStart(2,"0")}
           </Text>
-          {mobile && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Next carousel slide"
-              onPress={() => changeSlide(1)}
-              style={styles.mobileSlideArrow}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chevron-forward" size={19} color="#ffffff" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Next slide"
+            style={[styles.footerArrow, mobile && styles.footerArrowMobile]}
+            onPress={() => changeSlide(1)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-forward" size={18} color="#ffffff" />
+          </TouchableOpacity>
         </View>
       </ImageBackground>
       <View
@@ -383,11 +383,15 @@ export default function WebLogin() {
             mobile && styles.loginCardMobile,
           ]}
         >
+          <View style={styles.formEyebrowRow}>
+            <View style={styles.formEyebrowDash}/>
+            <Text style={styles.formEyebrow}>VOLUNSERVE ACCOUNT</Text>
+          </View>
           <Text style={[styles.welcomeTitle, mobile && styles.welcomeTitleMobile]}>
             Welcome back
           </Text>
           <Text style={[styles.welcomeSubtitle, mobile && styles.welcomeSubtitleMobile]}>
-            Sign in to continue to VolunServe
+            Sign in to stay connected with your community.
           </Text>
           <Text style={[styles.inputLabel, mobile && styles.inputLabelMobile]}>
             Email Address
@@ -574,15 +578,15 @@ export default function WebLogin() {
             </TouchableOpacity>
           </View>
           <View style={[styles.securityBox, mobile && styles.hideOnMobile]}>
-            <Ionicons
-              name="shield-checkmark"
-              size={22}
-              color="#0f766e"
-            />
-            <Text style={styles.securityText}>
-              Secure access for Basic Accounts, Verified Residents,
-              approved Volunteers, and administrators.
-            </Text>
+            <View style={styles.securityIcon}>
+              <Ionicons name="shield-checkmark-outline" size={18} color="#078365"/>
+            </View>
+            <View style={styles.securityCopy}>
+              <Text style={styles.securityTitle}>Protected VolunServe access</Text>
+              <Text style={styles.securityText}>
+                For registered Residents, Volunteers, and administrators.
+              </Text>
+            </View>
           </View>
         </View>
       </View>
