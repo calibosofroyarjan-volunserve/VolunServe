@@ -3373,7 +3373,7 @@ function InfoCell({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F4F7FB" },
+  screen: { flex: 1, backgroundColor: "#F6F8F7" },
   container: {
     width: "100%",
     maxWidth: 1180,
@@ -3387,7 +3387,7 @@ const styles = StyleSheet.create({
     minHeight: 520,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F4F7FB",
+    backgroundColor: "#F6F8F7",
   },
   loadingText: { marginTop: 10, color: "#64748B", fontWeight: "700" },
   header: {
@@ -3408,7 +3408,7 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: { flex: 1 },
   eyebrow: { color: "#0F766E", fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  title: { marginTop: 3, color: "#0F172A", fontSize: 27, fontWeight: "900" },
+  title: { marginTop: 3, color: "#173D32", fontSize: 27, fontWeight: "700" },
   subtitle: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: 12, lineHeight: 18 },
   flowCard: {
     flexDirection: "row",
