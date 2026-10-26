@@ -33,7 +33,10 @@ type RecordType =
   | "disputes"
   | "donations"
   | "events"
-  | "certificates";
+  | "certificates"
+  | "assistance"
+  | "campaigns"
+  | "communityEvents";
 
 type GenericRecord = {
   id: string;
@@ -55,6 +58,9 @@ const emptyRecords: RecordGroup = {
   donations: [],
   events: [],
   certificates: [],
+  assistance: [],
+  campaigns: [],
+  communityEvents: [],
 };
 
 const recordSources: Array<{
@@ -97,6 +103,9 @@ const recordSources: Array<{
     type: "certificates",
     collectionName: "certificates",
   },
+  { type: "assistance", collectionName: "assistanceRequests" },
+  { type: "campaigns", collectionName: "donationCampaigns" },
+  { type: "communityEvents", collectionName: "communityEvents" },
 ];
 
 const timestampValue = (
@@ -525,11 +534,34 @@ export default function AllRecords() {
       label: "Certificates",
       icon: "ribbon-outline",
     },
+    { key: "assistance", label: "Assistance Requests", icon: "hand-left-outline" },
+    { key: "campaigns", label: "Donation Campaigns", icon: "heart-outline" },
+    { key: "communityEvents", label: "Community Events", icon: "calendar-outline" },
   ];
 
   const renderRecord = (
     item: GenericRecord
   ) => {
+    if (activeTab === "assistance" || activeTab === "campaigns" || activeTab === "communityEvents") {
+      const sourceName = activeTab === "assistance" ? "Assistance Request" :
+        activeTab === "campaigns" ? "Donation Campaign" : "Community Event";
+      const status = firstText(item.verificationStatus, item.publicationStatus, item.status, "recorded");
+      return (
+        <RecordCard
+          key={item.id}
+          icon={activeTab === "assistance" ? "hand-left-outline" : activeTab === "campaigns" ? "heart-outline" : "calendar-outline"}
+          title={firstText(item.title, item.categoryLabel, sourceName)}
+          subtitle={firstText(item.requesterName, item.generalArea, item.barangay, item.id)}
+          status={status}
+          rows={[
+            { label: "Record ID", value: item.id },
+            { label: "Category", value: firstText(item.categoryLabel, item.campaignCategory, item.category, "Not specified") },
+            { label: "Created At", value: readableDate(item.createdAt) },
+            { label: "Status", value: status },
+          ]}
+        />
+      );
+    }
     if (
       activeTab === "users"
     ) {
