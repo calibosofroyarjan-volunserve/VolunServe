@@ -1636,9 +1636,8 @@ const styles =
     summaryCard: {
       flexGrow: 1,
       minWidth: 150,
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 3,
+      backgroundColor: "transparent",
+      borderRadius: 0,
       padding: 14,
       borderBottomWidth: 1,
       borderColor: "#E2E8F0",
@@ -1747,11 +1746,11 @@ const styles =
     recordCard: {
       backgroundColor:
         "#FFFFFF",
-      borderWidth: 1,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
-      borderRadius: 9,
+      borderRadius: 3,
       padding: 16,
-      marginBottom: 12,
+      marginBottom: 8,
     },
 
     recordTop: {
