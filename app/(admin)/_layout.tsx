@@ -8,6 +8,7 @@ import {
   usePathname,
 } from "expo-router";
 import React, {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -147,6 +148,18 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+type NavSectionId = "response" | "reviews" | "events" | "management";
+const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
+  { id: "response", title: "Response & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
+  { id: "reviews", title: "People & Approvals", icon: "people-outline", labels: ["Identity Reviews", "Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
+  { id: "events", title: "Events & Participation", icon: "calendar-outline", labels: ["Volunteer Events", "Community Events", "Event Attendance", "Certificates"] },
+  { id: "management", title: "Management & Reports", icon: "settings-outline", labels: ["Donation Management", "Announcements", "Analytics", "Disputes"] },
+];
+const navActive = (item: NavItem, pathname: string) =>
+  pathname === item.route ||
+  (item.route === "/(admin)/command-center" && pathname === "/command-center") ||
+  (item.route.includes("/(admin)/") && pathname.endsWith(item.route.split("/").pop() || ""));
+
 const initialsFor = (
   value: string,
 ) => {
@@ -182,10 +195,16 @@ export default function AdminLayout() {
   const pathname =
     usePathname();
 
-  const [
-    mobileMenuOpen,
-    setMobileMenuOpen,
-  ] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<NavSectionId | "none" | null>(null);
+  const currentSection = NAV_SECTIONS.find((section) =>
+    NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname))
+  )?.id ?? "response";
+  const visibleSection = expandedSection ?? currentSection;
+  useEffect(() => {
+    // Open the relevant group after navigation from an overview shortcut.
+    setExpandedSection(null);
+  }, [pathname]);
 
   const desktop =
     Platform.OS === "web" &&
@@ -431,77 +450,45 @@ export default function AdminLayout() {
           <Text style={styles.brandTagline}>LGU ADMINISTRATION</Text>
         </View>
       </View>
-      <Text style={styles.sidebarSection}>WORKSPACE</Text>
-
-      <ScrollView
-        style={
-          styles.sidebarScroll
-        }
-        contentContainerStyle={
-          styles.sidebarContent
-        }
-        showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled"
-        accessibilityLabel="Admin main menu navigation"
+      <Text style={styles.sidebarSection}>LGU WORKSPACE</Text>
+      <TouchableOpacity
+        style={[styles.navItem, styles.overviewNavItem, navActive(NAV_ITEMS[0], pathname) && styles.navItemActive]}
+        accessibilityRole="button" accessibilityState={{ selected: navActive(NAV_ITEMS[0], pathname) }}
+        activeOpacity={0.84} onPress={() => openRoute(NAV_ITEMS[0].route)}
       >
-        {NAV_ITEMS.map(
-          (item) => {
-            const active =
-              pathname ===
-                item.route ||
-              (
-                item.route ===
-                  "/(admin)/command-center" &&
-                pathname ===
-                  "/command-center"
-              ) ||
-              (
-                item.route.includes(
-                  "/(admin)/",
-                ) &&
-                pathname.endsWith(
-                  item.route
-                    .split("/")
-                    .pop() ||
-                    "",
-                )
-              );
-
-            return (
-              <TouchableOpacity
-                key={
-                  item.label
-                }
-                style={[
-                  styles.navItem,
-                  active &&
-                    styles.navItemActive,
-                ]}
-                activeOpacity={
-                  0.82
-                }
-                onPress={() =>
-                  openRoute(
-                    item.route,
-                  )
-                }
-              >
-                <View style={[styles.navIcon, active && styles.navIconActive]}>
-                  <Ionicons
-                    name={item.icon}
-                    size={19}
-                    color={active ? "#FFFFFF" : "#D9F5ED"}
-                  />
-                </View>
-                <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={2}>
-                  {item.label}
-                </Text>
-                {active && <View style={styles.activeIndicator} />}
-              </TouchableOpacity>
-            );
-          },
-        )}
-
+        <View style={styles.navIcon}><Ionicons name="grid-outline" size={19} color="#E7F4EF" /></View>
+        <Text style={[styles.navLabel, navActive(NAV_ITEMS[0], pathname) && styles.navLabelActive]}>Overview</Text>
+        {navActive(NAV_ITEMS[0], pathname) ? <View style={styles.activeIndicator} /> : null}
+      </TouchableOpacity>
+      <ScrollView style={styles.sidebarScroll} contentContainerStyle={styles.sidebarContent}
+        showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+        accessibilityLabel="LGU Admin module groups">
+        {NAV_SECTIONS.map((section) => {
+          const expanded = visibleSection === section.id;
+          const active = NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname));
+          return <View key={section.id} style={styles.navSection}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={section.title}
+              accessibilityState={{ expanded }} activeOpacity={0.85}
+              style={[styles.navGroupHeader, active && styles.navGroupHeaderCurrent]}
+              onPress={() => setExpandedSection(expanded ? "none" : section.id)}>
+              <Ionicons name={section.icon} color={active ? "#FFFFFF" : "#BAD9CF"} size={17} />
+              <Text style={[styles.navGroupTitle, active && styles.navGroupTitleCurrent]}>{section.title}</Text>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} color="#A9CDC0" size={15} />
+            </TouchableOpacity>
+            {expanded ? <View style={styles.navGroupChildren}>
+              {NAV_ITEMS.filter(item => section.labels.includes(item.label)).map((item) => {
+                const selected = navActive(item, pathname);
+                return <TouchableOpacity key={item.route} style={[styles.navItem, styles.groupNavItem, selected && styles.navItemActive]}
+                  accessibilityRole="button" accessibilityState={{ selected }} activeOpacity={0.82}
+                  onPress={() => openRoute(item.route)}>
+                  <Ionicons name={item.icon} color={selected ? "#FFFFFF" : "#B4D5C9"} size={17} />
+                  <Text numberOfLines={2} style={[styles.navLabel, selected && styles.navLabelActive]}>{item.label}</Text>
+                  {selected ? <View style={styles.activeIndicator} /> : null}
+                </TouchableOpacity>;
+              })}
+            </View> : null}
+          </View>;
+        })}
       </ScrollView>
       <View style={styles.sidebarUtility}>
         <TouchableOpacity
@@ -670,6 +657,14 @@ export default function AdminLayout() {
 
 const styles =
   StyleSheet.create({
+    navSection: { marginBottom: 6 },
+    overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
+    navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
+    navGroupHeaderCurrent: { backgroundColor: "rgba(255,255,255,0.07)" },
+    navGroupTitle: { flex: 1, color: "#C9DDD5", fontSize: 12.5, fontWeight: "600" },
+    navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
+    navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
+    groupNavItem: { minHeight: 41, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
     shell: {
       flex: 1,
       flexDirection: "row",
@@ -736,7 +731,7 @@ const styles =
     brandName: {
       color: "#FFFFFF",
       fontSize: 20,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     brandTagline: {
@@ -754,8 +749,8 @@ const styles =
     },
 
     sidebarContent: {
-      paddingHorizontal: 6,
-      paddingRight: 9,
+      paddingHorizontal: 7,
+      paddingRight: 10,
       paddingBottom: 18,
       gap: 3,
     },
@@ -810,7 +805,7 @@ const styles =
         "#29415E",
     },
 
-    navIcon: { width: 35, height: 35, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center" },
+    navIcon: { width: 30, height: 30, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center" },
     navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
     navIconActive: { backgroundColor: "#226859" },
     activeIndicator: { width: 4, height: 24, borderRadius: 3, backgroundColor: "#E1FFF6" },
