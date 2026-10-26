@@ -136,7 +136,7 @@ export default function SuperAdminLayout() {
     try {
       setDrawerOpen(false);
       await logoutUser();
-      router.replace("/login");
+      router.replace("/admin-login");
     } catch (error: any) {
       Alert.alert(
         "Sign Out Failed",
