@@ -885,7 +885,7 @@ export default function WebHome() {
                             ? "Approved"
                             : "Not enrolled"
                         }
-                        onPress={() => router.push("/volunteer-application")}
+                        onPress={() => hasVolunteerAccess(profile) ? void switchMode() : router.push("/volunteer-application")}
                         last
                       />
                     </>
