@@ -266,7 +266,7 @@ export default function HomeScreen() {
     <>
       <StatusBar
         style="light"
-        backgroundColor="#7A1723"
+        backgroundColor="#123E36"
       />
 
       <View style={styles.root}>
@@ -298,10 +298,10 @@ export default function HomeScreen() {
           >
             <LinearGradient
               colors={[
-                "#7A1723",
-                "#A71F2D",
-                "#D52E42",
-                "#F05B68",
+                "#123E36",
+                "#195444",
+                "#23765F",
+                "#2B8168",
               ]}
               locations={[0, 0.34, 0.7, 1]}
               start={{
@@ -403,7 +403,7 @@ export default function HomeScreen() {
                     </Text>
 
                     <Text style={styles.brandSubtitle}>
-                      City Disaster Response Platform
+                      Community Response & Volunteering
                     </Text>
                   </View>
                 </View>
