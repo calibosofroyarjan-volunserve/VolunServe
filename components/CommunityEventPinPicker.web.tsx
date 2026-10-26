@@ -72,6 +72,8 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [draft, setDraft] = useState<Venue | null>(saved);
+  const draftRef = useRef<Venue | null>(draft);
+  draftRef.current = draft;
   const [manual, setManual] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -87,12 +89,14 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
   const pick = (lat: number, lng: number) => {
     if (!validVenue(lat, lng)) {
       setMessage("Pumili ng location sa San Jose del Monte area. Hindi tatanggapin ang pin na malayo sa service area.");
-      return;
+      return false;
     }
     const next = tidy(lat, lng);
     setDraft(next);
+    draftRef.current = next;
     setMessage("Pin selected. Confirm this meeting point before submitting your proposal.");
     if (savedRef.current && !same(savedRef.current, next)) onChangeRef.current(null, null);
+    return true;
   };
 
   useEffect(() => {
@@ -146,7 +150,12 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     if (!markerInstance.current) {
       const marker = new g.maps.Marker({map, position, draggable: true, title:"Event meeting point"});
       marker.addListener("dragend", (event: any) => {
-        if (event.latLng) pick(event.latLng.lat(), event.latLng.lng());
+        // A rejected drag must visually snap back to the last accepted venue.
+        // Otherwise the marker can disagree with the confirmed proposal coordinates.
+        if (!event.latLng || !pick(event.latLng.lat(), event.latLng.lng())) {
+          const lastValid = draftRef.current;
+          if (lastValid) marker.setPosition({ lat: lastValid.latitude, lng: lastValid.longitude });
+        }
       });
       markerInstance.current = marker;
     } else markerInstance.current.setPosition(position);
