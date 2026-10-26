@@ -2014,11 +2014,10 @@ const styles =
 
     statCard: {
       flexGrow: 1,
-      minWidth: 180,
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 9,
-      borderWidth: 1,
+      minWidth: 140,
+      backgroundColor: "transparent",
+      borderRadius: 0,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
       padding: 16,
     },
@@ -2034,7 +2033,7 @@ const styles =
 
     statValue: {
       fontSize: 25,
-      fontWeight: "900",
+      fontWeight: "700",
       color: "#173D32",
     },
 
@@ -2099,11 +2098,11 @@ const styles =
     adminCard: {
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 9,
-      borderWidth: 1,
+      borderRadius: 3,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
       padding: 17,
-      marginBottom: 13,
+      marginBottom: 8,
     },
 
     adminTop: {
@@ -2179,10 +2178,9 @@ const styles =
     detailItem: {
       minWidth: 180,
       flexGrow: 1,
-      padding: 12,
-      backgroundColor:
-        "#F8FAFC",
-      borderRadius: 11,
+      padding: 8,
+      backgroundColor: "transparent",
+      borderRadius: 0,
     },
 
     detailLabel: {
