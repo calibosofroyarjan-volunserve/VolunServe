@@ -34,14 +34,12 @@ import {
 } from "../lib/firebaseAuth";
 
 // Keep original VolunServe photography; no generated imagery.
-// Six understated previews mirror Resident navigation without bypassing sign-in.
+// Three elegant, informational highlights from the original premium login.
+// Not links: they never bypass sign-in or Resident role permissions.
 const FEATURES = [
-  {icon:"home-outline" as const,title:"Home",subtitle:"Platform overview",iconBg:"#D8F4E9",iconColor:"#07886A"},
-  {icon:"map-outline" as const,title:"Live Map",subtitle:"Real-time tracking",iconBg:"#E0EEFF",iconColor:"#287BCB"},
-  {icon:"alert-circle-outline" as const,title:"Emergency Report",subtitle:"Report and get help",iconBg:"#FDEAE3",iconColor:"#C65C42"},
-  {icon:"hand-left-outline" as const,title:"Request Assistance",subtitle:"Community support",iconBg:"#DEF5F3",iconColor:"#098D91"},
-  {icon:"heart-outline" as const,title:"Donations",subtitle:"Give and make an impact",iconBg:"#E6F5DE",iconColor:"#4C9946"},
-  {icon:"calendar-outline" as const,title:"Community Events",subtitle:"Join local activities",iconBg:"#EDF2DB",iconColor:"#7C9837"},
+  {icon:"alert-circle-outline" as const,title:"Emergency Reports",subtitle:"Report and get help",iconColor:"#FFBD9C",tint:"rgba(243,135,101,0.18)"},
+  {icon:"hand-left-outline" as const,title:"Request Assistance",subtitle:"Support when needed",iconColor:"#A6F4DF",tint:"rgba(90,205,178,0.17)"},
+  {icon:"calendar-outline" as const,title:"Community Events",subtitle:"Join local activities",iconColor:"#D5EBA0",tint:"rgba(180,211,125,0.17)"},
 ];
 const SLIDES = [
   {
@@ -77,7 +75,6 @@ export default function WebLogin() {
   const compact = width < 960;
   const mobile = width < 640;
   const narrowMobile = width < 360;
-  const narrowTablet = width < 760 && !mobile;
   const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -257,7 +254,6 @@ export default function WebLogin() {
             : compact
               ? styles.visualPanelCompact
               : styles.visualPanelDesktop,
-          narrowTablet && styles.visualPanelTablet,
           narrowMobile && styles.visualPanelNarrow,
         ]}
         imageStyle={styles.visualImage}
@@ -266,14 +262,14 @@ export default function WebLogin() {
           colors={
             mobile
               ? [
-                  "rgba(0,67,62,0.24)",
-                  "rgba(2,45,41,0.42)",
-                  "rgba(2,22,27,0.73)",
+                  "rgba(2,48,46,0.20)",
+                  "rgba(3,37,39,0.44)",
+                  "rgba(2,21,31,0.77)",
                 ]
               : [
-                  "rgba(5,61,52,0.16)",
-                  "rgba(2,56,48,0.28)",
-                  "rgba(3,24,29,0.66)",
+                  "rgba(2,59,48,0.11)",
+                  "rgba(2,51,47,0.32)",
+                  "rgba(1,23,31,0.76)",
                 ]
           }
           style={StyleSheet.absoluteFillObject}
@@ -324,19 +320,15 @@ export default function WebLogin() {
             {currentSlide.description}
           </Text>
         </View>
-        {!mobile && (
-          <View style={[
-            styles.featureRow,
-            compact && styles.featureRowCompact,
-            narrowTablet && styles.featureRowNarrow,
-          ]}>
-            {FEATURES.map((item) => (
+        {!compact && (
+          <View style={styles.featureRow}>
+            {FEATURES.map((item,index) => (
               <View key={item.title} style={[
                 styles.featureItem,
-                narrowTablet && styles.featureItemNarrow,
+                index>0 && styles.featureItemDivider,
               ]}>
-                <View style={[styles.featureIcon,{backgroundColor:item.iconBg}]}>
-                  <Ionicons name={item.icon} size={18} color={item.iconColor} />
+                <View style={[styles.featureIcon,{backgroundColor:item.tint}]}>
+                  <Ionicons name={item.icon} size={18} color={item.iconColor}/>
                 </View>
                 <View style={styles.featureCopy}>
                   <Text style={styles.featureTitle} numberOfLines={2}>{item.title}</Text>
@@ -611,29 +603,28 @@ const styles = StyleSheet.create({
   screen: { flex:1,backgroundColor:"#EFF6F4" },
   screenContent: { flexGrow:1 },
   visualPanel: { position:"relative",overflow:"hidden",justifyContent:"space-between" },
-  visualPanelDesktop: { width:"53%",minHeight:760,paddingHorizontal:40,paddingTop:43,paddingBottom:26 },
-  visualPanelCompact: { width:"100%",minHeight:470,paddingHorizontal:28,paddingTop:24,paddingBottom:22 },
-  visualPanelTablet: { minHeight:565,paddingHorizontal:22 },
+  visualPanelDesktop: { width:"53%",minHeight:760,paddingHorizontal:47,paddingTop:43,paddingBottom:28 },
+  visualPanelCompact: { width:"100%",minHeight:335,paddingHorizontal:27,paddingTop:22,paddingBottom:20 },
   visualImage: {
     width: "100%",
     height: "100%",
   },
   brandRow: { zIndex:2,flexDirection:"row",alignItems:"center",alignSelf:"flex-start",
-    backgroundColor:"rgba(1,49,43,0.34)",borderRadius:18,paddingHorizontal:12,paddingVertical:9,
-    borderWidth:1,borderColor:"rgba(240,255,252,0.17)" },
+    backgroundColor:"rgba(1,45,42,0.24)",borderRadius:16,paddingHorizontal:10,paddingVertical:8,
+    borderWidth:1,borderColor:"rgba(238,255,250,0.13)" },
   logoContainer: { width:62,height:62,borderRadius:31,backgroundColor:"#FFFFFF",justifyContent:"center",alignItems:"center",marginRight:14,
   shadowColor:"#000000",shadowOpacity:0.12,shadowRadius:16,shadowOffset:{width:0,height:5} },
   logo: { width:55,height:55 },
   brandName: { color:"#FFFFFF",fontSize:28,fontFamily:"LoginInterExtraBold",letterSpacing:-0.8,
     textShadowColor:"rgba(0,22,24,0.30)",textShadowRadius:5 },
   brandSubtitle: { color:"#EEFDF8",fontSize:12,fontFamily:"LoginInterMedium",marginTop:3,letterSpacing:0.1 },
-  heroContent: { zIndex:2,maxWidth:630,marginTop:25,marginBottom:17 },
+  heroContent: { zIndex:2,maxWidth:630,marginTop:28,marginBottom:25 },
   statusBadge: { alignSelf:"flex-start",flexDirection:"row",alignItems:"center",backgroundColor:"rgba(231,255,249,0.95)",paddingHorizontal:12,paddingVertical:8,borderRadius:999,marginBottom:15 },
   statusText: { color:"#126759",fontSize:10,fontFamily:"LoginInterBold",letterSpacing:0.65,marginLeft:7 },
-  heroTitle: { color:"#FFFFFF",fontSize:44,lineHeight:52,fontFamily:"LoginInterExtraBold",letterSpacing:-1.4,maxWidth:620,
+  heroTitle: { color:"#FFFFFF",fontSize:42,lineHeight:51,fontFamily:"LoginInterExtraBold",letterSpacing:-1.25,maxWidth:620,
   textShadowColor:"rgba(0,20,20,0.62)",textShadowOffset:{width:0,height:2},textShadowRadius:9 },
   heroTitleCompact: { fontSize:29,lineHeight:36,letterSpacing:-0.55 },
-  heroDescription: { color:"#FFFFFF",fontSize:14.5,lineHeight:23,fontFamily:"LoginInterMedium",maxWidth:550,marginTop:12,
+  heroDescription: { color:"#EAF9F4",fontSize:14.5,lineHeight:23,fontFamily:"LoginInterMedium",maxWidth:550,marginTop:13,
     textShadowColor:"rgba(0,20,20,0.66)",textShadowOffset:{width:0,height:2},textShadowRadius:5 },
   arrowButton: {
     position: "absolute",
@@ -761,22 +752,22 @@ const styles = StyleSheet.create({
   signupQuestionMobile: { fontSize:11.5 },
   signupLinkMobile: { fontSize:11.5,fontFamily:"LoginInterBold" },
   heroContentCompact: { marginTop:20,marginBottom:12 },
-  featureRow: { zIndex:2,flexDirection:"row",flexWrap:"wrap",alignItems:"stretch",
-    gap:9,paddingVertical:12,marginBottom:11,
-    borderTopWidth:1,borderTopColor:"rgba(223,255,247,0.36)",
-    borderBottomWidth:1,borderBottomColor:"rgba(223,255,247,0.36)" },
-  featureRowCompact: { marginTop:7,paddingVertical:11 },
-  featureRowNarrow: { gap:8 },
-  featureItem: { flexBasis:"31%",flexGrow:1,minWidth:0,minHeight:68,
-    flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:10,paddingVertical:9,
-    borderRadius:12,backgroundColor:"rgba(249,255,252,0.94)",
-    borderWidth:1,borderColor:"rgba(255,255,255,0.81)" },
-  featureItemNarrow: { flexBasis:"47%" },
-  featureIcon: { width:36,height:36,flexShrink:0,borderRadius:10,
-    alignItems:"center",justifyContent:"center" },
+  // Restore the translucent strip instead of a six-card white dashboard.
+  featureRow: { zIndex:2,flexDirection:"row",alignItems:"center",
+    paddingVertical:15,marginBottom:14,
+    borderTopWidth:1,borderTopColor:"rgba(223,255,247,0.33)",
+    borderBottomWidth:1,borderBottomColor:"rgba(223,255,247,0.33)",
+    backgroundColor:"rgba(1,40,38,0.16)",borderRadius:4 },
+  featureItem: { flex:1,flexDirection:"row",alignItems:"center",gap:9,minWidth:0,
+    paddingHorizontal:11,paddingVertical:6 },
+  featureItemDivider: { borderLeftWidth:1,borderLeftColor:"rgba(223,255,247,0.19)" },
+  featureIcon: { width:37,height:37,flexShrink:0,borderRadius:11,
+    alignItems:"center",justifyContent:"center",borderWidth:1,
+    borderColor:"rgba(229,255,245,0.13)" },
   featureCopy: { flex:1,minWidth:0,gap:3 },
-  featureTitle: { color:"#173E39",fontFamily:"LoginInterBold",fontSize:11.1,lineHeight:15 },
-  featureSubtitle: { color:"#59776D",fontFamily:"LoginInter",fontSize:9.6,lineHeight:13 },
+  featureTitle: { color:"#FFFFFF",fontFamily:"LoginInterSemiBold",fontSize:11.1,lineHeight:15,
+    textShadowColor:"rgba(0,20,20,0.28)",textShadowRadius:3 },
+  featureSubtitle: { color:"#C8E7DE",fontFamily:"LoginInter",fontSize:9.7,lineHeight:14 },
   footerArrow: { width:38,height:38,borderRadius:19,backgroundColor:"rgba(10,49,47,0.30)",
   borderWidth:1,borderColor:"rgba(232,255,248,0.42)",alignItems:"center",justifyContent:"center" },
   footerArrowMobile: { width:31,height:31,borderRadius:16 },
