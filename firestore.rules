@@ -2322,7 +2322,18 @@ service cloud.firestore {
         && request.resource.data.evidenceReviewStatus == 'resubmitted'
         && request.resource.data.updatedAt is timestamp;
       allow update: if isAdmin()
-        && validStatusTransition();
+        && validStatusTransition()
+        && (
+          !('responseVehicleType' in request.resource.data)
+          || request.resource.data.responseVehicleType in [
+            'ambulance', 'fire_truck', 'rescue_vehicle',
+            'service_vehicle', 'other_vehicle', 'on_foot'
+          ]
+        )
+        && (
+          !('responseVehicleUpdatedAt' in request.resource.data)
+          || request.resource.data.responseVehicleUpdatedAt is timestamp
+        );
       allow delete: if false;
     }
     match /publicIncidentSummaries/{caseId} {
@@ -3867,8 +3878,41 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /evacuation_centers/{centerId} {
+      // Public may read facility metadata, but clients display ACTIVE only when
+      // LGU has supplied independent verification and official coordinates.
+      function validCenterPayload() {
+        let rd = request.resource.data;
+        return rd.name is string
+          && rd.name.size() >= 3
+          && rd.name.size() <= 160
+          && rd.address is string
+          && rd.address.size() >= 3
+          && rd.address.size() <= 320
+          && rd.barangay is string
+          && rd.barangay.size() >= 2
+          && rd.latitude is number && rd.latitude >= -90 && rd.latitude <= 90
+          && rd.longitude is number && rd.longitude >= -180 && rd.longitude <= 180
+          && rd.capacity is int && rd.capacity >= 1
+          && rd.occupied is int && rd.occupied >= 0
+          && rd.occupied <= rd.capacity
+          && rd.updatedBy == request.auth.uid
+          && rd.updatedAt is timestamp
+          && rd.status in ['active', 'pending_verification', 'inactive', 'closed']
+          && rd.verificationStatus in ['pending', 'verified']
+          && rd.verificationSource is string
+          && rd.verificationSource.size() <= 300
+          && (
+            rd.status != 'active'
+            || (
+              rd.verificationStatus == 'verified'
+              && rd.verificationSource.size() >= 10
+              && rd.lastVerifiedAt is timestamp
+            )
+          );
+      }
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && validCenterPayload();
+      allow delete: if isAdmin();
     }
     match /users_live_locations/{uid} {
       allow read: if isAdmin()
