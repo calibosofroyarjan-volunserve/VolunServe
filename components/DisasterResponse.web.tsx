@@ -9,6 +9,11 @@ import {
   where,
 } from "firebase/firestore";
 import React, { useEffect, useRef, useState } from "react";
+import {useFonts} from "expo-font";
+import {
+  Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
+  Inter_700Bold, Inter_800ExtraBold,
+} from "@expo-google-fonts/inter";
 
 import { db } from "../lib/firebase";
 import { isApprovedProfile } from "../lib/firebaseAuth";
@@ -404,6 +409,14 @@ const formatRemainingCooldown = (remainingMs: number) => {
 };
 
 export default function WebDisasterReport() {
+  // Use the same locally bundled Inter font family as the Donations module.
+  useFonts({
+    EmergencyInter:Inter_400Regular,
+    EmergencyInterMedium:Inter_500Medium,
+    EmergencyInterSemiBold:Inter_600SemiBold,
+    EmergencyInterBold:Inter_700Bold,
+    EmergencyInterExtraBold:Inter_800ExtraBold,
+  });
   const { user, profile, loading } = useUserSession();
   const profileData: any = profile || {};
 
@@ -1032,23 +1045,39 @@ export default function WebDisasterReport() {
     <main className="vs-report">
       <style>{css}</style>
 
-      <header className="page-head premium-head">
-        <div>
-          <span className="eyebrow">
-            VOLUNSERVE · EMERGENCY RESPONSE
-          </span>
-          <h1>Report an Emergency</h1>
-          <p>
-            Submit the incident, exact response location, and evidence so the
-            LGU can verify and coordinate the appropriate response.
-          </p>
+      <header className="page-head premium-head emergency-hero">
+        <div className="emergency-hero-content">
+          <div className="emergency-hero-icon" aria-hidden="true">
+            <div className="emergency-hero-icon-fill">
+              <svg viewBox="0 0 80 80" fill="none" focusable="false">
+                <path d="M22 56h36M27 55v-9a13 13 0 0 1 26 0v9M25 63h30"
+                  stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M40 22v-7M19 30l-5-5M61 30l5-5"
+                  stroke="#FFD1A5" strokeWidth="4.5" strokeLinecap="round"/>
+                <path d="M40 40v8" stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round"/>
+                <circle cx="40" cy="53" r="2.3" fill="#FFD1A5"/>
+              </svg>
+            </div>
+          </div>
+          <div className="emergency-hero-copy">
+            <span className="eyebrow">VOLUNSERVE · EMERGENCY RESPONSE</span>
+            <h1>Report an Emergency</h1>
+            <strong className="emergency-hero-tagline">Report clearly. Respond together.</strong>
+            <p>Share incident details, the exact location, and supporting evidence for coordinated LGU response.</p>
+          </div>
         </div>
-
-        <div className="verification-badge">
-          <strong>LGU response verification</strong>
-          <span>
-            Reports are reviewed for severity, evidence, and responder matching.
-            Critical incidents remain visible to the LGU while verification continues.
+        <div className="emergency-review-card">
+          <span className="emergency-review-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M12 2l8 3v6c0 5-3.2 8.5-8 11-4.8-2.5-8-6-8-11V5l8-3Z"
+                fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
+              <path d="m8.4 12 2.4 2.4 4.8-5" fill="none" stroke="currentColor" strokeWidth="1.7"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+          <span className="emergency-review-copy">
+            <strong>LGU response verification</strong>
+            <span>Reports are reviewed for urgency, location and evidence before responder coordination.</span>
           </span>
         </div>
       </header>
@@ -2334,4 +2363,236 @@ const css = `
   }
   .vs-report h1 { font-size: 26px; }
 }
+/* Emergency Response · clean premium language with a distinct siren identity.
+   Deliberately no photos, gradients over text, fictitious metrics or animations. */
+.vs-report {
+  background:#F4F8F7;
+  color:#173D39;
+  font-family:"EmergencyInter",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.55;
+  scrollbar-color:#A9C6BA #E9F2EE;
+}
+.vs-report .emergency-hero {
+  isolation:isolate;
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  min-height:176px;
+  padding:24px 26px;
+  margin-bottom:17px;
+  overflow:hidden;
+  border-radius:20px;
+  border:1px solid #C6E8DC;
+  background:
+    radial-gradient(circle at 97% 8%,rgba(255,209,173,.41),transparent 23%),
+    linear-gradient(100deg,#F3FFF9 0%,#EFFCF7 38%,#DBF5EB 69%,#99E0CB 100%);
+  box-shadow:0 3px 15px rgba(14,91,66,.035);
+}
+.vs-report .emergency-hero::before {
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  width:260px;height:260px;border-radius:50%;
+  border:32px solid rgba(24,158,122,.055);
+  right:-175px;top:-128px;
+}
+.vs-report .emergency-hero-content {
+  display:flex;align-items:center;gap:24px;
+  flex:1;min-width:0;position:relative;z-index:1;
+}
+.vs-report .emergency-hero-icon {
+  width:112px;height:112px;flex:0 0 112px;
+  padding:7px;
+  background:#FFFFFF;border:1px solid rgba(255,255,255,.95);
+  border-radius:25px;
+  transform:rotate(-7deg);
+  box-shadow:0 9px 20px rgba(4,86,64,.16);
+}
+.vs-report .emergency-hero-icon-fill {
+  width:100%;height:100%;display:grid;place-items:center;
+  border-radius:19px;
+  background:linear-gradient(145deg,#075E53,#079879 68%,#14B78C);
+}
+.vs-report .emergency-hero-icon svg {width:76%;height:76%;display:block;}
+.vs-report .emergency-hero-copy {min-width:0;max-width:500px;}
+.vs-report .emergency-hero .eyebrow {
+  display:block;
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:10px;font-weight:700;
+  color:#078060;letter-spacing:1.05px;line-height:1.5;
+}
+.vs-report .emergency-hero h1 {
+  font-family:"EmergencyInterExtraBold",Inter,sans-serif;
+  font-size:35px;line-height:1.15;letter-spacing:-1.2px;
+  color:#064A3B;margin:5px 0 7px;font-weight:800;
+}
+.vs-report .emergency-hero-tagline {
+  display:block;
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:13px;color:#0F715A;line-height:1.5;
+}
+.vs-report .emergency-hero p {
+  margin:6px 0 0;color:#4D786D;
+  font-size:12px;line-height:1.65;max-width:510px;
+  font-family:"EmergencyInter",Inter,sans-serif;
+}
+.vs-report .emergency-review-card {
+  display:flex;align-items:flex-start;gap:11px;
+  width:262px;flex:0 0 262px;
+  padding:15px 15px 14px;
+  border:1px solid rgba(217,238,228,.92);
+  border-radius:14px;background:rgba(255,255,255,.91);
+  box-shadow:0 3px 12px rgba(5,90,67,.045);
+  position:relative;z-index:1;
+}
+.vs-report .emergency-review-icon {
+  display:grid;place-items:center;
+  width:38px;height:38px;flex:0 0 38px;
+  border-radius:11px;background:#E4F8EF;color:#078E6C;
+}
+.vs-report .emergency-review-icon svg{width:22px;height:22px;}
+.vs-report .emergency-review-copy{min-width:0;display:grid;gap:5px;}
+.vs-report .emergency-review-copy strong {
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:11px;line-height:1.45;color:#164D3E;
+}
+.vs-report .emergency-review-copy span {
+  font-size:10px;line-height:1.6;color:#648276;
+}
+.vs-report .workflow-strip {
+  padding:15px 17px;
+  border:1px solid #DCEAE3;
+  border-radius:15px;
+  margin-bottom:16px;
+  box-shadow:none;
+  background:#FFFFFF;
+}
+.vs-report .workflow-step.active i {background:#09896C;}
+.vs-report .workflow-step strong {
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:11.5px;color:#1E4C42;
+}
+.vs-report .workflow-step small {font-size:10px;color:#7A9188;}
+.vs-report .workflow-line{background:#DDEBE5;}
+.vs-report .resident-summary {
+  border:1px solid #DCEAE3;border-radius:14px;
+  padding:15px 19px;margin-bottom:15px;
+}
+.vs-report .resident-summary strong {
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:11.5px;color:#17483B;
+}
+.vs-report .summary-label{color:#779489;letter-spacing:1px;}
+.vs-report .summary-trust{color:#078568;}
+.vs-report .card {
+  border:1px solid #DDEAE3;
+  border-radius:16px;
+  padding:22px;
+  box-shadow:0 2px 12px rgba(13,77,60,.025);
+}
+.vs-report .grid{gap:14px;}
+.vs-report h2{
+  color:#163E36;font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:16px;line-height:1.4;letter-spacing:-.3px;
+  margin-bottom:16px;
+}
+.vs-report h2 span {
+  border-radius:9px;background:#E0F6ED;color:#078367;
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:11px;letter-spacing:.02em;padding:7px 9px;
+}
+.vs-report h3,.vs-report .field-title {
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:12px;color:#1A483D;
+}
+.vs-report label {
+  color:#284D42;font-family:"EmergencyInterSemiBold",Inter,sans-serif;
+  font-weight:600;font-size:11.3px;
+  margin-top:15px;
+}
+.vs-report input:not([type=file]):not([type=checkbox]),
+.vs-report select,.vs-report textarea {
+  margin-top:7px;
+  border:1px solid #D2E3DA;border-radius:11px;
+  padding:12px 13px;min-height:44px;
+  background:#FFFFFF;color:#193C34;
+  font-family:"EmergencyInter",Inter,sans-serif;font-size:12px;
+}
+.vs-report textarea {min-height:104px;}
+.vs-report input::placeholder,.vs-report textarea::placeholder{color:#879F95;}
+.vs-report :is(input,select,textarea,button,a):focus-visible {
+  outline:2px solid #0D9E7A;outline-offset:3px;
+}
+.vs-report button {
+  font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:11.5px;font-weight:700;
+  border-radius:10px;
+  min-height:41px;
+  background:#078B70;
+  transition:background-color .15s ease,border-color .15s ease;
+}
+.vs-report button:hover:not(:disabled){background:#076E59;}
+.vs-report .secondary {
+  background:#EDF9F3;color:#096F56;border:1px solid #CDE7DA;
+}
+.vs-report .secondary:hover:not(:disabled){background:#E1F4EA;}
+.vs-report .severity-option > span {
+  min-height:75px;
+  border:1px solid #DCE9E2;border-radius:11px;
+  padding:12px 13px;background:#FFFFFF;
+}
+.vs-report .severity-option strong {
+  color:#1E483D;font-family:"EmergencyInterBold",Inter,sans-serif;
+  font-size:12px;
+}
+.vs-report .severity-option small{color:#6D897F;line-height:1.45;}
+.vs-report .help-card,.vs-report .evidence,.vs-report .confirmation-card {margin-top:14px;}
+.vs-report .choice {
+  border-radius:9px;background:#F7FBF9;
+  border-color:#D6E5DD;color:#385F53;
+  font-family:"EmergencyInterSemiBold",Inter,sans-serif;
+}
+.vs-report .choice:hover:not(:disabled){background:#EFF8F3;}
+.vs-report .choice.active{background:#DFF6EB;border-color:#6EC9A5;color:#08795D;}
+.vs-report .auto-match-card {
+  background:#F1FAF6;border:1px solid #D7E9DF;border-radius:12px;
+}
+.vs-report .upload-box {
+  background:#FAFDFC;border:1px solid #DDEBE4;
+  border-radius:12px;padding:16px;
+}
+.vs-report .privacy-note{background:#EDF8F3;color:#52756A;border-radius:10px;}
+.vs-report footer{padding-top:17px;}
+.vs-report footer strong{font-family:"EmergencyInterBold",Inter,sans-serif;color:#16463A;}
+.vs-report .success-icon{background:#E4F8ED;color:#087E62;}
+@media(max-width:1120px) {
+  .vs-report .emergency-hero{padding:21px;gap:16px;}
+  .vs-report .emergency-hero-content{gap:17px;}
+  .vs-report .emergency-hero-icon{width:90px;height:90px;flex-basis:90px;border-radius:20px;}
+  .vs-report .emergency-hero h1{font-size:30px;}
+  .vs-report .emergency-review-card{width:238px;flex-basis:238px;padding:12px;}
+}
+@media(max-width:900px) {
+  .vs-report .emergency-hero{flex-direction:column;align-items:stretch;gap:15px;}
+  .vs-report .emergency-review-card{width:100%;flex-basis:auto;}
+  .vs-report .emergency-hero-content{width:100%;}
+}
+@media(max-width:520px) {
+  .vs-report .emergency-hero{padding:17px;border-radius:17px;}
+  .vs-report .emergency-hero-content{gap:13px;align-items:center;}
+  .vs-report .emergency-hero-icon {
+    width:62px;height:62px;flex-basis:62px;border-radius:15px;
+    padding:4px;transform:rotate(-5deg);
+  }
+  .vs-report .emergency-hero-icon-fill{border-radius:11px;}
+  .vs-report .emergency-hero h1{font-size:25px;letter-spacing:-.7px;}
+  .vs-report .emergency-hero .eyebrow{font-size:8px;letter-spacing:.8px;}
+  .vs-report .emergency-hero-tagline{font-size:11px;}
+  .vs-report .emergency-hero p{font-size:10.5px;line-height:1.55;}
+  .vs-report .workflow-strip{padding:12px;}
+  .vs-report .card{padding:16px;}
+}
+
 `;
