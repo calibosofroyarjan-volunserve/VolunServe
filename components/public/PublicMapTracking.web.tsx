@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { db } from "../../lib/firebase";
+import { isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 import { usePublicSettings } from "../../lib/usePublicSettings";
 
 type EvacuationCenter = {
@@ -21,6 +22,10 @@ type EvacuationCenter = {
   status?: string;
   capacity?: number;
   occupied?: number;
+  latitude?: number;
+  longitude?: number;
+  verificationStatus?: string;
+  updatedAt?: any;
 };
 
 export default function PublicMapTracking() {
@@ -39,6 +44,7 @@ export default function PublicMapTracking() {
             id: item.id,
             ...(item.data() as Omit<EvacuationCenter, "id">),
           }))
+          .filter((center) => isVerifiedActiveCenter(center))
           .sort((a, b) =>
             (a.name || "").localeCompare(b.name || "")
           );
@@ -142,11 +148,25 @@ export default function PublicMapTracking() {
                   center.barangay ||
                   "Address pending"}
               </Text>
+              <Text style={styles.meta}>
+                Updated: {center.updatedAt?.toDate?.()?.toLocaleString("en-PH") || "Time not confirmed"}
+              </Text>
+              {mapsDirectionsUrl(center.latitude, center.longitude) && (
+                <Pressable
+                  accessibilityRole="link"
+                  style={styles.routeLink}
+                  onPress={() => {
+                    const url = mapsDirectionsUrl(center.latitude, center.longitude);
+                    if (url) void import("react-native").then(({ Linking }) => Linking.openURL(url));
+                  }}
+                >
+                  <Text style={styles.routeLinkText}>Open directions in Google Maps</Text>
+                  <Ionicons name="open-outline" color="#23765F" size={15} />
+                </Pressable>
+              )}
 
               <Text style={styles.status}>
-                {String(
-                  center.status || "available"
-                ).toUpperCase()}
+                LGU VERIFIED · OPEN
               </Text>
 
               {available !== null && (
@@ -173,6 +193,9 @@ export default function PublicMapTracking() {
 }
 
 const styles = StyleSheet.create({
+  routeLink: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 8 },
+  routeLinkText: { color: "#23765F", fontSize: 12, fontWeight: "700" },
+
   container: {
     flexGrow: 1,
     padding: 20,
