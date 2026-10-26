@@ -409,12 +409,6 @@ export default function TabLayout() {
                 <Ionicons name="person-outline" size={18} color="#12325D" />
                 <Text style={styles.mobileAccountActionText}>My Profile</Text>
               </Pressable>
-              {mode === "resident" ? (
-                <Pressable onPress={() => visit("my-cases")} style={styles.mobileAccountAction}>
-                  <Ionicons name="document-text-outline" size={18} color="#12325D" />
-                  <Text style={styles.mobileAccountActionText}>My Reports</Text>
-                </Pressable>
-              ) : null}
               <Pressable onPress={() => {setMobileProfileOpen(false); router.push({ pathname: "/(tabs)/profile", params: { edit: "1" } });}} style={styles.mobileAccountAction}>
                 <Ionicons name="settings-outline" size={18} color="#12325D" />
                 <Text style={styles.mobileAccountActionText}>Account Settings</Text>
@@ -474,7 +468,7 @@ export default function TabLayout() {
                     <Text style={styles.journeyActionText}>Apply as Volunteer</Text>
                   </Pressable>
                 ) : null}
-                {menuItems.map((item) => {
+                {menuItems.filter((item) => item.name !== "profile" && item.name !== "notifications").map((item) => {
                   const active = item.name === (segments[segments.length - 1] || "index");
                   return (
                     <Pressable key={item.name} accessibilityRole="button"
