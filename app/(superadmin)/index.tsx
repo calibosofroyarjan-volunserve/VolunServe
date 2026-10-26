@@ -1,309 +1,171 @@
-import { Ionicons } from "@expo/vector-icons";
-import { router, type Href } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Platform, ScrollView, StyleSheet, Text,
+  View, useWindowDimensions,
+} from "react-native";
+import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import { db } from "../../lib/firebase";
 import { useUserSession } from "../../lib/useUserSession";
-import {
-  ScrollView,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from "react-native";
 
-type IconName = React.ComponentProps<typeof Ionicons>["name"];
-
-type ModuleCardProps = {
-  title: string;
-  description: string;
-  icon: IconName;
-  iconBackground: string;
-  iconColor: string;
-  onPress: () => void;
-};
+type Source = "users" | "disasterCases" | "assistanceRequests" | "communityEvents";
+const SOURCES: { key: Source; label: string }[] = [
+  { key: "users", label: "Registered Accounts" },
+  { key: "disasterCases", label: "Emergency Reports" },
+  { key: "assistanceRequests", label: "Assistance Requests" },
+  { key: "communityEvents", label: "Community Events" },
+];
 
 export default function SuperAdminDashboard() {
   const { width } = useWindowDimensions();
   const compact = width < 760;
-  const {user,profile} = useUserSession();
-  const isSuperAdmin = !!user && profile?.role === "superadmin" && profile?.status === "approved";
-  const [counts,setCounts] = useState<Record<string,number>>({});
-  const [approvedCount,setApprovedCount] = useState<number|null>(null);
-  const [failedSources,setFailedSources] = useState<string[]>([]);
-  const [loadedSources,setLoadedSources] = useState<string[]>([]);
-  useEffect(()=>{
-    if(!isSuperAdmin)return;
-    const sources=[["users","Registered Accounts"],["disasterCases","Emergency Reports"],["assistanceRequests","Assistance Requests"],["volunteerEvents","Community Events"]];
-    const unsubscribers=sources.map(([name,label])=>onSnapshot(collection(db,name),snapshot=>{
-      setCounts(old=>({...old,[name]:snapshot.size}));
-      if(name==="users")setApprovedCount(snapshot.docs.filter(doc=>doc.data().status==="approved").length);
-      setLoadedSources(old=>old.includes(name)?old:[...old,name]);
-      setFailedSources(old=>old.filter(item=>item!==name));
-    },error=>{
-      console.warn("Dashboard summary unavailable:",name,error.code);
-      setFailedSources(old=>old.includes(name)?old:[...old,name]);
-      setLoadedSources(old=>old.includes(name)?old:[...old,name]);
-    }));
-    return ()=>unsubscribers.forEach(unsubscribe=>unsubscribe());
-  },[isSuperAdmin]);
-  const stats=useMemo(()=>[
-    {key:"users",label:"Registered Accounts"},
-    {key:"disasterCases",label:"Emergency Reports"},
-    {key:"assistanceRequests",label:"Assistance Requests"},
-    {key:"volunteerEvents",label:"Community Events"},
-  ],[]);
+  const { user, profile } = useUserSession();
+  const authorized = !!user && profile?.role === "superadmin" && profile?.status === "approved";
+  const [counts, setCounts] = useState<Partial<Record<Source, number>>>({});
+  const [approved, setApproved] = useState<number | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<Source, boolean>>>({});
+  const [loaded, setLoaded] = useState<Partial<Record<Source, boolean>>>({});
 
-  const openRoute = (route: string) => {
-    router.push(route as Href);
-  };
+  useEffect(() => {
+    if (!authorized) {
+      setCounts({});
+      setApproved(null);
+      setErrors({});
+      setLoaded({});
+      return;
+    }
+    const stops = SOURCES.map(({ key }) => onSnapshot(
+      collection(db, key),
+      (snapshot) => {
+        setCounts((old) => ({ ...old, [key]: snapshot.size }));
+        if (key === "users") {
+          setApproved(snapshot.docs.filter((doc) => doc.data().status === "approved").length);
+        }
+        setErrors((old) => ({ ...old, [key]: false }));
+        setLoaded((old) => ({ ...old, [key]: true }));
+      },
+      (error) => {
+        console.warn("Super Admin overview source unavailable", key, error.code);
+        setErrors((old) => ({ ...old, [key]: true }));
+        setLoaded((old) => ({ ...old, [key]: true }));
+      },
+    ));
+    return () => stops.forEach((stop) => stop());
+  }, [authorized]);
+
+  const total = counts.users ?? 0;
+  const approvedPercentage = total > 0 && approved !== null
+    ? Math.round((approved / total) * 100) : null;
+  const data = useMemo(() => SOURCES.map(({ key, label }) => ({
+    key, label,
+    value: errors[key] || !loaded[key] ? null : (counts[key] ?? 0),
+  })), [counts, errors, loaded]);
+  const hasUnavailable = SOURCES.some(({ key }) => errors[key]);
+  const allLoaded = SOURCES.every(({ key }) => loaded[key]);
+  const showApproval = loaded.users && !errors.users && approved !== null;
 
   return (
     <ScrollView
-      style={[styles.screen, Platform.OS === "web" && styles.webScrollBar]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={true}
-      accessibilityLabel="Super Admin dashboard content"
+      style={[styles.screen, Platform.OS === "web" && styles.webScroll]}
+      contentContainerStyle={[styles.content, compact && styles.compactContent]}
+      showsVerticalScrollIndicator
+      accessibilityLabel="Super Admin dashboard"
     >
-      <View style={styles.headerRow}>
-        <View style={styles.headerCopy}>
-          <Text style={[styles.title, compact && styles.titleCompact]}>
-            Super Admin Dashboard
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Manage system access, records, security, and settings.
-          </Text>
+      <View style={styles.header}>
+        <View style={styles.eyebrowRow}>
+          <View style={styles.dot} />
+          <Text style={styles.eyebrow}>SYSTEM ADMINISTRATION</Text>
         </View>
-
-        {!compact ? (
-          <View style={styles.roleBadge}>
-            <Ionicons name="shield-checkmark" size={16} color="#078F82" />
-            <Text style={styles.roleBadgeText}>SUPER ADMIN</Text>
-          </View>
-        ) : null}
+        <Text style={[styles.title, compact && styles.compactTitle]}>System overview</Text>
+        <Text style={styles.subtitle}>Access governance and system records for VolunServe.</Text>
       </View>
 
-      <View style={{backgroundColor:"#FFFFFF",padding:18,borderRadius:16,borderWidth:1,borderColor:"#DCEAE8",marginBottom:24}}>
-        <Text style={styles.sectionTitle}>System Overview · Live Records</Text>
-        <Text style={{fontSize:12,color:"#637F84",marginBottom:16}}>Real-time Firestore totals, not sample data. Each bar compares the number of records in its collection.</Text>
-        {stats.map(item=>{
-          const errored=failedSources.includes(item.key);
-          const loaded=loadedSources.includes(item.key);
-          const value=counts[item.key]??0;
-          const max=Math.max(1,...Object.values(counts));
-          return <View key={item.key} style={{marginBottom:14,gap:6}}>
-            <View style={{flexDirection:"row",justifyContent:"space-between",gap:14}}>
-              <Text style={{fontWeight:"700",fontSize:12,color:"#294A57"}}>{item.label}</Text>
-              <Text style={{fontWeight:"800",fontSize:12,color:errored?"#B45309":"#078F82"}}>
-                {errored?"Unavailable":!loaded?"Loading...":String(value)}
+      <View style={[styles.metricRow, compact && styles.metricRowCompact]}>
+        {[
+          { key: "users" as Source, label: "Accounts" },
+          { key: "disasterCases" as Source, label: "Emergency Reports" },
+          { key: "assistanceRequests" as Source, label: "Assistance Requests" },
+          { key: "communityEvents" as Source, label: "Community Events" },
+        ].map((item) =>
+          <View key={item.key} style={[styles.metric, compact && styles.metricCompact]}>
+            <Text style={styles.metricLabel}>{item.label}</Text>
+            <Text style={styles.metricValue}>
+              {errors[item.key] ? "—" : !loaded[item.key] ? "…" : (counts[item.key] ?? 0).toLocaleString("en-PH")}
+            </Text>
+          </View>,
+        )}
+      </View>
+
+      <WorkspaceBarChart
+        title="Records by service area"
+        subtitle="Comparison of live Firestore record totals. Bars represent counts, not monthly trends."
+        bars={data}
+        footer={allLoaded && !hasUnavailable
+          ? "Source: authorized Firestore records. Values update when records change."
+          : "Some sources are loading or unavailable. Missing counts are never shown as zero."}
+      />
+
+      <View style={styles.secondarySection}>
+        <View style={styles.secondaryHead}>
+          <Text style={styles.sectionTitle}>Account authorization</Text>
+          <Text style={styles.sectionHint}>Registered account status</Text>
+        </View>
+        {showApproval ?
+          <View style={styles.approvalRow}>
+            <View style={styles.approvalMain}>
+              <Text style={styles.largePercentage}>{approvedPercentage ?? 0}%</Text>
+              <Text style={styles.approvalDescription}>
+                {approved?.toLocaleString("en-PH")} approved of {total.toLocaleString("en-PH")} registered accounts
               </Text>
             </View>
-            <View style={{height:12,backgroundColor:"#ECF5F1",borderRadius:9,overflow:"hidden"}}>
-              {!errored&&loaded?<View style={{height:"100%",width:`${value/max*100}%`,backgroundColor:"#0D9970",borderRadius:9}}/>:null}
+            <View style={styles.percentageTrack}>
+              <View style={[styles.percentageFill, { width: `${approvedPercentage ?? 0}%` as `${number}%` }]} />
             </View>
-          </View>
-        })}
-        {approvedCount!==null&&!failedSources.includes("users")&&
-          <Text style={{fontSize:12,fontWeight:"700",color:"#285C4B",marginTop:4}}>
-            Approved accounts: {approvedCount} of {counts.users??0} ({(counts.users??0)>0?Math.round(100*approvedCount/(counts.users??1)):0}%)
-          </Text>}
-        {failedSources.length>0&&<Text style={{fontSize:11,color:"#A06420",marginTop:9}}>Some figures cannot be loaded. Check Super Admin permissions and the deployed Firestore rules.</Text>}
+          </View> :
+          <Text style={styles.pendingText}>
+            {!loaded.users ? "Loading account status…" : "Account approval figures are unavailable."}
+          </Text>
+        }
+        <Text style={styles.note}>
+          Review LGU credentials before granting Admin permissions. System administrators manage access and settings; operational donations belong to the LGU Admin workspace.
+        </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>System Management</Text>
-
-      <View style={[styles.grid, compact && styles.gridCompact]}>
-        <ModuleCard
-          title="Admin Accounts"
-          description="Manage operational admin access."
-          icon="people"
-          iconBackground="#E6F7F1"
-          iconColor="#078F82"
-          onPress={() => openRoute("/(superadmin)/admin-accounts")}
-        />
-
-        <ModuleCard
-          title="All Records"
-          description="View system-wide records."
-          icon="document-text-outline"
-          iconBackground="#EDF5FF"
-          iconColor="#2472CA"
-          onPress={() => openRoute("/(superadmin)/all-records")}
-        />
-
-        <ModuleCard
-          title="Audit Logs"
-          description="Review system activity logs."
-          icon="time-outline"
-          iconBackground="#E8F8F0"
-          iconColor="#07906C"
-          onPress={() => openRoute("/(superadmin)/admin-logs")}
-        />
-
-        <ModuleCard
-          title="System Settings"
-          description="Manage platform settings."
-          icon="settings"
-          iconBackground="#FFF4E7"
-          iconColor="#D97A14"
-          onPress={() => openRoute("/(superadmin)/system-settings")}
-        />
-      </View>
+      {hasUnavailable &&
+        <Text style={styles.error}>Some records could not be read. Check deployed Firestore permissions before presenting these totals.</Text>}
     </ScrollView>
   );
 }
 
-function ModuleCard({
-  title,
-  description,
-  icon,
-  iconBackground,
-  iconColor,
-  onPress,
-}: ModuleCardProps) {
-  return (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.82}
-      onPress={onPress}
-    >
-      <View style={styles.cardMain}>
-        <View
-          style={[
-            styles.iconBox,
-            {
-              backgroundColor: iconBackground,
-            },
-          ]}
-        >
-          <Ionicons name={icon} size={27} color={iconColor} />
-        </View>
-
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardDescription}>{description}</Text>
-      </View>
-
-      <View style={styles.arrowButton}>
-        <Ionicons name="arrow-forward" size={20} color="#078F82" />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: "#F2F9FC",
-  },
-  webScrollBar: {
-    overflowY: "scroll",
-    scrollbarWidth: "auto",
-    scrollbarColor: "#8CA3B2 #F2F9FC",
-  } as any,
-  content: {
-    width: "100%",
-    maxWidth: 1280,
-    alignSelf: "center",
-    paddingHorizontal: 28,
-    paddingTop: 35,
-    paddingBottom: 64,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 16,
-    marginBottom: 34,
-  },
-  headerCopy: { flex: 1, minWidth: 0 },
-  title: {
-    color: "#0E2D4E",
-    fontSize: 30,
-    lineHeight: 39,
-    fontWeight: "900",
-    letterSpacing: -0.6,
-  },
-  titleCompact: { fontSize: 25, lineHeight: 32 },
-  subtitle: {
-    color: "#657D92",
-    fontSize: 12,
-    lineHeight: 19,
-    marginTop: 5,
-  },
-  roleBadge: {
-    minHeight: 34,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#A7EDCE",
-    backgroundColor: "#E7FBF2",
-  },
-  roleBadgeText: {
-    color: "#08766C",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.4,
-  },
-  sectionTitle: {
-    color: "#0E2D4E",
-    fontSize: 18,
-    fontWeight: "900",
-    marginBottom: 14,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 14,
-  },
-  gridCompact: {
-    flexDirection: "column",
-  },
-  card: {
-    flexGrow: 1,
-    flexBasis: 220,
-    minWidth: 0,
-    minHeight: 205,
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#DCEAE8",
-    padding: 18,
-  },
-  cardMain: { alignItems: "flex-start" },
-  iconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 15,
-  },
-  cardTitle: {
-    color: "#0E2D4E",
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 21,
-  },
-  cardDescription: {
-    color: "#657D92",
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 7,
-    maxWidth: 230,
-  },
-  arrowButton: {
-    alignSelf: "flex-start",
-    marginTop: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  screen: { flex: 1, minHeight: 0, backgroundColor: "#F6F8F7" },
+  webScroll: { overflowY: "scroll", scrollbarWidth: "auto", scrollbarColor: "#A4B7AF #F6F8F7" } as any,
+  content: { width: "100%", maxWidth: 1250, alignSelf: "center", paddingHorizontal: 38, paddingTop: 36, paddingBottom: 70 },
+  compactContent: { paddingHorizontal: 17, paddingTop: 24 },
+  header: { paddingBottom: 28 },
+  eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#23765F" },
+  eyebrow: { color: "#568174", fontSize: 10, fontWeight: "700", letterSpacing: 1.3 },
+  title: { fontSize: 31, lineHeight: 38, letterSpacing: -0.6, fontWeight: "700", color: "#133A30" },
+  compactTitle: { fontSize: 26, lineHeight: 33 },
+  subtitle: { color: "#688076", fontSize: 13, lineHeight: 19, marginTop: 7 },
+  metricRow: { flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 30 },
+  metricRowCompact: { flexWrap: "wrap" },
+  metric: { flexGrow: 1, flexBasis: "24%", minWidth: 148, paddingVertical: 20, paddingHorizontal: 14 },
+  metricCompact: { flexBasis: "50%", minWidth: 135 },
+  metricLabel: { fontSize: 11, fontWeight: "600", color: "#62786F" },
+  metricValue: { fontSize: 28, fontWeight: "700", color: "#173D32", marginTop: 6, fontVariant: ["tabular-nums"] },
+  secondarySection: { marginTop: 34 },
+  secondaryHead: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 14 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#173D32" },
+  sectionHint: { fontSize: 12, color: "#6C7F77" },
+  approvalRow: { paddingVertical: 17, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1" },
+  approvalMain: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 12 },
+  largePercentage: { fontSize: 35, fontWeight: "700", color: "#23765F", fontVariant: ["tabular-nums"] },
+  approvalDescription: { fontSize: 13, color: "#566B61" },
+  percentageTrack: { height: 7, borderRadius: 3, backgroundColor: "#E4ECE7", marginTop: 16, overflow: "hidden" },
+  percentageFill: { backgroundColor: "#23765F", height: "100%", borderRadius: 3 },
+  pendingText: { fontSize: 13, color: "#6C7F77", paddingVertical: 15 },
+  note: { color: "#64776E", fontSize: 12, lineHeight: 19, paddingTop: 16, maxWidth: 850 },
+  error: { fontSize: 12, color: "#A45125", marginTop: 20 },
 });
