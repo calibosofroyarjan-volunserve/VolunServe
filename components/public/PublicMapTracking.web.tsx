@@ -4,6 +4,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -157,7 +158,7 @@ export default function PublicMapTracking() {
                   style={styles.routeLink}
                   onPress={() => {
                     const url = mapsDirectionsUrl(center.latitude, center.longitude);
-                    if (url) void import("react-native").then(({ Linking }) => Linking.openURL(url));
+                    if (url) void Linking.openURL(url);
                   }}
                 >
                   <Text style={styles.routeLinkText}>Open directions in Google Maps</Text>
