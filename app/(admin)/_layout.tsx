@@ -492,11 +492,11 @@ export default function AdminLayout() {
       </ScrollView>
       <View style={styles.sidebarUtility}>
         <TouchableOpacity
-          style={[styles.profileLink, pathname.endsWith("/profile") && styles.profileLinkActive]}
+          style={[styles.profileLink, pathname.endsWith("/admin-profile") && styles.profileLinkActive]}
           accessibilityRole="button"
           accessibilityLabel="View LGU Admin profile"
           activeOpacity={0.82}
-          onPress={() => openRoute("/(admin)/profile")}
+          onPress={() => openRoute("/(admin)/admin-profile")}
         >
           <Ionicons name="person-circle-outline" size={19} color="#D4E9DF" />
           <Text style={styles.profileLinkText}>My Profile</Text>
@@ -563,10 +563,10 @@ export default function AdminLayout() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Open my LGU Admin profile"
-            accessibilityState={{ selected: pathname.endsWith("/profile") }}
-            style={[styles.profileArea, pathname.endsWith("/profile") && styles.profileAreaSelected]}
+            accessibilityState={{ selected: pathname.endsWith("/admin-profile") }}
+            style={[styles.profileArea, pathname.endsWith("/admin-profile") && styles.profileAreaSelected]}
             activeOpacity={0.78}
-            onPress={() => openRoute("/(admin)/profile")}
+            onPress={() => openRoute("/(admin)/admin-profile")}
           >
             <View style={styles.profileAvatar}>
               <Text style={styles.profileAvatarText}>{initials}</Text>
