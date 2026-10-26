@@ -5,6 +5,7 @@ import { useUserSession } from "../../lib/useUserSession";
 import { router, type Href } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   Platform,
   StyleSheet,
