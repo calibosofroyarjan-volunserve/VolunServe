@@ -449,6 +449,14 @@ export default function Login() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Open Admin login"
+        style={{alignItems:"center",paddingVertical:11}}
+        onPress={() => router.push("/admin-login")}
+      >
+        <Text style={{fontWeight:"800",fontSize:12,color:"#087961"}}>Admin / LGU Staff Sign-In</Text>
+      </TouchableOpacity>
       <View style={styles.securityNote}>
         <Ionicons name="shield-checkmark-outline" size={15} color="#287968" />
         <Text style={styles.securityText}>
