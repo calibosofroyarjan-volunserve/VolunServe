@@ -467,6 +467,33 @@ function installFundReleaseDemoRoutes({
       next();
     }catch(error){return send(res,error);}
   }
+  // Scoped permission check used by the Resident Donations campaign modal.
+  // A beneficiary can see the private wallet panel only for their *own*
+  // Admin-verified and published linked assistance campaign. Donors only
+  // receive a boolean, never beneficiary identity or wallet details.
+  app.get("/api/funds/my-campaigns/:id/wallet-eligibility",
+    requireFirebaseUser,requireVerifiedRequester,async(req,res)=>{
+      try {
+        const campaignId=validId(req.params.id);
+        const snapshot=await db.collection("donationCampaigns").doc(campaignId).get();
+        const campaign=snapshot.exists?(snapshot.data()||{}):{};
+        if(!["published","closed"].includes(safe(campaign.status))||
+          safe(campaign.sourceType)!=="community_assistance_request"||
+          !campaign.sourceAssistanceRequestId)
+          return res.json({ok:true,eligible:false});
+        const requestId=validId(campaign.sourceAssistanceRequestId);
+        const sourceSnap=await db.collection("assistanceRequests").doc(requestId).get();
+        if(!sourceSnap.exists)return res.json({ok:true,eligible:false});
+        const source=sourceSnap.data()||{};
+        if(safe(source.requesterUid)!==req.firebaseUser.uid)
+          return res.json({ok:true,eligible:false});
+        try{validateSource({...campaign,campaignId},source,req.firebaseUser.uid);}
+        catch{return res.json({ok:true,eligible:false});}
+        const profile=await loadUserProfile(req.firebaseUser.uid);
+        return res.json({ok:true,eligible:isVerifiedResidentProfile(profile)});
+      }catch(error){return send(res,error);}
+    });
+
   // A Resident can create a fictional TEST-only wallet alias for the LGU
   // release demonstration. It is NOT an actual GCash/Maya account validation.
   // Do not collect or persist a full phone number or account credentials.

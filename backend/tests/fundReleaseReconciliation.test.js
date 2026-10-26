@@ -329,3 +329,37 @@ test("existing release cannot silently change verified recipient",async()=>{
   assert.equal(result.statusCode,409);
   assert.equal(result.payload.error,"recipient_record_mismatch");
 });
+
+test("published own assistance campaign exposes wallet panel permission only to linked requester",async()=>{
+  const {invoke,tables}=fixture();
+  const route="/api/funds/my-campaigns/"+verifiedId+"/wallet-eligibility";
+  tables.donationCampaigns.get(verifiedId).status="published";
+  const owner=await invoke("GET",route,{},"resident");
+  assert.equal(owner.statusCode,200);
+  assert.deepEqual(owner.payload,{ok:true,eligible:true});
+
+  // The same resident must never gain access to someone else's campaign.
+  const source=tables.assistanceRequests.get(sourceId);
+  source.requesterUid="AnotherVerifiedResident001";
+  const nonOwner=await invoke("GET",route,{},"resident");
+  assert.deepEqual(nonOwner.payload,{ok:true,eligible:false});
+  source.requesterUid=residentId;
+
+  // Hidden/draft campaigns and unapproved source requests cannot open setup.
+  tables.donationCampaigns.get(verifiedId).status="draft";
+  const draft=await invoke("GET",route,{},"resident");
+  assert.equal(draft.payload.eligible,false);
+  tables.donationCampaigns.get(verifiedId).status="published";
+  source.supportDecision="pending";
+  const pending=await invoke("GET",route,{},"resident");
+  assert.equal(pending.payload.eligible,false);
+
+  source.supportDecision="donation_support";
+  tables.donationCampaigns.get(verifiedId).status="closed";
+  const closed=await invoke("GET",route,{},"resident");
+  assert.equal(closed.payload.eligible,true);
+
+  const admin=await invoke("GET",route,{},"admin");
+  assert.equal(admin.statusCode,403);
+  assert.equal(admin.payload.ok,false);
+});

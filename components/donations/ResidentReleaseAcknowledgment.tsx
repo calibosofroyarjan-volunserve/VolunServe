@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth } from "../../lib/firebase";
 import WalletBrandLogo from "./WalletBrandLogo";
-import ResidentWalletSetup from "./ResidentWalletSetup";
 
 type Release = {
   id:string; campaignId:string; campaignTitle:string; status:string;
@@ -16,7 +15,7 @@ const ROOT="https://volunserve.onrender.com/api/funds/my-releases";
 const peso=(value:number) => "₱"+Number(value||0).toLocaleString("en-PH",{
   minimumFractionDigits:2,maximumFractionDigits:2,
 });
-export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean}) {
+export default function ResidentReleaseAcknowledgment({enabled,campaignId}:{enabled:boolean;campaignId?:string}) {
   const [releases,setReleases]=useState<Release[]>([]);
   const [loading,setLoading]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -62,6 +61,7 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
     finally{setBusy(false);}
   };
   if(!enabled)return null;
+  const visibleReleases=campaignId?releases.filter(r=>r.campaignId===campaignId):releases;
   return <View style={st.container}>
     <View style={st.head}>
       <View style={st.icon}><Ionicons name="shield-checkmark-outline" color="#078D69" size={21}/></View>
@@ -77,12 +77,11 @@ export default function ResidentReleaseAcknowledgment({enabled}:{enabled:boolean
         <Text style={st.refreshText}>Refresh</Text>
       </Pressable>
     </View>
-    <ResidentWalletSetup enabled={enabled}/>
     {!!error&&<Text style={st.error}>{error}</Text>}
     {!!notice&&<Text style={st.success}>{notice}</Text>}
-    {!releases.length&&!loading?<Text style={st.empty}>
+    {!visibleReleases.length&&!loading?<Text style={st.empty}>
       No assistance release notices are available yet.
-    </Text>:releases.map(r=><View key={r.id} style={st.card}>
+    </Text>:visibleReleases.map(r=><View key={r.id} style={st.card}>
       <View style={st.cardHeader}>
         <View style={st.flex}>
           <Text style={st.campaign}>{r.campaignTitle||"Donation campaign"}</Text>
