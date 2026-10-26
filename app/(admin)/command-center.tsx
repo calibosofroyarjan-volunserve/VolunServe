@@ -1052,14 +1052,16 @@ export default function CommandCenter() {
           </View>
           <View style={[styles.overviewSecondary, width < 1220 && styles.overviewFullWidth]}>
             <WorkspaceBarChart
-              title="Open workload comparison"
-              subtitle="Current records by service area, not a historical trend."
+              title="Current workload"
+              subtitle="Live operational counts · same numerical scale"
+              orientation="vertical"
               bars={[
-                { key: "cases", label: "Emergency cases", value: dataError ? null : metrics.activeCases },
-                { key: "reviews", label: "Pending reviews", value: dataError ? null : metrics.pendingReviews },
-                { key: "needs", label: "Relief needs", value: dataError ? null : metrics.openBarangayNeeds },
+                { key: "cases", label: "Open emergency cases", shortLabel: "Emergency", value: dataError ? null : metrics.activeCases, color: "#28765D" },
+                { key: "reviews", label: "Pending reviews", shortLabel: "Approvals", value: dataError ? null : metrics.pendingReviews, color: "#426D9B" },
+                { key: "needs", label: "Open relief needs", shortLabel: "Relief", value: dataError ? null : metrics.openBarangayNeeds, color: "#C18A43" },
+                { key: "centers", label: "Active evacuation centers", shortLabel: "Centers", value: dataError ? null : metrics.activeCenters, color: "#587C86" },
               ]}
-              footer="Counts are read from authorized Firestore records."
+              footer="Live totals from authorized Firestore records, not a time trend."
             />
             <View style={styles.serviceSummary}>
               <Text style={styles.serviceSummaryHeading}>Evacuation capacity</Text>

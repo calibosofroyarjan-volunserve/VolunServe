@@ -40,6 +40,8 @@ jobs:
         run: node scripts/audit-static-navigation.cjs
       - name: Verify LGU grouped navigation retains all modules
         run: node scripts/test-lgu-admin-navigation-groups.cjs
+      - name: Verify LGU Overview chart and Admin Profile
+        run: node scripts/test-admin-overview-ui.cjs
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export
