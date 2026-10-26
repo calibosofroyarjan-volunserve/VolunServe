@@ -413,7 +413,10 @@ const mapDocument = `
       function makeCenterElement() {
         const element = document.createElement("div");
         element.className = "pin center-pin";
-        element.innerHTML = "<span>⌂</span>";
+        const symbol = document.createElement("span");
+        symbol.textContent = "🏠";
+        element.title = "LGU-verified evacuation shelter";
+        element.appendChild(symbol);
         return element;
       }
 
@@ -5172,7 +5175,7 @@ export default function WebMapTracking() {
               className={showCenters ? "chip active" : "chip"}
               onClick={() => setShowCenters((value) => !value)}
             >
-              ◆ Evacuation centers
+              🏠 Verified shelters ({visibleCenters.length})
             </button>
           </div>
         </section>
@@ -5196,7 +5199,7 @@ export default function WebMapTracking() {
               className={showCenters ? "chip active blue" : "chip"}
               onClick={() => setShowCenters((value) => !value)}
             >
-              ◆ Evacuation centers
+              🏠 Verified shelters ({visibleCenters.length})
             </button>
           </div>
         </section>
