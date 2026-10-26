@@ -5,6 +5,7 @@ import {Inter_400Regular,Inter_500Medium,Inter_600SemiBold,Inter_700Bold,Inter_8
 import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
+import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
 import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
 import { router } from "expo-router";
 import {
@@ -425,15 +426,9 @@ const googleMapsDirectionsUrl = (event: CommunityEvent) =>
 const googleMapsSearchUrl = (event: CommunityEvent) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eventDestination(event))}`;
 
-// Google Maps Embed API: publicly visible browser key, restrict it to approved
-// website referrers and "Maps Embed API" in Google Cloud Console.
-// The existing address-based map remains usable until a key is configured.
-const googleMapsEmbedKey = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY || "").trim();
+// Browser GPS is requested only when a visitor explicitly asks for directions.
+// OpenFreeMap / OSRM works without a Google Maps Embed API key.
 type RouteOrigin = { latitude: number; longitude: number };
-const googleMapsEmbeddedDirectionsUrl = (event: CommunityEvent, origin: RouteOrigin) =>
-  `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(googleMapsEmbedKey)}` +
-  `&origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
-  `&destination=${encodeURIComponent(eventDestination(event))}&mode=driving`;
 
 const googleMapsNavigationUrl = (event: CommunityEvent) =>
   `${googleMapsDirectionsUrl(event)}&travelmode=driving&dir_action=navigate`;
@@ -890,12 +885,12 @@ export default function CommunityEventsScreen() {
 
   const showRouteInVolunServe = (event: CommunityEvent) => {
     setRouteNotice("");
-    if (!googleMapsEmbedKey) {
-      setRouteNotice("To show the driving route inside VolunServe, configure the Google Maps Embed API key in your local environment first. You can still tap Open in Google Maps for directions.");
+    if (!eventHasCoordinates(event)) {
+      setRouteNotice("An exact meeting-point pin has not been recorded. Use Google Maps to search the published venue, and confirm it with LGU.");
       return;
     }
     if (Platform.OS !== "web") {
-      setRouteNotice("In-app route preview is currently available on web. Use Google Maps for directions on mobile.");
+      setRouteNotice("On mobile, use the event pin and Open in Google Maps for road navigation.");
       return;
     }
     const geolocation = (globalThis as any).navigator?.geolocation;
@@ -1916,6 +1911,13 @@ export default function CommunityEventsScreen() {
               <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
               <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
               {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              {eventHasCoordinates(event) && (
+                <CommunityEventRoadMap eventId={event.id} title={event.title} category={event.category}
+                  destination={{
+                    latitude: Number(event.coordinates?.latitude ?? event.latitude),
+                    longitude: Number(event.coordinates?.longitude ?? event.longitude),
+                  }} height={230} />
+              )}
               <Pressable accessibilityRole="button" accessibilityLabel={"Navigate to " + event.title + " in Google Maps"}
                 onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
                 style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -2229,10 +2231,10 @@ export default function CommunityEventsScreen() {
                 <Ionicons name="information-circle-outline" size={14} color="#7C929E" />
                 <Text style={styles.lockedMapWarning}>Approximate location · confirm the exact meeting point with Admin/LGU</Text>
               </View>}
-              {routeEventId === event.id && routeOrigin && googleMapsEmbedKey ? (
+              {routeEventId === event.id && routeOrigin ? (
                 <View style={styles.lockedRouteReady}>
                   <Ionicons name="navigate-circle" size={17} color="#078371" />
-                  <Text style={styles.lockedRouteReadyText}>Driving route preview from your permitted device location</Text>
+                  <Text style={styles.lockedRouteReadyText}>Road route preview from your permitted device GPS · approximate travel time</Text>
                   <Pressable accessibilityRole="button" onPress={() => { setRouteEventId(null); setRouteNotice(""); }}>
                     <Text style={styles.lockedRouteReset}>Location map</Text>
                   </Pressable>
@@ -2243,11 +2245,11 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
               </View>}
               <View style={styles.lockedMapActions}>
-                {!!googleMapsEmbedKey && (
-                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show the route inside VolunServe" disabled={routeLoading}
+                {eventHasCoordinates(event) && (
+                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
                     onPress={() => showRouteInVolunServe(event)}>
                     {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating..." : "Show Route Here"}</Text>
+                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating…" : "Show Road Route"}</Text>
                   </Pressable>
                 )}
                 <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
@@ -2256,7 +2258,7 @@ export default function CommunityEventsScreen() {
                   <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.lockedMapFootnote}>{googleMapsEmbedKey ? "In-app route preview needs location permission. " : ""}Google Maps opens directions to this event. Your current GPS position is not saved in Firestore.</Text>
+              <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
             </View>
           </View>
         )}
@@ -2343,6 +2345,20 @@ export default function CommunityEventsScreen() {
           />
         )}
         {renderWebMap(event)}
+        {eventHasCoordinates(event) && (
+          <Pressable accessibilityRole="button" disabled={routeLoading}
+            onPress={() => showRouteInVolunServe(event)}
+            style={[styles.ruiPrimary, { backgroundColor: "#E6F2EB", marginTop: 10 }]}>
+            <Ionicons name="map-outline" size={17} color="#1E7156" />
+            <Text style={[styles.ruiPrimaryText, { color: "#1E7156" }]}>
+              {routeLoading ? "Locating…" : "Show Road Route Here"}
+            </Text>
+          </Pressable>
+        )}
+        {!!routeNotice && <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>}
+        {routeEventId === event.id && !!routeOrigin && (
+          <Text style={styles.lockedMapFootnote}>Route estimate uses OSRM, not live traffic. GPS is not stored in VolunServe.</Text>
+        )}
         <Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}>
           <Text style={styles.ruiPrimaryText}>Open in Google Maps</Text>
           <Ionicons name="navigate-outline" size={16} color="white"/>
@@ -2357,17 +2373,28 @@ export default function CommunityEventsScreen() {
   // Otherwise the old address-based map continues to show the real saved venue.
   const renderWebMap = (event: CommunityEvent) => {
     if (Platform.OS !== "web") return null;
-    const showRoute = routeEventId === event.id && !!routeOrigin && !!googleMapsEmbedKey;
+    if (eventHasCoordinates(event)) {
+      return (
+        <CommunityEventRoadMap
+          key={event.id}
+          eventId={event.id}
+          title={event.title}
+          category={event.category}
+          destination={{
+            latitude: Number(event.coordinates?.latitude ?? event.latitude),
+            longitude: Number(event.coordinates?.longitude ?? event.longitude),
+          }}
+          origin={routeEventId === event.id ? routeOrigin : null}
+          height={280}
+        />
+      );
+    }
     return React.createElement("iframe" as any, {
-      key: `${event.id}-${showRoute ? "route" : "place"}`,
-      title: showRoute ? `Driving route to ${event.title}` : `Map location for ${event.title}`,
-      src: showRoute && routeOrigin
-        ? googleMapsEmbeddedDirectionsUrl(event, routeOrigin)
-        : googleMapsViewUrl(event),
-      loading: "lazy",
+      key: `${event.id}-approximate`,
+      title: `Approximate venue search for ${event.title}`,
+      src: googleMapsViewUrl(event), loading: "lazy",
       referrerPolicy: "strict-origin-when-cross-origin",
-      allowFullScreen: true,
-      style: { display: "block", width: "100%", height: "100%", border: "0", borderRadius: "11px" },
+      style: { display: "block", width: "100%", height: "270px", border: "0", borderRadius: "11px" },
     });
   };
 
@@ -5364,7 +5391,7 @@ const styles = StyleSheet.create({
   lockedSectionTitle: { fontFamily:"EventInterBold", color: "#17483E", fontSize: 16, fontWeight: "900", flexShrink: 1 },
   lockedSectionSub: { color: "#6E8494", fontSize: 10.5, marginTop: 3 },
   lockedMapAddress: { fontSize: 11, color: "#486980", lineHeight: 17, marginBottom: 9 },
-  lockedMapFrame: { width: "100%", height: 260, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
+  lockedMapFrame: { width: "100%", minHeight: 270, borderRadius: 11, backgroundColor: "#E5F3EF" },
   lockedMapPlaceholder: { backgroundColor: "#F1F7F6", minHeight: 160, borderRadius: 11, justifyContent: "center", alignItems: "center", padding: 18, gap: 12 },
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
   lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
