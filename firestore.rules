@@ -149,12 +149,24 @@ service cloud.firestore {
         && request.resource.data.availability is list
         && request.resource.data.availability.size() == 0
         && request.resource.data.createdAt is timestamp;
+      // Independent LGU Admin accounts require a personally reviewed
+      // appointment reference. Ordinary Residents cannot be promoted here.
       allow create: if isSuperAdmin()
         && request.resource.data.uid == uid
         && request.resource.data.role == 'admin'
         && request.resource.data.status == 'approved'
+        && request.resource.data.adminStatus == 'active'
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.reviewedBy == request.auth.uid;
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.credentialsReviewedBy == request.auth.uid
+        && request.resource.data.credentialsReviewedAt is timestamp
+        && request.resource.data.credentialReviewMethod == 'manual_lgu_appointment_review'
+        && request.resource.data.lguOffice is string
+        && request.resource.data.lguOffice.size() >= 3
+        && request.resource.data.lguPosition is string
+        && request.resource.data.lguPosition.size() >= 3
+        && request.resource.data.appointmentReference is string
+        && request.resource.data.appointmentReference.size() >= 5;
       allow get: if signedIn()
         && (
           request.auth.uid == uid
@@ -398,31 +410,7 @@ service cloud.firestore {
         && request.auth.uid != uid
         && resource.data.role != 'superadmin'
         && (
-          (
-            resource.data.status == 'approved'
-            && request.resource.data.role == 'admin'
-            && request.resource.data.status == 'approved'
-            && request.resource.data.adminStatus == 'active'
-            && request.resource.data.adminCreatedBy == request.auth.uid
-            && request.resource.data.adminUpdatedBy == request.auth.uid
-            && request.resource.data.adminCreatedAt is timestamp
-            && request.resource.data.adminUpdatedAt is timestamp
-            && request.resource.data
-              .diff(resource.data)
-              .affectedKeys()
-              .hasOnly([
-                'previousRole',
-                'previousPrimaryRole',
-                'role',
-                'adminStatus',
-                'status',
-                'adminCreatedAt',
-                'adminCreatedBy',
-                'adminUpdatedAt',
-                'adminUpdatedBy'
-              ])
-          )
-          || (
+(
             resource.data.role == 'admin'
             && request.resource.data.role == 'admin'
             && request.resource.data.status in [
