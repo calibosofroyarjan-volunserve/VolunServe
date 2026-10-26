@@ -36,6 +36,8 @@ jobs:
         run: node scripts/test-typescript-backup-excludes.cjs
       - name: Verify Admin and Community Events navigation routes
         run: node scripts/test-route-entrypoints.cjs
+      - name: Audit static Expo Router links across application
+        run: node scripts/audit-static-navigation.cjs
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export
