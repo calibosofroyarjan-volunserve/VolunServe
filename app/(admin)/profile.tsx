@@ -132,7 +132,7 @@ export default function AdminProfile() {
       </View>
 
       <View style={[styles.twoColumns, compact && styles.twoColumnsCompact]}>
-        <View style={styles.primaryColumn}>
+        <View style={[styles.primaryColumn, compact && styles.fullWidthColumn]}>
           <View style={styles.sectionTitleRow}>
             <View>
               <Text style={styles.sectionTitle}>Contact information</Text>
@@ -179,7 +179,7 @@ export default function AdminProfile() {
           {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         </View>
 
-        <View style={styles.secondaryColumn}>
+        <View style={[styles.secondaryColumn, compact && styles.fullWidthColumn]}>
           <Text style={styles.sectionTitle}>LGU access</Text>
           <Text style={styles.sectionDescription}>Access and department details are managed by authorized administrators.</Text>
           <Detail label="Account role" value="LGU Admin" />
@@ -221,6 +221,7 @@ const styles = StyleSheet.create({
   separator: { color: "#779085", fontWeight: "700" },
   twoColumns: { flexDirection: "row", gap: 34, alignItems: "flex-start" },
   twoColumnsCompact: { flexDirection: "column", gap: 26 },
+  fullWidthColumn: { flex: 0, width: "100%" },
   primaryColumn: { flex: 1.12, minWidth: 0 },
   secondaryColumn: { flex: 1, minWidth: 0 },
   sectionTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
