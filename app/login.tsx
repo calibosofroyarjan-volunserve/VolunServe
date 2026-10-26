@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
@@ -453,7 +453,7 @@ export default function Login() {
         accessibilityRole="button"
         accessibilityLabel="Open Admin login"
         style={{alignItems:"center",paddingVertical:11}}
-        onPress={() => router.push("/admin-login")}
+        onPress={() => router.push("/admin-login" as Href)}
       >
         <Text style={{fontWeight:"800",fontSize:12,color:"#087961"}}>Admin / LGU Staff Sign-In</Text>
       </TouchableOpacity>

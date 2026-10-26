@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -499,7 +499,7 @@ export default function HomeScreen() {
                   cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
                   accentColor="#16876B"
                   badgeColor="#D8F2E5"
-                  onPress={() => router.push("/community-events")}
+                  onPress={() => router.push("/(tabs)/community-events" as Href)}
                 />
 
                 <ServiceCard
@@ -602,7 +602,7 @@ export default function HomeScreen() {
                   cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
                   accentColor="#16876B"
                   badgeColor="#D8F2E5"
-                  onPress={() => router.push("/community-events")}
+                  onPress={() => router.push("/(tabs)/community-events" as Href)}
                 />
 
                 <ServiceCard
