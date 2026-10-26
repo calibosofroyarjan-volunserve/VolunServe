@@ -1,7 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React from "react";
 import {
   ActivityIndicator,
@@ -72,6 +70,18 @@ const residentDesktopTabs: TabDefinition[] = [
     icon: "calendar-outline",
     activeIcon: "calendar",
   },
+  {
+    name: "my-cases",
+    label: "My Reports",
+    icon: "document-text-outline",
+    activeIcon: "document-text",
+  },
+  {
+    name: "profile",
+    label: "My Profile",
+    icon: "person-circle-outline",
+    activeIcon: "person-circle",
+  },
 ];
 
 // Notifications remain accessible from the dashboard bell and updates card.
@@ -129,6 +139,12 @@ const volunteerDesktopTabs: TabDefinition[] = [
     label: "Announcements",
     icon: "megaphone-outline",
     activeIcon: "megaphone",
+  },
+  {
+    name: "profile",
+    label: "My Profile",
+    icon: "person-circle-outline",
+    activeIcon: "person-circle",
   },
 ];
 
@@ -247,6 +263,13 @@ export default function TabLayout() {
   const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
   const canSwitchMode = Boolean(profile && hasResidentAccess(profile) && hasVolunteerAccess(profile));
   const adminRoute = profile ? administrativeRouteForProfile(profile) : null;
+  const currentModule = (menuItems.find((item) => item.name === segments[segments.length - 1]) || menuItems[0]).label;
+  const identityNeedsAction = !!profile && mode === "resident" &&
+    profile.identityVerified !== true &&
+    (profile.identityStatus === "basic" || profile.identityStatus === "failed");
+  const volunteerApplicationReady = !!profile && mode === "resident" &&
+    !hasVolunteerAccess(profile) &&
+    (profile.identityVerified === true || profile.identityStatus === "verified");
 
   const visit = (name: string) => {
     setMobileMenuOpen(false);
@@ -343,12 +366,8 @@ export default function TabLayout() {
           <View style={styles.mobileBrandText}>
             <Text style={styles.mobileBrandName} numberOfLines={1}>VolunServe</Text>
             <Text style={styles.mobileBrandMode} numberOfLines={1}>
-              {mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}
+              {mode === "volunteer" ? "VOLUNTEER" : "RESIDENT"} · {currentModule}
             </Text>
-          </View>
-          <View style={styles.mobileHeaderStatus}>
-            <View style={styles.mobileStatusDot} />
-            <Text style={styles.mobileStatusText} numberOfLines={1}>Online</Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -428,8 +447,7 @@ export default function TabLayout() {
               onPress={() => setMobileMenuOpen(false)}
               accessibilityLabel="Close navigation drawer"
             />
-            <LinearGradient colors={["#073A37", "#064D47", "#036151"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawer}>
-              <SidebarBotanicalDecor />
+            <View style={styles.mobileDrawer}>
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -444,29 +462,33 @@ export default function TabLayout() {
                 </View>
               </View>
                             <ScrollView style={styles.mobileDrawerScroll} showsVerticalScrollIndicator>
+                {identityNeedsAction ? (
+                  <Pressable style={styles.journeyAction} onPress={() => { setMobileMenuOpen(false); router.push("/identity-verification" as Href); }}>
+                    <Ionicons name="shield-checkmark-outline" color="#FFFFFF" size={19} />
+                    <Text style={styles.journeyActionText}>Verify your identity</Text>
+                  </Pressable>
+                ) : null}
+                {volunteerApplicationReady ? (
+                  <Pressable style={styles.journeyAction} onPress={() => { setMobileMenuOpen(false); router.push("/(tabs)/volunteer-application" as Href); }}>
+                    <Ionicons name="people-outline" color="#FFFFFF" size={19} />
+                    <Text style={styles.journeyActionText}>Apply as Volunteer</Text>
+                  </Pressable>
+                ) : null}
                 {menuItems.map((item) => {
-                  const theme = (mode === "volunteer" ? volunteerModuleIdentity : residentModuleIdentity)[item.name];
                   const active = item.name === (segments[segments.length - 1] || "index");
                   return (
                     <Pressable key={item.name} accessibilityRole="button"
                       onPress={() => visit(item.name)}
                       style={({ pressed }) => [styles.mobileDrawerItem, active && styles.mobileDrawerActive, pressed && styles.mobilePressed]}>
-                      {active ? <LinearGradient pointerEvents="none" colors={["#04987A", "#32B883"]}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.5 }}
-                        style={styles.mobileDrawerItemOverlay} /> : null}
-                      <LinearGradient colors={theme ? [...theme.colors] : ["#08766B", "#0BA69A"]}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mobileDrawerIconBadge}>
-                        <Ionicons name={item.icon as any} size={19} color="#FFFFFF" />
-                      </LinearGradient>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.mobileDrawerItemText}>{item.label}</Text>
-                        {theme ? <Text numberOfLines={1} style={styles.mobileDrawerSubtitle}>{theme.subtitle}</Text> : null}
+                      <View style={styles.mobileDrawerIconBadge}>
+                        <Ionicons name={item.icon as any} size={20} color={active ? "#FFFFFF" : "#CDE6DE"} />
                       </View>
+                      <Text style={styles.mobileDrawerItemText} numberOfLines={2}>{item.label}</Text>
                     </Pressable>
                   );
                 })}
               </ScrollView>
-            </LinearGradient>
+            </View>
           </View>
         ) : null}
       </View>
@@ -537,8 +559,7 @@ function DesktopTabBar({
   };
 
   return (
-    <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.desktopSidebar}>
-      <SidebarBotanicalDecor />
+    <View style={styles.desktopSidebar}>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -553,7 +574,7 @@ function DesktopTabBar({
         </View>
       </View>
 
-      <Text style={styles.residentModeLabel}>{mode === "volunteer" ? "VOLUNTEER MODE" : "RESIDENT MODE"}</Text>
+      <Text style={styles.residentModeLabel}>{mode === "volunteer" ? "VOLUNTEER WORKSPACE" : "RESIDENT SERVICES"}</Text>
 
       <ScrollView
         style={[styles.desktopNavigationScroll, mode === "resident" && styles.desktopResidentNavigationRaised]}
@@ -586,14 +607,6 @@ function DesktopTabBar({
               ]}
               onPress={() => navigate(item.name)}
             >
-              {focused && identity ? (
-                <LinearGradient
-                  pointerEvents="none"
-                  colors={["#00947A", "#068F74", "#43BC71"]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.6 }}
-                  style={styles.residentNavSelectedGradient}
-                />
-              ) : null}
               <View
                 style={[
                   styles.desktopNavIcon,
@@ -601,14 +614,6 @@ function DesktopTabBar({
                   identity && styles.residentNavIcon,
                 ]}
               >
-                {identity ? (
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={[...identity.colors]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={styles.residentIconGradient}
-                  />
-                ) : null}
                 <Ionicons
                   name={(focused ? item.activeIcon : item.icon) as any}
                   size={20}
@@ -623,11 +628,6 @@ function DesktopTabBar({
                     identity && styles.residentNavTitle,
                   ]}
                 >{item.label}</Text>
-                {identity ? (
-                  <Text style={styles.residentNavSubtitle} numberOfLines={1}>
-                    {identity.subtitle}
-                  </Text>
-                ) : null}
               </View>
               {focused ? (
                 <View style={styles.desktopActiveMark} />
@@ -637,7 +637,22 @@ function DesktopTabBar({
         })}
       </ScrollView>
 
-      {mode === "volunteer" ? <View style={styles.desktopUtilityArea}>
+      <View style={styles.desktopUtilityArea}>
+        {mode === "resident" &&
+          profile.identityVerified !== true &&
+          (profile.identityStatus === "basic" || profile.identityStatus === "failed") ? (
+          <Pressable style={styles.desktopUtilityButton} onPress={() => router.push("/identity-verification" as Href)}>
+            <Ionicons name="shield-checkmark-outline" size={18} color="#E6F5F2" />
+            <Text style={styles.desktopUtilityText}>Verify Identity</Text>
+          </Pressable>
+        ) : null}
+        {mode === "resident" && !volunteerAccess &&
+          (profile.identityVerified === true || profile.identityStatus === "verified") ? (
+          <Pressable style={styles.desktopUtilityButton} onPress={() => router.push("/(tabs)/volunteer-application" as Href)}>
+            <Ionicons name="people-outline" size={18} color="#E6F5F2" />
+            <Text style={styles.desktopUtilityText}>Apply as Volunteer</Text>
+          </Pressable>
+        ) : null}
         {canSwitchMode ? (
           <Pressable
             style={({ pressed }) => [
@@ -710,8 +725,8 @@ function DesktopTabBar({
             Log Out
           </Text>
         </Pressable>
-      </View> : null}
-    </LinearGradient>
+      </View>
+    </View>
   );
 }
 
@@ -863,6 +878,8 @@ function CustomTabBar({
 }
 
 const styles = StyleSheet.create({
+  journeyAction: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#226859", minHeight: 42, paddingHorizontal: 12, marginBottom: 10, borderRadius: 9 },
+  journeyActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
   mobileShell: { flex: 1, backgroundColor: "#F2F9FC" },
   mobileHeader: {
@@ -887,7 +904,7 @@ const styles = StyleSheet.create({
   mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
   mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
   mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
-  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#073A37", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
+  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#123E36", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
   mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.16)" },
   mobileDrawerLogo: { width: 44, height: 44 },
   mobileDrawerBrandCopy: { flex: 1 },
@@ -922,12 +939,12 @@ const styles = StyleSheet.create({
   mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
   mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
   mobileDrawerScroll: { flex: 1 },
-  mobileDrawerItem: { minHeight: 55, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
+  mobileDrawerItem: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
   mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
-  mobileDrawerIconBadge: { width: 37, height: 37, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  mobileDrawerIconBadge: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
-  mobileDrawerActive: { backgroundColor: "#079776" },
-  mobileDrawerItemText: { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
+  mobileDrawerActive: { backgroundColor: "#226859" },
+  mobileDrawerItemText: { flex: 1, color: "#E3F2EC", fontWeight: "600", fontSize: 13 },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
@@ -1036,7 +1053,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     paddingTop: 22,
     paddingBottom: 18,
-    backgroundColor: "#07332F",
+    backgroundColor: "#123E36",
     borderRightWidth: 1,
     borderRightColor: "#13695E",
     shadowColor: "#183153",
@@ -1116,10 +1133,7 @@ const styles = StyleSheet.create({
   },
   // Gently raise all six Resident modules by 10px without altering their
   // relative spacing, the botanical sidebar or other account modes.
-  desktopResidentNavigationRaised: {
-    marginTop: -10,
-    marginBottom: 10,
-  },
+  desktopResidentNavigationRaised: { marginTop: 0, marginBottom: 0 },
   desktopNavigation: {
     gap: 7,
     paddingRight: 3,
@@ -1127,13 +1141,9 @@ const styles = StyleSheet.create({
   },
   // Fill remaining height on large desktop displays while allowing scrolling
   // whenever the viewport is too short for all modules.
-  desktopResidentNavigation: {
-    flexGrow: 1,
-    justifyContent: "space-evenly",
-    paddingVertical: 16,
-  },
+  desktopResidentNavigation: { flexGrow: 0, paddingVertical: 10 },
   desktopNavItem: {
-    minHeight: 50,
+    minHeight: 49,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
@@ -1141,7 +1151,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   desktopNavItemActive: {
-    backgroundColor: "#049C7B",
+    backgroundColor: "#226859",
   },
   desktopNavIcon: {
     width: 34,
@@ -1202,7 +1212,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   desktopLogoutText: {
-    color: "#C92537",
+    color: "#FFD2D2",
   },
   residentSidebarAmbient: { position: "absolute", bottom: 20, left: -50, opacity: 0.055 },
   residentModeLabel: {
@@ -1215,15 +1225,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
-  residentNavItem: { minHeight: 57, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 14 },
-  residentNavItemActive: { backgroundColor: "#079776" },
+  residentNavItem: { minHeight: 49, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 9 },
+  residentNavItemActive: { backgroundColor: "#226859" },
   residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {
     width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#064F53",
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 13, color: "#FFFFFF", fontWeight: "600" },
+  residentNavTitle: { fontSize: 13, color: "#E3F2EC", fontWeight: "600" },
   residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
   desktopPressed: {
     opacity: 0.72,
