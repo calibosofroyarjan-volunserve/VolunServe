@@ -27,8 +27,7 @@ export function useVerifiedEvacuationCenters() {
       const next = snapshot.docs.map(item => ({
         ...item.data(),
         id: item.id,
-      })).filter(item => isVerifiedActiveCenter(item))
-        .map(item => item as VerifiedEvacuationCenter);
+      } as VerifiedEvacuationCenter)).filter(item => isVerifiedActiveCenter(item));
       next.sort((a, b) => (a.barangay || "").localeCompare(b.barangay || "") ||
         (a.name || "").localeCompare(b.name || ""));
       setCenters(next);
