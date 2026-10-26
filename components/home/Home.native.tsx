@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import {
   Animated,
+  Alert,
   Dimensions,
   Easing,
   Image,
@@ -32,7 +33,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
-import { activeModeForProfile, hasVolunteerAccess } from "../../lib/firebaseAuth";
+import { activeModeForProfile, hasVolunteerAccess, setActiveUserMode } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -48,6 +49,18 @@ export default function HomeScreen() {
 
   const activeMode = activeModeForProfile(profile);
   const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
+  const openVolunteerAccess = async () => {
+    if (!hasVolunteerAccess(profile)) {
+      router.push("/volunteer-application");
+      return;
+    }
+    try {
+      await setActiveUserMode("volunteer");
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      Alert.alert("Unable to switch mode", error?.message || "Please try again.");
+    }
+  };
   const displayName =
     profile?.firstName?.trim() ||
     profile?.fullName?.trim()?.split(" ")[0] ||
@@ -548,7 +561,7 @@ export default function HomeScreen() {
                   cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
                   accentColor="#0BA861"
                   badgeColor="#DCF8E9"
-                  onPress={() => router.push("/volunteer-application")}
+                  onPress={() => void openVolunteerAccess()}
                 />
 
                 <ServiceCard
