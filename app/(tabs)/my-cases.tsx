@@ -2896,8 +2896,7 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor:
-        "#F4F7FA",
+      backgroundColor: "#F6F8F7",
     },
 
     container: {
@@ -2913,8 +2912,7 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-      backgroundColor:
-        "#F4F7FA",
+      backgroundColor: "#F6F8F7",
       gap: 10,
     },
 
@@ -2957,16 +2955,16 @@ const styles =
     eyebrow: {
       color: "#07857C",
       fontSize: 10,
-      fontWeight: "900",
+      fontWeight: "700",
       letterSpacing: 1.4,
     },
 
     title: {
       marginTop: 6,
-      color: "#102A3A",
-      fontSize: 30,
+      color: "#173D32",
+      fontSize: 28,
       lineHeight: 36,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     subtitle: {
@@ -3433,9 +3431,9 @@ const styles =
 
     sectionTitle: {
       marginBottom: 10,
-      color: "#173748",
+      color: "#173D32",
       fontSize: 14,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     waitingBox: {
