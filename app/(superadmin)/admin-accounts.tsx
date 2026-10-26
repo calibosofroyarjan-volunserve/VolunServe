@@ -317,6 +317,12 @@ export default function AdminAccounts() {
           .trim()
           .toLowerCase();
 
+      // Avoid showing arbitrary Resident accounts in a privileged access picker.
+      // Require an intentional exact-name/email search before selecting staff.
+      if (term.length < 3) {
+        return [];
+      }
+
       return users
         .filter((item) => {
           if (
@@ -342,8 +348,6 @@ export default function AdminAccounts() {
           const searchable = [
             item.fullName,
             item.email,
-            item.barangay,
-            item.phoneNumber,
             item.role,
           ]
             .filter(Boolean)
@@ -1627,8 +1631,9 @@ export default function AdminAccounts() {
                       styles.emptyText
                     }
                   >
-                    No eligible approved
-                    users found.
+                    {promoteSearch.trim().length < 3
+                      ? "Enter at least 3 characters of the staff member's name or email."
+                      : "No matching approved account. Check the registered staff name or email."}
                   </Text>
                 </View>
               ) : (
