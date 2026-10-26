@@ -6066,8 +6066,7 @@ const styles =
 
     safeArea: {
       flex: 1,
-      backgroundColor:
-        "#F4F7FB",
+      backgroundColor: "#F6F8F7",
     },
 
     loadingScreen: {

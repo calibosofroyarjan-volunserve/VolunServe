@@ -1008,7 +1008,7 @@ function StatusPanel({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F1F7FA",
+    backgroundColor: "#F6F8F7",
   },
   scrollContent: {
     flexGrow: 1,
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F7FA",
+    backgroundColor: "#F6F8F7",
   },
   centerText: {
     marginTop: 10,
@@ -1055,14 +1055,14 @@ const styles = StyleSheet.create({
     color: "#0F766E",
     fontSize: 11,
     letterSpacing: 1.6,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   title: {
     marginTop: 5,
-    color: "#0F172A",
-    fontSize: 30,
+    color: "#173D32",
+    fontSize: 28,
     lineHeight: 36,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   subtitle: {
     marginTop: 6,
@@ -1204,9 +1204,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   sectionTitle: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   sectionText: {
     marginTop: 3,

@@ -4456,7 +4456,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 23,
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.ink,
   },
   pageSubtitle: {
@@ -4495,7 +4495,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 21,
     color: "#FFFFFF",
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 5,
   },
   heroSubtitle: {
@@ -4566,7 +4566,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.ink,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   sectionHint: {
     color: colors.muted,

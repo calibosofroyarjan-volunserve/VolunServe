@@ -2082,7 +2082,7 @@ export default function VolunteerTasks() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f5f8fb",
+    backgroundColor: "#F6F8F7",
   },
 
   page: {
@@ -2094,7 +2094,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f5f8fb",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -2123,15 +2123,15 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: "#078F82",
     fontSize: 9,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: 0.9,
   },
 
   title: {
     marginTop: 2,
-    color: "#10283d",
+    color: "#173D32",
     fontSize: 25,
-    fontWeight: "900",
+    fontWeight: "700",
   },
 
   subtitle: {

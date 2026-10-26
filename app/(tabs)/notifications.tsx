@@ -163,7 +163,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#F6F8F7",
     flexGrow: 1,
   },
 
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 24,
-    fontWeight: "900",
-    color: "#0f172a",
+    fontWeight: "700",
+    color: "#173D32",
     marginBottom: 16,
   },
 

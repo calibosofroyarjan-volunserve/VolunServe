@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import {
   Animated,
+  Alert,
   Dimensions,
   Easing,
   Image,
@@ -21,7 +22,6 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import SideDrawer from "../../components/SideDrawer";
 
 /* ============================================================
    FIREBASE
@@ -33,7 +33,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
-import { activeModeForProfile, hasVolunteerAccess } from "../../lib/firebaseAuth";
+import { activeModeForProfile, hasVolunteerAccess, setActiveUserMode } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -49,12 +49,23 @@ export default function HomeScreen() {
 
   const activeMode = activeModeForProfile(profile);
   const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
+  const openVolunteerAccess = async () => {
+    if (!hasVolunteerAccess(profile)) {
+      router.push("/volunteer-application");
+      return;
+    }
+    try {
+      await setActiveUserMode("volunteer");
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      Alert.alert("Unable to switch mode", error?.message || "Please try again.");
+    }
+  };
   const displayName =
     profile?.firstName?.trim() ||
     profile?.fullName?.trim()?.split(" ")[0] ||
     "VolunServe Member";
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<any[]>([]);
 
   /* ==========================================================
@@ -265,8 +276,8 @@ export default function HomeScreen() {
   return (
     <>
       <StatusBar
-        style="light"
-        backgroundColor="#123E36"
+        style="dark"
+        backgroundColor="#F6F8F7"
       />
 
       <View style={styles.root}>
@@ -292,186 +303,8 @@ export default function HomeScreen() {
               HEADER
           ================================================== */}
 
-          <SafeAreaView
-            edges={["top"]}
-            style={styles.safeHeader}
-          >
-            <LinearGradient
-              colors={[
-                "#123E36",
-                "#195444",
-                "#23765F",
-                "#2B8168",
-              ]}
-              locations={[0, 0.34, 0.7, 1]}
-              start={{
-                x: 0,
-                y: 0,
-              }}
-              end={{
-                x: 1,
-                y: 1,
-              }}
-              style={styles.header}
-            >
-              {/* LEFT SOFT GLOW */}
+          {/* The shared Resident/Volunteer layout owns the sole navigation header. */}
 
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.headerGlowLeft,
-                  {
-                    opacity: glowOpacity,
-
-                    transform: [
-                      {
-                        scale: glowScale,
-                      },
-                    ],
-                  },
-                ]}
-              />
-
-              {/* RIGHT SOFT GLOW */}
-
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.headerGlowRight,
-                  {
-                    opacity: glowOpacity,
-
-                    transform: [
-                      {
-                        scale: glowScale,
-                      },
-                    ],
-                  },
-                ]}
-              />
-
-              {/* SOFT LIGHT OVERLAY */}
-
-              <LinearGradient
-                pointerEvents="none"
-                colors={[
-                  "rgba(255,255,255,0.08)",
-                  "rgba(255,255,255,0)",
-                ]}
-                start={{
-                  x: 0,
-                  y: 0,
-                }}
-                end={{
-                  x: 1,
-                  y: 1,
-                }}
-                style={styles.headerLight}
-              />
-
-              {/* HEADER CONTENT */}
-
-              <Animated.View
-                style={[
-                  styles.headerContent,
-                  {
-                    opacity: headerOpacity,
-
-                    transform: [
-                      {
-                        translateY:
-                          headerTranslate,
-                      },
-                    ],
-                  },
-                ]}
-              >
-                {/* BRAND */}
-
-                <View style={styles.brand}>
-                  <Image
-                    source={require(
-                      "../../assets/images/logo.png"
-                    )}
-                    style={styles.logo}
-                    resizeMode="cover"
-                  />
-
-                  <View style={styles.brandText}>
-                    <Text style={styles.brandTitle}>
-                      VolunServe
-                    </Text>
-
-                    <Text style={styles.brandSubtitle}>
-                      Community Response & Volunteering
-                    </Text>
-                  </View>
-                </View>
-
-                {/* HEADER ACTIONS */}
-
-                <View style={styles.headerActions}>
-                  {/* NOTIFICATION */}
-
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.headerButton,
-
-                      pressed &&
-                        styles.headerPressed,
-                    ]}
-                    onPress={() =>
-                      router.push("/notifications")
-                    }
-                  >
-                    <Animated.View
-                      style={{
-                        transform: [
-                          {
-                            scale: bellScale,
-                          },
-                        ],
-                      }}
-                    >
-                      <Ionicons
-                        name="notifications-outline"
-                        size={28}
-                        color="#FFFFFF"
-                      />
-                    </Animated.View>
-
-                    {announcements.length > 0 && (
-                      <View
-                        style={
-                          styles.notificationDot
-                        }
-                      />
-                    )}
-                  </Pressable>
-
-                  {/* MENU */}
-
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.headerButton,
-
-                      pressed &&
-                        styles.headerPressed,
-                    ]}
-                    onPress={() =>
-                      setDrawerOpen(true)
-                    }
-                  >
-                    <Ionicons
-                      name="menu-outline"
-                      size={31}
-                      color="#FFFFFF"
-                    />
-                  </Pressable>
-                </View>
-              </Animated.View>
-            </LinearGradient>
-          </SafeAreaView>
 
           {/* ==================================================
               BODY
@@ -541,7 +374,7 @@ export default function HomeScreen() {
                   </View>
 
                   <Text style={styles.statusText}>
-                    System Status
+                    Account Workspace
                   </Text>
                 </View>
 
@@ -553,12 +386,20 @@ export default function HomeScreen() {
                       styles.operationalText
                     }
                   >
-                    Operational
+                    {volunteerMode ? "Volunteer Mode" : "Resident Mode"}
                   </Text>
                 </View>
               </View>
             </Animated.View>
 
+            <View style={styles.journeyBar} accessibilityLabel="VolunServe account workflow">
+              <Text style={styles.journeyLabel}>{volunteerMode ? "VOLUNTEER JOURNEY" : "RESIDENT JOURNEY"}</Text>
+              <Text style={styles.journeyText}>
+                {volunteerMode
+                  ? "Resident login  →  Admin approval  →  Volunteer tasks  →  Service hours and certificates"
+                  : "Sign in  →  Verify identity  →  Community services  →  Track your reports"}
+              </Text>
+            </View>
             {/* =================================================
                 MAIN SERVICES HEADER
             ================================================= */}
@@ -584,7 +425,7 @@ export default function HomeScreen() {
                     styles.serviceCountText
                   }
                 >
-                  5 Services
+                  {volunteerMode ? "6 Services" : "7 Services"}
                 </Text>
               </View>
             </View>
@@ -599,7 +440,7 @@ export default function HomeScreen() {
                   title="Volunteer Tasks"
                   description="View and respond to your assigned emergency missions."
                   iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
-                  cardGradient={["#FFFFFF", "#F5FFF9", "#C9F6DA"]}
+                  cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
                   accentColor="#0BA861"
                   badgeColor="#DCF8E9"
                   onPress={() => router.push("/volunteer")}
@@ -613,7 +454,7 @@ export default function HomeScreen() {
                   title="Live Response Map"
                   description="Track assigned incidents, response zones, and your location."
                   iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
-                  cardGradient={["#FFFFFF", "#F3FAFF", "#CEE8FF"]}
+                  cardGradient={["#FFFFFF", "#F8FBFE", "#E4F1F9"]}
                   accentColor="#218FDB"
                   badgeColor="#DDF2FF"
                   onPress={() => router.push("/map-tracking")}
@@ -624,10 +465,10 @@ export default function HomeScreen() {
                   glassDelay={1400}
                   identity="PROGRESS"
                   icon="ribbon"
-                  title="Volunteer Impact"
+                  title="My Progress"
                   description="Review your verified contributions and response progress."
                   iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
-                  cardGradient={["#FFFFFF", "#FFFAF1", "#FFE0A4"]}
+                  cardGradient={["#FFFFFF", "#FFFCF8", "#F8ECD9"]}
                   accentColor="#F28C13"
                   badgeColor="#FFF0D5"
                   onPress={() => router.push("/volunteer-impact")}
@@ -641,10 +482,24 @@ export default function HomeScreen() {
                   title="Certificates"
                   description="View your issued and verifiable volunteer certificates."
                   iconGradient={["#8DA2FB", "#6177F2", "#4657D9"]}
-                  cardGradient={["#FFFFFF", "#F7F8FF", "#DDE2FF"]}
+                  cardGradient={["#FFFFFF", "#FAFBFE", "#EAEDF9"]}
                   accentColor="#5368E8"
                   badgeColor="#E8EBFF"
                   onPress={() => router.push("/certificate")}
+                />
+
+                <ServiceCard
+                  delay={630}
+                  glassDelay={2400}
+                  identity="COMMUNITY"
+                  icon="calendar"
+                  title="Community Events"
+                  description="Join LGU-approved events, record attendance and serve your community."
+                  iconGradient={["#49D1A5", "#16A17B", "#047B63"]}
+                  cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
+                  accentColor="#16876B"
+                  badgeColor="#D8F2E5"
+                  onPress={() => router.push("/community-events")}
                 />
 
                 <ServiceCard
@@ -655,7 +510,7 @@ export default function HomeScreen() {
                   title="Donations"
                   description="Access the existing donation feature and relief support records."
                   iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
-                  cardGradient={["#FFFFFF", "#FFF6F7", "#FFD6DC"]}
+                  cardGradient={["#FFFFFF", "#FFFAFA", "#F8E7E9"]}
                   accentColor="#EF4855"
                   badgeColor="#FFE6E9"
                   onPress={() => router.push("/donation")}
@@ -668,10 +523,10 @@ export default function HomeScreen() {
                   glassDelay={0}
                   identity="EMERGENCY"
                   icon="warning"
-                  title="Report a Disaster"
+                  title="Emergency Reports"
                   description="Report hazards and emergencies in your area."
                   iconGradient={["#FF7882", "#FF3E4D", "#E92338"]}
-                  cardGradient={["#FFFFFF", "#FFF7F8", "#FFD4DB"]}
+                  cardGradient={["#FFFFFF", "#FFFAFA", "#F9E5E9"]}
                   accentColor="#EF3340"
                   badgeColor="#FFE3E7"
                   onPress={() => router.push("/disaster-response")}
@@ -685,7 +540,7 @@ export default function HomeScreen() {
                   title="Request Assistance"
                   description="Request help for you or someone in need."
                   iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
-                  cardGradient={["#FFFFFF", "#FFFAF1", "#FFE0A4"]}
+                  cardGradient={["#FFFFFF", "#FFFCF8", "#F8ECD9"]}
                   accentColor="#F28C13"
                   badgeColor="#FFF0D5"
                   onPress={() => router.push("/resident")}
@@ -703,10 +558,10 @@ export default function HomeScreen() {
                       : "Apply for volunteer access using your existing resident account."
                   }
                   iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
-                  cardGradient={["#FFFFFF", "#F5FFF9", "#C9F6DA"]}
+                  cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
                   accentColor="#0BA861"
                   badgeColor="#DCF8E9"
-                  onPress={() => router.push("/volunteer-application")}
+                  onPress={() => void openVolunteerAccess()}
                 />
 
                 <ServiceCard
@@ -714,13 +569,40 @@ export default function HomeScreen() {
                   glassDelay={2100}
                   identity="MONITORING"
                   icon="map"
-                  title="Map Tracking"
+                  title="Live Map"
                   description="View incidents and response zones in real-time."
                   iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
-                  cardGradient={["#FFFFFF", "#F3FAFF", "#CEE8FF"]}
+                  cardGradient={["#FFFFFF", "#F8FBFE", "#E4F1F9"]}
                   accentColor="#218FDB"
                   badgeColor="#DDF2FF"
                   onPress={() => router.push("/map-tracking")}
+                />
+
+                <ServiceCard
+                  delay={630}
+                  glassDelay={2400}
+                  identity="TRACKING"
+                  icon="document-text"
+                  title="My Reports"
+                  description="Follow your emergency reports and assistance request status."
+                  iconGradient={["#60B5EC", "#288AC3", "#13689E"]}
+                  cardGradient={["#FFFFFF", "#F2F9FF", "#D6E9F5"]}
+                  accentColor="#267FAC"
+                  badgeColor="#E1F1FA"
+                  onPress={() => router.push("/my-cases")}
+                />
+                <ServiceCard
+                  delay={640}
+                  glassDelay={2550}
+                  identity="COMMUNITY"
+                  icon="calendar"
+                  title="Community Events"
+                  description="Explore published events and propose community activities."
+                  iconGradient={["#49D1A5", "#16A17B", "#047B63"]}
+                  cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
+                  accentColor="#16876B"
+                  badgeColor="#D8F2E5"
+                  onPress={() => router.push("/community-events")}
                 />
 
                 <ServiceCard
@@ -731,7 +613,7 @@ export default function HomeScreen() {
                   title="Make a Donation"
                   description="Support relief efforts and community programs."
                   iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
-                  cardGradient={["#FFFFFF", "#FFF6F7", "#FFD6DC"]}
+                  cardGradient={["#FFFFFF", "#FFFAFA", "#F8E7E9"]}
                   accentColor="#EF4855"
                   badgeColor="#FFE6E9"
                   onPress={() => router.push("/donation")}
@@ -743,40 +625,7 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        {/* ====================================================
-            STATUS BAR GUARD
-        ==================================================== */}
-
-        <View
-          pointerEvents="none"
-          style={[
-            styles.statusBarGuard,
-            {
-              height: insets.top,
-            },
-          ]}
-        />
       </View>
-
-      {/* ======================================================
-          SIDE DRAWER
-      ====================================================== */}
-
-      <SideDrawer
-        visible={drawerOpen}
-        onClose={() =>
-          setDrawerOpen(false)
-        }
-        name={
-          profile?.fullName ||
-          "VolunServe Member"
-        }
-        email={profile?.email || ""}
-        role={profile?.role || "resident"}
-        activeMode={profile?.activeMode}
-        residentAccess={profile?.residentAccess}
-        volunteerAccess={profile?.volunteerAccess}
-      />
     </>
   );
 }
@@ -1457,6 +1306,14 @@ function ServiceCard({
 ============================================================ */
 
 const styles = StyleSheet.create({
+  journeyBar: {
+    backgroundColor: "#F5FAF7", borderBottomWidth: 1, borderTopWidth: 1,
+    borderColor: "#DDEAE2", paddingHorizontal: 15, paddingVertical: 13,
+    marginBottom: 14, borderRadius: 10,
+  },
+  journeyLabel: { color: "#23765F", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  journeyText: { color: "#36594B", fontSize: 12, lineHeight: 19, marginTop: 4 },
+
   /* ==========================================================
      ROOT
   ========================================================== */

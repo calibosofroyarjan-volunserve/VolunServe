@@ -485,7 +485,7 @@ export default function WebHome() {
                       {volunteerMode ? "VOLUNTEER OPERATIONS CENTER" : "RESIDENT OPERATIONS CENTER"}
                     </Text>
                     <Text style={styles.mobileHeroGreeting} numberOfLines={2}>Good day, {firstName}!</Text>
-                    <Text style={styles.mobileHeroDescription}>Here&apos;s what&apos;s happening in San Jose del Monte today.</Text>
+                    <Text style={styles.mobileHeroDescription}>{volunteerMode ? "Manage approved assignments, attendance, progress and certificates." : "Access resident services, track requests and participate in community events."}</Text>
                     <View style={styles.mobileWeatherCard}>
                       <Ionicons name="location-outline" size={19} color="#FFFFFF" />
                       <View style={{ flex: 1, minWidth: 0 }}>
@@ -508,7 +508,7 @@ export default function WebHome() {
                   <>
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY OVERVIEW</Text>
                     <Text style={styles.mobileHeroGreeting}>Your community at a glance</Text>
-                    <Text style={styles.mobileHeroDescription}>Generally stable conditions across San Jose del Monte today. Local teams remain on alert and monitoring.</Text>
+                    <Text style={styles.mobileHeroDescription}>Check official announcements and service updates for San Jose del Monte.</Text>
                     <Text style={styles.mobileHeroSlogan}>Together for a Safer Tomorrow</Text>
                     <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.mobileSmallSeal} resizeMode="contain" />
                   </>
@@ -772,6 +772,15 @@ export default function WebHome() {
           </>
           )}
 
+          <View style={[styles.journeyBar, narrow && styles.journeyBarCompact]}>
+            <Text style={styles.journeyLabel}>{volunteerMode ? "VOLUNTEER WORKFLOW" : "RESIDENT WORKFLOW"}</Text>
+            <Text style={styles.journeyText}>
+              {volunteerMode
+                ? "Resident login  →  Admin approval  →  Volunteer tasks  →  Service hours and certificates"
+                : "Sign in  →  Identity verification  →  Resident services  →  My Reports"}
+            </Text>
+          </View>
+
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
             <View style={[styles.panel, narrow && styles.mobilePanel]}>
               <PanelTitle
@@ -876,7 +885,7 @@ export default function WebHome() {
                             ? "Approved"
                             : "Not enrolled"
                         }
-                        onPress={() => router.push("/volunteer-application")}
+                        onPress={() => hasVolunteerAccess(profile) ? void handleModeSwitch() : router.push("/volunteer-application")}
                         last
                       />
                     </>
@@ -1163,6 +1172,15 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
 }
 
 const styles = StyleSheet.create({
+  journeyBar: {
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D9E8E1",
+    paddingVertical: 16, paddingHorizontal: 12, marginBottom: 22,
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
+  },
+  journeyBarCompact: { paddingVertical: 13, paddingHorizontal: 4, gap: 5 },
+  journeyLabel: { fontSize: 10, letterSpacing: 1, fontWeight: "800", color: "#23765F" },
+  journeyText: { fontSize: 12, lineHeight: 19, fontWeight: "500", color: "#385E50", flexShrink: 1 },
+
   mobileHero: {
     minHeight: 335, borderRadius: 18, overflow: "hidden",
     backgroundColor: "#174F63", justifyContent: "space-between", padding: 17,
