@@ -180,6 +180,8 @@ export interface UserProfile {
   employeeId?: string;
   isTestAccount?: boolean;
   status?: AccountStatus;
+  /** Privileged staff accounts can be explicitly suspended by Super Admin. */
+  adminStatus?: "active" | "suspended";
   reviewedAt?: any;
   reviewedBy?: string;
   rejectedReason?: string;

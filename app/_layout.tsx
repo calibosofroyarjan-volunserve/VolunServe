@@ -153,6 +153,8 @@ export default function RootLayout() {
 
     const isLoginRoute =
       rootSegment === "login";
+    const isAdministrativeLoginRoute =
+      rootSegment === "admin-login";
     const isSignupRoute =
       rootSegment === "signup";
     const isIdentityVerificationRoute =
@@ -179,7 +181,7 @@ export default function RootLayout() {
      * Public Mode, or public certificate verification.
      */
     if (!authUser) {
-      if (!isLoginRoute && !isSignupRoute) {
+      if (!isLoginRoute && !isSignupRoute && !isAdministrativeLoginRoute) {
         router.replace("/login");
       }
       return;
@@ -196,7 +198,7 @@ export default function RootLayout() {
      * retry before the Firestore profile is returned.
      */
     if (!profile) {
-      if (isLoginRoute || isSignupRoute) {
+      if (isLoginRoute || isSignupRoute || isAdministrativeLoginRoute) {
         return;
       }
       if (profileRetryInFlightRef.current) {
@@ -255,7 +257,7 @@ export default function RootLayout() {
      * protected VolunServe areas.
      */
     if (!isApprovedProfile(profile)) {
-      if (!isLoginRoute) {
+      if (!isLoginRoute && !isAdministrativeLoginRoute) {
         void (async () => {
           try {
             await logoutUser();
@@ -276,7 +278,7 @@ export default function RootLayout() {
       profile.role === "lgu_personnel" &&
       !isLguPersonnelProfile(profile)
     ) {
-      if (!isLoginRoute) {
+      if (!isLoginRoute && !isAdministrativeLoginRoute) {
         void (async () => {
           try {
             await logoutUser();
@@ -297,6 +299,7 @@ export default function RootLayout() {
      */
     if (
       isLoginRoute ||
+      isAdministrativeLoginRoute ||
       isSignupRoute ||
       !rootSegment
     ) {
@@ -418,6 +421,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="public" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="admin-login" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="identity-verification" />
         <Stack.Screen name="(tabs)" />

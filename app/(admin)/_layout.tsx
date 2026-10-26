@@ -257,7 +257,7 @@ export default function AdminLayout() {
         await logoutUser();
 
         router.replace(
-          "/login",
+          "/admin-login",
         );
       } catch (
         error: any

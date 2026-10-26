@@ -582,6 +582,15 @@ export default function WebLogin() {
               </Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open Admin and LGU portal"
+            onPress={() => router.push("/admin-login")}
+            style={{alignSelf:"center",paddingVertical:10,paddingHorizontal:12,flexDirection:"row",alignItems:"center",gap:8}}
+          >
+            <Ionicons name="shield-checkmark-outline" size={16} color="#078365"/>
+            <Text style={{fontSize:12,fontWeight:"800",color:"#087961"}}>Admin / LGU Staff Sign-In</Text>
+          </TouchableOpacity>
           <View style={[styles.securityBox, mobile && styles.hideOnMobile]}>
             <View style={styles.securityIcon}>
               <Ionicons name="shield-checkmark-outline" size={18} color="#078365"/>
