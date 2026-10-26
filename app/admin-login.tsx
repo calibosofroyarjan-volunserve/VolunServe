@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   sendPasswordResetEmail,
@@ -118,12 +117,7 @@ export default function AdministrativeLogin() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.page, narrow && styles.pageCompact]}>
-          <LinearGradient
-            colors={["#08684F", "#0C9671", "#35B89E"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.intro, narrow && styles.introCompact]}
-          >
+          <View style={[styles.intro, narrow && styles.introCompact]}>
             <View style={styles.brandRow}>
               <View style={styles.brandIcon}>
                 <Ionicons name="shield-checkmark" size={26} color="#0C8669" />
@@ -136,17 +130,7 @@ export default function AdministrativeLogin() {
               Dedicated account access for authorized LGU administrators and system administrators.
               This portal is separate from the community account interface.
             </Text>
-            <View style={styles.flowCard}>
-              <Ionicons name="lock-closed" size={20} color="#C3F8E7" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.flowHeading}>Secure authentication flow</Text>
-                <Text style={styles.flowText}>
-                  Sign in → verify account status and role → open the permitted dashboard.
-                  Account authorization is enforced server-side; a new public user cannot self-register as Admin.
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
+          </View>
           <View style={[styles.panel, narrow && styles.panelCompact]}>
             <Text style={styles.eyebrow}>STAFF SIGN-IN</Text>
             <Text style={styles.title}>Welcome back</Text>
@@ -240,18 +224,18 @@ export default function AdministrativeLogin() {
   );
 }
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F0F8F5" },
+  root: { flex: 1, backgroundColor: "#F6F8F7" },
   screen: { minHeight: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 36 },
   screenCompact: { paddingHorizontal: 12, paddingVertical: 15 },
-  page: { width: "100%", maxWidth: 1050, flexDirection: "row", borderRadius: 22, backgroundColor: "#FFFFFF", overflow: "hidden", borderWidth: 1, borderColor: "#DBEAE4" },
+  page: { width: "100%", maxWidth: 1050, flexDirection: "row", borderRadius: 11, backgroundColor: "#FFFFFF", overflow: "hidden", borderWidth: 1, borderColor: "#DBEAE4" },
   pageCompact: { flexDirection: "column", maxWidth: 550 },
-  intro: { flex: 1, minWidth: 0, padding: 38, justifyContent: "center", gap: 17 },
+  intro: { flex: 1, minWidth: 0, padding: 38, justifyContent: "center", gap: 17, backgroundColor: "#123E36" },
   introCompact: { padding: 23 },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 11 },
   brandIcon: { width: 43, height: 43, borderRadius: 13, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  brandName: { color: "#FFFFFF", fontWeight: "900", fontSize: 18, letterSpacing: 1.3 },
+  brandName: { color: "#FFFFFF", fontWeight: "700", fontSize: 18, letterSpacing: 1.3 },
   introLabel: { color: "#C9FBE9", fontSize: 10, fontWeight: "800", letterSpacing: 1.1, marginTop: 12 },
-  introTitle: { color: "#FFFFFF", fontSize: 35, lineHeight: 41, fontWeight: "900" },
+  introTitle: { color: "#FFFFFF", fontSize: 31, lineHeight: 39, fontWeight: "700" },
   introTitleCompact: { fontSize: 27, lineHeight: 33 },
   introText: { color: "#E0FFF5", fontSize: 13, lineHeight: 22 },
   flowCard: { flexDirection: "row", gap: 13, padding: 15, borderRadius: 13, backgroundColor: "rgba(3,52,41,0.23)", marginTop: 14 },
@@ -259,8 +243,8 @@ const styles = StyleSheet.create({
   flowText: { color: "#D2FFF1", fontSize: 11, lineHeight: 19 },
   panel: { flex: 1.05, minWidth: 0, padding: 38, gap: 12, justifyContent: "center" },
   panelCompact: { padding: 23 },
-  eyebrow: { fontSize: 10, color: "#168064", fontWeight: "900", letterSpacing: 1.3 },
-  title: { fontSize: 29, fontWeight: "900", color: "#153E35" },
+  eyebrow: { fontSize: 10, color: "#168064", fontWeight: "700", letterSpacing: 1.3 },
+  title: { fontSize: 28, fontWeight: "700", color: "#153E35" },
   subtitle: { fontSize: 12, lineHeight: 19, color: "#638076", marginBottom: 8 },
   label: { fontSize: 12, fontWeight: "800", color: "#2E5146", marginTop: 6 },
   inputRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F7FBF9", borderWidth: 1, borderColor: "#D8E8E1", borderRadius: 11, minHeight: 49, paddingHorizontal: 12, gap: 9 },
@@ -269,7 +253,7 @@ const styles = StyleSheet.create({
   errorText: { flex: 1, fontSize: 11, color: "#B42318", lineHeight: 16 },
   notice: { color: "#0F795C", fontSize: 11, lineHeight: 17 },
   submit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 11, minHeight: 49, backgroundColor: "#0D8969", marginTop: 8 },
-  submitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  submitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   disabled: { opacity: .62 },
   secondaryAction: { alignSelf: "center", padding: 6 },
   actionText: { color: "#0B7F64", fontWeight: "700", fontSize: 11 },
