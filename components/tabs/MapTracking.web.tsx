@@ -1832,7 +1832,7 @@ export default function WebMapTracking() {
   ]);
 
   useEffect(() => {
-    if (missionMode || adminMissionMode || isResidentMode) {
+    if (missionMode || adminMissionMode) {
       setCenters([]);
       return;
     }
@@ -1858,7 +1858,7 @@ export default function WebMapTracking() {
         );
       },
     );
-  }, [missionMode, adminMissionMode, isResidentMode]);
+  }, [missionMode, adminMissionMode]);
 
   const visibleCases = useMemo(() => {
     if (missionMode || adminMissionMode) {
@@ -1913,7 +1913,7 @@ export default function WebMapTracking() {
   ]);
 
   const visibleCenters = useMemo(() => {
-    if (missionMode || adminMissionMode || isResidentMode || !showCenters) return [];
+    if (missionMode || adminMissionMode || !showCenters) return [];
 
     const needle = normalize(search);
 
