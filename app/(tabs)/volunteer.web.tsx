@@ -1458,9 +1458,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   mobileTaskTitle: {
-    color: "#11283C",
+    color: "#173D32",
     fontSize: 23,
-    fontWeight: "900",
+    fontWeight: "700",
     lineHeight: 29,
     letterSpacing: -0.35,
   },
@@ -1662,7 +1662,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#f5f8fb",
+    backgroundColor: "#F6F8F7",
   },
   page: {
     width: "100%",
@@ -1677,7 +1677,7 @@ const styles = StyleSheet.create({
     minHeight: 520,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f5f8fb",
+    backgroundColor: "#F6F8F7",
   },
   loadingText: {
     marginTop: 12,
@@ -1699,7 +1699,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: "#078F82",
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: 1.1,
     marginBottom: 7,
   },
@@ -1717,10 +1717,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#e4f7f2",
   },
   title: {
-    color: "#10283d",
+    color: "#173D32",
     fontSize: 28,
     lineHeight: 33,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   subtitle: {
     color: "#6b7f93",
