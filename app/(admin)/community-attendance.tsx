@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useRouter, type Href } from "expo-router";
 import {
   collection,
   doc,
@@ -917,7 +917,7 @@ export default function CommunityAttendanceAdmin() {
               </View>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.push("/(admin)/community-events")}
+                onPress={() => router.push("/(admin)/community-events" as Href)}
                 style={styles.smallAction}
               >
                 <Ionicons name="arrow-forward-outline" size={14} color="#FFFFFF" />

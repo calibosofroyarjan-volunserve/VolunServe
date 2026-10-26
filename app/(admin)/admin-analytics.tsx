@@ -898,12 +898,12 @@ export default function AdminAnalytics() {
             style={styles.darkBtn}
             onPress={() =>
               router.push(
-                "/(admin)/admin-logs" as any
+                "/(admin)/command-center" as any
               )
             }
           >
             <Text style={styles.darkBtnText}>
-              Admin Logs
+              Command Center
             </Text>
           </TouchableOpacity>
         </View>
@@ -940,7 +940,7 @@ export default function AdminAnalytics() {
           style={styles.navBtn}
           onPress={() =>
             router.push(
-              "/(tabs)/donation-list" as any
+              "/(admin)/donor-monitoring" as any
             )
           }
         >
@@ -949,18 +949,7 @@ export default function AdminAnalytics() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/admin-analytics" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Analytics
-          </Text>
-        </TouchableOpacity>
+
       </View>
 
       <Text style={styles.sectionHeader}>

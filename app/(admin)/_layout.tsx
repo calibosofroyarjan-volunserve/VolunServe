@@ -235,7 +235,7 @@ export default function AdminLayout() {
         await logoutUser();
 
         router.replace(
-          "/admin-login",
+          "/admin-login" as Href,
         );
       } catch (
         error: any
