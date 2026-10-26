@@ -37,6 +37,7 @@ import {
   isApprovedProfile,
 } from "../lib/firebaseAuth";
 import { useUserSession } from "../lib/useUserSession";
+import VerifiedEvacuationCenters from "./VerifiedEvacuationCenters";
 
 type Pin = {
   latitude: number;
@@ -1433,6 +1434,8 @@ export default function DisasterResponse() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        <VerifiedEvacuationCenters />
+
         <View style={styles.accountCard}>
           <View style={styles.accountIcon}>
             <Ionicons
