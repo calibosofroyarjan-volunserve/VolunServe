@@ -5,6 +5,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 import { db } from "../../lib/firebase";
+import { isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 
 type Point = {
   latitude: number;
@@ -24,6 +26,8 @@ type EvacuationCenter = Point & {
   address: string;
   capacity: number;
   occupied: number;
+  verificationStatus: string;
+  status: string;
 };
 
 const SJDM_REGION: Region = {
@@ -57,12 +61,15 @@ export default function PublicMapTracking() {
               longitude: Number(data.longitude),
               capacity: Number(data.capacity ?? 0),
               occupied: Number(data.occupied ?? 0),
+              status: String(data.status ?? "pending_verification"),
+              verificationStatus: String(data.verificationStatus ?? "pending"),
             };
           })
           .filter(
             (center) =>
               Number.isFinite(center.latitude) &&
-              Number.isFinite(center.longitude)
+              Number.isFinite(center.longitude) &&
+              isVerifiedActiveCenter(center)
           );
 
         setCenters(nextCenters);
