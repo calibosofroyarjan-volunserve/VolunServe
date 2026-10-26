@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: "#F2F9FC",
+    backgroundColor: "#F6F8F7",
   },
   scroll: {
     flex: 1,
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
     padding: 20,
-    borderRadius: 18,
+    borderRadius: 10,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -1009,26 +1009,26 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 52,
     height: 52,
-    borderRadius: 15,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#4F46E5",
+    backgroundColor: "#23765F",
   },
   headerCopy: {
     flex: 1,
     minWidth: 0,
   },
   eyebrow: {
-    color: "#4F46E5",
+    color: "#23765F",
     fontSize: 9.5,
     fontWeight: "900",
     letterSpacing: 1,
   },
   title: {
     marginTop: 3,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 25,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   subtitle: {
     marginTop: 5,
@@ -1066,7 +1066,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   noticeTitle: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 12.5,
     fontWeight: "900",
   },
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F6F8F7",
   },
   countBadgeActive: {
     backgroundColor: "rgba(255,255,255,0.17)",
@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     minWidth: 0,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 12.5,
     outlineStyle: "none",
   } as any,
@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
     minHeight: 260,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: 9,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -1175,14 +1175,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 28,
-    borderRadius: 16,
+    borderRadius: 9,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
   emptyTitle: {
     marginTop: 10,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
@@ -1203,7 +1203,7 @@ const styles = StyleSheet.create({
   },
   queueCard: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -1220,7 +1220,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 39,
     height: 39,
-    borderRadius: 20,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#E0E7FF",
@@ -1231,7 +1231,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   residentName: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 12.5,
     fontWeight: "900",
   },
@@ -1264,7 +1264,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   scoreValue: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 12,
     fontWeight: "900",
   },
@@ -1275,7 +1275,7 @@ const styles = StyleSheet.create({
   },
   detailPanel: {
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -1308,7 +1308,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2FF",
   },
   detailTitle: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 17,
     fontWeight: "900",
   },
@@ -1325,7 +1325,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   sectionTitle: {
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 13,
     fontWeight: "900",
   },
@@ -1346,7 +1346,7 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     flex: 1,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 11,
     fontWeight: "700",
     textAlign: "right",
@@ -1370,7 +1370,7 @@ const styles = StyleSheet.create({
   },
   scoreCardValue: {
     marginTop: 3,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 18,
     fontWeight: "900",
   },
@@ -1444,7 +1444,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 11.5,
     lineHeight: 17,
     outlineStyle: "none",
