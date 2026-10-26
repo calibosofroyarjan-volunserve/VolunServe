@@ -110,7 +110,7 @@ export default function PublicMapTracking() {
       ) : centers.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>
-            No centers published yet
+            No LGU-verified open centers reported
           </Text>
 
           <Text style={styles.emptyText}>
