@@ -2799,8 +2799,7 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor:
-        "#F4F7FB",
+      backgroundColor: "#F6F8F7",
     },
 
     page: {
@@ -2818,8 +2817,7 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-      backgroundColor:
-        "#F4F7FB",
+      backgroundColor: "#F6F8F7",
       padding: 24,
     },
 
@@ -2835,9 +2833,9 @@ const styles =
     },
 
     pageTitle: {
-      color: "#0F172A",
-      fontSize: 32,
-      fontWeight: "900",
+      color: "#173D32",
+      fontSize: 28,
+      fontWeight: "700",
       letterSpacing: -0.6,
     },
 
@@ -3254,9 +3252,9 @@ const styles =
     },
 
     sectionTitle: {
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 17,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     infoRow: {
