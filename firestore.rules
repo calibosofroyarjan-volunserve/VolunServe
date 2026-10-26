@@ -1600,6 +1600,7 @@ service cloud.firestore {
           'estimatedAmount',
           'currentSituation',
           'preferredAssistanceTypes',
+          'preferredReleaseMethod',
           'documents',
           'status',
           'verificationStatus',
@@ -1684,6 +1685,8 @@ service cloud.firestore {
         && rd.preferredAssistanceTypes is list
         && rd.preferredAssistanceTypes.size() >= 1
         && rd.preferredAssistanceTypes.size() <= 2
+        && (!('preferredReleaseMethod' in rd)
+          || rd.preferredReleaseMethod in ['gcash','maya','bank'])
         && validSecureAssistanceDocuments()
         && rd.status == 'pending'
         && rd.verificationStatus == 'pending_review'
