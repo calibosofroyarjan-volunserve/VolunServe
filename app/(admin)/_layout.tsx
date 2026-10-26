@@ -276,7 +276,7 @@ export default function AdminLayout() {
       >
         <ActivityIndicator
           size="large"
-          color="#4F46E5"
+          color="#2C8466"
         />
 
         <Text
@@ -642,15 +642,15 @@ export default function AdminLayout() {
 const styles =
   StyleSheet.create({
     profileLink: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
-    profileLinkActive: { backgroundColor: "#226859" },
+    profileLinkActive: { backgroundColor: "#257C61" },
     profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
 
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
     navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
-    navGroupHeaderCurrent: { backgroundColor: "rgba(255,255,255,0.07)" },
-    navGroupTitle: { flex: 1, color: "#C9DDD5", fontSize: 12.5, fontWeight: "600" },
+    navGroupHeaderCurrent: { backgroundColor: "rgba(130,207,169,0.10)" },
+    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" },
     navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
     navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
     groupNavItem: { minHeight: 41, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
@@ -684,9 +684,9 @@ const styles =
       minHeight: 0,
       flexShrink: 0,
       overflow: "hidden",
-      backgroundColor: "#123E36",
+      backgroundColor: "#0F392F",
       borderRightWidth: 1,
-      borderRightColor: "#DDE8E3",
+      borderRightColor: "#1D5547",
     },
 
     brand: {
@@ -697,6 +697,9 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       gap: 11,
+      marginBottom: 11,
+      borderBottomWidth: 1,
+      borderBottomColor: "rgba(215,245,229,0.13)",
       flexShrink: 0,
     },
 
@@ -715,12 +718,13 @@ const styles =
         "center",
     },
 
-    brandLogo: { width: 47, height: 47, borderRadius: 24, backgroundColor: "#E8F8F5" },
+    brandLogo: { width: 47, height: 47, borderRadius: 24, backgroundColor: "#E8F8F5", borderWidth: 2, borderColor: "rgba(222,249,235,0.42)" },
     brandCopy: { flex: 1, minWidth: 0 },
     brandName: {
       color: "#FFFFFF",
       fontSize: 20,
       fontWeight: "700",
+      letterSpacing: -0.5,
     },
 
     brandTagline: {
@@ -749,7 +753,7 @@ const styles =
       marginTop: 5,
       marginBottom: 8,
       marginLeft: 27,
-      color: "#A7DCD4",
+      color: "#91C8B2",
       fontSize: 10,
       fontWeight: "700",
       letterSpacing: 1.1,
@@ -768,12 +772,12 @@ const styles =
     navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
 
     navItemActive: {
-      backgroundColor: "#226859",
+      backgroundColor: "#257C61",
     },
 
     navLabel: {
       flex: 1,
-      color: "#E6F5F2",
+      color: "#D7EDE1",
       fontSize: 13,
       fontWeight: "500",
     },
@@ -798,7 +802,7 @@ const styles =
     navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
     navIconActive: { backgroundColor: "#226859" },
     activeIndicator: { width: 4, height: 24, borderRadius: 3, backgroundColor: "#E1FFF6" },
-    sidebarUtility: { flexShrink: 0, marginHorizontal: 17, paddingTop: 11, paddingBottom: 15, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.18)" },
+    sidebarUtility: { flexShrink: 0, marginHorizontal: 17, paddingTop: 11, paddingBottom: 15, borderTopWidth: 1, borderTopColor: "rgba(220,245,230,0.16)" },
     logoutButton: { minHeight: 43, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
     signOutLabel: {
       color: "#FFCFCF",
@@ -829,7 +833,7 @@ const styles =
     main: {
       flex: 1,
       minWidth: 0,
-      backgroundColor: "#F2F9FC",
+      backgroundColor: "#F6F8F7",
     },
 
     topBar: {
@@ -844,7 +848,7 @@ const styles =
       borderBottomWidth:
         1,
       borderBottomColor:
-        "#E5E7EB",
+        "#DAE7DD",
       backgroundColor:
         "#FFFFFF",
     },
