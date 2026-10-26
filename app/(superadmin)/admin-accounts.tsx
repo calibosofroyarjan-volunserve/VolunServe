@@ -413,7 +413,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Grant Admin Access";
+      return "Grant LGU Admin Access";
     }
 
     if (action === "suspend") {
@@ -439,7 +439,7 @@ export default function AdminAccounts() {
       nameFor(account);
 
     if (action === "promote") {
-      return `Grant operational Admin access to ${name}?`;
+      return `Grant LGU Admin access to ${name} after confirming official staff credentials?`;
     }
 
     if (action === "suspend") {
@@ -907,15 +907,13 @@ export default function AdminAccounts() {
             <Text
               style={styles.title}
             >
-              Admin Accounts
+              LGU Admin Accounts
             </Text>
 
             <Text
               style={styles.subtitle}
             >
-              Control operational
-              administrator access
-              across VolunServe.
+              Review authorized LGU staff accounts, manage access, and keep approvals separate from Resident and Volunteer accounts.
             </Text>
           </View>
 
@@ -938,11 +936,22 @@ export default function AdminAccounts() {
                 styles.addButtonText
               }
             >
-              Grant Admin Access
+              Review Staff Account
             </Text>
           </TouchableOpacity>
         </View>
 
+        <View style={styles.accessFlow}>
+          <Text style={styles.accessFlowTitle}>LGU ADMIN ACCOUNT FLOW</Text>
+          <View style={styles.accessFlowSteps}>
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>01</Text><Text style={styles.stepText}>Register a separate staff account</Text></View>
+            <Ionicons name="chevron-forward" size={14} color="#789188" />
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>02</Text><Text style={styles.stepText}>Independently verify LGU credentials</Text></View>
+            <Ionicons name="chevron-forward" size={14} color="#789188" />
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Grant access and audit changes</Text></View>
+          </View>
+          <Text style={styles.flowHint}>A Resident identity check is not proof of LGU employment. This screen assigns access to an existing account; it does not create a Firebase Auth login.</Text>
+        </View>
         <View
           style={
             styles.statsRow
@@ -1071,7 +1080,7 @@ export default function AdminAccounts() {
               setSearch
             }
             placeholder={
-              "Search Admin name, email, barangay..."
+              "Search LGU Admin name, email, or barangay"
             }
             placeholderTextColor="#94A3B8"
           />
@@ -1158,9 +1167,7 @@ export default function AdminAccounts() {
                 styles.emptyText
               }
             >
-              Try another filter
-              or promote an approved
-              user to Admin.
+              No matching LGU Admin accounts. Adjust your search or start a staff access review.
             </Text>
           </View>
         ) : (
@@ -1505,7 +1512,7 @@ export default function AdminAccounts() {
                     styles.modalTitle
                   }
                 >
-                  Grant Admin Access
+                  Select Registered Staff Account
                 </Text>
 
                 <Text
@@ -1513,10 +1520,7 @@ export default function AdminAccounts() {
                     styles.modalSubtitle
                   }
                 >
-                  Select a separate
-                  approved VolunServe
-                  account to grant
-                  operational Admin access.
+                  Choose a registered staff-owned account. Verify legitimate LGU employment and authorization before granting the Admin role.
                 </Text>
               </View>
 
@@ -1564,7 +1568,7 @@ export default function AdminAccounts() {
                   setPromoteSearch
                 }
                 placeholder={
-                  "Search approved users..."
+                  "Search registered staff by name or email"
                 }
                 placeholderTextColor="#94A3B8"
               />
@@ -1687,7 +1691,7 @@ export default function AdminAccounts() {
                           >
                             {isSaving
                               ? "Saving..."
-                              : "Promote"}
+                              : "Review Access"}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -1713,16 +1717,7 @@ export default function AdminAccounts() {
                   styles.infoText
                 }
               >
-                Use a separate verified
-                Firebase Auth account for
-                each operational Admin.
-                The Super Admin account
-                remains separate and is
-                never promoted from this
-                list. For Spark/free,
-                create or register the
-                Admin account first, then
-                grant Admin access here.
+                Staff accounts use Firebase Authentication, while LGU eligibility must be independently verified. Do not grant Admin access to an ordinary Resident or Volunteer without legitimate staff credentials.
               </Text>
             </View>
           </View>
@@ -1920,6 +1915,13 @@ export default function AdminAccounts() {
 
 const styles =
   StyleSheet.create({
+    accessFlow: { paddingVertical: 16, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 18 },
+    accessFlowTitle: { color: "#426658", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 11 },
+    accessFlowSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
+    accessStep: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
+    stepNumber: { color: "#23765F", fontSize: 11, fontWeight: "800" },
+    stepText: { color: "#2B453B", fontSize: 12, fontWeight: "600", flexShrink: 1 },
+    flowHint: { color: "#667F74", fontSize: 11.5, lineHeight: 18, marginTop: 12, maxWidth: 850 },
     container: {
       padding: 24,
       paddingBottom: 60,
