@@ -6544,7 +6544,7 @@ function FormSelect({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f4f7fb",
+    backgroundColor: "#F6F8F7",
   },
   container: {
     width: "100%",
@@ -6559,7 +6559,7 @@ const styles = StyleSheet.create({
     minHeight: 520,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f4f7fb",
+    backgroundColor: "#F6F8F7",
   },
   loadingText: {
     color: "#64748b",
@@ -6588,7 +6588,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: "#0f172a",
     fontSize: 28,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   subtitle: {
     marginTop: 4,
