@@ -2748,76 +2748,39 @@ export default function AssistanceRequestScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
         >
-          <LinearGradient
-            colors={[
-              "#0F4E9A",
-              "#1769E0",
-            ]}
-            start={{
-              x: 0,
-              y: 0,
-            }}
-            end={{
-              x: 1,
-              y: 1,
-            }}
-            style={[styles.hero, mobile && styles.mobileHero]}
-          >
-            <View
-              style={[styles.heroIcon, mobile && styles.mobileHeroIcon]}
-            >
-              <Ionicons
-                name="hand-left-outline"
-                size={28}
-                color="#FFFFFF"
-              />
+          <LinearGradient colors={["#EBFFF7","#D7F9E9","#94EAC9","#2BC78F"]}
+            start={{x:0,y:0.15}} end={{x:1,y:0.85}}
+            style={[styles.hero,styles.premiumHero,mobile&&styles.mobileHero]}>
+            <View style={[styles.premiumEmblem,mobile&&styles.premiumEmblemMobile]}>
+              <LinearGradient colors={["#06674D","#0E9E76","#20C58D"]}
+                style={styles.premiumEmblemFace}>
+                <Ionicons name="hand-left" size={mobile?28:40} color="#FFFFFF"/>
+                <View style={styles.premiumEmblemCheck}>
+                  <Ionicons name="checkmark" size={14} color="#08795B"/>
+                </View>
+              </LinearGradient>
             </View>
-
-            <View
-              style={[styles.heroCopy, mobile && styles.mobileHeroCopy]}
-            >
-              <Text
-                style={[styles.heroEyebrow, mobile && styles.mobileHeroEyebrow]}
-              >
-                VOLUNSERVE · VERIFIED
-                RESIDENT SERVICE
-              </Text>
-
-              <Text
-                style={[styles.heroTitle, mobile && styles.mobileHeroTitle]}
-              >
-                Request Assistance
-              </Text>
-
-              <Text
-                style={[styles.heroSubtitle, mobile && styles.mobileHeroSubtitle]}
-              >
-                Submit a verified
-                non-emergency individual
-                or household assistance
-                request for LGU review.
-                Disaster recovery belongs
-                here after immediate
-                danger has passed.
-              </Text>
+            <View style={[styles.premiumHeroCopy,mobile&&styles.premiumHeroCopyMobile]}>
+              <Text style={styles.premiumHeroEyebrow}>VOLUNSERVE · VERIFIED RESIDENT SERVICE</Text>
+              <Text style={[styles.premiumHeroTitle,mobile&&styles.premiumHeroTitleMobile]}>Request Assistance</Text>
+              <Text style={styles.premiumHeroTagline}>Support that starts with your community.</Text>
+              <Text style={styles.premiumHeroDescription}>Submit a private request for LGU review and coordinated assistance.</Text>
             </View>
-
-            <View
-              style={[styles.heroVerifiedBadge, mobile && styles.mobileHeroBadge]}
-            >
-              <Ionicons
-                name="shield-checkmark"
-                size={15}
-                color="#0F8A58"
-              />
-
-              <Text
-                style={
-                  styles.heroVerifiedText
-                }
-              >
-                Verified Resident
-              </Text>
+            <View style={[styles.premiumHeroRight,mobile&&styles.premiumHeroRightMobile]}>
+              <View style={styles.premiumVerified}>
+                <Ionicons name="shield-checkmark" color="#067851" size={15}/>
+                <Text style={styles.premiumVerifiedText}>Verified Resident</Text>
+              </View>
+              <View style={styles.premiumHeroFacts}>
+                <View style={styles.premiumHeroFact}>
+                  <Ionicons name="document-text-outline" color="#078565" size={18}/>
+                  <Text style={styles.premiumHeroFactText}>{requests.length} My Requests</Text>
+                </View>
+                <View style={styles.premiumHeroFact}>
+                  <Ionicons name="lock-closed-outline" color="#078565" size={18}/>
+                  <Text style={styles.premiumHeroFactText}>Private LGU Review</Text>
+                </View>
+              </View>
             </View>
           </LinearGradient>
 
@@ -2972,82 +2935,16 @@ export default function AssistanceRequestScreen() {
                 />
 
                 <InfoCard
-                  icon="location-outline"
-                  title="LGU Sets the Location"
-                  text="Residents do not choose the public map point. The LGU assigns a safe public service location when needed."
+                  icon="wallet-outline"
+                  title="Release Preference"
+                  text="Choose GCash, Maya, or bank transfer. LGU confirms the final release method."
                 />
 
                 <InfoCard
                   icon="heart-outline"
-                  title="Donation Is Not Automatic"
-                  text="A public campaign is opened only after verification and a confirmed remaining shortage."
+                  title="Donation Support"
+                  text="An official campaign opens only if the LGU confirms an unmet assistance need."
                 />
-              </View>
-
-              <View
-                style={[styles.emergencyNotice, mobile && styles.mobileEmergencyNotice]}
-              >
-                <View
-                  style={
-                    styles.emergencyNoticeIcon
-                  }
-                >
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={21}
-                    color="#B42318"
-                  />
-                </View>
-
-                <View
-                  style={mobile ? styles.mobileNoticeCopy : { flex: 1 }}
-                >
-                  <Text
-                    style={
-                      styles.emergencyNoticeTitle
-                    }
-                  >
-                    Is there an active
-                    emergency or
-                    immediate danger?
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.emergencyNoticeText
-                    }
-                  >
-                    Use Emergency
-                    Report for an active
-                    danger that needs an
-                    immediate response.
-                    Use Request Assistance
-                    for non-emergency
-                    individual or household
-                    needs, including
-                    post-emergency recovery.
-                    Broader barangay relief
-                    is handled separately
-                    by the LGU.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.emergencyButton, mobile && styles.mobileEmergencyButton]}
-                  onPress={() =>
-                    router.push(
-                      "/(tabs)/disaster-response" as any,
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      styles.emergencyButtonText
-                    }
-                  >
-                    Emergency Report
-                  </Text>
-                </TouchableOpacity>
               </View>
 
               <StepProgress
@@ -3062,7 +2959,7 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 1 OF 4"
-                    title="Choose an Assistance Category"
+                    title="Select an assistance category"
                     text="Choose the category that best describes the verified individual or household need."
                   />
 
@@ -3989,7 +3886,7 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 4 OF 4"
-                    title="Review & Submit"
+                    title="Review your request"
                     text="Check the information before sending it to the LGU for private verification."
                   />
 
@@ -4497,22 +4394,8 @@ function StepProgress({
                       styles.progressCircleActive,
                   ]}
                 >
-                  <Ionicons
-                    name={
-                      done
-                        ? "checkmark"
-                        : item.icon
-                    }
-                    size={
-                      15
-                    }
-                    color={
-                      active ||
-                      done
-                        ? "#FFFFFF"
-                        : "#64748B"
-                    }
-                  />
+                  {done?<Ionicons name="checkmark" color="#FFFFFF" size={15}/>:
+                    <Text style={styles.premiumStepNumber}>{item.number}</Text>}
                 </View>
 
                 <Text
@@ -4523,9 +4406,7 @@ function StepProgress({
                       styles.progressLabelActive,
                   ]}
                 >
-                  {
-                    item.label
-                  }
+                  {mobile?item.label:`Step ${item.number} · ${item.label}`}
                 </Text>
               </View>
             </React.Fragment>
