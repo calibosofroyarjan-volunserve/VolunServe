@@ -120,8 +120,21 @@ async function main() {
       batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
         newReview(TARGET, "staff@example.test"));
       batch.update(superDb.doc("users/" + TARGET), promotion());
+      batch.set(superDb.doc("adminLogs/security-test-grant"), {
+        actionType: "admin_account_created",
+        targetType: "user",
+        targetId: TARGET,
+        adminUid: SU,
+        adminName: "Test Super Admin",
+        description: "Staff account granted LGU Admin access after verified review.",
+        createdAt: stamp(),
+      });
       return batch.commit();
     });
+    await check("Super Admin can read atomic Admin access audit record",
+      () => superDb.doc("adminLogs/security-test-grant").get());
+    await check("Ordinary Resident cannot read privileged Admin audit record",
+      () => unrelatedDb.doc("adminLogs/security-test-grant").get(), true);
     await check("Newly promoted LGU Admin can access own profile",
       () => residentDb.doc("users/" + TARGET).get());
 
