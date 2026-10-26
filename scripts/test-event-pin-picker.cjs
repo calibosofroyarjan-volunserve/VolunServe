@@ -14,6 +14,12 @@ assert(picker.includes("<InteractiveEventPinMap"), "Web picker must have an inte
 assert(map.includes("tiles.openfreemap.org/styles/liberty"), "Actual vector map tiles required");
 assert(map.includes('map.on("click", event => move('), "Tap-to-pin event missing");
 assert(map.includes('draggable:true'), "Pin must support drag adjustment");
+assert(map.includes("acceptedPoint = [lng,lat]") &&
+  map.includes("marker.setLngLat(acceptedPoint)"),
+  "Rejected MapLibre marker drag must snap back to last accepted pin");
+assert(picker.includes("draftRef.current") &&
+  picker.includes("marker.setPosition({ lat: lastValid.latitude"),
+  "Rejected Google Maps marker drag must restore the valid venue");
 assert(map.includes("event.source !== frame.current?.contentWindow"),
   "Iframe messages must be validated against the current frame");
 assert(map.includes('data?.token !== token.current'), "Map messages must validate a unique token");
@@ -32,5 +38,8 @@ assert(picker.includes("GOOGLE_JS_KEY"), "Keep configured Google Maps JavaScript
 assert(!picker.includes("GOOGLE_EMBED_KEY"), "A preview-only iframe must not be the default map picker");
 assert(screen.includes("<CommunityEventPinPicker"), "Live Community Events flow must use real pin picker");
 assert(native.includes('onPress={event=>pick('), "Existing native tap flow must remain available");
+assert(native.includes("if(!pick(p.latitude,p.longitude))") &&
+  native.includes("setDraft({...last})"),
+  "Rejected native marker drag must restore last accepted coordinates");
 assert(backend.includes("disaster") || backend.includes("community"), "Backend remains present");
 console.log("PASS interactive web pin picker, API-key fallback, safe confirmation, native parity");
