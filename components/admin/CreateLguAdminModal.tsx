@@ -1,11 +1,13 @@
 
 import Ionicons from "@expo/vector-icons/Ionicons";
+import {Picker} from "@react-native-picker/picker";
+import {SJDM_BARANGAYS} from "../../constants/sjdmBarangays";
 import React, {useState} from "react";
 import {ActivityIndicator,Modal,ScrollView,StyleSheet,Text,TextInput,TouchableOpacity,View} from "react-native";
 import {createAdminAccount} from "../../lib/adminAccounts";
 
-type FormState={fullName:string;email:string;password:string;lguOffice:string;lguPosition:string;appointmentReference:string;credentialsReviewed:boolean};
-const EMPTY:FormState={fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",appointmentReference:"",credentialsReviewed:false};
+type FormState={fullName:string;email:string;password:string;lguOffice:string;barangay:string;lguPosition:string;appointmentReference:string;credentialsReviewed:boolean};
+const EMPTY:FormState={fullName:"",email:"",password:"",lguOffice:"",barangay:"",lguPosition:"",appointmentReference:"",credentialsReviewed:false};
 
 /** Super Admin creates independent LGU login after reviewing external appointment evidence.
  * This is a manual authorization attestation, not automated government document verification.
@@ -29,7 +31,7 @@ export default function CreateLguAdminModal({visible,onClose,onCreated}:{visible
     }catch(err:any){setError(err?.message||"Could not create the Admin account. Check permissions and credentials.");}
     finally{setBusy(false);}
   };
-  const fields:ReadonlyArray<{key:Exclude<keyof FormState,"credentialsReviewed">;label:string;hint:string}>=[
+  const fields:ReadonlyArray<{key:Exclude<keyof FormState,"credentialsReviewed"|"barangay">;label:string;hint:string}>=[
     {key:"fullName",label:"Full legal name",hint:"Match the verified LGU appointment"},
     {key:"email",label:"Authorized LGU Admin email",hint:"Separate email for this Admin login"},
     {key:"lguOffice",label:"LGU office / department",hint:"E.g. City Social Welfare"},
@@ -68,6 +70,16 @@ export default function CreateLguAdminModal({visible,onClose,onCreated}:{visible
               </TouchableOpacity>}
             </View>
           </View>)}
+          <View style={styles.field}>
+            <Text style={styles.label}>Assigned SJDM barangay</Text>
+            <View style={styles.inputRow}>
+              <Picker selectedValue={form.barangay} onValueChange={value=>update("barangay",String(value))}
+                style={{width:"100%",color:"#21493A",fontSize:12}}>
+                <Picker.Item label="Select authorized barangay…" value=""/>
+                {SJDM_BARANGAYS.map(name=><Picker.Item key={name} label={name} value={name}/>)}
+              </Picker>
+            </View>
+          </View>
           <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{checked:form.credentialsReviewed}}
             onPress={()=>update("credentialsReviewed",!form.credentialsReviewed)} style={styles.checkrow}>
             <Ionicons name={form.credentialsReviewed?"checkbox":"square-outline"} color="#0D8464" size={22}/>
