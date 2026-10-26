@@ -6304,10 +6304,11 @@ const styles =
 
     modeTabActive: {
       backgroundColor:
-        "#1769E0",
+        "#088C70",
     },
 
     modeTabText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#475569",
       fontWeight:
@@ -6440,6 +6441,7 @@ const styles =
     },
 
     infoCardTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontSize:
@@ -6449,6 +6451,7 @@ const styles =
     },
 
     infoCardText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         5,
       color:
@@ -6589,10 +6592,11 @@ const styles =
 
     progressCircleActive: {
       backgroundColor:
-        "#1769E0",
+        "#098E70",
     },
 
     progressLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       marginTop:
         5,
       fontSize:
@@ -6605,7 +6609,7 @@ const styles =
 
     progressLabelActive: {
       color:
-        "#1769E0",
+        "#098E70",
       fontWeight:
         "900",
     },
@@ -6625,7 +6629,7 @@ const styles =
 
     progressLineDone: {
       backgroundColor:
-        "#1769E0",
+        "#098E70",
     },
 
     formCard: {
@@ -6649,8 +6653,9 @@ const styles =
     },
 
     formEyebrow: {
+      fontFamily:"AssistanceInterBold",
       color:
-        "#1769E0",
+        "#0B916F",
       fontSize:
         11,
       fontWeight:
@@ -6660,10 +6665,11 @@ const styles =
     },
 
     formTitle: {
+      fontFamily:"AssistanceInterExtraBold",
       marginTop:
         5,
       color:
-        "#172033",
+        "#17463A",
       fontSize:
         23,
       fontWeight:
@@ -6671,6 +6677,7 @@ const styles =
     },
 
     formText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         6,
       color:
@@ -6732,8 +6739,9 @@ const styles =
     },
 
     categoryTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
-        "#172033",
+        "#17463A",
       fontSize:
         14,
       fontWeight:
@@ -6741,6 +6749,7 @@ const styles =
     },
 
     categoryText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         4,
       color:
@@ -6752,6 +6761,7 @@ const styles =
     },
 
     fieldLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       marginTop:
         15,
       marginBottom:
@@ -6770,6 +6780,7 @@ const styles =
     },
 
     input: {
+      fontFamily:"AssistanceInter",
       minHeight:
         46,
       borderRadius:
@@ -6855,6 +6866,7 @@ const styles =
     },
 
     accountContactHelper: {
+      fontFamily:"AssistanceInter",
       marginTop:
         3,
       color:
@@ -7099,6 +7111,7 @@ const styles =
     },
 
     backButtonText: {
+      fontFamily:"AssistanceInterSemiBold",
       color:
         "#475569",
       fontWeight:
@@ -7113,7 +7126,7 @@ const styles =
       borderRadius:
         10,
       backgroundColor:
-        "#1769E0",
+        "#078A68",
       flexDirection:
         "row",
       alignItems:
@@ -7127,6 +7140,7 @@ const styles =
     },
 
     nextButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#FFFFFF",
       fontWeight:
@@ -7182,6 +7196,7 @@ const styles =
     },
 
     documentTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontWeight:
@@ -7225,6 +7240,7 @@ const styles =
     },
 
     documentHelper: {
+      fontFamily:"AssistanceInter",
       marginTop:
         4,
       color:
@@ -7261,6 +7277,7 @@ const styles =
     },
 
     uploadButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#1769E0",
       fontSize:
@@ -7415,6 +7432,7 @@ const styles =
     },
 
     reviewLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       width:
         160,
       padding:
@@ -7430,6 +7448,7 @@ const styles =
     },
 
     reviewValue: {
+      fontFamily:"AssistanceInterMedium",
       flex:
         1,
       padding:
@@ -7445,6 +7464,7 @@ const styles =
     },
 
     reviewSideTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontSize:
@@ -7555,7 +7575,7 @@ const styles =
       borderRadius:
         10,
       backgroundColor:
-        "#1769E0",
+        "#078A68",
       flexDirection:
         "row",
       alignItems:
@@ -7569,6 +7589,7 @@ const styles =
     },
 
     submitButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#FFFFFF",
       fontWeight:
@@ -7663,6 +7684,7 @@ const styles =
     },
 
     successTitle: {
+      fontFamily:"AssistanceInterExtraBold",
       color:
         "#172033",
       fontSize:
@@ -7767,6 +7789,7 @@ const styles =
     },
 
     historyTitle: {
+      fontFamily:"AssistanceInterBold",
       marginTop:
         5,
       color:
@@ -7911,6 +7934,7 @@ const styles =
     },
 
     requestCardTitle: {
+      fontFamily:"AssistanceInterBold",
       marginTop:
         2,
       color:
@@ -7946,6 +7970,7 @@ const styles =
     },
 
     statusBadgeText: {
+      fontFamily:"AssistanceInterBold",
       fontSize:
         10,
       fontWeight:
@@ -8564,6 +8589,7 @@ const styles =
     },
 
     publicPhotoSectionTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#312E81",
       fontSize:
@@ -8573,6 +8599,7 @@ const styles =
     },
 
     publicPhotoSectionText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         3,
       color:
@@ -9003,4 +9030,46 @@ const styles =
       minWidth: 0,
     },
 
+
+    premiumHero:{minHeight:188,borderRadius:20,flexDirection:"row",alignItems:"center",paddingHorizontal:23,paddingVertical:22,gap:18,borderWidth:1,borderColor:"#C4EBDC",overflow:"hidden"},
+    premiumEmblem:{width:110,height:110,borderRadius:25,transform:[{rotate:"-8deg"}],padding:6,backgroundColor:"#FFFFFF",shadowColor:"#04744E",shadowOpacity:0.19,shadowOffset:{width:0,height:6},shadowRadius:13,elevation:3},
+    premiumEmblemMobile:{width:62,height:62,borderRadius:15,padding:4},
+    premiumEmblemFace:{flex:1,borderRadius:19,alignItems:"center",justifyContent:"center"},
+    premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
+    premiumHeroCopy:{flex:1,minWidth:0,gap:5},
+    premiumHeroCopyMobile:{width:"100%",alignSelf:"stretch",flex:0},
+    premiumHeroEyebrow:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#08775D",letterSpacing:1.1},
+    premiumHeroTitle:{fontFamily:"AssistanceInterExtraBold",fontSize:33,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
+    premiumHeroTitleMobile:{fontSize:26,lineHeight:33,letterSpacing:-0.5},
+    premiumHeroTagline:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#0F6E52"},
+    premiumHeroDescription:{fontFamily:"AssistanceInter",fontSize:11.5,lineHeight:18,color:"#4C766B",maxWidth:460},
+    premiumHeroRight:{width:"33%",minWidth:215,maxWidth:310,gap:14,alignItems:"stretch"},
+    premiumHeroRightMobile:{width:"100%",minWidth:0,maxWidth:"100%"},
+    premiumVerified:{alignSelf:"flex-end",paddingHorizontal:11,paddingVertical:7,backgroundColor:"rgba(255,255,255,0.91)",borderRadius:19,flexDirection:"row",alignItems:"center",gap:7},
+    premiumVerifiedText:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#087C5D"},
+    premiumHeroFacts:{flexDirection:"row",gap:9},
+    premiumHeroFact:{flex:1,minHeight:63,padding:10,borderRadius:11,backgroundColor:"rgba(255,255,255,0.91)",alignItems:"center",justifyContent:"center",gap:6},
+    premiumHeroFactText:{fontFamily:"AssistanceInterSemiBold",color:"#27594B",fontSize:10,textAlign:"center"},
+    premiumStepNumber:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#FFFFFF"},
+    amountPresetRow:{flexDirection:"row",flexWrap:"wrap",gap:7,marginTop:9},
+    amountPreset:{paddingHorizontal:11,paddingVertical:8,backgroundColor:"#F4FAF7",borderWidth:1,borderColor:"#D9E9E1",borderRadius:9},
+    amountPresetActive:{backgroundColor:"#E5F8EE",borderColor:"#129976"},
+    amountPresetText:{fontFamily:"AssistanceInterSemiBold",fontSize:11,color:"#597D6E"},
+    amountPresetTextActive:{color:"#087558"},
+    amountHelp:{fontFamily:"AssistanceInter",fontSize:10.5,color:"#76958A",marginTop:7,lineHeight:16},
+    releaseSection:{marginTop:22,padding:17,borderRadius:15,backgroundColor:"#F7FCF9",borderWidth:1,borderColor:"#DCEDE4",gap:13},
+    releaseHeader:{flexDirection:"row",alignItems:"center",gap:9},
+    releaseHeaderCopy:{flex:1,gap:4},
+    releaseTitle:{fontFamily:"AssistanceInterBold",fontSize:14,color:"#16483A"},
+    releaseDesc:{fontFamily:"AssistanceInter",fontSize:11,color:"#6E887E",lineHeight:17},
+    releaseOptions:{flexDirection:"row",flexWrap:"wrap",gap:10},
+    releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D6E7DE"},
+    releaseOptionSelected:{backgroundColor:"#E9F9F0",borderColor:"#0C9773"},
+    releaseIcon:{width:36,height:36,borderRadius:10,backgroundColor:"#E6F3ED",alignItems:"center",justifyContent:"center"},
+    releaseIconActive:{backgroundColor:"#D0F0E0"},
+    releaseOptionCopy:{flex:1,minWidth:0,gap:4},
+    releaseOptionTitle:{fontFamily:"AssistanceInterBold",fontSize:12,color:"#214C3E"},
+    releaseOptionHint:{fontFamily:"AssistanceInter",fontSize:9.5,color:"#728F80",lineHeight:14},
+    releasePrivacy:{flexDirection:"row",gap:8,alignItems:"flex-start",borderRadius:9,backgroundColor:"#ECF8F2",padding:10},
+    releasePrivacyText:{flex:1,fontFamily:"AssistanceInter",fontSize:10.3,lineHeight:16,color:"#577E6F"},
   });
