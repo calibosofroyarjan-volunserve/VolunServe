@@ -29,6 +29,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
+import { isVerifiedActiveCenter } from "../../lib/emergencyMapTypes";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -75,6 +76,8 @@ type EvacuationCenter = {
   longitude: number;
   capacity?: number;
   occupied?: number;
+  status?: string;
+  verificationStatus?: string;
 };
 
 type Volunteer = {
@@ -814,8 +817,10 @@ export default function MapTracking() {
           longitude: Number(raw.longitude ?? 0),
           capacity: Number(raw.capacity ?? 0),
           occupied: Number(raw.occupied ?? 0),
+          status: String(raw.status ?? "pending_verification"),
+          verificationStatus: String(raw.verificationStatus ?? "pending"),
         };
-      });
+      }).filter((center) => isVerifiedActiveCenter(center));
 
       setCenters(data);
     });
