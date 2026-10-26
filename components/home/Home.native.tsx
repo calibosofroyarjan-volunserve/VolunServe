@@ -35,6 +35,7 @@ import {
 import { db } from "../../lib/firebase";
 import { activeModeForProfile, hasVolunteerAccess } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import RoleJourney from "./RoleJourney";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -541,7 +542,7 @@ export default function HomeScreen() {
                   </View>
 
                   <Text style={styles.statusText}>
-                    System Status
+                    Account Status
                   </Text>
                 </View>
 
@@ -553,11 +554,13 @@ export default function HomeScreen() {
                       styles.operationalText
                     }
                   >
-                    Operational
+                    Signed in
                   </Text>
                 </View>
               </View>
             </Animated.View>
+
+            <RoleJourney />
 
             {/* =================================================
                 MAIN SERVICES HEADER
