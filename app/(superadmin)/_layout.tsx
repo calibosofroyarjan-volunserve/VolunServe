@@ -5,8 +5,6 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -38,16 +36,6 @@ type NavItem = {
   match: string;
 };
 
-const SUPERADMIN_MODULE_COLORS: Record<string, readonly [string, string]> = {
-  Dashboard: ["#009D7C", "#42BF8F"],
-  "Admin Accounts": ["#1876BD", "#57A5DE"],
-  "All Records": ["#336EAA", "#74A8D7"],
-  "Donation Management": ["#198B5A", "#59BC7B"],
-  "Donation Notifications": ["#9564B0", "#B889D6"],
-  "Audit Logs": ["#A66A3C", "#DBAD70"],
-  "System Settings": ["#667286", "#9DACBC"],
-};
-
 const navItems: NavItem[] = [
   {
     label: "Dashboard",
@@ -66,12 +54,6 @@ const navItems: NavItem[] = [
     icon: "albums-outline",
     route: "/(superadmin)/all-records",
     match: "/all-records",
-  },
-  {
-    label: "Donation Management",
-    icon: "heart-outline",
-    route: "/(superadmin)/donations",
-    match: "/donations",
   },
   {
     label: "Audit Logs",
@@ -210,7 +192,7 @@ export default function SuperAdminLayout() {
             screenOptions={{
               headerShown: false,
               contentStyle: {
-                backgroundColor: "#F2F9FC",
+                backgroundColor: "#F6F8F7",
               },
             }}
           />
@@ -236,8 +218,7 @@ function SuperAdminSidebar({
       : pathname.endsWith(item.match);
 
   return (
-    <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.sidebar, compact && styles.sidebarCompact]}>
-      <SidebarBotanicalDecor />
+    <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"
@@ -253,10 +234,10 @@ function SuperAdminSidebar({
         />
         <View style={styles.brandCopy}>
           <Text style={styles.brandName}>VolunServe</Text>
-          <Text style={styles.brandTagline}>SUPER ADMIN MODE</Text>
+          <Text style={styles.brandTagline}>SYSTEM ADMINISTRATION</Text>
         </View>
       </TouchableOpacity>
-      <Text style={styles.sidebarLabel}>MAIN MENU</Text>
+      <Text style={styles.sidebarLabel}>WORKSPACE</Text>
 
       <ScrollView
         style={styles.sidebarScroll}
@@ -267,7 +248,6 @@ function SuperAdminSidebar({
       >
         {navItems.map((item) => {
           const active = isActive(item);
-          const identity = SUPERADMIN_MODULE_COLORS[item.label] || (["#0A8179", "#41B49E"] as const);
           return (
             <TouchableOpacity
               key={item.route}
@@ -277,16 +257,7 @@ function SuperAdminSidebar({
               activeOpacity={0.82}
               onPress={() => onNavigate(item.route)}
             >
-              {active ? <LinearGradient pointerEvents="none"
-                colors={["#009A7C", "#078D74", "#3DBB86"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.7 }}
-                style={styles.navSelectedGradient}
-              /> : null}
               <View style={[styles.navIcon, active && styles.navIconActive]}>
-                <LinearGradient pointerEvents="none" colors={[...identity]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={styles.navIconGradient}
-                />
                 <Ionicons
                   name={item.icon}
                   size={19}
@@ -311,10 +282,10 @@ function SuperAdminSidebar({
           onPress={onSignOut}
         >
           <Ionicons name="log-out-outline" size={20} color="#D03647" />
-          <Text style={styles.signOutText}>Log Out</Text>
+          <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -341,9 +312,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#07332F",
+    backgroundColor: "#123E36",
     borderRightWidth: 1,
-    borderRightColor: "#13695E",
+    borderRightColor: "#DDE8E3",
   },
   sidebarCompact: {
     width: 268,
@@ -373,13 +344,14 @@ const styles = StyleSheet.create({
   brandName: {
     color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   brandTagline: {
     marginTop: 2,
     color: "#B6E9DF",
-    fontSize: 8.5,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.65,
   },
   sidebarLabel: {
     flexShrink: 0,
@@ -387,8 +359,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 27,
     color: "#A7DCD4",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: 10,
+    fontWeight: "700",
     letterSpacing: 1.1,
   },
   sidebarScroll: {
@@ -406,7 +378,7 @@ const styles = StyleSheet.create({
     minHeight: 49,
     marginBottom: 3,
     paddingHorizontal: 9,
-    borderRadius: 13,
+    borderRadius: 9,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
@@ -414,33 +386,33 @@ const styles = StyleSheet.create({
   },
   navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
-    backgroundColor: "#049C7B",
+    backgroundColor: "#226859",
   },
   navIcon: {
     width: 35,
     height: 35,
-    borderRadius: 12,
+    borderRadius: 9,
     overflow: "hidden",
-    backgroundColor: "#0C6B68",
+    backgroundColor: "rgba(255,255,255,0.07)",
     alignItems: "center",
     justifyContent: "center",
   },
   navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   navIconActive: {
-    backgroundColor: "#078F82",
+    backgroundColor: "#226859",
   },
   navText: {
     flex: 1,
-    color: "#E6F5F2",
-    fontSize: 12,
-    fontWeight: "700",
+    color: "#D8E6E1",
+    fontSize: 13,
+    fontWeight: "500",
   },
   navTextActive: {
     color: "#FFFFFF",
-    fontWeight: "900",
+    fontWeight: "700",
   },
   activeIndicator: {
-    width: 4,
+    width: 3,
     height: 22,
     borderRadius: 3,
     backgroundColor: "#E1FFF6",
@@ -462,7 +434,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   signOutText: {
-    color: "#C92537",
+    color: "#FFCFCF",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -518,7 +490,7 @@ const styles = StyleSheet.create({
   accountName: {
     color: "#0F172A",
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   accountRole: {
     color: "#64748B",
