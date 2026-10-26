@@ -34,3 +34,11 @@ for (const route of routes) {
 assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-login" />'),
   "Admin login must be a registered route in the root layout");
 console.log("PASS root layout registers administrative login");
+// Both administrative workspaces sign out to the same staff login route.
+// Keep Href typing here because local Expo typed route manifests may be stale.
+for (const layout of ["app/(admin)/_layout.tsx", "app/(superadmin)/_layout.tsx"]) {
+  const source = read(layout);
+  assert(/router\.replace\(\s*"\/admin-login" as Href\s*,?\s*\)/.test(source),
+    layout + " must type the Admin logout redirect as Href");
+}
+console.log("PASS both Admin and Super Admin logout routes are explicitly typed");
