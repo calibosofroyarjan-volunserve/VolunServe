@@ -28,6 +28,7 @@ import {
 import {
   createAdminLog,
 } from "../../lib/adminLogger";
+import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 
 import {
   db,
@@ -129,15 +130,10 @@ export default function AdminAccounts() {
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); }, [search, filter]);
 
-  const [
-    showAddAdmin,
-    setShowAddAdmin,
-  ] = useState(false);
+  const [showAddAdmin,setShowAddAdmin] = useState(false);
+  const [creationNotice,setCreationNotice] = useState("");
 
-  const [
-    promoteSearch,
-    setPromoteSearch,
-  ] = useState("");
+
 
   const [
     actionType,
@@ -283,56 +279,6 @@ export default function AdminAccounts() {
     safeAdminPage * ADMIN_PAGE_SIZE
   );
 
-  const eligibleUsers =
-    useMemo(() => {
-      const term =
-        promoteSearch
-          .trim()
-          .toLowerCase();
-
-      return users
-        .filter((item) => {
-          if (
-            item.role ===
-              "admin" ||
-            item.role ===
-              "superadmin"
-          ) {
-            return false;
-          }
-
-          if (
-            item.status !==
-            "approved"
-          ) {
-            return false;
-          }
-
-          if (!term) {
-            return true;
-          }
-
-          const searchable = [
-            item.fullName,
-            item.email,
-            item.barangay,
-            item.phoneNumber,
-            item.role,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          return searchable.includes(
-            term
-          );
-        })
-        .slice(0, 30);
-    }, [
-      users,
-      promoteSearch,
-    ]);
-
   const totalAdmins =
     users.filter(
       (item) =>
@@ -413,7 +359,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Grant Admin Access";
+      return "Create LGU Admin";
     }
 
     if (action === "suspend") {
@@ -811,10 +757,6 @@ export default function AdminAccounts() {
           setShowAddAdmin(
             false
           );
-
-          setPromoteSearch(
-            ""
-          );
         }
 
         setActionType(null);
@@ -892,6 +834,11 @@ export default function AdminAccounts() {
           styles.container
         }
       >
+        {!!creationNotice&&<View style={{marginBottom:14,borderRadius:12,backgroundColor:"#E8F8EF",padding:13,flexDirection:"row",alignItems:"center",gap:9}}>
+          <Ionicons name="checkmark-circle" size={18} color="#087E61"/>
+          <Text style={{flex:1,fontSize:11,color:"#24684F",lineHeight:17}}>{creationNotice}</Text>
+        </View>}
+
         <View
           style={styles.header}
         >
@@ -1473,261 +1420,15 @@ export default function AdminAccounts() {
         )}
       </ScrollView>
 
-      <Modal
+
+      <CreateLguAdminModal
         visible={showAddAdmin}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
+        onClose={()=>setShowAddAdmin(false)}
+        onCreated={email=>{
           setShowAddAdmin(false);
-          setPromoteSearch("");
+          setCreationNotice("Independent LGU Admin account created for "+email+". The official must sign in at /admin-login with their own credentials.");
         }}
-      >
-        <View
-          style={
-            styles.modalBackdrop
-          }
-        >
-          <View
-            style={
-              styles.modalCard
-            }
-          >
-            <View
-              style={
-                styles.modalHeader
-              }
-            >
-              <View
-                style={{ flex: 1 }}
-              >
-                <Text
-                  style={
-                    styles.modalTitle
-                  }
-                >
-                  Grant Admin Access
-                </Text>
-
-                <Text
-                  style={
-                    styles.modalSubtitle
-                  }
-                >
-                  Select a separate
-                  approved VolunServe
-                  account to grant
-                  operational Admin access.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={
-                  styles.closeButton
-                }
-                onPress={() => {
-                  setShowAddAdmin(
-                    false
-                  );
-
-                  setPromoteSearch(
-                    ""
-                  );
-                }}
-              >
-                <Ionicons
-                  name="close"
-                  size={22}
-                  color="#334155"
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={
-                styles.modalSearch
-              }
-            >
-              <Ionicons
-                name="search-outline"
-                size={19}
-                color="#64748B"
-              />
-
-              <TextInput
-                style={
-                  styles.searchInput
-                }
-                value={
-                  promoteSearch
-                }
-                onChangeText={
-                  setPromoteSearch
-                }
-                placeholder={
-                  "Search approved users..."
-                }
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            <ScrollView
-              style={{
-                maxHeight: 420,
-              }}
-            >
-              {eligibleUsers.length ===
-              0 ? (
-                <View
-                  style={
-                    styles.modalEmpty
-                  }
-                >
-                  <Ionicons
-                    name="person-outline"
-                    size={30}
-                    color="#94A3B8"
-                  />
-
-                  <Text
-                    style={
-                      styles.emptyText
-                    }
-                  >
-                    No eligible approved
-                    users found.
-                  </Text>
-                </View>
-              ) : (
-                eligibleUsers.map(
-                  (account) => {
-                    const isSaving =
-                      savingUid ===
-                      account.id;
-
-                    return (
-                      <View
-                        key={
-                          account.id
-                        }
-                        style={
-                          styles.userRow
-                        }
-                      >
-                        <View
-                          style={
-                            styles.smallAvatar
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.smallAvatarText
-                            }
-                          >
-                            {nameFor(
-                              account
-                            )
-                              .charAt(0)
-                              .toUpperCase()}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={{
-                            flex: 1,
-                          }}
-                        >
-                          <Text
-                            style={
-                              styles.userName
-                            }
-                          >
-                            {nameFor(
-                              account
-                            )}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.userMeta
-                            }
-                          >
-                            {account.email ||
-                              "-"}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.userMeta
-                            }
-                          >
-                            Current role:{" "}
-                            {account.role ||
-                              "resident"}
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          disabled={
-                            isSaving
-                          }
-                          style={
-                            styles.promoteButton
-                          }
-                          onPress={() =>
-                            openAdminAction(
-                              "promote",
-                              account
-                            )
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.promoteButtonText
-                            }
-                          >
-                            {isSaving
-                              ? "Saving..."
-                              : "Promote"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-                )
-              )}
-            </ScrollView>
-
-            <View
-              style={
-                styles.infoBox
-              }
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={20}
-                color="#0369A1"
-              />
-
-              <Text
-                style={
-                  styles.infoText
-                }
-              >
-                Use a separate verified
-                Firebase Auth account for
-                each operational Admin.
-                The Super Admin account
-                remains separate and is
-                never promoted from this
-                list. For Spark/free,
-                create or register the
-                Admin account first, then
-                grant Admin access here.
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
 
       <Modal
         visible={
