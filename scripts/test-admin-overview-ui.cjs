@@ -29,6 +29,17 @@ assert(profile.includes('doc(db, "users", user.uid)'),
   "Profile must update only its own Firestore record");
 assert(profile.includes('fullName: nextName, phoneNumber: nextPhone'),
   "Editable profile data must be limited to non-privileged contact fields");
+
+assert(overview.includes("styles.premiumHero"), "VolunServe brand masthead must remain");
+assert(overview.includes("styles.heroDivider") && overview.includes("styles.metricStrip"),
+  "Masthead must integrate statistics instead of rendering redundant cards");
+assert(overview.includes("styles.overviewPrimary") && overview.includes("styles.overviewSecondary"),
+  "Overview priorities and service chart must remain distinct and accessible");
+assert(overview.includes("styles.managementDisclosure"),
+  "Evacuation-center management must remain available without cluttering initial view");
+for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews", "metrics.activeCenters"]) {
+  assert(overview.includes(binding), "Overview metric data binding missing: " + binding);
+}
 assert(overview.includes('orientation="vertical"'), "LGU Overview must use vertical columns");
 assert(overview.includes("dataError ? null : metrics.activeCases"),
   "Graph must use real count state with unavailable values clearly distinguished");
