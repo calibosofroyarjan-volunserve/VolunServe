@@ -383,7 +383,7 @@ export default function WebLogin() {
             mobile && styles.loginCardMobile,
           ]}
         >
-          <View style={styles.formEyebrowRow}>
+          <View style={[styles.formEyebrowRow, mobile && styles.formEyebrowMobile]}>
             <View style={styles.formEyebrowDash}/>
             <Text style={styles.formEyebrow}>VOLUNSERVE ACCOUNT</Text>
           </View>
@@ -755,6 +755,7 @@ const styles = StyleSheet.create({
   borderWidth:1,borderColor:"rgba(232,255,248,0.42)",alignItems:"center",justifyContent:"center" },
   footerArrowMobile: { width:31,height:31,borderRadius:16 },
   formEyebrowRow: { flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10 },
+  formEyebrowMobile: { justifyContent:"flex-start",marginBottom:8 },
   formEyebrowDash: { width:15,height:3,borderRadius:2,backgroundColor:"#10A47D" },
   formEyebrow: { fontSize:9,fontFamily:"LoginInterBold",color:"#188063",letterSpacing:1.8 },
   securityIcon: { width:34,height:34,borderRadius:10,backgroundColor:"#D9F5E7",alignItems:"center",justifyContent:"center" },
