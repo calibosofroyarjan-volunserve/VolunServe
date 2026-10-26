@@ -922,33 +922,48 @@ export default function CommandCenter() {
           },
         ]}
       >
-        <View
-          style={
-            styles.header
-          }
-        >
-          <View
-            style={
-              styles.headerCopy
-            }
-          >
-            <Text
-              style={
-                styles.title
-              }
-            >
-              Operations overview
-            </Text>
-
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              A focused view of community response, staff reviews, and active LGU services.
-            </Text>
+        <View style={styles.premiumHero}>
+          <View pointerEvents="none" style={styles.heroOrbLarge} />
+          <View pointerEvents="none" style={styles.heroOrbSmall} />
+          <View style={[styles.heroHeader, width < 830 && styles.heroHeaderCompact]}>
+            <View style={styles.heroCopy}>
+              <View style={styles.heroEyebrow}>
+                <View style={styles.heroEyebrowMark} />
+                <Text style={styles.heroEyebrowText}>VOLUNSERVE  /  LGU OPERATIONS</Text>
+              </View>
+              <Text style={styles.heroTitle}>Operations overview</Text>
+              <Text style={styles.heroSubtitle}>
+                Community response, approvals, and essential services at a glance.
+              </Text>
+            </View>
+            <View style={styles.heroLocality}>
+              <Ionicons name="location-outline" size={16} color="#AFDEC5" />
+              <Text style={styles.heroLocalityText}>SAN JOSE DEL MONTE · BULACAN</Text>
+            </View>
           </View>
-
+          <View style={styles.heroDivider} />
+          <View style={[styles.metricStrip, width < 760 && styles.metricStripCompact]}>
+            {[
+              { label: "Open emergency cases", value: metrics.activeCases, tone: "normal" },
+              { label: "Critical reports", value: metrics.criticalOpen, tone: "critical" },
+              { label: "Pending reviews", value: metrics.pendingReviews, tone: "normal" },
+              { label: "Evacuation centers", value: metrics.activeCenters, tone: "normal" },
+            ].map((metric, index) => (
+              <View key={metric.label} style={[
+                styles.metricItem,
+                index > 0 && width >= 760 && styles.metricItemDivider,
+                metric.tone === "critical" && styles.metricItemCritical,
+              ]}>
+                <Text style={styles.metricItemLabel}>{metric.label}</Text>
+                <Text style={[
+                  styles.metricItemValue,
+                  metric.tone === "critical" && metrics.criticalOpen > 0 && styles.metricItemValueCritical,
+                ]}>
+                  {dataError ? "—" : metric.value.toLocaleString("en-PH")}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         {dataError && (
@@ -973,33 +988,15 @@ export default function CommandCenter() {
           </View>
         )}
 
-        <View style={styles.flatSummary}>
-          <View style={styles.overviewEyebrow}>
-            <View style={styles.overviewEyebrowDot} />
-            <Text style={styles.overline}>LIVE OPERATIONS · SAN JOSE DEL MONTE</Text>
-          </View>
-          <View style={[styles.metricStrip, width < 760 && styles.metricStripCompact]}>
-            {[
-              { label: "Open emergency cases", value: metrics.activeCases, tone: "normal" },
-              { label: "Critical cases", value: metrics.criticalOpen, tone: "critical" },
-              { label: "Pending reviews", value: metrics.pendingReviews, tone: "normal" },
-              { label: "Active evacuation centers", value: metrics.activeCenters, tone: "normal" },
-            ].map(metric => (
-              <View key={metric.label} style={[styles.metricItem, metric.tone === "critical" && styles.metricItemCritical]}>
-                <Text style={styles.metricItemLabel}>{metric.label}</Text>
-                <Text style={[styles.metricItemValue, metric.tone === "critical" && metrics.criticalOpen > 0 && styles.metricItemValueCritical]}>
-                  {dataError ? "—" : metric.value.toLocaleString("en-PH")}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
         <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
           <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
             <View style={styles.overviewSectionHeader}>
-              <Text style={styles.sectionTitle}>Needs attention</Text>
-              <Text style={styles.overviewSectionSubtitle}>Open the appropriate LGU workflow</Text>
+              <View style={styles.sectionEyebrow}>
+                <View style={styles.sectionEyebrowLine} />
+                <Text style={styles.sectionEyebrowText}>ACTION CENTER</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Priority workflows</Text>
+              <Text style={styles.overviewSectionSubtitle}>Continue directly to the service that needs review.</Text>
             </View>
             {[
               {
@@ -1051,9 +1048,10 @@ export default function CommandCenter() {
             ))}
           </View>
           <View style={[styles.overviewSecondary, width < 1220 && styles.overviewFullWidth]}>
+            <View style={styles.chartHeadingAccent} />
             <WorkspaceBarChart
-              title="Current workload"
-              subtitle="Live operational counts · same numerical scale"
+              title="Service workload"
+              subtitle="Current records across operational areas"
               orientation="vertical"
               bars={[
                 { key: "cases", label: "Open emergency cases", shortLabel: "Emergency", value: dataError ? null : metrics.activeCases, color: "#28765D" },
@@ -1061,12 +1059,17 @@ export default function CommandCenter() {
                 { key: "needs", label: "Open relief needs", shortLabel: "Relief", value: dataError ? null : metrics.openBarangayNeeds, color: "#C18A43" },
                 { key: "centers", label: "Active evacuation centers", shortLabel: "Centers", value: dataError ? null : metrics.activeCenters, color: "#587C86" },
               ]}
-              footer="Live totals from authorized Firestore records, not a time trend."
+              footer="Counts from authorized Firestore records · common scale"
             />
-            <View style={styles.serviceSummary}>
-              <Text style={styles.serviceSummaryHeading}>Evacuation capacity</Text>
+            <View style={[styles.serviceSummary, width < 520 && styles.serviceSummaryCompact]}>
+              <View style={styles.capacityIcon}>
+                <Ionicons name="business-outline" size={21} color="#206E58" />
+              </View>
+              <View style={styles.capacityCopy}>
+                <Text style={styles.serviceSummaryHeading}>Evacuation capacity</Text>
+                <Text style={styles.serviceSummaryCaption}>Available spaces at active centers</Text>
+              </View>
               <Text style={styles.serviceSummaryValue}>{dataError ? "—" : metrics.availableEvacuationSpaces.toLocaleString("en-PH")}</Text>
-              <Text style={styles.serviceSummaryCaption}>Available spaces in currently active LGU evacuation centers</Text>
             </View>
           </View>
         </View>
@@ -1782,33 +1785,73 @@ function CenterInput({
 
 const styles =
   StyleSheet.create({
+    // VolunServe identity: one rich evergreen masthead, not a field of cards.
+    premiumHero: {
+      overflow: "hidden", position: "relative", backgroundColor: "#103E33",
+      borderRadius: 16, paddingHorizontal: 30, paddingTop: 28, paddingBottom: 15,
+      marginBottom: 29, borderWidth: 1, borderColor: "#235D4E",
+    },
+    heroOrbLarge: {
+      position: "absolute", right: -105, top: -180, width: 375, height: 375,
+      borderRadius: 190, borderWidth: 1, borderColor: "rgba(203,243,220,0.14)",
+      backgroundColor: "rgba(60,143,113,0.09)",
+    },
+    heroOrbSmall: {
+      position: "absolute", right: 90, top: -130, width: 250, height: 250,
+      borderRadius: 125, borderWidth: 1, borderColor: "rgba(203,243,220,0.12)",
+    },
+    heroHeader: {
+      flexDirection: "row", alignItems: "flex-start",
+      justifyContent: "space-between", gap: 22, paddingBottom: 26,
+    },
+    heroHeaderCompact: { flexDirection: "column", gap: 14, paddingBottom: 20 },
+    heroCopy: { flex: 1, minWidth: 0, zIndex: 1 },
+    heroEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 },
+    heroEyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#AFD7A0" },
+    heroEyebrowText: { color: "#A9D9C5", letterSpacing: 1.35, fontSize: 10.5, fontWeight: "700" },
+    heroTitle: { color: "#FFFFFF", fontSize: 32, lineHeight: 40, letterSpacing: -0.7, fontWeight: "700" },
+    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 7, fontSize: 13, lineHeight: 21 },
+    heroLocality: {
+      flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 8, zIndex: 1,
+    },
+    heroLocalityText: { color: "#BADDCB", fontSize: 9.5, letterSpacing: 0.6, fontWeight: "700" },
+    heroDivider: { height: 1, backgroundColor: "rgba(204,238,217,0.21)" },
+    metricItemDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(204,238,217,0.18)" },
+    sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 },
+    sectionEyebrowLine: { height: 2, width: 21, backgroundColor: "#3C9072" },
+    sectionEyebrowText: { fontSize: 10, fontWeight: "800", color: "#53836D", letterSpacing: 1.0 },
+    chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
+    capacityIcon: { height: 42, width: 42, borderRadius: 12, backgroundColor: "#E1F0E7", justifyContent: "center", alignItems: "center" },
+    capacityCopy: { flex: 1, minWidth: 0 },
+    serviceSummaryCompact: { flexWrap: "wrap" },
+
     overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
-    overviewColumns: { flexDirection: "row", gap: 28, alignItems: "flex-start", marginBottom: 27 },
-    overviewColumnsStack: { flexDirection: "column", gap: 22 },
-    overviewPrimary: { flex: 1.22, minWidth: 0 },
-    overviewSecondary: { flex: 1, minWidth: 0 },
+    overviewColumns: { flexDirection: "row", gap: 18, alignItems: "stretch", marginBottom: 24 },
+    overviewColumnsStack: { flexDirection: "column", gap: 18 },
+    overviewPrimary: { flex: 1.18, minWidth: 0, padding: 22, borderRadius: 14, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewSecondary: { flex: 1, minWidth: 0, padding: 22, borderRadius: 14, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
     overviewFullWidth: { flex: 0, width: "100%" },
-    overviewSectionHeader: { marginBottom: 13 },
-    overviewSectionSubtitle: { color: "#75877F", fontSize: 12, lineHeight: 18, marginTop: 4 },
+    overviewSectionHeader: { marginBottom: 10 },
+    overviewSectionSubtitle: { color: "#6C8076", fontSize: 12.5, lineHeight: 19, marginTop: 6 },
     overviewAction: {
-      flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 13, paddingHorizontal: 2,
-      borderBottomWidth: 1, borderColor: "#E0E8E3", minHeight: 67,
+      flexDirection: "row", gap: 13, alignItems: "center", paddingVertical: 15, paddingHorizontal: 2,
+      borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 73,
     },
-    overviewActionIcon: { width: 35, height: 35, borderRadius: 8, backgroundColor: "#E7F0EB", alignItems: "center", justifyContent: "center" },
+    overviewActionIcon: { width: 40, height: 40, borderRadius: 11, backgroundColor: "#EAF4ED", alignItems: "center", justifyContent: "center" },
     overviewActionContent: { flex: 1, minWidth: 0 },
-    overviewActionTitle: { fontSize: 13, fontWeight: "700", color: "#183F32" },
-    overviewActionDetail: { fontSize: 11.5, lineHeight: 17, color: "#718378", marginTop: 3 },
-    metricItemCritical: { borderBottomWidth: 2, borderBottomColor: "#CF8B51" },
-    metricItemValueCritical: { color: "#9C4F28" },
-    serviceSummary: { marginTop: 24, paddingTop: 17, borderTopWidth: 1, borderColor: "#DCE6DF" },
-    serviceSummaryHeading: { color: "#5D7669", fontSize: 12, fontWeight: "600" },
-    serviceSummaryValue: { color: "#183F32", fontSize: 29, fontWeight: "700", marginTop: 5 },
-    serviceSummaryCaption: { color: "#788B80", fontSize: 11.5, lineHeight: 18, marginTop: 4 },
+    overviewActionTitle: { fontSize: 13.5, fontWeight: "700", color: "#173E31" },
+    overviewActionDetail: { fontSize: 12, lineHeight: 18, color: "#708579", marginTop: 4 },
+    metricItemCritical: {},
+    metricItemValueCritical: { color: "#EBC18B" },
+    serviceSummary: { marginTop: 12, paddingHorizontal: 13, paddingVertical: 14, backgroundColor: "#F0F6F1", borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 12 },
+    serviceSummaryHeading: { color: "#315D4B", fontSize: 12.5, fontWeight: "700" },
+    serviceSummaryValue: { color: "#164D3C", fontSize: 27, fontWeight: "700", fontVariant: ["tabular-nums"] },
+    serviceSummaryCaption: { color: "#687F70", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
     managementDisclosure: {
-      minHeight: 77, flexDirection: "row", alignItems: "center", gap: 12,
-      paddingHorizontal: 8, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D7E4DB",
-      marginTop: 6, marginBottom: 12,
+      minHeight: 79, flexDirection: "row", alignItems: "center", gap: 12,
+      paddingHorizontal: 17, paddingVertical: 14, borderWidth: 1, borderColor: "#DDE9E0",
+      borderRadius: 12, backgroundColor: "#FFFFFF", marginTop: 2, marginBottom: 12,
     },
     disclosureIcon: { width: 39, height: 39, alignItems: "center", justifyContent: "center", backgroundColor: "#E5F0E9", borderRadius: 9 },
     disclosureTitle: { color: "#173D32", fontSize: 14, fontWeight: "700" },
@@ -1821,13 +1864,12 @@ const styles =
     },
     flatSummary: { marginBottom: 26 },
     metricStrip: {
-      flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderBottomWidth: 1,
-      borderColor: "#DDE6E1",
+      flexDirection: "row", flexWrap: "wrap",
     },
     metricStripCompact: { flexWrap: "wrap" },
-    metricItem: { flexGrow: 1, flexBasis: "24%", minWidth: 138, paddingVertical: 18, paddingHorizontal: 12 },
-    metricItemLabel: { fontSize: 11, color: "#62786F", fontWeight: "600" },
-    metricItemValue: { fontSize: 26, fontWeight: "700", color: "#173D32", marginTop: 5, fontVariant: ["tabular-nums"] },
+    metricItem: { flexGrow: 1, flexBasis: "24%", minWidth: 138, paddingVertical: 20, paddingHorizontal: 17 },
+    metricItemLabel: { fontSize: 11.5, color: "#B6D5C4", fontWeight: "600" },
+    metricItemValue: { fontSize: 31, lineHeight: 40, fontWeight: "700", color: "#FFFFFF", marginTop: 5, fontVariant: ["tabular-nums"] },
     queueSection: { marginTop: 31 },
     queueHeader: { marginBottom: 15 },
     queueRow: {
@@ -1846,14 +1888,14 @@ const styles =
     // Separate right-side scrolling from the fixed Admin navigation.
     webScrollBar: {
       overflowY: "scroll",
-      scrollbarWidth: "auto",
-      scrollbarColor: "#8CA3B2 #F2F9FC",
+      scrollbarWidth: "thin",
+      scrollbarColor: "#AFC4B7 #F6F8F7",
     } as any,
 
     page: {
       width: "100%",
-      paddingHorizontal: 28,
-      paddingTop: 30,
+      paddingHorizontal: 25,
+      paddingTop: 25,
       paddingBottom: 64,
     },
 
