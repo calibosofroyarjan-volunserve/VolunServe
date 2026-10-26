@@ -403,6 +403,12 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'
+            // Promote only after an accountable LGU credential review.
+            // A verified record is written by the same Super Admin in the
+            // same Firestore batch, and must identify this account.
+            && getAfter(/databases/$(database)/documents/lguAdminCredentialReviews/$(uid)).data.targetUid == uid
+            && getAfter(/databases/$(database)/documents/lguAdminCredentialReviews/$(uid)).data.reviewStatus == 'verified'
+            && getAfter(/databases/$(database)/documents/lguAdminCredentialReviews/$(uid)).data.verifiedBy == request.auth.uid
             && request.resource.data.adminCreatedBy == request.auth.uid
             && request.resource.data.adminUpdatedBy == request.auth.uid
             && request.resource.data.adminCreatedAt is timestamp
@@ -4874,6 +4880,35 @@ service cloud.firestore {
           && request.auth.uid == uid
           && resource.data.residentId == request.auth.uid
         );
+    }
+    // Private credential review, only a signed-in Super Admin may read/write.
+    // Verification must be an explicit action, not implied by account approval.
+    match /lguAdminCredentialReviews/{targetUid} {
+      allow read: if isSuperAdmin();
+      allow create, update: if isSuperAdmin()
+        && request.auth.uid != targetUid
+        && request.resource.data.keys().hasOnly([
+          'targetUid', 'reviewStatus', 'office', 'position',
+          'credentialReference', 'verificationMethod',
+          'verifiedBy', 'verifiedAt'
+        ])
+        && request.resource.data.targetUid == targetUid
+        && request.resource.data.reviewStatus == 'verified'
+        && request.resource.data.office is string
+        && request.resource.data.office.size() >= 3
+        && request.resource.data.office.size() <= 160
+        && request.resource.data.position is string
+        && request.resource.data.position.size() >= 3
+        && request.resource.data.position.size() <= 120
+        && request.resource.data.credentialReference is string
+        && request.resource.data.credentialReference.size() >= 5
+        && request.resource.data.credentialReference.size() <= 160
+        && request.resource.data.verificationMethod is string
+        && request.resource.data.verificationMethod.size() >= 8
+        && request.resource.data.verificationMethod.size() <= 200
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedAt == request.time;
+      allow delete: if false;
     }
     match /adminLogs/{logId} {
       allow read: if isSuperAdmin();
