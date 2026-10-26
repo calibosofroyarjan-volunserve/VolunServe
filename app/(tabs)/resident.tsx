@@ -3270,6 +3270,17 @@ export default function AssistanceRequestScreen() {
                         placeholder="e.g. 50000"
                         placeholderTextColor="#94A3B8"
                       />
+                      <View style={styles.amountPresetRow}>
+                        {AMOUNT_PRESETS.map(value=>{
+                          const selected=Number(estimatedAmount)===value;
+                          return <Pressable key={value} accessibilityRole="button"
+                            accessibilityState={{selected}} onPress={()=>setEstimatedAmount(String(value))}
+                            style={[styles.amountPreset,selected&&styles.amountPresetActive]}>
+                            <Text style={[styles.amountPresetText,selected&&styles.amountPresetTextActive]}>{formatMoney(value)}</Text>
+                          </Pressable>;
+                        })}
+                      </View>
+                      <Text style={styles.amountHelp}>Select an amount or enter your exact need. No payment is collected here.</Text>
                     </View>
 
                     <View
@@ -3398,6 +3409,38 @@ export default function AssistanceRequestScreen() {
                       placeholderTextColor="#94A3B8"
                     />
                   )}
+
+                  <View style={styles.releaseSection}>
+                    <View style={styles.releaseHeader}>
+                      <Ionicons name="wallet-outline" size={21} color="#078C69"/>
+                      <View style={styles.releaseHeaderCopy}>
+                        <Text style={styles.releaseTitle}>Preferred assistance release method</Text>
+                        <Text style={styles.releaseDesc}>Select how you would prefer to receive an LGU-approved release.</Text>
+                      </View>
+                    </View>
+                    <View style={styles.releaseOptions}>
+                      {RELEASE_OPTIONS.map(option=>{
+                        const chosen=releasePreference===option.key;
+                        return <Pressable key={option.key} accessibilityRole="radio"
+                          accessibilityState={{selected:chosen}} onPress={()=>setReleasePreference(option.key)}
+                          style={[styles.releaseOption,chosen&&styles.releaseOptionSelected]}>
+                          <View style={[styles.releaseIcon,chosen&&styles.releaseIconActive]}>
+                            <Ionicons name={option.icon} size={22} color="#087D61"/>
+                          </View>
+                          <View style={styles.releaseOptionCopy}>
+                            <Text style={styles.releaseOptionTitle}>{option.title}</Text>
+                            <Text style={styles.releaseOptionHint}>{option.hint}</Text>
+                          </View>
+                          <Ionicons name={chosen?"checkmark-circle":"ellipse-outline"}
+                            size={20} color={chosen?"#05886A":"#91ADA4"}/>
+                        </Pressable>;
+                      })}
+                    </View>
+                    <View style={styles.releasePrivacy}>
+                      <Ionicons name="shield-checkmark-outline" size={16} color="#087E62"/>
+                      <Text style={styles.releasePrivacyText}>Preference only. Never enter wallet numbers, bank or card details, PINs or OTPs. No payout happens on submission.</Text>
+                    </View>
+                  </View>
 
                   <View
                     style={
@@ -3962,7 +4005,8 @@ export default function AssistanceRequestScreen() {
                         }
                       />
 
-                      <ReviewRow
+                      <ReviewRow label="Preferred Release Method" value={RELEASE_OPTIONS.find(x=>x.key===releasePreference)?.title||"GCash"} />
+                       <ReviewRow
                         label="Current Situation"
                         value={
                           resolvedSituation
