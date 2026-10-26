@@ -83,6 +83,19 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
+      // A role grant is only valid with a same-commit, reviewed LGU credential record.
+      // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
+      // rather than a stale record from an earlier promotion.
+      function hasFreshLguCredentialReview() {
+        let review = getAfter(
+          /databases/$(database)/documents/lguAdminCredentialReviews/$(uid)
+        ).data;
+        return review.targetUid == uid
+          && review.reviewStatus == 'verified'
+          && review.verifiedBy == request.auth.uid
+          && review.verifiedAt == request.time
+          && review.accountEmail == request.resource.data.email;
+      }
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
@@ -153,6 +166,7 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.role == 'admin'
         && request.resource.data.status == 'approved'
+        && hasFreshLguCredentialReview()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.reviewedBy == request.auth.uid;
       allow get: if signedIn()
@@ -403,6 +417,7 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'
+            && hasFreshLguCredentialReview()
             && request.resource.data.adminCreatedBy == request.auth.uid
             && request.resource.data.adminUpdatedBy == request.auth.uid
             && request.resource.data.adminCreatedAt is timestamp
@@ -4874,6 +4889,44 @@ service cloud.firestore {
           && request.auth.uid == uid
           && resource.data.residentId == request.auth.uid
         );
+    }
+    // Private human-verified LGU credentials: reference only, never ID scans.
+    // Admin access requires a fresh review in the same commit as role promotion.
+    match /lguAdminCredentialReviews/{targetUid} {
+      function validReview() {
+        return isSuperAdmin()
+          && request.auth.uid != targetUid
+          && request.resource.data.keys().hasOnly([
+            'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
+            'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
+            'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
+          ])
+          && request.resource.data.targetUid == targetUid
+          && request.resource.data.reviewStatus == 'verified'
+          && request.resource.data.accountEmail is string
+          && request.resource.data.accountEmail.size() >= 5
+          && request.resource.data.accountEmail.size() <= 254
+          && request.resource.data.office is string
+          && request.resource.data.office.size() >= 3
+          && request.resource.data.office.size() <= 160
+          && request.resource.data.position is string
+          && request.resource.data.position.size() >= 3
+          && request.resource.data.position.size() <= 120
+          && request.resource.data.credentialReference is string
+          && request.resource.data.credentialReference.size() >= 5
+          && request.resource.data.credentialReference.size() <= 160
+          && request.resource.data.verificationMethod is string
+          && request.resource.data.verificationMethod.size() >= 8
+          && request.resource.data.verificationMethod.size() <= 200
+          && request.resource.data.verifiedBy == request.auth.uid
+          && request.resource.data.verifiedAt == request.time;
+      }
+      allow read: if isSuperAdmin();
+      allow create, update: if validReview();
+      allow delete: if false;
     }
     match /adminLogs/{logId} {
       allow read: if isSuperAdmin();
