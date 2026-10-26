@@ -1964,7 +1964,7 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7F9",
+    backgroundColor: "#F6F8F7",
   },
   container: {
     width: "100%",
@@ -1979,7 +1979,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#F4F7F9",
+    backgroundColor: "#F6F8F7",
   },
   loadingText: {
     color: "#64748B",
@@ -2020,7 +2020,7 @@ const styles = StyleSheet.create({
     fontFamily: "DonationInterBold",},
   title: {
     marginTop: 4,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 27,
     
   
@@ -2116,7 +2116,7 @@ const styles = StyleSheet.create({
     fontFamily: "DonationInterBold",},
   sectionTitle: {
     marginTop: 3,
-    color: "#0F172A",
+    color: "#173D32",
     fontSize: 20,
     
   
