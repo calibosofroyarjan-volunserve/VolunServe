@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, type Region } from "react-native-maps";
+import MapView, { Callout, Marker, type Region } from "react-native-maps";
 import { db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 
@@ -175,7 +175,18 @@ export default function PublicMapTracking() {
                 : center.address
             }
             pinColor="#0f766e"
-          />
+          >
+            <Callout onPress={() => {
+              const url = mapsDirectionsUrl(center.latitude, center.longitude);
+              if (url) void Linking.openURL(url);
+            }}>
+              <View style={styles.centerCallout}>
+                <Text style={styles.centerCalloutTitle}>{center.name}</Text>
+                <Text style={styles.centerCalloutDetails}>LGU verified · Last reported occupancy {center.occupied}/{center.capacity}</Text>
+                <Text style={styles.centerCalloutLink}>Directions in Google Maps</Text>
+              </View>
+            </Callout>
+          </Marker>
         ))}
       </MapView>
 
@@ -213,6 +224,11 @@ export default function PublicMapTracking() {
 }
 
 const styles = StyleSheet.create({
+  centerCallout: { minWidth: 175, padding: 8, maxWidth: 240 },
+  centerCalloutTitle: { fontSize: 14, fontWeight: "700", color: "#173D32" },
+  centerCalloutDetails: { fontSize: 11, color: "#647C70", marginTop: 5 },
+  centerCalloutLink: { fontSize: 12, fontWeight: "700", color: "#23765F", marginTop: 8 },
+
   container: {
     flex: 1,
     backgroundColor: "#e2e8f0",
