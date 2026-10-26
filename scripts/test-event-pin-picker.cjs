@@ -7,6 +7,7 @@ const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 const picker = read("components/CommunityEventPinPicker.web.tsx");
 const map = read("components/InteractiveEventPinMap.web.tsx");
 const native = read("components/CommunityEventPinPicker.native.tsx");
+const lookup = read("lib/eventVenueLookup.ts");
 const screen = read("app/(tabs)/community-events.tsx");
 const backend = read("backend/server.js");
 
@@ -33,4 +34,14 @@ assert(!picker.includes("GOOGLE_EMBED_KEY"), "A preview-only iframe must not be 
 assert(screen.includes("<CommunityEventPinPicker"), "Live Community Events flow must use real pin picker");
 assert(native.includes('onPress={event=>pick('), "Existing native tap flow must remain available");
 assert(backend.includes("disaster") || backend.includes("community"), "Backend remains present");
-console.log("PASS interactive web pin picker, API-key fallback, safe confirmation, native parity");
+assert(picker.includes("lookUpEventVenue(barangay, venue") &&
+  native.includes("lookUpEventVenue(barangay,venue"),
+  "Web and native must search the named event venue, not the Resident's GPS");
+assert(screen.includes("key={`${form.barangay}:${form.location}`}") &&
+  screen.includes('field === "barangay" || field === "location"'),
+  "Changing barangay or venue must clear stale confirmed coordinates");
+assert(lookup.includes("candidates.length !== 1") && lookup.includes("insideSJDM"),
+  "Geocoding must reject ambiguous or out-of-area guesses");
+assert(!picker.includes(">◎ Use Current GPS<") && !native.includes(">Use My Current GPS<"),
+  "Venue workflow must not offer proposer GPS as its primary lookup");
+console.log("PASS interactive event map and venue-based automatic pin lookup checks");

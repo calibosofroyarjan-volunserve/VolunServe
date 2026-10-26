@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, Text, TextInput, View } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import * as Location from "expo-location";
+import { lookUpEventVenue } from "../lib/eventVenueLookup";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
+  barangay?: string;
+  venue?: string;
   latitude: number | null;
   longitude: number | null;
   onChange: (lat: number | null, lng: number | null) => void;
@@ -16,10 +18,24 @@ const tidy = (latitude: number,longitude: number): Venue => ({
 });
 const equal = (a: Venue|null,b: Venue|null) => !!a&&!!b&&a.latitude===b.latitude&&a.longitude===b.longitude;
 
-export default function CommunityEventPinPicker({latitude,longitude,onChange}:Props) {
+export default function CommunityEventPinPicker({latitude,longitude,barangay="",venue="",onChange}:Props) {
   const saved:Venue|null = latitude!==null&&longitude!==null&&valid(latitude,longitude)?tidy(latitude,longitude):null;
   const [draft,setDraft] = useState<Venue|null>(saved);
   const [notice,setNotice] = useState("");
+  useEffect(()=>{
+    if(!barangay.trim()||!venue.trim())return;
+    const controller=new AbortController();
+    const timer=setTimeout(()=>{
+      void lookUpEventVenue(barangay,venue,controller.signal).then(result=>{
+        if(controller.signal.aborted)return;
+        if(result.status==="found"){
+          setDraft(result.point);
+          setNotice("Suggested venue pin found. Verify it on the map and confirm.");
+        }else setNotice("Exact venue was not found automatically. Tap the correct venue on the map.");
+      }).catch(()=>{if(!controller.signal.aborted)setNotice("Venue lookup unavailable. Select the pin on the map.");});
+    },900);
+    return ()=>{controller.abort();clearTimeout(timer);};
+  },[barangay,venue]);
   const [manual,setManual] = useState("");
   const mapRef = useRef<MapView|null>(null);
   const selected = draft||saved||CENTER;
@@ -38,12 +54,7 @@ export default function CommunityEventPinPicker({latitude,longitude,onChange}:Pr
   },[draft?.latitude,draft?.longitude]);
 
   const locate=async()=>{
-    try {
-      const permission=await Location.requestForegroundPermissionsAsync();
-      if(permission.status!=="granted"){setNotice("GPS permission denied. You can still tap the map or enter coordinates.");return;}
-      const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.High});
-      pick(pos.coords.latitude,pos.coords.longitude);
-    } catch {setNotice("GPS not available. Tap the map or enter coordinates.");}
+    setNotice("Select the actual event venue on the map, not your current GPS.");
   };
   const useCoordinates=()=>{
     const match=manual.trim().match(/^(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);
@@ -69,9 +80,6 @@ export default function CommunityEventPinPicker({latitude,longitude,onChange}:Pr
         title="Event Meeting Point"/>:null}
     </MapView>
     <View style={{flexDirection:"row",flexWrap:"wrap",gap:9,marginTop:11}}>
-      <Pressable onPress={()=>void locate()} style={{padding:12,backgroundColor:"#087F75",borderRadius:8}}>
-        <Text style={{fontSize:12,color:"#FFFFFF",fontWeight:"800"}}>Use My Current GPS</Text>
-      </Pressable>
       <Pressable onPress={()=>void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
         style={{padding:12,backgroundColor:"#E7F1FC",borderRadius:8}}>
         <Text style={{fontSize:12,color:"#17628D",fontWeight:"800"}}>Find Venue in Google Maps ↗</Text>
