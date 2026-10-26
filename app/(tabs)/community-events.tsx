@@ -5391,7 +5391,7 @@ const styles = StyleSheet.create({
   lockedSectionTitle: { fontFamily:"EventInterBold", color: "#17483E", fontSize: 16, fontWeight: "900", flexShrink: 1 },
   lockedSectionSub: { color: "#6E8494", fontSize: 10.5, marginTop: 3 },
   lockedMapAddress: { fontSize: 11, color: "#486980", lineHeight: 17, marginBottom: 9 },
-  lockedMapFrame: { width: "100%", height: 260, overflow: "hidden", borderRadius: 11, backgroundColor: "#E5F3EF", borderWidth: 1, borderColor: "#DCEAE8" },
+  lockedMapFrame: { width: "100%", minHeight: 270, borderRadius: 11, backgroundColor: "#E5F3EF" },
   lockedMapPlaceholder: { backgroundColor: "#F1F7F6", minHeight: 160, borderRadius: 11, justifyContent: "center", alignItems: "center", padding: 18, gap: 12 },
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
   lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
