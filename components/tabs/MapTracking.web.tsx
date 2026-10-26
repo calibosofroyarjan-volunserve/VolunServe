@@ -6270,18 +6270,30 @@ export default function WebMapTracking() {
                 {selectedCenter.address || selectedCenter.barangay || "Address pending"}
               </p>
               <div className="clean-info-block">
-                <strong>Status</strong>
-                <p>{String(selectedCenter.status || "available").toUpperCase()}</p>
+                <strong>LGU confirmed status</strong>
+                <p>VERIFIED · OPEN</p>
+                <small>As of {timestampMillis(selectedCenter.updatedAt) > 0
+                  ? new Date(timestampMillis(selectedCenter.updatedAt)).toLocaleString("en-PH")
+                  : "an unknown update time"} · Availability may change during emergencies.</small>
               </div>
               <div className="clean-info-block">
-                <strong>Occupancy</strong>
+                <strong>Last reported occupancy</strong>
                 <p>
-                  {selectedCenter.occupied ?? 0}
+                  {typeof selectedCenter.occupied === "number" ? selectedCenter.occupied : "Unknown"}
                   {Number.isFinite(selectedCenter.capacity)
                     ? ` / ${selectedCenter.capacity}`
                     : ""}
                 </p>
               </div>
+              {mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude) && (
+                <a
+                  href={mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude)!}
+                  target="_blank" rel="noopener noreferrer"
+                  className="primary-button" style={{ display: "inline-flex", marginTop: 12 }}
+                >
+                  Open directions in Google Maps
+                </a>
+              )}
             </>
           ) : (
             <div className="details-empty">
