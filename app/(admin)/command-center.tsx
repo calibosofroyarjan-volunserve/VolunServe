@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
@@ -916,177 +917,6 @@ export default function CommandCenter() {
       needAssessments,
     ]);
 
-  const modules:
-    ModuleCardProps[] =
-    [
-      {
-        icon:
-          "warning-outline",
-        iconColor:
-          "#DC2626",
-        iconBackground:
-          "#FEF2F2",
-        title:
-          "Emergency LGU Operations",
-        description:
-          "Validate reports and coordinate the LGU response. Volunteer assignment is optional support.",
-        count:
-          metrics.activeCases,
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-cases",
-          ),
-      },
-      {
-        icon:
-          "business-outline",
-        iconColor:
-          "#0891B2",
-        iconBackground:
-          "#ECFEFF",
-        title:
-          "Evacuation Centers",
-        description:
-          "Create and update official LGU evacuation centers shown on the map.",
-        count:
-          metrics.activeCenters,
-        onPress:
-          openNewCenter,
-      },
-      {
-        icon:
-          "cube-outline",
-        iconColor:
-          "#059669",
-        iconBackground:
-          "#ECFDF5",
-        title:
-          "Relief Operations",
-        description:
-          "Review verified barangay needs, LGU inventory, allocations, and distribution records in one place.",
-        count:
-          metrics.openBarangayNeeds,
-        onPress: () =>
-          navigate(
-            "/(admin)/relief-operations",
-          ),
-      },
-      {
-        icon:
-          "people-outline",
-        iconColor:
-          "#2563EB",
-        iconBackground:
-          "#EFF6FF",
-        title:
-          "Volunteer Reviews",
-        description:
-          "Review volunteer applications and legacy account records. Volunteers support LGU operations.",
-        count:
-          metrics.pendingReviews,
-        onPress: () =>
-          navigate(
-            "/(admin)/account-approvals",
-          ),
-      },
-      {
-        icon:
-          "calendar-outline",
-        iconColor:
-          "#7C3AED",
-        iconBackground:
-          "#F5F3FF",
-        title:
-          "Events",
-        description:
-          "Manage organized community and volunteer activities.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-events",
-          ),
-      },
-      {
-        icon:
-          "heart-outline",
-        iconColor:
-          "#078F82",
-        iconBackground:
-          "#E8F8F2",
-        title:
-          "Donations",
-        description:
-          "Monitor donor profiles, verified payment records, pending transactions, and campaign support.",
-        onPress: () =>
-          navigate(
-            "/(admin)/donor-monitoring",
-          ),
-      },
-      {
-        icon:
-          "megaphone-outline",
-        iconColor:
-          "#D97706",
-        iconBackground:
-          "#FFFBEB",
-        title:
-          "Announcements",
-        description:
-          "Publish official LGU community updates and emergency information.",
-        onPress: () =>
-          navigate(
-            "/(admin)/create-announcement",
-          ),
-      },
-      {
-        icon:
-          "analytics-outline",
-        iconColor:
-          "#0284C7",
-        iconBackground:
-          "#F0F9FF",
-        title:
-          "Analytics",
-        description:
-          "Review operational trends, response activity, and documented outcomes.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-analytics",
-          ),
-      },
-      {
-        icon:
-          "ribbon-outline",
-        iconColor:
-          "#078F82",
-        iconBackground:
-          "#EEF2FF",
-        title:
-          "Certificates",
-        description:
-          "Issue certificates from verified volunteer service records.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-certificates",
-          ),
-      },
-      {
-        icon:
-          "shield-checkmark-outline",
-        iconColor:
-          "#B45309",
-        iconBackground:
-          "#FFF7ED",
-        title:
-          "Disputes",
-        description:
-          "Review contested volunteer-response outcomes and service records.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-disputes",
-          ),
-      },
-    ];
-
   const overview:
     OverviewCardProps[] =
     [
@@ -1248,54 +1078,25 @@ export default function CommandCenter() {
           },
         ]}
       >
-        <View
-          style={
-            styles.header
-          }
-        >
-          <View
-            style={
-              styles.headerCopy
-            }
-          >
-            <Text
-              style={
-                styles.title
-              }
-            >
-              Admin Command Center
-            </Text>
 
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              Manage emergency response, community activities, assistance requests, and volunteer operations in San Jose del Monte.
-            </Text>
+        <LinearGradient colors={["#073D38","#04725D","#14A27B"]}
+          start={{x:0,y:0}} end={{x:1,y:1}}
+          style={{borderRadius:19,padding:24,marginBottom:23}}>
+          <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:15}}>
+            <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#CCFDE9"/>
+              <Text style={{color:"#C7F7E3",fontWeight:"800",fontSize:10,letterSpacing:1.2}}>LGU ADMIN · COMMAND CENTER</Text>
+            </View>
+            <View style={{backgroundColor:"rgba(255,255,255,.14)",borderRadius:30,paddingVertical:7,paddingHorizontal:11}}>
+              <Text style={{color:"#F0FFF8",fontSize:10,fontWeight:"700"}}>Operational dashboard</Text>
+            </View>
           </View>
-
-          <View
-            style={
-              styles.adminBadge
-            }
-          >
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={15}
-              color="#0F766E"
-            />
-
-            <Text
-              style={
-                styles.adminBadgeText
-              }
-            >
-              ADMIN
-            </Text>
-          </View>
-        </View>
-
+          <Text style={{fontSize:27,fontWeight:"900",color:"#FFFFFF",letterSpacing:-.55}}>Admin Command Center</Text>
+          <Text style={{fontSize:12,lineHeight:20,color:"#E0FCEF",maxWidth:650,marginTop:8}}>
+            Review requests, coordinate emergencies, approve eligible Volunteers and manage community services.
+            Use the sidebar for the complete module directory.
+          </Text>
+        </LinearGradient>
         {dataError && (
           <View
             style={
@@ -1358,56 +1159,40 @@ export default function CommandCenter() {
           </View>
         </View>
 
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Operations
-          </Text>
 
-          <Text
-            style={
-              styles.sectionSubtitle
-            }
-          >
-            LGU/Admin remains the primary authority and responder for every case.
+        <View style={{marginBottom:12}}>
+          <Text style={{fontSize:10,color:"#108269",fontWeight:"800",letterSpacing:1.2,marginBottom:7}}>PRIORITY WORK QUEUES</Text>
+          <Text style={{color:"#183E33",fontSize:20,fontWeight:"900"}}>Needs your attention</Text>
+          <Text style={{fontSize:11,color:"#718A7E",marginTop:4,lineHeight:18}}>
+            Open the correct review page to act. No approvals can happen directly from the dashboard.
           </Text>
         </View>
-
-        <View
-          style={[
-            styles.moduleGrid,
-            {
-              gap:
-                moduleGap,
-            },
-          ]}
-        >
-          {modules.map(
-            (item) => (
-              <View
-                key={
-                  item.title
-                }
-                style={{
-                  width:
-                    moduleCardWidth,
-                }}
-              >
-                <ModuleCard
-                  {...item}
-                />
+        <View style={{flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:13}}>
+          {([
+            {title:"Account Reviews",count:pendingUserIds.length,icon:"people-outline" as const,route:"/(admin)/account-approvals",color:"#087F64"},
+            {title:"Volunteer Applications",count:pendingVolunteerIds.length,icon:"hand-left-outline" as const,route:"/(admin)/account-approvals",color:"#24799B"},
+            {title:"Critical Emergency Cases",count:metrics.criticalOpen,icon:"warning-outline" as const,route:"/(admin)/admin-cases",color:"#B65F46"},
+          ]).map(action=>
+            <TouchableOpacity key={action.title} accessibilityRole="button" accessibilityLabel={"Review "+action.title}
+              onPress={()=>navigate(action.route)}
+              style={{flex:1,flexBasis:196,minWidth:173,backgroundColor:"#FFFFFF",borderColor:"#DDEBE4",borderWidth:1,borderRadius:15,padding:15,flexDirection:"row",alignItems:"center",gap:12}}>
+              <View style={{width:39,height:39,borderRadius:11,backgroundColor:"#EDF8F2",alignItems:"center",justifyContent:"center"}}>
+                <Ionicons name={action.icon} size={21} color={action.color}/>
               </View>
-            ),
+              <View style={{flex:1}}>
+                <Text style={{fontSize:23,fontWeight:"900",color:"#153E32"}}>{action.count}</Text>
+                <Text style={{fontSize:11,fontWeight:"800",color:"#537567",marginTop:3}}>{action.title}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#87A499"/>
+            </TouchableOpacity>
           )}
         </View>
-
+        <TouchableOpacity onPress={()=>navigate("/(admin)/assistance-requests")}
+          accessibilityRole="button" style={{backgroundColor:"#EAF8EF",borderWidth:1,borderColor:"#CEE9D8",borderRadius:12,padding:12,flexDirection:"row",gap:9,alignItems:"center",marginBottom:23}}>
+          <Ionicons name="document-text-outline" size={18} color="#0B8767"/>
+          <Text style={{flex:1,fontWeight:"700",fontSize:12,color:"#246D53"}}>Open Emergency and Assistance Management · Review assistance requests</Text>
+          <Ionicons name="arrow-forward" size={17} color="#0B8767"/>
+        </TouchableOpacity>
         <View
           style={[
             styles.sectionHeader,

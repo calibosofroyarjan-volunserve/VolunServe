@@ -33,6 +33,7 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import RoleJourney from "./RoleJourney";
 
 type Announcement = {
   id: string;
@@ -771,6 +772,8 @@ export default function WebHome() {
           </ImageBackground>
           </>
           )}
+
+          <RoleJourney />
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
             <View style={[styles.panel, narrow && styles.mobilePanel]}>
