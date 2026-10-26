@@ -508,7 +508,7 @@ export default function WebHome() {
                   <>
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY OVERVIEW</Text>
                     <Text style={styles.mobileHeroGreeting}>Your community at a glance</Text>
-                    <Text style={styles.mobileHeroDescription}>Generally stable conditions across San Jose del Monte today. Local teams remain on alert and monitoring.</Text>
+                    <Text style={styles.mobileHeroDescription}>Check official announcements and service updates for San Jose del Monte.</Text>
                     <Text style={styles.mobileHeroSlogan}>Together for a Safer Tomorrow</Text>
                     <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.mobileSmallSeal} resizeMode="contain" />
                   </>
