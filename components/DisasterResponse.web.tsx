@@ -18,6 +18,7 @@ import {
 import { db } from "../lib/firebase";
 import { isApprovedProfile } from "../lib/firebaseAuth";
 import { useUserSession } from "../lib/useUserSession";
+import VerifiedEvacuationCenters from "./VerifiedEvacuationCenters";
 
 type Pin = {
   latitude: number;
@@ -1081,6 +1082,8 @@ export default function WebDisasterReport() {
           </span>
         </div>
       </header>
+
+      {user && isApprovedProfile(profile) && <VerifiedEvacuationCenters />}
 
       {!success && user && isApprovedProfile(profile) && (
         <section className="workflow-strip" aria-label="Emergency report workflow">
