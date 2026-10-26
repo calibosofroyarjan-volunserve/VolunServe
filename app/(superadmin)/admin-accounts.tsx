@@ -128,6 +128,7 @@ export default function AdminAccounts() {
     showAddAdmin,
     setShowAddAdmin,
   ] = useState(false);
+  const [adminPage, setAdminPage] = useState(0);
 
   const [
     promoteSearch,
@@ -270,6 +271,10 @@ export default function AdminAccounts() {
       search,
       filter,
     ]);
+
+  const adminPageCount = Math.max(1, Math.ceil(adminAccounts.length / 5));
+  const currentAdminPage = Math.min(adminPage, adminPageCount - 1);
+  const pageAdmins = adminAccounts.slice(currentAdminPage * 5, currentAdminPage * 5 + 5);
 
   const eligibleUsers =
     useMemo(() => {
@@ -1152,7 +1157,7 @@ export default function AdminAccounts() {
             </Text>
           </View>
         ) : (
-          adminAccounts.map(
+          pageAdmins.map(
             (account) => {
               const isSaving =
                 savingUid ===
@@ -1441,6 +1446,23 @@ export default function AdminAccounts() {
               );
             }
           )
+        )}
+        {adminAccounts.length > 5 && (
+          <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",alignItems:"center",gap:11,paddingVertical:18}}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous Admin accounts page"
+              disabled={currentAdminPage === 0} style={{padding:11,borderRadius:10,backgroundColor:"#DFF4EA",opacity:currentAdminPage===0?0.5:1}}
+              onPress={()=>setAdminPage(page=>Math.max(0,page-1))}>
+              <Ionicons name="chevron-back" color="#087C5C" size={20}/>
+            </TouchableOpacity>
+            <Text style={{fontWeight:"800",color:"#29584A",fontSize:12}}>
+              Page {currentAdminPage+1} of {adminPageCount} · {adminAccounts.length} matching accounts · 5 per page
+            </Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next Admin accounts page"
+              disabled={currentAdminPage >= adminPageCount-1} style={{padding:11,borderRadius:10,backgroundColor:"#DFF4EA",opacity:currentAdminPage>=adminPageCount-1?0.5:1}}
+              onPress={()=>setAdminPage(page=>Math.min(adminPageCount-1,page+1))}>
+              <Ionicons name="chevron-forward" color="#087C5C" size={20}/>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
 
