@@ -32,4 +32,24 @@ assert(location.includes("communityEventLiveLocations") && location.includes("ca
 assert(shelters.includes("isVerifiedActiveCenter") &&
   shelters.includes("🏠 Verified shelters ({visibleCenters.length})"),
   "Only LGU-verified shelters can be presented as open on live map");
+const reportWeb = read("components/DisasterResponse.web.tsx");
+const reportNative = read("components/DisasterResponse.native.tsx");
+const shelterWeb = read("components/VerifiedEvacuationCenters.web.tsx");
+const shelterNative = read("components/VerifiedEvacuationCenters.native.tsx");
+const shelterHook = read("lib/useVerifiedEvacuationCenters.ts");
+assert(reportWeb.includes("<VerifiedEvacuationCenters />") &&
+  reportNative.includes("<VerifiedEvacuationCenters />"),
+  "LGU verified shelter directory must live inside Emergency Reports on both platforms");
+assert(shelterHook.includes('collection(db, "evacuation_centers")') &&
+  shelterHook.includes("isVerifiedActiveCenter"),
+  "Only actual LGU-verified active Firestore shelters can render");
+assert(shelterWeb.includes("maplibre-gl") &&
+  shelterWeb.includes('sandbox:"allow-scripts"') &&
+  shelterNative.includes("<MapView") && shelterNative.includes("<Marker"),
+  "Emergency Reports shelter pins require real web and native maps");
+assert(shelterWeb.includes("mapsDirectionsUrl") && shelterNative.includes("mapsDirectionsUrl"),
+  "Verified centers must offer Google Maps directions, not fake route distances");
+assert(shelterHook.includes("Last reported:") && shelterHook.includes("LGU record updated"),
+  "Capacity and update status must be sourced from LGU records and not called live");
+
 console.log("PASS event venue markers, consent-based road route, native map and verified shelters");
