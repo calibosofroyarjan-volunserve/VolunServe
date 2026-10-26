@@ -682,10 +682,10 @@ export default function VolunteerImpact() {
 }
 
 const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: "#F4F9F8"},
+  screen: {flex: 1, backgroundColor: "#F6F8F7"},
   container: {width: "100%", maxWidth: 1250, alignSelf: "center", padding: 24, paddingBottom: 72},
   containerMobile: {padding: 12, paddingBottom: 44},
-  loadingScreen: {flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#F4F9F8"},
+  loadingScreen: {flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#F6F8F7"},
   loadingText: {fontSize: 13, color: MUTED},
   accessCard: {margin: 24, backgroundColor: "#FFFFFF", borderRadius: 15, padding: 24, borderColor: BORDER, borderWidth: 1},
   accessTitle: {fontSize: 20, color: NAVY, fontWeight: "900"},
@@ -693,8 +693,8 @@ const styles = StyleSheet.create({
   hero: {backgroundColor: "#E9F8F4", borderWidth: 1, borderColor: "#D0EBE3", borderRadius: 20, padding: 25, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, overflow: "hidden"},
   heroCopy: {flex: 1},
   eyebrowRow: {flexDirection: "row", gap: 7, alignItems: "center"},
-  eyebrow: {fontWeight: "900", fontSize: 10, letterSpacing: 1, color: "#07776D"},
-  heroTitle: {fontSize: 32, fontWeight: "900", color: NAVY, marginTop: 13},
+  eyebrow: {fontWeight: "700", fontSize: 10, letterSpacing: 1, color: "#07776D"},
+  heroTitle: {fontSize: 32, fontWeight: "700", color: NAVY, marginTop: 13},
   heroTitleMobile: {fontSize: 26},
   heroDescription: {color: "#53747D", lineHeight: 21, fontSize: 12.5, marginTop: 7, maxWidth: 735},
   heroSymbol: {width: 90, height: 90, borderRadius: 45, backgroundColor: "#D2EFE6", alignItems: "center", justifyContent: "center", marginLeft: 10},
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   sectionHeading: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 17},
   sectionIcon: {height: 42, width: 42, borderRadius: 12, backgroundColor: "#E7F6F2", alignItems: "center", justifyContent: "center"},
   sectionHeadingCopy: {flex: 1, minWidth: 145},
-  sectionTitle: {fontWeight: "900", color: NAVY, fontSize: 18},
+  sectionTitle: {fontWeight: "700", color: NAVY, fontSize: 18},
   sectionSubtitle: {color: MUTED, fontSize: 10.5, marginTop: 4, lineHeight: 15},
   tertiaryButton: {flexDirection: "row", alignItems: "center", paddingHorizontal: 9, paddingVertical: 9, gap: 6, borderRadius: 9, backgroundColor: "#EDF8F5"},
   tertiaryText: {color: GREEN, fontWeight: "900", fontSize: 10.5},
