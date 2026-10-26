@@ -163,6 +163,8 @@ service cloud.firestore {
         && request.resource.data.credentialReviewMethod == 'manual_lgu_appointment_review'
         && request.resource.data.lguOffice is string
         && request.resource.data.lguOffice.size() >= 3
+        && request.resource.data.barangay is string
+        && request.resource.data.barangay.size() >= 3
         && request.resource.data.lguPosition is string
         && request.resource.data.lguPosition.size() >= 3
         && request.resource.data.appointmentReference is string
