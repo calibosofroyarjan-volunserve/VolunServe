@@ -38,7 +38,7 @@ export default function WorkspaceBarChart({
   const ticks = [0, 1, 2, 3, 4];
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, orientation === "vertical" && styles.verticalSection]}>
       <View style={styles.heading}>
         <Text style={styles.title}>{title}</Text>
         {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -113,9 +113,10 @@ export default function WorkspaceBarChart({
 
 const styles = StyleSheet.create({
   section: { paddingVertical: 18, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#E1E8E4", backgroundColor: "#FFFFFF" },
+  verticalSection: { paddingVertical: 0, borderTopWidth: 0, borderBottomWidth: 0, backgroundColor: "transparent" },
   heading: { marginBottom: 16 },
-  title: { fontSize: 16, lineHeight: 22, color: "#173D32", fontWeight: "700" },
-  subtitle: { fontSize: 12, lineHeight: 18, color: "#728279", marginTop: 5 },
+  title: { fontSize: 17, lineHeight: 23, color: "#173D32", fontWeight: "700", letterSpacing: -0.25 },
+  subtitle: { fontSize: 12.5, lineHeight: 19, color: "#728279", marginTop: 5 },
   plot: { gap: 19 },
   row: { gap: 8 },
   meta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
@@ -131,11 +132,11 @@ const styles = StyleSheet.create({
   verticalColumns: { position: "absolute", top: 24, left: 35, right: 2, height: GRAPH_HEIGHT, flexDirection: "row", alignItems: "flex-end" },
   column: { flex: 1, height: "100%", minWidth: 0, alignItems: "center", justifyContent: "flex-end" },
   verticalBar: { width: "58%", maxWidth: 62, minWidth: 13, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
-  columnValue: { position: "absolute", color: "#234639", fontWeight: "700", fontSize: 12, fontVariant: ["tabular-nums"] },
+  columnValue: { position: "absolute", color: "#234639", fontWeight: "700", fontSize: 12.5, fontVariant: ["tabular-nums"] },
   barLabels: { flexDirection: "row", paddingTop: 8 },
   yAxisLabelSpacer: { width: 35 },
   barLabelItem: { flex: 1, alignItems: "center", paddingHorizontal: 2, gap: 5 },
   legendDot: { height: 7, width: 7, borderRadius: 2 },
-  barLabelText: { fontSize: 10.5, color: "#526B5E", fontWeight: "600", lineHeight: 15, textAlign: "center" },
+  barLabelText: { fontSize: 11, color: "#476456", fontWeight: "600", lineHeight: 16, textAlign: "center" },
   footer: { color: "#778A7F", fontSize: 11, lineHeight: 17, marginTop: 15 },
 });
