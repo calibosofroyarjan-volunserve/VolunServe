@@ -38,6 +38,8 @@ jobs:
         run: node scripts/test-route-entrypoints.cjs
       - name: Audit static Expo Router links across application
         run: node scripts/audit-static-navigation.cjs
+      - name: Verify LGU grouped navigation retains all modules
+        run: node scripts/test-lgu-admin-navigation-groups.cjs
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export

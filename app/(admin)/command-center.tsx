@@ -171,6 +171,7 @@ export default function CommandCenter() {
     dataError,
     setDataError,
   ] = useState(false);
+  const [showCenterManagement, setShowCenterManagement] = useState(false);
 
   const isAdmin =
     !!profile &&
@@ -936,7 +937,7 @@ export default function CommandCenter() {
                 styles.title
               }
             >
-              Admin dashboard
+              Operations overview
             </Text>
 
             <Text
@@ -944,29 +945,10 @@ export default function CommandCenter() {
                 styles.subtitle
               }
             >
-              Live operational priorities, approval workflows, and LGU-managed response resources.
+              A focused view of community response, staff reviews, and active LGU services.
             </Text>
           </View>
 
-          <View
-            style={
-              styles.adminBadge
-            }
-          >
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={15}
-              color="#0F766E"
-            />
-
-            <Text
-              style={
-                styles.adminBadgeText
-              }
-            >
-              LGU ADMIN
-            </Text>
-          </View>
         </View>
 
         {dataError && (
@@ -992,72 +974,121 @@ export default function CommandCenter() {
         )}
 
         <View style={styles.flatSummary}>
-          <Text style={styles.overline}>OPERATIONS SUMMARY</Text>
+          <View style={styles.overviewEyebrow}>
+            <View style={styles.overviewEyebrowDot} />
+            <Text style={styles.overline}>LIVE OPERATIONS · SAN JOSE DEL MONTE</Text>
+          </View>
           <View style={[styles.metricStrip, width < 760 && styles.metricStripCompact]}>
             {[
-              { label: "Open cases", value: metrics.activeCases },
-              { label: "Critical reports", value: metrics.criticalOpen },
-              { label: "Pending reviews", value: metrics.pendingReviews },
-              { label: "Active evacuation centers", value: metrics.activeCenters },
-            ].map((metric) =>
-              <View key={metric.label} style={styles.metricItem}>
+              { label: "Open emergency cases", value: metrics.activeCases, tone: "normal" },
+              { label: "Critical cases", value: metrics.criticalOpen, tone: "critical" },
+              { label: "Pending reviews", value: metrics.pendingReviews, tone: "normal" },
+              { label: "Active evacuation centers", value: metrics.activeCenters, tone: "normal" },
+            ].map(metric => (
+              <View key={metric.label} style={[styles.metricItem, metric.tone === "critical" && styles.metricItemCritical]}>
                 <Text style={styles.metricItemLabel}>{metric.label}</Text>
-                <Text style={styles.metricItemValue}>{dataError ? "—" : metric.value.toLocaleString("en-PH")}</Text>
-              </View>,
-            )}
-          </View>
-        </View>
-
-        <WorkspaceBarChart
-          title="Operational workload comparison"
-          subtitle="Current open workloads and centers, based on authorized Firestore records. Not a trend forecast."
-          bars={[
-            { key: "cases", label: "Open emergency cases", value: dataError ? null : metrics.activeCases },
-            { key: "reviews", label: "Pending account and volunteer reviews", value: dataError ? null : metrics.pendingReviews },
-            { key: "needs", label: "Open barangay relief needs", value: dataError ? null : metrics.openBarangayNeeds },
-            { key: "centers", label: "Active evacuation centers", value: dataError ? null : metrics.activeCenters },
-          ]}
-          footer="Count comparisons use the same scale. Case review and emergency response remain LGU-led."
-        />
-
-        <View style={styles.queueSection}>
-          <View style={styles.queueHeader}>
-            <Text style={styles.sectionTitle}>Review and action queue</Text>
-            <Text style={styles.sectionSubtitle}>Open the relevant workflow directly. Full module navigation stays in the sidebar.</Text>
-          </View>
-          {[
-            {
-              title: "Account and Volunteer Reviews",
-              summary: `${pendingUserIds.length} account records · ${pendingVolunteerIds.length} volunteer applications`,
-              path: "/(admin)/account-approvals",
-            },
-            {
-              title: "Identity Verification Reviews",
-              summary: "Review AI-uncertain identity submissions before volunteer approval.",
-              path: "/(admin)/identity-reviews",
-            },
-            {
-              title: "Community Event Attendance",
-              summary: "Open Time In / Time Out verification and event completion.",
-              path: "/(admin)/community-attendance",
-            },
-          ].map((action) =>
-            <TouchableOpacity
-              key={action.path}
-              accessibilityRole="button"
-              activeOpacity={0.72}
-              style={styles.queueRow}
-              onPress={() => navigate(action.path)}
-            >
-              <View style={styles.queueContent}>
-                <Text style={styles.queueTitle}>{action.title}</Text>
-                <Text style={styles.queueSummary}>{action.summary}</Text>
+                <Text style={[styles.metricItemValue, metric.tone === "critical" && metrics.criticalOpen > 0 && styles.metricItemValueCritical]}>
+                  {dataError ? "—" : metric.value.toLocaleString("en-PH")}
+                </Text>
               </View>
-              <Ionicons name="arrow-forward-outline" size={19} color="#23765F" />
-            </TouchableOpacity>,
-          )}
+            ))}
+          </View>
         </View>
 
+        <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
+          <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
+            <View style={styles.overviewSectionHeader}>
+              <Text style={styles.sectionTitle}>Needs attention</Text>
+              <Text style={styles.overviewSectionSubtitle}>Open the appropriate LGU workflow</Text>
+            </View>
+            {[
+              {
+                key: "critical", label: "Emergency response",
+                detail: dataError ? "Live status unavailable" :
+                  metrics.criticalOpen > 0 ? `${metrics.criticalOpen} critical case${metrics.criticalOpen === 1 ? "" : "s"} requiring attention` : "Review incoming emergency reports",
+                icon: "warning-outline" as const, count: metrics.criticalOpen,
+                route: "/(admin)/admin-cases",
+              },
+              {
+                key: "accounts", label: "Resident & volunteer approvals",
+                detail: dataError ? "Live status unavailable" :
+                  `${pendingUserIds.length} account review${pendingUserIds.length === 1 ? "" : "s"} · ${pendingVolunteerIds.length} volunteer application${pendingVolunteerIds.length === 1 ? "" : "s"}`,
+                icon: "people-outline" as const, count: metrics.pendingReviews,
+                route: "/(admin)/account-approvals",
+              },
+              {
+                key: "identity", label: "Identity verification",
+                detail: "Review identity submissions and exceptions",
+                icon: "shield-checkmark-outline" as const, count: null,
+                route: "/(admin)/identity-reviews",
+              },
+              {
+                key: "relief", label: "Relief operations",
+                detail: dataError ? "Live status unavailable" :
+                  `${metrics.openBarangayNeeds} open barangay relief need${metrics.openBarangayNeeds === 1 ? "" : "s"}`,
+                icon: "cube-outline" as const, count: metrics.openBarangayNeeds,
+                route: "/(admin)/relief-operations",
+              },
+              {
+                key: "attendance", label: "Community event attendance",
+                detail: "Review attendance and verified service hours",
+                icon: "checkmark-done-outline" as const, count: null,
+                route: "/(admin)/community-attendance",
+              },
+            ].map(action => (
+              <TouchableOpacity key={action.key} accessibilityRole="button"
+                accessibilityLabel={action.label} style={styles.overviewAction}
+                activeOpacity={0.78} onPress={() => navigate(action.route)}>
+                <View style={styles.overviewActionIcon}>
+                  <Ionicons name={action.icon} size={19} color="#2E7560" />
+                </View>
+                <View style={styles.overviewActionContent}>
+                  <Text style={styles.overviewActionTitle}>{action.label}</Text>
+                  <Text style={styles.overviewActionDetail}>{action.detail}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#7D998D" />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={[styles.overviewSecondary, width < 1220 && styles.overviewFullWidth]}>
+            <WorkspaceBarChart
+              title="Open workload comparison"
+              subtitle="Current records by service area, not a historical trend."
+              bars={[
+                { key: "cases", label: "Emergency cases", value: dataError ? null : metrics.activeCases },
+                { key: "reviews", label: "Pending reviews", value: dataError ? null : metrics.pendingReviews },
+                { key: "needs", label: "Relief needs", value: dataError ? null : metrics.openBarangayNeeds },
+              ]}
+              footer="Counts are read from authorized Firestore records."
+            />
+            <View style={styles.serviceSummary}>
+              <Text style={styles.serviceSummaryHeading}>Evacuation capacity</Text>
+              <Text style={styles.serviceSummaryValue}>{dataError ? "—" : metrics.availableEvacuationSpaces.toLocaleString("en-PH")}</Text>
+              <Text style={styles.serviceSummaryCaption}>Available spaces in currently active LGU evacuation centers</Text>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showCenterManagement }}
+          onPress={() => setShowCenterManagement(value => !value)}
+          style={styles.managementDisclosure}
+          activeOpacity={0.82}
+        >
+          <View style={styles.disclosureIcon}>
+            <Ionicons name="business-outline" size={20} color="#25745F" />
+          </View>
+          <View style={styles.queueContent}>
+            <Text style={styles.disclosureTitle}>Evacuation center management</Text>
+            <Text style={styles.disclosureCaption}>
+              {dataError ? "Center data unavailable" : `${centers.length} registered center${centers.length === 1 ? "" : "s"}`} · View locations, capacity and edit official records
+            </Text>
+          </View>
+          <Text style={styles.disclosureAction}>{showCenterManagement ? "Close" : "Manage"}</Text>
+          <Ionicons name={showCenterManagement ? "chevron-up" : "chevron-down"} color="#26745F" size={18} />
+        </TouchableOpacity>
+        {showCenterManagement ? <View style={styles.centerManagementArea}>
         <View
           style={
             styles.centersHeader
@@ -1341,6 +1372,7 @@ export default function CommandCenter() {
             )}
           </View>
         )}
+        </View> : null}
       </View>
 
       <Modal
@@ -1748,10 +1780,44 @@ function CenterInput({
 
 const styles =
   StyleSheet.create({
+    overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
+    overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
+    overviewColumns: { flexDirection: "row", gap: 28, alignItems: "flex-start", marginBottom: 27 },
+    overviewColumnsStack: { flexDirection: "column", gap: 22 },
+    overviewPrimary: { flex: 1.22, minWidth: 0 },
+    overviewSecondary: { flex: 1, minWidth: 0 },
+    overviewFullWidth: { flex: 0, width: "100%" },
+    overviewSectionHeader: { marginBottom: 13 },
+    overviewSectionSubtitle: { color: "#75877F", fontSize: 12, lineHeight: 18, marginTop: 4 },
+    overviewAction: {
+      flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 13, paddingHorizontal: 2,
+      borderBottomWidth: 1, borderColor: "#E0E8E3", minHeight: 67,
+    },
+    overviewActionIcon: { width: 35, height: 35, borderRadius: 8, backgroundColor: "#E7F0EB", alignItems: "center", justifyContent: "center" },
+    overviewActionContent: { flex: 1, minWidth: 0 },
+    overviewActionTitle: { fontSize: 13, fontWeight: "700", color: "#183F32" },
+    overviewActionDetail: { fontSize: 11.5, lineHeight: 17, color: "#718378", marginTop: 3 },
+    metricItemCritical: { borderBottomWidth: 2, borderBottomColor: "#CF8B51" },
+    metricItemValueCritical: { color: "#9C4F28" },
+    serviceSummary: { marginTop: 24, paddingTop: 17, borderTopWidth: 1, borderColor: "#DCE6DF" },
+    serviceSummaryHeading: { color: "#5D7669", fontSize: 12, fontWeight: "600" },
+    serviceSummaryValue: { color: "#183F32", fontSize: 29, fontWeight: "700", marginTop: 5 },
+    serviceSummaryCaption: { color: "#788B80", fontSize: 11.5, lineHeight: 18, marginTop: 4 },
+    managementDisclosure: {
+      minHeight: 77, flexDirection: "row", alignItems: "center", gap: 12,
+      paddingHorizontal: 8, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D7E4DB",
+      marginTop: 6, marginBottom: 12,
+    },
+    disclosureIcon: { width: 39, height: 39, alignItems: "center", justifyContent: "center", backgroundColor: "#E5F0E9", borderRadius: 9 },
+    disclosureTitle: { color: "#173D32", fontSize: 14, fontWeight: "700" },
+    disclosureCaption: { color: "#6C8073", fontSize: 11.5, lineHeight: 18, marginTop: 3 },
+    disclosureAction: { color: "#23765F", fontSize: 12, fontWeight: "700" },
+    centerManagementArea: { paddingTop: 15 },
+
     overline: {
       fontSize: 10, letterSpacing: 1.2, color: "#688076", fontWeight: "700", marginBottom: 9,
     },
-    flatSummary: { marginBottom: 28 },
+    flatSummary: { marginBottom: 26 },
     metricStrip: {
       flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderBottomWidth: 1,
       borderColor: "#DDE6E1",
@@ -1784,8 +1850,8 @@ const styles =
 
     page: {
       width: "100%",
-      paddingHorizontal: 16,
-      paddingTop: 28,
+      paddingHorizontal: 28,
+      paddingTop: 30,
       paddingBottom: 64,
     },
 
@@ -1828,7 +1894,7 @@ const styles =
 
     title: {
       color: "#173D32",
-      fontSize: 29,
+      fontSize: 30,
       fontWeight: "700",
       letterSpacing: -0.5,
     },
