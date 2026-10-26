@@ -25,6 +25,10 @@ export type CreateAdminInput = {
   fullName: string;
   email: string;
   password: string;
+  lguOffice: string;
+  lguPosition: string;
+  appointmentReference: string;
+  credentialsReviewed: boolean;
 };
 
 export async function createAdminAccount(
@@ -46,7 +50,27 @@ export async function createAdminAccount(
     .trim()
     .toLowerCase();
 
-  const secondaryApp = initializeApp(
+  const lguOffice = input.lguOffice.trim();
+  const lguPosition = input.lguPosition.trim();
+  const appointmentReference = input.appointmentReference.trim();
+
+  // Manual authorization by the trusted Super Admin is required. This
+  // declaration does not validate the authenticity of external documents.
+  if (!input.credentialsReviewed ||
+      fullName.length < 5 ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+      lguOffice.length < 3 ||
+      lguPosition.length < 3 ||
+      appointmentReference.length < 5 ||
+      input.password.length < 12 ||
+      !/[A-Z]/.test(input.password) ||
+      !/[a-z]/.test(input.password) ||
+      !/[0-9]/.test(input.password) ||
+      !/[^A-Za-z0-9]/.test(input.password)) {
+    throw new Error("Enter complete LGU office, position and appointment reference, review the official credentials, and use a strong 12+ character temporary password.");
+  }
+
+    const secondaryApp = initializeApp(
     firebaseConfig,
     `admin-provision-${Date.now()}`
   );
@@ -98,9 +122,16 @@ export async function createAdminAccount(
       address:
         "City of San Jose del Monte, Bulacan",
 
-      occupation:
-        "VolunServe Administrator",
-
+      occupation: "LGU Administrator",
+      lguOffice,
+      lguPosition,
+      // Use a safe appointment memorandum reference, not a government ID number.
+      appointmentReference,
+      credentialsReviewedBy: creator.uid,
+      credentialsReviewedAt: serverTimestamp(),
+      credentialReviewMethod: "manual_lgu_appointment_review",
+      // User's authorized separate Firebase login, not a promoted Resident.
+      adminStatus: "active",
       role: "admin",
       status: "approved",
 
@@ -120,7 +151,7 @@ export async function createAdminAccount(
       adminUid: creator.uid,
 
       description:
-        `Created administrator account for ${email}.`,
+        `Created independent LGU Admin account for ${email} after manual appointment review (reference: ${appointmentReference}).`,
 
       createdAt: serverTimestamp(),
     });
