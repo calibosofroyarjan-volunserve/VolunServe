@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
+import {useFonts} from "expo-font";
+import {Inter_400Regular,Inter_500Medium,Inter_600SemiBold,Inter_700Bold,Inter_800ExtraBold} from "@expo-google-fonts/inter";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -46,6 +48,13 @@ type AssistanceCategory =
 type AssistanceRequestGroup = "disaster_recovery" | "community_need";
 type BeneficiaryType = "self" | "someone_else";
 type PreferredAssistanceType = "monetary";
+type ReleasePreference = "gcash"|"maya"|"bank";
+const RELEASE_OPTIONS=[
+ {key:"gcash" as const,title:"GCash",hint:"E-wallet preference",icon:"wallet-outline" as const},
+ {key:"maya" as const,title:"Maya",hint:"E-wallet preference",icon:"phone-portrait-outline" as const},
+ {key:"bank" as const,title:"Bank / Card",hint:"Bank transfer preference",icon:"card-outline" as const},
+];
+const AMOUNT_PRESETS=[500,1000,5000,10000];
 type ScreenMode = "new_request" | "my_requests";
 
 type DocumentRequirement = {
@@ -122,6 +131,7 @@ type AssistanceRequest = {
   estimatedAmount?: number;
   currentSituation?: string;
   preferredAssistanceTypes?: string[];
+  preferredReleaseMethod?: ReleasePreference;
   documents?: StoredDocument[];
 
   status?: string;
@@ -484,6 +494,7 @@ const statusMeta = (value?: string) => {
 
 export default function AssistanceRequestScreen() {
   const router = useRouter();
+  useFonts({AssistanceInter:Inter_400Regular,AssistanceInterMedium:Inter_500Medium,AssistanceInterSemiBold:Inter_600SemiBold,AssistanceInterBold:Inter_700Bold,AssistanceInterExtraBold:Inter_800ExtraBold});
   const { width } = useWindowDimensions();
 
   const wide = width >= 1040;
@@ -516,6 +527,7 @@ export default function AssistanceRequestScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState("");
+  const [releasePreference,setReleasePreference]=useState<ReleasePreference>("gcash");
   const [currentSituation, setCurrentSituation] = useState("");
   const [otherSituation, setOtherSituation] = useState("");
 
@@ -692,6 +704,7 @@ export default function AssistanceRequestScreen() {
 
   const resetForm = () => {
     setStep(1);
+    setReleasePreference("gcash");
     setCategory("");
     setBeneficiaryType("self");
     setBeneficiaryName("");
@@ -1092,6 +1105,7 @@ export default function AssistanceRequestScreen() {
       estimatedAmount: number;
       currentSituation: string;
       preferredAssistanceTypes: PreferredAssistanceType[];
+      preferredReleaseMethod: ReleasePreference;
     },
     evidenceIds: string[],
     publicCampaignPhotoAssetId: string,
@@ -1148,6 +1162,7 @@ export default function AssistanceRequestScreen() {
 
               preferredAssistanceTypes:
                 requestPayload.preferredAssistanceTypes,
+              preferredReleaseMethod:requestPayload.preferredReleaseMethod,
 
               evidenceIds,
 
@@ -1661,6 +1676,7 @@ export default function AssistanceRequestScreen() {
             0,
             2,
           ),
+        preferredReleaseMethod:releasePreference,
 
         documents:
           uploadedDocuments.slice(
@@ -1748,6 +1764,7 @@ export default function AssistanceRequestScreen() {
         "estimatedAmount",
         "currentSituation",
         "preferredAssistanceTypes",
+        "preferredReleaseMethod",
         "documents",
         "status",
         "verificationStatus",
@@ -2005,6 +2022,10 @@ export default function AssistanceRequestScreen() {
         localRuleProblems.push(
           "preferredAssistanceTypes must be monetary-only",
         );
+      }
+
+      if (!["gcash","maya","bank"].includes(requestPayload.preferredReleaseMethod)) {
+        localRuleProblems.push("preferredReleaseMethod is invalid");
       }
 
       if (
@@ -2285,6 +2306,7 @@ export default function AssistanceRequestScreen() {
 
             preferredAssistanceTypes:
               requestPayload.preferredAssistanceTypes,
+            preferredReleaseMethod:requestPayload.preferredReleaseMethod,
           },
           uploadedEvidenceIds,
           uploadedPublicPhotoAssetId,
