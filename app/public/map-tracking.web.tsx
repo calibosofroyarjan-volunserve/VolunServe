@@ -126,7 +126,7 @@ export default function PublicMapStatusWeb() {
       ) : centers.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>
-            No centers published yet
+            No LGU-verified open centers reported
           </Text>
 
           <Text style={styles.emptyText}>
@@ -198,7 +198,7 @@ export default function PublicMapStatusWeb() {
               {available !== null ? (
                 <Text style={styles.capacity}>
                   {available} of {capacity} spaces
-                  currently available
+                  reported available (last LGU update)
                 </Text>
               ) : null}
             </View>
