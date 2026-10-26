@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import {
+  Href,
   Redirect,
   router,
   Stack,
@@ -118,7 +119,7 @@ export default function SuperAdminLayout() {
     try {
       setDrawerOpen(false);
       await logoutUser();
-      router.replace("/admin-login");
+      router.replace("/admin-login" as Href);
     } catch (error: any) {
       Alert.alert(
         "Sign Out Failed",
@@ -131,7 +132,7 @@ export default function SuperAdminLayout() {
     <View style={styles.shell}>
       {desktop ? (
         <SuperAdminSidebar
-          onNavigate={(route) => router.push(route as any)}
+          onNavigate={(route) => router.push(route as Href)}
           onSignOut={signOut}
         />
       ) : (
@@ -151,7 +152,7 @@ export default function SuperAdminLayout() {
               compact
               onNavigate={(route) => {
                 setDrawerOpen(false);
-                router.push(route as any);
+                router.push(route as Href);
               }}
               onSignOut={signOut}
             />
