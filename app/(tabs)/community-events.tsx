@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
+import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
 import { router } from "expo-router";
 import {
   collection,
@@ -2377,31 +2378,36 @@ export default function CommunityEventsScreen() {
         {/* Final locked layout: left events, right live map and attendance. Sidebar lives in app layout. */}
         <View style={[styles.lockedColumns, !webSideBySide && styles.lockedColumnsStack]}>
           <View style={[styles.lockedMain, !webSideBySide && styles.lockedMainStack]}>
+            {/* Premium Community Events calendar banner; counts use the existing live state. */}
             <View style={styles.webHero}>
-              <LinearGradient colors={["#DBF4EC", "#EBF8F6", "#EFFBFA"]} style={[styles.lockedHeroGradient, canPropose && styles.ruiHeroHeight]}>
-                {canPropose && <Image source={require("../../assets/images/sjdm-rising-city.png")} resizeMode="cover" style={styles.ruiHeroImage} />}
-                {canPropose && <LinearGradient pointerEvents="none" colors={["rgba(227,250,245,0.97)","rgba(226,248,243,0.94)","rgba(231,249,244,0.24)"]} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.ruiHeroOverlay}/>}
-                <View style={styles.lockedHeroWords}>
-                  <View style={styles.webHeroKickerRow}><Ionicons name="leaf-outline" size={15} color="#008579" />
-                    <Text style={styles.webHeroKicker}>COMMUNITY EVENTS · SAN JOSE DEL MONTE</Text></View>
-                  <Text style={[styles.webHeroTitle, isCompact && styles.webHeroTitleSmall]}>Be part of a stronger San Jose del Monte.</Text>
-                  <Text style={styles.webHeroDescription}>{isVolunteer ? "Join local community events and make a meaningful difference." : "Discover community activities or propose an event for your barangay."}</Text>
+              <CommunityEventHeroArt compact={isCompact || webSideBySide}/>
+              <View style={[styles.communityHeroLayout,(isCompact || webSideBySide)&&styles.communityHeroLayoutCompact]}>
+                <View style={[styles.communityHeroCopy,(isCompact || webSideBySide)&&styles.communityHeroCopyCompact]}>
+                  <Text style={styles.communityHeroEyebrow}>VOLUNSERVE  ·  COMMUNITY ENGAGEMENT</Text>
+                  <Text style={[styles.communityHeroTitle,(isCompact || webSideBySide)&&styles.communityHeroTitleCompact]}>Community Events</Text>
+                  <Text style={styles.communityHeroTagline}>Connect. Participate. Make a difference.</Text>
+                  <Text style={styles.communityHeroDescription}>
+                    {isVolunteer
+                      ? "Explore local activities, join events, and support your community."
+                      : "Discover community activities or propose an event for your barangay."}
+                  </Text>
                 </View>
-                {webSideBySide && !canPropose && <View style={styles.lockedHeroIllustration} pointerEvents="none">
-                  <View style={styles.lockedHeroSun} />
-                  <View style={styles.lockedHeroHillBack} />
-                  <View style={styles.lockedHeroHillFront} />
-                  <View style={styles.lockedHeroQuote}>
-                    <Ionicons name="leaf" color="#0C8E7A" size={28} />
-                    <Text style={styles.lockedHeroMotto} numberOfLines={2}>{"People for a Cleaner,\nBrighter Tomorrow."}</Text>
-                  </View>
-                </View>}
-              </LinearGradient>
-            </View>
-            <View style={styles.lockedStats}>
-              <View style={styles.lockedStatCard}><View style={styles.lockedIconCircle}><Ionicons name="calendar-outline" size={24} color="#078F82" /></View><View style={styles.lockedStatWords}><Text style={styles.lockedStatValue}>{availableCount}</Text><Text style={styles.lockedStatLabel}>Available Events</Text></View></View>
-              <View style={styles.lockedStatCard}><View style={[styles.lockedIconCircle, {backgroundColor: "#EAF3FF"}]}><Ionicons name="people-outline" size={24} color="#1879DC" /></View><View style={styles.lockedStatWords}><Text style={styles.lockedStatValue}>{isVolunteer ? myEvents.length : proposals.length}</Text><Text style={styles.lockedStatLabel}>{isVolunteer ? "My Joined Events" : "My Proposals"}</Text></View></View>
-              <View style={styles.lockedStatCard}><View style={styles.lockedIconCircle}><Ionicons name="ribbon-outline" size={24} color="#078F82" /></View><View style={styles.lockedStatWords}><Text style={styles.lockedStatValue}>{completedCount}</Text><Text style={styles.lockedStatLabel}>Completed Events</Text></View></View>
+                <View style={[styles.communityHeroStats,(isCompact || webSideBySide)&&styles.communityHeroStatsCompact]}>
+                  {([
+                    {icon:"calendar-outline" as const,value:availableCount,label:"Available Events"},
+                    {icon:"people-outline" as const,value:isVolunteer?myEvents.length:proposals.length,label:isVolunteer?"My Joined Events":"My Proposals"},
+                    {icon:"ribbon-outline" as const,value:completedCount,label:"Completed Events"},
+                  ]).map((metric)=>(
+                    <View key={metric.label} style={styles.communityHeroStatCard}>
+                      <Ionicons name={metric.icon} size={21} color="#078B6B"/>
+                      <View style={styles.communityHeroStatCopy}>
+                        <Text style={styles.communityHeroStatNumber} numberOfLines={1}>{metric.value}</Text>
+                        <Text style={styles.communityHeroStatLabel} numberOfLines={2}>{metric.label}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
             <View style={styles.lockedToolbar}>
               <View style={styles.webSectionTabs}>
@@ -5432,6 +5438,35 @@ const styles = StyleSheet.create({
   residentProposalExcerpt: { color: "#5A7789", fontSize: 11, lineHeight: 17, marginTop: 6 },
   residentProposalPhoto: { height: 120, maxWidth: 280, width: "100%", borderRadius: 8, marginTop: 9 },
 
+  // Donations-style premium banner: calendar emblem, actual counters, safe responsiveness.
+  communityHeroLayout:{minHeight:190,paddingTop:24,paddingBottom:24,paddingLeft:163,
+    paddingRight:18,flexDirection:"row",alignItems:"center",gap:18},
+  communityHeroLayoutCompact:{paddingTop:116,paddingLeft:18,paddingRight:18,
+    paddingBottom:20,flexDirection:"column",alignItems:"stretch",gap:15},
+  communityHeroCopy:{flex:1,minWidth:0,paddingRight:2},
+  communityHeroCopyCompact:{width:"100%",paddingLeft:0,paddingRight:0},
+  communityHeroEyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1,
+    color:"#167B60",marginBottom:4},
+  communityHeroTitle:{fontSize:34,lineHeight:40,fontWeight:"900",
+    letterSpacing:-0.8,color:"#074A3C"},
+  communityHeroTitleCompact:{fontSize:29,lineHeight:35},
+  communityHeroTagline:{fontSize:13,fontWeight:"800",color:"#0F6E52",marginTop:5},
+  communityHeroDescription:{fontSize:11.5,lineHeight:18,color:"#46786D",
+    marginTop:7,maxWidth:460},
+  communityHeroStats:{flexDirection:"row",alignItems:"stretch",gap:9,
+    width:"46%",maxWidth:480,minWidth:350},
+  communityHeroStatsCompact:{width:"100%",maxWidth:"100%",minWidth:0,
+    flexWrap:"wrap",justifyContent:"space-between"},
+  communityHeroStatCard:{flex:1,minWidth:95,backgroundColor:"rgba(255,255,255,0.92)",
+    borderWidth:1,borderColor:"rgba(229,248,239,0.84)",borderRadius:13,
+    minHeight:78,paddingHorizontal:10,paddingVertical:11,
+    alignItems:"center",justifyContent:"center",gap:6,
+    shadowColor:"#05774F",shadowOpacity:0.05,shadowRadius:6,
+    shadowOffset:{width:0,height:3}},
+  communityHeroStatCopy:{alignItems:"center",gap:3,minWidth:0},
+  communityHeroStatNumber:{fontSize:18,fontWeight:"900",color:"#0C493E"},
+  communityHeroStatLabel:{fontSize:9.5,lineHeight:13,textAlign:"center",
+    fontWeight:"700",color:"#4D786C"},
   // Final Resident Community Events UI (matches the approved mockup).
   ruiHeroHeight: { minHeight: 170 },
   ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
