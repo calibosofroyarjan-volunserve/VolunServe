@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
+import {useFonts} from "expo-font";
+import {Inter_400Regular,Inter_500Medium,Inter_600SemiBold,Inter_700Bold,Inter_800ExtraBold} from "@expo-google-fonts/inter";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -46,6 +48,13 @@ type AssistanceCategory =
 type AssistanceRequestGroup = "disaster_recovery" | "community_need";
 type BeneficiaryType = "self" | "someone_else";
 type PreferredAssistanceType = "monetary";
+type ReleasePreference = "gcash"|"maya"|"bank";
+const RELEASE_OPTIONS=[
+ {key:"gcash" as const,title:"GCash",hint:"E-wallet preference",icon:"wallet-outline" as const},
+ {key:"maya" as const,title:"Maya",hint:"E-wallet preference",icon:"phone-portrait-outline" as const},
+ {key:"bank" as const,title:"Bank / Card",hint:"Bank transfer preference",icon:"card-outline" as const},
+];
+const AMOUNT_PRESETS=[500,1000,5000,10000];
 type ScreenMode = "new_request" | "my_requests";
 
 type DocumentRequirement = {
@@ -122,6 +131,7 @@ type AssistanceRequest = {
   estimatedAmount?: number;
   currentSituation?: string;
   preferredAssistanceTypes?: string[];
+  preferredReleaseMethod?: ReleasePreference;
   documents?: StoredDocument[];
 
   status?: string;
@@ -484,6 +494,7 @@ const statusMeta = (value?: string) => {
 
 export default function AssistanceRequestScreen() {
   const router = useRouter();
+  useFonts({AssistanceInter:Inter_400Regular,AssistanceInterMedium:Inter_500Medium,AssistanceInterSemiBold:Inter_600SemiBold,AssistanceInterBold:Inter_700Bold,AssistanceInterExtraBold:Inter_800ExtraBold});
   const { width } = useWindowDimensions();
 
   const wide = width >= 1040;
@@ -516,6 +527,7 @@ export default function AssistanceRequestScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState("");
+  const [releasePreference,setReleasePreference]=useState<ReleasePreference>("gcash");
   const [currentSituation, setCurrentSituation] = useState("");
   const [otherSituation, setOtherSituation] = useState("");
 
@@ -692,6 +704,7 @@ export default function AssistanceRequestScreen() {
 
   const resetForm = () => {
     setStep(1);
+    setReleasePreference("gcash");
     setCategory("");
     setBeneficiaryType("self");
     setBeneficiaryName("");
@@ -1092,6 +1105,7 @@ export default function AssistanceRequestScreen() {
       estimatedAmount: number;
       currentSituation: string;
       preferredAssistanceTypes: PreferredAssistanceType[];
+      preferredReleaseMethod: ReleasePreference;
     },
     evidenceIds: string[],
     publicCampaignPhotoAssetId: string,
@@ -1148,6 +1162,7 @@ export default function AssistanceRequestScreen() {
 
               preferredAssistanceTypes:
                 requestPayload.preferredAssistanceTypes,
+              preferredReleaseMethod:requestPayload.preferredReleaseMethod,
 
               evidenceIds,
 
@@ -1661,6 +1676,7 @@ export default function AssistanceRequestScreen() {
             0,
             2,
           ),
+        preferredReleaseMethod:releasePreference,
 
         documents:
           uploadedDocuments.slice(
@@ -1748,6 +1764,7 @@ export default function AssistanceRequestScreen() {
         "estimatedAmount",
         "currentSituation",
         "preferredAssistanceTypes",
+        "preferredReleaseMethod",
         "documents",
         "status",
         "verificationStatus",
@@ -2005,6 +2022,10 @@ export default function AssistanceRequestScreen() {
         localRuleProblems.push(
           "preferredAssistanceTypes must be monetary-only",
         );
+      }
+
+      if (!["gcash","maya","bank"].includes(requestPayload.preferredReleaseMethod)) {
+        localRuleProblems.push("preferredReleaseMethod is invalid");
       }
 
       if (
@@ -2285,6 +2306,7 @@ export default function AssistanceRequestScreen() {
 
             preferredAssistanceTypes:
               requestPayload.preferredAssistanceTypes,
+            preferredReleaseMethod:requestPayload.preferredReleaseMethod,
           },
           uploadedEvidenceIds,
           uploadedPublicPhotoAssetId,
@@ -2503,10 +2525,8 @@ export default function AssistanceRequestScreen() {
           Request Assistance is
           available only to
           Verified Residents.
-          Emergency reporting
-          remains available even
-          if identity verification
-          is not yet complete.
+          Complete identity verification
+          to submit an assistance request.
         </Text>
 
         <TouchableOpacity
@@ -2529,25 +2549,6 @@ export default function AssistanceRequestScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={
-            styles.secondaryButton
-          }
-          onPress={() =>
-            router.push(
-              "/(tabs)/disaster-response" as any,
-            )
-          }
-        >
-          <Text
-            style={
-              styles.secondaryButtonText
-            }
-          >
-            Report an Emergency
-            Instead
-          </Text>
-        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -2726,76 +2727,39 @@ export default function AssistanceRequestScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
         >
-          <LinearGradient
-            colors={[
-              "#0F4E9A",
-              "#1769E0",
-            ]}
-            start={{
-              x: 0,
-              y: 0,
-            }}
-            end={{
-              x: 1,
-              y: 1,
-            }}
-            style={[styles.hero, mobile && styles.mobileHero]}
-          >
-            <View
-              style={[styles.heroIcon, mobile && styles.mobileHeroIcon]}
-            >
-              <Ionicons
-                name="hand-left-outline"
-                size={28}
-                color="#FFFFFF"
-              />
+          <LinearGradient colors={["#EBFFF7","#D7F9E9","#94EAC9","#2BC78F"]}
+            start={{x:0,y:0.15}} end={{x:1,y:0.85}}
+            style={[styles.hero,styles.premiumHero,mobile&&styles.mobileHero]}>
+            <View style={[styles.premiumEmblem,mobile&&styles.premiumEmblemMobile]}>
+              <LinearGradient colors={["#06674D","#0E9E76","#20C58D"]}
+                style={styles.premiumEmblemFace}>
+                <Ionicons name="hand-left" size={mobile?28:40} color="#FFFFFF"/>
+                <View style={styles.premiumEmblemCheck}>
+                  <Ionicons name="checkmark" size={14} color="#08795B"/>
+                </View>
+              </LinearGradient>
             </View>
-
-            <View
-              style={[styles.heroCopy, mobile && styles.mobileHeroCopy]}
-            >
-              <Text
-                style={[styles.heroEyebrow, mobile && styles.mobileHeroEyebrow]}
-              >
-                VOLUNSERVE · VERIFIED
-                RESIDENT SERVICE
-              </Text>
-
-              <Text
-                style={[styles.heroTitle, mobile && styles.mobileHeroTitle]}
-              >
-                Request Assistance
-              </Text>
-
-              <Text
-                style={[styles.heroSubtitle, mobile && styles.mobileHeroSubtitle]}
-              >
-                Submit a verified
-                non-emergency individual
-                or household assistance
-                request for LGU review.
-                Disaster recovery belongs
-                here after immediate
-                danger has passed.
-              </Text>
+            <View style={[styles.premiumHeroCopy,mobile&&styles.premiumHeroCopyMobile]}>
+              <Text style={styles.premiumHeroEyebrow}>VOLUNSERVE · VERIFIED RESIDENT SERVICE</Text>
+              <Text style={[styles.premiumHeroTitle,mobile&&styles.premiumHeroTitleMobile]}>Request Assistance</Text>
+              <Text style={styles.premiumHeroTagline}>Support that starts with your community.</Text>
+              <Text style={styles.premiumHeroDescription}>Submit a private request for LGU review and coordinated assistance.</Text>
             </View>
-
-            <View
-              style={[styles.heroVerifiedBadge, mobile && styles.mobileHeroBadge]}
-            >
-              <Ionicons
-                name="shield-checkmark"
-                size={15}
-                color="#0F8A58"
-              />
-
-              <Text
-                style={
-                  styles.heroVerifiedText
-                }
-              >
-                Verified Resident
-              </Text>
+            <View style={[styles.premiumHeroRight,mobile&&styles.premiumHeroRightMobile]}>
+              <View style={styles.premiumVerified}>
+                <Ionicons name="shield-checkmark" color="#067851" size={15}/>
+                <Text style={styles.premiumVerifiedText}>Verified Resident</Text>
+              </View>
+              <View style={styles.premiumHeroFacts}>
+                <View style={styles.premiumHeroFact}>
+                  <Ionicons name="document-text-outline" color="#078565" size={18}/>
+                  <Text style={styles.premiumHeroFactText}>{requests.length} My Requests</Text>
+                </View>
+                <View style={styles.premiumHeroFact}>
+                  <Ionicons name="lock-closed-outline" color="#078565" size={18}/>
+                  <Text style={styles.premiumHeroFactText}>Private LGU Review</Text>
+                </View>
+              </View>
             </View>
           </LinearGradient>
 
@@ -2950,82 +2914,16 @@ export default function AssistanceRequestScreen() {
                 />
 
                 <InfoCard
-                  icon="location-outline"
-                  title="LGU Sets the Location"
-                  text="Residents do not choose the public map point. The LGU assigns a safe public service location when needed."
+                  icon="wallet-outline"
+                  title="Release Preference"
+                  text="Choose GCash, Maya, or bank transfer. LGU confirms the final release method."
                 />
 
                 <InfoCard
                   icon="heart-outline"
-                  title="Donation Is Not Automatic"
-                  text="A public campaign is opened only after verification and a confirmed remaining shortage."
+                  title="Donation Support"
+                  text="An official campaign opens only if the LGU confirms an unmet assistance need."
                 />
-              </View>
-
-              <View
-                style={[styles.emergencyNotice, mobile && styles.mobileEmergencyNotice]}
-              >
-                <View
-                  style={
-                    styles.emergencyNoticeIcon
-                  }
-                >
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={21}
-                    color="#B42318"
-                  />
-                </View>
-
-                <View
-                  style={mobile ? styles.mobileNoticeCopy : { flex: 1 }}
-                >
-                  <Text
-                    style={
-                      styles.emergencyNoticeTitle
-                    }
-                  >
-                    Is there an active
-                    emergency or
-                    immediate danger?
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.emergencyNoticeText
-                    }
-                  >
-                    Use Emergency
-                    Report for an active
-                    danger that needs an
-                    immediate response.
-                    Use Request Assistance
-                    for non-emergency
-                    individual or household
-                    needs, including
-                    post-emergency recovery.
-                    Broader barangay relief
-                    is handled separately
-                    by the LGU.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.emergencyButton, mobile && styles.mobileEmergencyButton]}
-                  onPress={() =>
-                    router.push(
-                      "/(tabs)/disaster-response" as any,
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      styles.emergencyButtonText
-                    }
-                  >
-                    Emergency Report
-                  </Text>
-                </TouchableOpacity>
               </View>
 
               <StepProgress
@@ -3040,7 +2938,7 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 1 OF 4"
-                    title="Choose an Assistance Category"
+                    title="Select an assistance category"
                     text="Choose the category that best describes the verified individual or household need."
                   />
 
@@ -3351,6 +3249,17 @@ export default function AssistanceRequestScreen() {
                         placeholder="e.g. 50000"
                         placeholderTextColor="#94A3B8"
                       />
+                      <View style={styles.amountPresetRow}>
+                        {AMOUNT_PRESETS.map(value=>{
+                          const selected=Number(estimatedAmount)===value;
+                          return <Pressable key={value} accessibilityRole="button"
+                            accessibilityState={{selected}} onPress={()=>setEstimatedAmount(String(value))}
+                            style={[styles.amountPreset,selected&&styles.amountPresetActive]}>
+                            <Text style={[styles.amountPresetText,selected&&styles.amountPresetTextActive]}>{formatMoney(value)}</Text>
+                          </Pressable>;
+                        })}
+                      </View>
+                      <Text style={styles.amountHelp}>Select an amount or enter your exact need. No payment is collected here.</Text>
                     </View>
 
                     <View
@@ -3479,6 +3388,38 @@ export default function AssistanceRequestScreen() {
                       placeholderTextColor="#94A3B8"
                     />
                   )}
+
+                  <View style={styles.releaseSection}>
+                    <View style={styles.releaseHeader}>
+                      <Ionicons name="wallet-outline" size={21} color="#078C69"/>
+                      <View style={styles.releaseHeaderCopy}>
+                        <Text style={styles.releaseTitle}>Preferred assistance release method</Text>
+                        <Text style={styles.releaseDesc}>Select how you would prefer to receive an LGU-approved release.</Text>
+                      </View>
+                    </View>
+                    <View style={styles.releaseOptions}>
+                      {RELEASE_OPTIONS.map(option=>{
+                        const chosen=releasePreference===option.key;
+                        return <Pressable key={option.key} accessibilityRole="radio"
+                          accessibilityState={{selected:chosen}} onPress={()=>setReleasePreference(option.key)}
+                          style={[styles.releaseOption,chosen&&styles.releaseOptionSelected]}>
+                          <View style={[styles.releaseIcon,chosen&&styles.releaseIconActive]}>
+                            <Ionicons name={option.icon} size={22} color="#087D61"/>
+                          </View>
+                          <View style={styles.releaseOptionCopy}>
+                            <Text style={styles.releaseOptionTitle}>{option.title}</Text>
+                            <Text style={styles.releaseOptionHint}>{option.hint}</Text>
+                          </View>
+                          <Ionicons name={chosen?"checkmark-circle":"ellipse-outline"}
+                            size={20} color={chosen?"#05886A":"#91ADA4"}/>
+                        </Pressable>;
+                      })}
+                    </View>
+                    <View style={styles.releasePrivacy}>
+                      <Ionicons name="shield-checkmark-outline" size={16} color="#087E62"/>
+                      <Text style={styles.releasePrivacyText}>Preference only. Never enter wallet numbers, bank or card details, PINs or OTPs. No payout happens on submission.</Text>
+                    </View>
+                  </View>
 
                   <View
                     style={
@@ -3967,7 +3908,7 @@ export default function AssistanceRequestScreen() {
                 >
                   <FormHeading
                     eyebrow="STEP 4 OF 4"
-                    title="Review & Submit"
+                    title="Review your request"
                     text="Check the information before sending it to the LGU for private verification."
                   />
 
@@ -4043,7 +3984,8 @@ export default function AssistanceRequestScreen() {
                         }
                       />
 
-                      <ReviewRow
+                      <ReviewRow label="Preferred Release Method" value={RELEASE_OPTIONS.find(x=>x.key===releasePreference)?.title||"GCash"} />
+                       <ReviewRow
                         label="Current Situation"
                         value={
                           resolvedSituation
@@ -4475,22 +4417,8 @@ function StepProgress({
                       styles.progressCircleActive,
                   ]}
                 >
-                  <Ionicons
-                    name={
-                      done
-                        ? "checkmark"
-                        : item.icon
-                    }
-                    size={
-                      15
-                    }
-                    color={
-                      active ||
-                      done
-                        ? "#FFFFFF"
-                        : "#64748B"
-                    }
-                  />
+                  {done?<Ionicons name="checkmark" color="#FFFFFF" size={15}/>:
+                    <Text style={styles.premiumStepNumber}>{item.number}</Text>}
                 </View>
 
                 <Text
@@ -4501,9 +4429,7 @@ function StepProgress({
                       styles.progressLabelActive,
                   ]}
                 >
-                  {
-                    item.label
-                  }
+                  {mobile?item.label:`Step ${item.number} · ${item.label}`}
                 </Text>
               </View>
             </React.Fragment>
@@ -4539,7 +4465,7 @@ function InfoCard({
         <Ionicons
           name={icon}
           size={20}
-          color="#1769E0"
+          color="#07896A"
         />
       </View>
 
@@ -6357,10 +6283,11 @@ const styles =
 
     modeTabActive: {
       backgroundColor:
-        "#1769E0",
+        "#088C70",
     },
 
     modeTabText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#475569",
       fontWeight:
@@ -6489,10 +6416,11 @@ const styles =
       justifyContent:
         "center",
       backgroundColor:
-        "#EDF4FF",
+        "#E8F7EF",
     },
 
     infoCardTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontSize:
@@ -6502,6 +6430,7 @@ const styles =
     },
 
     infoCardText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         5,
       color:
@@ -6642,10 +6571,11 @@ const styles =
 
     progressCircleActive: {
       backgroundColor:
-        "#1769E0",
+        "#098E70",
     },
 
     progressLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       marginTop:
         5,
       fontSize:
@@ -6658,7 +6588,7 @@ const styles =
 
     progressLabelActive: {
       color:
-        "#1769E0",
+        "#098E70",
       fontWeight:
         "900",
     },
@@ -6678,7 +6608,7 @@ const styles =
 
     progressLineDone: {
       backgroundColor:
-        "#1769E0",
+        "#098E70",
     },
 
     formCard: {
@@ -6702,8 +6632,9 @@ const styles =
     },
 
     formEyebrow: {
+      fontFamily:"AssistanceInterBold",
       color:
-        "#1769E0",
+        "#0B916F",
       fontSize:
         11,
       fontWeight:
@@ -6713,10 +6644,11 @@ const styles =
     },
 
     formTitle: {
+      fontFamily:"AssistanceInterExtraBold",
       marginTop:
         5,
       color:
-        "#172033",
+        "#17463A",
       fontSize:
         23,
       fontWeight:
@@ -6724,6 +6656,7 @@ const styles =
     },
 
     formText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         6,
       color:
@@ -6785,8 +6718,9 @@ const styles =
     },
 
     categoryTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
-        "#172033",
+        "#17463A",
       fontSize:
         14,
       fontWeight:
@@ -6794,6 +6728,7 @@ const styles =
     },
 
     categoryText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         4,
       color:
@@ -6805,6 +6740,7 @@ const styles =
     },
 
     fieldLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       marginTop:
         15,
       marginBottom:
@@ -6823,6 +6759,7 @@ const styles =
     },
 
     input: {
+      fontFamily:"AssistanceInter",
       minHeight:
         46,
       borderRadius:
@@ -6830,7 +6767,7 @@ const styles =
       borderWidth:
         1,
       borderColor:
-        "#CBD5E1",
+        "#D3E6DC",
       backgroundColor:
         "#FFFFFF",
       paddingHorizontal:
@@ -6908,6 +6845,7 @@ const styles =
     },
 
     accountContactHelper: {
+      fontFamily:"AssistanceInter",
       marginTop:
         3,
       color:
@@ -7152,6 +7090,7 @@ const styles =
     },
 
     backButtonText: {
+      fontFamily:"AssistanceInterSemiBold",
       color:
         "#475569",
       fontWeight:
@@ -7166,7 +7105,7 @@ const styles =
       borderRadius:
         10,
       backgroundColor:
-        "#1769E0",
+        "#078A68",
       flexDirection:
         "row",
       alignItems:
@@ -7180,6 +7119,7 @@ const styles =
     },
 
     nextButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#FFFFFF",
       fontWeight:
@@ -7235,6 +7175,7 @@ const styles =
     },
 
     documentTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontWeight:
@@ -7278,6 +7219,7 @@ const styles =
     },
 
     documentHelper: {
+      fontFamily:"AssistanceInter",
       marginTop:
         4,
       color:
@@ -7314,6 +7256,7 @@ const styles =
     },
 
     uploadButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#1769E0",
       fontSize:
@@ -7468,6 +7411,7 @@ const styles =
     },
 
     reviewLabel: {
+      fontFamily:"AssistanceInterSemiBold",
       width:
         160,
       padding:
@@ -7483,6 +7427,7 @@ const styles =
     },
 
     reviewValue: {
+      fontFamily:"AssistanceInterMedium",
       flex:
         1,
       padding:
@@ -7498,6 +7443,7 @@ const styles =
     },
 
     reviewSideTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#172033",
       fontSize:
@@ -7608,7 +7554,7 @@ const styles =
       borderRadius:
         10,
       backgroundColor:
-        "#1769E0",
+        "#078A68",
       flexDirection:
         "row",
       alignItems:
@@ -7622,6 +7568,7 @@ const styles =
     },
 
     submitButtonText: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#FFFFFF",
       fontWeight:
@@ -7716,6 +7663,7 @@ const styles =
     },
 
     successTitle: {
+      fontFamily:"AssistanceInterExtraBold",
       color:
         "#172033",
       fontSize:
@@ -7820,6 +7768,7 @@ const styles =
     },
 
     historyTitle: {
+      fontFamily:"AssistanceInterBold",
       marginTop:
         5,
       color:
@@ -7964,6 +7913,7 @@ const styles =
     },
 
     requestCardTitle: {
+      fontFamily:"AssistanceInterBold",
       marginTop:
         2,
       color:
@@ -7999,6 +7949,7 @@ const styles =
     },
 
     statusBadgeText: {
+      fontFamily:"AssistanceInterBold",
       fontSize:
         10,
       fontWeight:
@@ -8617,6 +8568,7 @@ const styles =
     },
 
     publicPhotoSectionTitle: {
+      fontFamily:"AssistanceInterBold",
       color:
         "#312E81",
       fontSize:
@@ -8626,6 +8578,7 @@ const styles =
     },
 
     publicPhotoSectionText: {
+      fontFamily:"AssistanceInter",
       marginTop:
         3,
       color:
@@ -9056,4 +9009,46 @@ const styles =
       minWidth: 0,
     },
 
+
+    premiumHero:{minHeight:188,borderRadius:20,flexDirection:"row",alignItems:"center",paddingHorizontal:23,paddingVertical:22,gap:18,borderWidth:1,borderColor:"#C4EBDC",overflow:"hidden"},
+    premiumEmblem:{width:110,height:110,borderRadius:25,transform:[{rotate:"-8deg"}],padding:6,backgroundColor:"#FFFFFF",shadowColor:"#04744E",shadowOpacity:0.19,shadowOffset:{width:0,height:6},shadowRadius:13,elevation:3},
+    premiumEmblemMobile:{width:62,height:62,borderRadius:15,padding:4},
+    premiumEmblemFace:{flex:1,borderRadius:19,alignItems:"center",justifyContent:"center"},
+    premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
+    premiumHeroCopy:{flex:1,minWidth:0,gap:5},
+    premiumHeroCopyMobile:{width:"100%",alignSelf:"stretch",flex:0},
+    premiumHeroEyebrow:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#08775D",letterSpacing:1.1},
+    premiumHeroTitle:{fontFamily:"AssistanceInterExtraBold",fontSize:33,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
+    premiumHeroTitleMobile:{fontSize:26,lineHeight:33,letterSpacing:-0.5},
+    premiumHeroTagline:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#0F6E52"},
+    premiumHeroDescription:{fontFamily:"AssistanceInter",fontSize:11.5,lineHeight:18,color:"#4C766B",maxWidth:460},
+    premiumHeroRight:{width:"33%",minWidth:215,maxWidth:310,gap:14,alignItems:"stretch"},
+    premiumHeroRightMobile:{width:"100%",minWidth:0,maxWidth:"100%"},
+    premiumVerified:{alignSelf:"flex-end",paddingHorizontal:11,paddingVertical:7,backgroundColor:"rgba(255,255,255,0.91)",borderRadius:19,flexDirection:"row",alignItems:"center",gap:7},
+    premiumVerifiedText:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#087C5D"},
+    premiumHeroFacts:{flexDirection:"row",gap:9},
+    premiumHeroFact:{flex:1,minHeight:63,padding:10,borderRadius:11,backgroundColor:"rgba(255,255,255,0.91)",alignItems:"center",justifyContent:"center",gap:6},
+    premiumHeroFactText:{fontFamily:"AssistanceInterSemiBold",color:"#27594B",fontSize:10,textAlign:"center"},
+    premiumStepNumber:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#FFFFFF"},
+    amountPresetRow:{flexDirection:"row",flexWrap:"wrap",gap:7,marginTop:9},
+    amountPreset:{paddingHorizontal:11,paddingVertical:8,backgroundColor:"#F4FAF7",borderWidth:1,borderColor:"#D9E9E1",borderRadius:9},
+    amountPresetActive:{backgroundColor:"#E5F8EE",borderColor:"#129976"},
+    amountPresetText:{fontFamily:"AssistanceInterSemiBold",fontSize:11,color:"#597D6E"},
+    amountPresetTextActive:{color:"#087558"},
+    amountHelp:{fontFamily:"AssistanceInter",fontSize:10.5,color:"#76958A",marginTop:7,lineHeight:16},
+    releaseSection:{marginTop:22,padding:17,borderRadius:15,backgroundColor:"#F7FCF9",borderWidth:1,borderColor:"#DCEDE4",gap:13},
+    releaseHeader:{flexDirection:"row",alignItems:"center",gap:9},
+    releaseHeaderCopy:{flex:1,gap:4},
+    releaseTitle:{fontFamily:"AssistanceInterBold",fontSize:14,color:"#16483A"},
+    releaseDesc:{fontFamily:"AssistanceInter",fontSize:11,color:"#6E887E",lineHeight:17},
+    releaseOptions:{flexDirection:"row",flexWrap:"wrap",gap:10},
+    releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D6E7DE"},
+    releaseOptionSelected:{backgroundColor:"#E9F9F0",borderColor:"#0C9773"},
+    releaseIcon:{width:36,height:36,borderRadius:10,backgroundColor:"#E6F3ED",alignItems:"center",justifyContent:"center"},
+    releaseIconActive:{backgroundColor:"#D0F0E0"},
+    releaseOptionCopy:{flex:1,minWidth:0,gap:4},
+    releaseOptionTitle:{fontFamily:"AssistanceInterBold",fontSize:12,color:"#214C3E"},
+    releaseOptionHint:{fontFamily:"AssistanceInter",fontSize:9.5,color:"#728F80",lineHeight:14},
+    releasePrivacy:{flexDirection:"row",gap:8,alignItems:"flex-start",borderRadius:9,backgroundColor:"#ECF8F2",padding:10},
+    releasePrivacyText:{flex:1,fontFamily:"AssistanceInter",fontSize:10.3,lineHeight:16,color:"#577E6F"},
   });

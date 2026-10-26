@@ -8905,6 +8905,15 @@ app.post(
         );
       }
       const preferredAssistanceTypes = ["monetary"];
+      // Preference only. Never request wallet/card credentials here:
+      // this does NOT execute payouts or verify external accounts.
+      const preferredReleaseMethod = cleanText(
+        request.body?.preferredReleaseMethod || "gcash", 12
+      ).toLowerCase();
+      if (!["gcash","maya","bank"].includes(preferredReleaseMethod)) {
+        throw makeHttpError(400,"invalid_release_preference",
+          "Choose GCash, Maya or Bank Transfer as a preference.");
+      }
       const publicCampaignPhotoAssetId =
         cleanText(
           request.body
@@ -9186,6 +9195,7 @@ app.post(
         estimatedAmount,
         currentSituation,
         preferredAssistanceTypes,
+        preferredReleaseMethod,
         documents,
         publicCampaignPhotoUrl,
         publicCampaignPhotoConsent:
