@@ -86,7 +86,7 @@ export default function WebLogin() {
   useEffect(() => {
     const timer = setInterval(() => {
       setSlideIndex((current) => (current + 1) % SLIDES.length);
-    }, 7000;
+    }, 7000);
     return () => clearInterval(timer);
   }, []);
   const changeSlide = (direction: number) => {
