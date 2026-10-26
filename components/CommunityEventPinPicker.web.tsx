@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
+import { lookUpEventVenue } from "../lib/eventVenueLookup";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
+  barangay?: string;
+  venue?: string;
   latitude: number | null;
   longitude: number | null;
   onChange: (latitude: number | null, longitude: number | null) => void;
@@ -64,7 +67,7 @@ function loadGoogleMaps(key: string): Promise<any> {
   return googleScriptPromise;
 }
 
-export default function CommunityEventPinPicker({ latitude, longitude, onChange }: Props) {
+export default function CommunityEventPinPicker({ latitude, longitude, barangay = "", venue = "", onChange }: Props) {
   const saved = latitude !== null && longitude !== null && validVenue(latitude, longitude)
     ? tidy(latitude, longitude) : null;
   const savedRef = useRef<Venue | null>(saved);
@@ -74,6 +77,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
   const [draft, setDraft] = useState<Venue | null>(saved);
   const [manual, setManual] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
+  const [lookupState, setLookupState] = useState<"idle" | "searching" | "found" | "unavailable">("idle");
   const [message, setMessage] = useState("");
   const [mapMode, setMapMode] = useState<"loading" | "google" | "preview">(
     GOOGLE_JS_KEY ? "loading" : "preview"
@@ -94,6 +98,35 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     setMessage("Pin selected. Confirm this meeting point before submitting your proposal.");
     if (savedRef.current && !same(savedRef.current, next)) onChangeRef.current(null, null);
   };
+
+  // Resolve the named event venue, not the proposing Resident's current position.
+  // The result remains unconfirmed until the Resident verifies its map pin.
+  useEffect(() => {
+    if (!barangay.trim() || !venue.trim()) {
+      setLookupState("idle");
+      return;
+    }
+    const controller = new AbortController();
+    setLookupState("searching");
+    const task = setTimeout(() => {
+      void lookUpEventVenue(barangay, venue, controller.signal).then(result => {
+        if (controller.signal.aborted) return;
+        if (result.status === "found") {
+          setDraft(result.point);
+          setLookupState("found");
+          setMessage("Suggested event venue found from the selected barangay and venue. Check the pin on the map, adjust if needed, then confirm.");
+        } else {
+          setLookupState("unavailable");
+          setMessage(result.status === "ambiguous"
+            ? "More than one venue matched. Select the exact site on the map to avoid an incorrect pin."
+            : "Exact venue not found automatically. Tap the real event location on the map instead.");
+        }
+      }).catch(() => {
+        if (!controller.signal.aborted) setLookupState("unavailable");
+      });
+    }, 900);
+    return () => { controller.abort(); clearTimeout(task); };
+  }, [barangay, venue]);
 
   useEffect(() => {
     if (!GOOGLE_JS_KEY) return;
@@ -199,7 +232,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
         <View style={{ flex: 1, minWidth: 190 }}>
           <Text style={{ ...title, fontSize: 15 }}>Event Meeting Point *</Text>
           <Text style={{ fontSize: 11.5, lineHeight: 17, color: "#688073", marginTop: 2 }}>
-            Tap the exact event venue on the map, then confirm the location.
+            Your barangay and venue suggest a pin automatically. Verify it on the map and confirm.
           </Text>
         </View>
         <Text style={{
@@ -208,6 +241,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
         }}>SAN JOSE DEL MONTE</Text>
       </View>
 
+      {lookupState === "searching" && <Text style={{ fontSize: 11, color: "#356C56", marginBottom: 8 }}>Finding the selected venue on the map…</Text>}
       <View style={{ borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#D6E5D9" }}>
         {GOOGLE_JS_KEY ? React.createElement("div" as any, {
           ref: mapContainer, role: "application",
@@ -234,9 +268,6 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
       )}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 13 }}>
-        <Pressable accessibilityRole="button" onPress={locate} style={button}>
-          <Text style={buttonText}>◎ Use Current GPS</Text>
-        </Pressable>
         <Pressable accessibilityRole="link"
           onPress={() => void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
           style={{ ...button, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1E4D9" }}>
