@@ -52,4 +52,14 @@ assert(shelterWeb.includes("mapsDirectionsUrl") && shelterNative.includes("mapsD
 assert(shelterHook.includes("Last reported:") && shelterHook.includes("LGU record updated"),
   "Capacity and update status must be sourced from LGU records and not called live");
 
+const mobileResponseMap = read("components/tabs/MapTracking.native.tsx");
+assert(mobileResponseMap.includes('doc(db, "lguResponseLocations", caseId)') &&
+  mobileResponseMap.includes('item.reportedBy === CURRENT_USER_ID'),
+  "Native resident response markers must read only their own case-scoped LGU GPS");
+assert(mobileResponseMap.includes("point.responderUid !== incident.activeLguResponderUid") &&
+  mobileResponseMap.includes("gpsClock - lastReading > 120_000"),
+  "Never display an unassigned, missing or stale response marker");
+assert(mobileResponseMap.includes("vehicleInfo(incident.responseVehicleType)") &&
+  mobileResponseMap.includes("point.vehicle.symbol"),
+  "Native responder marker must use Admin-assigned vehicle type, not a generic marker");
 console.log("PASS event venue markers, consent-based road route, native map and verified shelters");
