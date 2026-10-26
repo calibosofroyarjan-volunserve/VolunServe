@@ -18,16 +18,16 @@ type Props = {
   height?: number;
 };
 type RoadRoute = { coordinates: number[][]; distanceMeters: number; durationSeconds: number };
-const SJDM = { latitude: 14.813, longitude: 121.045 };
 const valid = (point?: Point | null) =>
   !!point && Number.isFinite(point.latitude) && Number.isFinite(point.longitude) &&
   Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;
 const toDistance = (m: number) =>
   m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km";
-const venueSymbol = (category: string) => ({
+const venueSymbols: Record<string, string> = {
   "Clean-up Drive": "🧹", "Tree Planting": "🌱", "Feeding Program": "🍲",
   "Pet Welfare": "🐾", "Community Outreach": "🤝",
-}[category] || "📍");
+};
+const venueSymbol = (category: string) => venueSymbols[category] || "📍";
 
 /** The generated iframe contains numbers and a fixed icon only, never user HTML. */
 function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | null, icon: string) {
@@ -188,7 +188,7 @@ export default function CommunityEventRoadMap({
           <Text style={styles.captionTitle}>
             {status === "ready" && route ? `${toDistance(route.distanceMeters)} · about ${Math.max(1, Math.round(route.durationSeconds / 60))} min`
               : status === "loading" ? "Calculating road route…" :
-                status === "unavailable" ? "In-app road route unavailable" : "Confirmed event venue pin"}
+                status === "unavailable" ? "In-app road route unavailable" : "Published event meeting-point pin"}
           </Text>
           <Text style={styles.captionSub}>
             {status === "ready"
