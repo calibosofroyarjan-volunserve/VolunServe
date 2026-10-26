@@ -20,6 +20,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -30,7 +31,7 @@ import {
 } from "react-native";
 
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
-import { isVerifiedActiveCenter } from "../../lib/emergencyMapTypes";
+import { isVerifiedActiveCenter, mapsPlaceUrl } from "../../lib/emergencyMapTypes";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -1333,6 +1334,19 @@ export default function CommandCenter() {
                         center.longitude,
                       ).toFixed(6)}
                     </Text>
+                    {mapsPlaceUrl(center.latitude, center.longitude) && (
+                      <TouchableOpacity
+                        accessibilityRole="link"
+                        style={styles.centerMapLink}
+                        onPress={() => {
+                          const url = mapsPlaceUrl(center.latitude, center.longitude);
+                          if (url) void Linking.openURL(url);
+                        }}
+                      >
+                        <Ionicons name="location-outline" size={16} color="#23765F" />
+                        <Text style={styles.centerMapLinkText}>Verify this pin in Google Maps</Text>
+                      </TouchableOpacity>
+                    )}
 
                     <View
                       style={
@@ -2526,6 +2540,8 @@ const styles =
     centerVerifyText: { flex: 1, color: "#255641", fontSize: 12, lineHeight: 19 },
     centerVerifyNote: { color: "#6E8276", fontSize: 11.5, lineHeight: 18, marginBottom: 10 },
     centerVerificationMeta: { color: "#28745A", fontSize: 10.5, fontWeight: "700", marginTop: 7 },
+    centerMapLink: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 11 },
+    centerMapLinkText: { color: "#23765F", fontSize: 12, fontWeight: "700" },
     modalNotice: {
       marginTop: 2,
       padding: 12,
