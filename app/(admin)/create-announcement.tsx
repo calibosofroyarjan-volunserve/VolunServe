@@ -304,7 +304,7 @@ export default function CreateAnnouncement() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   content: {
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -330,16 +330,16 @@ const styles = StyleSheet.create({
   },
 
   eyebrow: {
-    color: "#087F78",
+    color: "#23765F",
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 1.3,
   },
 
   title: {
-    color: "#123047",
+    color: "#173D32",
     fontSize: 30,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 5,
   },
 
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF8F6",
     borderWidth: 1,
     borderColor: "#C7EAE5",
-    borderRadius: 15,
+    borderRadius: 9,
     padding: 16,
     marginBottom: 16,
   },
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   },
 
   scopeValue: {
-    color: "#123047",
+    color: "#173D32",
     fontSize: 18,
     fontWeight: "900",
     marginTop: 5,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 16,
+    borderRadius: 9,
     padding: 20,
   },
 
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
 
   noteCard: {
     marginTop: 16,
-    borderRadius: 14,
+    borderRadius: 8,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
