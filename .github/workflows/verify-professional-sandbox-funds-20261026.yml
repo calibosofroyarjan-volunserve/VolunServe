@@ -34,6 +34,8 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
       - name: Ensure local VolunServe backup folders are excluded from TypeScript
         run: node scripts/test-typescript-backup-excludes.cjs
+      - name: Verify Admin and Community Events navigation routes
+        run: node scripts/test-route-entrypoints.cjs
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export
