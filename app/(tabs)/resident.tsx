@@ -2525,10 +2525,8 @@ export default function AssistanceRequestScreen() {
           Request Assistance is
           available only to
           Verified Residents.
-          Emergency reporting
-          remains available even
-          if identity verification
-          is not yet complete.
+          Complete identity verification
+          to submit an assistance request.
         </Text>
 
         <TouchableOpacity
@@ -2551,25 +2549,6 @@ export default function AssistanceRequestScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={
-            styles.secondaryButton
-          }
-          onPress={() =>
-            router.push(
-              "/(tabs)/disaster-response" as any,
-            )
-          }
-        >
-          <Text
-            style={
-              styles.secondaryButtonText
-            }
-          >
-            Report an Emergency
-            Instead
-          </Text>
-        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -4486,7 +4465,7 @@ function InfoCard({
         <Ionicons
           name={icon}
           size={20}
-          color="#1769E0"
+          color="#07896A"
         />
       </View>
 
@@ -6437,7 +6416,7 @@ const styles =
       justifyContent:
         "center",
       backgroundColor:
-        "#EDF4FF",
+        "#E8F7EF",
     },
 
     infoCardTitle: {
@@ -6788,7 +6767,7 @@ const styles =
       borderWidth:
         1,
       borderColor:
-        "#CBD5E1",
+        "#D3E6DC",
       backgroundColor:
         "#FFFFFF",
       paddingHorizontal:
