@@ -63,6 +63,11 @@ type AdminFilter =
   | "active"
   | "suspended";
 
+type AuditActionPayload = {
+  actionType:string;targetType:string;targetId:string;adminUid:string;
+  adminName:string;description:string;
+};
+
 type AdminAction =
   | "promote"
   | "suspend"
@@ -485,9 +490,7 @@ export default function AdminAccounts() {
           writeBatch(db);
 
         let logPayload:
-          Parameters<
-            typeof createAdminLog
-          >[0];
+          AuditActionPayload;
 
         if (
           action === "promote"
