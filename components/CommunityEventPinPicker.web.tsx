@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
+import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -10,7 +11,6 @@ type Props = {
 
 const CENTER: Venue = { latitude: 14.8139, longitude: 121.0453 };
 const GOOGLE_JS_KEY = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_JS_API_KEY || "").trim();
-const GOOGLE_EMBED_KEY = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY || "").trim();
 let googleScriptPromise: Promise<any> | null = null;
 
 function validVenue(lat: number, lng: number) {
@@ -38,13 +38,6 @@ function parseGoogleLocation(raw: string): Venue | null {
     if (match) return tidy(Number(match[1]), Number(match[2]));
   }
   return null;
-}
-function googlePreview(lat: number, lng: number) {
-  const point = encodeURIComponent(String(lat) + "," + String(lng));
-  return GOOGLE_EMBED_KEY
-    ? "https://www.google.com/maps/embed/v1/place?key=" +
-      encodeURIComponent(GOOGLE_EMBED_KEY) + "&q=" + point + "&zoom=16"
-    : "https://maps.google.com/maps?q=" + point + "&z=16&output=embed";
 }
 function loadGoogleMaps(key: string): Promise<any> {
   const g = (globalThis as any).google;
@@ -80,6 +73,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
   onChangeRef.current = onChange;
   const [draft, setDraft] = useState<Venue | null>(saved);
   const [manual, setManual] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [mapMode, setMapMode] = useState<"loading" | "google" | "preview">(
     GOOGLE_JS_KEY ? "loading" : "preview"
@@ -97,7 +91,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     }
     const next = tidy(lat, lng);
     setDraft(next);
-    setMessage("Pin selected. Click Confirm Event Pin below para ma-save sa proposal.");
+    setMessage("Pin selected. Confirm this meeting point before submitting your proposal.");
     if (savedRef.current && !same(savedRef.current, next)) onChangeRef.current(null, null);
   };
 
@@ -124,7 +118,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     }).catch(() => {
       if (active) {
         setMapMode("preview");
-        setMessage("Google Maps interactive mode unavailable. You can still enter GPS coordinates or use device location.");
+        setMessage("Google Maps did not load. You can still tap the interactive map to select your event venue.");
       }
     });
     return () => {
@@ -162,18 +156,18 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
 
   const locate = () => {
     const geo = (globalThis as any).navigator?.geolocation;
-    if (!geo) { setMessage("GPS unavailable. Puwede mong ilagay ang Google Maps coordinates sa baba."); return; }
+    if (!geo) { setMessage("GPS unavailable. Tap the map to select the venue, or enter coordinates."); return; }
     setMessage("Requesting current device location...");
     geo.getCurrentPosition(
       (result: any) => pick(result.coords.latitude, result.coords.longitude),
-      () => setMessage("Location permission denied/unavailable. Use manual Google Maps coordinates instead."),
+      () => setMessage("Device location unavailable. Tap the map to select the actual event meeting point."),
       {enableHighAccuracy:true,timeout:15000,maximumAge:0},
     );
   };
   const useManual = () => {
     const coords = parseGoogleLocation(manual);
     if (!coords) {
-      setMessage("I-paste ang exact latitude, longitude (example: 14.813900, 121.045300) o full Google Maps URL na may coordinates. Hindi supported ang shortened maps.app.goo.gl link.");
+      setMessage("Use exact latitude, longitude or a full coordinate-bearing Google Maps URL. Shortened links are not supported.");
       return;
     }
     pick(coords.latitude, coords.longitude);
@@ -187,62 +181,140 @@ export default function CommunityEventPinPicker({ latitude, longitude, onChange 
     setMessage("Confirmed ang event meeting point. Ito ang map location na irereview ng Admin at gagamitin ng Volunteer.");
   };
 
-  const previewPoint = draft || saved || CENTER;
-  const title = {fontWeight:"800" as const,color:"#143F42"};
-  const actionText = {fontWeight:"800" as const,color:"#FFFFFF",fontSize:12};
-  const action = {paddingHorizontal:13,paddingVertical:12,borderRadius:8,backgroundColor:"#087F75"};
-  return <View style={{marginTop:16,padding:14,borderRadius:14,borderWidth:1,borderColor:"#D3E8E5",backgroundColor:"#F7FBFA"}}>
-    <Text style={{...title,fontSize:15}}>Event Location & GPS Meeting Point *</Text>
-    <Text style={{fontSize:12,color:"#526C76",marginTop:5,marginBottom:12}}>
-      1. Set the venue above. 2. Select its exact pin. 3. Confirm it before submitting. Admin reviews the pinned venue, then Volunteers can navigate there.
-    </Text>
-    <View style={{borderWidth:1,borderColor:"#D1E5E7",borderRadius:10,overflow:"hidden",backgroundColor:"#E6F2EE"}}>
-      {GOOGLE_JS_KEY ? React.createElement("div" as any,{
-        ref:mapContainer,
-        role:"application",
-        "aria-label":"Google Maps venue pin picker. Click a location to select an event pin.",
-        style:{width:"100%",height:"285px",display:mapMode==="preview"?"none":"block"}
-      }) : null}
-      {mapMode==="preview" ? React.createElement("iframe" as any,{
-        src:googlePreview(previewPoint.latitude,previewPoint.longitude),
-        title:"Google Maps event location preview",
-        loading:"lazy",
-        allowFullScreen:true,
-        style:{display:"block",border:"0",width:"100%",height:"285px"}
-      }) : null}
-    </View>
-    {mapMode === "loading" ? <Text style={{fontSize:12,color:"#526C76",marginTop:7}}>Loading Google Maps...</Text> : null}
-    {mapMode === "google" ?
-      <Text style={{fontSize:11,color:"#0A7567",marginTop:7}}>Google Maps interactive: click or drag the pin, then Confirm Event Pin.</Text> :
-      <Text style={{fontSize:11,color:"#57737D",marginTop:7}}>Google Maps preview. For clickable pin selection inside VolunServe, configure a Google Maps JavaScript API key. GPS or coordinates work without it.</Text>}
-    <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:12}}>
-      <Pressable onPress={locate} style={action}><Text style={actionText}>Use My Current GPS</Text></Pressable>
-      <Pressable onPress={()=>void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")} style={{...action,backgroundColor:"#EEF7FF",borderWidth:1,borderColor:"#B7D9EC"}}>
-        <Text style={{...actionText,color:"#17628D"}}>Find Venue in Google Maps ↗</Text>
+  const title = { fontWeight: "700" as const, color: "#123F34" };
+  const buttonText = { fontWeight: "700" as const, color: "#FFFFFF", fontSize: 12 };
+  const button = { paddingHorizontal: 15, paddingVertical: 12, borderRadius: 9, backgroundColor: "#0D7458" };
+  return (
+    <View style={{
+      marginTop: 15, padding: 17, borderRadius: 15, borderWidth: 1,
+      borderColor: "#D6E7DE", backgroundColor: "#FAFCFA",
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <View style={{
+          height: 33, width: 33, borderRadius: 10, backgroundColor: "#E0F1E8",
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <Text style={{ fontSize: 18 }}>📍</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 190 }}>
+          <Text style={{ ...title, fontSize: 15 }}>Event Meeting Point *</Text>
+          <Text style={{ fontSize: 11.5, lineHeight: 17, color: "#688073", marginTop: 2 }}>
+            Tap the exact event venue on the map, then confirm the location.
+          </Text>
+        </View>
+        <Text style={{
+          color: "#2E755B", fontSize: 10, fontWeight: "700",
+          backgroundColor: "#E5F3EB", borderRadius: 8, paddingVertical: 5, paddingHorizontal: 8,
+        }}>SAN JOSE DEL MONTE</Text>
+      </View>
+
+      <View style={{ borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#D6E5D9" }}>
+        {GOOGLE_JS_KEY ? React.createElement("div" as any, {
+          ref: mapContainer, role: "application",
+          "aria-label": "Interactive Google Maps. Click or drag to select the event meeting point.",
+          style: { width: "100%", height: "315px", display: mapMode === "google" || mapMode === "loading" ? "block" : "none" },
+        }) : null}
+        {mapMode === "preview" ? (
+          <InteractiveEventPinMap
+            latitude={draft?.latitude ?? null}
+            longitude={draft?.longitude ?? null}
+            onPick={pick}
+          />
+        ) : null}
+      </View>
+      {mapMode === "loading" && (
+        <Text style={{ fontSize: 12, color: "#5A7567", paddingVertical: 8 }}>
+          Loading interactive venue map…
+        </Text>
+      )}
+      {mapMode === "google" && (
+        <Text style={{ fontSize: 11.5, color: "#3E7D60", paddingVertical: 9 }}>
+          Tap any location on Google Maps, or drag the pin to adjust it.
+        </Text>
+      )}
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 13 }}>
+        <Pressable accessibilityRole="button" onPress={locate} style={button}>
+          <Text style={buttonText}>◎ Use Current GPS</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link"
+          onPress={() => void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
+          style={{ ...button, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1E4D9" }}>
+          <Text style={{ ...buttonText, color: "#245F4C" }}>Open Google Maps ↗</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: manualOpen }}
+          onPress={() => setManualOpen(value => !value)}
+          style={{ ...button, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1E4D9" }}>
+          <Text style={{ ...buttonText, color: "#245F4C" }}>
+            {manualOpen ? "Hide Coordinates" : "Enter Coordinates"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {manualOpen && (
+        <View style={{ marginTop: 13, padding: 12, borderRadius: 10, backgroundColor: "#F0F7F2" }}>
+          <Text style={{ ...title, fontSize: 12, marginBottom: 7 }}>
+            Advanced · Paste coordinates or a Google Maps URL
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <TextInput value={manual} onChangeText={setManual}
+              placeholder="14.813900, 121.045300"
+              placeholderTextColor="#80978A" autoCapitalize="none"
+              accessibilityLabel="Exact event venue coordinates or full Google Maps URL"
+              style={{ flexGrow: 1, flexBasis: 220, minWidth: 160, paddingHorizontal: 12, paddingVertical: 10,
+                borderWidth: 1, borderColor: "#C9DDD1", borderRadius: 9,
+                backgroundColor: "#FFFFFF", fontSize: 12, color: "#163F32" }} />
+            <Pressable accessibilityRole="button" onPress={useManual} style={button}>
+              <Text style={buttonText}>Set Pin</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      <View style={{
+        marginTop: 15, paddingHorizontal: 13, paddingVertical: 12,
+        borderRadius: 10, borderWidth: 1,
+        borderColor: confirmed ? "#B7DBCA" : draft ? "#D1DFCD" : "#E0E7E0",
+        backgroundColor: confirmed ? "#EAF6EE" : "#FFFFFF",
+        flexDirection: "row", alignItems: "center", gap: 11,
+      }}>
+        <Text style={{ fontSize: 21, color: confirmed ? "#087A5D" : "#7B8E83" }}>
+          {confirmed ? "✓" : draft ? "⌖" : "○"}
+        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...title, fontSize: 12.5 }}>
+            {confirmed ? "Meeting point confirmed" :
+              draft ? "Pin selected — confirm below" : "Select an event pin on the map"}
+          </Text>
+          {draft && (
+            <Text selectable style={{ fontSize: 11, color: "#607F6E", marginTop: 4 }}>
+              {draft.latitude.toFixed(6)}, {draft.longitude.toFixed(6)}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !draft || confirmed }}
+        disabled={!draft || confirmed} onPress={confirm}
+        style={{
+          marginTop: 11, minHeight: 47, padding: 12, borderRadius: 10,
+          backgroundColor: !draft || confirmed ? "#9BC8B6" : "#0B7659",
+          justifyContent: "center", alignItems: "center",
+        }}>
+        <Text style={{ ...buttonText, fontSize: 13 }}>
+          {confirmed ? "Location Confirmed ✓" : "Confirm Meeting Point"}
+        </Text>
       </Pressable>
-    </View>
-    <Text style={{...title,marginTop:15,marginBottom:6,fontSize:12}}>Paste GPS coordinates or a full Google Maps URL</Text>
-    <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
-      <TextInput value={manual} onChangeText={setManual} placeholder="14.813900, 121.045300" placeholderTextColor="#79949F"
-        accessibilityLabel="Event venue coordinates or full Google Maps URL"
-        autoCapitalize="none" style={{flexGrow:1,flexBasis:220,minWidth:160,paddingHorizontal:12,paddingVertical:10,borderWidth:1,borderColor:"#C7DCDC",borderRadius:9,backgroundColor:"#FFFFFF",fontSize:12,color:"#143F42"}}/>
-      <Pressable onPress={useManual} style={action}><Text style={actionText}>Set Pin</Text></Pressable>
-    </View>
-    <View style={{marginTop:13,padding:11,backgroundColor:"#FFFFFF",borderRadius:10,borderWidth:1,borderColor:confirmed?"#77CCB2":"#F4D4A4"}}>
-      <Text style={{fontSize:12,fontWeight:"800",color:confirmed?"#087F75":"#966316"}}>
-        {confirmed ? "✓ Confirmed event pin" : draft ? "Pin selected — confirm to save" : "No event pin confirmed"}
+      {!!message && (
+        <Text accessibilityRole="alert"
+          style={{ fontSize: 11.5, lineHeight: 18, color: "#476D5D", marginTop: 9 }}>
+          {message}
+        </Text>
+      )}
+      <Text style={{ fontSize: 10.5, lineHeight: 17, color: "#779084", marginTop: 11 }}>
+        Only the confirmed meeting point is submitted for LGU review. Your current GPS is never
+        shared as live tracking when proposing an event.
       </Text>
-      {draft ? <Text style={{color:"#355F68",fontSize:12,marginTop:4}}>
-        {draft.latitude.toFixed(6)}, {draft.longitude.toFixed(6)}
-      </Text> : null}
     </View>
-    <Pressable disabled={!draft || confirmed} onPress={confirm}
-      style={{marginTop:10,padding:14,backgroundColor:!draft||confirmed?"#93BDB7":"#087F75",borderRadius:10,alignItems:"center"}}>
-      <Text style={{...actionText,fontSize:13}}>{confirmed?"Location Confirmed ✓":"Confirm Event Pin"}</Text>
-    </Pressable>
-    {!!message ? <Text accessibilityRole="alert" style={{fontSize:12,color:"#425F6B",marginTop:8}}>{message}</Text> : null}
-    <Text style={{fontSize:10,color:"#758C91",marginTop:12}}>
-      Your live location is never published. Only the confirmed event meeting point is saved. Google Maps provides map display and external navigation.
-    </Text>
-  </View>;
+  );
 }
