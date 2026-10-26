@@ -42,8 +42,6 @@ const SUPERADMIN_MODULE_COLORS: Record<string, readonly [string, string]> = {
   Dashboard: ["#009D7C", "#42BF8F"],
   "Admin Accounts": ["#1876BD", "#57A5DE"],
   "All Records": ["#336EAA", "#74A8D7"],
-  "Donation Management": ["#198B5A", "#59BC7B"],
-  "Donation Notifications": ["#9564B0", "#B889D6"],
   "Audit Logs": ["#A66A3C", "#DBAD70"],
   "System Settings": ["#667286", "#9DACBC"],
 };
@@ -66,12 +64,6 @@ const navItems: NavItem[] = [
     icon: "albums-outline",
     route: "/(superadmin)/all-records",
     match: "/all-records",
-  },
-  {
-    label: "Donation Management",
-    icon: "heart-outline",
-    route: "/(superadmin)/donations",
-    match: "/donations",
   },
   {
     label: "Audit Logs",
