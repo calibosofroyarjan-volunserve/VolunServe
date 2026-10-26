@@ -58,7 +58,7 @@ export async function createAdminAccount(
   // declaration does not validate the authenticity of external documents.
   if (!input.credentialsReviewed ||
       fullName.length < 5 ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       lguOffice.length < 3 ||
       lguPosition.length < 3 ||
       appointmentReference.length < 5 ||
@@ -70,7 +70,7 @@ export async function createAdminAccount(
     throw new Error("Enter complete LGU office, position and appointment reference, review the official credentials, and use a strong 12+ character temporary password.");
   }
 
-    const secondaryApp = initializeApp(
+  const secondaryApp = initializeApp(
     firebaseConfig,
     `admin-provision-${Date.now()}`
   );
