@@ -29,6 +29,7 @@ import {
   View,
 } from "react-native";
 
+import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -91,30 +92,6 @@ const EMPTY_CENTER_FORM: CenterForm = {
   longitude: "",
   capacity: "",
   occupied: "0",
-};
-
-type ModuleCardProps = {
-  icon: React.ComponentProps<
-    typeof Ionicons
-  >["name"];
-  iconColor: string;
-  iconBackground: string;
-  title: string;
-  description: string;
-  onPress: () => void;
-  count?: number;
-};
-
-type OverviewCardProps = {
-  icon: React.ComponentProps<
-    typeof Ionicons
-  >["name"];
-  iconColor: string;
-  iconBackground: string;
-  label: string;
-  value: number;
-  description: string;
-  onPress: () => void;
 };
 
 export default function CommandCenter() {
@@ -200,49 +177,7 @@ export default function CommandCenter() {
     profile.role === "admin" &&
     isApprovedProfile(profile);
 
-  const contentWidth =
-    Math.min(
-      Math.max(
-        width - 340,
-        280,
-      ),
-      1180,
-    );
-
-  const moduleColumns =
-    contentWidth >= 980
-      ? 4
-      : contentWidth >= 650
-        ? 2
-        : 1;
-
-  const overviewColumns =
-    contentWidth >= 850
-      ? 3
-      : contentWidth >= 560
-        ? 2
-        : 1;
-
-  const moduleGap = 14;
-  const overviewGap = 14;
-
-  const moduleCardWidth =
-    moduleColumns === 1
-      ? "100%"
-      : (contentWidth -
-          moduleGap *
-            (moduleColumns -
-              1)) /
-        moduleColumns;
-
-  const overviewCardWidth =
-    overviewColumns === 1
-      ? "100%"
-      : (contentWidth -
-          overviewGap *
-            (overviewColumns -
-              1)) /
-        overviewColumns;
+  const contentWidth = Math.min(1180, Math.max(280, width - (Platform.OS === "web" && width >= 980 ? 320 : 32)));
 
   const navigate = (
     route: string,
@@ -916,268 +851,6 @@ export default function CommandCenter() {
       needAssessments,
     ]);
 
-  const modules:
-    ModuleCardProps[] =
-    [
-      {
-        icon:
-          "warning-outline",
-        iconColor:
-          "#DC2626",
-        iconBackground:
-          "#FEF2F2",
-        title:
-          "Emergency LGU Operations",
-        description:
-          "Validate reports and coordinate the LGU response. Volunteer assignment is optional support.",
-        count:
-          metrics.activeCases,
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-cases",
-          ),
-      },
-      {
-        icon:
-          "business-outline",
-        iconColor:
-          "#0891B2",
-        iconBackground:
-          "#ECFEFF",
-        title:
-          "Evacuation Centers",
-        description:
-          "Create and update official LGU evacuation centers shown on the map.",
-        count:
-          metrics.activeCenters,
-        onPress:
-          openNewCenter,
-      },
-      {
-        icon:
-          "cube-outline",
-        iconColor:
-          "#059669",
-        iconBackground:
-          "#ECFDF5",
-        title:
-          "Relief Operations",
-        description:
-          "Review verified barangay needs, LGU inventory, allocations, and distribution records in one place.",
-        count:
-          metrics.openBarangayNeeds,
-        onPress: () =>
-          navigate(
-            "/(admin)/relief-operations",
-          ),
-      },
-      {
-        icon:
-          "people-outline",
-        iconColor:
-          "#2563EB",
-        iconBackground:
-          "#EFF6FF",
-        title:
-          "Volunteer Reviews",
-        description:
-          "Review volunteer applications and legacy account records. Volunteers support LGU operations.",
-        count:
-          metrics.pendingReviews,
-        onPress: () =>
-          navigate(
-            "/(admin)/account-approvals",
-          ),
-      },
-      {
-        icon:
-          "calendar-outline",
-        iconColor:
-          "#7C3AED",
-        iconBackground:
-          "#F5F3FF",
-        title:
-          "Events",
-        description:
-          "Manage organized community and volunteer activities.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-events",
-          ),
-      },
-      {
-        icon:
-          "heart-outline",
-        iconColor:
-          "#078F82",
-        iconBackground:
-          "#E8F8F2",
-        title:
-          "Donations",
-        description:
-          "Monitor donor profiles, verified payment records, pending transactions, and campaign support.",
-        onPress: () =>
-          navigate(
-            "/(admin)/donor-monitoring",
-          ),
-      },
-      {
-        icon:
-          "megaphone-outline",
-        iconColor:
-          "#D97706",
-        iconBackground:
-          "#FFFBEB",
-        title:
-          "Announcements",
-        description:
-          "Publish official LGU community updates and emergency information.",
-        onPress: () =>
-          navigate(
-            "/(admin)/create-announcement",
-          ),
-      },
-      {
-        icon:
-          "analytics-outline",
-        iconColor:
-          "#0284C7",
-        iconBackground:
-          "#F0F9FF",
-        title:
-          "Analytics",
-        description:
-          "Review operational trends, response activity, and documented outcomes.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-analytics",
-          ),
-      },
-      {
-        icon:
-          "ribbon-outline",
-        iconColor:
-          "#078F82",
-        iconBackground:
-          "#EEF2FF",
-        title:
-          "Certificates",
-        description:
-          "Issue certificates from verified volunteer service records.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-certificates",
-          ),
-      },
-      {
-        icon:
-          "shield-checkmark-outline",
-        iconColor:
-          "#B45309",
-        iconBackground:
-          "#FFF7ED",
-        title:
-          "Disputes",
-        description:
-          "Review contested volunteer-response outcomes and service records.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-disputes",
-          ),
-      },
-    ];
-
-  const overview:
-    OverviewCardProps[] =
-    [
-      {
-        icon:
-          "folder-open-outline",
-        iconColor:
-          "#2563EB",
-        iconBackground:
-          "#EFF6FF",
-        label:
-          "Active Cases",
-        value:
-          metrics.activeCases,
-        description:
-          "Emergency cases still under LGU responsibility.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-cases",
-          ),
-      },
-      {
-        icon:
-          "alert-circle-outline",
-        iconColor:
-          "#DC2626",
-        iconBackground:
-          "#FEF2F2",
-        label:
-          "Critical Open",
-        value:
-          metrics.criticalOpen,
-        description:
-          "Critical cases requiring immediate LGU attention.",
-        onPress: () =>
-          navigate(
-            "/(admin)/admin-cases",
-          ),
-      },
-      {
-        icon:
-          "list-outline",
-        iconColor:
-          "#059669",
-        iconBackground:
-          "#ECFDF5",
-        label:
-          "Barangay Needs",
-        value:
-          metrics.openBarangayNeeds,
-        description:
-          "Verified assessments still included in LGU relief planning.",
-        onPress: () =>
-          navigate(
-            "/(admin)/relief-operations",
-          ),
-      },
-      {
-        icon:
-          "business-outline",
-        iconColor:
-          "#0891B2",
-        iconBackground:
-          "#ECFEFF",
-        label:
-          "Active Centers",
-        value:
-          metrics.activeCenters,
-        description:
-          "Official evacuation centers currently listed by LGU.",
-        onPress:
-          openNewCenter,
-      },
-      {
-        icon:
-          "bed-outline",
-        iconColor:
-          "#7C3AED",
-        iconBackground:
-          "#F5F3FF",
-        label:
-          "Available Spaces",
-        value:
-          metrics.availableEvacuationSpaces,
-        description:
-          "Remaining listed capacity across active evacuation centers.",
-        onPress:
-          openNewCenter,
-      },
-    ];
-
   if (loading) {
     return (
       <View
@@ -1263,7 +936,7 @@ export default function CommandCenter() {
                 styles.title
               }
             >
-              Admin Command Center
+              Admin dashboard
             </Text>
 
             <Text
@@ -1271,7 +944,7 @@ export default function CommandCenter() {
                 styles.subtitle
               }
             >
-              Manage emergency response, community activities, assistance requests, and volunteer operations in San Jose del Monte.
+              Live operational priorities, approval workflows, and LGU-managed response resources.
             </Text>
           </View>
 
@@ -1291,7 +964,7 @@ export default function CommandCenter() {
                 styles.adminBadgeText
               }
             >
-              ADMIN
+              LGU ADMIN
             </Text>
           </View>
         </View>
@@ -1318,144 +991,70 @@ export default function CommandCenter() {
           </View>
         )}
 
-        <View
-          style={
-            styles.lguDoctrineCard
-          }
-        >
-          <View
-            style={
-              styles.lguDoctrineIcon
-            }
-          >
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={22}
-              color="#0F766E"
-            />
-          </View>
-
-          <View
-            style={
-              styles.lguDoctrineCopy
-            }
-          >
-            <Text
-              style={
-                styles.lguDoctrineTitle
-              }
-            >
-              LGU-led response
-            </Text>
-
-            <Text
-              style={
-                styles.lguDoctrineText
-              }
-            >
-              The LGU remains responsible for emergency response, evacuation centers, relief resources, and barangay allocation. Volunteers are optional support: they may accept or decline an assignment, but a declined or unavailable volunteer never stops the LGU response.
-            </Text>
+        <View style={styles.flatSummary}>
+          <Text style={styles.overline}>OPERATIONS SUMMARY</Text>
+          <View style={[styles.metricStrip, width < 760 && styles.metricStripCompact]}>
+            {[
+              { label: "Open cases", value: metrics.activeCases },
+              { label: "Critical reports", value: metrics.criticalOpen },
+              { label: "Pending reviews", value: metrics.pendingReviews },
+              { label: "Active evacuation centers", value: metrics.activeCenters },
+            ].map((metric) =>
+              <View key={metric.label} style={styles.metricItem}>
+                <Text style={styles.metricItemLabel}>{metric.label}</Text>
+                <Text style={styles.metricItemValue}>{dataError ? "—" : metric.value.toLocaleString("en-PH")}</Text>
+              </View>,
+            )}
           </View>
         </View>
 
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Operations
-          </Text>
+        <WorkspaceBarChart
+          title="Operational workload comparison"
+          subtitle="Current open workloads and centers, based on authorized Firestore records. Not a trend forecast."
+          bars={[
+            { key: "cases", label: "Open emergency cases", value: dataError ? null : metrics.activeCases },
+            { key: "reviews", label: "Pending account and volunteer reviews", value: dataError ? null : metrics.pendingReviews },
+            { key: "needs", label: "Open barangay relief needs", value: dataError ? null : metrics.openBarangayNeeds },
+            { key: "centers", label: "Active evacuation centers", value: dataError ? null : metrics.activeCenters },
+          ]}
+          footer="Count comparisons use the same scale. Case review and emergency response remain LGU-led."
+        />
 
-          <Text
-            style={
-              styles.sectionSubtitle
-            }
-          >
-            LGU/Admin remains the primary authority and responder for every case.
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.moduleGrid,
+        <View style={styles.queueSection}>
+          <View style={styles.queueHeader}>
+            <Text style={styles.sectionTitle}>Review and action queue</Text>
+            <Text style={styles.sectionSubtitle}>Open the relevant workflow directly. Full module navigation stays in the sidebar.</Text>
+          </View>
+          {[
             {
-              gap:
-                moduleGap,
+              title: "Account and Volunteer Reviews",
+              summary: `${pendingUserIds.length} account records · ${pendingVolunteerIds.length} volunteer applications`,
+              path: "/(admin)/account-approvals",
             },
-          ]}
-        >
-          {modules.map(
-            (item) => (
-              <View
-                key={
-                  item.title
-                }
-                style={{
-                  width:
-                    moduleCardWidth,
-                }}
-              >
-                <ModuleCard
-                  {...item}
-                />
-              </View>
-            ),
-          )}
-        </View>
-
-        <View
-          style={[
-            styles.sectionHeader,
-            styles.overviewHeader,
-          ]}
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            LGU Live Overview
-          </Text>
-
-          <Text
-            style={
-              styles.sectionSubtitle
-            }
-          >
-            Operational indicators for cases and official evacuation capacity.
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.overviewGrid,
             {
-              gap:
-                overviewGap,
+              title: "Identity Verification Reviews",
+              summary: "Review AI-uncertain identity submissions before volunteer approval.",
+              path: "/(admin)/identity-reviews",
             },
-          ]}
-        >
-          {overview.map(
-            (item) => (
-              <View
-                key={
-                  item.label
-                }
-                style={{
-                  width:
-                    overviewCardWidth,
-                }}
-              >
-                <OverviewCard
-                  {...item}
-                />
+            {
+              title: "Community Event Attendance",
+              summary: "Open Time In / Time Out verification and event completion.",
+              path: "/(admin)/community-attendance",
+            },
+          ].map((action) =>
+            <TouchableOpacity
+              key={action.path}
+              accessibilityRole="button"
+              activeOpacity={0.72}
+              style={styles.queueRow}
+              onPress={() => navigate(action.path)}
+            >
+              <View style={styles.queueContent}>
+                <Text style={styles.queueTitle}>{action.title}</Text>
+                <Text style={styles.queueSummary}>{action.summary}</Text>
               </View>
-            ),
+              <Ionicons name="arrow-forward-outline" size={19} color="#23765F" />
+            </TouchableOpacity>,
           )}
         </View>
 
@@ -2147,192 +1746,33 @@ function CenterInput({
   );
 }
 
-function ModuleCard({
-  icon,
-  iconColor,
-  iconBackground,
-  title,
-  description,
-  onPress,
-  count,
-}: ModuleCardProps) {
-  return (
-    <TouchableOpacity
-      activeOpacity={
-        0.78
-      }
-      style={
-        styles.moduleCard
-      }
-      onPress={
-        onPress
-      }
-    >
-      <View
-        style={
-          styles.moduleTop
-        }
-      >
-        <View
-          style={[
-            styles.moduleIcon,
-            {
-              backgroundColor:
-                iconBackground,
-            },
-          ]}
-        >
-          <Ionicons
-            name={icon}
-            size={22}
-            color={
-              iconColor
-            }
-          />
-        </View>
-
-        {typeof count ===
-          "number" &&
-          count > 0 && (
-            <View
-              style={
-                styles.countBadge
-              }
-            >
-              <Text
-                style={
-                  styles.countBadgeText
-                }
-              >
-                {count}
-              </Text>
-            </View>
-          )}
-      </View>
-
-      <Text
-        style={
-          styles.moduleTitle
-        }
-      >
-        {title}
-      </Text>
-
-      <Text
-        style={
-          styles.moduleDescription
-        }
-      >
-        {description}
-      </Text>
-
-      <View
-        style={
-          styles.moduleFooter
-        }
-      >
-        <Text
-          style={
-            styles.openText
-          }
-        >
-          Open
-        </Text>
-
-        <Ionicons
-          name="arrow-forward"
-          size={16}
-          color="#078F82"
-        />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function OverviewCard({
-  icon,
-  iconColor,
-  iconBackground,
-  label,
-  value,
-  description,
-  onPress,
-}: OverviewCardProps) {
-  return (
-    <TouchableOpacity
-      activeOpacity={
-        0.8
-      }
-      style={
-        styles.overviewCard
-      }
-      onPress={
-        onPress
-      }
-    >
-      <View
-        style={[
-          styles.overviewIcon,
-          {
-            backgroundColor:
-              iconBackground,
-          },
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={23}
-          color={
-            iconColor
-          }
-        />
-      </View>
-
-      <View
-        style={
-          styles.overviewBody
-        }
-      >
-        <Text
-          style={
-            styles.overviewLabel
-          }
-        >
-          {label}
-        </Text>
-
-        <Text
-          style={
-            styles.overviewValue
-          }
-        >
-          {value}
-        </Text>
-
-        <Text
-          style={
-            styles.overviewDescription
-          }
-        >
-          {description}
-        </Text>
-      </View>
-
-      <Ionicons
-        name="chevron-forward"
-        size={18}
-        color="#94A3B8"
-      />
-    </TouchableOpacity>
-  );
-}
-
 const styles =
   StyleSheet.create({
+    overline: {
+      fontSize: 10, letterSpacing: 1.2, color: "#688076", fontWeight: "700", marginBottom: 9,
+    },
+    flatSummary: { marginBottom: 28 },
+    metricStrip: {
+      flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderBottomWidth: 1,
+      borderColor: "#DDE6E1",
+    },
+    metricStripCompact: { flexWrap: "wrap" },
+    metricItem: { flexGrow: 1, flexBasis: "24%", minWidth: 138, paddingVertical: 18, paddingHorizontal: 12 },
+    metricItemLabel: { fontSize: 11, color: "#62786F", fontWeight: "600" },
+    metricItemValue: { fontSize: 26, fontWeight: "700", color: "#173D32", marginTop: 5, fontVariant: ["tabular-nums"] },
+    queueSection: { marginTop: 31 },
+    queueHeader: { marginBottom: 15 },
+    queueRow: {
+      flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16,
+      borderTopWidth: 1, borderTopColor: "#DDE6E1", minHeight: 65,
+    },
+    queueContent: { flex: 1, minWidth: 0 },
+    queueTitle: { fontSize: 13, fontWeight: "700", color: "#173D32" },
+    queueSummary: { fontSize: 12, color: "#6C7F77", lineHeight: 18, marginTop: 4 },
     screen: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: "#F2F9FC",
+      backgroundColor: "#F6F8F7",
     },
 
     // Separate right-side scrolling from the fixed Admin navigation.
@@ -2344,8 +1784,8 @@ const styles =
 
     page: {
       width: "100%",
-      paddingHorizontal: 28,
-      paddingTop: 35,
+      paddingHorizontal: 16,
+      paddingTop: 28,
       paddingBottom: 64,
     },
 
@@ -2387,9 +1827,9 @@ const styles =
     },
 
     title: {
-      color: "#0E2D4E",
-      fontSize: 30,
-      fontWeight: "900",
+      color: "#173D32",
+      fontSize: 29,
+      fontWeight: "700",
       letterSpacing: -0.5,
     },
 
@@ -2491,9 +1931,9 @@ const styles =
     },
 
     sectionTitle: {
-      color: "#0F172A",
-      fontSize: 18,
-      fontWeight: "900",
+      color: "#173D32",
+      fontSize: 17,
+      fontWeight: "700",
     },
 
     sectionSubtitle: {
