@@ -123,7 +123,7 @@ export default function SuperAdminDashboard() {
         {chartData.map(item=><View key={item.id} style={styles.barItem}>
           <View style={styles.barHeading}><Text style={styles.barTitle}>{item.label}</Text><Text style={styles.barValue}>{item.failed?"Unavailable":!item.loaded?"Loading…":String(item.value)}</Text></View>
           <View style={styles.barTrack}>{item.loaded&&!item.failed&&
-            <View style={[styles.barFill,{width:String(item.value/chartMax*100)+"%",backgroundColor:item.color}]}/>}</View>
+            <View style={[styles.barFill,{width:(String(item.value/chartMax*100)+"%") as any,backgroundColor:item.color}]}/>}</View>
         </View>)}
         {failed.length>0&&<Text style={styles.inlineWarning}>Some counters cannot be loaded. Check Super Admin Firestore permissions before defense.</Text>}
         <Text style={styles.footnote}>{chart==="roles"?"Role totals include all records in users, including inactive accounts.":"Operations are total records, not a monthly trend."}</Text>
@@ -132,7 +132,7 @@ export default function SuperAdminDashboard() {
         <Text style={styles.eyebrow}>ACCOUNT ACCESS</Text>
         <Text style={styles.panelHeading}>Account approval rate</Text>
         <Text style={styles.percent}>{users===null?"—":String(approvalPercent)+"%"}</Text>
-        <View style={styles.barTrack}>{users!==null&&<View style={[styles.barFill,{width:String(approvalPercent)+"%",backgroundColor:"#109875"}]}/>}</View>
+        <View style={styles.barTrack}>{users!==null&&<View style={[styles.barFill,{width:(String(approvalPercent)+"%") as any,backgroundColor:"#109875"}]}/>}</View>
         <Text style={styles.body}>{users===null?"Waiting for account records.":String(approved)+" of "+String(allUsers)+" accounts are approved."}</Text>
         <View style={styles.divider}/>
         <View style={styles.guidance}><Ionicons name="shield-checkmark-outline" size={19} color="#118565"/><Text style={styles.guidanceText}>Only independently authorized LGU personnel should receive Admin access. Review credentials before assigning a privileged role.</Text></View>
