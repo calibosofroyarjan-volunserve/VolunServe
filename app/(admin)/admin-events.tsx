@@ -756,7 +756,7 @@ function Pill({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f4f7fb" },
+  screen: { flex: 1, backgroundColor: "#F6F8F7" },
 
   header: {
     paddingTop: 56,
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: "#0f172a", fontWeight: "900" },
 
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 10 },
-  title: { fontSize: 18, fontWeight: "900", color: "#0f172a" },
+  title: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
   muted: { color: "#64748b", textAlign: "center" },
   danger: { color: "#dc2626", fontWeight: "900", textAlign: "center" },
 
