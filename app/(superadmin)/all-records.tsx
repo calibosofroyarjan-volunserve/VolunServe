@@ -28,6 +28,7 @@ type RecordType =
   | "users"
   | "applications"
   | "cases"
+  | "assistance"
   | "assignments"
   | "contributions"
   | "disputes"
@@ -49,6 +50,7 @@ const emptyRecords: RecordGroup = {
   users: [],
   applications: [],
   cases: [],
+  assistance: [],
   assignments: [],
   contributions: [],
   disputes: [],
@@ -72,6 +74,10 @@ const recordSources: Array<{
   {
     type: "cases",
     collectionName: "disasterCases",
+  },
+  {
+    type: "assistance",
+    collectionName: "assistanceRequests",
   },
   {
     type: "assignments",
@@ -485,8 +491,13 @@ export default function AllRecords() {
 
     {
       key: "cases",
-      label: "Cases",
+      label: "Emergency Reports",
       icon: "warning-outline",
+    },
+    {
+      key: "assistance",
+      label: "Assistance Requests",
+      icon: "hand-left-outline",
     },
 
     {
@@ -530,6 +541,18 @@ export default function AllRecords() {
   const renderRecord = (
     item: GenericRecord
   ) => {
+    if (activeTab === "assistance") {
+      return <RecordCard key={item.id} icon="hand-left-outline"
+        title={firstText(item.title,item.assistanceType,"Assistance Request")}
+        subtitle={firstText(item.barangay,item.generalArea,item.location,"San Jose del Monte")}
+        status={firstText(item.status,"pending")}
+        rows={[
+          {label:"Category",value:firstText(item.assistanceType,item.category)},
+          {label:"Date",value:readableDate(item.createdAt)},
+          {label:"Request reference",value:item.id},
+        ]}/>;
+    }
+
     if (
       activeTab === "users"
     ) {
@@ -1146,6 +1169,7 @@ export default function AllRecords() {
           icon="warning-outline"
         />
 
+        <SummaryCard label="Assistance" value={records.assistance.length} icon="hand-left-outline" />
         <SummaryCard
           label="Verified Help"
           value={
