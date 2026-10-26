@@ -1,278 +1,184 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { getAuth } from "firebase/auth";
-import {
-    collectionGroup,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    Timestamp,
-} from "firebase/firestore";
+import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator, ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from "react-native";
 import { db } from "../../lib/firebase";
+import { useUserSession } from "../../lib/useUserSession";
 
-type LogAction = "verified" | "rejected" | "distributed";
-
-type LogItem = {
+type AuditEntry = {
   id: string;
-  donationId: string;
-  action: LogAction;
-  note?: string;
-
-  // snapshots (to show without extra reads)
-  donorName?: string;
-  barangay?: string;
-  amount?: number;
-  refNumber?: string;
-  statusAfter?: string;
-
-  actorUid?: string;
-  actorRole?: string;
-  actorName?: string;
-
-  createdAt?: Timestamp;
+  source: string;
+  actionType: string;
+  adminUid: string;
+  adminName: string;
+  targetType: string;
+  targetId: string;
+  description: string;
+  createdAt?: Timestamp | null;
 };
 
-const formatDate = (ts?: Timestamp) => {
-  if (!ts) return "-";
-  const d = ts.toDate();
-  return d.toLocaleString();
+const asText = (value: unknown) => typeof value === "string" ? value : "";
+const eventTime = (value?: Timestamp | null) => value?.toMillis?.() || 0;
+const prettyDate = (value?: Timestamp | null) => {
+  const date = value?.toDate?.();
+  return date ? date.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : "Pending timestamp";
 };
+const prettyAction = (value: string) =>
+  value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const badgeStyle = (action: LogAction) => {
-  if (action === "verified") return { backgroundColor: "#2563eb" };
-  if (action === "rejected") return { backgroundColor: "#dc2626" };
-  return { backgroundColor: "#16a34a" };
-};
-
+/**
+ * Actual administrative audit feed. Donation transactions have their own
+ * donation history and must not be mislabeled as all administrative actions.
+ * Firestore rules restrict the feed to approved Super Admin accounts.
+ */
 export default function AdminLogs() {
   const router = useRouter();
-  const [role, setRole] = useState<string | null>(null);
-  const [loadingRole, setLoadingRole] = useState(true);
+  const { user, profile, loading: sessionLoading } = useUserSession();
+  const authorized = !!user && profile?.role === "superadmin" && profile?.status === "approved";
+  const [bySource, setBySource] = useState<Record<string, AuditEntry[]>>({});
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const sources = ["adminLogs", "adminActivityLogs"];
 
-  const [logs, setLogs] = useState<LogItem[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(true);
-
-  const [filter, setFilter] = useState<"all" | LogAction>("all");
-
-  const isAuthorized = role === "admin" || role === "superadmin";
-
-  // 🔐 Role check
   useEffect(() => {
-    const run = async () => {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const snap = await getDoc(doc(db, "users", user.uid));
-      const userRole = snap.data()?.role?.trim().toLowerCase() || "";
-      setRole(userRole);
-      setLoadingRole(false);
-    };
-
-    run();
-  }, []);
-
-  // 📜 Global logs feed
-  useEffect(() => {
-    if (!isAuthorized) return;
-
-    // logs are stored under: donations/{donationId}/logs/{logId}
-    // so we read them via collectionGroup("logs")
-    const q = query(collectionGroup(db, "logs"), orderBy("createdAt", "desc"));
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: LogItem[] = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            donationId: data.donationId || "",
-            action: data.action,
-            note: data.note || "",
-            donorName: data.donorName,
-            barangay: data.barangay,
-            amount: data.amount,
-            refNumber: data.refNumber,
-            statusAfter: data.statusAfter,
-            actorUid: data.actorUid,
-            actorRole: data.actorRole,
-            actorName: data.actorName,
-            createdAt: data.createdAt,
-          };
-        });
-
-        setLogs(list);
-        setLoadingLogs(false);
+    if (!authorized) {
+      setBySource({});
+      setLoaded({});
+      setErrors({});
+      return;
+    }
+    const unsub = sources.map((source) => onSnapshot(
+      collection(db, source),
+      (snapshot) => {
+        setBySource((old) => ({
+          ...old,
+          [source]: snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id, source,
+              actionType: asText(data.actionType || data.action) || "administrative_action",
+              adminUid: asText(data.adminUid || data.actorUid || data.updatedBy),
+              adminName: asText(data.adminName || data.actorName),
+              targetType: asText(data.targetType || data.entityType),
+              targetId: asText(data.targetId || data.entityId),
+              description: asText(data.description || data.details || data.message),
+              createdAt: data.createdAt || data.timestamp || null,
+            };
+          }),
+        }));
+        setErrors((old) => { const next = { ...old }; delete next[source]; return next; });
+        setLoaded((old) => ({ ...old, [source]: true }));
       },
-      () => setLoadingLogs(false)
-    );
+      (error) => {
+        setErrors((old) => ({ ...old, [source]: error.message || "Unable to load records" }));
+        setLoaded((old) => ({ ...old, [source]: true }));
+      },
+    ));
+    return () => unsub.forEach((stop) => stop());
+  }, [authorized]);
 
-    return () => unsub();
-  }, [isAuthorized]);
-
+  const logs = useMemo(
+    () => sources.flatMap((source) => bySource[source] || [])
+      .sort((a, b) => eventTime(b.createdAt) - eventTime(a.createdAt)),
+    [bySource],
+  );
   const visible = useMemo(() => {
-    if (filter === "all") return logs;
-    return logs.filter((l) => l.action === filter);
-  }, [logs, filter]);
-
-  if (loadingRole) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 10 }}>Loading...</Text>
-      </View>
+    const needle = search.trim().toLowerCase();
+    if (!needle) return logs;
+    return logs.filter((item) =>
+      [item.actionType, item.adminName, item.adminUid, item.targetType,
+        item.targetId, item.description].join(" ").toLowerCase().includes(needle),
     );
+  }, [logs, search]);
+
+  if (sessionLoading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
+  if (!authorized) {
+    return <View style={styles.center}><Ionicons name="lock-closed-outline" size={30} color="#64748B" />
+      <Text style={styles.denied}>Super Admin access required.</Text></View>;
   }
+  const loading = sources.some((source) => !loaded[source]);
 
-  if (!isAuthorized) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.denied}>Access Denied</Text>
+  return <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <View style={styles.header}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.eyebrow}>SUPER ADMIN · SYSTEM OVERSIGHT</Text>
+        <Text style={styles.title}>Audit Logs</Text>
+        <Text style={styles.subtitle}>Recorded administrative actions, including account access changes.</Text>
       </View>
-    );
-  }
-
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.topRow}>
-        <Text style={styles.title}>Admin Activity Logs</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={{ color: "#fff", fontWeight: "700" }}>Back</Text>
-        </TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
+        <Ionicons name="arrow-back" size={18} color="#086F55" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+    <View style={styles.summary}>
+      <Ionicons name="shield-checkmark-outline" size={23} color="#087657" />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.summaryTitle}>{logs.length} recorded administrative actions</Text>
+        <Text style={styles.subtitle}>Actor, timestamp, target, and reason are shown when recorded.</Text>
       </View>
-
-      <Text style={styles.subtitle}>
-        Global timeline of verification, rejection, and distribution actions.
-      </Text>
-
-      {/* Filter chips */}
-      <View style={styles.filters}>
-        <Chip active={filter === "all"} label="All" onPress={() => setFilter("all")} />
-        <Chip
-          active={filter === "verified"}
-          label="Verified"
-          onPress={() => setFilter("verified")}
-        />
-        <Chip
-          active={filter === "rejected"}
-          label="Rejected"
-          onPress={() => setFilter("rejected")}
-        />
-        <Chip
-          active={filter === "distributed"}
-          label="Distributed"
-          onPress={() => setFilter("distributed")}
-        />
-      </View>
-
-      {loadingLogs && (
-        <View style={{ marginTop: 20 }}>
-          <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 10, textAlign: "center" }}>Loading logs...</Text>
+    </View>
+    <View style={styles.searchRow}>
+      <Ionicons name="search-outline" color="#64748B" size={20} />
+      <TextInput
+        style={styles.searchInput} value={search} onChangeText={setSearch}
+        placeholder="Search action, account, actor or reference"
+        placeholderTextColor="#94A3B8" autoCapitalize="none"
+      />
+    </View>
+    {Object.entries(errors).map(([source, message]) =>
+      <View key={source} style={styles.error}>
+        <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
+      </View>,
+    )}
+    {loading ? <ActivityIndicator style={{ marginTop: 25 }} /> : null}
+    {!loading && visible.length === 0 ?
+      <View style={styles.empty}><Ionicons name="document-text-outline" size={30} color="#73918A" />
+        <Text style={styles.emptyText}>{search ? "No matching audit events." : "No administrative audit events recorded yet."}</Text>
+      </View> : null}
+    {visible.map((item) =>
+      <View key={item.source + ":" + item.id} style={styles.event}>
+        <View style={styles.eventHeader}>
+          <Text style={styles.action}>{prettyAction(item.actionType)}</Text>
+          <Text style={styles.date}>{prettyDate(item.createdAt)}</Text>
         </View>
-      )}
-
-      {!loadingLogs && visible.length === 0 && (
-        <Text style={{ marginTop: 20, color: "#64748b" }}>No logs yet.</Text>
-      )}
-
-      {visible.map((l) => (
-        <View key={`${l.donationId}_${l.id}`} style={styles.card}>
-          <View style={styles.cardTop}>
-            <Text style={styles.ref}>Ref: {l.refNumber || "-"}</Text>
-            <View style={[styles.badge, badgeStyle(l.action)]}>
-              <Text style={styles.badgeText}>{String(l.action).toUpperCase()}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.amount}>PHP {Number(l.amount || 0).toFixed(2)}</Text>
-          <Text style={styles.meta}>Barangay: {l.barangay || "-"}</Text>
-          <Text style={styles.meta}>Donor: {l.donorName || "-"}</Text>
-
-          <View style={styles.hr} />
-
-          <Text style={styles.meta}>
-            By: {l.actorName || "Admin"} ({l.actorRole || "-"})
-          </Text>
-          <Text style={styles.meta}>Date: {formatDate(l.createdAt)}</Text>
-
-          {l.note ? (
-            <View style={styles.noteBox}>
-              <Text style={styles.noteTitle}>Note</Text>
-              <Text style={styles.noteText}>{l.note}</Text>
-            </View>
-          ) : null}
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-function Chip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.chip,
-        active ? { backgroundColor: "#0f172a" } : { backgroundColor: "#e2e8f0" },
-      ]}
-    >
-      <Text style={[styles.chipText, active ? { color: "#fff" } : { color: "#0f172a" }]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+        <Text style={styles.description}>{item.description || "No description provided."}</Text>
+        <Text style={styles.meta}>Actor: {item.adminName || item.adminUid || "Not recorded"}</Text>
+        <Text style={styles.meta}>Target: {item.targetType || "record"} · {item.targetId || "Not recorded"}</Text>
+        <Text style={styles.source}>Source: {item.source}</Text>
+      </View>,
+    )}
+  </ScrollView>;
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingBottom: 40, backgroundColor: "#f4f7fb" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  denied: { fontSize: 20, fontWeight: "800", color: "#dc2626" },
-
-  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 24, fontWeight: "900" },
-  backBtn: { backgroundColor: "#111827", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
-
-  subtitle: { color: "#64748b", marginTop: 8, marginBottom: 14 },
-
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  chipText: { fontWeight: "700", fontSize: 12 },
-
-  card: { backgroundColor: "#fff", borderRadius: 18, padding: 16, marginBottom: 12, elevation: 2 },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  ref: { fontWeight: "800", color: "#0f172a" },
-  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  badgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
-  amount: { marginTop: 6, fontSize: 18, fontWeight: "900", color: "#16a34a" },
-  meta: { marginTop: 2, color: "#334155", fontWeight: "600" },
-
-  hr: { height: 1, backgroundColor: "#e2e8f0", marginVertical: 10 },
-
-  noteBox: { marginTop: 10, backgroundColor: "#f8fafc", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#e2e8f0" },
-  noteTitle: { fontWeight: "900", marginBottom: 4, color: "#0f172a" },
-  noteText: { color: "#0f172a" },
+  screen: { flex: 1, backgroundColor: "#F6F8F7" },
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center", padding: 22, paddingBottom: 60 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
+  header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 },
+  eyebrow: { fontSize: 11, fontWeight: "800", color: "#087657", letterSpacing: 1 },
+  title: { fontSize: 27, fontWeight: "700", color: "#14392F", marginTop: 4 },
+  subtitle: { fontSize: 12, color: "#657A80", marginTop: 4, lineHeight: 18 },
+  back: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, backgroundColor: "#E2F2ED", padding: 12 },
+  backText: { color: "#086F55", fontWeight: "800" },
+  summary: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, borderRadius: 16, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", marginBottom: 14 },
+  summaryTitle: { color: "#183C33", fontWeight: "800", fontSize: 15 },
+  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", paddingHorizontal: 14, borderRadius: 12, marginBottom: 14 },
+  searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 9, minWidth: 0, color: "#173B32" },
+  error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
+  errorText: { color: "#B91C1C", fontSize: 12 },
+  empty: { padding: 35, alignItems: "center", gap: 10 },
+  emptyText: { color: "#64748B", textAlign: "center" },
+  event: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
+  eventHeader: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginBottom: 8 },
+  action: { color: "#087657", fontSize: 14, fontWeight: "900", flexShrink: 1 },
+  date: { color: "#64748B", fontSize: 11 },
+  description: { color: "#243C36", fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  meta: { color: "#64748B", fontSize: 12, marginTop: 3 },
+  source: { color: "#819995", fontSize: 10, marginTop: 9 },
 });
