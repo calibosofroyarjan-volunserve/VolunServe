@@ -20,6 +20,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ import {
 } from "react-native";
 
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
+import { isVerifiedActiveCenter, mapsPlaceUrl } from "../../lib/emergencyMapTypes";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -64,6 +66,9 @@ type EvacuationCenter = {
   capacity?: number;
   occupied?: number;
   status?: string;
+  verificationStatus?: string;
+  verificationSource?: string;
+  lastVerifiedAt?: any;
   createdAt?: any;
   updatedAt?: any;
 };
@@ -82,6 +87,7 @@ type CenterForm = {
   longitude: string;
   capacity: string;
   occupied: string;
+  verificationSource: string;
 };
 
 const EMPTY_CENTER_FORM: CenterForm = {
@@ -92,6 +98,7 @@ const EMPTY_CENTER_FORM: CenterForm = {
   longitude: "",
   capacity: "",
   occupied: "0",
+  verificationSource: "",
 };
 
 export default function CommandCenter() {
@@ -152,6 +159,7 @@ export default function CommandCenter() {
     savingCenter,
     setSavingCenter,
   ] = useState(false);
+  const [centerVerifiedConfirmed, setCenterVerifiedConfirmed] = useState(false);
 
   const [
     pendingUserIds,
@@ -419,12 +427,14 @@ export default function CommandCenter() {
     setCenterForm(
       EMPTY_CENTER_FORM,
     );
+    setCenterVerifiedConfirmed(false);
     setCenterModalVisible(true);
   };
 
   const openEditCenter = (
     center: EvacuationCenter,
   ) => {
+    setCenterVerifiedConfirmed(false);
     setEditingCenterId(center.id);
 
     setCenterForm({
@@ -457,6 +467,7 @@ export default function CommandCenter() {
               ),
             )
           : "",
+      verificationSource: center.verificationSource || "",
       occupied:
         Number.isFinite(
           Number(center.occupied),
@@ -479,6 +490,7 @@ export default function CommandCenter() {
     }
 
     setCenterModalVisible(false);
+    setCenterVerifiedConfirmed(false);
     setEditingCenterId(null);
     setCenterForm(
       EMPTY_CENTER_FORM,
@@ -501,6 +513,7 @@ export default function CommandCenter() {
         centerForm.barangay.trim();
       const address =
         centerForm.address.trim();
+      const verificationSource = centerForm.verificationSource.trim();
 
       const latitude =
         Number(
@@ -587,6 +600,13 @@ export default function CommandCenter() {
         return;
       }
 
+      if (centerVerifiedConfirmed && verificationSource.length < 10) {
+        Alert.alert("Official verification reference required",
+          "Enter the LGU or CDRRMO verification source before publishing this center.");
+        return;
+      }
+      const published = centerVerifiedConfirmed && verificationSource.length >= 10;
+
       try {
         setSavingCenter(true);
 
@@ -605,7 +625,10 @@ export default function CommandCenter() {
               longitude,
               capacity,
               occupied,
-              status: "active",
+              status: published ? "active" : "pending_verification",
+              verificationStatus: published ? "verified" : "pending",
+              verificationSource,
+              ...(published ? { lastVerifiedAt: serverTimestamp() } : {}),
               updatedBy: user.uid,
               updatedAt:
                 serverTimestamp(),
@@ -635,7 +658,10 @@ export default function CommandCenter() {
               longitude,
               capacity,
               occupied,
-              status: "active",
+              status: published ? "active" : "pending_verification",
+              verificationStatus: published ? "verified" : "pending",
+              verificationSource,
+              ...(published ? { lastVerifiedAt: serverTimestamp() } : {}),
               createdBy:
                 user.uid,
               updatedBy:
@@ -656,7 +682,7 @@ export default function CommandCenter() {
 
         Alert.alert(
           "Evacuation Center Saved",
-          "The official LGU evacuation center is now available to the VolunServe map.",
+          published ? "LGU-verified center published to live map." : "Center saved pending verification; not shown as an open shelter.",
         );
       } catch (error) {
         console.log(
@@ -789,20 +815,7 @@ export default function CommandCenter() {
             ),
         ).length;
 
-      const activeCenters =
-        centers.filter(
-          (item) =>
-            String(
-              item.status ||
-              "active",
-            ).toLowerCase() !==
-              "inactive" &&
-            String(
-              item.status ||
-              "active",
-            ).toLowerCase() !==
-              "closed",
-        );
+      const activeCenters = centers.filter(center => isVerifiedActiveCenter(center));
 
       const evacuationCapacity =
         activeCenters.reduce(
@@ -1264,6 +1277,10 @@ export default function CommandCenter() {
                           {center.address ||
                             "Address not set"}
                         </Text>
+                        <Text style={styles.centerVerificationMeta}>
+                          {isVerifiedActiveCenter(center) ? "LGU VERIFIED · OPEN" : "NOT VERIFIED AS OPEN"}
+                          {center.lastVerifiedAt?.toDate?.() ? " · " + center.lastVerifiedAt.toDate().toLocaleDateString("en-PH") : ""}
+                        </Text>
                       </View>
 
                       <View
@@ -1317,6 +1334,19 @@ export default function CommandCenter() {
                         center.longitude,
                       ).toFixed(6)}
                     </Text>
+                    {mapsPlaceUrl(center.latitude, center.longitude) && (
+                      <TouchableOpacity
+                        accessibilityRole="link"
+                        style={styles.centerMapLink}
+                        onPress={() => {
+                          const url = mapsPlaceUrl(center.latitude, center.longitude);
+                          if (url) void Linking.openURL(url);
+                        }}
+                      >
+                        <Ionicons name="location-outline" size={16} color="#23765F" />
+                        <Text style={styles.centerMapLinkText}>Verify this pin in Google Maps</Text>
+                      </TouchableOpacity>
+                    )}
 
                     <View
                       style={
@@ -1611,6 +1641,22 @@ export default function CommandCenter() {
                   />
                 </View>
               </View>
+
+              <CenterInput
+                label="Official verification source or reference"
+                value={centerForm.verificationSource}
+                onChangeText={(value) => updateCenterField("verificationSource", value)}
+                placeholder="LGU memo, CDRRMO reference, or government record"
+              />
+              <TouchableOpacity
+                accessibilityRole="checkbox" accessibilityState={{ checked: centerVerifiedConfirmed }}
+                style={styles.centerVerifyRow}
+                onPress={() => setCenterVerifiedConfirmed(value => !value)} disabled={savingCenter}
+              >
+                <Ionicons name={centerVerifiedConfirmed ? "checkbox" : "square-outline"} size={22} color="#23765F" />
+                <Text style={styles.centerVerifyText}>I independently confirmed this facility, exact coordinates, capacity, and availability with the LGU. Publish as ACTIVE.</Text>
+              </TouchableOpacity>
+              <Text style={styles.centerVerifyNote}>Unchecked records remain pending and are never represented as open shelters.</Text>
 
               <View
                 style={
@@ -2490,6 +2536,12 @@ const styles =
       fontSize: 13,
     },
 
+    centerVerifyRow: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: "#EDF6F0", borderRadius: 9, padding: 13, marginVertical: 8 },
+    centerVerifyText: { flex: 1, color: "#255641", fontSize: 12, lineHeight: 19 },
+    centerVerifyNote: { color: "#6E8276", fontSize: 11.5, lineHeight: 18, marginBottom: 10 },
+    centerVerificationMeta: { color: "#28745A", fontSize: 10.5, fontWeight: "700", marginTop: 7 },
+    centerMapLink: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 11 },
+    centerMapLinkText: { color: "#23765F", fontSize: 12, fontWeight: "700" },
     modalNotice: {
       marginTop: 2,
       padding: 12,

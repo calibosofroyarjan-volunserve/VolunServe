@@ -9,6 +9,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import React, {
@@ -21,6 +22,7 @@ import CaseChat from "./CaseChat.web";
 import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
+import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -77,6 +79,8 @@ type CaseRow = {
   activeVolunteerSupportAssignmentId?: string;
   activeResponderAssignmentId?: string;
   assignedLguPersonnelIds?: string[];
+  responseVehicleType?: string;
+  responseVehicleUpdatedAt?: any;
   activeLguHeartbeatAt?: any;
   activeLguStartedAt?: any;
   createdAt?: any;
@@ -92,6 +96,9 @@ type CenterRow = {
   longitude?: number | null;
   capacity?: number;
   occupied?: number;
+  verificationStatus?: string;
+  verificationSource?: string;
+  updatedAt?: any;
 };
 
 type BrowserLocation = {
@@ -205,7 +212,21 @@ const mapDocument = `
     }
 
     .center-pin {
-      background: #64748b;
+      background: #23765f;
+    }
+    .vehicle-response-marker {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      border: 3px solid white;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 7px 20px rgba(22,45,39,.27);
+      cursor: pointer;
+      font-size: 24px;
+      line-height: 1;
+      text-align: center;
+      background: #23765f;
     }
 
     .user-marker {
@@ -466,13 +487,29 @@ const mapDocument = `
         return "#2563eb";
       }
 
-      function makeResponderElement(stale, role) {
+      function renderResponderIcon(element, role, vehicleType) {
+        const icons = {
+          ambulance: ["🚑", "#B3443A"],
+          fire_truck: ["🚒", "#C56833"],
+          rescue_vehicle: ["🚙", "#236F99"],
+          service_vehicle: ["🛻", "#4D6F84"],
+          other_vehicle: ["🚐", "#586A78"],
+        };
+        const vehicle = role === "lgu" ? icons[vehicleType] : null;
+        if (vehicle) {
+          element.className = "vehicle-response-marker";
+          element.textContent = vehicle[0];
+          element.style.background = vehicle[1];
+        } else {
+          element.className = "pin";
+          element.style.background = responderColor(false, role);
+          element.innerHTML = role === "lgu" ? "<span>L</span>" : "<span>V</span>";
+        }
+      }
+
+      function makeResponderElement(stale, role, vehicleType) {
         const element = document.createElement("div");
-        element.className = "pin";
-        element.style.background = responderColor(stale, role);
-        element.innerHTML = role === "lgu"
-          ? "<span>L</span>"
-          : "<span>V</span>";
+        renderResponderIcon(element, role, vehicleType);
         return element;
       }
 
@@ -579,7 +616,7 @@ const mapDocument = `
           let marker = responderMarkers.get(id);
 
           if (!marker) {
-            const element = makeResponderElement(person.stale, responderRole);
+            const element = makeResponderElement(person.stale, responderRole, person.vehicleType);
             element.style.zIndex = responderRole === "lgu" ? "40" : "35";
 
             if (person.selectable !== false) {
@@ -606,14 +643,8 @@ const mapDocument = `
             responderMarkers.set(id, marker);
           } else {
             const element = marker.getElement();
-            element.style.background = responderColor(
-              person.stale,
-              responderRole,
-            );
+            renderResponderIcon(element, responderRole, person.vehicleType);
             element.style.zIndex = responderRole === "lgu" ? "40" : "35";
-            element.innerHTML = responderRole === "lgu"
-              ? "<span>L</span>"
-              : "<span>V</span>";
             marker.setOffset(visualOffset);
 
             animateResponderMarker(
@@ -626,7 +657,8 @@ const mapDocument = `
           marker.getPopup()?.setText(
             (person.name || (responderRole === "lgu" ? "LGU responder" : "Assigned responder")) +
             (responderRole === "lgu" ? " · LGU" : " · Volunteer") +
-            (person.stale ? " · older reading · " : " · live · ") +
+            (person.vehicleType && person.vehicleType !== "on_foot" && responderRole === "lgu" ? " · " + String(person.vehicleType).replaceAll("_", " ") : "") +
+            (person.stale ? " · last known GPS · " : " · GPS updated · ") +
             new Date(person.lastShared).toLocaleTimeString()
           );
 
@@ -896,7 +928,7 @@ const mapDocument = `
           const popup = new maplibregl.Popup({
             offset: 22,
             closeButton: false,
-          }).setText(item.name || "Evacuation center");
+          }).setText([item.name || "Evacuation center", item.address || item.barangay || "", "LGU verified active", item.capacity != null && item.occupied != null ? String(Math.max(0, item.capacity - item.occupied)) + " spaces based on last LGU update" : "Capacity unconfirmed"].filter(Boolean).join(" · "));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
@@ -1447,6 +1479,9 @@ export default function WebMapTracking() {
 
   const [error, setError] = useState("");
   const [lguAssignmentStatus, setLguAssignmentStatus] = useState("");
+  const [vehicleSaving, setVehicleSaving] = useState(false);
+  const [vehicleError, setVehicleError] = useState("");
+  const [vehicleMessage, setVehicleMessage] = useState("");
   const [lguArrivalBusy, setLguArrivalBusy] = useState(false);
   const [lguArrivalMessage, setLguArrivalMessage] = useState("");
   const [lguArrivalError, setLguArrivalError] = useState("");
@@ -1797,7 +1832,7 @@ export default function WebMapTracking() {
   ]);
 
   useEffect(() => {
-    if (missionMode || adminMissionMode || isResidentMode) {
+    if (missionMode || adminMissionMode) {
       setCenters([]);
       return;
     }
@@ -1823,7 +1858,7 @@ export default function WebMapTracking() {
         );
       },
     );
-  }, [missionMode, adminMissionMode, isResidentMode]);
+  }, [missionMode, adminMissionMode]);
 
   const visibleCases = useMemo(() => {
     if (missionMode || adminMissionMode) {
@@ -1878,12 +1913,12 @@ export default function WebMapTracking() {
   ]);
 
   const visibleCenters = useMemo(() => {
-    if (missionMode || adminMissionMode || isResidentMode || !showCenters) return [];
+    if (missionMode || adminMissionMode || !showCenters) return [];
 
     const needle = normalize(search);
 
     return centers.filter((item) => {
-      if (!hasCoordinates(item)) return false;
+      if (!hasCoordinates(item) || !isVerifiedActiveCenter(item)) return false;
       if (!needle) return true;
 
       return [
@@ -2038,6 +2073,30 @@ export default function WebMapTracking() {
     residentBoundCase,
     volunteerOverviewMode,
   ]);
+
+  const chooseResponseVehicle = async (type: string) => {
+    if (!isAdministrator || !user || !selectedCase?.id ||
+        !["reported", "validated", "assigned", "in_progress"].includes(normalize(selectedCase.status)) ||
+        !DISPATCH_VEHICLES.some(vehicle => vehicle.id === type)) {
+      return;
+    }
+    setVehicleSaving(true);
+    setVehicleError("");
+    setVehicleMessage("");
+    try {
+      // Dispatch metadata belongs to the existing private emergency case.
+      // This is not a fake GPS location or evidence that a vehicle is moving.
+      await updateDoc(doc(db, "disasterCases", selectedCase.id), {
+        responseVehicleType: type,
+        responseVehicleUpdatedAt: serverTimestamp(),
+      });
+      setVehicleMessage("Response vehicle saved. The marker will appear only when the assigned LGU responder shares real GPS.");
+    } catch (cause: any) {
+      setVehicleError(cause?.message || "Could not update dispatch type. Verify your Admin access.");
+    } finally {
+      setVehicleSaving(false);
+    }
+  };
 
   const selectedCenter = useMemo(() => {
     if (selected?.kind !== "center") {
@@ -3697,7 +3756,16 @@ export default function WebMapTracking() {
     frame.current?.contentWindow?.postMessage(
       {
         kind: "set-map-data",
-        responders: mapResponderPins,
+        responders: mapResponderPins.map((person: any) => ({
+          ...person,
+          vehicleType: (person.role === "lgu" || person.responderRole === "lgu")
+            ? (isResidentMode
+                ? residentCoordinationCase?.responseVehicleType
+                : adminMissionMode
+                  ? adminCase?.responseVehicleType
+                  : missionCase?.responseVehicleType) || "on_foot"
+            : "on_foot",
+        })),
         residents: isResidentMode ? [] : residentLivePins,
         route: roadRoute
           ? {
@@ -3759,6 +3827,11 @@ export default function WebMapTracking() {
               name: item.name || "Evacuation center",
               latitude: numericCoordinate(item.latitude),
               longitude: numericCoordinate(item.longitude),
+              address: item.address || "",
+              barangay: item.barangay || "",
+              capacity: item.capacity ?? null,
+              occupied: item.occupied ?? null,
+              updatedAt: timestampMillis(item.updatedAt),
             })),
 
         fit,
@@ -3794,6 +3867,9 @@ export default function WebMapTracking() {
     mapIncidentCases,
     visibleCenters,
     mapResponderPins,
+    residentCoordinationCase?.responseVehicleType,
+    adminCase?.responseVehicleType,
+    missionCase?.responseVehicleType,
     residentLivePins,
     roadRoute,
     isAdministrator,
@@ -5338,6 +5414,34 @@ export default function WebMapTracking() {
                   </div>
                 </div>
 
+                {isAdministrator &&
+                  ["reported", "validated", "assigned", "in_progress"].includes(normalize(selectedCase.status)) && (
+                  <div className="admin-case-info-card" style={{ marginTop: 18 }}>
+                    <span>OFFICIAL RESPONSE VEHICLE</span>
+                    <strong>{vehicleInfo(selectedCase.responseVehicleType).label}</strong>
+                    <small>Select the actual LGU dispatch category. This changes the icon on fresh responder GPS; choosing a vehicle does not by itself start tracking.</small>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                      {DISPATCH_VEHICLES.map(vehicle => (
+                        <button
+                          key={vehicle.id} type="button" disabled={vehicleSaving}
+                          onClick={() => void chooseResponseVehicle(vehicle.id)}
+                          aria-pressed={vehicleInfo(selectedCase.responseVehicleType).id === vehicle.id}
+                          style={{
+                            borderRadius: 9, border: "1px solid #D2E4DA", padding: "9px 11px",
+                            cursor: vehicleSaving ? "wait" : "pointer",
+                            background: vehicleInfo(selectedCase.responseVehicleType).id === vehicle.id ? "#DFF1E8" : "#FFFFFF",
+                            fontSize: 12, fontWeight: 700, color: "#174A38",
+                          }}
+                        >
+                          {vehicle.symbol} {vehicle.label}
+                        </button>
+                      ))}
+                    </div>
+                    {vehicleError && <small style={{ color: "#AE4136" }} role="alert">{vehicleError}</small>}
+                    {vehicleMessage && <small style={{ color: "#22694F" }}>{vehicleMessage}</small>}
+                  </div>
+                )}
+
                 {["pending", "confirmed"].includes(
                   normalize(selectedCase.lguArrivalConfirmationStatus),
                 ) && (
@@ -6166,18 +6270,30 @@ export default function WebMapTracking() {
                 {selectedCenter.address || selectedCenter.barangay || "Address pending"}
               </p>
               <div className="clean-info-block">
-                <strong>Status</strong>
-                <p>{String(selectedCenter.status || "available").toUpperCase()}</p>
+                <strong>LGU confirmed status</strong>
+                <p>VERIFIED · OPEN</p>
+                <small>As of {timestampMillis(selectedCenter.updatedAt) > 0
+                  ? new Date(timestampMillis(selectedCenter.updatedAt)).toLocaleString("en-PH")
+                  : "an unknown update time"} · Availability may change during emergencies.</small>
               </div>
               <div className="clean-info-block">
-                <strong>Occupancy</strong>
+                <strong>Last reported occupancy</strong>
                 <p>
-                  {selectedCenter.occupied ?? 0}
+                  {typeof selectedCenter.occupied === "number" ? selectedCenter.occupied : "Unknown"}
                   {Number.isFinite(selectedCenter.capacity)
                     ? ` / ${selectedCenter.capacity}`
                     : ""}
                 </p>
               </div>
+              {mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude) && (
+                <a
+                  href={mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude)!}
+                  target="_blank" rel="noopener noreferrer"
+                  className="primary-button" style={{ display: "inline-flex", marginTop: 12 }}
+                >
+                  Open directions in Google Maps
+                </a>
+              )}
             </>
           ) : (
             <div className="details-empty">

@@ -42,6 +42,8 @@ jobs:
         run: node scripts/test-lgu-admin-navigation-groups.cjs
       - name: Verify LGU Overview chart and Admin Profile
         run: node scripts/test-admin-overview-ui.cjs
+      - name: Live Emergency GPS and shelter permissions (Firestore emulator)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-emergency-map-rules.cjs"
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export
