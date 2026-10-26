@@ -30,7 +30,7 @@ function getRoutes() {
     if (!filename.startsWith(app + path.sep)) continue;
     let relative = path.relative(app, filename).split(path.sep).join("/");
     if (!/\.(tsx?|jsx?)$/i.test(relative)) continue;
-    relative = relative.replace(/\.(web|native|ios|android)?\.(tsx?|jsx?)$/i, "");
+    relative = relative.replace(/(\.(web|native|ios|android))?\.(tsx?|jsx?)$/i, "");
     if (/^\+/.test(path.posix.basename(relative)) || /(^|\/)\_layout$/.test(relative)) continue;
     const segments = relative.split("/");
     const withoutIndex = segments[segments.length - 1] === "index" ? segments.slice(0, -1) : segments;
@@ -47,7 +47,7 @@ const ignored = [];
 const methods = new Set(["push", "replace", "navigate"]);
 function inspect(node, filename) {
   if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
-      methods.has(node.expression.name.text) && node.arguments.length > 0) {
+      methods.has(node.expression.name.text) && /(?:^|\.)router$/i.test(node.expression.expression.getText()) && node.arguments.length > 0) {
     const arg = node.arguments[0];
     const target = ts.isStringLiteral(arg) ? arg :
       ts.isAsExpression(arg) && ts.isStringLiteral(arg.expression) ? arg.expression : null;
