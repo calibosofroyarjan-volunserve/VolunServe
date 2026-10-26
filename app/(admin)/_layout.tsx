@@ -47,26 +47,6 @@ type NavItem = {
   route: string;
 };
 
-const ADMIN_MODULE_COLORS: Record<string, readonly [string, string]> = {
-  Dashboard: ["#009D7C", "#42BF8F"],
-  "Account Approvals": ["#1876BD", "#57A5DE"],
-  "Identity Reviews": ["#7955B7", "#A98EE1"],
-  "Emergency Cases": ["#BE4B4B", "#E5805B"],
-  "Assistance Requests": ["#D08136", "#EFB669"],
-  "LGU Personnel": ["#167F99", "#43B2C7"],
-  "LGU Attendance": ["#4774B7", "#70A6D7"],
-  Events: ["#65883A", "#A6BD59"],
-  "Community Events": ["#377C53", "#63B78E"],
-  "Event Attendance": ["#356D9D", "#66A5CF"],
-  Donations: ["#198B5A", "#59BC7B"],
-  "Donation Notifications": ["#9564B0", "#B889D6"],
-  "Relief Operations": ["#C07D43", "#E6B477"],
-  Announcements: ["#B16C39", "#E7A96E"],
-  Analytics: ["#3661B3", "#718ED9"],
-  Certificates: ["#8562B6", "#B9A1E5"],
-  Disputes: ["#667286", "#9DACBC"],
-};
-
 const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
@@ -487,7 +467,6 @@ export default function AdminLayout() {
                 )
               );
 
-            const identity = ADMIN_MODULE_COLORS[item.label] || (["#0A8179", "#41B49E"] as const);
             return (
               <TouchableOpacity
                 key={
@@ -508,10 +487,6 @@ export default function AdminLayout() {
                 }
               >
                 <View style={[styles.navIcon, active && styles.navIconActive]}>
-                  <LinearGradient pointerEvents="none" colors={[...identity]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={styles.navIconGradient}
-                  />
                   <Ionicons
                     name={item.icon}
                     size={19}
