@@ -28,6 +28,7 @@ type RecordType =
   | "users"
   | "applications"
   | "cases"
+  | "assistance"
   | "assignments"
   | "contributions"
   | "disputes"
@@ -49,6 +50,7 @@ const emptyRecords: RecordGroup = {
   users: [],
   applications: [],
   cases: [],
+  assistance: [],
   assignments: [],
   contributions: [],
   disputes: [],
@@ -72,6 +74,10 @@ const recordSources: Array<{
   {
     type: "cases",
     collectionName: "disasterCases",
+  },
+  {
+    type: "assistance",
+    collectionName: "assistanceRequests",
   },
   {
     type: "assignments",
@@ -485,10 +491,15 @@ export default function AllRecords() {
 
     {
       key: "cases",
-      label: "Cases",
+      label: "Emergency Reports",
       icon: "warning-outline",
     },
 
+    {
+      key: "assistance",
+      label: "Assistance Requests",
+      icon: "medkit-outline",
+    },
     {
       key: "assignments",
       label: "Assignments",

@@ -26,10 +26,6 @@ import {
 } from "react-native";
 
 import {
-  createAdminLog,
-} from "../../lib/adminLogger";
-
-import {
   db,
 } from "../../lib/firebase";
 
@@ -69,6 +65,15 @@ type AdminAction =
   | "suspend"
   | "activate"
   | "revoke";
+
+type AdminAuditPayload = {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  adminUid: string;
+  adminName: string;
+  description: string;
+};
 
 const timestampValue = (
   value: any
@@ -153,6 +158,28 @@ export default function AdminAccounts() {
     actionError,
     setActionError,
   ] = useState("");
+
+  // LGU staff authorization requires an independent human credential check.
+  // Never collect photographs or secret document values in this review.
+  const [lguOffice, setLguOffice] = useState("");
+  const [lguPosition, setLguPosition] = useState("");
+  const [lguReference, setLguReference] = useState("");
+  const [lguVerificationMethod, setLguVerificationMethod] = useState("");
+  const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
+  const clearCredentialReview = () => {
+    setLguOffice("");
+    setLguPosition("");
+    setLguReference("");
+    setLguVerificationMethod("");
+    setCredentialsConfirmed(false);
+  };
+  const reviewComplete =
+    lguOffice.trim().length >= 3 && lguOffice.trim().length <= 160 &&
+    lguPosition.trim().length >= 3 && lguPosition.trim().length <= 120 &&
+    lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
+    lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
+    !!actionTarget?.email && actionTarget.email.length >= 5 &&
+    credentialsConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -290,6 +317,12 @@ export default function AdminAccounts() {
           .trim()
           .toLowerCase();
 
+      // Avoid showing arbitrary Resident accounts in a privileged access picker.
+      // Require an intentional exact-name/email search before selecting staff.
+      if (term.length < 3) {
+        return [];
+      }
+
       return users
         .filter((item) => {
           if (
@@ -315,8 +348,6 @@ export default function AdminAccounts() {
           const searchable = [
             item.fullName,
             item.email,
-            item.barangay,
-            item.phoneNumber,
             item.role,
           ]
             .filter(Boolean)
@@ -394,6 +425,7 @@ export default function AdminAccounts() {
     }
 
     setActionError("");
+    clearCredentialReview();
     setActionType(action);
     setActionTarget(account);
   };
@@ -508,24 +540,6 @@ export default function AdminAccounts() {
     );
   };
 
-  const writeAdminLogSafely =
-    async (
-      payload: Parameters<
-        typeof createAdminLog
-      >[0]
-    ) => {
-      try {
-        await createAdminLog(
-          payload
-        );
-      } catch (logError) {
-        console.warn(
-          "Admin access changed but audit log could not be written.",
-          logError
-        );
-      }
-    };
-
   const confirmAdminAction =
     async () => {
       const account =
@@ -548,6 +562,13 @@ export default function AdminAccounts() {
         return;
       }
 
+      if (action === "promote" && !reviewComplete) {
+        setActionError(
+          "Complete the LGU office, official position, reference, verification method, and reviewer confirmation before granting access."
+        );
+        return;
+      }
+
       setSavingUid(
         account.id
       );
@@ -558,14 +579,24 @@ export default function AdminAccounts() {
         const batch =
           writeBatch(db);
 
-        let logPayload:
-          Parameters<
-            typeof createAdminLog
-          >[0];
+        let logPayload: AdminAuditPayload;
 
         if (
           action === "promote"
         ) {
+          // Atomic grant: Firestore rules require this fresh review record
+          // in the same batch as the role change.
+          batch.set(doc(db, "lguAdminCredentialReviews", account.id), {
+            targetUid: account.id,
+            accountEmail: account.email,
+            reviewStatus: "verified",
+            office: lguOffice.trim(),
+            position: lguPosition.trim(),
+            credentialReference: lguReference.trim(),
+            verificationMethod: lguVerificationMethod.trim(),
+            verifiedBy: verified.current.uid,
+            verifiedAt: serverTimestamp(),
+          });
           batch.update(
             doc(
               db,
@@ -799,11 +830,13 @@ export default function AdminAccounts() {
           };
         }
 
+        // Log the outcome in the same atomic batch as the role change:
+        // privileged access must never be granted without its audit record.
+        batch.set(doc(collection(db, "adminLogs")), {
+          ...logPayload,
+          createdAt: serverTimestamp(),
+        });
         await batch.commit();
-
-        await writeAdminLogSafely(
-          logPayload
-        );
 
         if (
           action === "promote"
@@ -820,6 +853,7 @@ export default function AdminAccounts() {
         setActionType(null);
         setActionTarget(null);
         setActionError("");
+        clearCredentialReview();
       } catch (error: any) {
         console.log(
           "admin access update error",
@@ -1597,8 +1631,9 @@ export default function AdminAccounts() {
                       styles.emptyText
                     }
                   >
-                    No eligible approved
-                    users found.
+                    {promoteSearch.trim().length < 3
+                      ? "Enter at least 3 characters of the staff member's name or email."
+                      : "No matching approved account. Check the registered staff name or email."}
                   </Text>
                 </View>
               ) : (
@@ -1823,6 +1858,55 @@ export default function AdminAccounts() {
               </View>
             )}
 
+            {actionType === "promote" ? (
+              <View style={styles.credentialReview}>
+                <Text style={styles.reviewKicker}>STEP 2 OF 3 · LGU CREDENTIAL REVIEW</Text>
+                <Text style={styles.reviewHelp}>
+                  Verify this person's LGU employment and authorization using an official source.
+                  Resident identity verification alone is not sufficient.
+                </Text>
+                <ScrollView style={styles.reviewScroll} keyboardShouldPersistTaps="handled">
+                  {([
+                    { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
+                    { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
+                    { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
+                    { label: "How was this independently verified?", value: lguVerificationMethod, onChange: setLguVerificationMethod, placeholder: "e.g., confirmed through the official LGU office", maxLength: 200 },
+                  ] as const).map((field) => (
+                    <View key={field.label} style={styles.reviewField}>
+                      <Text style={styles.reviewLabel}>{field.label}</Text>
+                      <TextInput
+                        accessibilityLabel={field.label}
+                        style={styles.reviewInput}
+                        placeholder={field.placeholder}
+                        placeholderTextColor="#8A9C94"
+                        maxLength={field.maxLength}
+                        value={field.value}
+                        onChangeText={field.onChange}
+                        editable={!savingUid}
+                      />
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: credentialsConfirmed }}
+                    style={styles.confirmReview}
+                    onPress={() => setCredentialsConfirmed((current) => !current)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons
+                      name={credentialsConfirmed ? "checkbox" : "square-outline"}
+                      size={23}
+                      color="#23765F"
+                    />
+                    <Text style={styles.confirmReviewText}>
+                      I independently reviewed LGU credentials and confirmed that the selected account belongs to the authorized staff member.
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+                <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
+              </View>
+            ) : null}
+
             {!!actionError && (
               <View
                 style={
@@ -1872,9 +1956,7 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                disabled={
-                  !!savingUid
-                }
+                disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
                 style={[
                   styles.confirmButton,
                   actionType ===
@@ -1883,6 +1965,7 @@ export default function AdminAccounts() {
                     "suspend"
                     ? styles.confirmDangerButton
                     : styles.confirmPrimaryButton,
+                  (actionType === "promote" && !reviewComplete) && styles.confirmDisabled,
                 ]}
                 onPress={() =>
                   void confirmAdminAction()
@@ -1915,6 +1998,17 @@ export default function AdminAccounts() {
 
 const styles =
   StyleSheet.create({
+    credentialReview: { marginTop: 12, marginBottom: 10, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 14 },
+    reviewKicker: { fontSize: 10, fontWeight: "700", letterSpacing: 0.9, color: "#247459" },
+    reviewHelp: { color: "#64776D", fontSize: 12, lineHeight: 18, marginTop: 6, marginBottom: 12 },
+    reviewScroll: { maxHeight: 275 },
+    reviewField: { marginBottom: 10 },
+    reviewLabel: { fontSize: 12, fontWeight: "600", color: "#355247", marginBottom: 5 },
+    reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 8, paddingHorizontal: 11, minHeight: 43, fontSize: 13, color: "#173D32" },
+    confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginVertical: 8 },
+    confirmReviewText: { flex: 1, color: "#3B594B", fontSize: 12, lineHeight: 18 },
+    reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
+    confirmDisabled: { opacity: 0.5 },
     accessFlow: { paddingVertical: 16, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 18 },
     accessFlowTitle: { color: "#426658", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 11 },
     accessFlowSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },

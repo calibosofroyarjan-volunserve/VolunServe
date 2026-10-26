@@ -25,6 +25,13 @@ jobs:
           node --check backend/fundReleaseDemoRoutes.js
       - name: Donation reconciliation and sandbox release tests
         run: node --test backend/tests/fundReleaseReconciliation.test.js
+      - name: Install Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: LGU Admin credential security (Firestore emulator)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo web production export
