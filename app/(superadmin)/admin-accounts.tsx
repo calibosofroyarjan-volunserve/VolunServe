@@ -124,6 +124,11 @@ export default function AdminAccounts() {
     setFilter,
   ] = useState<AdminFilter>("all");
 
+  // Remock requirement: display only five Admin accounts per page.
+  const [adminPage, setAdminPage] = useState(1);
+  const ADMIN_PAGE_SIZE = 5;
+  React.useEffect(() => { setAdminPage(1); }, [search, filter]);
+
   const [
     showAddAdmin,
     setShowAddAdmin,
@@ -270,6 +275,13 @@ export default function AdminAccounts() {
       search,
       filter,
     ]);
+
+  const adminPageCount = Math.max(1, Math.ceil(adminAccounts.length / ADMIN_PAGE_SIZE));
+  const safeAdminPage = Math.min(adminPage, adminPageCount);
+  const pagedAdminAccounts = adminAccounts.slice(
+    (safeAdminPage - 1) * ADMIN_PAGE_SIZE,
+    safeAdminPage * ADMIN_PAGE_SIZE
+  );
 
   const eligibleUsers =
     useMemo(() => {
@@ -1152,7 +1164,7 @@ export default function AdminAccounts() {
             </Text>
           </View>
         ) : (
-          adminAccounts.map(
+          pagedAdminAccounts.map(
             (account) => {
               const isSaving =
                 savingUid ===
@@ -1441,6 +1453,23 @@ export default function AdminAccounts() {
               );
             }
           )
+        )}
+        {adminAccounts.length > 0 && (
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingVertical:14}}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous Admin accounts page"
+              disabled={safeAdminPage <= 1} onPress={()=>setAdminPage(Math.max(1,safeAdminPage-1))}
+              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage<=1?0.45:1}}>
+              <Text style={{fontWeight:"700",color:"#076B50"}}>Previous</Text>
+            </TouchableOpacity>
+            <Text style={{fontWeight:"700",color:"#355D50"}}>
+              Page {safeAdminPage} of {adminPageCount} · {adminAccounts.length} accounts
+            </Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next Admin accounts page"
+              disabled={safeAdminPage >= adminPageCount} onPress={()=>setAdminPage(Math.min(adminPageCount,safeAdminPage+1))}
+              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage>=adminPageCount?0.45:1}}>
+              <Text style={{fontWeight:"700",color:"#076B50"}}>Next</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
 

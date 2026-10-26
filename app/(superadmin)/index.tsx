@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, type Href } from "expo-router";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../../lib/firebase";
+import { useUserSession } from "../../lib/useUserSession";
 import {
   ScrollView,
   Platform,
@@ -25,6 +28,33 @@ type ModuleCardProps = {
 export default function SuperAdminDashboard() {
   const { width } = useWindowDimensions();
   const compact = width < 760;
+  const {user,profile} = useUserSession();
+  const isSuperAdmin = !!user && profile?.role === "superadmin" && profile?.status === "approved";
+  const [counts,setCounts] = useState<Record<string,number>>({});
+  const [approvedCount,setApprovedCount] = useState<number|null>(null);
+  const [failedSources,setFailedSources] = useState<string[]>([]);
+  const [loadedSources,setLoadedSources] = useState<string[]>([]);
+  useEffect(()=>{
+    if(!isSuperAdmin)return;
+    const sources=[["users","Registered Accounts"],["disasterCases","Emergency Reports"],["assistanceRequests","Assistance Requests"],["volunteerEvents","Community Events"]];
+    const unsubscribers=sources.map(([name,label])=>onSnapshot(collection(db,name),snapshot=>{
+      setCounts(old=>({...old,[name]:snapshot.size}));
+      if(name==="users")setApprovedCount(snapshot.docs.filter(doc=>doc.data().status==="approved").length);
+      setLoadedSources(old=>old.includes(name)?old:[...old,name]);
+      setFailedSources(old=>old.filter(item=>item!==name));
+    },error=>{
+      console.warn("Dashboard summary unavailable:",name,error.code);
+      setFailedSources(old=>old.includes(name)?old:[...old,name]);
+      setLoadedSources(old=>old.includes(name)?old:[...old,name]);
+    }));
+    return ()=>unsubscribers.forEach(unsubscribe=>unsubscribe());
+  },[isSuperAdmin]);
+  const stats=useMemo(()=>[
+    {key:"users",label:"Registered Accounts"},
+    {key:"disasterCases",label:"Emergency Reports"},
+    {key:"assistanceRequests",label:"Assistance Requests"},
+    {key:"volunteerEvents",label:"Community Events"},
+  ],[]);
 
   const openRoute = (route: string) => {
     router.push(route as Href);
@@ -54,6 +84,33 @@ export default function SuperAdminDashboard() {
             <Text style={styles.roleBadgeText}>SUPER ADMIN</Text>
           </View>
         ) : null}
+      </View>
+
+      <View style={{backgroundColor:"#FFFFFF",padding:18,borderRadius:16,borderWidth:1,borderColor:"#DCEAE8",marginBottom:24}}>
+        <Text style={styles.sectionTitle}>System Overview · Live Records</Text>
+        <Text style={{fontSize:12,color:"#637F84",marginBottom:16}}>Real-time Firestore totals, not sample data. Each bar compares the number of records in its collection.</Text>
+        {stats.map(item=>{
+          const errored=failedSources.includes(item.key);
+          const loaded=loadedSources.includes(item.key);
+          const value=counts[item.key]??0;
+          const max=Math.max(1,...Object.values(counts));
+          return <View key={item.key} style={{marginBottom:14,gap:6}}>
+            <View style={{flexDirection:"row",justifyContent:"space-between",gap:14}}>
+              <Text style={{fontWeight:"700",fontSize:12,color:"#294A57"}}>{item.label}</Text>
+              <Text style={{fontWeight:"800",fontSize:12,color:errored?"#B45309":"#078F82"}}>
+                {errored?"Unavailable":!loaded?"Loading...":String(value)}
+              </Text>
+            </View>
+            <View style={{height:12,backgroundColor:"#ECF5F1",borderRadius:9,overflow:"hidden"}}>
+              {!errored&&loaded?<View style={{height:"100%",width:`${value/max*100}%`,backgroundColor:"#0D9970",borderRadius:9}}/>:null}
+            </View>
+          </View>
+        })}
+        {approvedCount!==null&&!failedSources.includes("users")&&
+          <Text style={{fontSize:12,fontWeight:"700",color:"#285C4B",marginTop:4}}>
+            Approved accounts: {approvedCount} of {counts.users??0} ({(counts.users??0)>0?Math.round(100*approvedCount/(counts.users??1)):0}%)
+          </Text>}
+        {failedSources.length>0&&<Text style={{fontSize:11,color:"#A06420",marginTop:9}}>Some figures cannot be loaded. Check Super Admin permissions and the deployed Firestore rules.</Text>}
       </View>
 
       <Text style={styles.sectionTitle}>System Management</Text>
