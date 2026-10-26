@@ -153,6 +153,18 @@ export default function AdminAccounts() {
     actionError,
     setActionError,
   ] = useState("");
+  const [lguOffice, setLguOffice] = useState("");
+  const [lguPosition, setLguPosition] = useState("");
+  const [lguReference, setLguReference] = useState("");
+  const [lguVerificationMethod, setLguVerificationMethod] = useState("");
+  const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
+  const resetCredentialReview = () => {
+    setLguOffice("");
+    setLguPosition("");
+    setLguReference("");
+    setLguVerificationMethod("");
+    setCredentialsConfirmed(false);
+  };
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -394,6 +406,7 @@ export default function AdminAccounts() {
     }
 
     setActionError("");
+    resetCredentialReview();
     setActionType(action);
     setActionTarget(account);
   };
@@ -548,6 +561,20 @@ export default function AdminAccounts() {
         return;
       }
 
+      if (action === "promote") {
+        if (
+          lguOffice.trim().length < 3 ||
+          lguPosition.trim().length < 3 ||
+          lguReference.trim().length < 5 ||
+          lguVerificationMethod.trim().length < 8 ||
+          !credentialsConfirmed
+        ) {
+          setActionError(
+            "Review the applicant's actual LGU credentials. Enter the office, position, verification reference and how they were independently verified, then confirm the review."
+          );
+          return;
+        }
+      }
       setSavingUid(
         account.id
       );
@@ -566,6 +593,19 @@ export default function AdminAccounts() {
         if (
           action === "promote"
         ) {
+          batch.set(
+            doc(db, "lguAdminCredentialReviews", account.id),
+            {
+              targetUid: account.id,
+              reviewStatus: "verified",
+              office: lguOffice.trim(),
+              position: lguPosition.trim(),
+              credentialReference: lguReference.trim(),
+              verificationMethod: lguVerificationMethod.trim(),
+              verifiedBy: verified.current.uid,
+              verifiedAt: serverTimestamp(),
+            }
+          );
           batch.update(
             doc(
               db,
@@ -820,6 +860,7 @@ export default function AdminAccounts() {
         setActionType(null);
         setActionTarget(null);
         setActionError("");
+        resetCredentialReview();
       } catch (error: any) {
         console.log(
           "admin access update error",
@@ -1828,6 +1869,34 @@ export default function AdminAccounts() {
               </View>
             )}
 
+            {actionType === "promote" && (
+              <ScrollView style={{ maxHeight: 290 }} keyboardShouldPersistTaps="handled">
+                <Text style={{ color: "#475569", marginBottom: 12, fontSize: 12, lineHeight: 18 }}>
+                  This action grants privileged LGU Admin access. Independently inspect legitimate LGU employment/authorization evidence before continuing. Do not use a resident identity check as proof of LGU authority.
+                </Text>
+                <Text style={{ color: "#334155", fontWeight: "700", marginBottom: 5 }}>LGU Office / Department</Text>
+                <TextInput accessibilityLabel="LGU office" value={lguOffice} onChangeText={setLguOffice}
+                  placeholder="Verified LGU department" style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 9, padding: 10, marginBottom: 10, color: "#0F172A" }} />
+                <Text style={{ color: "#334155", fontWeight: "700", marginBottom: 5 }}>Official Position</Text>
+                <TextInput accessibilityLabel="Official position" value={lguPosition} onChangeText={setLguPosition}
+                  placeholder="Verified authorized position" style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 9, padding: 10, marginBottom: 10, color: "#0F172A" }} />
+                <Text style={{ color: "#334155", fontWeight: "700", marginBottom: 5 }}>Credential Verification Reference</Text>
+                <TextInput accessibilityLabel="Credential reference" value={lguReference} onChangeText={setLguReference}
+                  placeholder="Official reference (avoid ID scans or secrets)" style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 9, padding: 10, marginBottom: 10, color: "#0F172A" }} />
+                <Text style={{ color: "#334155", fontWeight: "700", marginBottom: 5 }}>Independent Verification Method</Text>
+                <TextInput accessibilityLabel="Verification method" value={lguVerificationMethod} onChangeText={setLguVerificationMethod}
+                  placeholder="How employment and authority were confirmed" multiline
+                  style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 9, padding: 10, marginBottom: 10, minHeight: 55, color: "#0F172A" }} />
+                <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: credentialsConfirmed }}
+                  onPress={() => setCredentialsConfirmed(!credentialsConfirmed)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 8, marginBottom: 10 }}>
+                  <Ionicons name={credentialsConfirmed ? "checkbox-outline" : "square-outline"} size={23} color="#086F55" />
+                  <Text style={{ flex: 1, color: "#334155", fontSize: 12 }}>
+                    I reviewed valid LGU credentials and confirmed this exact account belongs to the authorized officer.
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
             {!!actionError && (
               <View
                 style={
