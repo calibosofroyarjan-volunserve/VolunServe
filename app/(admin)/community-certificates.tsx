@@ -1030,7 +1030,7 @@ export default function CommunityCertificatesAdminScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F9F8",
+    backgroundColor: "#F6F8F7",
   },
 
   content: {
@@ -1064,7 +1064,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 24,
-    fontWeight: "900",
+    fontWeight: "700",
     color: DARK,
     marginTop: 4,
   },

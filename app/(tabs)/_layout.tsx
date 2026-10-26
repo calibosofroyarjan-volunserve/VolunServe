@@ -44,13 +44,13 @@ const residentDesktopTabs: TabDefinition[] = [
   },
   {
     name: "map-tracking",
-    label: "Live Map",
+    label: "Response Map",
     icon: "map-outline",
     activeIcon: "map",
   },
   {
     name: "disaster-response",
-    label: "Emergency Report",
+    label: "Emergency Reports",
     icon: "alert-circle-outline",
     activeIcon: "alert-circle",
   },
@@ -102,7 +102,7 @@ const volunteerDesktopTabs: TabDefinition[] = [
   },
   {
     name: "donation",
-    label: "Donation Operations",
+    label: "Donations",
     icon: "heart-outline",
     activeIcon: "heart",
   },
@@ -134,7 +134,7 @@ const volunteerDesktopTabs: TabDefinition[] = [
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
 const residentModuleIdentity: Record<string, ModuleIdentity> = {
-  index: { subtitle: "Platform Overview", colors: ["#00846B", "#04B78F"] },
+  index: { subtitle: "Resident Overview", colors: ["#00846B", "#04B78F"] },
   "map-tracking": { subtitle: "Real-Time Tracking", colors: ["#00587C", "#168BC8"] },
   "disaster-response": { subtitle: "Report and Get Help", colors: ["#963C2F", "#D86747"] },
   resident: { subtitle: "Community Support", colors: ["#05727D", "#0BA99F"] },
@@ -333,7 +333,7 @@ export default function TabLayout() {
             onPress={() => { setMobileProfileOpen(false); setMobileMenuOpen((current) => !current); }}
             style={styles.mobileHeaderButton}
           >
-            <Ionicons name={mobileMenuOpen ? "close" : "menu"} size={22} color="#12365B" />
+            <Ionicons name={mobileMenuOpen ? "close" : "menu"} size={22} color="#173D32" />
           </Pressable>
           <Image
             source={require("../../assets/images/logo.png")}
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
-  mobileBrandName: { color: "#006859", fontWeight: "900", fontSize: 15 },
+  mobileBrandName: { color: "#173D32", fontWeight: "700", fontSize: 16 },
   mobileBrandMode: { color: "#607890", fontSize: 9, fontWeight: "800" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: "#E7EEF4", marginBottom: 6,
   },
-  mobileAccountName: { fontSize: 13, fontWeight: "900", color: "#102B53" },
+  mobileAccountName: { fontSize: 13, fontWeight: "700", color: "#173D32" },
   mobileAccountRole: { fontSize: 10, color: "#6B829D", marginTop: 3 },
   mobileAccountAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
   },
   mobileAccountActionText: { fontSize: 12.5, color: "#1A345D", fontWeight: "700" },
   mobileAccountDivider: { height: 1, backgroundColor: "#E6EDF2", marginVertical: 7 },
-  mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "700" },
   mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
   mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
   mobileDrawerScroll: { flex: 1 },
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   mobileDrawerIconBadge: { width: 37, height: 37, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
   mobileDrawerActive: { backgroundColor: "#079776" },
-  mobileDrawerItemText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12.5 },
+  mobileDrawerItemText: { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
@@ -1062,8 +1062,8 @@ const styles = StyleSheet.create({
   },
   desktopBrandTitle: {
     color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: 21,
+    fontWeight: "700",
   },
   desktopBrandSubtitle: {
     marginTop: 1,
@@ -1157,8 +1157,8 @@ const styles = StyleSheet.create({
   desktopNavText: {
     flex: 1,
     color: "#E6F5F2",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "500",
   },
   desktopNavTextActive: {
     color: "#FFFFFF",
@@ -1206,7 +1206,7 @@ const styles = StyleSheet.create({
   },
   residentSidebarAmbient: { position: "absolute", bottom: 20, left: -50, opacity: 0.055 },
   residentModeLabel: {
-    marginTop: 25,
+    marginTop: 18,
     marginBottom: 12,
     paddingHorizontal: 10,
     color: "#8EE6D1",
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 12.5, color: "#FFFFFF", fontWeight: "800" },
+  residentNavTitle: { fontSize: 13, color: "#FFFFFF", fontWeight: "600" },
   residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
   desktopPressed: {
     opacity: 0.72,

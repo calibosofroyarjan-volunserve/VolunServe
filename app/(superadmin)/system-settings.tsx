@@ -314,8 +314,8 @@ export default function SystemSettings() {
       <View style={styles.hero}>
         <Ionicons
           name="settings-outline"
-          size={31}
-          color="#FFFFFF"
+          size={27}
+          color="#23765F"
         />
 
         <Text style={styles.title}>
@@ -549,12 +549,12 @@ const styles =
       flexGrow: 1,
       padding: 24,
       paddingBottom: 60,
-      backgroundColor: "#F1F5F9",
+      backgroundColor: "#F6F8F7",
     },
 
     hero: {
       padding: 21,
-      borderRadius: 20,
+      borderRadius: 10,
       backgroundColor: "#078F82",
     },
 
@@ -562,7 +562,7 @@ const styles =
       marginTop: 8,
       color: "#FFFFFF",
       fontSize: 26,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     subtitle: {
@@ -575,7 +575,7 @@ const styles =
     notice: {
       marginTop: 15,
       padding: 14,
-      borderRadius: 14,
+      borderRadius: 8,
       backgroundColor: "#F3FAF8",
       borderWidth: 1,
       borderColor: "#BDE5D9",
@@ -630,7 +630,7 @@ const styles =
     },
 
     cardTitle: {
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 18,
       fontWeight: "900",
     },
@@ -656,7 +656,7 @@ const styles =
       borderColor: "#CBD5E1",
       borderRadius: 11,
       paddingHorizontal: 12,
-      color: "#0F172A",
+      color: "#173D32",
       backgroundColor: "#F8FAFC",
       outlineStyle: "none",
     } as any,

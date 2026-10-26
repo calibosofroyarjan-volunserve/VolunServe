@@ -2742,7 +2742,7 @@ const styles =
       color: "#102A3A",
       fontSize: 30,
       lineHeight: 36,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     subtitle: {

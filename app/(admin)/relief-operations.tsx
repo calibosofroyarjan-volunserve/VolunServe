@@ -5350,9 +5350,9 @@ const styles =
 
     title: {
       marginTop: 3,
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 28,
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     subtitle: {

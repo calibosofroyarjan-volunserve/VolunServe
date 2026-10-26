@@ -957,7 +957,7 @@ const styles =
     container: {
       padding: 20,
       paddingBottom: 50,
-      backgroundColor: "#F1F5F9",
+      backgroundColor: "#F6F8F7",
     },
 
     center: {
@@ -992,8 +992,8 @@ const styles =
 
     title: {
       fontSize: 24,
-      fontWeight: "900",
-      color: "#0F172A",
+      fontWeight: "700",
+      color: "#173D32",
     },
 
     subtitle: {
@@ -1049,7 +1049,7 @@ const styles =
 
     emptyCard: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 16,
+      borderRadius: 9,
       padding: 28,
       alignItems: "center",
     },
@@ -1062,7 +1062,7 @@ const styles =
 
     card: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 16,
+      borderRadius: 9,
       padding: 16,
       marginBottom: 14,
       borderWidth: 1,
@@ -1078,7 +1078,7 @@ const styles =
     name: {
       fontSize: 17,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     meta: {
@@ -1159,14 +1159,14 @@ const styles =
 
     modalCard: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 18,
+      borderRadius: 10,
       padding: 18,
     },
 
     modalTitle: {
       fontSize: 20,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     reasonInput: {

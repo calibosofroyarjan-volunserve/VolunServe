@@ -1616,8 +1616,8 @@ const styles =
     title: {
       marginTop: 4,
       fontSize: 30,
-      fontWeight: "900",
-      color: "#0F172A",
+      fontWeight: "700",
+      color: "#173D32",
     },
 
     subtitle: {
@@ -1636,11 +1636,10 @@ const styles =
     summaryCard: {
       flexGrow: 1,
       minWidth: 150,
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 14,
+      backgroundColor: "transparent",
+      borderRadius: 0,
       padding: 14,
-      borderWidth: 1,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
     },
 
@@ -1659,7 +1658,7 @@ const styles =
     summaryValue: {
       fontSize: 23,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     summaryLabel: {
@@ -1720,7 +1719,7 @@ const styles =
     searchInput: {
       flex: 1,
       minHeight: 45,
-      color: "#0F172A",
+      color: "#173D32",
       outlineStyle: "none",
     } as any,
 
@@ -1735,7 +1734,7 @@ const styles =
     sectionTitle: {
       fontSize: 18,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     recordCount: {
@@ -1747,11 +1746,11 @@ const styles =
     recordCard: {
       backgroundColor:
         "#FFFFFF",
-      borderWidth: 1,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
-      borderRadius: 15,
+      borderRadius: 3,
       padding: 16,
-      marginBottom: 12,
+      marginBottom: 8,
     },
 
     recordTop: {
@@ -1774,7 +1773,7 @@ const styles =
     recordTitle: {
       fontSize: 16,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     recordSubtitle: {
@@ -1829,14 +1828,14 @@ const styles =
         "#FFFFFF",
       borderWidth: 1,
       borderColor: "#E2E8F0",
-      borderRadius: 15,
+      borderRadius: 9,
       padding: 30,
       alignItems: "center",
     },
 
     emptyTitle: {
       marginTop: 10,
-      color: "#0F172A",
+      color: "#173D32",
       fontWeight: "900",
       fontSize: 16,
     },

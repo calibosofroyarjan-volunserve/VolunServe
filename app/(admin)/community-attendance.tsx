@@ -1514,7 +1514,7 @@ export default function CommunityAttendanceAdmin() {
 }
 
 const styles = StyleSheet.create({
-  page: {flex: 1, backgroundColor: "#F3F8F8"},
+  page: {flex: 1, backgroundColor: "#F6F8F7"},
   scroll: {flex: 1},
   content: {width: "100%", maxWidth: 1560, alignSelf: "center", padding: 22, paddingBottom: 42},
   contentPhone: {padding: 12, paddingBottom: 30},
@@ -1523,7 +1523,7 @@ const styles = StyleSheet.create({
   titleRowPhone: {flexDirection: "column", alignItems: "flex-start"},
   pageIntro: {flex: 1, minWidth: 0},
   eyebrow: {fontSize: 11, fontWeight: "900", letterSpacing: 0.65, color: GREEN, marginBottom: 7},
-  title: {fontSize: 29, letterSpacing: -0.65, lineHeight: 35, fontWeight: "900", color: NAVY},
+  title: {fontSize: 29, letterSpacing: -0.65, lineHeight: 35, fontWeight: "700", color: NAVY},
   subtitle: {fontSize: 13, color: MUTED, marginTop: 5, lineHeight: 20},
   headerNote: {flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#E8F6F2", borderRadius: 15, padding: 13, width: 285},
   headerNoteIcon: {width: 52, height: 52, borderRadius: 12, backgroundColor: "#DAEEE7", alignItems: "center", justifyContent: "center"},

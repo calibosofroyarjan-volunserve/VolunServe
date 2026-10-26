@@ -5176,7 +5176,7 @@ function DocumentPreviewModal({
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: "#F6F8F7",
   },
 
   pageScroll: {
@@ -5193,7 +5193,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -6642,7 +6642,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 18,
     paddingBottom: 18,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: "#F6F8F7",
   },
 
   detailChrome: {

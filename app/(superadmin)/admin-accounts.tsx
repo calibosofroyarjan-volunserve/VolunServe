@@ -1944,7 +1944,7 @@ const styles =
 
     accessDeniedTitle: {
       marginTop: 14,
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 20,
       fontWeight: "900",
       textAlign: "center",
@@ -1977,8 +1977,8 @@ const styles =
 
     title: {
       fontSize: 30,
-      fontWeight: "900",
-      color: "#0F172A",
+      fontWeight: "700",
+      color: "#173D32",
     },
 
     subtitle: {
@@ -2014,11 +2014,10 @@ const styles =
 
     statCard: {
       flexGrow: 1,
-      minWidth: 180,
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 15,
-      borderWidth: 1,
+      minWidth: 140,
+      backgroundColor: "transparent",
+      borderRadius: 0,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
       padding: 16,
     },
@@ -2034,8 +2033,8 @@ const styles =
 
     statValue: {
       fontSize: 25,
-      fontWeight: "900",
-      color: "#0F172A",
+      fontWeight: "700",
+      color: "#173D32",
     },
 
     statLabel: {
@@ -2060,7 +2059,7 @@ const styles =
     searchInput: {
       flex: 1,
       minHeight: 46,
-      color: "#0F172A",
+      color: "#173D32",
       outlineStyle: "none",
     } as any,
 
@@ -2099,11 +2098,11 @@ const styles =
     adminCard: {
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 16,
-      borderWidth: 1,
+      borderRadius: 3,
+      borderBottomWidth: 1,
       borderColor: "#E2E8F0",
       padding: 17,
-      marginBottom: 13,
+      marginBottom: 8,
     },
 
     adminTop: {
@@ -2131,7 +2130,7 @@ const styles =
     adminName: {
       fontSize: 17,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     adminEmail: {
@@ -2179,10 +2178,9 @@ const styles =
     detailItem: {
       minWidth: 180,
       flexGrow: 1,
-      padding: 12,
-      backgroundColor:
-        "#F8FAFC",
-      borderRadius: 11,
+      padding: 8,
+      backgroundColor: "transparent",
+      borderRadius: 0,
     },
 
     detailLabel: {
@@ -2240,7 +2238,7 @@ const styles =
       padding: 32,
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 16,
+      borderRadius: 9,
       borderWidth: 1,
       borderColor: "#E2E8F0",
       alignItems: "center",
@@ -2258,7 +2256,7 @@ const styles =
 
     emptyTitle: {
       marginTop: 13,
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 17,
       fontWeight: "900",
     },
@@ -2284,7 +2282,7 @@ const styles =
       alignSelf: "center",
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 18,
+      borderRadius: 10,
       padding: 18,
     },
 
@@ -2297,7 +2295,7 @@ const styles =
     modalTitle: {
       fontSize: 22,
       fontWeight: "900",
-      color: "#0F172A",
+      color: "#173D32",
     },
 
     modalSubtitle: {
@@ -2353,7 +2351,7 @@ const styles =
     },
 
     userName: {
-      color: "#0F172A",
+      color: "#173D32",
       fontWeight: "900",
     },
 
@@ -2408,7 +2406,7 @@ const styles =
       alignSelf: "center",
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 18,
+      borderRadius: 10,
       padding: 24,
       borderWidth: 1,
       borderColor:
@@ -2418,7 +2416,7 @@ const styles =
     confirmIcon: {
       width: 54,
       height: 54,
-      borderRadius: 16,
+      borderRadius: 9,
       backgroundColor:
         "#F0FDFA",
       alignItems: "center",
@@ -2427,7 +2425,7 @@ const styles =
     },
 
     confirmTitle: {
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 21,
       fontWeight: "900",
     },
@@ -2451,7 +2449,7 @@ const styles =
     },
 
     confirmAccountName: {
-      color: "#0F172A",
+      color: "#173D32",
       fontSize: 14,
       fontWeight: "900",
     },

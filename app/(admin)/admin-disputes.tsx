@@ -887,7 +887,7 @@ function StatusBadge({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   content: {
@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
     minHeight: 500,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -928,8 +928,8 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 32,
-    fontWeight: "900",
-    color: "#123047",
+    fontWeight: "700",
+    color: "#173D32",
   },
 
   subtitle: {
