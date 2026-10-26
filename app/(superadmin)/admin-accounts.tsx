@@ -26,10 +26,6 @@ import {
 } from "react-native";
 
 import {
-  createAdminLog,
-} from "../../lib/adminLogger";
-
-import {
   db,
 } from "../../lib/firebase";
 
@@ -69,6 +65,15 @@ type AdminAction =
   | "suspend"
   | "activate"
   | "revoke";
+
+type AdminAuditPayload = {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  adminUid: string;
+  adminName: string;
+  description: string;
+};
 
 const timestampValue = (
   value: any
@@ -531,24 +536,6 @@ export default function AdminAccounts() {
     );
   };
 
-  const writeAdminLogSafely =
-    async (
-      payload: Parameters<
-        typeof createAdminLog
-      >[0]
-    ) => {
-      try {
-        await createAdminLog(
-          payload
-        );
-      } catch (logError) {
-        console.warn(
-          "Admin access changed but audit log could not be written.",
-          logError
-        );
-      }
-    };
-
   const confirmAdminAction =
     async () => {
       const account =
@@ -588,10 +575,7 @@ export default function AdminAccounts() {
         const batch =
           writeBatch(db);
 
-        let logPayload:
-          Parameters<
-            typeof createAdminLog
-          >[0];
+        let logPayload: AdminAuditPayload;
 
         if (
           action === "promote"
@@ -842,11 +826,13 @@ export default function AdminAccounts() {
           };
         }
 
+        // Log the outcome in the same atomic batch as the role change:
+        // privileged access must never be granted without its audit record.
+        batch.set(doc(collection(db, "adminLogs")), {
+          ...logPayload,
+          createdAt: serverTimestamp(),
+        });
         await batch.commit();
-
-        await writeAdminLogSafely(
-          logPayload
-        );
 
         if (
           action === "promote"
