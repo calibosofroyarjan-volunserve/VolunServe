@@ -406,7 +406,7 @@ function formatDate(value: any) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   content: {
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
 
-    backgroundColor: "#F4F7FA",
+    backgroundColor: "#F6F8F7",
   },
 
   loadingText: {
@@ -443,16 +443,16 @@ const styles = StyleSheet.create({
     color: "#087F78",
 
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
 
     letterSpacing: 1.3,
   },
 
   title: {
-    color: "#123047",
+    color: "#173D32",
 
-    fontSize: 30,
-    fontWeight: "900",
+    fontSize: 28,
+    fontWeight: "700",
 
     marginTop: 5,
   },
