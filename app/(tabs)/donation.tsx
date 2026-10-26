@@ -11,7 +11,7 @@ import {
 } from "@expo-google-fonts/inter";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
 import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
-import ResidentReleaseAcknowledgment from "../../components/donations/ResidentReleaseAcknowledgment";
+import CampaignBeneficiaryWallet from "../../components/donations/CampaignBeneficiaryWallet";
 import {
   collection,
   onSnapshot,
@@ -844,11 +844,6 @@ export default function Donation() {
         </View>
       </View>
 
-      <ResidentReleaseAcknowledgment enabled={
-        !!profile && profile.residentAccess === true &&
-        (profile.identityVerified === true || profile.identityStatus === "verified")
-      } />
-
       <View style={[styles.donationToolbar, !medium && styles.donationToolbarMobile]}>
       <View style={[styles.webPrimaryTabs, mobileDetailOpen && styles.mobileHidden]}>
         {[
@@ -1218,7 +1213,16 @@ export default function Donation() {
                   finished={selectedFunded}
                   money={money}
                 >
-                  {selectedFunded ? (
+                  <CampaignBeneficiaryWallet
+                    key={selectedCampaign.id}
+                    campaignId={selectedCampaign.id}
+                    enabled={
+                      selectedCampaign.sourceType === "community_assistance_request" &&
+                      !!profile && profile.residentAccess === true &&
+                      (profile.identityVerified === true || profile.identityStatus === "verified")
+                    }
+                  >
+                    {selectedFunded ? (
                     <View style={styles.webFundedNotice}>
                       <Ionicons name="checkmark-circle" size={22} color="#0C9B75" />
                       <View style={{ flex: 1 }}>
@@ -1342,6 +1346,7 @@ export default function Donation() {
                         </TouchableOpacity>
                     </View>
                   )}
+                  </CampaignBeneficiaryWallet>
                 </PremiumCampaignDetails>
               ) : null}
             </ScrollView>
