@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFonts } from "expo-font";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
@@ -585,7 +585,7 @@ export default function WebLogin() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Open Admin and LGU portal"
-            onPress={() => router.push("/admin-login")}
+            onPress={() => router.push("/admin-login" as Href)}
             style={{alignSelf:"center",paddingVertical:10,paddingHorizontal:12,flexDirection:"row",alignItems:"center",gap:8}}
           >
             <Ionicons name="shield-checkmark-outline" size={16} color="#078365"/>
