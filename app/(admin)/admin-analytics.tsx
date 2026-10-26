@@ -1516,7 +1516,7 @@ function LeaderboardRow({
 const styles = StyleSheet.create({
   container: {
     padding: 16,
-    backgroundColor: "#F4F7FB",
+    backgroundColor: "#F6F8F7",
   },
 
   center: {
@@ -1549,8 +1549,8 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 22,
-    fontWeight: "900",
-    color: "#0F172A",
+    fontWeight: "700",
+    color: "#173D32",
   },
 
   sub: {
@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
   },
 
   darkBtn: {
-    backgroundColor: "#111827",
+    backgroundColor: "#173D32",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1586,7 +1586,7 @@ const styles = StyleSheet.create({
   navBtn: {
     flex: 1,
     minWidth: "30%",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#23765F",
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
@@ -1601,7 +1601,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#173D32",
     marginBottom: 10,
     marginTop: 4,
   },
@@ -1615,7 +1615,7 @@ const styles = StyleSheet.create({
   kpi: {
     width: "48%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 9,
     padding: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1630,7 +1630,7 @@ const styles = StyleSheet.create({
   kpiValue: {
     fontSize: 20,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#173D32",
   },
 
   kpiHint: {
@@ -1643,7 +1643,7 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 14,
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 9,
     padding: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1651,7 +1651,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#173D32",
     marginBottom: 10,
   },
 
@@ -1677,7 +1677,7 @@ const styles = StyleSheet.create({
   riskName: {
     flex: 1,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#173D32",
   },
 
   riskBadge: {
@@ -1762,7 +1762,7 @@ const styles = StyleSheet.create({
   },
 
   rowValue: {
-    color: "#0F172A",
+    color: "#173D32",
     fontWeight: "900",
   },
 
@@ -1783,7 +1783,7 @@ const styles = StyleSheet.create({
 
   leaderboardName: {
     flex: 1,
-    color: "#0F172A",
+    color: "#173D32",
     fontWeight: "700",
   },
 
@@ -1799,7 +1799,7 @@ const styles = StyleSheet.create({
   },
 
   certName: {
-    color: "#0F172A",
+    color: "#173D32",
     fontWeight: "900",
   },
 
