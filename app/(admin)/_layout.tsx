@@ -7,8 +7,6 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import SidebarBotanicalDecor from "../../components/ui/SidebarBotanicalDecor";
 import React, {
   useMemo,
   useState,
@@ -77,19 +75,19 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/command-center",
   },
   {
-    label: "Account Approvals",
-    icon: "people-outline",
-    route:
-      "/(admin)/account-approvals",
-  },
-  {
     label: "Identity Reviews",
     icon: "shield-checkmark-outline",
     route:
       "/(admin)/identity-reviews",
   },
   {
-    label: "Emergency Cases",
+    label: "Volunteer Approvals",
+    icon: "people-outline",
+    route:
+      "/(admin)/account-approvals",
+  },
+  {
+    label: "Emergency Reports",
     icon: "warning-outline",
     route:
       "/(admin)/admin-cases",
@@ -113,7 +111,7 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/lgu-attendance",
   },
   {
-    label: "Events",
+    label: "Volunteer Events",
     icon: "calendar-outline",
     route:
       "/(admin)/admin-events",
@@ -131,7 +129,7 @@ const NAV_ITEMS: NavItem[] = [
       "/(admin)/community-attendance",
   },
   {
-    label: "Donations",
+    label: "Donation Management",
     icon: "heart-outline",
     route:
       "/(admin)/donor-monitoring",
@@ -440,8 +438,7 @@ export default function AdminLayout() {
   }
 
   const sidebar = (
-    <LinearGradient colors={["#07332F", "#044E47", "#036354"]} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.sidebar}>
-      <SidebarBotanicalDecor />
+    <View style={styles.sidebar}>
       <View style={styles.brand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -451,10 +448,10 @@ export default function AdminLayout() {
         />
         <View style={styles.brandCopy}>
           <Text style={styles.brandName}>VolunServe</Text>
-          <Text style={styles.brandTagline}>ADMIN MODE</Text>
+          <Text style={styles.brandTagline}>LGU ADMINISTRATION</Text>
         </View>
       </View>
-      <Text style={styles.sidebarSection}>MAIN MENU</Text>
+      <Text style={styles.sidebarSection}>WORKSPACE</Text>
 
       <ScrollView
         style={
@@ -510,11 +507,6 @@ export default function AdminLayout() {
                   )
                 }
               >
-                {active ? <LinearGradient pointerEvents="none"
-                  colors={["#009A7C", "#078D74", "#3DBB86"]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.7 }}
-                  style={styles.navSelectedGradient}
-                /> : null}
                 <View style={[styles.navIcon, active && styles.navIconActive]}>
                   <LinearGradient pointerEvents="none" colors={[...identity]}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -548,7 +540,7 @@ export default function AdminLayout() {
           <Text style={styles.signOutLabel}>Log Out</Text>
         </TouchableOpacity>
       </View>
-    </LinearGradient>
+    </View>
   );
 
   return (
@@ -706,7 +698,7 @@ const styles =
     shell: {
       flex: 1,
       flexDirection: "row",
-      backgroundColor: "#F2F9FC",
+      backgroundColor: "#F6F8F7",
     },
 
     center: {
@@ -733,9 +725,9 @@ const styles =
       minHeight: 0,
       flexShrink: 0,
       overflow: "hidden",
-      backgroundColor: "#07332F",
+      backgroundColor: "#123E36",
       borderRightWidth: 1,
-      borderRightColor: "#13695E",
+      borderRightColor: "#DDE8E3",
     },
 
     brand: {
@@ -775,8 +767,9 @@ const styles =
     brandTagline: {
       marginTop: 2,
       color: "#B6E9DF",
-      fontSize: 8.5,
-      fontWeight: "800",
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.65,
     },
 
     sidebarScroll: {
@@ -798,8 +791,8 @@ const styles =
       marginBottom: 8,
       marginLeft: 27,
       color: "#A7DCD4",
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "700",
       letterSpacing: 1.1,
     },
 
@@ -807,7 +800,7 @@ const styles =
       minHeight: 49,
       marginBottom: 3,
       paddingHorizontal: 9,
-      borderRadius: 13,
+      borderRadius: 9,
       flexDirection: "row",
       alignItems: "center",
       gap: 11,
@@ -816,19 +809,19 @@ const styles =
     navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
 
     navItemActive: {
-      backgroundColor: "#049C7B",
+      backgroundColor: "#226859",
     },
 
     navLabel: {
       flex: 1,
       color: "#E6F5F2",
-      fontSize: 12,
-      fontWeight: "700",
+      fontSize: 13,
+      fontWeight: "500",
     },
 
     navLabelActive: {
       color: "#FFFFFF",
-      fontWeight: "900",
+      fontWeight: "700",
     },
 
     divider: {
@@ -842,14 +835,14 @@ const styles =
         "#29415E",
     },
 
-    navIcon: { width: 35, height: 35, borderRadius: 12, overflow: "hidden", backgroundColor: "#0C6B68", alignItems: "center", justifyContent: "center" },
+    navIcon: { width: 35, height: 35, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center" },
     navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
-    navIconActive: { backgroundColor: "#00775F" },
+    navIconActive: { backgroundColor: "#226859" },
     activeIndicator: { width: 4, height: 24, borderRadius: 3, backgroundColor: "#E1FFF6" },
     sidebarUtility: { flexShrink: 0, marginHorizontal: 17, paddingTop: 11, paddingBottom: 15, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.18)" },
     logoutButton: { minHeight: 43, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
     signOutLabel: {
-      color: "#C92537",
+      color: "#FFCFCF",
       fontSize: 12,
       fontWeight: "800",
     },
