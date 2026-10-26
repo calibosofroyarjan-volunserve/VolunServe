@@ -47,6 +47,12 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
       }
       function move(lat,lng,notify) {
         if (!valid(lat,lng) || !map) return;
+        // Mirror backend's existing SJDM service-area bounds. An out-of-area
+        // click reports validation feedback but never displays a false venue pin.
+        if (lat < 14.65 || lat > 15.0 || lng < 120.88 || lng > 121.30) {
+          if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
+          return;
+        }
         if (!marker) {
           marker = new maplibregl.Marker({element:pinElement(),draggable:true})
             .setLngLat([lng,lat]).addTo(map);
