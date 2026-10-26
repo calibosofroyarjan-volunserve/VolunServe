@@ -21,7 +21,6 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import SideDrawer from "../../components/SideDrawer";
 
 /* ============================================================
    FIREBASE
@@ -54,7 +53,6 @@ export default function HomeScreen() {
     profile?.fullName?.trim()?.split(" ")[0] ||
     "VolunServe Member";
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<any[]>([]);
 
   /* ==========================================================
@@ -614,40 +612,7 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        {/* ====================================================
-            STATUS BAR GUARD
-        ==================================================== */}
-
-        <View
-          pointerEvents="none"
-          style={[
-            styles.statusBarGuard,
-            {
-              height: insets.top,
-            },
-          ]}
-        />
       </View>
-
-      {/* ======================================================
-          SIDE DRAWER
-      ====================================================== */}
-
-      <SideDrawer
-        visible={drawerOpen}
-        onClose={() =>
-          setDrawerOpen(false)
-        }
-        name={
-          profile?.fullName ||
-          "VolunServe Member"
-        }
-        email={profile?.email || ""}
-        role={profile?.role || "resident"}
-        activeMode={profile?.activeMode}
-        residentAccess={profile?.residentAccess}
-        volunteerAccess={profile?.volunteerAccess}
-      />
     </>
   );
 }
