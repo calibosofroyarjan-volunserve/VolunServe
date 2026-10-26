@@ -492,6 +492,17 @@ export default function AdminLayout() {
       </ScrollView>
       <View style={styles.sidebarUtility}>
         <TouchableOpacity
+          style={[styles.profileLink, pathname.endsWith("/profile") && styles.profileLinkActive]}
+          accessibilityRole="button"
+          accessibilityLabel="View LGU Admin profile"
+          activeOpacity={0.82}
+          onPress={() => openRoute("/(admin)/profile")}
+        >
+          <Ionicons name="person-circle-outline" size={19} color="#D4E9DF" />
+          <Text style={styles.profileLinkText}>My Profile</Text>
+          <Ionicons name="chevron-forward" color="#AACBBC" size={15} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.logoutButton}
           accessibilityRole="button"
           accessibilityLabel="Log out of Admin account"
@@ -549,50 +560,23 @@ export default function AdminLayout() {
             }
           />
 
-          <View
-            style={
-              styles.profileArea
-            }
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open my LGU Admin profile"
+            accessibilityState={{ selected: pathname.endsWith("/profile") }}
+            style={[styles.profileArea, pathname.endsWith("/profile") && styles.profileAreaSelected]}
+            activeOpacity={0.78}
+            onPress={() => openRoute("/(admin)/profile")}
           >
-            <View
-              style={
-                styles.profileAvatar
-              }
-            >
-              <Text
-                style={
-                  styles.profileAvatarText
-                }
-              >
-                {initials}
-              </Text>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileAvatarText}>{initials}</Text>
             </View>
-
-            <View
-              style={
-                styles.profileText
-              }
-            >
-              <Text
-                style={
-                  styles.profileName
-                }
-                numberOfLines={
-                  1
-                }
-              >
-                {fullName}
-              </Text>
-
-              <Text
-                style={
-                  styles.profileRole
-                }
-              >
-                Administrator
-              </Text>
+            <View style={styles.profileText}>
+              <Text style={styles.profileName} numberOfLines={1}>{fullName}</Text>
+              <Text style={styles.profileRole}>LGU Admin · My Profile</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward-outline" size={16} color="#7F9788" />
+          </TouchableOpacity>
         </View>
 
         <View
@@ -657,6 +641,11 @@ export default function AdminLayout() {
 
 const styles =
   StyleSheet.create({
+    profileLink: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
+    profileLinkActive: { backgroundColor: "#226859" },
+    profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
+    profileAreaSelected: { backgroundColor: "#F0F6F2" },
+
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
     navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
@@ -885,14 +874,13 @@ const styles =
     },
 
     profileArea: {
-      maxWidth:
-        300,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap:
-        10,
+      maxWidth: 330,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 11,
+      minHeight: 56,
+      borderRadius: 9,
+      paddingHorizontal: 10,
     },
 
     profileAvatar: {
@@ -914,26 +902,20 @@ const styles =
     },
 
     profileText: {
-      minWidth:
-        0,
+      flexShrink: 1,
+      minWidth: 0,
     },
 
     profileName: {
-      color:
-        "#0F172A",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
+      color: "#173D32",
+      fontSize: 13,
+      fontWeight: "700",
     },
 
     profileRole: {
-      marginTop:
-        2,
-      color:
-        "#64748B",
-      fontSize:
-        10.5,
+      marginTop: 3,
+      color: "#6F8278",
+      fontSize: 10.5,
     },
 
     stackArea: {
