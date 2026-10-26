@@ -1,4 +1,5 @@
 import { deleteApp, initializeApp } from "firebase/app";
+import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 import {
     createUserWithEmailAndPassword,
@@ -26,6 +27,7 @@ export type CreateAdminInput = {
   email: string;
   password: string;
   lguOffice: string;
+  barangay: string;
   lguPosition: string;
   appointmentReference: string;
   credentialsReviewed: boolean;
@@ -60,6 +62,7 @@ export async function createAdminAccount(
       fullName.length < 5 ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       lguOffice.length < 3 ||
+      !SJDM_BARANGAYS.includes(input.barangay) ||
       lguPosition.length < 3 ||
       appointmentReference.length < 5 ||
       input.password.length < 12 ||
@@ -118,7 +121,7 @@ export async function createAdminAccount(
       region: "Region III – Central Luzon",
       province: "Bulacan",
       city: "City of San Jose del Monte",
-      barangay: "",
+      barangay: input.barangay,
       address:
         "City of San Jose del Monte, Bulacan",
 
