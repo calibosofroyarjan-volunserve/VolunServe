@@ -25,9 +25,7 @@ import {
   View,
 } from "react-native";
 
-import {
-  createAdminLog,
-} from "../../lib/adminLogger";
+
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 
 import {
@@ -454,24 +452,6 @@ export default function AdminAccounts() {
     );
   };
 
-  const writeAdminLogSafely =
-    async (
-      payload: Parameters<
-        typeof createAdminLog
-      >[0]
-    ) => {
-      try {
-        await createAdminLog(
-          payload
-        );
-      } catch (logError) {
-        console.warn(
-          "Admin access changed but audit log could not be written.",
-          logError
-        );
-      }
-    };
-
   const confirmAdminAction =
     async () => {
       const account =
@@ -745,11 +725,13 @@ export default function AdminAccounts() {
           };
         }
 
+        // Atomic audit logging: do not change Admin privileges without
+        // writing the traceable action to the same Firestore batch.
+        batch.set(doc(collection(db, "adminLogs")), {
+          ...logPayload,
+          createdAt: serverTimestamp(),
+        });
         await batch.commit();
-
-        await writeAdminLogSafely(
-          logPayload
-        );
 
         if (
           action === "promote"
