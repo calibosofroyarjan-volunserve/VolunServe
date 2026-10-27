@@ -188,6 +188,7 @@ export default function AdminAccounts() {
     lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
     lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
+    actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
     credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
 
   React.useEffect(() => {
@@ -954,44 +955,16 @@ export default function AdminAccounts() {
             <Text
               style={styles.title}
             >
-              LGU Admin Accounts
+              LGU Staff & Admin Accounts
             </Text>
 
             <Text
               style={styles.subtitle}
             >
-              Review authorized LGU staff accounts, manage access, and keep approvals separate from Resident and Volunteer accounts.
+              Review submitted LGU staff information first, verify identity and official appointment, then promote eligible staff to LGU Admin. Manage existing Admin access below.
             </Text>
           </View>
 
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Create independent LGU Admin account"
-            style={styles.addButton}
-            onPress={() => setShowCreateIndependentAdmin(true)}
-          >
-            <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.addButtonText}>Create LGU Admin</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[styles.addButton, {backgroundColor:"#2B6C54"}]}
-            onPress={() => setShowAddAdmin(true)}
-          >
-            <Ionicons
-              name="person-add-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-
-            <Text
-              style={
-                styles.addButtonText
-              }
-            >
-              Review Existing Staff
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {!!creationNotice && (
@@ -1001,15 +974,15 @@ export default function AdminAccounts() {
         )}
 
         <View style={styles.accessFlow}>
-          <Text style={styles.accessFlowTitle}>LGU ADMIN ACCOUNT FLOW</Text>
+          <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
           <View style={styles.accessFlowSteps}>
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>01</Text><Text style={styles.stepText}>Register a separate staff account</Text></View>
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>01</Text><Text style={styles.stepText}>Receive staff application</Text></View>
             <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>02</Text><Text style={styles.stepText}>Independently verify LGU credentials</Text></View>
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>02</Text><Text style={styles.stepText}>Verify official LGU credentials</Text></View>
             <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Grant access and audit changes</Text></View>
+            <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Promote to Admin & record audit</Text></View>
           </View>
-          <Text style={styles.flowHint}>Create a separate staff Firebase login after independent LGU credential verification, or review an existing registered staff account. Resident identity verification alone is not proof of LGU employment.</Text>
+          <Text style={styles.flowHint}>Only the pending LGU staff application queue below is the standard entry point. Verify both identity and employment independently; promote only confirmed staff. Admin accounts can be suspended or revoked after approval.</Text>
         </View>
         <View style={{
           borderWidth:1,borderColor:"#D6E9DD",borderRadius:14,
