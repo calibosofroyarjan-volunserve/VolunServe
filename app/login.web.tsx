@@ -200,7 +200,7 @@ export default function WebLogin() {
             accessibilityLabel="Resident email address"
             placeholder="Enter your email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
-            textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
+            textContentType="emailAddress" autoComplete="email" editable={!loading}
             returnKeyType="next" onFocus={() => setFocusedInput("email")} onBlur={() => setFocusedInput(null)} />
         </View>
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
@@ -210,7 +210,7 @@ export default function WebLogin() {
             accessibilityLabel="Resident password"
             placeholder="Enter your password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
-            editable={!loading && !googleLoading} returnKeyType="done"
+            editable={!loading} returnKeyType="done"
             onSubmitEditing={() => void handleLogin()} onFocus={() => setFocusedInput("password")}
             onBlur={() => setFocusedInput(null)} />
           <TouchableOpacity accessibilityRole="button"
