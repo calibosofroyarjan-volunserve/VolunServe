@@ -44,7 +44,7 @@ export function AdminPageHeading({
       <View style={[styles.heroInner, width < 770 && styles.heroCompact]}>
         <View style={styles.heroText}>
           <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, width < 770 && styles.titleCompact]}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
         {actionLabel && onAction ? (
@@ -130,8 +130,9 @@ const styles = StyleSheet.create({
   heroText: {flex: 1, maxWidth: 720},
   eyebrow: {color: "#A7F3D0", fontSize: 10, fontWeight: "900",
     letterSpacing: 1.8, marginBottom: 9},
-  title: {color: "#FFFFFF", fontSize: 26, fontWeight: "900",
-    letterSpacing: -0.7, lineHeight: 32},
+  title: {color: "#FFFFFF", fontSize: 32, fontWeight: "800",
+    letterSpacing: -0.7, lineHeight: 40},
+  titleCompact: {fontSize: 25, lineHeight: 32},
   subtitle: {color: "#D5F5E7", fontSize: 13, lineHeight: 20,
     marginTop: 8, maxWidth: 650},
   action: {minHeight: 43, flexDirection: "row", gap: 7, alignItems: "center",
