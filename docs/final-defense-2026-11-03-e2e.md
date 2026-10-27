@@ -60,7 +60,7 @@ Run emulators:exec only after stopping Terminal 1; the ports must be free. Rules
 ## Separate acceptance gates
 
 - UI clicks/screenshots are a manual acceptance gate; SDK/rules checks do not establish browser E2E success.
-- The current /admin-request secondary Firebase client does not connect to the local emulators through the opt-in flag. Do not submit that form in the emulator-only rehearsal; pending-applicant browser testing needs a separately prepared synthetic fixture or reviewed secondary-client emulator wiring. The automated rules suite covers pending submission and approval using synthetic identities.
+- The /admin-request secondary Firebase client follows the explicit localhost emulator opt-in. Use only fictional staff details in the emulator rehearsal. Submission grants only pending applicant status; independent official LGU confirmation and the Super Admin review/audit transaction remain mandatory before any Admin access.
 - Android export verifies JavaScript bundling, not an APK build, installation, GPS hardware or device runtime.
 - Storage uploads, Cloud Functions, certificate delivery, external Identity AI and payments are not emulated in the Auth+Firestore setup. Certificate eligibility is covered by offline unit tests (29 minutes rejected, 30 minutes accepted, idempotent issuance); actual delivery remains a separate gate.
 - Do not invoke donation/payment actions or submit emergency reports during this rehearsal. This setup does not redirect every external backend to an emulator.

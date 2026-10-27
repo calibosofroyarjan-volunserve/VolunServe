@@ -273,6 +273,8 @@ export default function SuperAdminLayout() {
         <View style={styles.topbar}>
           {!desktop ? (
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Open Super Admin navigation"
               style={styles.menuButton}
               activeOpacity={0.8}
               onPress={() => setDrawerOpen(true)}

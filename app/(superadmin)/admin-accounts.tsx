@@ -189,6 +189,7 @@ export default function AdminAccounts() {
     lguPosition.trim().length >= 3 && lguPosition.trim().length <= 120 &&
     lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
     lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
+    (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
     credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
@@ -1903,8 +1904,9 @@ export default function AdminAccounts() {
               <View style={styles.credentialReview}>
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
-                  Compare the applicant's information with an independently obtained official LGU source.
-                  Completing this review is required before activating any Admin account.
+                  Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
+                  Submitted documents or ID images alone are insufficient. If official confirmation is unavailable, keep the application pending.
+                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check.
                 </Text>
                 {actionTarget?.role === "applicant" && (
                   <View style={styles.applicantDetails}>
@@ -1922,7 +1924,6 @@ export default function AdminAccounts() {
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
                     { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
                     { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
-                    { label: "How was this independently verified?", value: lguVerificationMethod, onChange: setLguVerificationMethod, placeholder: "e.g., confirmed through the official LGU office", maxLength: 200 },
                   ] as const).map((field) => (
                     <View key={field.label} style={styles.reviewField}>
                       <Text style={styles.reviewLabel}>{field.label}</Text>
@@ -1938,6 +1939,48 @@ export default function AdminAccounts() {
                       />
                     </View>
                   ))}
+                  <View style={styles.reviewField}>
+                    <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
+                    <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
+                    {[
+                      "In-person verification at LGU office",
+                      "Official LGU phone callback",
+                      "Official LGU email confirmation",
+                      "Official appointment records verification",
+                      "Others — specify independently verified source",
+                    ].map((option) => {
+                      const isOther = option.startsWith("Others");
+                      const otherSelected = !!lguVerificationMethod && ![
+                        "In-person verification at LGU office",
+                        "Official LGU phone callback",
+                        "Official LGU email confirmation",
+                        "Official appointment records verification",
+                      ].includes(lguVerificationMethod);
+                      return (
+                        <TouchableOpacity key={option} accessibilityRole="radio"
+                          accessibilityState={{ checked: isOther ? otherSelected : lguVerificationMethod === option }}
+                          disabled={!!savingUid}
+                          style={[styles.confirmReview, (isOther ? otherSelected : lguVerificationMethod === option) && { borderColor: "#158060", backgroundColor: "#EFFAF4" }]}
+                          onPress={() => setLguVerificationMethod(isOther ? "Other official source: " : option)}>
+                          <Ionicons name={(isOther ? otherSelected : lguVerificationMethod === option) ? "radio-button-on" : "radio-button-off"} size={20} color="#23765F" />
+                          <Text style={styles.confirmReviewText}>{option}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {!!lguVerificationMethod && ![
+                      "In-person verification at LGU office",
+                      "Official LGU phone callback",
+                      "Official LGU email confirmation",
+                      "Official appointment records verification",
+                    ].includes(lguVerificationMethod) && (
+                      <TextInput accessibilityLabel="Specify independent official verification"
+                        placeholder="Describe the official source and what was confirmed"
+                        placeholderTextColor="#8A9C94" maxLength={200}
+                        value={lguVerificationMethod.replace(/^Other official source: /, "")}
+                        onChangeText={value => setLguVerificationMethod("Other official source: " + value)}
+                        editable={!savingUid} style={styles.reviewInput} />
+                    )}
+                  </View>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: identityMatched }}
@@ -1959,7 +2002,7 @@ export default function AdminAccounts() {
                   >
                     <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
                     <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
+                      I independently confirmed current LGU employment, appointment and authority with the official LGU office or records, using independently obtained contact details.
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -2007,11 +2050,14 @@ export default function AdminAccounts() {
 
             </ScrollView>
             <View
-              style={
-                styles.confirmActions
-              }
+              style={[
+                styles.confirmActions,
+                viewportWidth < 480 && styles.confirmActionsCompact,
+              ]}
             >
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Cancel staff account action"
                 disabled={
                   !!savingUid
                 }
@@ -2033,6 +2079,8 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={actionButtonLabel(actionType)}
                 disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
                 style={[
                   styles.confirmButton,
@@ -2661,6 +2709,11 @@ const styles =
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 10,
+    },
+
+    confirmActionsCompact: {
+      flexDirection: "column-reverse",
+      alignItems: "stretch",
     },
 
     confirmButton: {
