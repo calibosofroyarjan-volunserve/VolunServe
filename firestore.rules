@@ -5069,8 +5069,10 @@ service cloud.firestore {
         && isEventOrganizer()
         && resource.data.residentId == request.auth.uid
         && validLiveCoordinates();
+      // A Resident organizer must be able to stop sharing after switching
+      // their active account mode to Volunteer. Ownership is still enforced.
       allow delete: if isAdminOrSuperAdmin()
-        || (isResident()
+        || (hasResidentAccess()
           && isEventOrganizer()
           && resource.data.residentId == request.auth.uid);
     }
