@@ -960,7 +960,7 @@ export default function CommandCenter() {
         <View style={[styles.kpiGrid, width < 640 && styles.kpiGridCompact]}>
           {([
             {key:"cases",label:"Open emergencies",count:metrics.activeCases,icon:"alert-circle-outline" as const,route:"/(admin)/admin-cases",hint:"Incident response"},
-            {key:"residents",label:"Resident reviews",count:pendingUserIds.length,icon:"shield-checkmark-outline" as const,route:"/(admin)/identity-reviews",hint:"LGU user verification"},
+            {key:"residents",label:"Pending user profiles",count:pendingUserIds.length,icon:"shield-checkmark-outline" as const,route:"/(admin)/account-approvals",hint:"Non-staff account reviews"},
             {key:"volunteers",label:"Volunteer approvals",count:pendingVolunteerIds.length,icon:"people-outline" as const,route:"/(admin)/account-approvals",hint:"Volunteer applications"},
             {key:"centers",label:"Verified evacuation centers",count:metrics.activeCenters,icon:"business-outline" as const,route:"/(admin)/command-center",hint:"Official active centers"},
           ]).map((item,index) => (
@@ -1025,10 +1025,16 @@ export default function CommandCenter() {
                 route: "/(admin)/admin-cases",
               },
               {
-                key: "resident", label: "Resident verification",
+                key: "resident", label: "Pending user profiles",
                 detail: dataError ? "Live status unavailable" :
-                  pendingUserIds.length + " non-staff user account review(s) · identity decisions in dedicated queue",
+                  pendingUserIds.length + " non-staff accounts awaiting review",
                 icon: "shield-checkmark-outline" as const, count: pendingUserIds.length,
+                route: "/(admin)/account-approvals",
+              },
+              {
+                key: "identity", label: "AI identity reviews",
+                detail: "Open the dedicated identity verification queue",
+                icon: "finger-print-outline" as const, count: null,
                 route: "/(admin)/identity-reviews",
               },
               {
@@ -1845,7 +1851,7 @@ const styles =
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
-    kpiCardLabel: {fontSize:11,fontWeight:"750",color:"#688073",flex:1,lineHeight:16},
+    kpiCardLabel: {fontSize:11,fontWeight:"700",color:"#688073",flex:1,lineHeight:16},
     kpiCardValue: {fontSize:29,fontWeight:"800",color:"#164535",marginTop:13,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:9},
     kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
