@@ -1,45 +1,60 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf8");
+const read = p => fs.readFileSync(path.join(__dirname,"..",p),"utf8");
 const shell = read("components/auth/PremiumAuthShell.tsx");
-const resident = read("app/login.tsx");
-const residentWeb = read("app/login.web.tsx");
-const staff = read("app/admin-login.tsx");
-assert(shell.includes('const compact = width < 900') &&
-  shell.includes('const narrow = width < 480') &&
-  shell.includes("ScrollView") && shell.includes("heroHeight"),
-  "Shared sign-in hero must adapt for tablet/mobile and allow scrolling");
-assert(shell.includes("clipPath:") &&
-  shell.includes("polygon(") &&
-  shell.includes("Platform.OS === \"web\""),
-  "Chamfer corners must be web-only and provide a native fallback");
-for (const name of ["Emergency Reports","Request Assistance","Community Events",
-  "Resident Login","LGU Admin Login","VolunServe","Build Safer Communities"]) {
-  assert(shell.includes(name), "Missing design element: " + name);
+const login = read("app/login.tsx");
+const web = read("app/login.web.tsx");
+const admin = read("app/admin-login.tsx");
+const google = read("components/auth/GoogleBrandMark.tsx");
+
+for (const s of [
+  "Resident & Volunteer Login",
+  "LGU & System",
+  "Administration Login",
+  "Login",
+  "Basic",
+  "Verified",
+  "Volunteer",
+  "Resident & Volunteer",
+  "auth-resident-hero.webp",
+  "auth-admin-hero.webp",
+  'accessibilityRole="tab"',
+  "Svg",
+  "Path",
+  "useWindowDimensions",
+  "ScrollView",
+]) assert(shell.includes(s), "Missing login reference-design element: "+s);
+assert(fs.existsSync(path.join(__dirname,"..","assets/images/auth-resident-hero.webp")),
+  "Missing local Resident volunteer photo");
+assert(fs.existsSync(path.join(__dirname,"..","assets/images/auth-admin-hero.webp")),
+  "Missing local SJDM City Hall photo");
+assert(shell.includes("clipPath:") && shell.includes("polygon(") && shell.includes('Platform.OS === "web"'),
+  "Shared mobile-friendly shape fallback must remain for other auth forms");
+for (const value of ['#4285F4','#34A853','#FBBC05','#EA4335']) {
+  assert(google.includes(value), "Google brand mark is missing the original Google color: "+value);
 }
-assert(resident.includes('<PremiumAuthShell active="resident">') &&
-  residentWeb.includes('<PremiumAuthShell active="resident">') &&
-  staff.includes('<PremiumAuthShell active="admin">'),
-  "Both sign-in routes must use the same premium shell");
-assert(resident.includes("GoogleAuthProvider.credential") &&
-  resident.includes("handleGoogleLogin") &&
-  resident.includes('router.replace("/public")') &&
-  resident.includes('router.push("/signup")') &&
-  resident.includes("handleForgotPassword"),
-  "Resident OAuth, guest, signup and password reset are retained");
-assert(resident.includes("browserSessionPersistence") &&
-  resident.includes("browserLocalPersistence") &&
-  resident.includes("applyRememberMe()"),
-  "Remember me must be functional instead of decorative");
-assert(residentWeb.includes("connectGoogleAccountWeb()") &&
-  residentWeb.includes("applySessionPersistence()") &&
-  residentWeb.includes('profile.role === "admin" || profile.role === "superadmin"') &&
-  residentWeb.includes("await logoutUser()"),
-  "Web login must preserve Google popup while denying privileged staff through community auth");
-assert(!staff.includes("GoogleAuthProvider") &&
-  !staff.includes("promptGoogleAsync") &&
-  staff.includes("loginUser(cleanEmail, password)") &&
-  staff.includes('router.push("/admin-request")'),
-  "LGU login remains password-only with application pathway");
-console.log("PASS: professional chamfered login layouts, responsive geometry and preserved auth boundary");
+for (const src of [login,web]) {
+  assert(src.includes('<PremiumAuthShell active="resident">'), "Resident login shell missing");
+  for (const piece of ["Login as Resident / Volunteer","Continue with Google",
+    "Continue as Guest", "Create An Account", "GoogleBrandMark","router.push(\"/signup\")",
+    "router.replace(\"/public\")", "handleForgotPassword","rememberMe"]) {
+    assert(src.includes(piece), "Resident login feature missing: "+piece);
+  }
+}
+assert(login.includes("GoogleAuthProvider.credential")&&login.includes("handleGoogleLogin"),
+  "Native OAuth callback must remain");
+assert(web.includes("connectGoogleAccountWeb()")&&web.includes("applySessionPersistence()") &&
+  web.includes('profile.role === "admin" || profile.role === "superadmin"') &&
+  web.includes("await logoutUser()"), "Web Google popup must preserve admin role denial");
+assert(login.includes("browserLocalPersistence")&&login.includes("browserSessionPersistence") &&
+  login.includes("applyRememberMe()"), "Native web remember-me persistence must remain");
+assert(admin.includes('<PremiumAuthShell active="admin">') &&
+  admin.includes("Login as Admin") && admin.includes("Request LGU Admin Access") &&
+  admin.includes("loginUser(cleanEmail, password)") &&
+  admin.includes('router.push("/admin-request")'), "LGU admin restricted login flow broken");
+assert(admin.includes("setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence)"),
+  "Admin Remember me checkbox must actually change session persistence");
+assert(!admin.includes("GoogleAuthProvider")&&!admin.includes("promptGoogleAsync"),
+  "Admin must not gain Resident Google OAuth access");
+console.log("PASS: reference photo login forms, real Google mark, resident Google+Guest+Sign Up, secure LGU portal, persistent Remember me");
