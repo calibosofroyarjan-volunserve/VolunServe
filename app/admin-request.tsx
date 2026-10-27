@@ -9,6 +9,7 @@ import { connectStorageEmulator, getMetadata, getStorage, ref as storageRef, upl
 import React, { useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
+import LguStaffWithdrawalPanel from "../components/auth/LguStaffWithdrawalPanel";
 import { firebaseConfig, usingFirebaseEmulators } from "../lib/firebase";
 import { EvidenceSlot, LGU_APPLICATION_NOTICE, LGU_ID_TYPES, LGU_STAFF_STEPS, LguIdType, lguIdRequiresBack, validLguApplication } from "../lib/lguStaffApplicationPolicy";
 
@@ -45,6 +46,7 @@ export default function LguStaffApplication() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [error, setError] = useState("");
   const update = (key:keyof FormFields, value:string) => setForm(old=>({...old,[key]:value}));
 
@@ -257,7 +259,17 @@ export default function LguStaffApplication() {
               </Text>}
             </View>
           </View>
-          {success ? (
+          <TouchableOpacity accessibilityRole="button" disabled={busy}
+            style={styles.withdrawToggle}
+            onPress={()=>{setError("");setWithdrawOpen(value=>!value);}}>
+            <Ionicons name={withdrawOpen?"chevron-up":"shield-outline"} size={18} color="#08775D"/>
+            <Text style={styles.withdrawToggleText}>
+              {withdrawOpen?"Return to LGU application":"Already applied? Withdraw an application"}
+            </Text>
+          </TouchableOpacity>
+          {withdrawOpen ? (
+            <LguStaffWithdrawalPanel/>
+          ) : success ? (
             <View style={styles.success}>
               <Ionicons name="checkmark-circle" color="#068360" size={37}/>
               <Text style={styles.successTitle}>Application received</Text>
@@ -391,7 +403,12 @@ const styles = StyleSheet.create({
   screen:{alignItems:"center",justifyContent:"center",padding:20,minHeight:"100%"},
   panel:{width:"100%",maxWidth:850,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D4E8DA",
     borderRadius:24,padding:30,shadowColor:"#115D45",shadowOpacity:0.07,shadowRadius:18,elevation:4,gap:13},
-  panelSmall:{padding:16,borderRadius:16},header:{flexDirection:"row",gap:14,alignItems:"center",marginBottom:10},
+  panelSmall:{padding:16,borderRadius:16},
+  withdrawToggle:{minHeight:44,borderRadius:10,backgroundColor:"#E9F7EF",
+    borderWidth:1,borderColor:"#BEDFCB",alignItems:"center",justifyContent:"center",
+    flexDirection:"row",gap:8,paddingHorizontal:12,marginTop:4},
+  withdrawToggleText:{color:"#08775D",fontSize:12,fontWeight:"800"},
+  header:{flexDirection:"row",gap:14,alignItems:"center",marginBottom:10},
   headerIcon:{width:48,height:48,borderRadius:15,backgroundColor:"#087B5C",alignItems:"center",justifyContent:"center"},
   kicker:{fontSize:10,letterSpacing:1.2,color:"#078165",fontWeight:"800"},
   title:{fontSize:26,lineHeight:31,fontWeight:"900",color:"#103D30",letterSpacing:-0.5,marginVertical:4},

@@ -5,10 +5,18 @@ const source = p => fs.readFileSync(path.join(__dirname,"..",p),"utf8");
 const app=source("app/admin-request.tsx");
 const review=source("app/(superadmin)/admin-accounts.tsx");
 const panel=source("components/admin/LguApplicantEvidencePanel.tsx");
+const withdrawal=source("components/auth/LguStaffWithdrawalPanel.tsx");
 const policy=source("lib/lguStaffApplicationPolicy.ts");
 const firestore=source("firestore.rules");
 const storage=source("storage.rules");
 const config=JSON.parse(source("firebase.json"));
+assert(app.includes("LguStaffWithdrawalPanel")&&
+  app.includes("Already applied? Withdraw an application")&&
+  withdrawal.includes("/api/lgu-staff/privacy/request-withdrawal")&&
+  withdrawal.includes("signInWithEmailAndPassword")&&
+  withdrawal.includes("usingFirebaseEmulators?!localEndpoint")&&
+  !withdrawal.includes("getDownloadURL("),
+  "Applicant must have a protected same-page withdrawal request, without leaking emulator auth to production");
 assert(config.emulators?.storage?.port===9199,"Local Storage emulator must be configured");
 for(const value of ["ph_national_id","ph_drivers_license","ph_passport"]) {
   assert(policy.includes(value),"Government ID allowlist missing "+value);
