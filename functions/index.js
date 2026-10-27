@@ -2577,7 +2577,7 @@ exports.issueCommunityCertificateOnAttendanceVerification = onDocumentUpdated(
 // ---------------------------------------------------------------------------
 const {getMessaging} = require("firebase-admin/messaging");
 
-const ANDROID_PUSH_TOKEN = /^[A-Za-z0-9_:\-]{30,4096}$/;
+const ANDROID_PUSH_TOKEN = /^[A-Za-z0-9_.:\\-]{30,4096}$/;
 const PUSH_TYPES = new Set(["emergency", "event", "donation", "account"]);
 
 function safePushCategory(value) {
@@ -2589,7 +2589,9 @@ function safePushCategory(value) {
 }
 
 exports.registerAndroidPushToken = onCall(
-    {enforceAppCheck: true, maxInstances: 5},
+    // Firebase Authentication is required for all token changes. App Check
+    // enforcement is deferred until native attestation is configured for APKs.
+    {maxInstances: 5},
     async (request) => {
       const uid = request.auth?.uid;
       if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -2606,18 +2608,35 @@ exports.registerAndroidPushToken = onCall(
         throw new HttpsError("permission-denied", "Account is not push eligible.");
       }
       const digest = crypto.createHash("sha256").update(token).digest("hex");
-      await database.collection("userPushTokens").doc(uid).collection("devices")
-          .doc(digest).set({
-            token,
-            platform: "android",
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
+      const ownerRef = database.collection("pushDeviceOwners").doc(digest);
+      const deviceRef = database.collection("userPushTokens").doc(uid)
+          .collection("devices").doc(digest);
+      await database.runTransaction(async (transaction) => {
+        const prior = await transaction.get(ownerRef);
+        const previousUid = prior.data()?.uid;
+        if (typeof previousUid === "string" &&
+            previousUid !== uid && previousUid.length <= 128) {
+          transaction.delete(database.collection("userPushTokens")
+              .doc(previousUid).collection("devices").doc(digest));
+        }
+        transaction.set(ownerRef, {
+          uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(deviceRef, {
+          token,
+          platform: "android",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
       return {registered: true};
     },
 );
 
 exports.unregisterAndroidPushToken = onCall(
-    {enforceAppCheck: true, maxInstances: 5},
+    // Firebase Authentication is required for all token changes. App Check
+    // enforcement is deferred until native attestation is configured for APKs.
+    {maxInstances: 5},
     async (request) => {
       const uid = request.auth?.uid;
       if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -2626,8 +2645,15 @@ exports.unregisterAndroidPushToken = onCall(
         throw new HttpsError("invalid-argument", "Invalid FCM token.");
       }
       const digest = crypto.createHash("sha256").update(token).digest("hex");
-      await getFirestore().collection("userPushTokens").doc(uid)
-          .collection("devices").doc(digest).delete();
+      const database = getFirestore();
+      const ownerRef = database.collection("pushDeviceOwners").doc(digest);
+      const deviceRef = database.collection("userPushTokens").doc(uid)
+          .collection("devices").doc(digest);
+      await database.runTransaction(async (transaction) => {
+        const owner = await transaction.get(ownerRef);
+        if (owner.data()?.uid === uid) transaction.delete(ownerRef);
+        transaction.delete(deviceRef);
+      });
       return {unregistered: true};
     },
 );
@@ -2668,11 +2694,23 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       if (!records.length) return;
       const results = await Promise.allSettled(records.map(async (device) => {
         try {
+          const owner = await database.collection("pushDeviceOwners")
+              .doc(device.id).get();
+          if (owner.data()?.uid !== uid) {
+            await device.ref.delete();
+            return;
+          }
           await getMessaging().send({
             token: device.data().token,
             notification: {title, body: "Open VolunServe to see your update."},
             data: {route: "/notifications", category},
-            android: {priority: category === "emergency" ? "high" : "normal"},
+            android: {
+              priority: category === "emergency" ? "high" : "normal",
+              notification: {
+                channelId: category === "emergency" ?
+                  "volunserve-urgent" : "volunserve-updates",
+              },
+            },
           });
         } catch (error) {
           const code = error?.code || "";

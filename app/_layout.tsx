@@ -20,6 +20,7 @@ import {
 import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+import { useAndroidPushNavigation } from "../lib/useAndroidPushNavigation";
 import {
   getUserProfile,
   homeRouteForProfile,
@@ -389,6 +390,8 @@ export default function RootLayout() {
     router,
     segments,
   ]);
+
+  useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
   if (
     (!fontsLoaded && !fontError) ||

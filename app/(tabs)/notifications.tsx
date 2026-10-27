@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
+import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
 type NotificationItem = {
   id: string;
@@ -42,11 +44,16 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<Filter>("All");
   const [page, setPage] = useState(1);
   const [updating, setUpdating] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [phoneStatus, setPhoneStatus] = useState("");
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, user => {
     setUid(user?.uid ?? null);
     setNotifications([]);
     setError("");
+    setPhoneStatus("");
+    setPhoneEnabled(false);
     setLoading(!!user);
   }), []);
 
@@ -98,14 +105,16 @@ export default function NotificationsScreen() {
   </View>;
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-    <View style={styles.heading}>
+    <LinearGradient colors={["#073E31", "#087B5B", "#35A27C"]}
+      start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.heading}>
+      <View pointerEvents="none" style={styles.heroDecor}><Ionicons name="leaf-outline" color="rgba(255,255,255,0.12)" size={124}/></View>
       <View style={styles.headingIcon}><Ionicons name="notifications-outline" size={24} color="#fff" /></View>
       <View style={styles.headingText}>
         <Text style={styles.kicker}>VOLUNSERVE • UPDATES</Text>
         <Text style={styles.title}>Notifications</Text>
         <Text style={styles.subtitle}>Important account and community updates in one place.</Text>
       </View>
-    </View>
+    </LinearGradient>
 
     <View style={styles.summary}>
       <View><Text style={styles.metric}>{unread}</Text><Text style={styles.metricLabel}>Unread notifications</Text></View>
@@ -116,6 +125,35 @@ export default function NotificationsScreen() {
         <Text style={styles.markAllText}>{updating ? "Updating..." : "Mark all read"}</Text>
       </TouchableOpacity>
     </View>
+
+    {Platform.OS === "android" && <View style={styles.phoneCard}>
+      <View style={styles.phoneIcon}><Ionicons name="phone-portrait-outline" color="#0D7557" size={22}/></View>
+      <View style={styles.phoneContent}>
+        <Text style={styles.phoneTitle}>Phone push notifications</Text>
+        <Text style={styles.phoneDescription}>Optional alerts on your Android device when VolunServe has an update. Your private details stay inside the app.</Text>
+        {!!phoneStatus && <Text accessibilityLiveRegion="polite" style={styles.phoneStatus}>{phoneStatus}</Text>}
+        <View style={styles.phoneActions}>
+          <TouchableOpacity accessibilityRole="button" disabled={pushBusy || !uid}
+            accessibilityLabel={phoneEnabled ? "Refresh phone alert registration" : "Enable Android phone alerts"}
+            onPress={() => {
+              setPushBusy(true); setPhoneStatus("");
+              void enableAndroidPhoneAlerts().then(message => {
+                setPhoneEnabled(true); setPhoneStatus(message);
+              }).catch(err => setPhoneStatus(err instanceof Error ? err.message : "Phone alerts could not be enabled.")).finally(() => setPushBusy(false));
+            }} style={[styles.phoneButton, pushBusy && styles.disabled]}>
+            {pushBusy ? <ActivityIndicator color="#FFFFFF" size="small"/> : <Ionicons name="notifications-outline" size={17} color="#FFFFFF"/>}
+            <Text style={styles.phoneButtonText}>{phoneEnabled ? "Refresh alerts" : "Enable alerts"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" disabled={pushBusy}
+            onPress={() => {
+              setPushBusy(true); setPhoneStatus("");
+              void disableAndroidPhoneAlerts().then(message => {
+                setPhoneEnabled(false); setPhoneStatus(message);
+              }).catch(err => setPhoneStatus(err instanceof Error ? err.message : "Could not disable alerts.")).finally(() => setPushBusy(false));
+            }} style={styles.phoneOffButton}><Text style={styles.phoneOffText}>Disable</Text></TouchableOpacity>
+        </View>
+      </View>
+    </View>}
 
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filters}>
       {FILTERS.map(option => <TouchableOpacity key={option} accessibilityRole="tab"
@@ -168,7 +206,8 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F3F8F5" },
   container: { width: "100%", maxWidth: 980, alignSelf: "center", paddingHorizontal: 18, paddingVertical: 24, paddingBottom: 48 },
-  heading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 18, paddingHorizontal: 17, backgroundColor: "#0D7557", borderRadius: 19 },
+  heading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 18, paddingHorizontal: 17, backgroundColor: "#0D7557", borderRadius: 19, overflow: "hidden" },
+  heroDecor: { position: "absolute", right: -16, top: -25, opacity: 0.95 },
   headingIcon: { backgroundColor: "#ffffff25", borderRadius: 15, padding: 13 },
   headingText: { flex: 1 },
   kicker: { color: "#C4F4DE", fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
@@ -180,6 +219,17 @@ const styles = StyleSheet.create({
   markAll: { flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, backgroundColor: "#E8F7EE", gap: 5 },
   markAllText: { color: "#087D60", fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.35 },
+  phoneCard: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CEE8DA", borderRadius: 17, padding: 16, marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  phoneIcon: { backgroundColor: "#E7F7EE", padding: 11, borderRadius: 12 },
+  phoneContent: { flex: 1, gap: 7 },
+  phoneTitle: { color: "#164A35", fontSize: 14, fontWeight: "900" },
+  phoneDescription: { color: "#628273", fontSize: 12, lineHeight: 18 },
+  phoneStatus: { color: "#376754", fontSize: 12, fontWeight: "700" },
+  phoneActions: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 5 },
+  phoneButton: { flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#0D7557", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10 },
+  phoneButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  phoneOffButton: { borderRadius: 10, borderWidth: 1, borderColor: "#D5E6DC", paddingHorizontal: 12, paddingVertical: 10 },
+  phoneOffText: { color: "#477362", fontWeight: "800", fontSize: 12 },
   filterScroll: { marginTop: 17, maxHeight: 48 },
   filters: { gap: 8, paddingBottom: 8 },
   filterPill: { paddingHorizontal: 14, paddingVertical: 9, backgroundColor: "#FFFFFF", borderRadius: 999, borderColor: "#D9E8DF", borderWidth: 1 },
