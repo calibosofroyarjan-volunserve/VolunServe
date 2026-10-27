@@ -147,6 +147,28 @@ async function main() {
     await env.withSecurityRulesDisabled(async ctx => {
       await ctx.firestore().doc("lguApplicantEvidence/"+TARGET).set(submittedEvidence(TARGET));
     });
+    // Regression: even if an old applicant still looks pending, a trusted
+    // withdrawal request must forbid any programmer Super Admin role grant.
+    const withdrawn="withdrawn-lgu-applicant";
+    await env.withSecurityRulesDisabled(async ctx=>{
+      const q=ctx.firestore();
+      await q.doc("users/"+withdrawn).set({
+        uid:withdrawn,email:"withdrawn@example.test",
+        role:"applicant",status:"pending_review",
+        residentAccess:false,volunteerAccess:false,
+      });
+      await q.doc("lguApplicantEvidence/"+withdrawn).set(submittedEvidence(withdrawn));
+      await q.doc("lguApplicantPrivacyRequests/"+withdrawn).set({
+        uid:withdrawn,status:"requested",
+      });
+    });
+    await check("Withdrawal request prevents forged LGU Admin promotion despite evidence", () => {
+      const batch=superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/"+withdrawn),
+        newReview(withdrawn,"withdrawn@example.test"));
+      batch.update(superDb.doc("users/"+withdrawn),promotion());
+      return batch.commit();
+    },true);
     await check("Valid batch: fresh LGU review and Admin promotion together", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
