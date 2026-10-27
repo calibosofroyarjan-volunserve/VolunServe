@@ -128,7 +128,7 @@ export default function NotificationsScreen() {
       <View style={styles.phoneContent}>
         <Text style={styles.phoneTitle}>Phone push notifications</Text>
         <Text style={styles.phoneDescription}>Optional alerts on your Android device when VolunServe has an update. Your private details stay inside the app.</Text>
-        {!!phoneStatus && <Text accessibilityRole="status" style={styles.phoneStatus}>{phoneStatus}</Text>}
+        {!!phoneStatus && <Text accessibilityLiveRegion="polite" style={styles.phoneStatus}>{phoneStatus}</Text>}
         <View style={styles.phoneActions}>
           <TouchableOpacity accessibilityRole="button" disabled={pushBusy || !uid}
             accessibilityLabel={phoneEnabled ? "Refresh phone alert registration" : "Enable Android phone alerts"}
