@@ -40,8 +40,8 @@ assert(attendance.includes("LGU Admin-only attendance corrections/verification."
   attendance.includes("isAdmin()"),
   "Only LGU Admin may perform staff attendance verification");
 for(const entry of [
-  "System Overview","LGU Verification & Accounts",
-  "System Records · Read Only","Security & Audit Logs","System Settings",
+  "System Overview","LGU Staff & Admin Accounts",
+  "Admin Activity & Audit Logs","System Records (Read Only)","System Settings",
 ]) assert(saLayout.includes(entry),"Missing Super Admin governance nav "+entry);
 for(const entry of [
   "Emergency & Assistance","People & Verification","Events & Volunteering",
