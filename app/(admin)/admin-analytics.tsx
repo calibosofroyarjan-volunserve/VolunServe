@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { AdminPageHeading, AdminSectionHeading, AdminMetricCard, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 import { getAuth } from "firebase/auth";
 import {
   addDoc,
@@ -84,7 +84,6 @@ const clamp = (
 };
 
 export default function AdminAnalytics() {
-  const router = useRouter();
 
   const [checkingRole, setCheckingRole] =
     useState(true);
@@ -882,148 +881,69 @@ export default function AdminAnalytics() {
     <ScrollView
       contentContainerStyle={styles.container}
     >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>
-            Admin Analytics
-          </Text>
+      <AdminPageHeading eyebrow="LGU ADMIN  /  REPORTING & INSIGHTS"
+        title="Community Analytics"
+        subtitle="Read-only operational reporting from current VolunServe records. For urgent tasks and approvals, use the Command Center or the relevant module." />
 
-          <Text style={styles.sub}>
-            Role: {String(role)}
-          </Text>
-        </View>
-
-        <View style={styles.headerBtns}>
-          <TouchableOpacity
-            style={styles.darkBtn}
-            onPress={() =>
-              router.push(
-                "/(admin)/command-center" as any
-              )
-            }
-          >
-            <Text style={styles.darkBtnText}>
-              Command Center
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.navRow}>
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/admin-cases" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Cases
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/admin-events" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Events
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/donor-monitoring" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Donations
-          </Text>
-        </TouchableOpacity>
-
-
-      </View>
-
-      <Text style={styles.sectionHeader}>
-        📊 System Overview
-      </Text>
-
+      <AdminSectionHeading title="Emergency & Cases"
+        caption="Reported incidents and their recorded resolution statuses." />
       <View style={styles.grid}>
-        <KpiCard
-          title="Total Cases"
-          value={metrics.caseTotal}
-          hint={`Active: ${metrics.caseActive} • Resolved: ${metrics.caseResolved}`}
-        />
+        <AdminMetricCard label="Total Cases" value={metrics.caseTotal}
+          hint="All incident records" icon="alert-circle-outline" />
+        <AdminMetricCard label="Active Cases" value={metrics.caseActive}
+          hint="Open or in progress" icon="pulse-outline" />
+        <AdminMetricCard label="Resolved Cases" value={metrics.caseResolved}
+          hint="Resolved incidents" icon="checkmark-done-outline" />
+      </View>
 
-        <KpiCard
-          title="Volunteer Events"
-          value={metrics.eventTotal}
-          hint={`Upcoming: ${metrics.eventUpcoming} • Active: ${metrics.eventActive} • Done: ${metrics.eventCompleted}`}
-        />
+      <AdminSectionHeading title="Residents & Volunteer Applications"
+        caption="Community accounts, volunteer approvals and active participation." />
+      <View style={styles.grid}>
+        <AdminMetricCard label="Total Users" value={metrics.totalUsers}
+          hint="Registered user profiles" icon="people-outline" />
+        <AdminMetricCard label="Volunteer Applications" value={metrics.appTotal}
+          hint={`Pending: ${metrics.appPending} · Approved: ${metrics.appApproved} · Rejected: ${metrics.appRejected}`}
+          icon="person-add-outline" />
+        <AdminMetricCard label="Active Volunteers" value={metrics.activeVolunteers}
+          hint="Source: volunteerStats" icon="heart-outline" />
+      </View>
 
-        <KpiCard
-          title="Volunteer Applications"
-          value={metrics.appTotal}
-          hint={`Pending: ${metrics.appPending} • Approved: ${metrics.appApproved} • Rejected: ${metrics.appRejected}`}
-        />
+      <AdminSectionHeading title="Events & Attendance"
+        caption="LGU volunteer activity counts and completion follow-up indicators." />
+      <View style={styles.grid}>
+        <AdminMetricCard label="Volunteer Events" value={metrics.eventTotal}
+          hint={`Upcoming: ${metrics.eventUpcoming} · Active: ${metrics.eventActive} · Completed: ${metrics.eventCompleted}`}
+          icon="calendar-outline" />
+        <AdminMetricCard label="Total Hours Served" value={metrics.totalHours.toFixed(2)}
+          hint={`Event participations: ${metrics.totalEventsServed}`}
+          icon="time-outline" />
+        <AdminMetricCard label="High-priority Attendance Follow-ups" value={metrics.highRiskCount}
+          hint={`Medium: ${metrics.mediumRiskCount} · Low: ${metrics.lowRiskCount}`}
+          icon="clipboard-outline" />
+      </View>
 
-        <KpiCard
-          title="Total Users"
-          value={metrics.totalUsers}
-          hint="Profiles registered in users collection"
-        />
-
-        <KpiCard
-          title="Certificates Issued"
-          value={metrics.certificatesIssued}
-          hint="Generated completion certificates"
-        />
-
-        <KpiCard
-          title="Achievements Unlocked"
-          value={
-            metrics.totalAchievementsUnlocked
-          }
+      <AdminSectionHeading title="Certificates & Engagement"
+        caption="Issued completion records and community activity totals." />
+      <View style={styles.grid}>
+        <AdminMetricCard label="Certificates Issued" value={metrics.certificatesIssued}
+          hint="Recorded completion certificates" icon="ribbon-outline" />
+        <AdminMetricCard label="Achievements Unlocked" value={metrics.totalAchievementsUnlocked}
           hint={`Users with badges: ${metrics.usersWithAchievements}`}
-        />
+          icon="trophy-outline" />
+        <AdminMetricCard label="Total Points" value={metrics.totalUserPoints}
+          hint={`Joined: ${metrics.totalJoined} · Completed: ${metrics.totalCompleted}`}
+          icon="star-outline" />
+      </View>
 
-        <KpiCard
-          title="Total Points"
-          value={metrics.totalUserPoints}
-          hint={`Joined: ${metrics.totalJoined} • Completed: ${metrics.totalCompleted}`}
-        />
-
-        <KpiCard
-          title="Attendance Follow-up"
-          value={metrics.highRiskCount}
-          hint={`Medium: ${metrics.mediumRiskCount} • Low: ${metrics.lowRiskCount}`}
-        />
-
-        <KpiCard
-          title="Active Volunteers"
-          value={metrics.activeVolunteers}
-          hint="Based on volunteerStats"
-        />
-
-        <KpiCard
-          title="Total Hours Served"
-          value={metrics.totalHours.toFixed(2)}
-          hint={`Total events served: ${metrics.totalEventsServed}`}
-        />
-
-        <KpiCard
-          title="Total Donations"
-          value={metrics.donationTotal}
-          hint={`Total amount: PHP ${metrics.donationSum.toFixed(2)}`}
-        />
+      <AdminSectionHeading title="Donation Reporting"
+        caption="Donation records only. Approval and fund-release decisions remain in LGU Donation Management." />
+      <View style={styles.grid}>
+        <AdminMetricCard label="Donation Records" value={metrics.donationTotal}
+          hint="All recorded donations" icon="heart-circle-outline" />
+        <AdminMetricCard label="Recorded Donation Total"
+          value={`PHP ${metrics.donationSum.toLocaleString("en-PH", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+          hint="Based on recorded donation amounts; not an available release balance"
+          icon="wallet-outline" />
       </View>
 
       <View style={styles.section}>
@@ -1504,8 +1424,8 @@ function LeaderboardRow({
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    backgroundColor: "#F6F8F7",
+    padding: 24,
+    backgroundColor: ADMIN_UI.paper,
   },
 
   center: {
@@ -1599,6 +1519,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
+    marginBottom: 8,
   },
 
   kpi: {
