@@ -10,6 +10,14 @@
 - Three attempts maximum per applicant, transaction-based concurrency lease; AI unavailability or failure produces a manual-review result. It never changes `users.role`, `identityVerified`, `identityStatus`, or `lguAdminCredentialReviews`.
 - The returned `faceSimilaritySignal` is informational: `similarity_signal_present` or `inconclusive_manual_review`. The decision is **always `manual_review_required`**. UI explicitly says that liveness, government ID authenticity, and LGU employment have NOT been verified.
 
+## New Tesseract government-ID OCR screening — implemented on this branch
+- `identity-ai/lgu_id_ocr.py`: Tesseract + Pillow OCR from private government ID front/back (passport identity page only), text-type heuristics for Philippine National ID, Philippine passport, driver's license and explicit school/company/employee ID warning. On poor/unrecognized text -> inconclusive. **No raw OCR text, ID numbers, names, dates or photos returned, saved, or logged.**
+- `POST /lgu-id-ocr` private Python endpoint: internal-key authorization and multipart government ID images. Returns `documentTypeSignal`, `ocrEngineAvailable` and `decision:manual_review_required`. `documentAuthenticityVerified:false`, `issuerVerificationImplemented:false`.
+- `POST /api/lgu-staff/document-screen` Node backend: Firebase ID auth + approved Super Admin check, pending applicant only, protected Storage media metadata & image-type validation, no public image URL, 3-attempt transaction lease, private AI server-to-server transport; separate private results in `lguApplicantDocumentScreenings/{uid}` with all client writes denied.
+- Super Admin document panel includes `Run private government ID OCR (review only)` alongside optional face similarity screening. Neither signal authorizes LGU role promotion.
+- `EXPO_PUBLIC_LGU_STAFF_PRIVATE_EVIDENCE_ENABLED` is default **off** in public production; only enable after privacy and identity-service release readiness review. Local Firebase Emulator synthetic-data tests remain allowed. UI gating alone is not a server-side privacy guarantee: production Firestore/Storage rules must be verified in rollout.
+- Python OCR heuristic tests and mocked Node OCR endpoint tests included in CI; they are NOT accuracy validation using representative legal ID samples. The real independent issuer and liveness components are **still missing**.
+
 ## Required backend configuration
 - `IDENTITY_AI_SERVICE_URL`: HTTPS URL of **the existing private** VolunServe Python AI service. This must be reachable by the Node backend, not from browsers.
 - `IDENTITY_AI_INTERNAL_KEY`: same non-public secret configured on the Python AI service.
