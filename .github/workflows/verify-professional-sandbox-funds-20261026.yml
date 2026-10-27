@@ -24,10 +24,15 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/lguStaffFaceScreening.js
+          node --check backend/lguStaffDocumentScreening.js
           node --check backend/fundReleaseDemoRoutes.js
           node --check functions/index.js
       - name: Identity AI Python syntax (offline, no provider calls)
-        run: python -m py_compile identity-ai/main.py identity-ai/firebase_admin_config.py
+        run: python -m py_compile identity-ai/main.py identity-ai/lgu_id_ocr.py identity-ai/test_lgu_id_ocr.py identity-ai/firebase_admin_config.py
+      - name: Philippine National ID, passport, drivers license and rejected school ID OCR heuristics (synthetic)
+        run: python -m unittest discover -s identity-ai -p 'test_lgu_id_ocr.py'
+      - name: Super Admin-only front/back government ID OCR screening (mock integration)
+        run: node --test scripts/test-lgu-staff-document-screening.cjs
       - name: Donation reconciliation and sandbox release tests
         run: node --test backend/tests/fundReleaseReconciliation.test.js
       - name: Install Java for Firestore emulator
