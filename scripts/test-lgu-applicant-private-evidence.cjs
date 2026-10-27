@@ -33,6 +33,12 @@ assert(app.includes('role:"applicant",status:"pending_review"') &&
 assert(app.includes('autoComplete={options?.off?"off"') &&
   app.includes('importantForAutofill={options?.off?"no"'),
   "Appointment reference must resist email/password autofill");
+assert(app.includes('front:undefined,back:undefined') &&
+  app.includes('meta.customMetadata?.idType!==declaredIdType') &&
+  app.includes('idType:declaredIdType') &&
+  panel.includes('meta.customMetadata?.idType!==item.idType') &&
+  storage.includes("request.resource.metadata.idType in ["),
+  "Changing ID type or resuming uploads must never silently mix ID types");
 assert(app.includes('requestCameraPermissionsAsync') &&
   app.includes('launchCameraAsync'),"Live camera capture must be available");
 assert(app.includes('Upload')===false || app.includes('uploadBytes'),

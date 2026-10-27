@@ -72,6 +72,18 @@ class LguGovernmentIdOcrTests(unittest.TestCase):
         self.assertNotIn("12345", repr(result))
         self.assertNotIn("675849231", repr(result))
 
+    def test_suspicious_school_id_back_overrides_front_government_keyword(self):
+        with patch.object(lgu_id_ocr, "recognize", side_effect=[
+            "PAMBANSANG PAGKAKAKILANLAN",
+            "SCHOOL ID - University student account",
+        ]):
+            result = lgu_id_ocr.screen_document(
+                b"z" * 1400, b"k" * 1600, "ph_national_id"
+            )
+        self.assertEqual(result["documentTypeSignal"], "unsupported_document_suspected")
+        self.assertEqual(result["decision"], "manual_review_required")
+        self.assertNotIn("student account", repr(result))
+
     def test_passport_does_not_need_fictional_reverse_side(self):
         with patch.object(lgu_id_ocr, "recognize", return_value="Passport") as mock:
             result = lgu_id_ocr.screen_document(

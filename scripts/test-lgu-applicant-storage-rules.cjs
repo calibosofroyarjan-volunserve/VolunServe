@@ -19,7 +19,7 @@ const BUCKET=projectId+".appspot.com";
 const staff="storage-evidence-applicant", superAdmin="storage-evidence-superadmin";
 const lguAdmin="storage-evidence-lgu-admin", stranger="storage-evidence-resident";
 const media=new Uint8Array(1400).fill(0x55);
-const meta={contentType:"image/jpeg",customMetadata:{purpose:"lgu_staff_manual_review"}};
+const meta={contentType:"image/jpeg",customMetadata:{purpose:"lgu_staff_manual_review",idType:"ph_national_id"}};
 const FILE="lguStaffEvidence/"+staff+"/front.jpg";
 let pass=0, fail=0;
 async function verify(name, operation, denied=false) {
@@ -75,6 +75,10 @@ async function main(){
       ()=>ownerFile.put(media,{...meta,contentType:"image/png"}),true);
     await verify("Applicant cannot omit official private-evidence purpose",
       ()=>ownerFile.put(media,{contentType:"image/jpeg"}),true);
+    await verify("Applicant cannot omit immutable declared government ID type",
+      ()=>ownerFile.put(media,{contentType:"image/jpeg",customMetadata:{purpose:"lgu_staff_manual_review"}}),true);
+    await verify("School IDs cannot be falsely declared in Storage metadata",
+      ()=>ownerFile.put(media,{contentType:"image/jpeg",customMetadata:{purpose:"lgu_staff_manual_review",idType:"school_id"}}),true);
     await verify("Applicant cannot upload empty file",
       ()=>ownerFile.put(new Uint8Array(20),meta),true);
     await verify("Private government ID created only by its pending applicant",

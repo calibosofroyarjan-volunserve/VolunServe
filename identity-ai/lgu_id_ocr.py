@@ -103,8 +103,12 @@ def screen_document(front_bytes, back_bytes, declared_type):
         front_text = recognize(front_bytes, label="front")
         # Analyze the reverse side's readability, but only the front determines
         # document type; back-side OCR can carry unrelated protected numbers.
-        if back_bytes:
-            recognize(back_bytes, label="back")
+        back_text = recognize(back_bytes, label="back") if back_bytes else ""
+        # A front with copied government keywords cannot excuse a clearly
+        # unrelated school/company ID on its reverse side.
+        if any(marker in normalize_text(back_text) for marker in UNSUPPORTED):
+            return {"documentTypeSignal": "unsupported_document_suspected",
+                    "ocrEngineAvailable": True, "decision": "manual_review_required"}
     except (ValueError, RuntimeError, OSError, TimeoutError):
         return {"documentTypeSignal": "ocr_unavailable_or_unreadable",
                 "ocrEngineAvailable": False, "decision": "manual_review_required"}

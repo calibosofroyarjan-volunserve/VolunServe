@@ -96,7 +96,7 @@ export default function LguStaffApplication() {
 
   const uploadPrivateImage = async (
     storage: ReturnType<typeof getStorage>, uid:string, slot: EvidenceSlot,
-    asset: ImagePicker.ImagePickerAsset,
+    asset: ImagePicker.ImagePickerAsset, declaredIdType: LguIdType,
   ): Promise<string> => {
     const result = await fetch(asset.uri);
     if (!result.ok) throw new Error("Unable to read your selected image.");
@@ -115,7 +115,8 @@ export default function LguStaffApplication() {
         const meta=await getMetadata(storageRef(storage,priorPath));
         const expectedMime=ext==="jpg"?"image/jpeg":"image/"+ext;
         if(meta.contentType!==expectedMime || meta.size<1024 || meta.size>MAX_IMAGE_BYTES ||
-          meta.customMetadata?.purpose!=="lgu_staff_manual_review") {
+          meta.customMetadata?.purpose!=="lgu_staff_manual_review" ||
+          meta.customMetadata?.idType!==declaredIdType) {
           throw new Error("Previously uploaded evidence needs secure staff review.");
         }
         return priorPath;
@@ -124,7 +125,7 @@ export default function LguStaffApplication() {
       }
     }
     const path = "lguStaffEvidence/" + uid + "/" + slot + "." + extension;
-    await uploadBytes(storageRef(storage,path),blob,{contentType:mime,customMetadata:{purpose:"lgu_staff_manual_review"}});
+    await uploadBytes(storageRef(storage,path),blob,{contentType:mime,customMetadata:{purpose:"lgu_staff_manual_review",idType:declaredIdType}});
     return path; // Private object path only; never a public URL.
   };
 
@@ -184,11 +185,11 @@ export default function LguStaffApplication() {
         }
       }
       profileCreated=true;
-      const front = await uploadPrivateImage(storage,uid,"front",images.front!);
+      const front = await uploadPrivateImage(storage,uid,"front",images.front!,idType);
       const back = lguIdRequiresBack(idType)
-        ? await uploadPrivateImage(storage,uid,"back",images.back!) : "";
-      const selfie = await uploadPrivateImage(storage,uid,"selfie",images.selfie!);
-      const lguProof = await uploadPrivateImage(storage,uid,"lgu_proof",images.lgu_proof!);
+        ? await uploadPrivateImage(storage,uid,"back",images.back!,idType) : "";
+      const selfie = await uploadPrivateImage(storage,uid,"selfie",images.selfie!,idType);
+      const lguProof = await uploadPrivateImage(storage,uid,"lgu_proof",images.lgu_proof!,idType);
       await setDoc(doc(candidateDb,"lguApplicantEvidence",uid),{
         uid,idType,front,back,selfie,lguProof,
         reviewStatus:"pending_manual_review",
@@ -309,7 +310,7 @@ export default function LguStaffApplication() {
                   <View style={styles.idChoices}>
                     {LGU_ID_TYPES.map(item=>(
                       <TouchableOpacity key={item.value} accessibilityRole="radio" accessibilityState={{checked:idType===item.value}}
-                        onPress={()=>{setIdType(item.value);setImages(old=>({...old,back:undefined}));}} style={[styles.idChoice,item.value===idType&&styles.idChoiceSelected]}>
+                        onPress={()=>{if(item.value!==idType){setIdType(item.value);setImages(old=>({...old,front:undefined,back:undefined}));}}} style={[styles.idChoice,item.value===idType&&styles.idChoiceSelected]}>
                         <Ionicons name={item.value===idType?"radio-button-on":"radio-button-off"} size={19} color="#08775D"/>
                         <Text style={styles.choiceText}>{item.label}</Text>
                       </TouchableOpacity>

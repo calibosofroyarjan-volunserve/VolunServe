@@ -7,7 +7,7 @@ const vm=require("node:vm");
 const code=fs.readFileSync(path.resolve(__dirname,"../backend/lguStaffDocumentScreening.js"),"utf8");
 const CID="synthetic-ocr-applicant_2026",SU="synthetic-ocr-superadmin_2026";
 const jpeg=Buffer.alloc(1600,32);jpeg[0]=255;jpeg[1]=216;jpeg[2]=255;
-function harness({role="superadmin",badPath=false,ocrSignal="declared_type_text_consistent"}={}){
+function harness({role="superadmin",badPath=false,ocrSignal="declared_type_text_consistent",wrongIdType=false}={}){
   const docs=new Map([
     ["users/"+SU,{role,status:"approved"}],
     ["users/"+CID,{role:"applicant",status:"pending_review"}],
@@ -55,7 +55,7 @@ function harness({role="superadmin",badPath=false,ocrSignal="declared_type_text_
       if(name==="firebase-admin/storage")return {getStorage:()=>({
         bucket:()=>({file:()=>({
           async getMetadata(){mediaReads++;return[{size:jpeg.length,
-            contentType:"image/jpeg",metadata:{purpose:"lgu_staff_manual_review"}}];},
+            contentType:"image/jpeg",metadata:{purpose:"lgu_staff_manual_review",idType:wrongIdType?"ph_passport":"ph_national_id"}}];},
           async download(){return[jpeg];},
         })}),
       })};
@@ -96,6 +96,13 @@ test("Non-Super Admin blocked before reading government ID images",async()=>{
   const h=harness({role:"admin"});const r=await h.invoke();
   assert.equal(r.status,403);assert.equal(r.result.error,"superadmin_only");
   assert.equal(h.calls().aiCalls,0);assert.equal(h.calls().mediaReads,0);
+});
+test("Declared ID-type mismatch in private Storage blocks OCR",async()=>{
+  const h=harness({wrongIdType:true});
+  const r=await h.invoke();
+  assert.equal(r.status,409);
+  assert.equal(r.result.error,"document_integrity_failed");
+  assert.equal(h.calls().aiCalls,0);
 });
 test("Invalid ID paths blocked before evidence read",async()=>{
   const h=harness({badPath:true});const r=await h.invoke();

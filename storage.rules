@@ -88,7 +88,11 @@ service firebase.storage {
           || (filename.matches('.*[.]webp') && request.resource.contentType == 'image/webp')
         )
         && ('purpose' in request.resource.metadata)
-        && request.resource.metadata.purpose == 'lgu_staff_manual_review';
+        && request.resource.metadata.purpose == 'lgu_staff_manual_review'
+        && ('idType' in request.resource.metadata)
+        && request.resource.metadata.idType in [
+          'ph_national_id', 'ph_drivers_license', 'ph_passport'
+        ];
       allow get: if signedIn()
         && (request.auth.uid == uid || isSuperAdmin());
       allow list: if isSuperAdmin();

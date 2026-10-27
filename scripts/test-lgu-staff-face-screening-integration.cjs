@@ -61,7 +61,7 @@ function harness(config={}){
           assert(p.startsWith("lguStaffEvidence/"+APPLICANT+"/"));
           return {
             getMetadata:async()=>[{size:good.length,contentType:"image/jpeg",
-              metadata:{purpose:"lgu_staff_manual_review"}}],
+              metadata:{purpose:"lgu_staff_manual_review",idType:config.wrongIdType?"ph_passport":"ph_national_id"}}],
             download:async()=>[good],
           };
         }};
@@ -149,6 +149,13 @@ test("operational LGU Admin cannot inspect private media or invoke AI screening"
   assert.equal(result.body.error,"superadmin_only");
   assert.equal(h.getCalls().aiCalls,0);
   assert.equal(h.getCalls().storageReads,0);
+});
+test("Face comparison refuses mismatched declared ID-type metadata",async()=>{
+  const h=harness({wrongIdType:true});
+  const result=await h.invoke();
+  assert.equal(result.status,409);
+  assert.equal(result.body.error,"media_integrity_failed");
+  assert.equal(h.getCalls().aiCalls,0);
 });
 test("invalid or public evidence paths stop before image download",async()=>{
   const h=harness({badPath:true});

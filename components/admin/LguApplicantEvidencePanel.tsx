@@ -63,7 +63,9 @@ export default function LguApplicantEvidencePanel({
         const reference=storageRef(storage,entry.path);
         const meta=await getMetadata(reference); // Actual object must exist.
         if(meta.size<1024||meta.size>4*1024*1024||
-          !["image/jpeg","image/png","image/webp"].includes(meta.contentType||"")) {
+          !["image/jpeg","image/png","image/webp"].includes(meta.contentType||"") ||
+          meta.customMetadata?.purpose!=="lgu_staff_manual_review" ||
+          meta.customMetadata?.idType!==item.idType) {
           throw new Error("Unsupported or oversized evidence file.");
         }
         if (Platform.OS!=="web" || typeof URL==="undefined") {

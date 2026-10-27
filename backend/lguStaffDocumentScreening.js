@@ -74,7 +74,8 @@ function mountLguStaffDocumentScreening(app,{db,adminApp,FieldValue,requireFireb
         const size=Number(meta.size);
         if(!Number.isFinite(size)||size<1024||size>4194304||
           meta.contentType!==item.mime||
-          meta.metadata?.purpose!=="lgu_staff_manual_review")
+          meta.metadata?.purpose!=="lgu_staff_manual_review" ||
+          meta.metadata?.idType!==evidence.idType)
           fail(409,"document_integrity_failed","Private document failed integrity validation.");
         const [bytes]=await file.download();
         if(bytes.length!==size||mediaMime(bytes)!==item.mime)

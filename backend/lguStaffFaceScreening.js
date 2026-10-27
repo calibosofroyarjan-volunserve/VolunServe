@@ -84,7 +84,8 @@ function mountLguStaffFaceScreening(app,{db,adminApp,FieldValue,requireFirebaseU
         const size=Number(metadata.size);
         if(!Number.isFinite(size)||size<1024||size>4194304||
           metadata.contentType!==item.mime||
-          metadata.metadata?.purpose!=="lgu_staff_manual_review")
+          metadata.metadata?.purpose!=="lgu_staff_manual_review" ||
+          metadata.metadata?.idType!==evidence.idType)
           fail(409,"media_integrity_failed","Private applicant media failed the integrity check.");
         const [bytes]=await f.download();
         if(bytes.length!==size||mediaMime(bytes)!==item.mime)
