@@ -24,8 +24,12 @@ const IMG_TYPES: Record<string, string> = {
 const renderSteps = LGU_STAFF_STEPS;
 // Fail closed in production until approved biometric/privacy release gating.
 // Emulator demo uses synthetic documents; staging may explicitly opt in.
+const emulatorRequested = process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === "true";
 const privateEvidenceIntakeEnabled = usingFirebaseEmulators ||
-  process.env.EXPO_PUBLIC_LGU_STAFF_PRIVATE_EVIDENCE_ENABLED === "true";
+  (!emulatorRequested &&
+    process.env.EXPO_PUBLIC_LGU_STAFF_PRIVATE_EVIDENCE_ENABLED === "true");
+// Native emulator support has NOT been configured by lib/firebase.ts. Never
+// let an Android simulator silently submit test government IDs to production.
 
 export default function LguStaffApplication() {
   const router = useRouter();
@@ -127,7 +131,9 @@ export default function LguStaffApplication() {
   const submit = async () => {
     if (busy || step!==4 || !stepValid()) return;
     if (!privateEvidenceIntakeEnabled) {
-      setError("LGU government ID and selfie intake is not yet enabled for production. Privacy controls and biometric QA must be approved before processing real documents.");
+      setError(emulatorRequested && !usingFirebaseEmulators
+        ? "Local emulator mode is supported only in a localhost web browser. Mobile test devices must never upload synthetic IDs to the production Firebase project."
+        : "LGU government ID and selfie intake is not yet enabled for production. Privacy controls and biometric QA must be approved before processing real documents.");
       return;
     }
     setBusy(true);setError("");
