@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf8");
 const shell = read("components/auth/PremiumAuthShell.tsx");
 const resident = read("app/login.tsx");
+const residentWeb = read("app/login.web.tsx");
 const staff = read("app/admin-login.tsx");
 assert(shell.includes('const compact = width < 900') &&
   shell.includes('const narrow = width < 480') &&
@@ -18,6 +19,7 @@ for (const name of ["Emergency Reports","Request Assistance","Community Events",
   assert(shell.includes(name), "Missing design element: " + name);
 }
 assert(resident.includes('<PremiumAuthShell active="resident">') &&
+  residentWeb.includes('<PremiumAuthShell active="resident">') &&
   staff.includes('<PremiumAuthShell active="admin">'),
   "Both sign-in routes must use the same premium shell");
 assert(resident.includes("GoogleAuthProvider.credential") &&
@@ -30,6 +32,11 @@ assert(resident.includes("browserSessionPersistence") &&
   resident.includes("browserLocalPersistence") &&
   resident.includes("applyRememberMe()"),
   "Remember me must be functional instead of decorative");
+assert(residentWeb.includes("connectGoogleAccountWeb()") &&
+  residentWeb.includes("applySessionPersistence()") &&
+  residentWeb.includes('profile.role === "admin" || profile.role === "superadmin"') &&
+  residentWeb.includes("await logoutUser()"),
+  "Web login must preserve Google popup while denying privileged staff through community auth");
 assert(!staff.includes("GoogleAuthProvider") &&
   !staff.includes("promptGoogleAsync") &&
   staff.includes("loginUser(cleanEmail, password)") &&
