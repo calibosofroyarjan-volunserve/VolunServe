@@ -49,7 +49,7 @@ assert(storage.includes("match /lguStaffEvidence/{uid}/{filename}") &&
   storage.includes("allow update, delete: if false;"),
   "Storage rules must enforce private restricted evidence");
 assert(firestore.includes("match /lguApplicantEvidence/{uid}") &&
-  firestore.includes("allow create: if validIntake()") &&
+  firestore.includes("allow create: if lguEvidenceIntakeReleased() && validIntake()") &&
   firestore.includes("data.reviewStatus == 'pending_manual_review'") &&
   firestore.includes("data.aiStatus == 'not_run'"),
   "Firestore record must be immutable with manual review and not-run AI");
