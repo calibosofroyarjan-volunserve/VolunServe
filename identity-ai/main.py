@@ -1249,3 +1249,64 @@ async def verify_identity(
         **result,
         "idType": id_type,
     }
+
+
+# Private government-ID OCR screening for pending LGU staff.
+# It ONLY returns non-sensitive document-type consistency signals for review.
+# Never treat an OCR result as proof that the document is genuine.
+@app.post("/lgu-id-ocr")
+async def lgu_staff_document_ocr(
+    request: Request,
+    x_volunserve_internal_key: str | None = Header(
+        default=None, alias="X-VolunServe-Internal-Key"
+    ),
+    x_volunserve_user_id: str | None = Header(
+        default=None, alias="X-VolunServe-User-Id"
+    ),
+):
+    from lgu_id_ocr import SUPPORTED, screen_document
+
+    require_internal_backend(x_volunserve_internal_key)
+    validate_forwarded_user(x_volunserve_user_id)
+    content_type = str(request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("multipart/form-data"):
+        raise HTTPException(
+            status_code=415,
+            detail="Private government ID OCR requires multipart form data.",
+        )
+    form = await request.form()
+    id_type = clean_text(form.get("idType"), 60).lower()
+    if id_type not in SUPPORTED:
+        raise HTTPException(status_code=400, detail="Unsupported LGU government ID type.")
+    front_upload = form.get("frontDocument")
+    back_upload = form.get("backDocument")
+    try:
+        front_data = await read_upload(
+            front_upload, label="Government ID front/identity page",
+            maximum_bytes=4 * 1024 * 1024
+        )
+        if id_type != "ph_passport":
+            back_data = await read_upload(
+                back_upload, label="Government ID reverse side",
+                maximum_bytes=4 * 1024 * 1024
+            )
+        else:
+            back_data = b""
+    finally:
+        for item in (front_upload, back_upload):
+            if isinstance(item, StarletteUploadFile):
+                await item.close()
+    screening = await asyncio.to_thread(
+        screen_document, front_data, back_data, id_type
+    )
+    # Never expose OCR fields, document numbers, birth dates or uploaded images.
+    return {
+        "ok": True,
+        "screeningKind": "document_type_ocr_consistency",
+        "documentTypeSignal": screening["documentTypeSignal"],
+        "ocrEngineAvailable": screening["ocrEngineAvailable"],
+        "decision": "manual_review_required",
+        "documentAuthenticityVerified": False,
+        "issuerVerificationImplemented": False,
+        "livenessImplemented": False,
+    }
