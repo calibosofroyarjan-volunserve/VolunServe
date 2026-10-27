@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { db } from "../lib/firebase";
-import { vehicleInfo } from "../lib/emergencyMapTypes";
+import { DISPATCH_VEHICLES, vehicleInfo } from "../lib/emergencyMapTypes";
 
 type ActiveCase = {
   id: string;
@@ -75,6 +75,7 @@ export default function EmergencyResponseQuickActions({ residentUid }: { residen
   };
 
   const assignedVehicle = active?.activeLguResponderUid &&
+    DISPATCH_VEHICLES.some(vehicle => vehicle.id === active.responseVehicleType) &&
     ["assigned", "in_progress"].includes(active.status || "")
     ? vehicleInfo(active.responseVehicleType) : null;
 
@@ -99,7 +100,7 @@ export default function EmergencyResponseQuickActions({ residentUid }: { residen
       {active ? (
         <View style={styles.caseRow}>
           <View style={{flex:1,minWidth:170}}>
-            <Text style={styles.eyebrow}>YOUR ACTIVE EMERGENCY · FIRESTORE STATUS</Text>
+            <Text style={styles.eyebrow}>YOUR LATEST ACTIVE EMERGENCY · FIRESTORE STATUS</Text>
             <Text style={styles.caseTitle} numberOfLines={2}>
               {active.title || active.category || "Emergency report"}
             </Text>
@@ -107,7 +108,7 @@ export default function EmergencyResponseQuickActions({ residentUid }: { residen
               {statusLabel[active.status || ""] || "LGU status pending"}
             </Text>
             {assignedVehicle && (
-              <Text style={styles.vehicle}>{assignedVehicle.symbol} {assignedVehicle.label} assigned · awaiting actual responder GPS</Text>
+              <Text style={styles.vehicle}>{assignedVehicle.symbol} LGU response type: {assignedVehicle.label} · live GPS shown only in tracking map</Text>
             )}
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Track your active emergency response"
