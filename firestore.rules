@@ -3866,11 +3866,21 @@ service cloud.firestore {
           == request.resource.data.userId
         && request.resource.data.userId
           != request.auth.uid;
-      allow read, update: if approved()
+      allow read: if approved()
         && (
           resource.data.userId == request.auth.uid
           || resource.data.recipientUid == request.auth.uid
         );
+      // Recipients may acknowledge their own notification but cannot change
+      // the recipient, origin, content, status, or delivery metadata.
+      allow update: if approved()
+        && (
+          resource.data.userId == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid
+        )
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['read'])
+        && request.resource.data.read == true;
       allow read, update, delete: if isAdmin();
     }
     match /tickets/{ticketId} {
