@@ -44,7 +44,7 @@ assert(policy.includes('lguIdRequiresBack'),"Document back-side policy missing")
 for(const token of ["front","back","selfie","lgu_proof"]) {
   assert(app.includes('"'+token+'"'),"Applicant evidence field missing "+token);
 }
-for(const token of ["Live face capture","LGU employment confirmation","STEP ","OF 5",
+for(const token of ["Face verification","LGU employment confirmation","STEP ","OF 5",
 "Submit for independent review","connectStorageEmulator","getStorage(app)"]) {
   assert(app.includes(token),"Intake UI or secure emulator flow missing "+token);
 }
