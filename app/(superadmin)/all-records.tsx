@@ -91,10 +91,7 @@ const recordSources: Array<{
     type: "disputes",
     collectionName: "responseDisputes",
   },
-  {
-    type: "donations",
-    collectionName: "donations",
-  },
+  // Donation receipts are private LGU Admin financial records, not Super Admin oversight.
   {
     type: "events",
     collectionName: "volunteerEvents",
