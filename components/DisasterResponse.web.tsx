@@ -1084,7 +1084,7 @@ export default function WebDisasterReport() {
         </div>
       </header>
 
-      {user && isApprovedProfile(profile) && <EmergencyResponseQuickActions residentUid={user.uid} />}
+      <EmergencyResponseQuickActions residentUid={user && isApprovedProfile(profile) ? user.uid : ""} />
       {user && isApprovedProfile(profile) && <VerifiedEvacuationCenters />}
 
       {!success && user && isApprovedProfile(profile) && (
