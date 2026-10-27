@@ -19,7 +19,7 @@ const SLIDES = [
   require("../../assets/images/slide3.jpg"),
 ];
 
-const chamfer = (n: number) => Platform.OS === "web"
+export const authCornerCut = (n: number) => Platform.OS === "web"
   ? ({
       clipPath: "polygon(" + n + "px 0, calc(100% - " + n +
         "px) 0, 100% " + n + "px, 100% calc(100% - " + n +
@@ -65,7 +65,7 @@ export default function PremiumAuthShell({ active, children }: Props) {
             </View>
 
             <View style={[styles.heroTextWrap, compact && styles.heroTextCompact]}>
-              <View style={[styles.heroBadge, chamfer(10)]}>
+              <View style={[styles.heroBadge, authCornerCut(10)]}>
                 <Ionicons name="shield-checkmark" color="#066B55" size={17} />
                 <Text style={styles.heroBadgeText}>BUILT FOR A SAFER COMMUNITY</Text>
               </View>
@@ -86,8 +86,8 @@ export default function PremiumAuthShell({ active, children }: Props) {
                     { icon: "people-outline", title: "Request Assistance", subtitle: "Get support when you need it.", tint: "#7BF4D3" },
                     { icon: "calendar-outline", title: "Community Events", subtitle: "Join and support local activities.", tint: "#C3FF91" },
                   ] as const).map(feature => (
-                    <View key={feature.title} style={[styles.feature, chamfer(12)]}>
-                      <View style={[styles.featureIcon, chamfer(8)]}>
+                    <View key={feature.title} style={[styles.feature, authCornerCut(12)]}>
+                      <View style={[styles.featureIcon, authCornerCut(8)]}>
                         <Ionicons name={feature.icon} size={25} color={feature.tint} />
                       </View>
                       <View style={styles.featureWords}>
@@ -116,18 +116,18 @@ export default function PremiumAuthShell({ active, children }: Props) {
             colors={["rgba(18,148,109,0.45)", "rgba(9,102,76,0.04)"]}
             start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }}
             pointerEvents="none"
-            style={[styles.cornerWash, chamfer(26)]}
+            style={[styles.cornerWash, authCornerCut(26)]}
           />
         </View>
 
         <View style={[styles.right, compact && styles.rightCompact]}>
-          <View style={[styles.formCard, compact && styles.formCardCompact, chamfer(compact ? 12 : 29)]}>
-            <View style={[styles.tabs, chamfer(10)]} accessibilityLabel="Choose account sign-in">
+          <View style={[styles.formCard, compact && styles.formCardCompact, authCornerCut(compact ? 12 : 29)]}>
+            <View style={[styles.tabs, authCornerCut(10)]} accessibilityLabel="Choose account sign-in">
               <TouchableOpacity accessibilityRole="tab"
                 accessibilityState={{ selected }}
                 accessibilityLabel="Resident Login"
                 onPress={() => { if (!selected) router.replace("/login"); }}
-                style={[styles.tab, selected && styles.activeTab, selected && chamfer(9)]}>
+                style={[styles.tab, selected && styles.activeTab, selected && authCornerCut(9)]}>
                 <Ionicons name="person" size={17} color={selected ? "#FFFFFF" : "#31564C"} />
                 <Text style={[styles.tabText, selected && styles.activeTabText]}>Resident Login</Text>
               </TouchableOpacity>
@@ -135,7 +135,7 @@ export default function PremiumAuthShell({ active, children }: Props) {
                 accessibilityState={{ selected: !selected }}
                 accessibilityLabel="LGU Admin Login"
                 onPress={() => { if (selected) router.replace("/admin-login"); }}
-                style={[styles.tab, !selected && styles.activeTab, !selected && chamfer(9)]}>
+                style={[styles.tab, !selected && styles.activeTab, !selected && authCornerCut(9)]}>
                 <Ionicons name="business-outline" size={18} color={!selected ? "#FFFFFF" : "#31564C"} />
                 <Text style={[styles.tabText, !selected && styles.activeTabText]}>LGU Admin Login</Text>
               </TouchableOpacity>
