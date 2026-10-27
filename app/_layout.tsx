@@ -58,6 +58,7 @@ export default function RootLayout() {
    */
   const currentAuthUidRef =
     useRef<string | null>(null);
+  const handledPushIdRef = useRef<string | null>(null);
   const profileRetryInFlightRef =
     useRef(false);
 
@@ -401,6 +402,10 @@ export default function RootLayout() {
     let alive = true;
     const openInApp = (response: Notifications.NotificationResponse) => {
       if (!alive || response.notification.request.content.data?.route !== "/notifications") return;
+      const notificationId = response.notification.request.identifier;
+      if (handledPushIdRef.current === notificationId) return;
+      handledPushIdRef.current = notificationId;
+      void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
       if (profile.role === "admin" || profile.role === "superadmin" ||
           profile.role === "lgu_personnel") {
         router.push(homeRouteForProfile(profile) as any);
