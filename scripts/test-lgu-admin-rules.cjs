@@ -182,6 +182,49 @@ async function main() {
       console.log("PASS standalone LGU Admin client submits credential review atomically");
     }
 
+    // LGU staff can apply for an account, but applications grant NO privileges.
+    const pendingUid = "pending-lgu-applicant";
+    const pendingEmail = "new-lgu-applicant@example.test";
+    const pendingDb = env.authenticatedContext(pendingUid,
+      { email: pendingEmail }).firestore();
+    const pendingProfile = {
+      uid: pendingUid, email: pendingEmail, fullName: "Authorized Staff Applicant",
+      age: 0, phoneNumber: "", role: "applicant", status: "pending_review",
+      residentAccess: false, volunteerAccess: false,
+      region:"Region III – Central Luzon", province:"Bulacan",
+      city:"City of San Jose del Monte", barangay:"Poblacion",
+      lguOffice:"Office of Public Safety", lguPosition:"City Personnel",
+      appointmentReference:"OFFICIAL-MEMO-NON-SENSITIVE",
+      createdAt: stamp(),
+    };
+    await check("Applicant cannot create their own approved LGU Admin profile", () =>
+      pendingDb.doc("users/"+pendingUid).set({
+        ...pendingProfile, role:"admin",status:"approved",
+      }), true);
+    await check("Applicant can create a pending-only staff application", () =>
+      pendingDb.doc("users/"+pendingUid).set(pendingProfile));
+    await check("Applicant can read own pending status", () =>
+      pendingDb.doc("users/"+pendingUid).get());
+    await check("Applicant cannot self-promote or change pending role", () =>
+      pendingDb.doc("users/"+pendingUid).update(promotion()), true);
+    await check("Operational LGU Admin cannot approve pending applicants", () =>
+      adminDb.doc("users/"+pendingUid).update(promotion()), true);
+    await check("Super Admin cannot approve pending staff without a fresh review", () =>
+      superDb.doc("users/"+pendingUid).update(promotion()), true);
+    await check("Super Admin can approve applicant only in an atomic credential review batch", () => {
+      const batch = superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/"+pendingUid),
+        newReview(pendingUid,pendingEmail));
+      batch.update(superDb.doc("users/"+pendingUid),{
+        ...promotion(),previousRole:"applicant",previousPrimaryRole:"applicant",
+      });
+      batch.set(superDb.doc("adminLogs/lgu-pending-grant"), {
+        actionType:"admin_account_created",targetType:"user",
+        targetId:pendingUid,adminUid:SU,adminName:"Super Admin",
+        description:"Reviewed and approved LGU staff application",createdAt:stamp(),
+      });
+      return batch.commit();
+    });
     console.log("\nLGU Admin Firestore rules: "+pass+" passed, "+fail+" failed.");
     if (fail) process.exitCode = 1;
   } finally {
