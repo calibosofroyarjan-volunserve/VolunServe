@@ -62,7 +62,7 @@ assert(saOverview.includes('item.role === "applicant" && item.status === "pendin
   saOverview.includes('router.push("/(superadmin)/admin-accounts"') &&
   saOverview.includes('router.push("/(superadmin)/admin-logs"'),
   "Super Admin overview must surface actual applicant status and working navigation");
-assert(adminLogin.includes("Request Super Admin Access") &&
+assert(adminLogin.includes("Request LGU Admin Access") &&
   adminLogin.includes('router.push("/admin-request")') &&
   docs.includes("Fresh independent LGU review"),
   "Current user-facing request label must still route to pending-only LGU staff application");
