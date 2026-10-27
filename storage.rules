@@ -65,8 +65,15 @@ service firebase.storage {
         && profile().role == 'superadmin'
         && profile().status == 'approved';
     }
+    // Server-controlled release gate. Missing/false is DENIED even if a client
+    // bypasses the React Native environment flag and calls Firebase directly.
+    // Keep to one config get plus profile get (Storage Rules 2-doc limit).
+    function lguEvidenceIntakeReleased() {
+      return firestore.get(/databases/(default)/documents/lguIdentityIntake/release).data.enabled == true;
+    }
     match /lguStaffEvidence/{uid}/{filename} {
       allow create: if signedIn()
+        && lguEvidenceIntakeReleased()
         && resource == null
         && request.auth.uid == uid
         && profile().role == 'applicant'

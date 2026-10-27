@@ -4999,6 +4999,16 @@ service cloud.firestore {
     // Admin access requires a fresh review in the same commit as role promotion.
     // Private evidence metadata. The application record can NEVER self-verify.
     // Raw ID and selfie pixels are in restricted Storage objects, not Firestore.
+    // Unlike EXPO_PUBLIC_* flags, this release is enforced by Firebase rules.
+    // Admin SDK / emulator fixture only: no browser, applicant, LGU Admin or
+    // programmer Super Admin client can enable intake.
+    match /lguIdentityIntake/{configId} {
+      allow read, write: if false;
+    }
+    function lguEvidenceIntakeReleased() {
+      let path = /databases/$(database)/documents/lguIdentityIntake/release;
+      return exists(path) && get(path).data.enabled == true;
+    }
     match /lguApplicantEvidence/{uid} {
       function validIntake() {
         let applicant = get(/databases/$(database)/documents/users/$(uid)).data;
@@ -5037,7 +5047,7 @@ service cloud.firestore {
           && data.consentVersion == 'lgu-intake-v1'
           && data.createdAt == request.time;
       }
-      allow create: if validIntake();
+      allow create: if lguEvidenceIntakeReleased() && validIntake();
       allow get: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
       allow list: if isSuperAdmin();
       allow update, delete: if false;

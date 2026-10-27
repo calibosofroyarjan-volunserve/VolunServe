@@ -48,6 +48,23 @@ async function main(){
     const owner=get(staff), privileged=get(superAdmin), admin=get(lguAdmin);
     const another=get(stranger), anonymous=env.unauthenticatedContext().storage(BUCKET);
     const ownerFile=owner.ref(FILE);
+    // No config exists on first deployment: deny all direct SDK intake.
+    await verify("Without server release even pending applicants cannot create ID photos",
+      ()=>ownerFile.put(media,meta),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguIdentityIntake/release").set({enabled:false});
+    });
+    await verify("Explicitly disabled release blocks direct Storage SDK uploads",
+      ()=>ownerFile.put(media,meta),true);
+    await verify("Applicant cannot enable evidence release",
+      ()=>env.authenticatedContext(staff).firestore().doc("lguIdentityIntake/release").set({enabled:true}),true);
+    await verify("LGU Admin cannot enable evidence release",
+      ()=>env.authenticatedContext(lguAdmin).firestore().doc("lguIdentityIntake/release").set({enabled:true}),true);
+    await verify("Super Admin browser cannot enable evidence release",
+      ()=>env.authenticatedContext(superAdmin).firestore().doc("lguIdentityIntake/release").set({enabled:true}),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguIdentityIntake/release").set({enabled:true});
+    });
     await verify("Random resident cannot create someone else's ID",()=>another.ref(FILE).put(media,meta),true);
     await verify("LGU Admin cannot create applicant ID",()=>admin.ref(FILE).put(media,meta),true);
     await verify("Applicant cannot write in somebody else's directory",

@@ -43,6 +43,20 @@ async function main() {
     const stranger=env.authenticatedContext(OTHER).firestore();
     const anon=env.unauthenticatedContext().firestore();
     const row=applicant.doc("lguApplicantEvidence/"+STAFF);
+    await check("Missing server release denies Firestore evidence creation",
+      ()=>row.set(base()),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguIdentityIntake/release").set({enabled:false});
+    });
+    await check("Disabled release denies direct applicant SDK submission",
+      ()=>row.set(base()),true);
+    await check("Applicants cannot read confidential release flag",
+      ()=>applicant.doc("lguIdentityIntake/release").get(),true);
+    await check("Super Admin browser cannot change server-controlled release",
+      ()=>superadmin.doc("lguIdentityIntake/release").set({enabled:true}),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguIdentityIntake/release").set({enabled:true});
+    });
     await check("school ID rejected even if applicant calls it ID",()=>row.set(base("school_id")),true);
     await check("private ID record with unrecognized custom type rejected",
       ()=>row.set(base("other_government_id")),true);

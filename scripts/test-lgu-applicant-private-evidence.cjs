@@ -37,6 +37,12 @@ assert(app.includes('requestCameraPermissionsAsync') &&
   app.includes('launchCameraAsync'),"Live camera capture must be available");
 assert(app.includes('Upload')===false || app.includes('uploadBytes'),
   "No pretend uploads without restricted Storage writes");
+assert(storage.includes("lguEvidenceIntakeReleased()") &&
+  storage.includes("lguIdentityIntake/release") &&
+  firestore.includes("allow create: if lguEvidenceIntakeReleased() && validIntake();") &&
+  firestore.includes("match /lguIdentityIntake/{configId}") &&
+  firestore.includes("allow read, write: if false;"),
+  "Sensitive intake must be server-gated in both rules; client flags alone are bypassable");
 assert(storage.includes("match /lguStaffEvidence/{uid}/{filename}") &&
   storage.includes("profile().role == 'applicant'") &&
   storage.includes("isSuperAdmin()") &&
