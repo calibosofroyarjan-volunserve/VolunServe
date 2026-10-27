@@ -45,22 +45,22 @@ const navItems: NavItem[] = [
     match: "/",
   },
   {
-    label: "LGU Verification & Accounts",
+    label: "LGU Staff & Admin Accounts",
     icon: "people-outline",
     route: "/(superadmin)/admin-accounts",
     match: "/admin-accounts",
   },
   {
-    label: "System Records · Read Only",
-    icon: "albums-outline",
-    route: "/(superadmin)/all-records",
-    match: "/all-records",
-  },
-  {
-    label: "Security & Audit Logs",
+    label: "Admin Activity & Audit Logs",
     icon: "time-outline",
     route: "/(superadmin)/admin-logs",
     match: "/admin-logs",
+  },
+  {
+    label: "System Records (Read Only)",
+    icon: "albums-outline",
+    route: "/(superadmin)/all-records",
+    match: "/all-records",
   },
   {
     label: "System Settings",
