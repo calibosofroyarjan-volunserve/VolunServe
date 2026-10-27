@@ -39,6 +39,13 @@ export default function CreateAnnouncement() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [customAnnouncement, setCustomAnnouncement] = useState(true);
+  const ANNOUNCEMENT_TEMPLATES = [
+    { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
+    { label: "Volunteer Schedule Update", title: "Volunteer Schedule Update", body: "Volunteers, please review your assigned activities and any schedule updates in VolunServe." },
+    { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official barangay service advisory and follow instructions from authorized LGU personnel." },
+  ];
 
   const [submitting, setSubmitting] =
     useState(false);
@@ -230,6 +237,21 @@ export default function CreateAnnouncement() {
       </View>
 
       <View style={styles.formCard}>
+        <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose announcement type"
+          accessibilityState={{ expanded: templateOpen }} onPress={() => setTemplateOpen(!templateOpen)}
+          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+          <Text style={{ color: "#173D32" }}>{customAnnouncement ? "Others — write your own" : (title || "Choose a template")}</Text>
+        </TouchableOpacity>
+        {templateOpen && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 9, marginBottom: 14 }}>
+          {[...ANNOUNCEMENT_TEMPLATES, { label: "Others — write your own", title: "", body: "" }].map((item) =>
+            <TouchableOpacity key={item.label} accessibilityRole="button"
+              onPress={() => { setTitle(item.title); setMessage(item.body); setCustomAnnouncement(!item.title); setTemplateOpen(false); }}
+              style={{ padding: 13, borderBottomWidth: 1, borderColor: "#EDF3EF" }}>
+              <Text style={{ color: "#173D32" }}>{item.label}</Text>
+            </TouchableOpacity>)}
+        </View>}
+        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
         <Text style={styles.inputLabel}>
           TITLE
         </Text>
