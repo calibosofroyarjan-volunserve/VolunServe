@@ -462,9 +462,9 @@ export default function AdminEvents() {
           actionLabel="Create Volunteer Event" actionIcon="add-circle-outline" onAction={openCreate} />
         <AdminSectionHeading title="Event Operations" caption="Live event counts · select a record below to manage attendance or its status." />
         <View style={styles.metricGrid}>
-          <AdminMetricCard label="Upcoming" value={events.filter(e => e.status === "upcoming").length} hint="Scheduled activities" icon="calendar-outline" />
-          <AdminMetricCard label="Active" value={events.filter(e => e.status === "active").length} hint="Currently running" icon="pulse-outline" />
-          <AdminMetricCard label="Completed" value={events.filter(e => e.status === "completed").length} hint="Finished activities" icon="checkmark-circle-outline" />
+          <AdminMetricCard label="Upcoming" value={loading ? "—" : events.filter(e => e.status === "upcoming").length} hint="Scheduled activities" icon="calendar-outline" />
+          <AdminMetricCard label="Active" value={loading ? "—" : events.filter(e => e.status === "active").length} hint="Currently running" icon="pulse-outline" />
+          <AdminMetricCard label="Completed" value={loading ? "—" : events.filter(e => e.status === "completed").length} hint="Finished activities" icon="checkmark-circle-outline" />
         </View>
       </View>
 
