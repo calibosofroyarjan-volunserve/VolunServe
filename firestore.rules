@@ -5236,7 +5236,7 @@ service cloud.firestore {
 
       // Only the Admin can review a pending proposal.
       // Approval must atomically create a matching published event.
-      allow update: if isAdminOrSuperAdmin()
+      allow update: if isAdmin()
         && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data)
           .affectedKeys().hasOnly([
@@ -5285,7 +5285,7 @@ service cloud.firestore {
           && resource.data.publicationStatus == 'published');
 
       // Creation requires same-transaction Admin approval of this proposal.
-      allow create: if isAdminOrSuperAdmin()
+      allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
           'location', 'date', 'time', 'endTime', 'capacity',
@@ -5357,7 +5357,7 @@ service cloud.firestore {
         && request.resource.data.proposerName == proposalAfter().proposerName;
 
       // Admin can advance status; completion is recorded by the Admin.
-      allow update: if isAdminOrSuperAdmin()
+      allow update: if isAdmin()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
         && (
