@@ -369,6 +369,10 @@ export default function AdminAccounts() {
       promoteSearch,
     ]);
 
+  const pendingLguApplications = users
+    .filter(account => account.role === "applicant" && account.status === "pending_review")
+    .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
+
   const totalAdmins =
     users.filter(
       (item) =>
@@ -1003,6 +1007,40 @@ export default function AdminAccounts() {
           </View>
           <Text style={styles.flowHint}>Create a separate staff Firebase login after independent LGU credential verification, or review an existing registered staff account. Resident identity verification alone is not proof of LGU employment.</Text>
         </View>
+        <View style={{
+          borderWidth:1,borderColor:"#D6E9DD",borderRadius:14,
+          backgroundColor:"#F5FBF7",padding:15,marginBottom:16,gap:10
+        }}>
+          <Text style={{fontSize:15,fontWeight:"900",color:"#174936"}}>
+            LGU Staff Applications · {pendingLguApplications.length} Pending
+          </Text>
+          <Text style={{fontSize:11,color:"#527464",lineHeight:17}}>
+            Applicants receive no administrative access. Independently verify their official
+            LGU appointment with the issuing office before approving.
+          </Text>
+          {pendingLguApplications.length===0 ? (
+            <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
+          ) : pendingLguApplications.slice(0,20).map(account => (
+            <View key={account.id} style={{padding:12,backgroundColor:"#FFFFFF",
+              borderWidth:1,borderColor:"#DCEAE1",borderRadius:10,
+              flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12}}>
+              <View style={{flex:1,minWidth:180}}>
+                <Text style={{fontWeight:"800",color:"#174936"}}>{nameFor(account)}</Text>
+                <Text style={{fontSize:11,color:"#577464"}}>{account.email}</Text>
+                <Text style={{fontSize:11,color:"#577464"}}>{String((account as any).lguOffice||"Unspecified office")} · {String((account as any).lguPosition||"Unspecified position")}</Text>
+                <Text style={{fontSize:10,color:"#698679"}}>Application reference: {String((account as any).appointmentReference||"Not provided")}</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button"
+                accessibilityLabel={"Review LGU credentials for "+nameFor(account)}
+                style={{backgroundColor:"#087D60",paddingVertical:11,
+                  paddingHorizontal:14,borderRadius:9}}
+                onPress={()=>openAdminAction("promote",account)}>
+                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Review Credentials</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+
         <View
           style={
             styles.statsRow
