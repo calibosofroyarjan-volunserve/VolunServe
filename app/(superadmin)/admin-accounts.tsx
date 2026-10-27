@@ -1012,11 +1012,10 @@ export default function AdminAccounts() {
           backgroundColor:"#F5FBF7",padding:15,marginBottom:16,gap:10
         }}>
           <Text style={{fontSize:15,fontWeight:"900",color:"#174936"}}>
-            LGU Staff Applications · {pendingLguApplications.length} Pending
+            LGU Admin Access Requests · {pendingLguApplications.length} Pending
           </Text>
           <Text style={{fontSize:11,color:"#527464",lineHeight:17}}>
-            Applicants receive no administrative access. Independently verify their official
-            LGU appointment with the issuing office before approving.
+            These are requests for LGU Admin access, not Super Admin accounts. Our programmer Super Admin team must independently obtain and confirm official LGU appointment details with the issuing office before approval. No operational access is granted while pending.
           </Text>
           {pendingLguApplications.length===0 ? (
             <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
