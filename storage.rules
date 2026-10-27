@@ -73,7 +73,13 @@ service firebase.storage {
         && filename.matches('(front|back|selfie|lgu_proof)[.](jpg|png|webp)')
         && request.resource.size > 1024
         && request.resource.size <= 4 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && (
+          (filename.matches('.*[.]jpg') && request.resource.contentType == 'image/jpeg')
+          || (filename.matches('.*[.]png') && request.resource.contentType == 'image/png')
+          || (filename.matches('.*[.]webp') && request.resource.contentType == 'image/webp')
+        )
+        && request.resource.metadata.purpose == 'lgu_staff_manual_review';
       allow get: if signedIn()
         && (request.auth.uid == uid || isSuperAdmin());
       allow list: if isSuperAdmin();
