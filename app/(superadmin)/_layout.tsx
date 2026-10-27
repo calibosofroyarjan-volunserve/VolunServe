@@ -39,25 +39,25 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    label: "Dashboard",
+    label: "System Overview",
     icon: "home-outline",
     route: "/(superadmin)",
     match: "/",
   },
   {
-    label: "Admin Accounts",
+    label: "LGU Verification & Accounts",
     icon: "people-outline",
     route: "/(superadmin)/admin-accounts",
     match: "/admin-accounts",
   },
   {
-    label: "All Records",
+    label: "System Records · Read Only",
     icon: "albums-outline",
     route: "/(superadmin)/all-records",
     match: "/all-records",
   },
   {
-    label: "Audit Logs",
+    label: "Security & Audit Logs",
     icon: "time-outline",
     route: "/(superadmin)/admin-logs",
     match: "/admin-logs",
@@ -183,7 +183,7 @@ export default function SuperAdminLayout() {
               <Text style={styles.accountName} numberOfLines={1}>
                 {fullName}
               </Text>
-              <Text style={styles.accountRole}>Super Admin</Text>
+              <Text style={styles.accountRole}>Programmer · Super Admin</Text>
             </View>
           </View>
         </View>
@@ -238,7 +238,7 @@ function SuperAdminSidebar({
           <Text style={styles.brandTagline}>SYSTEM ADMINISTRATION</Text>
         </View>
       </TouchableOpacity>
-      <Text style={styles.sidebarLabel}>WORKSPACE</Text>
+      <Text style={styles.sidebarLabel}>SYSTEM GOVERNANCE</Text>
 
       <ScrollView
         style={styles.sidebarScroll}
