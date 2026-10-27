@@ -99,7 +99,8 @@ service cloud.firestore {
           ]
           && get(path).data.reviewStatus == 'pending_manual_review'
           && get(path).data.aiStatus == 'not_run'
-          && get(path).data.officialOfficeStatus == 'unconfirmed';
+          && get(path).data.officialOfficeStatus == 'unconfirmed'
+          && !exists(/databases/$(database)/documents/lguApplicantPrivacyRequests/$(uid));
       }
       // A role grant is only valid with a same-commit, reviewed LGU credential record.
       // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
@@ -5008,6 +5009,16 @@ service cloud.firestore {
     function lguEvidenceIntakeReleased() {
       let path = /databases/$(database)/documents/lguIdentityIntake/release;
       return exists(path) && get(path).data.enabled == true;
+    }
+    // Backend-only privacy lifecycle; browser clients cannot forge completion.
+    match /lguApplicantPrivacyRequests/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+    match /lguApplicantPrivacyAudits/{auditId} {
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
     }
     match /lguApplicantEvidence/{uid} {
       function validIntake() {

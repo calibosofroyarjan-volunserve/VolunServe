@@ -136,6 +136,29 @@ async function main() {
       admin.doc("lguApplicantDocumentScreenings/"+STAFF).get(),true);
     await check("Other resident cannot read private OCR results", ()=>
       stranger.doc("lguApplicantDocumentScreenings/"+STAFF).get(),true);
+    await check("Applicant cannot forge privacy withdrawal status",()=>
+      applicant.doc("lguApplicantPrivacyRequests/"+STAFF).set({
+        uid:STAFF,status:"completed",purgedFileCount:4,
+      }),true);
+    await check("LGU Admin cannot forge evidence purge audit",()=>
+      admin.collection("lguApplicantPrivacyAudits").add({
+        targetUid:STAFF,action:"lgu_applicant_evidence_purged",
+      }),true);
+    await check("Super Admin browser cannot forge evidence purge audit",()=>
+      superadmin.collection("lguApplicantPrivacyAudits").add({
+        targetUid:STAFF,action:"lgu_applicant_evidence_purged",
+      }),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguApplicantPrivacyRequests/"+STAFF).set({
+        uid:STAFF,status:"requested",
+      });
+    });
+    await check("Applicant can view own backend-verified withdrawal request",()=>
+      applicant.doc("lguApplicantPrivacyRequests/"+STAFF).get());
+    await check("LGU Admin cannot read biometric erasure request",()=>
+      admin.doc("lguApplicantPrivacyRequests/"+STAFF).get(),true);
+    await check("Applicant cannot erase their withdrawal request to reopen access",()=>
+      applicant.doc("lguApplicantPrivacyRequests/"+STAFF).delete(),true);
     await check("applicant cannot overwrite manual review status",
       ()=>row.update({reviewStatus:"verified"}),true);
     await check("applicant cannot delete evidence metadata",

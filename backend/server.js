@@ -11475,6 +11475,10 @@ require("./lguStaffFaceScreening").mountLguStaffFaceScreening(app,{
 require("./lguStaffDocumentScreening").mountLguStaffDocumentScreening(app,{
   db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
 });
+// Withdrawal immediately blocks Admin promotion; sensitive purge is OFF by default.
+require("./lguStaffPrivacy").mountLguStaffPrivacy(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
 const port =
   Number(
     process.env.PORT ||

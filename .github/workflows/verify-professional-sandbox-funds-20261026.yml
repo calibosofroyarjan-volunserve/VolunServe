@@ -25,6 +25,7 @@ jobs:
           node --check backend/server.js
           node --check backend/lguStaffFaceScreening.js
           node --check backend/lguStaffDocumentScreening.js
+          node --check backend/lguStaffPrivacy.js
           node --check backend/fundReleaseDemoRoutes.js
           node --check functions/index.js
       - name: Identity AI Python syntax (offline, no provider calls)
@@ -33,6 +34,8 @@ jobs:
         run: python -m unittest discover -s identity-ai -p 'test_lgu_id_ocr.py'
       - name: Super Admin-only front/back government ID OCR screening (mock integration)
         run: node --test scripts/test-lgu-staff-document-screening.cjs
+      - name: LGU staff withdrawal, evidence purge and privacy audit (synthetic-only)
+        run: node --test scripts/test-lgu-staff-privacy.cjs
       - name: Donation reconciliation and sandbox release tests
         run: node --test backend/tests/fundReleaseReconciliation.test.js
       - name: Install Java for Firestore emulator
