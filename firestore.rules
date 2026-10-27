@@ -5043,6 +5043,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // AI-assisted face-similarity signals remain informational. Only the
+    // authenticated backend may write; clients cannot forge a match score.
+    // No record in this collection grants applicant/admin permissions.
+    match /lguApplicantFaceScreenings/{uid} {
+      allow get: if signedIn() &&
+        (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
     match /lguAdminCredentialReviews/{targetUid} {
       function validReview() {
         return isSuperAdmin()
