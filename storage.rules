@@ -67,6 +67,7 @@ service firebase.storage {
     }
     match /lguStaffEvidence/{uid}/{filename} {
       allow create: if signedIn()
+        && resource == null
         && request.auth.uid == uid
         && profile().role == 'applicant'
         && profile().status == 'pending_review'
@@ -79,6 +80,7 @@ service firebase.storage {
           || (filename.matches('.*[.]png') && request.resource.contentType == 'image/png')
           || (filename.matches('.*[.]webp') && request.resource.contentType == 'image/webp')
         )
+        && ('purpose' in request.resource.metadata)
         && request.resource.metadata.purpose == 'lgu_staff_manual_review';
       allow get: if signedIn()
         && (request.auth.uid == uid || isSuperAdmin());
