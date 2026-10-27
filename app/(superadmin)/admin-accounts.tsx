@@ -1922,7 +1922,6 @@ export default function AdminAccounts() {
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
                     { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
                     { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
-                    { label: "How was this independently verified?", value: lguVerificationMethod, onChange: setLguVerificationMethod, placeholder: "e.g., confirmed through the official LGU office", maxLength: 200 },
                   ] as const).map((field) => (
                     <View key={field.label} style={styles.reviewField}>
                       <Text style={styles.reviewLabel}>{field.label}</Text>
@@ -1938,6 +1937,48 @@ export default function AdminAccounts() {
                       />
                     </View>
                   ))}
+                  <View style={styles.reviewField}>
+                    <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
+                    <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
+                    {[
+                      "In-person verification at LGU office",
+                      "Official LGU phone callback",
+                      "Official LGU email confirmation",
+                      "Official appointment records verification",
+                      "Others — specify independently verified source",
+                    ].map((option) => {
+                      const isOther = option.startsWith("Others");
+                      const otherSelected = !!lguVerificationMethod && ![
+                        "In-person verification at LGU office",
+                        "Official LGU phone callback",
+                        "Official LGU email confirmation",
+                        "Official appointment records verification",
+                      ].includes(lguVerificationMethod);
+                      return (
+                        <TouchableOpacity key={option} accessibilityRole="radio"
+                          accessibilityState={{ checked: isOther ? otherSelected : lguVerificationMethod === option }}
+                          disabled={!!savingUid}
+                          style={[styles.confirmReview, (isOther ? otherSelected : lguVerificationMethod === option) && { borderColor: "#158060", backgroundColor: "#EFFAF4" }]}
+                          onPress={() => setLguVerificationMethod(isOther ? "Other official source: " : option)}>
+                          <Ionicons name={(isOther ? otherSelected : lguVerificationMethod === option) ? "radio-button-on" : "radio-button-off"} size={20} color="#23765F" />
+                          <Text style={styles.confirmReviewText}>{option}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {!!lguVerificationMethod && ![
+                      "In-person verification at LGU office",
+                      "Official LGU phone callback",
+                      "Official LGU email confirmation",
+                      "Official appointment records verification",
+                    ].includes(lguVerificationMethod) && (
+                      <TextInput accessibilityLabel="Specify independent official verification"
+                        placeholder="Describe the official source and what was confirmed"
+                        placeholderTextColor="#8A9C94" maxLength={200}
+                        value={lguVerificationMethod.replace(/^Other official source: /, "")}
+                        onChangeText={value => setLguVerificationMethod("Other official source: " + value)}
+                        editable={!savingUid} style={styles.reviewInput} />
+                    )}
+                  </View>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: identityMatched }}
