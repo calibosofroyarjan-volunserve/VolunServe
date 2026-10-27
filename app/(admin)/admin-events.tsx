@@ -99,7 +99,7 @@ export default function AdminEvents() {
         }
         const profile: any = await getUserProfile(user.uid);
         const role: Role = profile?.role || "user";
-        const ok = role === "admin" || role === "superadmin";
+        const ok = role === "admin" && profile?.status === "approved" && profile?.adminStatus !== "suspended";
         setAllowed(ok);
       } catch {
         setAllowed(false);
