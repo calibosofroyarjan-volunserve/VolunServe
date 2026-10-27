@@ -136,12 +136,11 @@ export default function SystemSettings() {
     }
 
     if (
-      emergencyHotline.trim().length < 3 ||
-      emergencyHotline.trim().length > 160
+      !/^[+()0-9\s-]{3,40}$/.test(emergencyHotline.trim())
     ) {
       Alert.alert(
         "Invalid hotline",
-        "Enter an official hotline or contact instruction."
+        "Enter a verified official phone number (digits, spaces, +, - or parentheses only)."
       );
 
       return;
@@ -373,13 +372,13 @@ export default function SystemSettings() {
           maxLength={120}
         />
 
-        <Field
-          label="Official Emergency Hotline or Contact Instruction"
+        <PresetField
+          label="Official Emergency Hotline"
           value={emergencyHotline}
-          onChangeText={
-            setEmergencyHotline
-          }
-          maxLength={160}
+          onChangeText={setEmergencyHotline}
+          options={["911"]}
+          placeholder="Enter verified official hotline number"
+          help="Choose the national emergency hotline or Others to enter an independently verified official contact number. Do not enter generic instructions."
         />
 
         <Field
@@ -391,14 +390,17 @@ export default function SystemSettings() {
           maxLength={160}
         />
 
-        <Field
+        <PresetField
           label="Public Service Notice"
           value={publicServiceNotice}
-          onChangeText={
-            setPublicServiceNotice
-          }
-          maxLength={500}
+          onChangeText={setPublicServiceNotice}
+          options={[
+            "VolunServe requires internet connectivity and does not replace emergency hotlines.",
+            "For immediate life-threatening emergencies, call 911. VolunServe reports require connectivity.",
+          ]}
           multiline
+          maxLength={500}
+          help="Select an understandable notice or Others to write an authorized public notice."
         />
       </View>
 
@@ -423,14 +425,14 @@ export default function SystemSettings() {
           </View>
         </View>
 
-        <Field
+        <PresetField
           label="Retention Period (Hours)"
           value={retentionHours}
-          onChangeText={
-            setRetentionHours
-          }
+          onChangeText={setRetentionHours}
+          options={["24", "48", "72"]}
           keyboardType="number-pad"
           maxLength={3}
+          help="Select a retention preference or Others for 1–720 hours. Changing it does not activate automatic deletion."
         />
 
         <Text style={styles.helper}>
@@ -478,6 +480,49 @@ export default function SystemSettings() {
         )}
       </TouchableOpacity>
     </ScrollView>
+  );
+}
+
+function PresetField({
+  label, value, onChangeText, options, help, multiline, keyboardType, maxLength, placeholder,
+}: {
+  label: string; value: string; onChangeText: (next: string) => void; options: string[];
+  help?: string; multiline?: boolean; keyboardType?: "number-pad"; maxLength?: number; placeholder?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isOther = !options.includes(value);
+  const [customMode, setCustomMode] = useState(isOther);
+  useEffect(() => { if (!options.includes(value)) setCustomMode(true); }, [value, options]);
+  return (
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={label + " options"}
+        accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
+        style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+        <Text style={{ flex: 1, color: "#173D32" }} numberOfLines={2}>
+          {customMode ? "Others — specify" : (value || "Select an option")}
+        </Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
+      </TouchableOpacity>
+      {expanded && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 11, marginTop: 4, overflow: "hidden" }}>
+        {[...options, "Others — specify"].map((option) =>
+          <TouchableOpacity key={option} accessibilityRole="button" onPress={() => {
+            const other = option === "Others — specify";
+            setCustomMode(other); setExpanded(false);
+            if (!other) onChangeText(option);
+            else if (options.includes(value)) onChangeText("");
+          }} style={{ padding: 13, backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderColor: "#EDF3EF" }}>
+            <Text style={{ color: "#173D32" }}>{option}</Text>
+          </TouchableOpacity>)}
+      </View>}
+      {customMode && <TextInput value={value} onChangeText={onChangeText}
+        placeholder={placeholder || "Specify your value"}
+        accessibilityLabel={label + " custom value"}
+        keyboardType={keyboardType}
+        multiline={multiline} maxLength={maxLength || 160}
+        style={[styles.input, { marginTop: 8 }, multiline && styles.multiline]} />}
+      {!!help && <Text style={styles.helper}>{help}</Text>}
+    </View>
   );
 }
 
