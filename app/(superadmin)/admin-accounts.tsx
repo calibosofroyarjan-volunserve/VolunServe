@@ -135,6 +135,7 @@ export default function AdminAccounts() {
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
+  const [applicantPage, setApplicantPage] = useState(1);
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); }, [search, filter]);
 
@@ -380,6 +381,12 @@ export default function AdminAccounts() {
   const pendingLguApplications = users
     .filter(account => account.role === "applicant" && account.status === "pending_review")
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
+  const applicantPageCount = Math.max(1, Math.ceil(pendingLguApplications.length / 5));
+  const safeApplicantPage = Math.min(applicantPage, applicantPageCount);
+  const pagedLguApplications = pendingLguApplications.slice(
+    (safeApplicantPage - 1) * 5, safeApplicantPage * 5
+  );
+
 
   const totalAdmins =
     users.filter(
@@ -999,7 +1006,7 @@ export default function AdminAccounts() {
           </Text>
           {pendingLguApplications.length===0 ? (
             <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
-          ) : pendingLguApplications.slice(0,20).map(account => (
+          ) : pagedLguApplications.map(account => (
             <View key={account.id} style={{padding:12,backgroundColor:"#FFFFFF",
               borderWidth:1,borderColor:"#DCEAE1",borderRadius:10,
               flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12}}>
@@ -1018,7 +1025,34 @@ export default function AdminAccounts() {
               </TouchableOpacity>
             </View>
           ))}
-        </View>
+ 
+          {pendingLguApplications.length > 5 && (
+            <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+              flexWrap:"wrap",gap:9,marginTop:7}}>
+              <Text style={{fontSize:11,color:"#4E7865"}}>
+                Showing {(safeApplicantPage-1)*5+1}–{Math.min(pendingLguApplications.length,safeApplicantPage*5)} of {pendingLguApplications.length} · 5 per page
+              </Text>
+              <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous LGU applicant page"
+                  disabled={safeApplicantPage<=1} onPress={()=>setApplicantPage(v=>Math.max(1,v-1))}
+                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
+                    opacity:safeApplicantPage<=1?0.4:1}}>
+                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Previous</Text>
+                </TouchableOpacity>
+                <Text style={{color:"#235B48",fontWeight:"700",fontSize:12}}>
+                  {safeApplicantPage} / {applicantPageCount}
+                </Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next LGU applicant page"
+                  disabled={safeApplicantPage>=applicantPageCount}
+                  onPress={()=>setApplicantPage(v=>Math.min(applicantPageCount,v+1))}
+                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
+                    opacity:safeApplicantPage>=applicantPageCount?0.4:1}}>
+                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+       </View>
 
         <View
           style={
