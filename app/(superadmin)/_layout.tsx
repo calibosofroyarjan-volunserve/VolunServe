@@ -10,6 +10,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +28,8 @@ import {
   logoutUser,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+
+const WEB_PORTAL_URL = "https://volunserve-3aa5b.web.app";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -99,6 +102,112 @@ export default function SuperAdminLayout() {
     }
 
     return <Redirect href="/(tabs)" />;
+  }
+
+  if (Platform.OS !== "web") {
+    return (
+      <View
+        style={
+          styles.blockedContainer
+        }
+      >
+        <View
+          style={
+            styles.blockedCard
+          }
+        >
+          <View
+            style={
+              styles.iconCircle
+            }
+          >
+            <Text
+              style={
+                styles.iconText
+              }
+            >
+              VS
+            </Text>
+          </View>
+
+          <Text
+            style={
+              styles.blockedEyebrow
+            }
+          >
+            VOLUNSERVE SYSTEM
+            ADMINISTRATION
+          </Text>
+
+          <Text
+            style={
+              styles.blockedTitle
+            }
+          >
+            Web Portal Required
+          </Text>
+
+          <Text
+            style={
+              styles.blockedDescription
+            }
+          >
+            Super Admin system
+            management is available
+            through the VolunServe
+            web portal.
+          </Text>
+
+          <Text
+            style={
+              styles.blockedDescription
+            }
+          >
+            Please open the website
+            using Chrome, Safari,
+            Edge, or another web
+            browser on your phone,
+            tablet, laptop, or
+            desktop computer.
+          </Text>
+
+          <TouchableOpacity
+            style={
+              styles.webButton
+            }
+            activeOpacity={0.85}
+            onPress={() => {
+              Linking.openURL(
+                WEB_PORTAL_URL
+              ).catch(
+                (error) => {
+                  console.log(
+                    "open web portal error",
+                    error
+                  );
+                }
+              );
+            }}
+          >
+            <Text
+              style={
+                styles.webButtonText
+              }
+            >
+              Open Web Portal
+            </Text>
+          </TouchableOpacity>
+
+          <Text
+            style={
+              styles.webAddress
+            }
+          >
+            volunserve-3aa5b.web.app
+          </Text>
+        </View>
+      </View>
+    );
   }
 
   const desktop = Platform.OS === "web" && width >= 980;
@@ -507,4 +616,118 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "rgba(15, 23, 42, 0.35)",
   },
+    blockedContainer: {
+      flex: 1,
+      padding: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#F1F5F9",
+    },
+
+    blockedCard: {
+      width: "100%",
+      maxWidth: 460,
+      backgroundColor: "#FFFFFF",
+      borderRadius: 22,
+      padding: 28,
+      alignItems: "center",
+
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+
+      shadowColor: "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height: 5,
+      },
+
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+
+      elevation: 4,
+    },
+
+    iconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+
+      alignItems: "center",
+      justifyContent: "center",
+
+      backgroundColor: "#CCFBF1",
+
+      marginBottom: 18,
+    },
+
+    iconText: {
+      color: "#0F766E",
+      fontWeight: "900",
+      fontSize: 22,
+    },
+
+    blockedEyebrow: {
+      color: "#0F766E",
+
+      fontWeight: "900",
+      fontSize: 10,
+
+      letterSpacing: 1.4,
+
+      marginBottom: 8,
+
+      textAlign: "center",
+    },
+
+    blockedTitle: {
+      color: "#0F172A",
+      fontSize: 25,
+      fontWeight: "900",
+      textAlign: "center",
+    },
+
+    blockedDescription: {
+      marginTop: 10,
+
+      color: "#64748B",
+
+      fontSize: 14,
+      lineHeight: 21,
+
+      textAlign: "center",
+
+      maxWidth: 360,
+    },
+
+    webButton: {
+      width: "100%",
+      minHeight: 48,
+
+      marginTop: 22,
+
+      borderRadius: 12,
+
+      backgroundColor: "#0F766E",
+
+      alignItems: "center",
+      justifyContent: "center",
+
+      paddingHorizontal: 18,
+    },
+
+    webButtonText: {
+      color: "#FFFFFF",
+      fontWeight: "900",
+      fontSize: 14,
+    },
+
+    webAddress: {
+      marginTop: 12,
+
+      color: "#94A3B8",
+
+      fontSize: 11,
+      fontWeight: "600",
+    },
 });
