@@ -158,6 +158,12 @@ export default function Login() {
       );
     }
 
+    // Staff accounts use a separate email/password portal, never community Google OAuth.
+    if (profile.role === "admin" || profile.role === "superadmin") {
+      await firebaseSignOut(auth);
+      throw new Error("LGU Admin and system staff must use Admin Login with their issued email and password.");
+    }
+
     if (!isApprovedProfile(profile)) {
       await firebaseSignOut(auth);
 
@@ -206,6 +212,10 @@ export default function Login() {
         password
       );
 
+      if (profile.role === "admin" || profile.role === "superadmin") {
+        await firebaseSignOut(auth);
+        throw new Error("Use the LGU Admin Login tab for staff accounts.");
+      }
       const destination =
         homeRouteForProfile(profile);
 
@@ -310,6 +320,19 @@ export default function Login() {
   // One shared login form for Android, iOS and the web. Authentication logic above is unchanged.
   const loginForm = (
     <View style={[styles.loginCard, isCompact && styles.loginCardCompact]}>
+      <View style={styles.loginTypeTabs} accessibilityLabel="Choose account sign-in">
+        <View style={[styles.loginTypeTab, styles.loginTypeActive]}>
+          <Text style={[styles.loginTypeText, styles.loginTypeTextActive]}>Resident Login</Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Switch to LGU Admin Login"
+          onPress={() => router.push("/admin-login" as Href)}
+          style={styles.loginTypeTab}
+        >
+          <Text style={styles.loginTypeText}>LGU Admin Login</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.welcomeBlock}>
         <Text style={[styles.welcomeTitle, isCompact && styles.welcomeTitleCompact]}>
           Welcome back
@@ -449,14 +472,6 @@ export default function Login() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Open Admin login"
-        style={{alignItems:"center",paddingVertical:11}}
-        onPress={() => router.push("/admin-login" as Href)}
-      >
-        <Text style={{fontWeight:"800",fontSize:12,color:"#087961"}}>Admin / LGU Staff Sign-In</Text>
-      </TouchableOpacity>
       <View style={styles.securityNote}>
         <Ionicons name="shield-checkmark-outline" size={15} color="#287968" />
         <Text style={styles.securityText}>
@@ -685,6 +700,13 @@ const styles = StyleSheet.create({
     borderRadius: 19, paddingHorizontal: 20, paddingVertical: 20,
     elevation: 1, shadowOpacity: 0.04,
   },
+  loginTypeTabs: { flexDirection: "row", backgroundColor: "#F1F7F3", borderRadius: 12,
+    padding: 4, borderWidth: 1, borderColor: "#D8E8DF", marginBottom: 23, gap: 4 },
+  loginTypeTab: { flex: 1, minWidth: 0, paddingHorizontal: 6, paddingVertical: 12,
+    borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  loginTypeActive: { backgroundColor: "#087F61" },
+  loginTypeText: { fontSize: 12, fontWeight: "800", color: "#467464", textAlign: "center" },
+  loginTypeTextActive: { color: "#FFFFFF" },
   welcomeBlock: { marginBottom: 17 },
   welcomeTitle: { color: "#142b31", fontSize: 28, fontWeight: "900", letterSpacing: -0.6 },
   welcomeTitleCompact: { fontSize: 24 },

@@ -1,0 +1,30 @@
+const fs = require("node:fs");
+const path = require("node:path");
+const assert = require("node:assert/strict");
+const read = f => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
+const resident = read("app/login.tsx");
+const admin = read("app/admin-login.tsx");
+const apply = read("app/admin-request.tsx");
+const owner = read("app/(superadmin)/admin-accounts.tsx");
+const rules = read("firestore.rules");
+assert(resident.includes("Resident Login") && resident.includes("LGU Admin Login") &&
+  admin.includes("Resident Login") && admin.includes("LGU Admin Login"),
+  "Both login entrypoints must offer the same two clear top tabs");
+assert(resident.includes('profile.role === "admin" || profile.role === "superadmin"') &&
+  resident.includes("await firebaseSignOut(auth)"),
+  "Community login and Google OAuth must sign out privileged staff accounts");
+assert(!admin.includes("GoogleAuthProvider") && !admin.includes("promptGoogleAsync") &&
+  admin.includes("loginUser(cleanEmail, password)"),
+  "LGU Admin login must use email/password only");
+assert(admin.includes('router.push("/admin-request")'),
+  "A separate LGU staff application must be linked to Admin Login");
+assert(apply.includes('role:"applicant",status:"pending_review"') &&
+  apply.includes('residentAccess:false,volunteerAccess:false'),
+  "LGU applications must have no resident, volunteer or administrative permissions");
+assert(owner.includes('role === "applicant" && account.status === "pending_review"') &&
+  owner.includes('openAdminAction("promote",account)'),
+  "Super Admin workspace must review pending applicants");
+assert(rules.includes("request.resource.data.role == 'applicant'") &&
+  rules.includes("hasFreshLguCredentialReview()"),
+  "Rules must prohibit public creation of approved Admin role");
+console.log("PASS staff login tabs, email-only staff auth, pending LGU applications and verified Super Admin grant");

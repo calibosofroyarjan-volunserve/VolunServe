@@ -34,6 +34,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Staff login tabs, pending applications and Super Admin gate
+        run: node scripts/test-admin-staff-login.cjs
       - name: LGU Admin credential security (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
       - name: Donation financial records only for LGU Admin (Firestore emulator)
