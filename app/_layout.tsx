@@ -1,6 +1,5 @@
 
 import { useFonts } from "expo-font";
-import * as Notifications from "expo-notifications";
 import {
   Stack,
   useRouter,
@@ -14,7 +13,6 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Platform,
   StyleSheet,
   Text,
   View,
@@ -22,6 +20,7 @@ import {
 import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+import { useAndroidPushNavigation } from "../lib/useAndroidPushNavigation";
 import {
   getUserProfile,
   homeRouteForProfile,
@@ -58,7 +57,6 @@ export default function RootLayout() {
    */
   const currentAuthUidRef =
     useRef<string | null>(null);
-  const handledPushIdRef = useRef<string | null>(null);
   const profileRetryInFlightRef =
     useRef(false);
 
@@ -393,32 +391,7 @@ export default function RootLayout() {
     segments,
   ]);
 
-  // Open a push only after authorization resolves. Never allow an untrusted
-  // notification payload to choose an arbitrary route.
-  useEffect(() => {
-    if (Platform.OS !== "android" || !authChecked || !authUser || !profile) {
-      return;
-    }
-    let alive = true;
-    const openInApp = (response: Notifications.NotificationResponse) => {
-      if (!alive || response.notification.request.content.data?.route !== "/notifications") return;
-      const notificationId = response.notification.request.identifier;
-      if (handledPushIdRef.current === notificationId) return;
-      handledPushIdRef.current = notificationId;
-      void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
-      if (profile.role === "admin" || profile.role === "superadmin" ||
-          profile.role === "lgu_personnel") {
-        router.push(homeRouteForProfile(profile) as any);
-      } else {
-        router.push("/(tabs)/notifications" as any);
-      }
-    };
-    const subscription = Notifications.addNotificationResponseReceivedListener(openInApp);
-    void Notifications.getLastNotificationResponseAsync().then(response => {
-      if (response) openInApp(response);
-    }).catch(() => undefined);
-    return () => { alive = false; subscription.remove(); };
-  }, [authChecked, authUser?.uid, profile, router]);
+  useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
   if (
     (!fontsLoaded && !fontError) ||
