@@ -36,6 +36,8 @@ jobs:
           java-version: '21'
       - name: Premium responsive Resident and LGU login UI regression
         run: node scripts/test-premium-auth-portal.cjs
+      - name: Final Super Admin / LGU Admin scope and role boundary checks
+        run: node scripts/test-final-admin-scope.cjs
       - name: Staff login tabs, pending applications and Super Admin gate
         run: node scripts/test-admin-staff-login.cjs
       - name: LGU Admin credential security (Firestore emulator)
