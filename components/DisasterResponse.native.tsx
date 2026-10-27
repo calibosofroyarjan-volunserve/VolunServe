@@ -1409,6 +1409,7 @@ export default function DisasterResponse() {
         <Text style={styles.blockedText}>
           Sign in with your VolunServe account to submit an emergency report.
         </Text>
+        <EmergencyResponseQuickActions residentUid="" />
       </View>
     );
   }
