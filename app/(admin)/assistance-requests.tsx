@@ -3810,13 +3810,13 @@ function DecisionTab({
               editable={!reviewLocked}
               style={styles.input}
             />
-            <TextInput
+            <LabelText>Facility type</LabelText>
+            <PresetOrOtherReviewField
               value={reviewDraft.facilityType}
-              onChangeText={(value) => onReviewChange("facilityType", value)}
-              placeholder="Facility type — hospital, clinic, veterinary clinic..."
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
+              onChange={(value) => onReviewChange("facilityType", value)}
+              disabled={reviewLocked}
+              options={["Hospital", "Medical Clinic", "Veterinary Clinic", "Diagnostic Center", "Rehabilitation Facility"]}
+              customPlaceholder="Specify the official facility type"
             />
             <TextInput
               value={reviewDraft.facilityDepartment}
@@ -4586,6 +4586,50 @@ function EmbeddedGoogleMap({
   );
 }
 
+
+// Guided choice keeps the existing Firestore string field and supports
+// unusual accredited facilities without misclassifying them.
+function PresetOrOtherReviewField({
+  value, onChange, options, disabled, customPlaceholder,
+}: {
+  value: string; onChange: (value: string) => void; options: string[];
+  disabled?: boolean; customPlaceholder: string;
+}) {
+  const custom = Boolean(value) && !options.includes(value);
+  const [otherSelected, setOtherSelected] = useState(custom);
+  useEffect(() => {
+    if (value && !options.includes(value)) setOtherSelected(true);
+  }, [value]);
+  return (
+    <View>
+      <StatusChoiceRow
+        value={otherSelected ? "other" : value}
+        options={[...options.map((option): [string,string] => [option, option]), ["other", "Others — specify"]]}
+        disabled={disabled}
+        onChange={(choice) => {
+          if (choice === "other") {
+            setOtherSelected(true);
+            onChange("");
+          } else {
+            setOtherSelected(false);
+            onChange(choice);
+          }
+        }}
+      />
+      {otherSelected && (
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          placeholder={customPlaceholder}
+          placeholderTextColor="#94A3B8"
+          editable={!disabled}
+          maxLength={160}
+          style={[styles.input, { marginTop: 8 }]}
+        />
+      )}
+    </View>
+  );
+}
 
 function StatusChoiceRow({
   value,
