@@ -1,7 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useFonts } from "expo-font";
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
@@ -9,21 +6,20 @@ import {
   sendPasswordResetEmail,
   setPersistence,
 } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  ImageBackground,
   Pressable,
-  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { auth } from "../lib/firebase";
+import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
   connectGoogleAccountWeb,
   getUserProfile,
@@ -33,69 +29,17 @@ import {
   logoutUser,
 } from "../lib/firebaseAuth";
 
-// Keep original VolunServe photography; no generated imagery.
-// Three elegant, informational highlights from the original premium login.
-// Not links: they never bypass sign-in or Resident role permissions.
-const FEATURES = [
-  {icon:"alert-circle-outline" as const,title:"Emergency Reports",subtitle:"Report and get help",iconColor:"#FFBD9C",tint:"rgba(243,135,101,0.18)"},
-  {icon:"hand-left-outline" as const,title:"Request Assistance",subtitle:"Support when needed",iconColor:"#A6F4DF",tint:"rgba(90,205,178,0.17)"},
-  {icon:"calendar-outline" as const,title:"Community Events",subtitle:"Join local activities",iconColor:"#D5EBA0",tint:"rgba(180,211,125,0.17)"},
-];
-const SLIDES = [
-  {
-    image: require("../assets/images/slide1.jpg"),
-    title: "Together for a Safer Community",
-    description:
-      "Report hazards, request assistance, and stay connected with your community.",
-  },
-  {
-    image: require("../assets/images/slide2.jpg"),
-    title: "Report Emergencies Quickly",
-    description:
-      "Send important incident details and locations to local responders.",
-  },
-  {
-    image: require("../assets/images/slide3.jpg"),
-    title: "Help. Support. Rebuild.",
-    description:
-      "Volunteer, provide support, and help communities recover together.",
-  },
-];
-
 export default function WebLogin() {
   const router = useRouter();
-  useFonts({
-    LoginInter: Inter_400Regular,
-    LoginInterMedium: Inter_500Medium,
-    LoginInterSemiBold: Inter_600SemiBold,
-    LoginInterBold: Inter_700Bold,
-    LoginInterExtraBold: Inter_800ExtraBold,
-  });
-  const { width, height } = useWindowDimensions();
-  const compact = width < 960;
-  const mobile = width < 640;
-  const narrowMobile = width < 360;
-  const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [focusedInput, setFocusedInput] = useState<
     "email" | "password" | null
   >(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSlideIndex((current) => (current + 1) % SLIDES.length);
-    }, 7000);
-    return () => clearInterval(timer);
-  }, []);
-  const changeSlide = (direction: number) => {
-    setSlideIndex((current) => {
-      return (current + direction + SLIDES.length) % SLIDES.length;
-    });
-  };
   const applySessionPersistence = async () => {
     await setPersistence(
       auth,
@@ -117,6 +61,10 @@ export default function WebLogin() {
         email.trim().toLowerCase(),
         password
       );
+      if (profile.role === "admin" || profile.role === "superadmin") {
+        await logoutUser();
+        throw new Error("LGU staff must use the LGU Admin Login tab with email and password.");
+      }
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: any) {
       alert(error?.message || "Login failed.");
@@ -167,6 +115,10 @@ export default function WebLogin() {
         );
       }
 
+      if (profile.role === "admin" || profile.role === "superadmin") {
+        await logoutUser();
+        throw new Error("LGU staff must use the LGU Admin Login tab with email and password.");
+      }
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: any) {
       try {
@@ -231,560 +183,131 @@ export default function WebLogin() {
       setLoading(false);
     }
   };
-  const currentSlide = SLIDES[slideIndex];
+  // Shared premium shell supplies the real two-route tab switcher.
+  // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.screenContent,
-        {
-          minHeight: height,
-          flexDirection: compact ? "column" : "row",
-        },
-      ]}
-      keyboardShouldPersistTaps="handled"
-    >
-      <ImageBackground
-        source={currentSlide.image}
-        resizeMode="cover"
-        style={[
-          styles.visualPanel,
-          mobile
-            ? styles.visualPanelMobile
-            : compact
-              ? styles.visualPanelCompact
-              : styles.visualPanelDesktop,
-          narrowMobile && styles.visualPanelNarrow,
-        ]}
-        imageStyle={styles.visualImage}
-      >
-        <LinearGradient
-          colors={
-            mobile
-              ? [
-                  "rgba(2,48,46,0.20)",
-                  "rgba(3,37,39,0.44)",
-                  "rgba(2,21,31,0.77)",
-                ]
-              : [
-                  "rgba(2,59,48,0.11)",
-                  "rgba(2,51,47,0.32)",
-                  "rgba(1,23,31,0.76)",
-                ]
-          }
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={[styles.brandRow, mobile && styles.brandRowMobile]}>
-          <View style={[styles.logoContainer, mobile && styles.logoContainerMobile]}>
-            <Image
-              source={require("../assets/images/logo.png")}
-              style={[styles.logo, mobile && styles.logoMobile]}
-              resizeMode="contain"
-            />
-          </View>
-          <View>
-            <Text style={[styles.brandName, mobile && styles.brandNameMobile]}>
-              VolunServe
-            </Text>
-            <Text style={[styles.brandSubtitle, mobile && styles.brandSubtitleMobile]}>
-              City Disaster Response Platform
-            </Text>
-          </View>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <PremiumAuthShell active="resident">
+        <View style={styles.intro}>
+          <Text style={styles.kicker}>—  VOLUNSERVE ACCOUNT  —</Text>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to stay connected with your community and help build a safer, stronger city.</Text>
         </View>
-        <View style={[styles.heroContent, compact && styles.heroContentCompact, mobile && styles.heroContentMobile]}>
-          <View style={[styles.statusBadge, mobile && styles.statusBadgeMobile]}>
-            <Ionicons
-              name="shield-checkmark"
-              size={17}
-              color="#10b981"
-            />
-            <Text style={[styles.statusText, mobile && styles.statusTextMobile]}>
-              BUILT FOR A SAFER COMMUNITY
-            </Text>
-          </View>
-          <Text
-            style={[
-              styles.heroTitle,
-              compact && styles.heroTitleCompact,
-              mobile && styles.heroTitleMobile,
-              narrowMobile && styles.heroTitleNarrow,
-            ]}
-          >
-            {currentSlide.title}
-          </Text>
-          <Text style={[
-            styles.heroDescription,
-            mobile && styles.heroDescriptionMobile,
-            narrowMobile && styles.heroDescriptionNarrow,
-          ]}>
-            {currentSlide.description}
-          </Text>
+        <Text style={styles.label}>Email Address</Text>
+        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "email" && styles.focused]}>
+          <Ionicons name="mail-outline" size={21} color="#64748B" />
+          <TextInput style={styles.input} value={email} onChangeText={setEmail}
+            accessibilityLabel="Resident email address"
+            placeholder="Enter your email address" placeholderTextColor="#8BA0B4"
+            autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
+            textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
+            returnKeyType="next" onFocus={() => setFocusedInput("email")} onBlur={() => setFocusedInput(null)} />
         </View>
-        {!compact && (
-          <View style={styles.featureRow}>
-            {FEATURES.map((item,index) => (
-              <View key={item.title} style={[
-                styles.featureItem,
-                index>0 && styles.featureItemDivider,
-              ]}>
-                <View style={[styles.featureIcon,{backgroundColor:item.tint}]}>
-                  <Ionicons name={item.icon} size={18} color={item.iconColor}/>
-                </View>
-                <View style={styles.featureCopy}>
-                  <Text style={styles.featureTitle} numberOfLines={2}>{item.title}</Text>
-                  <Text style={styles.featureSubtitle} numberOfLines={2}>{item.subtitle}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-        <View style={[styles.carouselFooter, mobile && styles.carouselFooterMobile]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Previous slide"
-            style={[styles.footerArrow, mobile && styles.footerArrowMobile]}
-            onPress={() => changeSlide(-1)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={18} color="#ffffff" />
-          </TouchableOpacity>
-          <View style={styles.dots}>
-            {SLIDES.map((_, index) => (
-              <Pressable
-                key={index}
-                accessibilityRole="button"
-                accessibilityLabel={`Show carousel slide ${index + 1} of ${SLIDES.length}`}
-                accessibilityState={{ selected: index === slideIndex }}
-                onPress={() => setSlideIndex(index)}
-                style={[styles.dot,index === slideIndex && styles.activeDot]}
-              />
-            ))}
-          </View>
-          <Text style={[styles.slideCounter, mobile && styles.slideCounterMobile]}>
-            {String(slideIndex + 1).padStart(2,"0")} / {String(SLIDES.length).padStart(2,"0")}
-          </Text>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Next slide"
-            style={[styles.footerArrow, mobile && styles.footerArrowMobile]}
-            onPress={() => changeSlide(1)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-forward" size={18} color="#ffffff" />
+        <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
+        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "password" && styles.focused]}>
+          <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
+          <TextInput style={styles.input} value={password} onChangeText={setPassword}
+            accessibilityLabel="Resident password"
+            placeholder="Enter your password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
+            autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
+            editable={!loading && !googleLoading} returnKeyType="done"
+            onSubmitEditing={() => void handleLogin()} onFocus={() => setFocusedInput("password")}
+            onBlur={() => setFocusedInput(null)} />
+          <TouchableOpacity accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            onPress={() => setShowPassword(value => !value)} disabled={loading}
+            style={styles.eye}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#57728C" />
           </TouchableOpacity>
         </View>
-      </ImageBackground>
-      <View
-        style={[
-          styles.formPanel,
-          compact && styles.formPanelCompact,
-          mobile && styles.formPanelMobile,
-        ]}
-      >
-        <View
-          style={[
-            styles.loginCard,
-            compact && styles.loginCardCompact,
-            mobile && styles.loginCardMobile,
-          ]}
-        >
-          <View style={[styles.formEyebrowRow, mobile && styles.formEyebrowMobile]}>
-            <View style={styles.formEyebrowDash}/>
-            <Text style={styles.formEyebrow}>VOLUNSERVE ACCOUNT</Text>
-          </View>
-          <Text style={[styles.welcomeTitle, mobile && styles.welcomeTitleMobile]}>
-            Welcome back
-          </Text>
-          <Text style={[styles.welcomeSubtitle, mobile && styles.welcomeSubtitleMobile]}>
-            Sign in to stay connected with your community.
-          </Text>
-          <Text style={[styles.inputLabel, mobile && styles.inputLabelMobile]}>
-            Email Address
-          </Text>
-          <View
-            style={[
-              styles.inputContainer,
-              mobile && styles.inputContainerMobile,
-              focusedInput === "email" &&
-                styles.inputContainerFocused,
-            ]}
-          >
-            <Ionicons
-              name="mail-outline"
-              size={21}
-              color="#64748b"
-            />
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setFocusedInput("email")}
-              onBlur={() => setFocusedInput(null)}
-              placeholder="Enter your email address"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              returnKeyType="next"
-              editable={!loading}
-              style={[styles.textInput, mobile && styles.textInputMobile]}
-            />
-          </View>
-          <Text style={[styles.inputLabel, mobile && styles.inputLabelMobile]}>
-            Password
-          </Text>
-          <View
-            style={[
-              styles.inputContainer,
-              mobile && styles.inputContainerMobile,
-              focusedInput === "password" &&
-                styles.inputContainerFocused,
-            ]}
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={21}
-              color="#64748b"
-            />
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => setFocusedInput("password")}
-              onBlur={() => setFocusedInput(null)}
-              onSubmitEditing={handleLogin}
-              placeholder="Enter your password"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry={!showPassword}
-              returnKeyType="done"
-              editable={!loading}
-              style={[styles.textInput, mobile && styles.textInputMobile]}
-            />
-            <TouchableOpacity
-              disabled={loading}
-              onPress={() => setShowPassword((current) => !current)}
-            >
-              <Ionicons
-                name={
-                  showPassword
-                    ? "eye-off-outline"
-                    : "eye-outline"
-                }
-                size={21}
-                color="#64748b"
-              />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.optionsRow, mobile && styles.optionsRowMobile]}>
-            <Pressable
-              disabled={loading}
-              style={styles.rememberRow}
-              onPress={() =>
-                setRememberMe((current) => !current)
-              }
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  rememberMe && styles.checkboxChecked,
-                ]}
-              >
-                {rememberMe && (
-                  <Ionicons
-                    name="checkmark"
-                    size={15}
-                    color="#ffffff"
-                  />
-                )}
-              </View>
-              <Text style={[styles.rememberText, mobile && styles.optionTextMobile]}>
-                Remember me
-              </Text>
-            </Pressable>
-            <TouchableOpacity
-              disabled={loading}
-              onPress={handleForgotPassword}
-            >
-              <Text style={[styles.forgotText, mobile && styles.optionTextMobile]}>
-                Forgot password?
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Pressable
-            disabled={loading}
-            onPress={handleLogin}
-            style={({ pressed }) => [
-              styles.signInButton,
-              mobile && styles.signInButtonMobile,
-              (pressed || loading) &&
-                styles.buttonPressed,
-            ]}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <>
-                <Text style={[styles.signInText, mobile && styles.signInTextMobile]}>
-                  Sign In
-                </Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={20}
-                  color="#ffffff"
-                />
-              </>
-            )}
-          </Pressable>
-          <View style={[styles.dividerRow, mobile && styles.dividerRowMobile]}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.divider} />
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.googleButton,
-              mobile && styles.actionButtonMobile,
-              loading && styles.googleButtonDisabled,
-            ]}
-            onPress={handleGoogleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <View style={styles.googleMark}>
-              <Text style={styles.googleMarkText}>G</Text>
-            </View>
-            <Text style={[styles.googleButtonText, mobile && styles.googleButtonTextMobile]}>Continue with Google</Text>
+        <View style={styles.options}>
+          <TouchableOpacity accessibilityRole="checkbox"
+            accessibilityState={{ checked: rememberMe }}
+            onPress={() => setRememberMe(value => !value)}
+            disabled={loading} style={styles.checkRow}>
+            <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
+            <Text style={styles.muted}>Remember me</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.guestButton,
-              styles.guestButtonSpaced,
-              mobile && styles.actionButtonMobile,
-            ]}
-            onPress={() => router.replace("/public")}
-            disabled={loading}
-          >
-            <Ionicons
-              name="person-outline"
-              size={21}
-              color="#0f172a"
-            />
-            <Text style={[styles.guestButtonText, mobile && styles.guestButtonTextMobile]}>
-              Continue as Guest
-            </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+            disabled={loading}>
+            <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
-          <View style={[styles.signupRow, mobile && styles.signupRowMobile]}>
-            <Text style={[styles.signupQuestion, mobile && styles.signupQuestionMobile]}>
-              Don&apos;t have an account?
-            </Text>
-            <TouchableOpacity
-              onPress={() => router.push("/signup")}
-            >
-              <Text style={[styles.signupLink, mobile && styles.signupLinkMobile]}>
-                Create account
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Open Admin and LGU portal"
-            onPress={() => router.push("/admin-login" as Href)}
-            style={{alignSelf:"center",paddingVertical:10,paddingHorizontal:12,flexDirection:"row",alignItems:"center",gap:8}}
-          >
-            <Ionicons name="shield-checkmark-outline" size={16} color="#078365"/>
-            <Text style={{fontSize:12,fontWeight:"800",color:"#087961"}}>Admin / LGU Staff Sign-In</Text>
-          </TouchableOpacity>
-          <View style={[styles.securityBox, mobile && styles.hideOnMobile]}>
-            <View style={styles.securityIcon}>
-              <Ionicons name="shield-checkmark-outline" size={18} color="#078365"/>
-            </View>
-            <View style={styles.securityCopy}>
-              <Text style={styles.securityTitle}>Protected VolunServe access</Text>
-              <Text style={styles.securityText}>
-                For registered Residents, Volunteers, and administrators.
-              </Text>
-            </View>
-          </View>
         </View>
-      </View>
-    </ScrollView>
+        <Pressable accessibilityRole="button" onPress={() => void handleLogin()}
+          disabled={loading}
+          style={({ pressed }) => [styles.signIn, authCornerCut(12),
+            (pressed || loading) && styles.disabled]}>
+          {loading ? <ActivityIndicator color="#FFFFFF" /> :
+            <View style={styles.centerRow}>
+              <Text style={styles.signInText}>Sign In</Text>
+              <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
+            </View>}
+        </Pressable>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.muted}>or continue with</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <TouchableOpacity accessibilityRole="button" onPress={() => void handleGoogleLogin()}
+          disabled={loading}
+          style={[styles.outlineButton, authCornerCut(10),
+            (loading) && styles.disabled]}>
+          {loading ? <ActivityIndicator color="#087F66" /> :
+            <View style={styles.centerRow}>
+              <Ionicons name="logo-google" color="#2563EB" size={19} />
+              <Text style={styles.outlineText}>Continue with Google</Text>
+            </View>}
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
+          disabled={loading}
+          style={[styles.outlineButton, authCornerCut(10), (loading) && styles.disabled]}>
+          <View style={styles.centerRow}>
+            <Ionicons name="person-outline" color="#285A4A" size={21} />
+            <Text style={styles.outlineText}>Continue as Guest</Text>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.createRow}>
+          <Text style={styles.muted}>Don't have an account? </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/signup")}
+            disabled={loading}>
+            <Text style={styles.createLink}>Create account</Text>
+          </TouchableOpacity>
+        </View>
+      </PremiumAuthShell>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex:1,backgroundColor:"#EFF6F4" },
-  screenContent: { flexGrow:1 },
-  visualPanel: { position:"relative",overflow:"hidden",justifyContent:"space-between" },
-  visualPanelDesktop: { width:"53%",minHeight:760,paddingHorizontal:47,paddingTop:43,paddingBottom:28 },
-  visualPanelCompact: { width:"100%",minHeight:335,paddingHorizontal:27,paddingTop:22,paddingBottom:20 },
-  visualImage: {
-    width: "100%",
-    height: "100%",
-  },
-  brandRow: { zIndex:2,flexDirection:"row",alignItems:"center",alignSelf:"flex-start",
-    backgroundColor:"rgba(1,45,42,0.24)",borderRadius:16,paddingHorizontal:10,paddingVertical:8,
-    borderWidth:1,borderColor:"rgba(238,255,250,0.13)" },
-  logoContainer: { width:62,height:62,borderRadius:31,backgroundColor:"#FFFFFF",justifyContent:"center",alignItems:"center",marginRight:14,
-  shadowColor:"#000000",shadowOpacity:0.12,shadowRadius:16,shadowOffset:{width:0,height:5} },
-  logo: { width:55,height:55 },
-  brandName: { color:"#FFFFFF",fontSize:28,fontFamily:"LoginInterExtraBold",letterSpacing:-0.8,
-    textShadowColor:"rgba(0,22,24,0.30)",textShadowRadius:5 },
-  brandSubtitle: { color:"#EEFDF8",fontSize:12,fontFamily:"LoginInterMedium",marginTop:3,letterSpacing:0.1 },
-  heroContent: { zIndex:2,maxWidth:630,marginTop:28,marginBottom:25 },
-  statusBadge: { alignSelf:"flex-start",flexDirection:"row",alignItems:"center",backgroundColor:"rgba(231,255,249,0.95)",paddingHorizontal:12,paddingVertical:8,borderRadius:999,marginBottom:15 },
-  statusText: { color:"#126759",fontSize:10,fontFamily:"LoginInterBold",letterSpacing:0.65,marginLeft:7 },
-  heroTitle: { color:"#FFFFFF",fontSize:42,lineHeight:51,fontFamily:"LoginInterExtraBold",letterSpacing:-1.25,maxWidth:620,
-  textShadowColor:"rgba(0,20,20,0.62)",textShadowOffset:{width:0,height:2},textShadowRadius:9 },
-  heroTitleCompact: { fontSize:29,lineHeight:36,letterSpacing:-0.55 },
-  heroDescription: { color:"#EAF9F4",fontSize:14.5,lineHeight:23,fontFamily:"LoginInterMedium",maxWidth:550,marginTop:13,
-    textShadowColor:"rgba(0,20,20,0.66)",textShadowOffset:{width:0,height:2},textShadowRadius:5 },
-  arrowButton: {
-    position: "absolute",
-    top: "50%",
-    zIndex: 3,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  leftArrow: {
-    left: 22,
-  },
-  rightArrow: {
-    right: 22,
-  },
-  carouselFooter: { zIndex:2,flexDirection:"row",alignItems:"center",gap:12,justifyContent:"flex-start" },
-  dots: { flexDirection:"row",alignItems:"center",gap:7 },
-  dot: { width:7,height:7,borderRadius:4,backgroundColor:"rgba(224,250,241,0.46)" },
-  activeDot: { width:28,backgroundColor:"#3CE1AB" },
-  slideCounter: { color:"#D5F1E9",fontSize:10.5,fontFamily:"LoginInterSemiBold",letterSpacing:1.1 },
-  formPanel: { width:"47%",minHeight:760,paddingHorizontal:35,paddingVertical:34,alignItems:"center",justifyContent:"center",
-  backgroundColor:"#F2F8F6" },
-  formPanelCompact: { width:"100%",minHeight:0,paddingHorizontal:20,paddingVertical:26 },
-  loginCard: { width:"100%",maxWidth:528,backgroundColor:"#FFFFFF",borderRadius:24,padding:36,
-  borderWidth:1,borderColor:"#DCEAE4",shadowColor:"#163D38",shadowOpacity:0.09,
-  shadowRadius:35,shadowOffset:{width:0,height:14} },
-  loginCardCompact: { padding:29,borderRadius:21 },
-  welcomeTitle: { color:"#122D31",fontSize:32,lineHeight:39,fontFamily:"LoginInterExtraBold",letterSpacing:-0.9,textAlign:"center" },
-  welcomeSubtitle: { color:"#70847F",fontSize:13,lineHeight:21,fontFamily:"LoginInter",textAlign:"center",marginTop:5,marginBottom:21 },
-  inputLabel: { color:"#25433F",fontSize:12,fontFamily:"LoginInterSemiBold",marginBottom:8,marginTop:12 },
-  inputContainer: { minHeight:54,flexDirection:"row",alignItems:"center",paddingHorizontal:15,
-  backgroundColor:"#FAFCFB",borderWidth:1,borderColor:"#D4E3DF",borderRadius:12 },
-  inputContainerFocused: { borderColor:"#119878",borderWidth:1.7,backgroundColor:"#FFFFFF" },
-  textInput: { flex:1,color:"#223B3B",fontSize:13.5,fontFamily:"LoginInter",marginLeft:10,minWidth:0,outlineStyle:"none" } as any,
-  optionsRow: { flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginTop:16,flexWrap:"wrap",gap:10 },
-  rememberRow: { flexDirection:"row",alignItems:"center",gap:8 },
-  checkbox: { width:19,height:19,borderRadius:5,borderWidth:1,borderColor:"#B2C9C0",
-  alignItems:"center",justifyContent:"center" },
-  checkboxChecked: { backgroundColor:"#087F63",borderColor:"#087F63" },
-  rememberText: { color:"#536B65",fontFamily:"LoginInterMedium",fontSize:12 },
-  forgotText: { color:"#078569",fontFamily:"LoginInterSemiBold",fontSize:12 },
-  signInButton: { minHeight:55,marginTop:24,borderRadius:12,backgroundColor:"#078B72",
-  flexDirection:"row",alignItems:"center",justifyContent:"center",gap:10,
-  shadowColor:"#057658",shadowOpacity:0.15,shadowRadius:10,shadowOffset:{width:0,height:5} },
-  signInText: { color:"#FFFFFF",fontSize:14,fontFamily:"LoginInterBold" },
-  buttonPressed: { opacity:0.76 },
-  dividerRow: { flexDirection:"row",alignItems:"center",marginVertical:19 },
-  divider: { flex:1,height:1,backgroundColor:"#E1EBE7" },
-  dividerText: { color:"#8CA39A",fontSize:12,fontFamily:"LoginInter",marginHorizontal:12 },
-  googleButton: { minHeight:54,borderRadius:12,borderWidth:1,borderColor:"#D7E5DF",
-  backgroundColor:"#FFFFFF",flexDirection:"row",alignItems:"center",justifyContent:"center",gap:10 },
-  googleButtonDisabled: { opacity:0.6 },
-  googleMark: { width:26,height:26,borderRadius:13,borderWidth:1,borderColor:"#ECF1EE",
-  alignItems:"center",justifyContent:"center",backgroundColor:"#FFFFFF" },
-  googleMarkText: { color:"#4285F4",fontSize:15,fontFamily:"LoginInterBold" },
-  googleButtonText: { color:"#193336",fontSize:13,fontFamily:"LoginInterSemiBold" },
-  guestButton: { minHeight:54,borderRadius:12,borderWidth:1,borderColor:"#A2D4C2",
-  backgroundColor:"#FDFEFE",flexDirection:"row",alignItems:"center",justifyContent:"center",gap:9 },
-  guestButtonSpaced: { marginTop:10 },
-  guestButtonText: { color:"#1B4940",fontSize:13,fontFamily:"LoginInterSemiBold" },
-  signupRow: { flexDirection:"row",justifyContent:"center",flexWrap:"wrap",marginTop:19,gap:5 },
-  signupQuestion: { color:"#73847F",fontSize:12,fontFamily:"LoginInter" },
-  signupLink: { color:"#07896A",fontSize:12,fontFamily:"LoginInterBold" },
-  securityBox: { flexDirection:"row",alignItems:"center",gap:10,backgroundColor:"#ECF9F3",
-  borderRadius:12,padding:12,marginTop:20,borderWidth:1,borderColor:"#DCF0E5" },
-  securityText: { color:"#648478",fontSize:10.5,lineHeight:16,fontFamily:"LoginInter" },
-  // Mobile presentation: visible rotating carousel above the compact form.
-  // All authentication, permissions, and redirects remain untouched.
-  hideOnMobile: { display:"none" },
-  // Balanced mobile carousel: clear separation between brand, slide text,
-  // navigation controls, and the login card below it.
-  visualPanelMobile: { width:"100%",height:265,minHeight:265,paddingHorizontal:18,
-  paddingTop:17,paddingBottom:13,justifyContent:"space-between",
-  borderBottomWidth:2,borderBottomColor:"#12B989" },
-  visualPanelNarrow: { height:278,minHeight:278,paddingHorizontal:15 },
-  heroContentMobile: { flex:1,justifyContent:"flex-end",marginTop:8,marginBottom:13,maxWidth:"100%" },
-  statusBadgeMobile: { paddingHorizontal:9,paddingVertical:5,marginBottom:9 },
-  statusTextMobile: { fontSize:8.5,letterSpacing:0.6 },
-  heroTitleMobile: { fontSize:20,lineHeight:25,letterSpacing:-0.25,maxWidth:"100%" },
-  heroTitleNarrow: { fontSize:18,lineHeight:23,letterSpacing:-0.2 },
-  heroDescriptionMobile: { fontSize:11,lineHeight:17,marginTop:6,maxWidth:"100%" },
-  heroDescriptionNarrow: { fontSize:10.5,lineHeight:16 },
-  carouselFooterMobile: { width:"100%",gap:10,justifyContent:"center",minHeight:30 },
-  slideCounterMobile: { fontSize:9.5 },
-  mobileSlideArrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.50)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  brandRowMobile: { alignItems:"center",paddingHorizontal:7,paddingVertical:5,borderRadius:12 },
-  logoContainerMobile: { width:43,height:43,borderRadius:22,marginRight:9 },
-  logoMobile: { width:38,height:38 },
-  brandNameMobile: { fontSize:20,lineHeight:25,letterSpacing:-0.5 },
-  brandSubtitleMobile: { fontSize:9.2,lineHeight:13,marginTop:1 },
-  formPanelMobile: { width:"100%",minHeight:0,flexGrow:1,paddingHorizontal:14,
-  paddingTop:17,paddingBottom:25,alignItems:"center",justifyContent:"flex-start",
-  backgroundColor:"#F3F8F6" },
-  loginCardMobile: { width:"100%",maxWidth:480,borderWidth:1,borderColor:"#E0ECE6",
-  borderRadius:19,paddingHorizontal:20,paddingTop:23,paddingBottom:25,
-  shadowOpacity:0.03,shadowRadius:11,shadowOffset:{width:0,height:5},elevation:0 },
-  welcomeTitleMobile: { fontSize:25,lineHeight:32,letterSpacing:-0.6,textAlign:"left" },
-  welcomeSubtitleMobile: { fontSize:12,lineHeight:18,textAlign:"left",marginTop:4,marginBottom:12 },
-  inputLabelMobile: { fontSize:11.5,marginTop:11,marginBottom:6 },
-  inputContainerMobile: { minHeight:49,paddingHorizontal:12,borderRadius:10 },
-  textInputMobile: { fontSize:13,minWidth:0 },
-  optionsRowMobile: { marginTop:13,flexWrap:"wrap",gap:9 },
-  optionTextMobile: { fontSize:11 },
-  signInButtonMobile: { minHeight:50,marginTop:18,borderRadius:10 },
-  dividerRowMobile: { marginVertical:15 },
-  actionButtonMobile: { minHeight:48,borderRadius:10 },
-  signupRowMobile: { marginTop:15 },
-  // Typography-only adjustments for phone screens. The original carousel
-  // dimensions, slide controls, login-card spacing, and auth handlers stay unchanged.
-  signInTextMobile: { fontSize:13,fontFamily:"LoginInterBold" },
-  googleButtonTextMobile: { fontSize:12.5,fontFamily:"LoginInterSemiBold" },
-  guestButtonTextMobile: { fontSize:12.5,fontFamily:"LoginInterSemiBold" },
-  signupQuestionMobile: { fontSize:11.5 },
-  signupLinkMobile: { fontSize:11.5,fontFamily:"LoginInterBold" },
-  heroContentCompact: { marginTop:20,marginBottom:12 },
-  // Restore the translucent strip instead of a six-card white dashboard.
-  featureRow: { zIndex:2,flexDirection:"row",alignItems:"center",
-    paddingVertical:15,marginBottom:14,
-    borderTopWidth:1,borderTopColor:"rgba(223,255,247,0.33)",
-    borderBottomWidth:1,borderBottomColor:"rgba(223,255,247,0.33)",
-    backgroundColor:"rgba(1,40,38,0.16)",borderRadius:4 },
-  featureItem: { flex:1,flexDirection:"row",alignItems:"center",gap:9,minWidth:0,
-    paddingHorizontal:11,paddingVertical:6 },
-  featureItemDivider: { borderLeftWidth:1,borderLeftColor:"rgba(223,255,247,0.19)" },
-  featureIcon: { width:37,height:37,flexShrink:0,borderRadius:11,
-    alignItems:"center",justifyContent:"center",borderWidth:1,
-    borderColor:"rgba(229,255,245,0.13)" },
-  featureCopy: { flex:1,minWidth:0,gap:3 },
-  featureTitle: { color:"#FFFFFF",fontFamily:"LoginInterSemiBold",fontSize:11.1,lineHeight:15,
-    textShadowColor:"rgba(0,20,20,0.28)",textShadowRadius:3 },
-  featureSubtitle: { color:"#C8E7DE",fontFamily:"LoginInter",fontSize:9.7,lineHeight:14 },
-  footerArrow: { width:38,height:38,borderRadius:19,backgroundColor:"rgba(10,49,47,0.30)",
-  borderWidth:1,borderColor:"rgba(232,255,248,0.42)",alignItems:"center",justifyContent:"center" },
-  footerArrowMobile: { width:31,height:31,borderRadius:16 },
-  formEyebrowRow: { flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10 },
-  formEyebrowMobile: { justifyContent:"flex-start",marginBottom:8 },
-  formEyebrowDash: { width:15,height:3,borderRadius:2,backgroundColor:"#10A47D" },
-  formEyebrow: { fontSize:9,fontFamily:"LoginInterBold",color:"#188063",letterSpacing:1.8 },
-  securityIcon: { width:34,height:34,borderRadius:10,backgroundColor:"#D9F5E7",alignItems:"center",justifyContent:"center" },
-  securityCopy: { flex:1,gap:3 },
-  securityTitle: { color:"#246455",fontSize:11,fontFamily:"LoginInterBold" },
+  root: { flex: 1, backgroundColor: "#ECF6F1" },
+  intro: { alignItems: "center", marginBottom: 15, gap: 8 },
+  kicker: { fontSize: 10, fontWeight: "900", letterSpacing: 2.2, color: "#087C64" },
+  title: { fontSize: 34, fontWeight: "900", color: "#112333", letterSpacing: -1.1, textAlign: "center" },
+  subtitle: { maxWidth: 380, color: "#718198", fontSize: 13, textAlign: "center", lineHeight: 21 },
+  label: { fontSize: 12, fontWeight: "900", color: "#18283A", marginBottom: -5 },
+  passwordLabel: { marginTop: 5 },
+  inputBox: { minHeight: 56, flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 17, gap: 11, backgroundColor: "#FCFDFD", borderWidth: 1, borderColor: "#C5D8DC" },
+  focused: { borderColor: "#008A6E", backgroundColor: "#FFFFFF" },
+  input: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 13, color: "#122F38" },
+  eye: { padding: 5 },
+  options: { flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: -2 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
+  muted: { color: "#728095", fontSize: 12 },
+  forgot: { color: "#007B60", fontWeight: "800", fontSize: 12 },
+  signIn: { minHeight: 57, justifyContent: "center", alignItems: "center",
+    backgroundColor: "#007F62", marginTop: 4, shadowColor: "#087F61", shadowOpacity: .2,
+    shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  centerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  signInText: { fontSize: 16, fontWeight: "900", color: "#FFFFFF" },
+  divider: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 3 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#D5E1E1" },
+  outlineButton: { minHeight: 51, borderWidth: 1, borderColor: "#C9D8DA",
+    backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  outlineText: { fontSize: 13, color: "#172E3B", fontWeight: "800" },
+  createRow: { flexDirection: "row", alignItems: "center", justifyContent: "center",
+    flexWrap: "wrap", paddingTop: 10 },
+  createLink: { fontSize: 12, fontWeight: "900", color: "#008365" },
+  disabled: { opacity: .5 },
 });
