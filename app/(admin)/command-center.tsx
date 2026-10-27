@@ -180,6 +180,10 @@ export default function CommandCenter() {
     setDataError,
   ] = useState(false);
   const [showCenterManagement, setShowCenterManagement] = useState(false);
+  const [loadedSources,setLoadedSources] = useState({
+    cases:false,centers:false,needs:false,users:false,volunteers:false,
+  });
+  const overviewReady = Object.values(loadedSources).every(Boolean);
 
   const isAdmin =
     !!profile &&
@@ -223,6 +227,7 @@ export default function CommandCenter() {
           setCases(
             rows,
           );
+          setLoadedSources(old=>({...old,cases:true}));
         },
         (error) => {
           console.log(
@@ -271,6 +276,7 @@ export default function CommandCenter() {
               );
 
           setCenters(rows);
+          setLoadedSources(old=>({...old,centers:true}));
         },
         (error) => {
           console.log(
@@ -309,6 +315,7 @@ export default function CommandCenter() {
             );
 
           setNeedAssessments(rows);
+          setLoadedSources(old=>({...old,needs:true}));
         },
         (error) => {
           console.log(
@@ -352,6 +359,7 @@ export default function CommandCenter() {
               .filter(item => !["applicant", "admin", "superadmin", "lgu_personnel"].includes(String(item.data().role || "").toLowerCase()))
               .map(item => item.id),
           );
+          setLoadedSources(old=>({...old,users:true}));
         },
         (error) => {
           console.log(
@@ -396,6 +404,7 @@ export default function CommandCenter() {
                 item.id,
             ),
           );
+          setLoadedSources(old=>({...old,volunteers:true}));
         },
         (error) => {
           console.log(
@@ -797,11 +806,8 @@ export default function CommandCenter() {
           },
         ).length;
 
-      const pendingReviews =
-        new Set([
-          ...pendingUserIds,
-          ...pendingVolunteerIds,
-        ]).size;
+      // Count actionable review tasks; one person may have multiple independent tasks.
+      const pendingReviews = pendingUserIds.length + pendingVolunteerIds.length;
 
       const openBarangayNeeds =
         needAssessments.filter(
@@ -974,7 +980,7 @@ export default function CommandCenter() {
                 <Ionicons name={item.icon} color={index===0?"#E7FFF4":"#147B5A"} size={19}/>
               </View>
               <Text style={[styles.kpiCardValue,index===0 && styles.kpiFeaturedText]}>
-                {dataError ? "—" : item.count.toLocaleString("en-PH")}
+                {dataError ? "—" : !overviewReady ? "…" : item.count.toLocaleString("en-PH")}
               </Text>
               <View style={styles.kpiCardFoot}>
                 <Text style={[styles.kpiCardHint,index===0 && styles.kpiFeaturedHint]}>{item.hint}</Text>
@@ -1019,14 +1025,14 @@ export default function CommandCenter() {
             {[
               {
                 key: "critical", label: "Emergency response",
-                detail: dataError ? "Live status unavailable" :
+                detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   metrics.criticalOpen > 0 ? `${metrics.criticalOpen} critical case${metrics.criticalOpen === 1 ? "" : "s"} requiring attention` : "Review incoming emergency reports",
                 icon: "warning-outline" as const, count: metrics.criticalOpen,
                 route: "/(admin)/admin-cases",
               },
               {
                 key: "resident", label: "Pending user profiles",
-                detail: dataError ? "Live status unavailable" :
+                detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   pendingUserIds.length + " non-staff accounts awaiting review",
                 icon: "shield-checkmark-outline" as const, count: pendingUserIds.length,
                 route: "/(admin)/account-approvals",
@@ -1039,14 +1045,14 @@ export default function CommandCenter() {
               },
               {
                 key: "volunteers", label: "Volunteer applications",
-                detail: dataError ? "Live status unavailable" :
+                detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   pendingVolunteerIds.length + " volunteer application(s) awaiting review",
                 icon: "people-outline" as const, count: pendingVolunteerIds.length,
                 route: "/(admin)/account-approvals",
               },
               {
                 key: "relief", label: "Relief operations",
-                detail: dataError ? "Live status unavailable" :
+                detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   `${metrics.openBarangayNeeds} open barangay relief need${metrics.openBarangayNeeds === 1 ? "" : "s"}`,
                 icon: "cube-outline" as const, count: metrics.openBarangayNeeds,
                 route: "/(admin)/relief-operations",
