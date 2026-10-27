@@ -7,9 +7,11 @@ const admin = read("app/admin-login.tsx");
 const apply = read("app/admin-request.tsx");
 const owner = read("app/(superadmin)/admin-accounts.tsx");
 const rules = read("firestore.rules");
-assert(resident.includes("Resident Login") && resident.includes("LGU Admin Login") &&
-  admin.includes("Resident Login") && admin.includes("LGU Admin Login"),
-  "Both login entrypoints must offer the same two clear top tabs");
+const shell = read("components/auth/PremiumAuthShell.tsx");
+assert(shell.includes("Resident Login") && shell.includes("LGU Admin Login") &&
+  resident.includes('<PremiumAuthShell active="resident">') &&
+  admin.includes('<PremiumAuthShell active="admin">'),
+  "Both login entrypoints must share the Resident/LGU Admin tabs");
 assert(resident.includes('profile.role === "admin" || profile.role === "superadmin"') &&
   resident.includes("await firebaseSignOut(auth)"),
   "Community login and Google OAuth must sign out privileged staff accounts");

@@ -14,8 +14,8 @@ const routes = [
   {
     name: "LGU Admin login",
     screen: "app/admin-login.tsx",
-    screens: ["app/login.tsx", "app/login.web.tsx"],
-    href: '"/admin-login" as Href',
+    screens: ["components/auth/PremiumAuthShell.tsx"],
+    href: 'router.replace("/admin-login")',
   },
   {
     name: "Resident/Volunteer community events",
@@ -34,6 +34,13 @@ for (const route of routes) {
 assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-login" />'),
   "Admin login must be a registered route in the root layout");
 console.log("PASS root layout registers administrative login");
+assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-request" />') &&
+  read("app/_layout.tsx").includes("isAdminRequestRoute"),
+  "LGU staff applicant request page must be reachable without staff credentials");
+for (const entry of ["app/login.tsx","app/login.web.tsx"]) {
+  assert(read(entry).includes('<PremiumAuthShell active="resident">'),
+    entry + " must use shared premium resident login shell");
+}
 // Both administrative workspaces sign out to the same staff login route.
 // Keep Href typing here because local Expo typed route manifests may be stale.
 for (const layout of ["app/(admin)/_layout.tsx", "app/(superadmin)/_layout.tsx"]) {

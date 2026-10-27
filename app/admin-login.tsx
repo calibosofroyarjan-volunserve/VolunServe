@@ -5,18 +5,16 @@ import {
   signOut,
 } from "firebase/auth";
 import React, { useState } from "react";
+import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
 
 import { auth } from "../lib/firebase";
@@ -33,22 +31,12 @@ import {
  */
 export default function AdministrativeLogin() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const narrow = width < 540;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-
-  const alertMessage = (title: string, message: string) => {
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      window.alert(title + "\n\n" + message);
-    } else {
-      Alert.alert(title, message);
-    }
-  };
 
   const signIn = async () => {
     if (working) return;
@@ -108,181 +96,104 @@ export default function AdministrativeLogin() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={[styles.screen, narrow && styles.screenCompact]}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={[styles.page, narrow && styles.pageCompact]}>
-          <View style={[styles.intro, narrow && styles.introCompact]}>
-            <View style={styles.brandRow}>
-              <View style={styles.brandIcon}>
-                <Ionicons name="shield-checkmark" size={26} color="#0C8669" />
-              </View>
-              <Text style={styles.brandName}>VOLUNSERVE</Text>
-            </View>
-            <Text style={styles.introLabel}>AUTHORIZED ACCESS ONLY</Text>
-            <Text style={[styles.introTitle, narrow && styles.introTitleCompact]}>Administration Portal</Text>
-            <Text style={styles.introText}>
-              Dedicated account access for authorized LGU administrators and system administrators.
-              This portal is separate from the community account interface.
-            </Text>
-          </View>
-          <View style={[styles.panel, narrow && styles.panelCompact]}>
-            <View style={styles.loginTypeTabs} accessibilityLabel="Choose account sign-in">
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Switch to Resident Login"
-                onPress={() => router.replace("/login")}
-                style={styles.loginTypeTab}
-              >
-                <Text style={styles.loginTypeText}>Resident Login</Text>
-              </TouchableOpacity>
-              <View style={[styles.loginTypeTab, styles.loginTypeActive]}>
-                <Text style={[styles.loginTypeText, styles.loginTypeTextActive]}>LGU Admin Login</Text>
-              </View>
-            </View>
-            <Text style={styles.eyebrow}>STAFF SIGN-IN · EMAIL & PASSWORD ONLY</Text>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>
-              Sign in directly using your issued email and password. Google Sign-In is not available for staff.
-            </Text>
-            <Text style={styles.label}>Administrative email</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="mail-outline" size={19} color="#647F75" />
-              <TextInput
-                accessibilityLabel="Administrative email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="emailAddress"
-                keyboardType="email-address"
-                placeholder="name@example.gov.ph"
-                placeholderTextColor="#93A9A1"
-                value={email}
-                onChangeText={setEmail}
-                style={styles.input}
-                editable={!working}
-              />
-            </View>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="lock-closed-outline" size={19} color="#647F75" />
-              <TextInput
-                accessibilityLabel="Administrative password"
-                textContentType="password"
-                placeholder="Enter password"
-                placeholderTextColor="#93A9A1"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                onSubmitEditing={() => void signIn()}
-                style={styles.input}
-                editable={!working}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(prev => !prev)}
-                accessibilityRole="button"
-                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                hitSlop={10}
-                disabled={working}
-              >
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={21} color="#416A5B" />
-              </TouchableOpacity>
-            </View>
-            {!!error && (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-            {!!notice && <Text style={styles.notice}>{notice}</Text>}
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Sign in to administrative portal"
-              style={[styles.submit, working && styles.disabled]}
-              onPress={() => void signIn()}
-              disabled={working}
-            >
-              {working ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="log-in-outline" size={20} color="#FFFFFF" />}
-              <Text style={styles.submitText}>{working ? "Verifying account..." : "Sign In to Administration"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => void resetPassword()}
-              disabled={working}
-              style={styles.secondaryAction}
-              accessibilityRole="button"
-            >
-              <Text style={styles.actionText}>Forgot your administrative password?</Text>
-            </TouchableOpacity>
-            <View style={styles.separator} />
-            <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/admin-request")}
-              style={styles.communityLink}>
-              <Ionicons name="document-text-outline" size={17} color="#087D5D"/>
-              <Text style={styles.communityLinkText}>Request LGU Admin Access</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.communityLink}
-              accessibilityRole="button"
-              onPress={() => router.replace("/login")}
-            >
-              <Ionicons name="arrow-back-outline" size={18} color="#087D5D" />
-              <Text style={styles.communityLinkText}>Go to Resident and Volunteer Login</Text>
-            </TouchableOpacity>
-            <Text style={styles.footer}>
-              LGU Admin access is activated only after independent credential verification by Super Admin. System programmers use their separately approved accounts.
-            </Text>
-          </View>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <PremiumAuthShell active="admin">
+        <View style={styles.intro}>
+          <Text style={styles.kicker}>—  AUTHORIZED LGU ACCESS  —</Text>
+          <Text style={styles.title}>Administration Portal</Text>
+          <Text style={styles.subtitle}>Sign in securely with your issued administrative email and password.</Text>
         </View>
-      </ScrollView>
+        <View style={[styles.adminNotice, authCornerCut(8)]}>
+          <Ionicons name="shield-checkmark-outline" color="#087B62" size={18} />
+          <Text style={styles.adminNoticeText}>Verified LGU Admins and system administrators only. No Google authentication.</Text>
+        </View>
+        <Text style={styles.label}>Administrative Email</Text>
+        <View style={[styles.inputBox, authCornerCut(10)]}>
+          <Ionicons name="mail-outline" size={21} color="#657A89" />
+          <TextInput accessibilityLabel="Administrative email" style={styles.input}
+            value={email} onChangeText={setEmail} editable={!working}
+            autoCapitalize="none" autoCorrect={false} textContentType="emailAddress"
+            autoComplete="email" keyboardType="email-address"
+            placeholder="name@example.gov.ph" placeholderTextColor="#91A3AE" />
+        </View>
+        <Text style={[styles.label, { marginTop: 5 }]}>Password</Text>
+        <View style={[styles.inputBox, authCornerCut(10)]}>
+          <Ionicons name="lock-closed-outline" size={21} color="#657A89" />
+          <TextInput accessibilityLabel="Administrative password" style={styles.input}
+            value={password} onChangeText={setPassword} editable={!working}
+            autoCapitalize="none" secureTextEntry={!showPassword}
+            textContentType="password" autoComplete="password"
+            placeholder="Enter password" placeholderTextColor="#91A3AE"
+            onSubmitEditing={() => void signIn()} />
+          <TouchableOpacity accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            onPress={() => setShowPassword(value => !value)} disabled={working}
+            style={styles.eye}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={20} color="#57728C" />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.forgot} accessibilityRole="button"
+          disabled={working} onPress={() => void resetPassword()}>
+          <Text style={styles.forgotText}>Forgot your administrative password?</Text>
+        </TouchableOpacity>
+        {!!error && (
+          <View accessibilityRole="alert" style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        {!!notice && <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text>}
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Sign in to LGU administration"
+          disabled={working} onPress={() => void signIn()}
+          style={[styles.submit, authCornerCut(12), working && styles.disabled]}>
+          {working ? <ActivityIndicator color="#FFFFFF" /> :
+            <View style={styles.rowCenter}>
+              <Text style={styles.submitText}>Sign In to Administration</Text>
+              <Ionicons name="arrow-forward-outline" size={20} color="#FFFFFF" />
+            </View>}
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/admin-request")}
+          disabled={working} style={[styles.outlineAction, authCornerCut(10)]}>
+          <Ionicons name="document-text-outline" size={19} color="#087B62" />
+          <Text style={styles.outlineActionText}>Request LGU Admin Access</Text>
+        </TouchableOpacity>
+        <Text style={styles.footer}>Admin access is granted only after independent Super Admin credential verification. Pending applicants cannot manage LGU operations.</Text>
+      </PremiumAuthShell>
     </KeyboardAvoidingView>
   );
 }
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F6F8F7" },
-  screen: { minHeight: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 36 },
-  screenCompact: { paddingHorizontal: 12, paddingVertical: 15 },
-  page: { width: "100%", maxWidth: 1050, flexDirection: "row", borderRadius: 11, backgroundColor: "#FFFFFF", overflow: "hidden", borderWidth: 1, borderColor: "#DBEAE4" },
-  pageCompact: { flexDirection: "column", maxWidth: 550 },
-  intro: { flex: 1, minWidth: 0, padding: 38, justifyContent: "center", gap: 17, backgroundColor: "#123E36" },
-  introCompact: { padding: 23 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 11 },
-  brandIcon: { width: 43, height: 43, borderRadius: 13, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  brandName: { color: "#FFFFFF", fontWeight: "700", fontSize: 18, letterSpacing: 1.3 },
-  introLabel: { color: "#C9FBE9", fontSize: 10, fontWeight: "800", letterSpacing: 1.1, marginTop: 12 },
-  introTitle: { color: "#FFFFFF", fontSize: 31, lineHeight: 39, fontWeight: "700" },
-  introTitleCompact: { fontSize: 27, lineHeight: 33 },
-  introText: { color: "#E0FFF5", fontSize: 13, lineHeight: 22 },
-  flowCard: { flexDirection: "row", gap: 13, padding: 15, borderRadius: 13, backgroundColor: "rgba(3,52,41,0.23)", marginTop: 14 },
-  flowHeading: { color: "#FFFFFF", fontSize: 13, fontWeight: "800", marginBottom: 5 },
-  flowText: { color: "#D2FFF1", fontSize: 11, lineHeight: 19 },
-  panel: { flex: 1.05, minWidth: 0, padding: 38, gap: 12, justifyContent: "center" },
-  panelCompact: { padding: 23 },
-  loginTypeTabs: { flexDirection:"row", backgroundColor:"#F1F7F3", borderWidth:1,
-    borderColor:"#D8E8DF", borderRadius:12, padding:4, gap:4, marginBottom:12 },
-  loginTypeTab: { flex:1, paddingVertical:12, paddingHorizontal:5, borderRadius:9,
-    justifyContent:"center", alignItems:"center", minWidth:0 },
-  loginTypeActive: { backgroundColor:"#087F61" },
-  loginTypeText: { color:"#467464", fontWeight:"800", fontSize:12, textAlign:"center" },
-  loginTypeTextActive: { color:"#FFFFFF" },
-  eyebrow: { fontSize: 10, color: "#168064", fontWeight: "700", letterSpacing: 1.3 },
-  title: { fontSize: 28, fontWeight: "700", color: "#153E35" },
-  subtitle: { fontSize: 12, lineHeight: 19, color: "#638076", marginBottom: 8 },
-  label: { fontSize: 12, fontWeight: "800", color: "#2E5146", marginTop: 6 },
-  inputRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F7FBF9", borderWidth: 1, borderColor: "#D8E8E1", borderRadius: 11, minHeight: 49, paddingHorizontal: 12, gap: 9 },
-  input: { flex: 1, color: "#173D31", fontSize: 13, minWidth: 0, paddingVertical: 12 },
-  errorBox: { flexDirection: "row", gap: 8, backgroundColor: "#FFF2F1", padding: 11, borderRadius: 9 },
-  errorText: { flex: 1, fontSize: 11, color: "#B42318", lineHeight: 16 },
-  notice: { color: "#0F795C", fontSize: 11, lineHeight: 17 },
-  submit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 11, minHeight: 49, backgroundColor: "#0D8969", marginTop: 8 },
-  submitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
-  disabled: { opacity: .62 },
-  secondaryAction: { alignSelf: "center", padding: 6 },
-  actionText: { color: "#0B7F64", fontWeight: "700", fontSize: 11 },
-  separator: { height: 1, backgroundColor: "#E1EDE8", marginVertical: 8 },
-  communityLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, minHeight: 39 },
-  communityLinkText: { color: "#087D5D", fontWeight: "800", fontSize: 12 },
-  footer: { textAlign: "center", color: "#718B80", fontSize: 10, lineHeight: 17, marginTop: 8 },
+  root: { flex: 1, backgroundColor: "#EAF7F0" },
+  intro: { alignItems: "center", marginBottom: 13, gap: 7 },
+  kicker: { color: "#087D62", fontSize: 10, letterSpacing: 2.1, fontWeight: "900" },
+  title: { color: "#14283A", fontSize: 29, fontWeight: "900", textAlign: "center", letterSpacing: -.7 },
+  subtitle: { fontSize: 13, lineHeight: 20, maxWidth: 370, textAlign: "center", color: "#738293" },
+  adminNotice: { backgroundColor: "#E7F8EF", paddingHorizontal: 13, paddingVertical: 11,
+    flexDirection: "row", alignItems: "center", gap: 10 },
+  adminNoticeText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#286D58", fontWeight: "600" },
+  label: { fontSize: 12, color: "#182838", fontWeight: "900", marginBottom: -4 },
+  inputBox: { minHeight: 56, paddingHorizontal: 16, flexDirection: "row", alignItems: "center",
+    borderWidth: 1, borderColor: "#C9DAD8", gap: 11, backgroundColor: "#FCFDFD" },
+  input: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 13, color: "#152F36" },
+  eye: { padding: 5 },
+  forgot: { alignSelf: "flex-end", paddingVertical: 6 },
+  forgotText: { color: "#007F62", fontSize: 12, fontWeight: "800" },
+  errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12,
+    backgroundColor: "#FFF0EF", borderWidth: 1, borderColor: "#FFD5D0" },
+  errorText: { fontSize: 12, lineHeight: 17, color: "#B42318", flex: 1 },
+  notice: { color: "#087F62", fontSize: 12, lineHeight: 17 },
+  submit: { marginTop: 5, minHeight: 56, backgroundColor: "#007F62", alignItems: "center",
+    justifyContent: "center", shadowColor: "#007F62", shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: .18, elevation: 2 },
+  rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  submitText: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
+  disabled: { opacity: .55 },
+  divider: { height: 1, backgroundColor: "#DBE5E1", marginVertical: 4 },
+  outlineAction: { flexDirection: "row", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#C5DCD4", minHeight: 52, gap: 9 },
+  outlineActionText: { color: "#08785F", fontSize: 13, fontWeight: "800" },
+  footer: { textAlign: "center", color: "#718A80", fontSize: 10, lineHeight: 16 },
 });
