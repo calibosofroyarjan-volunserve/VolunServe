@@ -141,13 +141,13 @@ export default function NotificationsScreen() {
             {pushBusy ? <ActivityIndicator color="#FFFFFF" size="small"/> : <Ionicons name="notifications-outline" size={17} color="#FFFFFF"/>}
             <Text style={styles.phoneButtonText}>{phoneEnabled ? "Refresh alerts" : "Enable alerts"}</Text>
           </TouchableOpacity>
-          {phoneEnabled && <TouchableOpacity accessibilityRole="button" disabled={pushBusy}
+          <TouchableOpacity accessibilityRole="button" disabled={pushBusy}
             onPress={() => {
               setPushBusy(true); setPhoneStatus("");
               void disableAndroidPhoneAlerts().then(message => {
                 setPhoneEnabled(false); setPhoneStatus(message);
               }).catch(err => setPhoneStatus(err instanceof Error ? err.message : "Could not disable alerts.")).finally(() => setPushBusy(false));
-            }} style={styles.phoneOffButton}><Text style={styles.phoneOffText}>Disable</Text></TouchableOpacity>}
+            }} style={styles.phoneOffButton}><Text style={styles.phoneOffText}>Disable</Text></TouchableOpacity>
         </View>
       </View>
     </View>}
