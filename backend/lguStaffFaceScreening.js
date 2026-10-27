@@ -29,8 +29,18 @@ function mediaMime(bytes) {
   if(bytes.toString("ascii",0,4)==="RIFF"&&bytes.toString("ascii",8,12)==="WEBP")return "image/webp";
   return "";
 }
-function similaritySignal(decision,score) {
-  return decision==="verified"&&Number.isFinite(score)&&score>=0&&score<=1
+/**
+ * The existing Python engine returns decision="manual_review" and status="pending"
+ * even for above-threshold similarity. It never returns identity "verified".
+ * Only surface an *informational* face-geometry signal if the actual returned
+ * score meets the engine-provided threshold and inputs are well-formed.
+ */
+function similaritySignal(decision,score,threshold,status) {
+  const valid = decision==="manual_review" && status==="pending"
+    && typeof score==="number" && Number.isFinite(score)
+    && typeof threshold==="number" && Number.isFinite(threshold)
+    && score>=0 && score<=1 && threshold>0 && threshold<=1;
+  return valid && score>=threshold
     ?"similarity_signal_present":"inconclusive_manual_review";
 }
 function fail(status,code,message) {
@@ -113,7 +123,10 @@ function mountLguStaffFaceScreening(app,{db,adminApp,FieldValue,requireFirebaseU
       if(!response.ok)fail(502,"ai_engine_error","AI face comparison failed. Use manual review.");
       const score=typeof raw.matchScore==="number"&&Number.isFinite(raw.matchScore)&&
         raw.matchScore>=0&&raw.matchScore<=1?raw.matchScore:null;
-      const signal=similaritySignal(raw.decision,score);
+      const threshold=typeof raw.matchThreshold==="number" &&
+        Number.isFinite(raw.matchThreshold) && raw.matchThreshold>0 &&
+        raw.matchThreshold<=1 ? raw.matchThreshold:null;
+      const signal=similaritySignal(raw.decision,score,threshold,raw.status);
       await screenRef.set({
         uid,status:"manual_review_required",reviewerUid,
         faceSimilaritySignal:signal,faceSimilarityScore:score,
