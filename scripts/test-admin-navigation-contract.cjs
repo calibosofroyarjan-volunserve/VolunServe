@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8");
+const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8").replace(/\r\n/g, "\n");
 const sa = read("app/(superadmin)/_layout.tsx");
 const lgu = read("app/(admin)/_layout.tsx");
 const accounts = read("app/(superadmin)/admin-accounts.tsx");
@@ -30,11 +30,12 @@ for(let i=0;i<expectedSa.length;i++){
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [
-  {title:"People & Verification",items:["Resident Identity Reviews","User & Volunteer Approvals","LGU Personnel","LGU Attendance"]},
-  {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests","Relief Operations"]},
-  {title:"Events & Volunteering",items:["Community Events","Volunteer Events","Event Attendance","Certificates"]},
+  {title:"Residents Management",items:["Resident Directory","Identity Reviews","Assistance Requests","Community Events","Resident Notifications"]},
+  {title:"Volunteers Management",items:["Volunteer Applications","Volunteer Events","Event Attendance","Certificates","Volunteer Notifications"]},
+  {title:"Emergency & Relief",items:["Emergency Reports","Relief Operations"]},
+  {title:"LGU Staff Operations",items:["LGU Personnel","LGU Attendance"]},
   {title:"Donations & Funds",items:["Donation Management"]},
-  {title:"Communication & Reports",items:["Announcements","Disputes","Analytics"]},
+  {title:"Communications & Reports",items:["Announcements","Disputes","Analytics"]},
 ];
 const adminLabels = ["Command Center",...expectedGroups.flatMap(group=>group.items)];
 for (let i=0;i<adminLabels.length;i++){

@@ -44,12 +44,13 @@ for(const entry of [
   "Admin Activity & Audit Logs","System Records (Read Only)","System Settings",
 ]) assert(saLayout.includes(entry),"Missing Super Admin governance nav "+entry);
 for(const entry of [
-  "Emergency & Assistance","People & Verification","Events & Volunteering",
-  "Donations & Funds","Communication & Reports",
+  "Residents Management","Volunteers Management","Emergency & Relief",
+  "LGU Staff Operations","Donations & Funds","Communications & Reports",
 ]) assert(adminLayout.includes(entry),"Missing LGU operational nav "+entry);
 for(const route of [
   "/(admin)/admin-cases","/(admin)/assistance-requests","/(admin)/identity-reviews",
-  "/(admin)/account-approvals","/(admin)/community-events","/(admin)/community-attendance",
+  "/(admin)/residents","/(admin)/volunteers","/(admin)/community-events","/(admin)/community-attendance",
+  "/(admin)/resident-notifications","/(admin)/volunteer-notifications",
   "/(admin)/donor-monitoring","/(admin)/admin-analytics"
 ]) assert(adminLayout.includes(route),"Missing existing operational route "+route);
 assert(!saLayout.includes("Donation Management") &&
@@ -61,7 +62,7 @@ assert(saOverview.includes('item.role === "applicant" && item.status === "pendin
   saOverview.includes('router.push("/(superadmin)/admin-accounts"') &&
   saOverview.includes('router.push("/(superadmin)/admin-logs"'),
   "Super Admin overview must surface actual applicant status and working navigation");
-assert(adminLogin.includes("Request Super Admin Access") &&
+assert(adminLogin.includes("Request LGU Admin Access") &&
   adminLogin.includes('router.push("/admin-request")') &&
   docs.includes("Fresh independent LGU review"),
   "Current user-facing request label must still route to pending-only LGU staff application");

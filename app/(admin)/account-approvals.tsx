@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 
-import { useRouter } from "expo-router";
 
 import {
   collection,
@@ -39,15 +38,15 @@ import {
 import {
   UserProfile,
 } from "../../lib/firebaseAuth";
+import { AdminPageHeading, AdminMetricCard, AdminEmptyState, AdminSectionHeading, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 
 type Account =
   UserProfile & {
     id: string;
   };
 
-type Filter =
-  | "pending"
-  | "all";
+type Filter = "pending" | "all" | "basic" | "verified" | "suspended";
+type WorkspaceMode = "combined" | "residents" | "volunteers";
 
 type VolunteerApplication = {
   uid?: string;
@@ -69,8 +68,7 @@ const timestampValue = (
   return value?.toMillis?.() || 0;
 };
 
-export default function AccountApprovals() {
-  const router = useRouter();
+export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceMode}) {
 
   const [
     accounts,
@@ -95,7 +93,10 @@ export default function AccountApprovals() {
   const [
     filter,
     setFilter,
-  ] = useState<Filter>("pending");
+  ] = useState<Filter>(mode === "residents" ? "all" : "pending");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const [
     selected,
@@ -242,21 +243,27 @@ export default function AccountApprovals() {
     );
   };
 
-  const visibleAccounts =
-    useMemo(() => {
-      if (filter === "pending") {
-        return accounts.filter(
-          (item) =>
-            isPendingVolunteerApplication(item)
-        );
-      }
+  const visibleAccounts = useMemo(() => {
+    const scope = mode === "volunteers"
+      ? accounts.filter(item => !!volunteerApplications[item.id] || item.volunteerAccess === true)
+      : accounts;
+    if (filter === "pending") return scope.filter(isPendingVolunteerApplication);
+    if (filter === "verified") return scope.filter(isVerifiedResidentAccount);
+    if (filter === "basic") return scope.filter(item => !isVerifiedResidentAccount(item)
+      && item.volunteerAccess !== true && item.status !== "suspended");
+    if (filter === "suspended") return scope.filter(item => item.status === "suspended");
+    return scope;
+  }, [accounts, filter, mode, volunteerApplications]);
 
-      return accounts;
-    }, [
-      accounts,
-      filter,
-      volunteerApplications,
-    ]);
+  const matchingAccounts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? visibleAccounts.filter(a =>
+      [a.fullName, a.email, a.barangay, a.phoneNumber]
+        .some(v => String(v || "").toLowerCase().includes(q))) : visibleAccounts;
+  }, [visibleAccounts, search]);
+  const totalPages = Math.max(1, Math.ceil(matchingAccounts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAccounts = matchingAccounts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const writeAdminLogSafely = async (
     payload: Parameters<typeof createAdminLog>[0]
@@ -542,88 +549,80 @@ export default function AccountApprovals() {
           styles.container
         }
       >
-        <View style={styles.titleRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={23}
-              color="#0F172A"
-            />
-          </TouchableOpacity>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>
-              User & Volunteer Approvals
-            </Text>
-
-            <Text style={styles.subtitle}>
-              All signups are Basic Residents automatically. Review volunteer requests and manage existing Resident accounts here.
-            </Text>
-          </View>
-
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>
-              {
-                accounts.filter(
-                  (item) => isPendingVolunteerApplication(item)
-                ).length
-              }
-            </Text>
-          </View>
+        <AdminPageHeading
+          eyebrow={mode === "volunteers" ? "LGU ADMIN  /  VOLUNTEERS"
+            : mode === "residents" ? "LGU ADMIN  /  RESIDENTS"
+            : "LGU ADMIN  /  PEOPLE & VERIFICATION"}
+          title={mode === "volunteers" ? "Volunteer Management"
+            : mode === "residents" ? "Residents Management"
+            : "User & Volunteer Approvals"}
+          subtitle={mode === "volunteers"
+            ? "Review volunteer applications, skills and availability, then manage active volunteer access. Resident identity checks remain in Residents."
+            : mode === "residents"
+            ? "View registered community accounts, verified and basic residents, and manage account access. Identity evidence has a separate review queue."
+            : "Manage community accounts and review volunteer applications. Identity verification has its own review module; LGU staff promotion belongs to Super Admin."} />
+        <AdminSectionHeading
+          title={mode === "volunteers" ? "Volunteer Review & Participation" : "Community Account Records"}
+          caption={mode === "volunteers"
+            ? "Only volunteer applicants and active volunteers appear here."
+            : "Every registered resident stays in the directory, even after becoming a volunteer."} />
+        <View style={styles.metricGrid}>
+          {mode !== "volunteers" ? <>
+            <AdminMetricCard label="Resident Accounts" value={accounts.length}
+              hint="Community profiles" icon="people-outline" />
+            <AdminMetricCard label="Verified Residents" value={accounts.filter(isVerifiedResidentAccount).length}
+              hint="Confirmed identity" icon="shield-checkmark-outline" />
+            <AdminMetricCard label="Basic Residents" value={accounts.filter(a =>
+              !isVerifiedResidentAccount(a) && a.volunteerAccess !== true && a.status !== "suspended").length}
+              hint="Limited community access" icon="person-outline" />
+            <AdminMetricCard label="Suspended Accounts" value={accounts.filter(a => a.status === "suspended").length}
+              hint="Access temporarily restricted" icon="ban-outline" />
+          </> : <>
+            <AdminMetricCard label="Pending Applications" value={accounts.filter(isPendingVolunteerApplication).length}
+              hint="LGU review queue" icon="hourglass-outline" />
+            <AdminMetricCard label="Active Volunteers" value={accounts.filter(a => a.volunteerAccess === true).length}
+              hint="Granted volunteer permissions" icon="heart-outline" />
+            <AdminMetricCard label="Rejected Applications" value={accounts.filter(a =>
+              volunteerApplicationFor(a)?.status === "rejected").length}
+              hint="Recorded decisions" icon="close-circle-outline" />
+          </>}
         </View>
-
         <View style={styles.filterRow}>
-          {(
-            [
-              "pending",
-              "all",
-            ] as Filter[]
-          ).map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[
-                styles.filterButton,
-
-                filter === value &&
-                  styles.filterButtonActive,
-              ]}
-              onPress={() =>
-                setFilter(value)
-              }
-            >
-              <Text
-                style={[
-                  styles.filterText,
-
-                  filter === value &&
-                    styles.filterTextActive,
-                ]}
-              >
-                {value === "pending"
-                  ? "Pending Volunteers"
-                  : "All Residents"}
+          {(mode === "residents"
+            ? (["all", "verified", "basic", "suspended"] as Filter[])
+            : (["pending", "all"] as Filter[])
+          ).map(value => (
+            <TouchableOpacity key={value} accessibilityRole="button"
+              accessibilityLabel={value === "pending" ? "Pending volunteer applications"
+                : value === "all" ? (mode === "volunteers" ? "All volunteers" : "All residents")
+                : value + " residents"}
+              accessibilityState={{selected: filter === value}}
+              style={[styles.filterButton, filter === value && styles.filterButtonActive]}
+              onPress={() => {setFilter(value); setPage(1);}}>
+              <Text style={[styles.filterText, filter === value && styles.filterTextActive]}>
+                {value === "pending" ? "Pending Applications"
+                  : value === "all" ? (mode === "volunteers" ? "All Volunteers" : "All Residents")
+                  : value === "verified" ? "Verified"
+                  : value === "basic" ? "Basic"
+                  : "Suspended"}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {visibleAccounts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={38}
-              color="#16A34A"
-            />
-
-            <Text style={styles.emptyTitle}>
-              No volunteer applications or resident accounts in this view
-            </Text>
-          </View>
+        <TextInput accessibilityLabel="Search community accounts"
+          value={search} onChangeText={v => {setSearch(v); setPage(1);}}
+          placeholder="Search name, email, barangay or contact"
+          placeholderTextColor="#789082" style={styles.searchInput} />
+        <Text style={styles.resultText}>{matchingAccounts.length} {mode === "volunteers" ? "volunteer records" : "resident accounts"} · 5 per page</Text>
+        {matchingAccounts.length === 0 ? (
+          <AdminEmptyState icon="people-outline"
+            title={filter === "pending" ? "No pending volunteer reviews" : mode === "volunteers" ? "No volunteer records found" : "No matching residents"}
+            description={search ? "Try a different search or clear the search." : "There are no records in this view."}
+            actionLabel={search ? "Clear search" : undefined}
+            onAction={search ? () => {setSearch(""); setPage(1);} : undefined} />
         ) : (
-          visibleAccounts.map(
+          pagedAccounts.map(
             (account) => {
               const application =
                 volunteerApplicationFor(account);
@@ -876,6 +875,21 @@ export default function AccountApprovals() {
             }
           )
         )}
+        {matchingAccounts.length > PAGE_SIZE && (
+          <View style={styles.pagination}>
+            <TouchableOpacity accessibilityRole="button" disabled={currentPage <= 1}
+              accessibilityLabel="Previous page" style={[styles.pageButton, currentPage <= 1 && styles.pageDisabled]}
+              onPress={() => setPage(v => Math.max(1, v - 1))}>
+              <Text style={styles.pageButtonText}>Previous</Text>
+            </TouchableOpacity>
+            <Text style={styles.pageStatus}>Page {currentPage} of {totalPages}</Text>
+            <TouchableOpacity accessibilityRole="button" disabled={currentPage >= totalPages}
+              accessibilityLabel="Next page" style={[styles.pageButton, currentPage >= totalPages && styles.pageDisabled]}
+              onPress={() => setPage(v => Math.min(totalPages, v + 1))}>
+              <Text style={styles.pageButtonText}>Next</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -955,11 +969,24 @@ export default function AccountApprovals() {
 const styles =
   StyleSheet.create({
     container: {
-      padding: 20,
+      padding: 24,
       paddingBottom: 50,
       backgroundColor: "#F6F8F7",
     },
 
+    metricGrid: {flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 17},
+    searchInput: {minHeight: 48, backgroundColor: "#FFFFFF", borderWidth: 1,
+      borderColor: ADMIN_UI.stroke, borderRadius: 12, paddingHorizontal: 14,
+      fontSize: 13, color: ADMIN_UI.ink, marginBottom: 9},
+    resultText: {fontSize: 12, color: ADMIN_UI.muted, marginBottom: 16},
+    pagination: {flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 16, marginTop: 24, marginBottom: 10},
+    pageButton: {minHeight: 40, borderRadius: 10, borderWidth: 1,
+      borderColor: ADMIN_UI.stroke, backgroundColor: "#FFFFFF",
+      paddingHorizontal: 15, justifyContent: "center"},
+    pageDisabled: {opacity: 0.4},
+    pageButtonText: {color: ADMIN_UI.emerald, fontWeight: "800", fontSize: 12},
+    pageStatus: {fontSize: 12, color: ADMIN_UI.muted, fontWeight: "700"},
     center: {
       flex: 1,
       alignItems: "center",
@@ -1019,12 +1046,14 @@ const styles =
 
     filterRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 10,
       marginBottom: 16,
     },
 
     filterButton: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: 130,
       padding: 11,
       borderRadius: 12,
       backgroundColor: "#FFFFFF",
