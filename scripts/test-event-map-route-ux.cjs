@@ -62,4 +62,19 @@ assert(mobileResponseMap.includes("point.responderUid !== incident.activeLguResp
 assert(mobileResponseMap.includes("vehicleInfo(incident.responseVehicleType)") &&
   mobileResponseMap.includes("point.vehicle.symbol"),
   "Native responder marker must use Admin-assigned vehicle type, not a generic marker");
+const quickHelp = read("components/EmergencyResponseQuickActions.tsx");
+assert(reportWeb.includes('<EmergencyResponseQuickActions residentUid={user && isApprovedProfile(profile) ? user.uid : ""} />') &&
+  reportNative.includes("<EmergencyResponseQuickActions residentUid={user.uid} />") &&
+  reportNative.includes('<EmergencyResponseQuickActions residentUid="" />'),
+  "911 must be visible without login; authenticated Residents may also track own active cases");
+assert(quickHelp.includes('Linking.openURL("tel:911")') &&
+  quickHelp.includes("VolunServe reports are reviewed and do not automatically call or dispatch 911"),
+  "911 requires explicit dialer action and cannot be misrepresented as a VolunServe dispatch");
+assert(quickHelp.includes('where("reporterUid", "==", residentUid)') &&
+  quickHelp.includes('collection(db, "disasterCases")') &&
+  quickHelp.includes("activeStatuses"),
+  "Resident case strip must listen only to reporter-authorized active cases");
+assert(quickHelp.includes('pathname: "/map-tracking"') &&
+  quickHelp.includes("caseId: active.id"),
+  "Case tracking must use the active case ID, not a generic simulated map");
 console.log("PASS event venue markers, consent-based road route, native map and verified shelters");

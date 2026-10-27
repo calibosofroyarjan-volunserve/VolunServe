@@ -38,6 +38,7 @@ import {
 } from "../lib/firebaseAuth";
 import { useUserSession } from "../lib/useUserSession";
 import VerifiedEvacuationCenters from "./VerifiedEvacuationCenters";
+import EmergencyResponseQuickActions from "./EmergencyResponseQuickActions";
 
 type Pin = {
   latitude: number;
@@ -1408,6 +1409,7 @@ export default function DisasterResponse() {
         <Text style={styles.blockedText}>
           Sign in with your VolunServe account to submit an emergency report.
         </Text>
+        <EmergencyResponseQuickActions residentUid="" />
       </View>
     );
   }
@@ -1434,6 +1436,7 @@ export default function DisasterResponse() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        <EmergencyResponseQuickActions residentUid={user.uid} />
         <VerifiedEvacuationCenters />
 
         <View style={styles.accountCard}>
