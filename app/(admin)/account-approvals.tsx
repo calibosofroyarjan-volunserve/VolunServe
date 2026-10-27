@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 
-import { useRouter } from "expo-router";
 
 import {
   collection,
@@ -71,7 +70,6 @@ const timestampValue = (
 };
 
 export default function AccountApprovals() {
-  const router = useRouter();
 
   const [
     accounts,
@@ -558,7 +556,7 @@ export default function AccountApprovals() {
       >
         <AdminPageHeading
           eyebrow="LGU ADMIN  /  PEOPLE & VERIFICATION"
-          title="Residents & Volunteer Approvals"
+          title="User & Volunteer Approvals"
           subtitle="Manage community accounts and review volunteer applications. Identity verification has its own review module; LGU staff promotion belongs to Super Admin." />
         <AdminSectionHeading title="Community Accounts"
           caption="Each role has a separate workflow. The figures below reflect current account records." />
