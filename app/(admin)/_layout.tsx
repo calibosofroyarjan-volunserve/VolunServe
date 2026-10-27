@@ -48,113 +48,33 @@ type NavItem = {
   route: string;
 };
 
+// Final LGU operational hierarchy: each destination appears once.
 const NAV_ITEMS: NavItem[] = [
-  {
-    label: "Dashboard",
-    icon: "home-outline",
-    route:
-      "/(admin)/command-center",
-  },
-  {
-    label: "Identity Reviews",
-    icon: "shield-checkmark-outline",
-    route:
-      "/(admin)/identity-reviews",
-  },
-  {
-    label: "Volunteer Approvals",
-    icon: "people-outline",
-    route:
-      "/(admin)/account-approvals",
-  },
-  {
-    label: "Emergency Reports",
-    icon: "warning-outline",
-    route:
-      "/(admin)/admin-cases",
-  },
-  {
-    label: "Assistance Requests",
-    icon: "hand-left-outline",
-    route:
-      "/(admin)/assistance-requests",
-  },
-  {
-    label: "LGU Personnel",
-    icon: "business-outline",
-    route:
-      "/(admin)/lgu-members",
-  },
-  {
-    label: "LGU Attendance",
-    icon: "time-outline",
-    route:
-      "/(admin)/lgu-attendance",
-  },
-  {
-    label: "Volunteer Events",
-    icon: "calendar-outline",
-    route:
-      "/(admin)/admin-events",
-  },
-  {
-    label: "Community Events",
-    icon: "leaf-outline",
-    route:
-      "/(admin)/community-events",
-  },
-  {
-    label: "Event Attendance",
-    icon: "checkmark-done-outline",
-    route:
-      "/(admin)/community-attendance",
-  },
-  {
-    label: "Donation Management",
-    icon: "heart-outline",
-    route:
-      "/(admin)/donor-monitoring",
-  },
-  {
-    label: "Relief Operations",
-    icon: "cube-outline",
-    route:
-      "/(admin)/relief-operations",
-  },
-  {
-    label: "Announcements",
-    icon: "megaphone-outline",
-    route:
-      "/(admin)/create-announcement",
-  },
-  {
-    label: "Analytics",
-    icon: "analytics-outline",
-    route:
-      "/(admin)/admin-analytics",
-  },
-  {
-    label: "Certificates",
-    icon: "ribbon-outline",
-    route:
-      "/(admin)/certificates",
-  },
-  {
-    label: "Disputes",
-    icon:
-      "shield-checkmark-outline",
-    route:
-      "/(admin)/admin-disputes",
-  },
+  { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
+  { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
+  { label: "User & Volunteer Approvals", icon: "people-outline", route: "/(admin)/account-approvals" },
+  { label: "LGU Personnel", icon: "business-outline", route: "/(admin)/lgu-members" },
+  { label: "LGU Attendance", icon: "time-outline", route: "/(admin)/lgu-attendance" },
+  { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
+  { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
+  { label: "Relief Operations", icon: "cube-outline", route: "/(admin)/relief-operations" },
+  { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
+  { label: "Volunteer Events", icon: "calendar-outline", route: "/(admin)/admin-events" },
+  { label: "Event Attendance", icon: "checkmark-done-outline", route: "/(admin)/community-attendance" },
+  { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
+  { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
+  { label: "Announcements", icon: "megaphone-outline", route: "/(admin)/create-announcement" },
+  { label: "Disputes", icon: "shield-checkmark-outline", route: "/(admin)/admin-disputes" },
+  { label: "Analytics", icon: "analytics-outline", route: "/(admin)/admin-analytics" },
 ];
 
-type NavSectionId = "response" | "people" | "events" | "funds" | "reports";
+type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
+  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "User & Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
-  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Identity Reviews", "Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
-  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Volunteer Events", "Community Events", "Event Attendance", "Certificates"] },
+  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Volunteer Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
-  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Analytics", "Disputes"] },
+  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes", "Analytics"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
@@ -200,7 +120,7 @@ export default function AdminLayout() {
   const [expandedSection, setExpandedSection] = useState<NavSectionId | "none" | null>(null);
   const currentSection = NAV_SECTIONS.find((section) =>
     NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname))
-  )?.id ?? "response";
+  )?.id ?? "none";
   const visibleSection = expandedSection ?? currentSection;
   useEffect(() => {
     // Open the relevant group after navigation from an overview shortcut.
@@ -464,7 +384,7 @@ export default function AdminLayout() {
         activeOpacity={0.84} onPress={() => openRoute(NAV_ITEMS[0].route)}
       >
         <View style={styles.navIcon}><Ionicons name="grid-outline" size={19} color="#E7F4EF" /></View>
-        <Text style={[styles.navLabel, navActive(NAV_ITEMS[0], pathname) && styles.navLabelActive]}>Overview</Text>
+        <Text style={[styles.navLabel, navActive(NAV_ITEMS[0], pathname) && styles.navLabelActive]}>Command Center</Text>
         {navActive(NAV_ITEMS[0], pathname) ? <View style={styles.activeIndicator} /> : null}
       </TouchableOpacity>
       <ScrollView style={styles.sidebarScroll} contentContainerStyle={styles.sidebarContent}
