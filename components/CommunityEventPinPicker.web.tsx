@@ -75,6 +75,8 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [draft, setDraft] = useState<Venue | null>(saved);
+  const lastValidPinRef = useRef<Venue | null>(draft);
+  lastValidPinRef.current = draft;
   const [manual, setManual] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [lookupState, setLookupState] = useState<"idle" | "searching" | "found" | "unavailable">("idle");
@@ -91,12 +93,14 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   const pick = (lat: number, lng: number) => {
     if (!validVenue(lat, lng)) {
       setMessage("Pumili ng location sa San Jose del Monte area. Hindi tatanggapin ang pin na malayo sa service area.");
-      return;
+      return false;
     }
     const next = tidy(lat, lng);
     setDraft(next);
+    lastValidPinRef.current = next;
     setMessage("Pin selected. Confirm this meeting point before submitting your proposal.");
     if (savedRef.current && !same(savedRef.current, next)) onChangeRef.current(null, null);
+    return true;
   };
 
   // Resolve the named event venue, not the proposing Resident's current position.
@@ -179,7 +183,11 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     if (!markerInstance.current) {
       const marker = new g.maps.Marker({map, position, draggable: true, title:"Event meeting point"});
       marker.addListener("dragend", (event: any) => {
-        if (event.latLng) pick(event.latLng.lat(), event.latLng.lng());
+        // Revert an invalid drag to the last accepted meeting point.
+        if (!event.latLng || !pick(event.latLng.lat(), event.latLng.lng())) {
+          const previous = lastValidPinRef.current;
+          if (previous) marker.setPosition({ lat: previous.latitude, lng: previous.longitude });
+        }
       });
       markerInstance.current = marker;
     } else markerInstance.current.setPosition(position);

@@ -21,6 +21,8 @@ const equal = (a: Venue|null,b: Venue|null) => !!a&&!!b&&a.latitude===b.latitude
 export default function CommunityEventPinPicker({latitude,longitude,barangay="",venue="",onChange}:Props) {
   const saved:Venue|null = latitude!==null&&longitude!==null&&valid(latitude,longitude)?tidy(latitude,longitude):null;
   const [draft,setDraft] = useState<Venue|null>(saved);
+  const lastValidPinRef=useRef<Venue|null>(draft);
+  lastValidPinRef.current=draft;
   const [notice,setNotice] = useState("");
   useEffect(()=>{
     if(!barangay.trim()||!venue.trim())return;
@@ -42,11 +44,13 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
   const confirmed = equal(saved,draft);
 
   const pick = (a:number,b:number) => {
-    if(!valid(a,b)){setNotice("Pumili ng meeting point within the SJDM area.");return;}
+    if(!valid(a,b)){setNotice("Pumili ng meeting point within the SJDM area.");return false;}
     const point=tidy(a,b);
     setDraft(point);
+    lastValidPinRef.current=point;
     if(saved&&!equal(saved,point))onChange(null,null);
     setNotice("Pin selected. Confirm the event venue before submitting.");
+    return true;
   };
   useEffect(()=>{
     if(!draft)return;
@@ -76,7 +80,13 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
       initialRegion={{...selected,latitudeDelta:0.055,longitudeDelta:0.055}}
       onPress={event=>pick(event.nativeEvent.coordinate.latitude,event.nativeEvent.coordinate.longitude)}>
       {draft?<Marker draggable coordinate={draft}
-        onDragEnd={event=>pick(event.nativeEvent.coordinate.latitude,event.nativeEvent.coordinate.longitude)}
+        onDragEnd={event=>{
+          const next=event.nativeEvent.coordinate;
+          if(!pick(next.latitude,next.longitude)){
+            const last=lastValidPinRef.current;
+            if(last)setDraft({...last});
+          }
+        }}
         title="Event Meeting Point"/>:null}
     </MapView>
     <View style={{flexDirection:"row",flexWrap:"wrap",gap:9,marginTop:11}}>
