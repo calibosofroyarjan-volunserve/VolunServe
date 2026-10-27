@@ -67,6 +67,12 @@ assert(review.includes("applicantPageCount") &&
 assert(review.includes("LguApplicantEvidencePanel") &&
   review.includes("lguEmploymentConfirmed && evidenceReady"),
   "Super Admin promotion must require protected evidence access AND independent LGU confirmation");
+assert(panel.includes("onLoad={()=>setDecodedImages(") &&
+  panel.includes("onError={()") &&
+  panel.includes("images.every(item=>decodedImages.includes(item.path))") &&
+  panel.includes("onReady(previewsDecoded)") &&
+  !panel.includes("onReady(true)"),
+  "Super Admin role promotion must wait for all private image previews to decode; broken media fails closed");
 assert(panel.includes("getMetadata(reference)") &&
   panel.includes("getBlob(reference)") &&
   panel.includes("URL.revokeObjectURL(url)") &&

@@ -24,6 +24,8 @@ export default function LguApplicantEvidencePanel({
   const [error,setError]=React.useState("");
   const [info,setInfo]=React.useState<EvidenceInfo|null>(null);
   const [images,setImages]=React.useState<ImageEvidence[]>([]);
+  const [decodedImages,setDecodedImages]=React.useState<string[]>([]);
+  const [previewUid,setPreviewUid]=React.useState("");
   const [screenBusy,setScreenBusy]=React.useState(false);
   const [screenMessage,setScreenMessage]=React.useState("");
   const [screenStatus,setScreenStatus]=React.useState("");
@@ -34,6 +36,7 @@ export default function LguApplicantEvidencePanel({
     let cancelled=false;
     let objectUrls: string[]=[];
     setLoading(true);setError("");setInfo(null);setImages([]);
+    setDecodedImages([]);setPreviewUid("");
     setScreenBusy(false);setScreenMessage("");setScreenStatus("");
     setOcrBusy(false);setOcrMessage("");setOcrStatus("");
     onReady(false);
@@ -81,8 +84,9 @@ export default function LguApplicantEvidencePanel({
       if(!entries.every(entry=>!!entry.localUrl)) {
         throw new Error("Private ID/face preview was not available. Review is blocked.");
       }
-      setInfo(item);setImages(entries);setLoading(false);
-      onReady(true); // Private evidence visibly loaded; separate HUMAN verification still required.
+      setInfo(item);setImages(entries);setPreviewUid(uid);setLoading(false);
+      // Do not unlock reviewer confirmation before the browser actually
+      // decodes EVERY private image; object URL creation alone is insufficient.
     };
     load().catch(e=>{
       if(cancelled)return;
@@ -95,8 +99,14 @@ export default function LguApplicantEvidencePanel({
     };
     // onReady is an event receiver. Do not redo private fetches on its identity change.
   },[uid]);
+  const previewsDecoded=previewUid===uid && !loading && !error && !!info &&
+    images.length>0 && images.every(item=>decodedImages.includes(item.path));
+  React.useEffect(()=>{
+    onReady(previewsDecoded);
+  },[previewsDecoded,uid]); // Parent uses a stable state setter.
+
   const runSimilarityScreen=async()=>{
-    if(!info||!uid||screenBusy||images.some(item=>!item.localUrl))return;
+    if(!info||!uid||screenBusy||!previewsDecoded)return;
     setScreenBusy(true);setScreenMessage("");setScreenStatus("");
     try {
       // Emulator test accounts MUST NEVER be forwarded to production Render.
@@ -135,7 +145,7 @@ export default function LguApplicantEvidencePanel({
     }finally{setScreenBusy(false);}
   };
   const runOcrScreen=async()=>{
-    if(!info||!uid||ocrBusy||images.some(item=>!item.localUrl))return;
+    if(!info||!uid||ocrBusy||!previewsDecoded)return;
     setOcrBusy(true);setOcrMessage("");setOcrStatus("");
     try {
       // Never send emulator applicant tokens or ID paths to real Render.
@@ -193,15 +203,24 @@ export default function LguApplicantEvidencePanel({
         {images.map((item)=>(
           <View key={item.label} style={styles.photoCard}>
             <Text style={styles.label}>{item.label}</Text>
-            {item.localUrl ? <Image source={{uri:item.localUrl}} resizeMode="contain" style={styles.photo}/> :
+            {item.localUrl ? <Image source={{uri:item.localUrl}} resizeMode="contain" style={styles.photo}
+              onLoad={()=>setDecodedImages(old=>old.includes(item.path)?old:[...old,item.path])}
+              onError={()=>{
+                setError("A protected ID or staff evidence image could not be displayed. Review and promotion are blocked.");
+                setDecodedImages([]);
+                onReady(false);
+              }}/> :
               <Text style={styles.note}>Verified private object. Preview requires secure web reviewer mode.</Text>}
           </View>
         ))}
       </View>
-      <Text style={styles.warning}>File presence is not government ID authentication, liveness or proof of LGU employment. Confirm independently before checking all approval fields.</Text>
+      {!loading&&!error&&!previewsDecoded&&<Text style={styles.note}>
+        Private evidence is loading into the secure reviewer view. Approval remains locked until all document photos display successfully.
+      </Text>}
+      <Text style={styles.warning}>File presence or successful preview is not government ID authentication, liveness or proof of LGU employment. Confirm independently before checking all approval fields.</Text>
       <TouchableOpacity accessibilityRole="button"
         accessibilityLabel="Run private OCR document type consistency screening"
-        disabled={ocrBusy||loading||!!error||!info||images.some(item=>!item.localUrl)}
+        disabled={ocrBusy||!previewsDecoded}
         onPress={()=>void runOcrScreen()}
         style={[styles.screenButton,(ocrBusy||loading||!!error||!info)&&{opacity:0.5}]}>
         {ocrBusy?<ActivityIndicator color="#FFFFFF"/>:
@@ -213,7 +232,7 @@ export default function LguApplicantEvidencePanel({
       </View>}
       <TouchableOpacity accessibilityRole="button"
         accessibilityLabel="Run optional Super Admin AI-assisted face similarity screening"
-        disabled={screenBusy||loading||!!error||!info||images.some(item=>!item.localUrl)}
+        disabled={screenBusy||!previewsDecoded}
         onPress={()=>void runSimilarityScreen()}
         style={[styles.screenButton,(screenBusy||loading||!!error||!info)&&{opacity:0.5}]}>
         {screenBusy?<ActivityIndicator color="#FFFFFF"/>:
