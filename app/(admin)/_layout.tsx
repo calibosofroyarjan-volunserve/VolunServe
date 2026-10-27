@@ -148,12 +148,13 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-type NavSectionId = "response" | "reviews" | "events" | "management";
+type NavSectionId = "response" | "people" | "events" | "funds" | "reports";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
-  { id: "response", title: "Response & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
-  { id: "reviews", title: "People & Approvals", icon: "people-outline", labels: ["Identity Reviews", "Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
-  { id: "events", title: "Events & Participation", icon: "calendar-outline", labels: ["Volunteer Events", "Community Events", "Event Attendance", "Certificates"] },
-  { id: "management", title: "Management & Reports", icon: "settings-outline", labels: ["Donation Management", "Announcements", "Analytics", "Disputes"] },
+  { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
+  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Identity Reviews", "Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
+  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Volunteer Events", "Community Events", "Event Attendance", "Certificates"] },
+  { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
+  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Analytics", "Disputes"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
@@ -330,6 +331,12 @@ export default function AdminLayout() {
         href="/(tabs)"
       />
     );
+  }
+
+  // Revoke dashboard access for suspended staff even if Firebase Auth still
+  // holds a valid session. Firestore rules independently enforce the same gate.
+  if (role === "admin" && profile?.adminStatus === "suspended") {
+    return <Redirect href="/admin-login" />;
   }
 
   if (
