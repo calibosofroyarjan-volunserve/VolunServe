@@ -58,16 +58,21 @@ export default function LguApplicantEvidencePanel({
           !["image/jpeg","image/png","image/webp"].includes(meta.contentType||"")) {
           throw new Error("Unsupported or oversized evidence file.");
         }
-        if (Platform.OS==="web" && typeof URL!=="undefined") {
-          const file=await getBlob(reference);
-          const url=URL.createObjectURL(file);
-          objectUrls.push(url);
-          entry.localUrl=url;
+        if (Platform.OS!=="web" || typeof URL==="undefined") {
+          throw new Error("Open the Super Admin review in the secure web dashboard to inspect ID and facial evidence.");
         }
+        const file=await getBlob(reference);
+        if (cancelled) return; // Never create a sensitive blob URL after unmount.
+        const url=URL.createObjectURL(file);
+        objectUrls.push(url);
+        entry.localUrl=url;
       }));
       if(cancelled)return;
+      if(!entries.every(entry=>!!entry.localUrl)) {
+        throw new Error("Private ID/face preview was not available. Review is blocked.");
+      }
       setInfo(item);setImages(entries);setLoading(false);
-      onReady(true); // Evidence exists. Separate HUMAN identity + LGU review remains required.
+      onReady(true); // Private evidence visibly loaded; separate HUMAN verification still required.
     };
     load().catch(e=>{
       if(cancelled)return;
