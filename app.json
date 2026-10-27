@@ -41,7 +41,14 @@
           }
         }
       ],
-      "expo-camera"
+      "expo-camera",
+      [
+        "expo-notifications",
+        {
+          "color": "#0D7557",
+          "defaultChannel": "volunserve-updates"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
