@@ -162,6 +162,41 @@ service cloud.firestore {
         && request.resource.data.availability is list
         && request.resource.data.availability.size() == 0
         && request.resource.data.createdAt is timestamp;
+      // Staff applications never receive operational permissions at signup.
+      // Only a separately verified Super Admin can promote the pending account.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.auth.token.get('email', '') == request.resource.data.email
+        && request.resource.data.keys().hasOnly([
+          'uid','email','fullName','age','phoneNumber','role','status',
+          'residentAccess','volunteerAccess','region','province','city',
+          'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid','email','fullName','role','status','residentAccess',
+          'volunteerAccess','lguOffice','lguPosition','appointmentReference','createdAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'applicant'
+        && request.resource.data.status == 'pending_review'
+        && request.resource.data.residentAccess == false
+        && request.resource.data.volunteerAccess == false
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() >= 5
+        && request.resource.data.fullName.size() <= 160
+        && request.resource.data.email is string
+        && request.resource.data.lguOffice is string
+        && request.resource.data.lguOffice.size() >= 3
+        && request.resource.data.lguOffice.size() <= 160
+        && request.resource.data.lguPosition is string
+        && request.resource.data.lguPosition.size() >= 3
+        && request.resource.data.lguPosition.size() <= 120
+        && request.resource.data.appointmentReference is string
+        && request.resource.data.appointmentReference.size() >= 5
+        && request.resource.data.appointmentReference.size() <= 160
+        && request.resource.data.province == 'Bulacan'
+        && request.resource.data.city == 'City of San Jose del Monte'
+        && request.resource.data.createdAt == request.time;
       allow create: if isSuperAdmin()
         && request.resource.data.uid == uid
         && request.resource.data.role == 'admin'
@@ -413,7 +448,8 @@ service cloud.firestore {
         && resource.data.role != 'superadmin'
         && (
           (
-            resource.data.status == 'approved'
+            (resource.data.status == 'approved'
+              || (resource.data.role == 'applicant' && resource.data.status == 'pending_review'))
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'
