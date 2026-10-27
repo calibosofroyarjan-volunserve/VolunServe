@@ -155,6 +155,7 @@ export default function RootLayout() {
       rootSegment === "login";
     const isAdministrativeLoginRoute =
       rootSegment === "admin-login";
+    const isAdminRequestRoute = rootSegment === "admin-request";
     const isSignupRoute =
       rootSegment === "signup";
     const isIdentityVerificationRoute =
@@ -172,7 +173,7 @@ export default function RootLayout() {
      * Public Mode and certificate verification are available whether
      * the user is signed in or not.
      */
-    if (isPublicRoute || isCertificateVerificationRoute) {
+    if (isPublicRoute || isCertificateVerificationRoute || isAdminRequestRoute) {
       return;
     }
 
@@ -422,6 +423,7 @@ export default function RootLayout() {
         <Stack.Screen name="public" />
         <Stack.Screen name="login" />
         <Stack.Screen name="admin-login" />
+        <Stack.Screen name="admin-request" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="identity-verification" />
         <Stack.Screen name="(tabs)" />
