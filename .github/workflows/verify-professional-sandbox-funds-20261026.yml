@@ -32,6 +32,8 @@ jobs:
           java-version: '21'
       - name: LGU Admin credential security (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
+      - name: Donation financial records only for LGU Admin (Firestore emulator)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-donation-lgu-role-isolation.cjs"
       - name: Ensure local VolunServe backup folders are excluded from TypeScript
         run: node scripts/test-typescript-backup-excludes.cjs
       - name: Verify Admin and Community Events navigation routes
