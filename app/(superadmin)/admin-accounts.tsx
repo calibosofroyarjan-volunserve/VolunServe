@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguApplicantEvidencePanel from "../../components/admin/LguApplicantEvidencePanel";
 
 import {
   db,
@@ -173,6 +174,7 @@ export default function AdminAccounts() {
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
+  const [evidenceReady, setEvidenceReady] = useState(false);
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
   const [identityMatched, setIdentityMatched] = useState(false);
   const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
@@ -181,6 +183,7 @@ export default function AdminAccounts() {
     setLguPosition("");
     setLguReference("");
     setLguVerificationMethod("");
+    setEvidenceReady(false);
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
     setLguEmploymentConfirmed(false);
@@ -193,7 +196,7 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -1936,6 +1939,7 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
+                <LguApplicantEvidencePanel uid={actionTarget?.id || ""} onReady={setEvidenceReady} />
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
                   Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
