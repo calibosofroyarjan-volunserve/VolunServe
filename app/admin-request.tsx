@@ -22,6 +22,10 @@ const IMG_TYPES: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
 };
 const renderSteps = LGU_STAFF_STEPS;
+// Fail closed in production until approved biometric/privacy release gating.
+// Emulator demo uses synthetic documents; staging may explicitly opt in.
+const privateEvidenceIntakeEnabled = usingFirebaseEmulators ||
+  process.env.EXPO_PUBLIC_LGU_STAFF_PRIVATE_EVIDENCE_ENABLED === "true";
 
 export default function LguStaffApplication() {
   const router = useRouter();
@@ -122,6 +126,10 @@ export default function LguStaffApplication() {
 
   const submit = async () => {
     if (busy || step!==4 || !stepValid()) return;
+    if (!privateEvidenceIntakeEnabled) {
+      setError("LGU government ID and selfie intake is not yet enabled for production. Privacy controls and biometric QA must be approved before processing real documents.");
+      return;
+    }
     setBusy(true);setError("");
     const app = initializeApp(firebaseConfig,"lgu-application-"+Date.now());
     const candidateAuth=getAuth(app), candidateDb=getFirestore(app), storage=getStorage(app);
@@ -237,6 +245,9 @@ export default function LguStaffApplication() {
               <Text style={styles.kicker}>VOLUNSERVE · LGU STAFF APPLICATION</Text>
               <Text style={styles.title}>Request LGU Admin Access</Text>
               <Text style={styles.help}>Guided application · Government-issued ID only · Manual verification</Text>
+              {!privateEvidenceIntakeEnabled&&<Text style={styles.notice}>
+                Protected government ID submission is disabled on this release. This form is available for preview only; real sensitive documents cannot be submitted until the privacy and identity-service release gates pass.
+              </Text>}
             </View>
           </View>
           {success ? (
@@ -347,7 +358,7 @@ export default function LguStaffApplication() {
                   <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>}
                 <TouchableOpacity accessibilityRole="button" disabled={busy}
-                  onPress={step===4?()=>void submit():next} style={[styles.submit,{flex:1},busy&&{opacity:0.55}]}>
+                  onPress={step===4?()=>void submit():next} style={[styles.submit,{flex:1},(busy||(step===4&&!privateEvidenceIntakeEnabled))&&{opacity:0.55}]}>
                   <LinearGradient colors={["#16A580","#006347"]} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject}/>
                   {busy?<ActivityIndicator color="#FFFFFF"/>:(
                     <View style={styles.submitRow}>
