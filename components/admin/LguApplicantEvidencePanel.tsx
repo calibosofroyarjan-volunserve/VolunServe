@@ -122,8 +122,10 @@ export default function LguApplicantEvidencePanel({
         "https://volunserve.onrender.com")
         .replace(/\/api\/identity\/(verify|status|engine-health)\/?$/,"")
         .replace(/\/+$/,"");
-      if(!/^https:\/\//.test(base)&&
-        !(usingFirebaseEmulators&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)))
+      // Never forward emulator Auth tokens or synthetic applicant UID to
+      // HTTPS production hosts, even if a developer misconfigures the URL.
+      const localEndpoint=/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base);
+      if(usingFirebaseEmulators ? !localEndpoint : !/^https:\/\//.test(base))
         throw new Error("The private screening service must use a secure backend address.");
       const response=await fetch(base+"/api/lgu-staff/face-screen",{
         method:"POST",
@@ -161,8 +163,10 @@ export default function LguApplicantEvidencePanel({
         "https://volunserve.onrender.com")
         .replace(/\/api\/identity\/(verify|status|engine-health)\/?$/,"")
         .replace(/\/+$/,"");
-      if(!/^https:\/\//.test(base)&&
-        !(usingFirebaseEmulators&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)))
+      // Never forward emulator Auth tokens or synthetic applicant UID to
+      // HTTPS production hosts, even if a developer misconfigures the URL.
+      const localEndpoint=/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base);
+      if(usingFirebaseEmulators ? !localEndpoint : !/^https:\/\//.test(base))
         throw new Error("Document OCR requires a secure backend URL.");
       const response=await fetch(base+"/api/lgu-staff/document-screen",{
         method:"POST",
