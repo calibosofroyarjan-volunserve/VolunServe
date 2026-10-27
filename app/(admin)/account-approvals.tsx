@@ -579,6 +579,9 @@ export default function AccountApprovals() {
           ).map((value) => (
             <TouchableOpacity
               key={value}
+              accessibilityRole="button"
+              accessibilityLabel={value === "pending" ? "View pending volunteer applications" : "View all resident accounts"}
+              accessibilityState={{selected: filter === value}}
               style={[
                 styles.filterButton,
 
