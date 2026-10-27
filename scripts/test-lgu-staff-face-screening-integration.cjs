@@ -80,8 +80,12 @@ function harness(config={}){
       assert.equal(opts.headers["X-VolunServe-User-Id"],APPLICANT);
       assert.equal(opts.headers["X-VolunServe-Internal-Key"],"secret-in-tests-only");
       assert.equal(opts.method,"POST");
-      return {ok:true,json:async()=>({status:"verified",
-        decision:"verified",matchScore:0.93,livenessImplemented:false})};
+      return {ok:true,json:async()=>({
+        status:config.fakeVerifiedResponse?"verified":"pending",
+        decision:config.fakeVerifiedResponse?"verified":"manual_review",
+        matchScore:config.lowScore?0.62:0.93,
+        matchThreshold:0.85,livenessImplemented:false,
+      })};
     },
     require(name){
       if(name==="firebase-admin/storage")return storage;
@@ -110,7 +114,7 @@ function harness(config={}){
   }
   return {invoke,docs,getCalls:()=>({aiCalls,storageReads})};
 }
-test("AI engine raw verified still forces human decision, liveness false, no role promotion",async()=>{
+test("Real Python manual_review/pending match score gets informational signal, never role grant",async()=>{
   const h=harness();
   const result=await h.invoke();
   assert.equal(result.status,200);
@@ -123,6 +127,20 @@ test("AI engine raw verified still forces human decision, liveness false, no rol
   assert.equal(h.docs.get("lguApplicantFaceScreenings/"+APPLICANT).identityDecision,"manual_review_required");
   assert(!JSON.stringify(result.body).includes("secret-in-tests-only"));
   assert(!JSON.stringify(result.body).includes("0.93"));
+});
+test("Unexpected fake verified engine result cannot be treated as similarity confirmation",async()=>{
+  const h=harness({fakeVerifiedResponse:true});
+  const result=await h.invoke();
+  assert.equal(result.status,200);
+  assert.equal(result.body.faceSimilaritySignal,"inconclusive_manual_review");
+  assert.equal(result.body.identityDecision,"manual_review_required");
+  assert.equal(h.docs.get("users/"+APPLICANT).role,"applicant");
+});
+test("Below-threshold geometry score remains inconclusive",async()=>{
+  const h=harness({lowScore:true});
+  const result=await h.invoke();
+  assert.equal(result.status,200);
+  assert.equal(result.body.faceSimilaritySignal,"inconclusive_manual_review");
 });
 test("operational LGU Admin cannot inspect private media or invoke AI screening",async()=>{
   const h=harness({reviewerRole:"admin"});
