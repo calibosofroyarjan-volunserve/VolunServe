@@ -5046,6 +5046,14 @@ service cloud.firestore {
     // AI-assisted face-similarity signals remain informational. Only the
     // authenticated backend may write; clients cannot forge a match score.
     // No record in this collection grants applicant/admin permissions.
+    // OCR provides only a document TYPE signal, never issuer authentication.
+    // Server Admin SDK writes the review result; all client writes are denied.
+    match /lguApplicantDocumentScreenings/{uid} {
+      allow get: if signedIn() &&
+        (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
     match /lguApplicantFaceScreenings/{uid} {
       allow get: if signedIn() &&
         (request.auth.uid == uid || isSuperAdmin());
