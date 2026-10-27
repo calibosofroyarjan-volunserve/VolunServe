@@ -50,6 +50,8 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
       - name: LGU applicant government ID, privacy and manual-review metadata rules (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-applicant-evidence-rules.cjs"
+      - name: LGU staff government-ID and facial-photo private Storage access (Firestore+Storage emulators)
+        run: npx firebase emulators:exec --only firestore,storage --project demo-volunserve "node scripts/test-lgu-applicant-storage-rules.cjs"
       - name: Donation financial records only for LGU Admin (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-donation-lgu-role-isolation.cjs"
       - name: Ensure local VolunServe backup folders are excluded from TypeScript
