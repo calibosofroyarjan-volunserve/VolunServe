@@ -79,6 +79,11 @@ assert(review.includes("applicantPageCount") &&
   review.includes("setApplicantPage") &&
   review.includes('const ADMIN_PAGE_SIZE = 5'),
   "Super Admin lists must paginate staff applications in batches of five");
+assert(review.includes("inPersonIdentityConfirmed") &&
+  review.includes('identityPresenceMethod: "in_person_original_government_id_review"') &&
+  firestore.includes("review.identityPresenceConfirmed == true") &&
+  firestore.includes("request.resource.data.identityPresenceConfirmed == true"),
+  "In-person review of the living applicant and original ID must gate Admin promotion");
 assert(review.includes("LguApplicantEvidencePanel") &&
   review.includes("lguEmploymentConfirmed && evidenceReady"),
   "Super Admin promotion must require protected evidence access AND independent LGU confirmation");

@@ -49,6 +49,8 @@ const newReview = (uid, email) => ({
   office: "City Public Safety Office", position: "LGU Response Officer",
   credentialReference: "PUBLIC-OFFICE-REFERENCE-TEST",
   verificationMethod: "Confirmed directly with the official LGU office",
+  identityPresenceMethod:"in_person_original_government_id_review",
+  identityPresenceConfirmed:true,
   verifiedBy: SU, verifiedAt: stamp(),
 });
 const submittedEvidence = uid => ({
@@ -147,6 +149,15 @@ async function main() {
     await env.withSecurityRulesDisabled(async ctx => {
       await ctx.firestore().doc("lguApplicantEvidence/"+TARGET).set(submittedEvidence(TARGET));
     });
+    await check("Without an in-person ID check, forged Admin review is denied",()=>{
+      const batch=superDb.batch();
+      const claim=newReview(TARGET,"staff@example.test");
+      delete claim.identityPresenceMethod;
+      delete claim.identityPresenceConfirmed;
+      batch.set(superDb.doc("lguAdminCredentialReviews/"+TARGET),claim);
+      batch.update(superDb.doc("users/"+TARGET),promotion());
+      return batch.commit();
+    },true);
     // Regression: even if an old applicant still looks pending, a trusted
     // withdrawal request must forbid any programmer Super Admin role grant.
     const withdrawn="withdrawn-lgu-applicant";

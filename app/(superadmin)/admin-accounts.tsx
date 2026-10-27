@@ -178,6 +178,9 @@ export default function AdminAccounts() {
   const [evidenceReady, setEvidenceReady] = useState(false);
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
   const [identityMatched, setIdentityMatched] = useState(false);
+  // Until validated active liveness exists, require a human observation of
+  // the living applicant AND the original government-issued ID in person.
+  const [inPersonIdentityConfirmed, setInPersonIdentityConfirmed] = useState(false);
   const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
   const clearCredentialReview = () => {
     setLguOffice("");
@@ -187,6 +190,7 @@ export default function AdminAccounts() {
     setEvidenceReady(false);
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
+    setInPersonIdentityConfirmed(false);
     setLguEmploymentConfirmed(false);
   };
   const reviewComplete =
@@ -197,7 +201,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady &&
+    inPersonIdentityConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -622,6 +627,8 @@ export default function AdminAccounts() {
             position: lguPosition.trim(),
             credentialReference: lguReference.trim(),
             verificationMethod: lguVerificationMethod.trim(),
+            identityPresenceMethod: "in_person_original_government_id_review",
+            identityPresenceConfirmed: true,
             verifiedBy: verified.current.uid,
             verifiedAt: serverTimestamp(),
           });
@@ -1948,7 +1955,7 @@ export default function AdminAccounts() {
                 <Text style={styles.reviewHelp}>
                   Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
                   Submitted documents or ID images alone are insufficient. If official confirmation is unavailable, keep the application pending.
-                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check.
+                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check. Without validated active liveness, a supervised in-person examination of the original ID and applicant is mandatory for approval.
                 </Text>
                 {actionTarget?.role === "applicant" && (
                   <View style={styles.applicantDetails}>
@@ -2033,6 +2040,18 @@ export default function AdminAccounts() {
                     <Ionicons name={identityMatched ? "checkbox" : "square-outline"} size={23} color="#23765F" />
                     <Text style={styles.confirmReviewText}>
                       I matched the applicant's identity and submitted details with the independently verified LGU staff information.
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: inPersonIdentityConfirmed }}
+                    style={styles.confirmReview}
+                    onPress={() => setInPersonIdentityConfirmed(v => !v)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons name={inPersonIdentityConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>
+                      I personally observed this applicant in person, inspected the original government-issued ID, and compared the portrait with the applicant's face. A photo upload or video call alone does not satisfy this confirmation.
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
