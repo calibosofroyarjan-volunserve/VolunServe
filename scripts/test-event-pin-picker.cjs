@@ -15,6 +15,15 @@ assert(picker.includes("<InteractiveEventPinMap"), "Web picker must have an inte
 assert(map.includes("tiles.openfreemap.org/styles/liberty"), "Actual vector map tiles required");
 assert(map.includes('map.on("click", event => move('), "Tap-to-pin event missing");
 assert(map.includes('draggable:true'), "Pin must support drag adjustment");
+assert(map.includes("acceptedPoint = [lng,lat]") &&
+  map.includes("marker.setLngLat(acceptedPoint)"),
+  "MapLibre must restore last valid meeting location after rejected drag");
+assert(picker.includes("lastValidPinRef") &&
+  picker.includes("marker.setPosition({ lat: previous.latitude, lng: previous.longitude })"),
+  "Google Maps must restore last valid pin after rejected drag");
+assert(native.includes("if(!pick(next.latitude,next.longitude))") &&
+  native.includes("setDraft({...last})"),
+  "Native marker must snap back to last valid pin after rejected drag");
 assert(map.includes("event.source !== frame.current?.contentWindow"),
   "Iframe messages must be validated against the current frame");
 assert(map.includes('data?.token !== token.current'), "Map messages must validate a unique token");
