@@ -30,13 +30,14 @@ assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must prohibit public creation of approved Admin role");
 assert(admin.includes("Request LGU Admin Access") &&
-  apply.includes("LGU Staff Verification Application") &&
-  apply.includes("Submit LGU Information for Verification"),
+  apply.includes("Request LGU Admin Access") &&
+  apply.includes("Submit for independent review"),
   "LGU staff access requests must display the LGU-only access request and route to the staff verification form");
 assert(admin.includes("until independently verified and approved by Super Admin") &&
   apply.includes("role:\"applicant\",status:\"pending_review\"") &&
-  apply.includes("Only after successful confirmation") &&
-  owner.includes("LGU Staff Applications"),
+  apply.includes("before making a decision") &&
+  owner.includes("LGU Staff Applications") &&
+  owner.includes("LguApplicantEvidencePanel") && owner.includes("evidenceReady"),
   "Unverified submissions remain pending and visible to programmer Super Admins");
 assert(owner.includes("setIdentityMatched") &&
   owner.includes("setLguEmploymentConfirmed") &&
