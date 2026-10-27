@@ -25,6 +25,8 @@ import {
   View,
 } from "react-native";
 
+import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+
 import {
   db,
 } from "../../lib/firebase";
@@ -138,6 +140,9 @@ export default function AdminAccounts() {
     showAddAdmin,
     setShowAddAdmin,
   ] = useState(false);
+
+  const [showCreateIndependentAdmin, setShowCreateIndependentAdmin] = useState(false);
+  const [creationNotice, setCreationNotice] = useState("");
 
   const [
     promoteSearch,
@@ -952,12 +957,18 @@ export default function AdminAccounts() {
           </View>
 
           <TouchableOpacity
-            style={
-              styles.addButton
-            }
-            onPress={() =>
-              setShowAddAdmin(true)
-            }
+            accessibilityRole="button"
+            accessibilityLabel="Create independent LGU Admin account"
+            style={styles.addButton}
+            onPress={() => setShowCreateIndependentAdmin(true)}
+          >
+            <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Create LGU Admin</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={[styles.addButton, {backgroundColor:"#2B6C54"}]}
+            onPress={() => setShowAddAdmin(true)}
           >
             <Ionicons
               name="person-add-outline"
@@ -970,10 +981,16 @@ export default function AdminAccounts() {
                 styles.addButtonText
               }
             >
-              Review Staff Account
+              Review Existing Staff
             </Text>
           </TouchableOpacity>
         </View>
+
+        {!!creationNotice && (
+          <Text accessibilityRole="alert" style={{color:"#16654B",fontWeight:"700",marginVertical:8}}>
+            {creationNotice}
+          </Text>
+        )}
 
         <View style={styles.accessFlow}>
           <Text style={styles.accessFlowTitle}>LGU ADMIN ACCOUNT FLOW</Text>
@@ -984,7 +1001,7 @@ export default function AdminAccounts() {
             <Ionicons name="chevron-forward" size={14} color="#789188" />
             <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Grant access and audit changes</Text></View>
           </View>
-          <Text style={styles.flowHint}>A Resident identity check is not proof of LGU employment. This screen assigns access to an existing account; it does not create a Firebase Auth login.</Text>
+          <Text style={styles.flowHint}>Create a separate staff Firebase login after independent LGU credential verification, or review an existing registered staff account. Resident identity verification alone is not proof of LGU employment.</Text>
         </View>
         <View
           style={
@@ -1513,6 +1530,15 @@ export default function AdminAccounts() {
           </View>
         )}
       </ScrollView>
+
+      <CreateLguAdminModal
+        visible={showCreateIndependentAdmin}
+        onClose={() => setShowCreateIndependentAdmin(false)}
+        onCreated={(email) => {
+          setShowCreateIndependentAdmin(false);
+          setCreationNotice("Authorized LGU Admin created: " + email + ". Sign in using /admin-login.");
+        }}
+      />
 
       <Modal
         visible={showAddAdmin}
