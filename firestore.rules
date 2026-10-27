@@ -3178,7 +3178,8 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt is timestamp;
       }
-      allow read: if isAdminOrSuperAdmin()
+      // Financial operations and campaign oversight are LGU Admin duties.
+      allow read: if isAdmin()
         || hasResidentAccess();
       allow create: if isAdmin()
         && validCampaignPayload()
@@ -3373,7 +3374,7 @@ service cloud.firestore {
       }
       allow create: if hasResidentAccess()
         && validDonationSubmission();
-      allow read: if isAdminOrSuperAdmin()
+      allow read: if isAdmin()
         || (
           hasResidentAccess()
           && resource.data.donorUid == request.auth.uid
@@ -3385,7 +3386,7 @@ service cloud.firestore {
         );
       allow delete: if false;
       match /logs/{logId} {
-        allow read: if isAdminOrSuperAdmin();
+        allow read: if isAdmin();
         allow create, update, delete: if false;
       }
     }
