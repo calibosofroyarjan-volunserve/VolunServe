@@ -44,12 +44,13 @@ for(const entry of [
   "Admin Activity & Audit Logs","System Records (Read Only)","System Settings",
 ]) assert(saLayout.includes(entry),"Missing Super Admin governance nav "+entry);
 for(const entry of [
-  "Emergency & Assistance","People & Verification","Events & Volunteering",
-  "Donations & Funds","Communication & Reports",
+  "Residents Management","Volunteers Management","Emergency & Relief",
+  "LGU Staff Operations","Donations & Funds","Communications & Reports",
 ]) assert(adminLayout.includes(entry),"Missing LGU operational nav "+entry);
 for(const route of [
   "/(admin)/admin-cases","/(admin)/assistance-requests","/(admin)/identity-reviews",
-  "/(admin)/account-approvals","/(admin)/community-events","/(admin)/community-attendance",
+  "/(admin)/residents","/(admin)/volunteers","/(admin)/community-events","/(admin)/community-attendance",
+  "/(admin)/resident-notifications","/(admin)/volunteer-notifications",
   "/(admin)/donor-monitoring","/(admin)/admin-analytics"
 ]) assert(adminLayout.includes(route),"Missing existing operational route "+route);
 assert(!saLayout.includes("Donation Management") &&
