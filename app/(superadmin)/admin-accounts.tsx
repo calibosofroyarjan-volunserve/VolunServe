@@ -2084,6 +2084,7 @@ const styles =
 
     header: {
       flexDirection: "row",
+      flexWrap: "wrap",
       alignItems: "flex-start",
       gap: 16,
       marginBottom: 22,
