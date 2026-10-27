@@ -4982,6 +4982,52 @@ service cloud.firestore {
     }
     // Private human-verified LGU credentials: reference only, never ID scans.
     // Admin access requires a fresh review in the same commit as role promotion.
+    // Private evidence metadata. The application record can NEVER self-verify.
+    // Raw ID and selfie pixels are in restricted Storage objects, not Firestore.
+    match /lguApplicantEvidence/{uid} {
+      function validIntake() {
+        let applicant = get(/databases/$(database)/documents/users/$(uid)).data;
+        let data = request.resource.data;
+        return signedIn()
+          && request.auth.uid == uid
+          && applicant.role == 'applicant'
+          && applicant.status == 'pending_review'
+          && data.keys().hasOnly([
+            'uid','idType','front','back','selfie','lguProof',
+            'reviewStatus','aiStatus','officialOfficeStatus',
+            'consentVersion','createdAt'
+          ])
+          && data.keys().hasAll([
+            'uid','idType','front','back','selfie','lguProof',
+            'reviewStatus','aiStatus','officialOfficeStatus',
+            'consentVersion','createdAt'
+          ])
+          && data.uid == uid
+          && data.idType in ['ph_national_id','ph_drivers_license','ph_passport']
+          && data.front is string
+          && data.front.matches('lguStaffEvidence/' + uid + '/front[.](jpg|png|webp)')
+          && data.back is string
+          && (
+            (data.idType == 'ph_passport' && data.back == '')
+            || (data.idType in ['ph_national_id','ph_drivers_license']
+              && data.back.matches('lguStaffEvidence/' + uid + '/back[.](jpg|png|webp)'))
+          )
+          && data.selfie is string
+          && data.selfie.matches('lguStaffEvidence/' + uid + '/selfie[.](jpg|png|webp)')
+          && data.lguProof is string
+          && data.lguProof.matches('lguStaffEvidence/' + uid + '/lgu_proof[.](jpg|png|webp)')
+          && data.reviewStatus == 'pending_manual_review'
+          && data.aiStatus == 'not_run'
+          && data.officialOfficeStatus == 'unconfirmed'
+          && data.consentVersion == 'lgu-intake-v1'
+          && data.createdAt == request.time;
+      }
+      allow create: if validIntake();
+      allow get: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
     match /lguAdminCredentialReviews/{targetUid} {
       function validReview() {
         return isSuperAdmin()
