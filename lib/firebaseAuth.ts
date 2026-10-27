@@ -18,6 +18,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { Platform } from "react-native";
+import { disableAndroidPhoneAlerts } from "./androidNativePush";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -669,6 +671,16 @@ export const loginUser = async (
 };
 
 export const logoutUser = async () => {
+  // Best-effort unregister BEFORE Firebase sign-out so a shared Android
+  // handset does not continue receiving the previous account's pushes.
+  // Do not block logout indefinitely when offline or when notifications
+  // were never enabled.
+  if (Platform.OS === "android" && auth.currentUser) {
+    await Promise.race([
+      disableAndroidPhoneAlerts().catch(() => undefined),
+      new Promise<void>(resolve => setTimeout(resolve, 1800)),
+    ]);
+  }
   await signOut(auth);
 };
 

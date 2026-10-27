@@ -59,7 +59,8 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "~0.21.0",
     "react-native-webview": "^13.16.1",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "expo-notifications": "~0.32.17"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

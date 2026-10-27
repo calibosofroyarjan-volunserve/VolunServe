@@ -2568,3 +2568,167 @@ exports.issueCommunityCertificateOnAttendanceVerification = onDocumentUpdated(
       }
     },
 );
+
+
+// ---------------------------------------------------------------------------
+// Android FCM push transport.  This is a best-effort companion to the existing
+// private Firestore inbox, never an authorization mechanism or a source of truth.
+// Clients register tokens through an authenticated callable function only.
+// ---------------------------------------------------------------------------
+const {getMessaging} = require("firebase-admin/messaging");
+
+const ANDROID_PUSH_TOKEN = /^[A-Za-z0-9_.:\\-]{30,4096}$/;
+const PUSH_TYPES = new Set(["emergency", "event", "donation", "account"]);
+
+function safePushCategory(value) {
+  const type = String(value || "").toLowerCase();
+  if (/emergency|disaster|rescue|incident|response|evacuat/.test(type)) return "emergency";
+  if (/event|volunteer|attendance|certificate|schedule|task/.test(type)) return "event";
+  if (/donat|assistance|fund|campaign|payment|release|receipt/.test(type)) return "donation";
+  return "account";
+}
+
+exports.registerAndroidPushToken = onCall(
+    // Firebase Authentication is required for all token changes. App Check
+    // enforcement is deferred until native attestation is configured for APKs.
+    {maxInstances: 5},
+    async (request) => {
+      const uid = request.auth?.uid;
+      if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+      const token = request.data?.token;
+      if (typeof token !== "string" || !ANDROID_PUSH_TOKEN.test(token) ||
+          token.startsWith("ExponentPushToken") || token.startsWith("ExpoPushToken")) {
+        throw new HttpsError("invalid-argument", "Expected a native Android FCM token.");
+      }
+      const database = getFirestore();
+      const user = await database.collection("users").doc(uid).get();
+      if (!user.exists || user.data()?.status === "suspended" ||
+          user.data()?.adminStatus === "suspended" ||
+          user.data()?.role === "applicant") {
+        throw new HttpsError("permission-denied", "Account is not push eligible.");
+      }
+      const digest = crypto.createHash("sha256").update(token).digest("hex");
+      const ownerRef = database.collection("pushDeviceOwners").doc(digest);
+      const deviceRef = database.collection("userPushTokens").doc(uid)
+          .collection("devices").doc(digest);
+      await database.runTransaction(async (transaction) => {
+        const prior = await transaction.get(ownerRef);
+        const previousUid = prior.data()?.uid;
+        if (typeof previousUid === "string" &&
+            previousUid !== uid && previousUid.length <= 128) {
+          transaction.delete(database.collection("userPushTokens")
+              .doc(previousUid).collection("devices").doc(digest));
+        }
+        transaction.set(ownerRef, {
+          uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(deviceRef, {
+          token,
+          platform: "android",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+      return {registered: true};
+    },
+);
+
+exports.unregisterAndroidPushToken = onCall(
+    // Firebase Authentication is required for all token changes. App Check
+    // enforcement is deferred until native attestation is configured for APKs.
+    {maxInstances: 5},
+    async (request) => {
+      const uid = request.auth?.uid;
+      if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+      const token = request.data?.token;
+      if (typeof token !== "string" || !ANDROID_PUSH_TOKEN.test(token)) {
+        throw new HttpsError("invalid-argument", "Invalid FCM token.");
+      }
+      const digest = crypto.createHash("sha256").update(token).digest("hex");
+      const database = getFirestore();
+      const ownerRef = database.collection("pushDeviceOwners").doc(digest);
+      const deviceRef = database.collection("userPushTokens").doc(uid)
+          .collection("devices").doc(digest);
+      await database.runTransaction(async (transaction) => {
+        const owner = await transaction.get(ownerRef);
+        if (owner.data()?.uid === uid) transaction.delete(ownerRef);
+        transaction.delete(deviceRef);
+      });
+      return {unregistered: true};
+    },
+);
+
+exports.deliverAndroidPushForNotification = onDocumentCreated(
+    {
+      document: "notifications/{notificationId}",
+      retry: true,
+      timeoutSeconds: 60,
+      maxInstances: 5,
+    },
+    async (event) => {
+      const notification = event.data?.data();
+      if (!notification) return;
+      const uid = notification.userId || notification.recipientUid;
+      if (typeof uid !== "string" || uid.length > 128) return;
+      const database = getFirestore();
+      const user = await database.collection("users").doc(uid).get();
+      if (!user.exists || user.data()?.role === "applicant" ||
+          user.data()?.status === "suspended" ||
+          user.data()?.adminStatus === "suspended") return;
+
+      // No personal identity evidence, finance, location or full notification
+      // content on the lock screen. Open the authenticated in-app inbox.
+      const category = safePushCategory(notification.type);
+      if (!PUSH_TYPES.has(category)) return;
+      const title = category === "emergency" ? "VolunServe emergency update" :
+        category === "event" ? "VolunServe event update" :
+        category === "donation" ? "VolunServe donation update" :
+        "VolunServe account update";
+      const devices = await database.collection("userPushTokens").doc(uid)
+          .collection("devices").limit(25).get();
+      if (devices.empty) return;
+      const records = devices.docs.filter((d) =>
+        d.data().platform === "android" &&
+        typeof d.data().token === "string" &&
+        ANDROID_PUSH_TOKEN.test(d.data().token));
+      if (!records.length) return;
+      const results = await Promise.allSettled(records.map(async (device) => {
+        try {
+          const owner = await database.collection("pushDeviceOwners")
+              .doc(device.id).get();
+          if (owner.data()?.uid !== uid) {
+            await device.ref.delete();
+            return;
+          }
+          await getMessaging().send({
+            token: device.data().token,
+            notification: {title, body: "Open VolunServe to see your update."},
+            data: {route: "/notifications", category},
+            android: {
+              priority: category === "emergency" ? "high" : "normal",
+              notification: {
+                channelId: category === "emergency" ?
+                  "volunserve-urgent" : "volunserve-updates",
+              },
+            },
+          });
+        } catch (error) {
+          const code = error?.code || "";
+          if (code === "messaging/registration-token-not-registered" ||
+              code === "messaging/invalid-registration-token") {
+            await device.ref.delete();
+            return;
+          }
+          throw error;
+        }
+      }));
+      for (const result of results) {
+        if (result.status === "rejected") {
+          logger.warn("Push attempt failed", {
+            notificationId: event.params.notificationId,
+            reason: String(result.reason?.code || "unknown"),
+          });
+        }
+      }
+    },
+);
