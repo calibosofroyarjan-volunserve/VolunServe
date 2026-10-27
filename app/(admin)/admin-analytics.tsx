@@ -947,7 +947,7 @@ export default function AdminAnalytics() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          ⚠️ Attendance Completion Follow-up
+          Attendance Completion Follow-up
         </Text>
 
         <Text style={styles.predictiveIntro}>
@@ -1087,7 +1087,7 @@ export default function AdminAnalytics() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          🏆 Top Volunteers by Points
+          Top Volunteers by Points
         </Text>
 
         {metrics.topPointUsers.length === 0 ? (
@@ -1117,7 +1117,7 @@ export default function AdminAnalytics() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          🎖 Achievement Leaders
+          Achievement Leaders
         </Text>
 
         {metrics.topAchievementUsers.length ===
@@ -1335,34 +1335,6 @@ export default function AdminAnalytics() {
         predictions.
       </Text>
     </ScrollView>
-  );
-}
-
-function KpiCard({
-  title,
-  value,
-  hint,
-}: {
-  title: string;
-  value: any;
-  hint?: string;
-}) {
-  return (
-    <View style={styles.kpi}>
-      <Text style={styles.kpiTitle}>
-        {title}
-      </Text>
-
-      <Text style={styles.kpiValue}>
-        {String(value)}
-      </Text>
-
-      {hint ? (
-        <Text style={styles.kpiHint}>
-          {hint}
-        </Text>
-      ) : null}
-    </View>
   );
 }
 
