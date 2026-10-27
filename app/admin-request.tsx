@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { deleteApp, initializeApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
 import { connectFirestoreEmulator, doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
-import { getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
+import { connectStorageEmulator, getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
 import React, { useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
@@ -112,17 +112,11 @@ export default function LguStaffApplication() {
     if (usingFirebaseEmulators) {
       connectAuthEmulator(candidateAuth,"http://127.0.0.1:9099",{disableWarnings:true});
       connectFirestoreEmulator(candidateDb,"127.0.0.1",8080);
-      // Firebase Storage emulator requires its own secure local settings to test uploads.
-      // Never silently send applicant ID images to production while emulator mode is active.
+      connectStorageEmulator(storage,"127.0.0.1",9199); // private local evidence only
     }
     let user:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;
     let profileCreated=false;
     try {
-      // Storage evidence intake is intentionally blocked in emulator mode until
-      // the matching Storage emulator is connected. No production-data leaks.
-      if (usingFirebaseEmulators) {
-        throw new Error("LGU private evidence intake needs the Firebase Storage emulator configuration before local use.");
-      }
       user=(await createUserWithEmailAndPassword(candidateAuth,form.email.trim().toLowerCase(),form.password)).user;
       const uid=user.uid;
       await setDoc(doc(candidateDb,"users",uid),{
@@ -197,9 +191,9 @@ export default function LguStaffApplication() {
           <View style={styles.header}>
             <View style={styles.headerIcon}><Ionicons name="shield-checkmark" color="#FFFFFF" size={23}/></View>
             <View style={{flex:1}}>
-              <Text style={styles.kicker}>VOLUNSERVE · VERIFIED LGU STAFF</Text>
+              <Text style={styles.kicker}>VOLUNSERVE · LGU STAFF APPLICATION</Text>
               <Text style={styles.title}>Request LGU Admin Access</Text>
-              <Text style={styles.help}>Guided application · Strict government-ID screening · Independent authorization</Text>
+              <Text style={styles.help}>Guided application · Government-issued ID only · Manual verification</Text>
             </View>
           </View>
           {success ? (
