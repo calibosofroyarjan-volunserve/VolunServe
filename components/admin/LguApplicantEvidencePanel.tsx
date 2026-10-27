@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { doc, getDoc } from "firebase/firestore";
 import { getBlob, getMetadata, ref as storageRef, getStorage } from "firebase/storage";
 import React from "react";
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from "react-native";
-import { db } from "../../lib/firebase";
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { auth, db, usingFirebaseEmulators } from "../../lib/firebase";
 import { isSupportedLguIdType, lguIdRequiresBack } from "../../lib/lguStaffApplicationPolicy";
 
 type EvidenceInfo = {
@@ -24,10 +24,14 @@ export default function LguApplicantEvidencePanel({
   const [error,setError]=React.useState("");
   const [info,setInfo]=React.useState<EvidenceInfo|null>(null);
   const [images,setImages]=React.useState<ImageEvidence[]>([]);
+  const [screenBusy,setScreenBusy]=React.useState(false);
+  const [screenMessage,setScreenMessage]=React.useState("");
+  const [screenStatus,setScreenStatus]=React.useState("");
   React.useEffect(()=>{
     let cancelled=false;
     let objectUrls: string[]=[];
     setLoading(true);setError("");setInfo(null);setImages([]);
+    setScreenBusy(false);setScreenMessage("");setScreenStatus("");
     onReady(false);
     const load=async()=>{
       if (!uid) throw new Error("No staff applicant selected.");
@@ -85,6 +89,45 @@ export default function LguApplicantEvidencePanel({
     };
     // onReady is an event receiver. Do not redo private fetches on its identity change.
   },[uid]);
+  const runSimilarityScreen=async()=>{
+    if(!info||!uid||screenBusy||images.some(item=>!item.localUrl))return;
+    setScreenBusy(true);setScreenMessage("");setScreenStatus("");
+    try {
+      // Emulator test accounts MUST NEVER be forwarded to production Render.
+      const configured=process.env.EXPO_PUBLIC_LGU_FACE_SCREEN_API_URL?.trim();
+      if(usingFirebaseEmulators&&!configured)
+        throw new Error("Configure a local test-only screening backend for emulator QA.");
+      if(Platform.OS!=="web")
+        throw new Error("Run private facial review inside the authorized Super Admin web workspace.");
+      const user=auth.currentUser;
+      if(!user)throw new Error("Your Super Admin session has expired.");
+      const base=(configured||
+        process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim()||
+        "https://volunserve.onrender.com")
+        .replace(/\/api\/identity\/(verify|status|engine-health)\/?$/,"")
+        .replace(/\/+$/,"");
+      if(!/^https:\/\//.test(base)&&
+        !(usingFirebaseEmulators&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)))
+        throw new Error("The private screening service must use a secure backend address.");
+      const response=await fetch(base+"/api/lgu-staff/face-screen",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+await user.getIdToken(),
+          "Content-Type":"application/json"},
+        body:JSON.stringify({applicantUid:uid}),
+      });
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(String(body.message||
+        "Secure face-similarity screening is unavailable. Use manual review."));
+      const signal=body.faceSimilaritySignal==="similarity_signal_present"
+        ?"Face geometry similarity signal detected — NOT proof of identity."
+        :"Facial comparison inconclusive — manual review required.";
+      setScreenStatus(String(body.faceSimilaritySignal||"inconclusive_manual_review"));
+      setScreenMessage(signal+" Active liveness, ID authenticity and LGU employment were not verified.");
+    }catch(e:any){
+      setScreenStatus("manual_review_required");
+      setScreenMessage(String(e?.message||"Face screening could not be completed."));
+    }finally{setScreenBusy(false);}
+  };
   return (
     <View style={styles.section}>
       <View style={styles.titleRow}>
@@ -105,6 +148,18 @@ export default function LguApplicantEvidencePanel({
         ))}
       </View>
       <Text style={styles.warning}>File presence is not government ID authentication, liveness or proof of LGU employment. Confirm independently before checking all approval fields.</Text>
+      <TouchableOpacity accessibilityRole="button"
+        accessibilityLabel="Run optional Super Admin AI-assisted face similarity screening"
+        disabled={screenBusy||loading||!!error||!info||images.some(item=>!item.localUrl)}
+        onPress={()=>void runSimilarityScreen()}
+        style={[styles.screenButton,(screenBusy||loading||!!error||!info)&&{opacity:0.5}]}>
+        {screenBusy?<ActivityIndicator color="#FFFFFF"/>:
+          <Text style={styles.screenButtonText}>Run AI-assisted face comparison (review only)</Text>}
+      </TouchableOpacity>
+      {!!screenMessage&&<View style={styles.signalBox}>
+        <Text style={styles.signalLabel}>{screenStatus==="similarity_signal_present"?"Informational similarity":"Manual review required"}</Text>
+        <Text style={styles.note}>{screenMessage}</Text>
+      </View>}
     </View>
   );
 }
@@ -122,4 +177,8 @@ const styles=StyleSheet.create({
   photoCard:{width:"48%",minWidth:130,backgroundColor:"#FFFFFF",
     borderRadius:10,borderWidth:1,borderColor:"#D1E5D9",padding:8,gap:7},
   photo:{width:"100%",height:118,backgroundColor:"#E7EEE8",borderRadius:7},
+  screenButton:{backgroundColor:"#08775D",padding:13,borderRadius:10,alignItems:"center",justifyContent:"center",minHeight:47},
+  screenButtonText:{fontSize:12,color:"#FFFFFF",fontWeight:"800",textAlign:"center"},
+  signalBox:{padding:12,borderRadius:10,backgroundColor:"#EDF8F1",gap:6},
+  signalLabel:{fontSize:12,fontWeight:"800",color:"#205D44"},
 });
