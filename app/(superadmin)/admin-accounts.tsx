@@ -171,12 +171,16 @@ export default function AdminAccounts() {
   const [lguReference, setLguReference] = useState("");
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
+  const [identityMatched, setIdentityMatched] = useState(false);
+  const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
   const clearCredentialReview = () => {
     setLguOffice("");
     setLguPosition("");
     setLguReference("");
     setLguVerificationMethod("");
     setCredentialsConfirmed(false);
+    setIdentityMatched(false);
+    setLguEmploymentConfirmed(false);
   };
   const reviewComplete =
     lguOffice.trim().length >= 3 && lguOffice.trim().length <= 160 &&
@@ -184,7 +188,7 @@ export default function AdminAccounts() {
     lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
     lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
-    credentialsConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -454,7 +458,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Grant LGU Admin Access";
+      return "Verify Staff and Promote to Admin";
     }
 
     if (action === "suspend") {
@@ -480,7 +484,7 @@ export default function AdminAccounts() {
       nameFor(account);
 
     if (action === "promote") {
-      return `Grant LGU Admin access to ${name} after confirming official staff credentials?`;
+      return `Promote ${name} to LGU Admin only after confirming their identity, legitimate LGU employment and official authorization?`;
     }
 
     if (action === "suspend") {
@@ -505,7 +509,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Grant Access";
+      return "Promote Verified Staff";
     }
 
     if (action === "suspend") {
@@ -573,7 +577,7 @@ export default function AdminAccounts() {
 
       if (action === "promote" && !reviewComplete) {
         setActionError(
-          "Complete the LGU office, official position, reference, verification method, and reviewer confirmation before granting access."
+          "Verify staff identity and official LGU employment, complete all review fields, and confirm the verification before promoting this applicant to Admin."
         );
         return;
       }
@@ -1012,10 +1016,10 @@ export default function AdminAccounts() {
           backgroundColor:"#F5FBF7",padding:15,marginBottom:16,gap:10
         }}>
           <Text style={{fontSize:15,fontWeight:"900",color:"#174936"}}>
-            LGU Admin Access Requests · {pendingLguApplications.length} Pending
+            LGU Staff Applications · {pendingLguApplications.length} Pending
           </Text>
           <Text style={{fontSize:11,color:"#527464",lineHeight:17}}>
-            These are requests for LGU Admin access, not Super Admin accounts. Our programmer Super Admin team must independently obtain and confirm official LGU appointment details with the issuing office before approval. No operational access is granted while pending.
+            LGU personnel submit their information first. As programmer Super Admins, review their submitted details and independently confirm identity, LGU employment, and appointment authority. Only verified applicants can be promoted to operational Admin. No access while pending.
           </Text>
           {pendingLguApplications.length===0 ? (
             <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
@@ -1034,7 +1038,7 @@ export default function AdminAccounts() {
                 style={{backgroundColor:"#087D60",paddingVertical:11,
                   paddingHorizontal:14,borderRadius:9}}
                 onPress={()=>openAdminAction("promote",account)}>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Review Credentials</Text>
+                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Review Application</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -1923,11 +1927,22 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
-                <Text style={styles.reviewKicker}>STEP 2 OF 3 · LGU CREDENTIAL REVIEW</Text>
+                <Text style={styles.reviewKicker}>STEP 2 · VERIFY LGU STAFF BEFORE PROMOTION</Text>
                 <Text style={styles.reviewHelp}>
-                  Verify this person's LGU employment and authorization using an official source.
-                  Resident identity verification alone is not sufficient.
+                  Compare the applicant's information with an independently obtained official LGU source.
+                  Completing this review is required before activating any Admin account.
                 </Text>
+                {actionTarget?.role === "applicant" && (
+                  <View style={styles.credentialReview}>
+                    <Text style={styles.reviewLabel}>APPLICANT-SUBMITTED DETAILS · NOT YET VERIFIED</Text>
+                    <Text style={styles.reviewHelp}>Name: {nameFor(actionTarget)}</Text>
+                    <Text style={styles.reviewHelp}>Email: {actionTarget.email || "Not provided"}</Text>
+                    <Text style={styles.reviewHelp}>Office: {String((actionTarget as any).lguOffice || "Not provided")}</Text>
+                    <Text style={styles.reviewHelp}>Position: {String((actionTarget as any).lguPosition || "Not provided")}</Text>
+                    <Text style={styles.reviewHelp}>Barangay: {String((actionTarget as any).barangay || "Not provided")}</Text>
+                    <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
+                  </View>
+                )}
                 <ScrollView style={styles.reviewScroll} keyboardShouldPersistTaps="handled">
                   {([
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
@@ -1949,6 +1964,30 @@ export default function AdminAccounts() {
                       />
                     </View>
                   ))}
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: identityMatched }}
+                    style={styles.confirmReview}
+                    onPress={() => setIdentityMatched(v => !v)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons name={identityMatched ? "checkbox" : "square-outline"} size={23} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>
+                      I matched the applicant's identity and submitted details with the independently verified LGU staff information.
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: lguEmploymentConfirmed }}
+                    style={styles.confirmReview}
+                    onPress={() => setLguEmploymentConfirmed(v => !v)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>
+                      I confirmed current LGU employment, appointment and authority directly from an official source.
+                    </Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: credentialsConfirmed }}
