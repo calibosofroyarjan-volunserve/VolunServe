@@ -51,6 +51,16 @@ const newReview = (uid, email) => ({
   verificationMethod: "Confirmed directly with the official LGU office",
   verifiedBy: SU, verifiedAt: stamp(),
 });
+const submittedEvidence = uid => ({
+  uid, idType: "ph_national_id",
+  front: "lguStaffEvidence/"+uid+"/front.jpg",
+  back: "lguStaffEvidence/"+uid+"/back.png",
+  selfie: "lguStaffEvidence/"+uid+"/selfie.webp",
+  lguProof: "lguStaffEvidence/"+uid+"/lgu_proof.jpg",
+  reviewStatus:"pending_manual_review",
+  aiStatus:"not_run", officialOfficeStatus:"unconfirmed",
+  consentVersion:"lgu-intake-v1",createdAt:stamp(),
+});
 const promotion = () => ({
   previousRole: "applicant",
   previousPrimaryRole: "applicant",
@@ -127,6 +137,16 @@ async function main() {
       return batch.commit();
     }, true);
 
+    await check("Super Admin cannot approve staff without submitted ID and LGU evidence", () => {
+      const batch = superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
+        newReview(TARGET, "staff@example.test"));
+      batch.update(superDb.doc("users/" + TARGET), promotion());
+      return batch.commit();
+    }, true);
+    await env.withSecurityRulesDisabled(async ctx => {
+      await ctx.firestore().doc("lguApplicantEvidence/"+TARGET).set(submittedEvidence(TARGET));
+    });
     await check("Valid batch: fresh LGU review and Admin promotion together", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
@@ -220,6 +240,9 @@ async function main() {
       adminDb.doc("users/"+pendingUid).update(promotion()), true);
     await check("Super Admin cannot approve pending staff without a fresh review", () =>
       superDb.doc("users/"+pendingUid).update(promotion()), true);
+    await env.withSecurityRulesDisabled(async ctx => {
+      await ctx.firestore().doc("lguApplicantEvidence/"+pendingUid).set(submittedEvidence(pendingUid));
+    });
     await check("Super Admin can approve applicant only in an atomic credential review batch", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/"+pendingUid),
