@@ -43,6 +43,24 @@ function similaritySignal(decision,score,threshold,status) {
   return valid && score>=threshold
     ?"similarity_signal_present":"inconclusive_manual_review";
 }
+/**
+ * The trusted Python service MUST return its actual informational FaceMesh
+ * contract, including the selected ID type and both quality checks. A
+ * malformed, stale or mismatched response is NEVER a positive match.
+ * This is not an authenticity or liveness check.
+ */
+function hasExpectedPythonContract(raw,expectedIdType) {
+  return !!raw && typeof raw==="object" &&
+    raw.ok===true &&
+    raw.status==="pending" &&
+    raw.decision==="manual_review" &&
+    raw.engine==="mediapipe-landmark-1to1-v1" &&
+    raw.idType===expectedIdType &&
+    raw.livenessImplemented===false &&
+    [raw.idImageQualityScore,raw.selfieQualityScore].every(
+      value=>typeof value==="number"&&Number.isFinite(value)&&value>=0&&value<=1
+    );
+}
 function fail(status,code,message) {
   const e=new Error(message);e.httpStatus=status;e.publicCode=code;throw e;
 }
@@ -127,7 +145,11 @@ function mountLguStaffFaceScreening(app,{db,adminApp,FieldValue,requireFirebaseU
       const threshold=typeof raw.matchThreshold==="number" &&
         Number.isFinite(raw.matchThreshold) && raw.matchThreshold>0 &&
         raw.matchThreshold<=1 ? raw.matchThreshold:null;
-      const signal=similaritySignal(raw.decision,score,threshold,raw.status);
+      // A numeric score without an intact Python engine contract is not a
+      // trusted match. Fail closed to manual review, never self-approve.
+      const signal=hasExpectedPythonContract(raw,ALLOWED[evidence.idType])
+        ? similaritySignal(raw.decision,score,threshold,raw.status)
+        : "inconclusive_manual_review";
       await screenRef.set({
         uid,status:"manual_review_required",reviewerUid,
         faceSimilaritySignal:signal,faceSimilarityScore:score,
@@ -166,4 +188,4 @@ function mountLguStaffFaceScreening(app,{db,adminApp,FieldValue,requireFirebaseU
     }
   });
 }
-module.exports={mountLguStaffFaceScreening,safeUid,evidenceFile,mediaMime,similaritySignal};
+module.exports={mountLguStaffFaceScreening,safeUid,evidenceFile,mediaMime,similaritySignal,hasExpectedPythonContract};

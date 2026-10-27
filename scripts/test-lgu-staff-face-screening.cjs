@@ -17,7 +17,7 @@ vm.runInNewContext(source,{
     throw Error("Unexpected dependency "+name);
   },
 },{filename:"lguStaffFaceScreening.js"});
-const {safeUid,evidenceFile,mediaMime,similaritySignal}=target.exports;
+const {safeUid,evidenceFile,mediaMime,similaritySignal,hasExpectedPythonContract}=target.exports;
 assert.equal(safeUid("safe-UID_2026"),"safe-UID_2026");
 assert.equal(safeUid("../bad/path"),"");
 assert.equal(safeUid("abc"),"");
@@ -39,6 +39,17 @@ assert.equal(similaritySignal("verified",0.93,0.85,"pending"),"inconclusive_manu
 assert.equal(similaritySignal("manual_review",0.93,null,"pending"),"inconclusive_manual_review");
 assert.equal(similaritySignal("manual_review",0.93,0.85,"failed"),"inconclusive_manual_review");
 assert.equal(similaritySignal("manual_review",Number.NaN,0.85,"pending"),"inconclusive_manual_review");
+const actualContract={
+  ok:true,status:"pending",decision:"manual_review",
+  engine:"mediapipe-landmark-1to1-v1",idType:"national_id",
+  idImageQualityScore:0.77,selfieQualityScore:0.86,livenessImplemented:false,
+};
+assert.equal(hasExpectedPythonContract(actualContract,"national_id"),true);
+for(const changed of [
+  {ok:false},{engine:"unrecognized_engine"},{idType:"passport"},
+  {selfieQualityScore:null},{idImageQualityScore:-1},
+  {livenessImplemented:true},{status:"verified"},
+])assert.equal(hasExpectedPythonContract({...actualContract,...changed},"national_id"),false);
 for(const fragment of [
   '"/api/lgu-staff/face-screen"',
   'reviewer.role!=="superadmin"',
@@ -51,6 +62,7 @@ for(const fragment of [
   'identityDecision:"manual_review_required"',
   'livenessImplemented:false',
   'documentAuthenticityVerified:false',
+  'hasExpectedPythonContract(raw,ALLOWED[evidence.idType])',
   'FieldValue.delete()',
 ])assert(source.includes(fragment),"Missing security requirement: "+fragment);
 assert(server.includes("mountLguStaffFaceScreening(app"),"Backend must register restricted reviewer route");

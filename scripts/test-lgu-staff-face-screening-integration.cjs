@@ -84,7 +84,13 @@ function harness(config={}){
         status:config.fakeVerifiedResponse?"verified":"pending",
         decision:config.fakeVerifiedResponse?"verified":"manual_review",
         matchScore:config.lowScore?0.62:0.93,
-        matchThreshold:0.85,livenessImplemented:false,
+        matchThreshold:0.85,
+        ok:config.badOk?false:true,
+        idType:config.wrongResultIdType?"passport":"national_id",
+        engine:config.wrongEngine?"unrecognized-model":"mediapipe-landmark-1to1-v1",
+        idImageQualityScore:config.missingQuality?undefined:0.88,
+        selfieQualityScore:config.missingQuality?undefined:0.94,
+        livenessImplemented:config.claimsLiveness?true:false,
       })};
     },
     require(name){
@@ -136,6 +142,24 @@ test("Unexpected fake verified engine result cannot be treated as similarity con
   assert.equal(result.body.identityDecision,"manual_review_required");
   assert.equal(h.docs.get("users/"+APPLICANT).role,"applicant");
 });
+for(const [reason,config] of [
+  ["fake Python engine ID",{wrongEngine:true}],
+  ["mismatched engine ID type",{wrongResultIdType:true}],
+  ["missing quality assessment",{missingQuality:true}],
+  ["unexpected liveness claim",{claimsLiveness:true}],
+  ["failed Python contract",{badOk:true}],
+]) {
+  test("Untrusted or incomplete AI response stays manual review: "+reason,async()=>{
+    const h=harness(config);
+    const result=await h.invoke();
+    assert.equal(result.status,200);
+    assert.equal(result.body.faceSimilaritySignal,"inconclusive_manual_review");
+    assert.equal(result.body.identityDecision,"manual_review_required");
+    assert.equal(result.body.livenessImplemented,false);
+    assert.equal(h.docs.get("users/"+APPLICANT).role,"applicant");
+    assert.equal(h.docs.get("lguApplicantFaceScreenings/"+APPLICANT).faceSimilaritySignal,"inconclusive_manual_review");
+  });
+}
 test("Below-threshold geometry score remains inconclusive",async()=>{
   const h=harness({lowScore:true});
   const result=await h.invoke();
