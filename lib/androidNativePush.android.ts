@@ -67,11 +67,12 @@ export async function enableAndroidPhoneAlerts(): Promise<string> {
 export async function disableAndroidPhoneAlerts(): Promise<string> {
   if (Platform.OS !== "android") return "Phone alerts are unavailable on this platform.";
   if (!auth.currentUser?.uid) throw new Error("Sign in first to manage phone alerts.");
-  const existing = await Notifications.getPermissionsAsync();
-  if (!existing.granted && existing.status !== "granted") {
-    return "Phone alerts are already disabled in Android settings.";
-  }
-  const nativeToken = await Notifications.getDevicePushTokenAsync();
+  // Android notification display permission is separate from server-side FCM
+  // registration. Even after the user disables OS notifications, attempt to
+  // unregister the stored device token so the backend stops targeting it.
+  const nativeToken = await Notifications.getDevicePushTokenAsync().catch(() => {
+    throw new Error("Could not identify this device to disable server alerts. Check your connection and retry.");
+  });
   if (nativeToken.type !== "android") throw new Error("No Android device token was found.");
   const unregister = httpsCallable<{ token: string }, { unregistered: boolean }>(
     functions, "unregisterAndroidPushToken",
