@@ -41,10 +41,10 @@ export function AdminPageHeading({
       <View pointerEvents="none" style={styles.heroMark}>
         <Ionicons name="leaf-outline" size={134} color="rgba(255,255,255,0.10)" />
       </View>
-      <View style={[styles.heroInner, width < 770 && styles.heroCompact]}>
+      <View style={[styles.heroInner, width < 1050 && styles.heroCompact]}>
         <View style={styles.heroText}>
           <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>
-          <Text style={[styles.title, width < 770 && styles.titleCompact]}>{title}</Text>
+          <Text style={[styles.title, width < 1050 && styles.titleCompact]}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
         {actionLabel && onAction ? (
