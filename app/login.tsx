@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import {
@@ -9,25 +8,24 @@ import {
   GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithCredential,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from "firebase/auth";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 
 import { auth } from "../lib/firebase";
+import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
   getUserProfile,
   homeRouteForProfile,
@@ -41,48 +39,22 @@ const redirectUri = AuthSession.makeRedirectUri({
   scheme: "com.froyarjan123.volunserve",
 });
 
-const SLIDES = [
-  {
-    image: require("../assets/images/slide1.jpg"),
-    title: "San Jose del Monte\nDisaster Monitoring",
-    desc: "Real-time monitoring of hazards, floods, and emergency incidents across the city.",
-  },
-  {
-    image: require("../assets/images/slide2.jpg"),
-    title: "Volunteer Coordination\nNetwork",
-    desc: "Organize trained volunteers and response teams during disasters and emergencies.",
-  },
-  {
-    image: require("../assets/images/slide3.jpg"),
-    title: "Community Assistance\nPlatform",
-    desc: "Residents can request help, report hazards, and coordinate disaster response.",
-  },
-];
-
 export default function Login() {
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < 820;
-  const contentWidth = Math.max(0, Math.min(screenWidth - (isCompact ? 32 : 64), 1120));
-  const heroWidth = isCompact ? Math.min(contentWidth, 520) : Math.round((contentWidth - 24) * 0.46);
-  const heroHeight = isCompact ? 116 : 584;
   const emailInputRef = useRef<TextInput>(null);
-
-  const mainScrollRef = useRef<ScrollView>(null);
-  const heroScrollRef = useRef<ScrollView>(null);
-
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const zoomAnim = useRef(new Animated.Value(1)).current;
-
-  const [heroIndex, setHeroIndex] = useState(0);
-  const heroIndexRef = useRef(0);
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(true);
+  const applyRememberMe = async () => {
+    if (Platform.OS === "web") {
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+    }
+  };
+
 
   const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
     webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
@@ -90,60 +62,6 @@ export default function Login() {
     redirectUri,
     scopes: ["openid", "profile", "email"],
   });
-
-  useEffect(() => {
-    heroIndexRef.current = heroIndex;
-  }, [heroIndex]);
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(zoomAnim, {
-          toValue: 1.08,
-          duration: 7000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(zoomAnim, {
-          toValue: 1,
-          duration: 7000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [zoomAnim]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const next =
-        (heroIndexRef.current + 1) % SLIDES.length;
-
-      heroScrollRef.current?.scrollTo({
-        x: next * heroWidth,
-        animated: true,
-      });
-
-      setHeroIndex(next);
-      heroIndexRef.current = next;
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [heroWidth]);
-
-  const goToSlide = (index: number) => {
-    heroScrollRef.current?.scrollTo({
-      x: index * heroWidth,
-      animated: true,
-    });
-
-    setHeroIndex(index);
-    heroIndexRef.current = index;
-  };
 
   const routeSignedInProfile = async (uid: string) => {
     let profile;
@@ -207,6 +125,7 @@ export default function Login() {
     try {
       setLoading(true);
 
+      await applyRememberMe();
       const { profile } = await loginUser(
         cleanEmail,
         password
@@ -293,6 +212,7 @@ export default function Login() {
         );
       }
 
+      await applyRememberMe();
       const credential =
         GoogleAuthProvider.credential(idToken);
 
@@ -317,447 +237,131 @@ export default function Login() {
     }
   };
 
-  // One shared login form for Android, iOS and the web. Authentication logic above is unchanged.
-  const loginForm = (
-    <View style={[styles.loginCard, isCompact && styles.loginCardCompact]}>
-      <View style={styles.loginTypeTabs} accessibilityLabel="Choose account sign-in">
-        <View style={[styles.loginTypeTab, styles.loginTypeActive]}>
-          <Text style={[styles.loginTypeText, styles.loginTypeTextActive]}>Resident Login</Text>
-        </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Switch to LGU Admin Login"
-          onPress={() => router.push("/admin-login" as Href)}
-          style={styles.loginTypeTab}
-        >
-          <Text style={styles.loginTypeText}>LGU Admin Login</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.welcomeBlock}>
-        <Text style={[styles.welcomeTitle, isCompact && styles.welcomeTitleCompact]}>
-          Welcome back
-        </Text>
-        <Text style={styles.welcomeSub}>
-          Sign in to your VolunServe account
-        </Text>
-      </View>
-
-      <Text style={styles.inputLabel}>Email address</Text>
-      <View style={[styles.inputWrapper, focused === "email" && styles.inputFocused]}>
-        <Ionicons name="mail-outline" size={19} color="#718096" />
-        <TextInput
-          ref={emailInputRef}
-          style={styles.inputField}
-          placeholder="Enter your email address"
-          placeholderTextColor="#94a3b8"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          autoComplete="email"
-          editable={!loading && !googleLoading}
-          returnKeyType="next"
-          onFocus={() => setFocused("email")}
-          onBlur={() => setFocused(null)}
-        />
-      </View>
-
-      <Text style={[styles.inputLabel, styles.passwordLabel]}>Password</Text>
-      <View style={[styles.inputWrapper, focused === "password" && styles.inputFocused]}>
-        <Ionicons name="lock-closed-outline" size={19} color="#718096" />
-        <TextInput
-          style={styles.inputField}
-          placeholder="Enter your password"
-          placeholderTextColor="#94a3b8"
-          secureTextEntry={!showPassword}
-          value={password}
-          onChangeText={setPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          textContentType="password"
-          autoComplete="password"
-          editable={!loading && !googleLoading}
-          returnKeyType="done"
-          onSubmitEditing={handleLogin}
-          onFocus={() => setFocused("password")}
-          onBlur={() => setFocused(null)}
-        />
-        <TouchableOpacity
-          style={styles.eyeButton}
-          disabled={loading || googleLoading}
-          accessibilityRole="button"
-          accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-          onPress={() => setShowPassword((current) => !current)}
-        >
-          <Ionicons
-            name={showPassword ? "eye-off-outline" : "eye-outline"}
-            size={20}
-            color="#64748b"
-          />
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        disabled={loading || googleLoading}
-        onPress={handleForgotPassword}
-        style={styles.forgotPasswordButton}
-      >
-        <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-      </TouchableOpacity>
-
-      <Pressable
-        accessibilityRole="button"
-        disabled={loading || googleLoading}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          (pressed || loading || googleLoading) && styles.buttonDisabled,
-        ]}
-        onPress={handleLogin}
-      >
-        {loading ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <View style={styles.primaryButtonContent}>
-            <Text style={styles.primaryButtonText}>Sign In</Text>
-            <Ionicons name="arrow-forward" size={18} color="#ffffff" />
-          </View>
-        )}
-      </Pressable>
-
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.orText}>or continue with</Text>
-        <View style={styles.divider} />
-      </View>
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        disabled={!googleRequest || loading || googleLoading}
-        style={[
-          styles.googleButton,
-          (!googleRequest || loading || googleLoading) && styles.buttonDisabled,
-        ]}
-        onPress={handleGoogleLogin}
-      >
-        {googleLoading ? (
-          <ActivityIndicator color="#064e3b" />
-        ) : (
-          <>
-            <Ionicons name="logo-google" size={19} color="#2563eb" />
-            <Text style={styles.googleText}>Continue with Google</Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        disabled={loading || googleLoading}
-        style={[styles.guestButton, (loading || googleLoading) && styles.buttonDisabled]}
-        onPress={() => router.replace("/public")}
-      >
-        <Ionicons name="globe-outline" size={19} color="#176a5b" />
-        <Text style={styles.guestText}>Continue as Guest</Text>
-      </TouchableOpacity>
-
-      <View style={styles.signupRow}>
-        <Text style={styles.signupText}>Don't have an account?</Text>
-        <TouchableOpacity
-          accessibilityRole="button"
-          disabled={loading || googleLoading}
-          onPress={() => router.push("/signup")}
-        >
-          <Text style={styles.signupLink}> Sign up</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.securityNote}>
-        <Ionicons name="shield-checkmark-outline" size={15} color="#287968" />
-        <Text style={styles.securityText}>
-          Secure access for residents and volunteers
-        </Text>
-      </View>
-    </View>
-  );
-
+  // Shared premium shell supplies the real two-route tab switcher.
+  // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.header, isCompact && styles.headerCompact]}>
-        <Image
-          source={require("../assets/images/logo.png")}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <View style={styles.brandText}>
-          <Text style={styles.headerTitle}>VolunServe</Text>
-          <Text style={styles.headerSubtitle}>Community Response Platform</Text>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <PremiumAuthShell active="resident">
+        <View style={styles.intro}>
+          <Text style={styles.kicker}>—  VOLUNSERVE ACCOUNT  —</Text>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to stay connected with your community and help build a safer, stronger city.</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Ionicons name="shield-checkmark" size={18} color="#0b7661" />
+        <Text style={styles.label}>Email Address</Text>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
+          <Ionicons name="mail-outline" size={21} color="#64748B" />
+          <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={setEmail}
+            accessibilityLabel="Resident email address"
+            placeholder="Enter your email address" placeholderTextColor="#8BA0B4"
+            autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
+            textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
+            returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
         </View>
-      </View>
-
-      <ScrollView
-        ref={mainScrollRef}
-        style={styles.mainScroll}
-        contentContainerStyle={[styles.mainContent, isCompact && styles.mainContentCompact]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.shell, isCompact && styles.shellCompact]}>
-          <View
-            style={[
-              styles.heroPanel,
-              { width: heroWidth, height: heroHeight },
-              isCompact && styles.heroPanelCompact,
-            ]}
-          >
-            <Animated.ScrollView
-              ref={heroScrollRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              bounces={false}
-              scrollEventThrottle={16}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                { useNativeDriver: false }
-              )}
-              onMomentumScrollEnd={(event) => {
-                const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
-                setHeroIndex(index);
-                heroIndexRef.current = index;
-              }}
-            >
-              {SLIDES.map((slide, index) => {
-                const inputRange = [
-                  (index - 1) * heroWidth,
-                  index * heroWidth,
-                  (index + 1) * heroWidth,
-                ];
-                const translateX = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [-24, 0, 24],
-                  extrapolate: "clamp",
-                });
-                return (
-                  <View
-                    key={index}
-                    style={[styles.slide, { width: heroWidth, height: heroHeight }]}
-                  >
-                    <Animated.Image
-                      source={slide.image}
-                      resizeMode="cover"
-                      style={[
-                        styles.heroImage,
-                        { width: heroWidth, height: heroHeight },
-                        { transform: [{ translateX }, { scale: zoomAnim }] },
-                      ]}
-                    />
-                    <LinearGradient
-                      colors={["rgba(3,35,36,0.82)", "rgba(3,60,53,0.72)", "rgba(4,41,52,0.70)"]}
-                      style={styles.heroGradient}
-                    />
-                    <View style={[styles.heroContent, isCompact && styles.heroContentCompact]}>
-                      <View style={styles.systemBadge}>
-                        <Ionicons name="heart-circle-outline" size={15} color="#a7f3d0" />
-                        <Text style={styles.systemText}>
-                          {isCompact ? "SERVING SAN JOSE DEL MONTE" : "CITY RESPONSE NETWORK"}
-                        </Text>
-                      </View>
-                      {isCompact ? (
-                        <Text style={styles.heroTitleCompact} numberOfLines={2}>
-                          Together, we make a difference.
-                        </Text>
-                      ) : (
-                        <>
-                          <Text style={styles.heroTitle}>{slide.title}</Text>
-                          <Text style={styles.heroText}>{slide.desc}</Text>
-                          <TouchableOpacity
-                            accessibilityRole="button"
-                            style={styles.accessButton}
-                            onPress={() => emailInputRef.current?.focus()}
-                          >
-                            <Text style={styles.accessText}>Access Portal</Text>
-                            <Ionicons name="arrow-forward" size={16} color="#ffffff" />
-                          </TouchableOpacity>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </Animated.ScrollView>
-            <View style={[styles.dotsContainer, isCompact && styles.dotsContainerCompact]}>
-              {SLIDES.map((_, index) => (
-                <Pressable
-                  key={index}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Show community slide ${index + 1}`}
-                  onPress={() => goToSlide(index)}
-                  style={[styles.dot, index === heroIndex && styles.dotActive]}
-                />
-              ))}
-            </View>
+        <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
+          <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
+          <TextInput style={styles.input} value={password} onChangeText={setPassword}
+            accessibilityLabel="Resident password"
+            placeholder="Enter your password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
+            autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
+            editable={!loading && !googleLoading} returnKeyType="done"
+            onSubmitEditing={() => void handleLogin()} onFocus={() => setFocused("password")}
+            onBlur={() => setFocused(null)} />
+          <TouchableOpacity accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            onPress={() => setShowPassword(value => !value)} disabled={loading || googleLoading}
+            style={styles.eye}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#57728C" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.options}>
+          <TouchableOpacity accessibilityRole="checkbox"
+            accessibilityState={{ checked: rememberMe }}
+            onPress={() => setRememberMe(value => !value)}
+            disabled={loading || googleLoading} style={styles.checkRow}>
+            <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
+            <Text style={styles.muted}>Remember me</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+            disabled={loading || googleLoading}>
+            <Text style={styles.forgot}>Forgot password?</Text>
+          </TouchableOpacity>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => void handleLogin()}
+          disabled={loading || googleLoading}
+          style={({ pressed }) => [styles.signIn, authCornerCut(12),
+            (pressed || loading || googleLoading) && styles.disabled]}>
+          {loading ? <ActivityIndicator color="#FFFFFF" /> :
+            <View style={styles.centerRow}>
+              <Text style={styles.signInText}>Sign In</Text>
+              <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
+            </View>}
+        </Pressable>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.muted}>or continue with</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <TouchableOpacity accessibilityRole="button" onPress={() => void handleGoogleLogin()}
+          disabled={!googleRequest || loading || googleLoading}
+          style={[styles.outlineButton, authCornerCut(10),
+            (!googleRequest || loading || googleLoading) && styles.disabled]}>
+          {googleLoading ? <ActivityIndicator color="#087F66" /> :
+            <View style={styles.centerRow}>
+              <Ionicons name="logo-google" color="#2563EB" size={19} />
+              <Text style={styles.outlineText}>Continue with Google</Text>
+            </View>}
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
+          disabled={loading || googleLoading}
+          style={[styles.outlineButton, authCornerCut(10), (loading || googleLoading) && styles.disabled]}>
+          <View style={styles.centerRow}>
+            <Ionicons name="person-outline" color="#285A4A" size={21} />
+            <Text style={styles.outlineText}>Continue as Guest</Text>
           </View>
-
-          <View style={[styles.formColumn, isCompact && styles.formColumnCompact]}>
-            {loginForm}
-          </View>
+        </TouchableOpacity>
+        <View style={styles.createRow}>
+          <Text style={styles.muted}>Don't have an account? </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/signup")}
+            disabled={loading || googleLoading}>
+            <Text style={styles.createLink}>Create account</Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.footerText}>
-          VolunServe · City of San Jose del Monte, Bulacan
-        </Text>
-      </ScrollView>
+      </PremiumAuthShell>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f4f8f6" },
-  header: {
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5efeb",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: Platform.OS === "web" ? 14 : 40,
-    paddingBottom: 13,
-    paddingHorizontal: 22,
-  },
-  headerCompact: { paddingHorizontal: 16, paddingBottom: 10 },
-  headerLogo: { height: 38, width: 38, marginRight: 10 },
-  brandText: { flex: 1, justifyContent: "center" },
-  headerTitle: { color: "#103b34", fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
-  headerSubtitle: { color: "#647a74", fontSize: 10, fontWeight: "600", letterSpacing: 0.25 },
-  headerRight: {
-    width: 34, height: 34, backgroundColor: "#e9f6f1", borderRadius: 17,
-    alignItems: "center", justifyContent: "center",
-  },
-  mainScroll: { flex: 1 },
-  mainContent: { flexGrow: 1, paddingTop: 28, paddingBottom: 24, paddingHorizontal: 32 },
-  mainContentCompact: { paddingTop: 12, paddingHorizontal: 16, paddingBottom: 20 },
-  shell: {
-    width: "100%", maxWidth: 1120, alignSelf: "center",
-    flexDirection: "row", alignItems: "stretch", gap: 24,
-  },
-  shellCompact: { flexDirection: "column", alignItems: "center", gap: 12 },
-  heroPanel: {
-    overflow: "hidden", borderRadius: 25, backgroundColor: "#0f766e",
-    shadowColor: "#164d43", shadowOpacity: 0.12, shadowRadius: 18,
-    shadowOffset: { width: 0, height: 7 }, elevation: 3,
-  },
-  heroPanelCompact: { borderRadius: 17, elevation: 1 },
-  slide: { overflow: "hidden" },
-  heroImage: { position: "absolute", left: 0, top: 0 },
-  heroGradient: { ...StyleSheet.absoluteFillObject },
-  heroContent: {
-    position: "absolute", left: 40, right: 36, top: 0, bottom: 0,
-    justifyContent: "center", alignItems: "flex-start",
-  },
-  heroContentCompact: { left: 18, right: 18, justifyContent: "center", paddingBottom: 6 },
-  systemBadge: {
-    flexDirection: "row", alignItems: "center", alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.11)",
-    borderColor: "rgba(255,255,255,0.22)", borderWidth: 1,
-    borderRadius: 20, paddingVertical: 6, paddingHorizontal: 10,
-  },
-  systemText: { marginLeft: 5, fontSize: 9, color: "#e7fff6", fontWeight: "800", letterSpacing: 0.7 },
-  heroTitle: {
-    color: "#ffffff", fontWeight: "900", fontSize: 34,
-    lineHeight: 41, marginTop: 23, maxWidth: 410,
-  },
-  heroText: { color: "#e5f9f1", fontSize: 15, lineHeight: 24, marginTop: 14, maxWidth: 390 },
-  heroTitleCompact: { color: "#ffffff", fontWeight: "800", fontSize: 21, lineHeight: 26, marginTop: 9 },
-  accessButton: {
-    backgroundColor: "#ffffff", borderRadius: 13, marginTop: 25,
-    paddingHorizontal: 18, paddingVertical: 12, flexDirection: "row",
-    alignItems: "center", gap: 9,
-  },
-  accessText: { fontSize: 13, fontWeight: "800", color: "#105e50" },
-  dotsContainer: {
-    position: "absolute", bottom: 18, alignSelf: "center",
-    flexDirection: "row", alignItems: "center", gap: 5,
-  },
-  dotsContainerCompact: { bottom: 9, alignSelf: "flex-end", right: 16 },
-  dot: { height: 6, width: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.47)" },
-  dotActive: { backgroundColor: "#ffffff", width: 19 },
-  formColumn: { flex: 1, minWidth: 0, justifyContent: "center" },
-  formColumnCompact: { width: "100%", maxWidth: 520 },
-  loginCard: {
-    backgroundColor: "#ffffff", borderRadius: 23,
-    borderWidth: 1, borderColor: "#e6ece9",
-    paddingVertical: 30, paddingHorizontal: 32,
-    shadowColor: "#1a5146", shadowOpacity: 0.08, shadowRadius: 22,
-    shadowOffset: { width: 0, height: 8 }, elevation: 3,
-  },
-  loginCardCompact: {
-    borderRadius: 19, paddingHorizontal: 20, paddingVertical: 20,
-    elevation: 1, shadowOpacity: 0.04,
-  },
-  loginTypeTabs: { flexDirection: "row", backgroundColor: "#F1F7F3", borderRadius: 12,
-    padding: 4, borderWidth: 1, borderColor: "#D8E8DF", marginBottom: 23, gap: 4 },
-  loginTypeTab: { flex: 1, minWidth: 0, paddingHorizontal: 6, paddingVertical: 12,
-    borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  loginTypeActive: { backgroundColor: "#087F61" },
-  loginTypeText: { fontSize: 12, fontWeight: "800", color: "#467464", textAlign: "center" },
-  loginTypeTextActive: { color: "#FFFFFF" },
-  welcomeBlock: { marginBottom: 17 },
-  welcomeTitle: { color: "#142b31", fontSize: 28, fontWeight: "900", letterSpacing: -0.6 },
-  welcomeTitleCompact: { fontSize: 24 },
-  welcomeSub: { color: "#64748b", fontSize: 13, lineHeight: 19, marginTop: 3 },
-  inputLabel: { fontSize: 12, fontWeight: "700", color: "#34434a", marginBottom: 7 },
-  passwordLabel: { marginTop: 13 },
-  inputWrapper: {
-    minHeight: 51, paddingHorizontal: 13, borderRadius: 12,
-    borderWidth: 1, borderColor: "#dae3e5", backgroundColor: "#fafcfc",
-    flexDirection: "row", alignItems: "center",
-  },
-  inputFocused: { borderColor: "#0b8571", borderWidth: 1.5, backgroundColor: "#ffffff" },
-  inputField: {
-    flex: 1, minWidth: 0, marginLeft: 10, fontSize: 14, color: "#162d33",
-    paddingVertical: 10,
-  },
-  eyeButton: { paddingVertical: 8, paddingLeft: 8 },
-  forgotPasswordButton: { alignSelf: "flex-end", marginTop: 10, marginBottom: 2, paddingVertical: 3 },
-  forgotPasswordText: { fontSize: 12, color: "#167b70", fontWeight: "700" },
-  primaryButton: {
-    minHeight: 50, backgroundColor: "#087561", borderRadius: 12,
-    marginTop: 14, alignItems: "center", justifyContent: "center",
-  },
-  primaryButtonContent: { flexDirection: "row", alignItems: "center", gap: 9 },
-  primaryButtonText: { fontSize: 15, fontWeight: "800", color: "#ffffff" },
-  buttonDisabled: { opacity: 0.56 },
-  dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 17 },
-  divider: { flex: 1, backgroundColor: "#e0e8e5", height: 1 },
-  orText: { color: "#71818a", fontSize: 11, marginHorizontal: 12 },
-  googleButton: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    minHeight: 49, borderRadius: 12, backgroundColor: "#ffffff",
-    borderWidth: 1, borderColor: "#cfddda", marginBottom: 9, gap: 10,
-  },
-  googleText: { fontSize: 13, color: "#23353a", fontWeight: "700" },
-  guestButton: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    minHeight: 46, borderRadius: 12, backgroundColor: "#eef8f4",
-    borderWidth: 1, borderColor: "#d4e8e0", gap: 10,
-  },
-  guestText: { fontSize: 13, color: "#176a5b", fontWeight: "700" },
-  signupRow: {
-    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
-    justifyContent: "center", marginTop: 16,
-  },
-  signupText: { color: "#64748b", fontSize: 12 },
-  signupLink: { color: "#087561", fontSize: 12, fontWeight: "800" },
-  securityNote: { marginTop: 17, paddingTop: 13, borderTopColor: "#e8eeeb", borderTopWidth: 1,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  securityText: { fontSize: 10, color: "#71818a" },
-  footerText: {
-    textAlign: "center", marginTop: 20, color: "#71848a", fontSize: 11,
-  },
+  root: { flex: 1, backgroundColor: "#ECF6F1" },
+  intro: { alignItems: "center", marginBottom: 15, gap: 8 },
+  kicker: { fontSize: 10, fontWeight: "900", letterSpacing: 2.2, color: "#087C64" },
+  title: { fontSize: 34, fontWeight: "900", color: "#112333", letterSpacing: -1.1, textAlign: "center" },
+  subtitle: { maxWidth: 380, color: "#718198", fontSize: 13, textAlign: "center", lineHeight: 21 },
+  label: { fontSize: 12, fontWeight: "900", color: "#18283A", marginBottom: -5 },
+  passwordLabel: { marginTop: 5 },
+  inputBox: { minHeight: 56, flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 17, gap: 11, backgroundColor: "#FCFDFD", borderWidth: 1, borderColor: "#C5D8DC" },
+  focused: { borderColor: "#008A6E", backgroundColor: "#FFFFFF" },
+  input: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 13, color: "#122F38" },
+  eye: { padding: 5 },
+  options: { flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: -2 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
+  muted: { color: "#728095", fontSize: 12 },
+  forgot: { color: "#007B60", fontWeight: "800", fontSize: 12 },
+  signIn: { minHeight: 57, justifyContent: "center", alignItems: "center",
+    backgroundColor: "#007F62", marginTop: 4, shadowColor: "#087F61", shadowOpacity: .2,
+    shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  centerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  signInText: { fontSize: 16, fontWeight: "900", color: "#FFFFFF" },
+  divider: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 3 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#D5E1E1" },
+  outlineButton: { minHeight: 51, borderWidth: 1, borderColor: "#C9D8DA",
+    backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  outlineText: { fontSize: 13, color: "#172E3B", fontWeight: "800" },
+  createRow: { flexDirection: "row", alignItems: "center", justifyContent: "center",
+    flexWrap: "wrap", paddingTop: 10 },
+  createLink: { fontSize: 12, fontWeight: "900", color: "#008365" },
+  disabled: { opacity: .5 },
 });
