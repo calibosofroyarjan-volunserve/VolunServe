@@ -93,6 +93,35 @@ async function main() {
       admin.doc("lguApplicantFaceScreenings/"+STAFF).get(),true);
     await check("Unrelated resident cannot inspect face screening result", ()=>
       stranger.doc("lguApplicantFaceScreenings/"+STAFF).get(),true);
+    await check("Applicant cannot forge OCR government ID authenticity", ()=>
+      applicant.doc("lguApplicantDocumentScreenings/"+STAFF).set({
+        documentTypeSignal:"declared_type_text_consistent",
+        decision:"verified",documentAuthenticityVerified:true,
+      }),true);
+    await check("Operational Admin cannot forge OCR issuer checks", ()=>
+      admin.doc("lguApplicantDocumentScreenings/"+STAFF).set({
+        documentTypeSignal:"declared_type_text_consistent",
+        decision:"verified",
+      }),true);
+    await check("Super Admin browser cannot forge backend OCR", ()=>
+      superadmin.doc("lguApplicantDocumentScreenings/"+STAFF).set({
+        documentTypeSignal:"declared_type_text_consistent",
+      }),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguApplicantDocumentScreenings/"+STAFF).set({
+        uid:STAFF,documentTypeSignal:"document_type_inconclusive",
+        decision:"manual_review_required",
+        documentAuthenticityVerified:false,
+      });
+    });
+    await check("Applicant can read own OCR review status", ()=>
+      applicant.doc("lguApplicantDocumentScreenings/"+STAFF).get());
+    await check("Programmer Super Admin can review OCR screening", ()=>
+      superadmin.doc("lguApplicantDocumentScreenings/"+STAFF).get());
+    await check("LGU operational Admin cannot access OCR screening", ()=>
+      admin.doc("lguApplicantDocumentScreenings/"+STAFF).get(),true);
+    await check("Other resident cannot read private OCR results", ()=>
+      stranger.doc("lguApplicantDocumentScreenings/"+STAFF).get(),true);
     await check("applicant cannot overwrite manual review status",
       ()=>row.update({reviewStatus:"verified"}),true);
     await check("applicant cannot delete evidence metadata",
