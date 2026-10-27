@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -104,14 +105,16 @@ export default function NotificationsScreen() {
   </View>;
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-    <View style={styles.heading}>
+    <LinearGradient colors={["#073E31", "#087B5B", "#35A27C"]}
+      start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.heading}>
+      <View pointerEvents="none" style={styles.heroDecor}><Ionicons name="leaf-outline" color="rgba(255,255,255,0.12)" size={124}/></View>
       <View style={styles.headingIcon}><Ionicons name="notifications-outline" size={24} color="#fff" /></View>
       <View style={styles.headingText}>
         <Text style={styles.kicker}>VOLUNSERVE • UPDATES</Text>
         <Text style={styles.title}>Notifications</Text>
         <Text style={styles.subtitle}>Important account and community updates in one place.</Text>
       </View>
-    </View>
+    </LinearGradient>
 
     <View style={styles.summary}>
       <View><Text style={styles.metric}>{unread}</Text><Text style={styles.metricLabel}>Unread notifications</Text></View>
@@ -203,7 +206,8 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F3F8F5" },
   container: { width: "100%", maxWidth: 980, alignSelf: "center", paddingHorizontal: 18, paddingVertical: 24, paddingBottom: 48 },
-  heading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 18, paddingHorizontal: 17, backgroundColor: "#0D7557", borderRadius: 19 },
+  heading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 18, paddingHorizontal: 17, backgroundColor: "#0D7557", borderRadius: 19, overflow: "hidden" },
+  heroDecor: { position: "absolute", right: -16, top: -25, opacity: 0.95 },
   headingIcon: { backgroundColor: "#ffffff25", borderRadius: 15, padding: 13 },
   headingText: { flex: 1 },
   kicker: { color: "#C4F4DE", fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
