@@ -2576,7 +2576,6 @@ exports.issueCommunityCertificateOnAttendanceVerification = onDocumentUpdated(
 // Clients register tokens through an authenticated callable function only.
 // ---------------------------------------------------------------------------
 const {getMessaging} = require("firebase-admin/messaging");
-const {onDocumentDeleted} = require("firebase-functions/v2/firestore");
 
 const ANDROID_PUSH_TOKEN = /^[A-Za-z0-9_:\-]{30,4096}$/;
 const PUSH_TYPES = new Set(["emergency", "event", "donation", "account"]);
