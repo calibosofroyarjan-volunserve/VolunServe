@@ -11479,6 +11479,11 @@ require("./lguStaffDocumentScreening").mountLguStaffDocumentScreening(app,{
 require("./lguStaffPrivacy").mountLguStaffPrivacy(app,{
   db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
 });
+// AWS challenge sessions are applicant-only and OFF until approved release.
+// Never accept client-reported live/spoof results or return confidence scores.
+require("./lguStaffLiveness").mountLguStaffLiveness(app,{
+  db,FieldValue,requireFirebaseUser,
+});
 const port =
   Number(
     process.env.PORT ||

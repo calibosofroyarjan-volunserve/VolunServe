@@ -5077,6 +5077,11 @@ service cloud.firestore {
       allow list: if isSuperAdmin();
       allow create, update, delete: if false;
     }
+    // AWS liveness session ownership, nonces and response signals exist
+    // server-side only. Clients MUST use authenticated backend endpoints.
+    match /lguApplicantLivenessSessions/{uid} {
+      allow read, write: if false;
+    }
     match /lguApplicantFaceScreenings/{uid} {
       allow get: if signedIn() &&
         (request.auth.uid == uid || isSuperAdmin());

@@ -79,6 +79,18 @@ async function main() {
       ()=>anon.doc("lguApplicantEvidence/"+STAFF).get(),true);
     await check("programmer Super Admin can inspect confidential metadata",
       ()=>superadmin.doc("lguApplicantEvidence/"+STAFF).get());
+    await check("Applicant cannot access raw AWS liveness session IDs",()=>
+      applicant.doc("lguApplicantLivenessSessions/"+STAFF).get(),true);
+    await check("Super Admin browser cannot read raw AWS session tokens",()=>
+      superadmin.doc("lguApplicantLivenessSessions/"+STAFF).get(),true);
+    await check("LGU Admin cannot forge AWS liveness success",()=>
+      admin.doc("lguApplicantLivenessSessions/"+STAFF).set({
+        uid:STAFF,state:"completed",signal:"live_presence_signal_present",
+      }),true);
+    await check("Applicant cannot forge AWS liveness success",()=>
+      applicant.doc("lguApplicantLivenessSessions/"+STAFF).set({
+        uid:STAFF,state:"completed",signal:"live_presence_signal_present",
+      }),true);
     await check("Applicant cannot forge face-similarity results", ()=>
       applicant.doc("lguApplicantFaceScreenings/"+STAFF).set({
         uid:STAFF,faceSimilaritySignal:"similarity_signal_present",

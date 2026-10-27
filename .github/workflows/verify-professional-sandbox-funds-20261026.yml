@@ -24,6 +24,7 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/lguStaffFaceScreening.js
+          node --check backend/lguStaffLiveness.js
           node --check backend/lguStaffDocumentScreening.js
           node --check backend/lguStaffPrivacy.js
           node --check backend/fundReleaseDemoRoutes.js
@@ -61,6 +62,8 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-applicant-evidence-rules.cjs"
       - name: LGU staff private AI face screening security regression (offline)
         run: node scripts/test-lgu-staff-face-screening.cjs
+      - name: AWS active liveness session security (mocked provider, no AWS credentials)
+        run: node --test scripts/test-lgu-staff-liveness.cjs
       - name: Mock private LGU staff facial screen, role access and forced manual review
         run: node --test scripts/test-lgu-staff-face-screening-integration.cjs
       - name: LGU staff government-ID and facial-photo private Storage access (Firestore+Storage emulators)
