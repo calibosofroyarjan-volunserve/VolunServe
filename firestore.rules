@@ -22,7 +22,9 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return signedIn()
         && p.get('role', '') == 'admin'
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        // A suspended LGU administrator must lose operational access immediately.
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
@@ -35,7 +37,9 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return signedIn()
         && p.get('role', '') in ['admin', 'superadmin']
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        && (p.get('role', '') == 'superadmin'
+          || p.get('adminStatus', 'active') != 'suspended');
     }
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
