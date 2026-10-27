@@ -65,6 +65,34 @@ async function main() {
       ()=>anon.doc("lguApplicantEvidence/"+STAFF).get(),true);
     await check("programmer Super Admin can inspect confidential metadata",
       ()=>superadmin.doc("lguApplicantEvidence/"+STAFF).get());
+    await check("Applicant cannot forge face-similarity results", ()=>
+      applicant.doc("lguApplicantFaceScreenings/"+STAFF).set({
+        uid:STAFF,faceSimilaritySignal:"similarity_signal_present",
+        identityDecision:"verified",livenessImplemented:true,
+      }),true);
+    await check("Operational LGU Admin cannot forge staff biometric screening", ()=>
+      admin.doc("lguApplicantFaceScreenings/"+STAFF).set({
+        uid:STAFF,faceSimilaritySignal:"similarity_signal_present",
+      }),true);
+    await check("Super Admin browser cannot forge backend AI results", ()=>
+      superadmin.doc("lguApplicantFaceScreenings/"+STAFF).set({
+        uid:STAFF,faceSimilaritySignal:"similarity_signal_present",
+      }),true);
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("lguApplicantFaceScreenings/"+STAFF).set({
+        uid:STAFF,status:"manual_review_required",
+        identityDecision:"manual_review_required",
+        livenessImplemented:false,documentAuthenticityVerified:false,
+      });
+    });
+    await check("Applicant may read own non-privileged screening status", ()=>
+      applicant.doc("lguApplicantFaceScreenings/"+STAFF).get());
+    await check("Only Super Admin may read another applicant face screening", ()=>
+      superadmin.doc("lguApplicantFaceScreenings/"+STAFF).get());
+    await check("Operational LGU Admin cannot inspect applicant face comparison", ()=>
+      admin.doc("lguApplicantFaceScreenings/"+STAFF).get(),true);
+    await check("Unrelated resident cannot inspect face screening result", ()=>
+      stranger.doc("lguApplicantFaceScreenings/"+STAFF).get(),true);
     await check("applicant cannot overwrite manual review status",
       ()=>row.update({reviewStatus:"verified"}),true);
     await check("applicant cannot delete evidence metadata",
