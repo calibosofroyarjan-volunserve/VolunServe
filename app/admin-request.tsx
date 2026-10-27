@@ -3,9 +3,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { deleteApp, initializeApp } from "firebase/app";
-import { connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
-import { connectFirestoreEmulator, doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
-import { connectStorageEmulator, getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
+import { connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { connectFirestoreEmulator, doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { connectStorageEmulator, getMetadata, getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
 import React, { useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
@@ -99,6 +99,22 @@ export default function LguStaffApplication() {
     const mime = blob.type || asset.mimeType || "";
     const extension = IMG_TYPES[mime];
     if (!extension) throw new Error("Only real JPG, PNG or WebP images are accepted.");
+    // Storage is create-only. After a network interruption, recover original
+    // private evidence rather than overwriting immutable submitted files.
+    for (const ext of ["jpg","png","webp"]) {
+      const priorPath="lguStaffEvidence/"+uid+"/"+slot+"."+ext;
+      try {
+        const meta=await getMetadata(storageRef(storage,priorPath));
+        const expectedMime=ext==="jpg"?"image/jpeg":"image/"+ext;
+        if(meta.contentType!==expectedMime || meta.size<1024 || meta.size>MAX_IMAGE_BYTES ||
+          meta.customMetadata?.purpose!=="lgu_staff_manual_review") {
+          throw new Error("Previously uploaded evidence needs secure staff review.");
+        }
+        return priorPath;
+      } catch(e:any) {
+        if(e?.code!=="storage/object-not-found") throw e;
+      }
+    }
     const path = "lguStaffEvidence/" + uid + "/" + slot + "." + extension;
     await uploadBytes(storageRef(storage,path),blob,{contentType:mime,customMetadata:{purpose:"lgu_staff_manual_review"}});
     return path; // Private object path only; never a public URL.
@@ -115,18 +131,44 @@ export default function LguStaffApplication() {
       connectStorageEmulator(storage,"127.0.0.1",9199); // private local evidence only
     }
     let user:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;
+    let newlyCreated=false;
     let profileCreated=false;
     try {
-      user=(await createUserWithEmailAndPassword(candidateAuth,form.email.trim().toLowerCase(),form.password)).user;
+      const email=form.email.trim().toLowerCase();
+      try {
+        user=(await createUserWithEmailAndPassword(candidateAuth,email,form.password)).user;
+        newlyCreated=true;
+      } catch(e:any) {
+        if(e?.code!=="auth/email-already-in-use") throw e;
+        // Only the existing signed-in applicant may resume an interrupted submission.
+        user=(await signInWithEmailAndPassword(candidateAuth,email,form.password)).user;
+      }
       const uid=user.uid;
-      await setDoc(doc(candidateDb,"users",uid),{
-        uid,email:form.email.trim().toLowerCase(),fullName:form.fullName.trim().replace(/\s+/g," "),
-        age:0,phoneNumber:"",role:"applicant",status:"pending_review",
-        residentAccess:false,volunteerAccess:false,region:"Region III – Central Luzon",
-        province:"Bulacan",city:"City of San Jose del Monte",barangay:form.barangay,
-        lguOffice:form.lguOffice.trim(),lguPosition:form.lguPosition.trim(),
-        appointmentReference:form.appointmentReference.trim(),createdAt:serverTimestamp(),
-      });
+      if(newlyCreated) {
+        await setDoc(doc(candidateDb,"users",uid),{
+          uid,email,fullName:form.fullName.trim().replace(/\s+/g," "),
+          age:0,phoneNumber:"",role:"applicant",status:"pending_review",
+          residentAccess:false,volunteerAccess:false,region:"Region III – Central Luzon",
+          province:"Bulacan",city:"City of San Jose del Monte",barangay:form.barangay,
+          lguOffice:form.lguOffice.trim(),lguPosition:form.lguPosition.trim(),
+          appointmentReference:form.appointmentReference.trim(),createdAt:serverTimestamp(),
+        });
+      } else {
+        const existing=await getDoc(doc(candidateDb,"users",uid));
+        const profile=existing.data();
+        if(!existing.exists() || profile?.role!=="applicant" || profile?.status!=="pending_review" ||
+          profile.email!==email ||
+          profile.fullName?.trim()!==form.fullName.trim().replace(/\s+/g," ") ||
+          profile.lguOffice?.trim()!==form.lguOffice.trim() ||
+          profile.appointmentReference?.trim()!==form.appointmentReference.trim()) {
+          throw new Error("The account is not an eligible pending LGU application or the saved details do not match. No existing profile was changed.");
+        }
+        const evidence=await getDoc(doc(candidateDb,"lguApplicantEvidence",uid));
+        if(evidence.exists()) {
+          setSuccess(true); // Existing protected submission; never rewrite it.
+          return;
+        }
+      }
       profileCreated=true;
       const front = await uploadPrivateImage(storage,uid,"front",images.front!);
       const back = lguIdRequiresBack(idType)
@@ -142,10 +184,11 @@ export default function LguStaffApplication() {
       void sendEmailVerification(user).catch(()=>undefined);
       setSuccess(true);
     } catch(e:any) {
-      if(user && !profileCreated) await deleteUser(user).catch(()=>undefined);
+      // Never delete a pre-existing account after a failed recovery attempt.
+      if(user && newlyCreated && !profileCreated) await deleteUser(user).catch(()=>undefined);
       setError(profileCreated
-        ? "Applicant account created but evidence submission was incomplete. No Admin access has been granted. Contact the Super Admin for a secure resubmission; do not send ID images through chat or email."
-        : String(e?.message || "Could not create the LGU applicant account."));
+        ? "Submission interrupted. No Admin access was granted. Reopen this form with the same staff details and password to resume securely. Previously uploaded private files remain locked. Never send IDs through chat or email."
+        : String(e?.message || "Unable to create or resume this LGU staff application."));
     } finally {
       await signOut(candidateAuth).catch(()=>undefined);
       await deleteApp(app).catch(()=>undefined);
