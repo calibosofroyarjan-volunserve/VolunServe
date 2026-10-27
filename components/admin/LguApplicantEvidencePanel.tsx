@@ -137,10 +137,10 @@ export default function LguApplicantEvidencePanel({
       if(!response.ok)throw new Error(String(body.message||
         "Secure face-similarity screening is unavailable. Use manual review."));
       const signal=body.faceSimilaritySignal==="similarity_signal_present"
-        ?"Face geometry similarity signal detected — NOT proof of identity."
-        :"Facial comparison inconclusive — manual review required.";
+        ?"Photo comparison completed. Review the applicant and original ID before deciding."
+        :"Photo comparison needs additional manual identity review.";
       setScreenStatus(String(body.faceSimilaritySignal||"inconclusive_manual_review"));
-      setScreenMessage(signal+" Active liveness, ID authenticity and LGU employment were not verified.");
+      setScreenMessage(signal+" Live presence, government ID authenticity and LGU appointment remain unverified.");
     }catch(e:any){
       setScreenStatus("manual_review_required");
       setScreenMessage(String(e?.message||"Face screening could not be completed."));
@@ -240,10 +240,10 @@ export default function LguApplicantEvidencePanel({
         onPress={()=>void runSimilarityScreen()}
         style={[styles.screenButton,(screenBusy||loading||!!error||!info)&&{opacity:0.5}]}>
         {screenBusy?<ActivityIndicator color="#FFFFFF"/>:
-          <Text style={styles.screenButtonText}>Run AI-assisted face comparison (review only)</Text>}
+          <Text style={styles.screenButtonText}>Check ID portrait and face photo</Text>}
       </TouchableOpacity>
       {!!screenMessage&&<View style={styles.signalBox}>
-        <Text style={styles.signalLabel}>{screenStatus==="similarity_signal_present"?"Informational similarity":"Manual review required"}</Text>
+        <Text style={styles.signalLabel}>{screenStatus==="similarity_signal_present"?"Photo comparison complete · Review required":"Additional review required"}</Text>
         <Text style={styles.note}>{screenMessage}</Text>
       </View>}
     </View>

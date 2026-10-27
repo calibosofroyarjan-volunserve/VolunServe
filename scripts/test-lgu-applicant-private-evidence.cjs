@@ -11,6 +11,14 @@ const policy=source("lib/lguStaffApplicationPolicy.ts");
 const firestore=source("firestore.rules");
 const storage=source("storage.rules");
 const config=JSON.parse(source("firebase.json"));
+assert(app.includes("faceGuideOval") &&
+  app.includes("Photo captured · Identity review pending") &&
+  app.includes("Gallery uploads are not accepted for this step") &&
+  app.includes("Identity verification: Awaiting protected review") &&
+  !app.includes("matching score") &&
+  !panel.includes("faceSimilarityScore") &&
+  panel.includes("Check ID portrait and face photo"),
+  "Guided private face capture and professional human-readable status must never display scores");
 assert(app.includes("LguStaffWithdrawalPanel")&&
   app.includes("Already applied? Withdraw an application")&&
   withdrawal.includes("/api/lgu-staff/privacy/request-withdrawal")&&

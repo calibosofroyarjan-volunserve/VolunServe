@@ -131,6 +131,7 @@ test("Real Python manual_review/pending match score gets informational signal, n
   assert.equal(h.docs.get("users/"+APPLICANT).role,"applicant");
   assert.equal(h.docs.get("users/"+APPLICANT).status,"pending_review");
   assert.equal(h.docs.get("lguApplicantFaceScreenings/"+APPLICANT).identityDecision,"manual_review_required");
+  assert.equal(Object.hasOwn(h.docs.get("lguApplicantFaceScreenings/"+APPLICANT),"faceSimilarityScore"),false);
   assert(!JSON.stringify(result.body).includes("secret-in-tests-only"));
   assert(!JSON.stringify(result.body).includes("0.93"));
 });

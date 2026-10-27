@@ -66,11 +66,12 @@ for(const fragment of [
   'FieldValue.delete()',
 ])assert(source.includes(fragment),"Missing security requirement: "+fragment);
 assert(server.includes("mountLguStaffFaceScreening(app"),"Backend must register restricted reviewer route");
-assert(ui.includes("Run AI-assisted face comparison (review only)") &&
+assert(ui.includes("Check ID portrait and face photo") &&
+  !source.includes("faceSimilarityScore:score") &&
   ui.includes("auth.currentUser") &&
   ui.includes("usingFirebaseEmulators") &&
   ui.includes('identityDecision')===false &&
-  ui.includes("Active liveness, ID authenticity and LGU employment were not verified."),
+  ui.includes("Live presence, government ID authenticity and LGU appointment remain unverified."),
   "Super Admin must only display optional informational similarity, not ID verification");
 assert(rules.includes("match /lguApplicantFaceScreenings/{uid}") &&
   rules.includes("allow create, update, delete: if false;"),

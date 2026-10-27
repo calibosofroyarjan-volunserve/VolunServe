@@ -152,7 +152,9 @@ function mountLguStaffFaceScreening(app,{db,adminApp,FieldValue,requireFirebaseU
         : "inconclusive_manual_review";
       await screenRef.set({
         uid,status:"manual_review_required",reviewerUid,
-        faceSimilaritySignal:signal,faceSimilarityScore:score,
+        // Scores are transient engine internals, never stored in applicant-readable
+        // Firestore review documents or exposed to clients.
+        faceSimilaritySignal:signal,
         engine:"existing_landmark_similarity_v1",
         livenessImplemented:false,documentAuthenticityVerified:false,
         identityDecision:"manual_review_required",

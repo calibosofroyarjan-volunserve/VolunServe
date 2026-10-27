@@ -220,14 +220,26 @@ export default function LguStaffApplication() {
         <Text style={styles.help}>{explanation}</Text>
       </View>
       {images[slot] ? (
-        <Image source={{uri:images[slot]!.uri}} resizeMode="contain" style={styles.preview}/>
+        <View style={live?styles.selfiePreviewShell:undefined}>
+          <Image source={{uri:images[slot]!.uri}} resizeMode="contain" style={live?styles.selfiePreview:styles.preview}/>
+          {live&&<View style={styles.captureStatusRow}>
+            <Ionicons name="checkmark-circle" size={17} color="#0B8060"/>
+            <Text style={styles.captureStatusText}>Photo captured · Identity review pending</Text>
+          </View>}
+        </View>
+      ) : live ? (
+        <View style={styles.selfieCapturePlaceholder}>
+          <View style={styles.faceGuideOval}><Ionicons name="person-outline" size={54} color="#388D70"/></View>
+          <Text style={styles.faceGuideTitle}>Position your face inside the guide</Text>
+          <Text style={styles.faceGuideHelp}>Camera access is requested only when you begin capture.</Text>
+        </View>
       ) : (
-        <View style={styles.placeholder}><Ionicons name={live?"camera-outline":"image-outline"} size={24} color="#417967"/></View>
+        <View style={styles.placeholder}><Ionicons name="image-outline" size={24} color="#417967"/></View>
       )}
       <TouchableOpacity accessibilityRole="button" disabled={busy}
         onPress={()=>void capture(slot,live)} style={styles.photoButton}>
         <Ionicons name={live?"camera-outline":"cloud-upload-outline"} size={17} color="#07725C"/>
-        <Text style={styles.photoButtonLabel}>{images[slot]?"Replace image":live?"Capture live selfie":"Choose image"}</Text>
+        <Text style={styles.photoButtonLabel}>{images[slot]?(live?"Retake face photo":"Replace image"):live?"Open camera":"Choose image"}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -253,7 +265,7 @@ export default function LguStaffApplication() {
             <View style={{flex:1}}>
               <Text style={styles.kicker}>VOLUNSERVE · LGU STAFF APPLICATION</Text>
               <Text style={styles.title}>Request LGU Admin Access</Text>
-              <Text style={styles.help}>Guided application · Government-issued ID only · Manual verification</Text>
+              <Text style={styles.help}>Private identity onboarding · Government-issued ID · Protected review</Text>
               {!privateEvidenceIntakeEnabled&&<Text style={styles.notice}>
                 Protected government ID submission is disabled on this release. This form is available for preview only; real sensitive documents cannot be submitted until the privacy and identity-service release gates pass.
               </Text>}
@@ -335,10 +347,32 @@ export default function LguStaffApplication() {
               )}
               {step===2&&(
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Live face capture</Text>
-                  <Text style={styles.help}>Capture your own face with the camera, in good lighting without filters or accessories covering your face. Your selfie will be kept private for authorized review.</Text>
-                  {photo("selfie","Camera selfie","Camera capture only—not a validated liveness or face-match result.",true)}
-                  <Text style={styles.notice}>Face comparison and active anti-spoof checks are NOT yet connected for LGU staff. The system will route this evidence for manual checking and never mark it AI verified.</Text>
+                  <View style={styles.faceStepHeading}>
+                    <View style={styles.faceStepIcon}><Ionicons name="scan-outline" size={24} color="#08775D"/></View>
+                    <View style={{flex:1,gap:4}}>
+                      <Text style={styles.sectionTitle}>Face verification</Text>
+                      <Text style={styles.help}>A simple, secure photo capture for your identity application.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.captureInstructions}>
+                    <Text style={styles.captureInstructionsTitle}>Before you begin</Text>
+                    {[
+                      ["sunny-outline","Stay in a bright, evenly lit area"],
+                      ["person-outline","Keep your full face visible and centered"],
+                      ["glasses-outline","Remove sunglasses, filters and face coverings"],
+                    ].map(([icon,label])=>(
+                      <View key={label} style={styles.captureInstructionRow}>
+                        <Ionicons name={icon as any} size={18} color="#0E7C5C"/>
+                        <Text style={styles.captureInstructionText}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {photo("selfie","Camera capture","Use your device camera to take a fresh face photo. Gallery uploads are not accepted for this step.",true)}
+                  <View style={styles.capturePrivacyRow}>
+                    <Ionicons name="lock-closed-outline" size={18} color="#0B7B5B"/>
+                    <Text style={styles.capturePrivacyText}>Your photo stays private and can only be accessed by authorized reviewers. It is never displayed publicly.</Text>
+                  </View>
+                  <Text style={styles.notice}>Photo capture does not prove liveness. Active anti-spoof verification is not yet enabled; a qualified Super Admin must review the identity evidence and confirm the original ID in person.</Text>
                 </View>
               )}
               {step===3&&(
@@ -359,7 +393,8 @@ export default function LguStaffApplication() {
                     <Text style={styles.reviewText}>Barangay: {form.barangay}</Text>
                     <Text style={styles.reviewText}>ID type: {LGU_ID_TYPES.find(item=>item.value===idType)?.label}</Text>
                     <Text style={styles.reviewText}>Required images: ID, {lguIdRequiresBack(idType)?"back, ":""}selfie, LGU proof</Text>
-                    <Text style={styles.reviewText}>AI decision: NOT RUN · Official confirmation: PENDING</Text>
+                    <Text style={styles.reviewText}>Identity verification: Awaiting protected review</Text>
+                    <Text style={styles.reviewText}>LGU appointment: Awaiting official confirmation</Text>
                   </View>
                   <Text style={styles.notice}>{LGU_APPLICATION_NOTICE}</Text>
                   <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{checked:consent}}
@@ -435,6 +470,25 @@ const styles = StyleSheet.create({
     padding:13,flexDirection:"row",alignItems:"center",gap:9,backgroundColor:"#FAFCFB"},
   idChoiceSelected:{backgroundColor:"#E9F8EF",borderColor:"#6BBFA2"},
   choiceText:{fontWeight:"800",color:"#255A47",fontSize:13},
+  faceStepHeading:{flexDirection:"row",alignItems:"center",gap:12},
+  faceStepIcon:{width:54,height:54,borderRadius:18,backgroundColor:"#DDF5E8",alignItems:"center",justifyContent:"center"},
+  captureInstructions:{borderRadius:16,borderWidth:1,borderColor:"#CCE8D8",backgroundColor:"#F4FBF7",padding:15,gap:12},
+  captureInstructionsTitle:{fontSize:13,fontWeight:"900",color:"#15543F"},
+  captureInstructionRow:{flexDirection:"row",alignItems:"center",gap:11},
+  captureInstructionText:{flex:1,fontSize:12,lineHeight:18,color:"#356B55",fontWeight:"600"},
+  selfieCapturePlaceholder:{alignItems:"center",justifyContent:"center",paddingVertical:22,paddingHorizontal:12,gap:8,
+    borderWidth:1,borderStyle:"dashed",borderColor:"#A9D8C2",backgroundColor:"#EEF8F1",borderRadius:16},
+  faceGuideOval:{width:120,height:148,borderRadius:70,borderWidth:3,borderColor:"#47AE85",
+    backgroundColor:"#DFF4E7",alignItems:"center",justifyContent:"center",marginBottom:4},
+  faceGuideTitle:{fontSize:13,fontWeight:"800",color:"#175943",textAlign:"center"},
+  faceGuideHelp:{fontSize:11,color:"#5B8270",textAlign:"center"},
+  selfiePreviewShell:{padding:9,borderRadius:14,backgroundColor:"#E7F6EE",gap:8},
+  selfiePreview:{width:"100%",height:190,borderRadius:12,backgroundColor:"#DFEEE5"},
+  captureStatusRow:{flexDirection:"row",gap:7,justifyContent:"center",alignItems:"center"},
+  captureStatusText:{fontSize:11,fontWeight:"800",color:"#0B7558"},
+  capturePrivacyRow:{flexDirection:"row",gap:9,alignItems:"flex-start",padding:12,borderRadius:12,
+    backgroundColor:"#E9F7EF"},
+  capturePrivacyText:{flex:1,fontSize:11,lineHeight:18,color:"#346E56"},
   photoCard:{borderRadius:13,borderWidth:1,borderColor:"#C9E6D8",
     padding:12,backgroundColor:"#F5FBF7",gap:9},
   photoCopy:{gap:4},photoTitle:{fontSize:14,color:"#164637",fontWeight:"800"},
