@@ -11472,6 +11472,9 @@ app.post(
 require("./lguStaffFaceScreening").mountLguStaffFaceScreening(app,{
   db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
 });
+require("./lguStaffDocumentScreening").mountLguStaffDocumentScreening(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
 const port =
   Number(
     process.env.PORT ||
