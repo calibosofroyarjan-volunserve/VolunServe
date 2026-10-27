@@ -28,6 +28,7 @@ import {
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 import LguApplicantEvidencePanel from "../../components/admin/LguApplicantEvidencePanel";
+import LguStaffPrivacyRequestsPanel from "../../components/admin/LguStaffPrivacyRequestsPanel";
 
 import {
   db,
@@ -1056,6 +1057,9 @@ export default function AdminAccounts() {
             </View>
           )}
        </View>
+
+        {/* This is part of the existing Super Admin staff workspace, not a separate module. */}
+        <LguStaffPrivacyRequestsPanel/>
 
         <View
           style={
