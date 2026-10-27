@@ -30,6 +30,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { AdminPageHeading, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 import { useUserSession } from "../../lib/useUserSession";
 
 type ReviewFilter =
@@ -2132,25 +2133,10 @@ This still does not automatically create a Donation Campaign.`,
           showsVerticalScrollIndicator={false}
         >
           <>
-            <View style={styles.mockHeaderRow}>
-              <View style={styles.mockHeaderCopy}>
-                <Text style={styles.eyebrow}>
-                  COMMUNITY ASSISTANCE REVIEW
-                </Text>
-
-                <Text style={styles.pageTitle}>
-                  Assistance Requests
-                </Text>
-
-                <Text style={styles.pageSubtitle}>
-                  Review non-emergency Resident assistance requests.
-                  Emergency incidents stay in Emergency Cases, while
-                  barangay or multi-household distribution stays in
-                  Relief Operations.
-                </Text>
-              </View>
-            </View>
-
+            <AdminPageHeading
+              eyebrow="LGU ADMIN  /  EMERGENCY & ASSISTANCE"
+              title="Assistance Requests"
+              subtitle="Review individual Resident assistance applications and submitted evidence. Emergency incidents belong in Emergency Reports; community-wide distribution belongs in Relief Operations." />
             <View style={styles.mockTopTabsRow}>
               <MockStatusTab
                 label="Pending"
@@ -5220,7 +5206,7 @@ function DocumentPreviewModal({
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ADMIN_UI.paper,
   },
 
   pageScroll: {
@@ -6433,8 +6419,8 @@ const styles = StyleSheet.create({
   },
 
   mockStatusTabActive: {
-    borderColor: "#2563EB",
-    backgroundColor: "#2563EB",
+    borderColor: ADMIN_UI.emerald,
+    backgroundColor: ADMIN_UI.emerald,
   },
 
   mockStatusTabText: {
@@ -6466,8 +6452,8 @@ const styles = StyleSheet.create({
   },
 
   mockHistoryButtonActive: {
-    borderColor: "#BFDBFE",
-    backgroundColor: "#EFF6FF",
+    borderColor: ADMIN_UI.stroke,
+    backgroundColor: "#E9F7EF",
   },
 
   mockHistoryButtonText: {
@@ -6477,7 +6463,7 @@ const styles = StyleSheet.create({
   },
 
   mockHistoryButtonTextActive: {
-    color: "#2563EB",
+    color: ADMIN_UI.emerald,
   },
 
   mockSearchRow: {
@@ -6499,8 +6485,8 @@ const styles = StyleSheet.create({
   },
 
   mockAllButtonActive: {
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
+    borderColor: ADMIN_UI.stroke,
+    backgroundColor: "#E9F7EF",
   },
 
   mockAllButtonText: {
@@ -6510,7 +6496,7 @@ const styles = StyleSheet.create({
   },
 
   mockAllButtonTextActive: {
-    color: "#2563EB",
+    color: ADMIN_UI.emerald,
   },
 
   mockQueuePanel: {

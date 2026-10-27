@@ -3,7 +3,7 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/https");
-const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentUpdated, onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
@@ -2730,5 +2730,91 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
           });
         }
       }
+    },
+);
+
+
+// LGU Admin queues share one notifications collection. Scope tags keep Resident
+// and Volunteer inboxes independent without duplicating records or permissions.
+// These are staff *work alerts* only: no applicant names, contact details,
+// submitted IDs, face images, financial information or evidence in notifications.
+async function sendScopedLguWorkAlert(scope, type, eventKey, title, message) {
+  const database = getFirestore();
+  const admins = await database.collection("users")
+      .where("role", "==", "admin")
+      .limit(100)
+      .get();
+  const recipients = admins.docs.filter((entry) =>
+    entry.data().status === "approved" &&
+    entry.data().adminStatus !== "suspended");
+  const digest = crypto.createHash("sha256")
+      .update(String(eventKey))
+      .digest("hex")
+      .slice(0, 32);
+  // Deterministic per-event/recipient IDs make Firebase event retries idempotent:
+  // a retry must never reset an alert already acknowledged as read.
+  await Promise.all(recipients.map(async (admin) => {
+    const ref = database.collection("notifications")
+        .doc(`lgu_${scope}_${digest}_${admin.id}`);
+    await database.runTransaction(async (transaction) => {
+      const existing = await transaction.get(ref);
+      if (!existing.exists) {
+        transaction.create(ref, {
+          userId: admin.id,
+          scope,
+          type,
+          title,
+          message,
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    });
+  }));
+}
+
+exports.notifyLguOnVolunteerApplication = onDocumentWritten(
+    {
+      document: "volunteerApplications/{applicationId}",
+      retry: true,
+      timeoutSeconds: 60,
+    },
+    async (event) => {
+      const before = event.data?.before.data();
+      const after = event.data?.after.data();
+      if (!after || after.status !== "pending" ||
+          before?.status === "pending") return;
+      await sendScopedLguWorkAlert(
+          "volunteers",
+          "admin_volunteer_application_pending",
+          event.id,
+          "Volunteer application awaiting review",
+          "A new volunteer application entered the LGU review queue. " +
+          "Open Volunteers Management to check verified-resident " +
+          "eligibility, skills and availability.");
+    },
+);
+
+exports.notifyLguOnResidentIdentityPending = onDocumentUpdated(
+    {
+      document: "users/{uid}",
+      retry: true,
+      timeoutSeconds: 60,
+    },
+    async (event) => {
+      const before = event.data?.before.data();
+      const after = event.data?.after.data();
+      if (!after || before?.identityStatus === "pending" ||
+          after.identityStatus !== "pending" ||
+          !["resident", "user"].includes(String(after.role)) ||
+          after.identityVerified === true) return;
+      await sendScopedLguWorkAlert(
+          "residents",
+          "admin_resident_identity_pending",
+          event.id,
+          "Resident identity submission awaiting review",
+          "An identity submission is pending. Open Resident Identity " +
+          "Reviews and follow the required evidence and manual " +
+          "verification process.");
     },
 );

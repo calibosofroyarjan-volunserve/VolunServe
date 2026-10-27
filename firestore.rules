@@ -3881,7 +3881,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['read'])
         && request.resource.data.read == true;
-      allow read, update, delete: if isAdmin();
+      // Private inbox access is scoped to the recipient for every role.
     }
     match /tickets/{ticketId} {
       allow create: if approved()
