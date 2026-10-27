@@ -75,17 +75,17 @@ export default function LguStaffApplication() {
           <Ionicons name="shield-checkmark-outline" size={28} color="#087D60"/>
           <View style={{flex:1}}>
             <Text style={styles.kicker}>VOLUNSERVE · LGU STAFF</Text>
-            <Text style={styles.title}>Request Access from Super Admin</Text>
-            <Text style={styles.requestSubtitle}>LGU Admin application · reviewed by VolunServe programmers</Text>
+            <Text style={styles.title}>LGU Staff Verification Application</Text>
+            <Text style={styles.requestSubtitle}>Submit staff details · Super Admin reviews · Verified applicants may become LGU Admin</Text>
           </View>
         </View>
         {success ? <>
-          <Text style={styles.success}>Your request has been submitted to the Super Admin review queue. This is an LGU Admin access request, not a Super Admin account. The programmer team must independently obtain and verify official LGU appointment information before granting access. No administrative privileges are active while pending. Check your email for verification instructions.</Text>
+          <Text style={styles.success}>Your LGU staff information was submitted for review. Your account is PENDING with no Admin privileges. Our programmer Super Admin team will independently verify your identity, employment and authorization with official LGU sources. Only after successful confirmation may they promote this account to LGU Admin. Check your email for verification instructions.</Text>
           <TouchableOpacity style={styles.submit} onPress={()=>router.replace("/admin-login")}>
             <Text style={styles.submitText}>Return to Admin Login</Text>
           </TouchableOpacity>
         </> : <>
-          <Text style={styles.notice}>For authorized LGU staff requesting an Admin account. Provide basic contact and appointment information here; the programmer Super Admin team will independently collect and confirm supporting LGU credentials through authorized channels before approving the request. Do not upload IDs, sensitive documents, or passwords as proof. Submitting this form does not grant Super Admin or LGU Admin privileges.</Text>
+          <Text style={styles.notice}>STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Do not submit sensitive ID scans or passwords as proof.</Text>
           {fields.map(([key,label,hint,secret])=><View key={key} style={styles.field}>
             <Text style={styles.label}>{label}</Text>
             <TextInput style={styles.input} placeholder={hint} placeholderTextColor="#8CA89A"
@@ -108,7 +108,7 @@ export default function LguStaffApplication() {
           {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           <TouchableOpacity accessibilityRole="button" style={[styles.submit,busy&&{opacity:.6}]}
             disabled={busy} onPress={()=>void submit()}>
-            {busy?<ActivityIndicator color="#FFFFFF"/>:<Text style={styles.submitText}>Submit Request to Super Admin</Text>}
+            {busy?<ActivityIndicator color="#FFFFFF"/>:<Text style={styles.submitText}>Submit LGU Information for Verification</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>router.replace("/admin-login")} style={{alignItems:"center",padding:12}}>
             <Text style={{color:"#087D60",fontWeight:"700"}}>Back to LGU Admin Login</Text>
