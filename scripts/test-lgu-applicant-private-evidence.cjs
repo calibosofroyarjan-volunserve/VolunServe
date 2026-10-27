@@ -61,4 +61,14 @@ assert(panel.includes("getMetadata(reference)") &&
   panel.includes("onReady(false)") &&
   !panel.includes("getDownloadURL("),
   "Private evidence viewer must avoid public bearer URLs and fail closed");
+assert(app.includes("signInWithEmailAndPassword(candidateAuth,email,form.password)") &&
+  app.includes('profile?.role!=="applicant"') &&
+  app.includes('profile?.status!=="pending_review"') &&
+  app.includes('getDoc(doc(candidateDb,"lguApplicantEvidence",uid))'),
+  "A failed upload must resume ONLY for its authenticated pending applicant, never overwrite an existing user's profile");
+assert(app.includes('getMetadata(storageRef(storage,priorPath))') &&
+  app.includes('e?.code!=="storage/object-not-found"') &&
+  app.includes('return priorPath;') &&
+  app.includes('newlyCreated && !profileCreated'),
+  "Immutable private Storage uploads require fail-closed idempotent retries without deleting pre-existing accounts");
 console.log("PASS LGU government ID intake, 5-step wizard, private data rules, 5-item queue and promotion evidence gate");
