@@ -132,10 +132,23 @@ export default function AdministrativeLogin() {
             </Text>
           </View>
           <View style={[styles.panel, narrow && styles.panelCompact]}>
-            <Text style={styles.eyebrow}>STAFF SIGN-IN</Text>
+            <View style={styles.loginTypeTabs} accessibilityLabel="Choose account sign-in">
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Switch to Resident Login"
+                onPress={() => router.replace("/login")}
+                style={styles.loginTypeTab}
+              >
+                <Text style={styles.loginTypeText}>Resident Login</Text>
+              </TouchableOpacity>
+              <View style={[styles.loginTypeTab, styles.loginTypeActive]}>
+                <Text style={[styles.loginTypeText, styles.loginTypeTextActive]}>LGU Admin Login</Text>
+              </View>
+            </View>
+            <Text style={styles.eyebrow}>STAFF SIGN-IN · EMAIL & PASSWORD ONLY</Text>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>
-              Use the individual credentials issued to your authorized administrative account.
+              Sign in directly using your issued email and password. Google Sign-In is not available for staff.
             </Text>
             <Text style={styles.label}>Administrative email</Text>
             <View style={styles.inputRow}>
@@ -214,8 +227,7 @@ export default function AdministrativeLogin() {
               <Text style={styles.communityLinkText}>Go to Resident and Volunteer Login</Text>
             </TouchableOpacity>
             <Text style={styles.footer}>
-              Admin privileges require Super Admin approval after independent staff credential review.
-              Resident AI identity verification alone does not authorize Admin access.
+              LGU Admin access is activated only after independent credential verification by Super Admin. System programmers use their separately approved accounts.
             </Text>
           </View>
         </View>
@@ -243,6 +255,13 @@ const styles = StyleSheet.create({
   flowText: { color: "#D2FFF1", fontSize: 11, lineHeight: 19 },
   panel: { flex: 1.05, minWidth: 0, padding: 38, gap: 12, justifyContent: "center" },
   panelCompact: { padding: 23 },
+  loginTypeTabs: { flexDirection:"row", backgroundColor:"#F1F7F3", borderWidth:1,
+    borderColor:"#D8E8DF", borderRadius:12, padding:4, gap:4, marginBottom:12 },
+  loginTypeTab: { flex:1, paddingVertical:12, paddingHorizontal:5, borderRadius:9,
+    justifyContent:"center", alignItems:"center", minWidth:0 },
+  loginTypeActive: { backgroundColor:"#087F61" },
+  loginTypeText: { color:"#467464", fontWeight:"800", fontSize:12, textAlign:"center" },
+  loginTypeTextActive: { color:"#FFFFFF" },
   eyebrow: { fontSize: 10, color: "#168064", fontWeight: "700", letterSpacing: 1.3 },
   title: { fontSize: 28, fontWeight: "700", color: "#153E35" },
   subtitle: { fontSize: 12, lineHeight: 19, color: "#638076", marginBottom: 8 },
