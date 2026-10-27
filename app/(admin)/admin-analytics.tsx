@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { AdminPageHeading, AdminSectionHeading, AdminMetricCard, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 import { getAuth } from "firebase/auth";
 import {
@@ -84,6 +85,7 @@ const clamp = (
 };
 
 export default function AdminAnalytics() {
+  const router = useRouter();
 
   const [checkingRole, setCheckingRole] =
     useState(true);
@@ -91,9 +93,7 @@ export default function AdminAnalytics() {
   const [role, setRole] =
     useState<Role>("user");
 
-  const allowed =
-    role === "admin" ||
-    role === "superadmin";
+  const allowed = role === "admin";
 
   const [caseDocs, setCaseDocs] =
     useState<any[]>([]);
@@ -870,8 +870,7 @@ export default function AdminAnalytics() {
         </Text>
 
         <Text style={styles.muted}>
-          You must be admin/superadmin to
-          view analytics.
+          An approved LGU Admin account is required to view operational analytics.
         </Text>
       </View>
     );
