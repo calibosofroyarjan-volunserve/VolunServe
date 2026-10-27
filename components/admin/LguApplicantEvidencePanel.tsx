@@ -27,11 +27,15 @@ export default function LguApplicantEvidencePanel({
   const [screenBusy,setScreenBusy]=React.useState(false);
   const [screenMessage,setScreenMessage]=React.useState("");
   const [screenStatus,setScreenStatus]=React.useState("");
+  const [ocrBusy,setOcrBusy]=React.useState(false);
+  const [ocrMessage,setOcrMessage]=React.useState("");
+  const [ocrStatus,setOcrStatus]=React.useState("");
   React.useEffect(()=>{
     let cancelled=false;
     let objectUrls: string[]=[];
     setLoading(true);setError("");setInfo(null);setImages([]);
     setScreenBusy(false);setScreenMessage("");setScreenStatus("");
+    setOcrBusy(false);setOcrMessage("");setOcrStatus("");
     onReady(false);
     const load=async()=>{
       if (!uid) throw new Error("No staff applicant selected.");
@@ -128,13 +132,58 @@ export default function LguApplicantEvidencePanel({
       setScreenMessage(String(e?.message||"Face screening could not be completed."));
     }finally{setScreenBusy(false);}
   };
+  const runOcrScreen=async()=>{
+    if(!info||!uid||ocrBusy||images.some(item=>!item.localUrl))return;
+    setOcrBusy(true);setOcrMessage("");setOcrStatus("");
+    try {
+      // Never send emulator applicant tokens or ID paths to real Render.
+      const configured=process.env.EXPO_PUBLIC_LGU_FACE_SCREEN_API_URL?.trim();
+      if(usingFirebaseEmulators&&!configured)
+        throw new Error("Set up a local test-only backend for private document OCR QA.");
+      if(Platform.OS!=="web")
+        throw new Error("Open the authorized Super Admin web dashboard to review ID documents.");
+      const user=auth.currentUser;
+      if(!user)throw new Error("Your Super Admin session has expired.");
+      const base=(configured||
+        process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim()||
+        "https://volunserve.onrender.com")
+        .replace(/\/api\/identity\/(verify|status|engine-health)\/?$/,"")
+        .replace(/\/+$/,"");
+      if(!/^https:\/\//.test(base)&&
+        !(usingFirebaseEmulators&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)))
+        throw new Error("Document OCR requires a secure backend URL.");
+      const response=await fetch(base+"/api/lgu-staff/document-screen",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+await user.getIdToken(),
+          "Content-Type":"application/json"},
+        body:JSON.stringify({applicantUid:uid}),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(String(result.message||
+        "Government ID OCR is unavailable; review the document manually."));
+      const signal=String(result.documentTypeSignal||"document_type_inconclusive");
+      const labels:Record<string,string>={
+        declared_type_text_consistent:"OCR text appears consistent with the selected ID category.",
+        declared_type_text_mismatch:"OCR indicates a different ID category. Manual review required.",
+        unsupported_document_suspected:"OCR suggests an unsupported school/company or employee ID.",
+        document_type_inconclusive:"OCR could not reliably classify the document type.",
+        ocr_unavailable_or_unreadable:"OCR could not process the document clearly.",
+      };
+      setOcrStatus(signal);
+      setOcrMessage((labels[signal]||"Document requires manual classification.")+
+        " This is NOT issuer authentication or proof that the ID is genuine.");
+    }catch(e:any){
+      setOcrStatus("manual_review_required");
+      setOcrMessage(String(e?.message||"Document OCR screening was unavailable."));
+    }finally{setOcrBusy(false);}
+  };
   return (
     <View style={styles.section}>
       <View style={styles.titleRow}>
         <Ionicons name="document-lock-outline" color="#126F54" size={19}/>
         <Text style={styles.heading}>Private identity and LGU documents</Text>
       </View>
-      <Text style={styles.note}>Restricted to Super Admin. Inspect government ID front/back (as applicable), portrait versus selfie and redacted staff proof. AI OCR, face matching and liveness have NOT run.</Text>
+      <Text style={styles.note}>Restricted to Super Admin. Inspect government ID front/back (as applicable), portrait versus selfie and redacted staff proof. OCR and facial comparison are optional reviewer checks; active liveness is NOT available.</Text>
       {loading&&<ActivityIndicator color="#0A7A5C"/>}
       {!!error&&<Text style={styles.error}>{error}</Text>}
       {info&&<Text style={styles.label}>ID selected: {info.idType.replaceAll("_"," ")} · Status: awaiting independent manual review</Text>}
@@ -148,6 +197,18 @@ export default function LguApplicantEvidencePanel({
         ))}
       </View>
       <Text style={styles.warning}>File presence is not government ID authentication, liveness or proof of LGU employment. Confirm independently before checking all approval fields.</Text>
+      <TouchableOpacity accessibilityRole="button"
+        accessibilityLabel="Run private OCR document type consistency screening"
+        disabled={ocrBusy||loading||!!error||!info||images.some(item=>!item.localUrl)}
+        onPress={()=>void runOcrScreen()}
+        style={[styles.screenButton,(ocrBusy||loading||!!error||!info)&&{opacity:0.5}]}>
+        {ocrBusy?<ActivityIndicator color="#FFFFFF"/>:
+          <Text style={styles.screenButtonText}>Run private government ID OCR (review only)</Text>}
+      </TouchableOpacity>
+      {!!ocrMessage&&<View style={styles.signalBox}>
+        <Text style={styles.signalLabel}>{ocrStatus==="declared_type_text_consistent"?"Informational OCR signal":"Document review required"}</Text>
+        <Text style={styles.note}>{ocrMessage}</Text>
+      </View>}
       <TouchableOpacity accessibilityRole="button"
         accessibilityLabel="Run optional Super Admin AI-assisted face similarity screening"
         disabled={screenBusy||loading||!!error||!info||images.some(item=>!item.localUrl)}
