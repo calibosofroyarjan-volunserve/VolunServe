@@ -556,7 +556,7 @@ export default function AccountApprovals() {
 
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>
-              Volunteer Applications & Accounts
+              User & Volunteer Approvals
             </Text>
 
             <Text style={styles.subtitle}>
