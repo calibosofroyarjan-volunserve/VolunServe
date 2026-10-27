@@ -5112,7 +5112,7 @@ service cloud.firestore {
         && validLiveCoordinates();
       // A Resident organizer must be able to stop sharing after switching
       // their active account mode to Volunteer. Ownership is still enforced.
-      allow delete: if isAdminOrSuperAdmin()
+      allow delete: if isAdmin()
         || (hasResidentAccess()
           && isEventOrganizer()
           && resource.data.residentId == request.auth.uid);
@@ -5566,8 +5566,8 @@ service cloud.firestore {
           )
           ||
           (
-            // Admin-only corrections/verification; signed-in verifier must match.
-            isAdminOrSuperAdmin()
+            // LGU Admin-only attendance corrections/verification.
+            isAdmin()
             && (
               request.resource.data.attendanceVerified == false
               || request.resource.data.attendanceVerifiedBy == request.auth.uid
