@@ -75,16 +75,17 @@ export default function LguStaffApplication() {
           <Ionicons name="shield-checkmark-outline" size={28} color="#087D60"/>
           <View style={{flex:1}}>
             <Text style={styles.kicker}>VOLUNSERVE · LGU STAFF</Text>
-            <Text style={styles.title}>Request LGU Admin Access</Text>
+            <Text style={styles.title}>Request Access from Super Admin</Text>
+            <Text style={styles.requestSubtitle}>LGU Admin application · reviewed by VolunServe programmers</Text>
           </View>
         </View>
         {success ? <>
-          <Text style={styles.success}>Application submitted. Your account has no Admin privileges while pending. A Super Admin must independently confirm your LGU appointment before granting access. Check your email for verification instructions.</Text>
+          <Text style={styles.success}>Your request has been submitted to the Super Admin review queue. This is an LGU Admin access request, not a Super Admin account. The programmer team must independently obtain and verify official LGU appointment information before granting access. No administrative privileges are active while pending. Check your email for verification instructions.</Text>
           <TouchableOpacity style={styles.submit} onPress={()=>router.replace("/admin-login")}>
             <Text style={styles.submitText}>Return to Admin Login</Text>
           </TouchableOpacity>
         </> : <>
-          <Text style={styles.notice}>This is an application, not instant Admin registration. Only authorized LGU personnel should apply. The programmer Super Admin verifies eligibility against official LGU records. No Google Sign-In or government ID upload is required.</Text>
+          <Text style={styles.notice}>For authorized LGU staff requesting an Admin account. Provide basic contact and appointment information here; the programmer Super Admin team will independently collect and confirm supporting LGU credentials through authorized channels before approving the request. Do not upload IDs, sensitive documents, or passwords as proof. Submitting this form does not grant Super Admin or LGU Admin privileges.</Text>
           {fields.map(([key,label,hint,secret])=><View key={key} style={styles.field}>
             <Text style={styles.label}>{label}</Text>
             <TextInput style={styles.input} placeholder={hint} placeholderTextColor="#8CA89A"
@@ -107,7 +108,7 @@ export default function LguStaffApplication() {
           {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           <TouchableOpacity accessibilityRole="button" style={[styles.submit,busy&&{opacity:.6}]}
             disabled={busy} onPress={()=>void submit()}>
-            {busy?<ActivityIndicator color="#FFFFFF"/>:<Text style={styles.submitText}>Submit for Super Admin Verification</Text>}
+            {busy?<ActivityIndicator color="#FFFFFF"/>:<Text style={styles.submitText}>Submit Request to Super Admin</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>router.replace("/admin-login")} style={{alignItems:"center",padding:12}}>
             <Text style={{color:"#087D60",fontWeight:"700"}}>Back to LGU Admin Login</Text>
@@ -122,7 +123,7 @@ const styles=StyleSheet.create({
  panel:{width:"100%",maxWidth:590,backgroundColor:"#FFFFFF",borderColor:"#DCE9E2",borderWidth:1,
    borderRadius:18,padding:25,gap:8},header:{flexDirection:"row",alignItems:"center",gap:13,marginBottom:13},
  kicker:{fontSize:10,fontWeight:"800",color:"#087D60",letterSpacing:1.4},
- title:{fontSize:23,fontWeight:"900",color:"#153B31"},notice:{fontSize:12,lineHeight:19,color:"#57776A",
+ title:{fontSize:23,fontWeight:"900",color:"#153B31"},requestSubtitle:{fontSize:12,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize:12,lineHeight:19,color:"#57776A",
    backgroundColor:"#EDF8F1",borderRadius:11,padding:14,marginBottom:9},
  field:{gap:6,marginBottom:6},label:{fontSize:12,fontWeight:"800",color:"#2D5747"},
  input:{borderWidth:1,borderColor:"#D6E6DD",backgroundColor:"#FAFCFA",borderRadius:10,
