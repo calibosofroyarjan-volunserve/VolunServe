@@ -1,4 +1,5 @@
 import { deleteApp, initializeApp } from "firebase/app";
+import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 import {
     createUserWithEmailAndPassword,
@@ -25,6 +26,11 @@ export type CreateAdminInput = {
   fullName: string;
   email: string;
   password: string;
+  lguOffice: string;
+  barangay: string;
+  lguPosition: string;
+  appointmentReference: string;
+  credentialsReviewed: boolean;
 };
 
 export async function createAdminAccount(
@@ -45,6 +51,27 @@ export async function createAdminAccount(
   const email = input.email
     .trim()
     .toLowerCase();
+
+  const lguOffice = input.lguOffice.trim();
+  const lguPosition = input.lguPosition.trim();
+  const appointmentReference = input.appointmentReference.trim();
+
+  // Manual authorization by the trusted Super Admin is required. This
+  // declaration does not validate the authenticity of external documents.
+  if (!input.credentialsReviewed ||
+      fullName.length < 5 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      lguOffice.length < 3 || lguOffice.length > 160 ||
+      !SJDM_BARANGAYS.includes(input.barangay) ||
+      lguPosition.length < 3 || lguPosition.length > 120 ||
+      appointmentReference.length < 5 || appointmentReference.length > 160 ||
+      input.password.length < 12 ||
+      !/[A-Z]/.test(input.password) ||
+      !/[a-z]/.test(input.password) ||
+      !/[0-9]/.test(input.password) ||
+      !/[^A-Za-z0-9]/.test(input.password)) {
+    throw new Error("Enter complete LGU office, position and appointment reference, review the official credentials, and use a strong 12+ character temporary password.");
+  }
 
   const secondaryApp = initializeApp(
     firebaseConfig,
@@ -83,6 +110,21 @@ export async function createAdminAccount(
       collection(db, "adminLogs")
     );
 
+    // Both the official-appointment review and Admin profile are committed
+    // atomically. Firestore rules require review.verifiedAt == request.time.
+    const credentialReviewReference = doc(db, "lguAdminCredentialReviews", createdUser.uid);
+    batch.set(credentialReviewReference, {
+      targetUid: createdUser.uid,
+      accountEmail: email,
+      reviewStatus: "verified",
+      office: lguOffice,
+      position: lguPosition,
+      credentialReference: appointmentReference,
+      verificationMethod: "Manual review of LGU appointment evidence with the issuing office",
+      verifiedBy: creator.uid,
+      verifiedAt: serverTimestamp(),
+    });
+
     batch.set(userReference, {
       uid: createdUser.uid,
       fullName,
@@ -94,13 +136,20 @@ export async function createAdminAccount(
       region: "Region III – Central Luzon",
       province: "Bulacan",
       city: "City of San Jose del Monte",
-      barangay: "",
+      barangay: input.barangay,
       address:
         "City of San Jose del Monte, Bulacan",
 
-      occupation:
-        "VolunServe Administrator",
-
+      occupation: "LGU Administrator",
+      lguOffice,
+      lguPosition,
+      // Use a safe appointment memorandum reference, not a government ID number.
+      appointmentReference,
+      credentialsReviewedBy: creator.uid,
+      credentialsReviewedAt: serverTimestamp(),
+      credentialReviewMethod: "manual_lgu_appointment_review",
+      // User's authorized separate Firebase login, not a promoted Resident.
+      adminStatus: "active",
       role: "admin",
       status: "approved",
 
@@ -120,7 +169,7 @@ export async function createAdminAccount(
       adminUid: creator.uid,
 
       description:
-        `Created administrator account for ${email}.`,
+        `Created independent LGU Admin account for ${email} after manual appointment review (reference: ${appointmentReference}).`,
 
       createdAt: serverTimestamp(),
     });
