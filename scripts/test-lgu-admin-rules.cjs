@@ -147,6 +147,41 @@ async function main() {
         role:"admin",status:"approved",createdBy:SU,reviewedBy:SU,
       }), true);
 
+    const freshAdminUid = "new-lgu-staff-verified";
+    const freshAdminEmail = "verified-admin@example.test";
+    await check("Independent LGU Admin creation requires same-batch review", () => {
+      const batch = superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/" + freshAdminUid),
+        newReview(freshAdminUid, freshAdminEmail));
+      batch.set(superDb.doc("users/" + freshAdminUid), {
+        uid: freshAdminUid, fullName: "Verified LGU Admin",
+        email: freshAdminEmail, role: "admin", status: "approved",
+        adminStatus: "active", createdBy: SU, reviewedBy: SU,
+        createdAt: stamp(), reviewedAt: stamp(),
+      });
+      batch.set(superDb.doc("adminLogs/independent-admin-create"), {
+        actionType:"admin_account_created",targetType:"user",
+        targetId:freshAdminUid,adminUid:SU,adminName:"Test Super Admin",
+        description:"LGU Admin profile created with independent credential review",
+        createdAt:stamp(),
+      });
+      return batch.commit();
+    });
+    await check("Newly created LGU Admin can read own profile", () =>
+      env.authenticatedContext(freshAdminUid).firestore()
+        .doc("users/" + freshAdminUid).get());
+    const accountSource = fs.readFileSync(path.resolve(__dirname,
+      "..", "lib/adminAccounts.ts"), "utf8");
+    if (!accountSource.includes("batch.set(credentialReviewReference") ||
+        !accountSource.includes("lguAdminCredentialReviews") ||
+        !accountSource.includes("writeBatch(db)")) {
+      fail += 1;
+      console.error("FAIL standalone LGU Admin client must batch-write a fresh credential review");
+    } else {
+      pass += 1;
+      console.log("PASS standalone LGU Admin client submits credential review atomically");
+    }
+
     console.log("\nLGU Admin Firestore rules: "+pass+" passed, "+fail+" failed.");
     if (fail) process.exitCode = 1;
   } finally {
