@@ -966,8 +966,8 @@ export default function CommandCenter() {
         <View style={[styles.kpiGrid, width < 640 && styles.kpiGridCompact]}>
           {([
             {key:"cases",label:"Open emergencies",count:metrics.activeCases,icon:"alert-circle-outline" as const,route:"/(admin)/admin-cases",hint:"Incident response"},
-            {key:"residents",label:"Pending user profiles",count:pendingUserIds.length,icon:"shield-checkmark-outline" as const,route:"/(admin)/account-approvals",hint:"Non-staff account reviews"},
-            {key:"volunteers",label:"Volunteer approvals",count:pendingVolunteerIds.length,icon:"people-outline" as const,route:"/(admin)/account-approvals",hint:"Volunteer applications"},
+            {key:"residents",label:"Resident account reviews",count:pendingUserIds.length,icon:"shield-checkmark-outline" as const,route:"/(admin)/residents",hint:"Resident directory"},
+            {key:"volunteers",label:"Volunteer approvals",count:pendingVolunteerIds.length,icon:"people-outline" as const,route:"/(admin)/volunteers",hint:"Volunteer applications"},
             {key:"centers",label:"Verified evacuation centers",count:metrics.activeCenters,icon:"business-outline" as const,route:"/(admin)/command-center",hint:"Official active centers"},
           ]).map((item,index) => (
             <TouchableOpacity key={item.key} accessibilityRole="button"
@@ -1035,7 +1035,7 @@ export default function CommandCenter() {
                 detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   pendingUserIds.length + " non-staff accounts awaiting review",
                 icon: "shield-checkmark-outline" as const, count: pendingUserIds.length,
-                route: "/(admin)/account-approvals",
+                route: "/(admin)/residents",
               },
               {
                 key: "identity", label: "AI identity reviews",
@@ -1048,7 +1048,7 @@ export default function CommandCenter() {
                 detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
                   pendingVolunteerIds.length + " volunteer application(s) awaiting review",
                 icon: "people-outline" as const, count: pendingVolunteerIds.length,
-                route: "/(admin)/account-approvals",
+                route: "/(admin)/volunteers",
               },
               {
                 key: "relief", label: "Relief operations",
