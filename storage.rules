@@ -58,6 +58,28 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Private government ID / live selfie / redacted LGU appointment evidence.
+    // Never store public download URLs in Firestore; only applicant and programmer Super Admin can read.
+    function isSuperAdmin() {
+      return signedIn()
+        && profile().role == 'superadmin'
+        && profile().status == 'approved';
+    }
+    match /lguStaffEvidence/{uid}/{filename} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && profile().role == 'applicant'
+        && profile().status == 'pending_review'
+        && filename.matches('(front|back|selfie|lgu_proof)[.](jpg|png|webp)')
+        && request.resource.size > 1024
+        && request.resource.size <= 4 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow get: if signedIn()
+        && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
