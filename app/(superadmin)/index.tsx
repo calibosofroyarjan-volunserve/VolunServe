@@ -140,9 +140,9 @@ export default function SuperAdminDashboard() {
       <View style={styles.header}>
         <View style={styles.eyebrowRow}>
           <View style={styles.dot} />
-          <Text style={styles.eyebrow}>SYSTEM ADMINISTRATION</Text>
+          <Text style={styles.eyebrow}>SYSTEM GOVERNANCE</Text>
         </View>
-        <Text style={[styles.title, compact && styles.compactTitle]}>System overview</Text>
+        <Text style={[styles.title, compact && styles.compactTitle]}>System Overview</Text>
         <Text style={styles.subtitle}>LGU staff verification, account access, technical oversight and system audit trails. City operations remain under authorized LGU Admin personnel.</Text>
       </View>
 
