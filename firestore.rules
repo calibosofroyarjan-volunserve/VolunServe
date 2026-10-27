@@ -87,6 +87,20 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
+      // An applicant cannot become LGU Admin unless government-ID, selfie and
+      // LGU-document evidence metadata was submitted before the review.
+      // This is an existence/consistency gate, NOT proof of ID authenticity.
+      function hasSubmittedLguEvidence() {
+        let path = /databases/$(database)/documents/lguApplicantEvidence/$(uid);
+        return exists(path)
+          && get(path).data.uid == uid
+          && get(path).data.idType in [
+            'ph_national_id', 'ph_drivers_license', 'ph_passport'
+          ]
+          && get(path).data.reviewStatus == 'pending_manual_review'
+          && get(path).data.aiStatus == 'not_run'
+          && get(path).data.officialOfficeStatus == 'unconfirmed';
+      }
       // A role grant is only valid with a same-commit, reviewed LGU credential record.
       // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
       // rather than a stale record from an earlier promotion.
@@ -452,6 +466,7 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'
+            && hasSubmittedLguEvidence()
             && hasFreshLguCredentialReview()
             && request.resource.data.adminCreatedBy == request.auth.uid
             && request.resource.data.adminUpdatedBy == request.auth.uid
@@ -5032,6 +5047,7 @@ service cloud.firestore {
       function validReview() {
         return isSuperAdmin()
           && request.auth.uid != targetUid
+          && exists(/databases/$(database)/documents/lguApplicantEvidence/$(targetUid))
           && request.resource.data.keys().hasOnly([
             'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
             'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
