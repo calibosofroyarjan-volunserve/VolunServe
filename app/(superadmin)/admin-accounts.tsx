@@ -189,6 +189,7 @@ export default function AdminAccounts() {
     lguPosition.trim().length >= 3 && lguPosition.trim().length <= 120 &&
     lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
     lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
+    (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
     credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
