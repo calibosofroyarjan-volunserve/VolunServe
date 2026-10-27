@@ -33,10 +33,12 @@ assert.equal(mediaMime(Buffer.from([255,216,255,...new Array(18).fill(0)])),"ima
 assert.equal(mediaMime(Buffer.from([137,80,78,71,13,10,26,10,...new Array(12).fill(0)])),"image/png");
 assert.equal(mediaMime(Buffer.from("RIFF0000WEBPxxxxxxxx")),"image/webp");
 assert.equal(mediaMime(Buffer.from("not an image at all")),"");
-assert.equal(similaritySignal("verified",0.9),"similarity_signal_present");
-assert.equal(similaritySignal("failed",0.95),"inconclusive_manual_review");
-assert.equal(similaritySignal("verified",null),"inconclusive_manual_review");
-assert.equal(similaritySignal("verified",Number.NaN),"inconclusive_manual_review");
+assert.equal(similaritySignal("manual_review",0.93,0.85,"pending"),"similarity_signal_present");
+assert.equal(similaritySignal("manual_review",0.75,0.85,"pending"),"inconclusive_manual_review");
+assert.equal(similaritySignal("verified",0.93,0.85,"pending"),"inconclusive_manual_review");
+assert.equal(similaritySignal("manual_review",0.93,null,"pending"),"inconclusive_manual_review");
+assert.equal(similaritySignal("manual_review",0.93,0.85,"failed"),"inconclusive_manual_review");
+assert.equal(similaritySignal("manual_review",Number.NaN,0.85,"pending"),"inconclusive_manual_review");
 for(const fragment of [
   '"/api/lgu-staff/face-screen"',
   'reviewer.role!=="superadmin"',
