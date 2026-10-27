@@ -58,6 +58,8 @@ jobs:
         run: node scripts/test-event-map-route-ux.cjs
       - name: Resident Community Event pin picker UX
         run: node scripts/test-event-pin-picker.cjs
+      - name: Check Expo JSX / VS Code TypeScript project
+        run: node scripts/test-vscode-typescript-jsx.cjs
       - name: TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Expo Android JavaScript bundle (not APK)
