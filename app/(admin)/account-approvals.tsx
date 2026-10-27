@@ -45,9 +45,8 @@ type Account =
     id: string;
   };
 
-type Filter =
-  | "pending"
-  | "all";
+type Filter = "pending" | "all" | "basic" | "verified" | "suspended";
+type WorkspaceMode = "combined" | "residents" | "volunteers";
 
 type VolunteerApplication = {
   uid?: string;
@@ -69,7 +68,7 @@ const timestampValue = (
   return value?.toMillis?.() || 0;
 };
 
-export default function AccountApprovals() {
+export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceMode}) {
 
   const [
     accounts,
@@ -94,7 +93,7 @@ export default function AccountApprovals() {
   const [
     filter,
     setFilter,
-  ] = useState<Filter>("pending");
+  ] = useState<Filter>(mode === "residents" ? "all" : "pending");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
@@ -244,21 +243,17 @@ export default function AccountApprovals() {
     );
   };
 
-  const visibleAccounts =
-    useMemo(() => {
-      if (filter === "pending") {
-        return accounts.filter(
-          (item) =>
-            isPendingVolunteerApplication(item)
-        );
-      }
-
-      return accounts;
-    }, [
-      accounts,
-      filter,
-      volunteerApplications,
-    ]);
+  const visibleAccounts = useMemo(() => {
+    const scope = mode === "volunteers"
+      ? accounts.filter(item => !!volunteerApplications[item.id] || item.volunteerAccess === true)
+      : accounts;
+    if (filter === "pending") return scope.filter(isPendingVolunteerApplication);
+    if (filter === "verified") return scope.filter(isVerifiedResidentAccount);
+    if (filter === "basic") return scope.filter(item => !isVerifiedResidentAccount(item)
+      && item.volunteerAccess !== true && item.status !== "suspended");
+    if (filter === "suspended") return scope.filter(item => item.status === "suspended");
+    return scope;
+  }, [accounts, filter, mode, volunteerApplications]);
 
   const matchingAccounts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -555,52 +550,61 @@ export default function AccountApprovals() {
         }
       >
         <AdminPageHeading
-          eyebrow="LGU ADMIN  /  PEOPLE & VERIFICATION"
-          title="User & Volunteer Approvals"
-          subtitle="Manage community accounts and review volunteer applications. Identity verification has its own review module; LGU staff promotion belongs to Super Admin." />
-        <AdminSectionHeading title="Community Accounts"
-          caption="Each role has a separate workflow. The figures below reflect current account records." />
+          eyebrow={mode === "volunteers" ? "LGU ADMIN  /  VOLUNTEERS"
+            : mode === "residents" ? "LGU ADMIN  /  RESIDENTS"
+            : "LGU ADMIN  /  PEOPLE & VERIFICATION"}
+          title={mode === "volunteers" ? "Volunteer Management"
+            : mode === "residents" ? "Residents Management"
+            : "User & Volunteer Approvals"}
+          subtitle={mode === "volunteers"
+            ? "Review volunteer applications, skills and availability, then manage active volunteer access. Resident identity checks remain in Residents."
+            : mode === "residents"
+            ? "View registered community accounts, verified and basic residents, and manage account access. Identity evidence has a separate review queue."
+            : "Manage community accounts and review volunteer applications. Identity verification has its own review module; LGU staff promotion belongs to Super Admin."} />
+        <AdminSectionHeading
+          title={mode === "volunteers" ? "Volunteer Review & Participation" : "Community Account Records"}
+          caption={mode === "volunteers"
+            ? "Only volunteer applicants and active volunteers appear here."
+            : "Every registered resident stays in the directory, even after becoming a volunteer."} />
         <View style={styles.metricGrid}>
-          <AdminMetricCard label="Community Accounts" value={accounts.length}
-            hint="Residents and volunteers" icon="people-outline" />
-          <AdminMetricCard label="Verified Residents" value={accounts.filter(isVerifiedResidentAccount).length}
-            hint="Approved resident identity" icon="shield-checkmark-outline" />
-          <AdminMetricCard label="Pending Volunteer Reviews" value={accounts.filter(isPendingVolunteerApplication).length}
-            hint="Awaiting LGU decision" icon="hourglass-outline" />
-          <AdminMetricCard label="Active Volunteers" value={accounts.filter(a => a.volunteerAccess === true).length}
-            hint="Approved volunteer permissions" icon="heart-outline" />
+          {mode !== "volunteers" ? <>
+            <AdminMetricCard label="Resident Accounts" value={accounts.length}
+              hint="Community profiles" icon="people-outline" />
+            <AdminMetricCard label="Verified Residents" value={accounts.filter(isVerifiedResidentAccount).length}
+              hint="Confirmed identity" icon="shield-checkmark-outline" />
+            <AdminMetricCard label="Basic Residents" value={accounts.filter(a =>
+              !isVerifiedResidentAccount(a) && a.volunteerAccess !== true && a.status !== "suspended").length}
+              hint="Limited community access" icon="person-outline" />
+            <AdminMetricCard label="Suspended Accounts" value={accounts.filter(a => a.status === "suspended").length}
+              hint="Access temporarily restricted" icon="ban-outline" />
+          </> : <>
+            <AdminMetricCard label="Pending Applications" value={accounts.filter(isPendingVolunteerApplication).length}
+              hint="LGU review queue" icon="hourglass-outline" />
+            <AdminMetricCard label="Active Volunteers" value={accounts.filter(a => a.volunteerAccess === true).length}
+              hint="Granted volunteer permissions" icon="heart-outline" />
+            <AdminMetricCard label="Rejected Applications" value={accounts.filter(a =>
+              volunteerApplicationFor(a)?.status === "rejected").length}
+              hint="Recorded decisions" icon="close-circle-outline" />
+          </>}
         </View>
         <View style={styles.filterRow}>
-          {(
-            [
-              "pending",
-              "all",
-            ] as Filter[]
-          ).map((value) => (
-            <TouchableOpacity
-              key={value}
-              accessibilityRole="button"
-              accessibilityLabel={value === "pending" ? "View pending volunteer applications" : "View all resident accounts"}
+          {(mode === "residents"
+            ? (["all", "verified", "basic", "suspended"] as Filter[])
+            : (["pending", "all"] as Filter[])
+          ).map(value => (
+            <TouchableOpacity key={value} accessibilityRole="button"
+              accessibilityLabel={value === "pending" ? "Pending volunteer applications"
+                : value === "all" ? (mode === "volunteers" ? "All volunteers" : "All residents")
+                : value + " residents"}
               accessibilityState={{selected: filter === value}}
-              style={[
-                styles.filterButton,
-
-                filter === value &&
-                  styles.filterButtonActive,
-              ]}
-              onPress={() => { setFilter(value); setPage(1); }}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-
-                  filter === value &&
-                    styles.filterTextActive,
-                ]}
-              >
-                {value === "pending"
-                  ? "Pending Volunteers"
-                  : "All Residents"}
+              style={[styles.filterButton, filter === value && styles.filterButtonActive]}
+              onPress={() => {setFilter(value); setPage(1);}}>
+              <Text style={[styles.filterText, filter === value && styles.filterTextActive]}>
+                {value === "pending" ? "Pending Applications"
+                  : value === "all" ? (mode === "volunteers" ? "All Volunteers" : "All Residents")
+                  : value === "verified" ? "Verified"
+                  : value === "basic" ? "Basic"
+                  : "Suspended"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -610,10 +614,10 @@ export default function AccountApprovals() {
           value={search} onChangeText={v => {setSearch(v); setPage(1);}}
           placeholder="Search name, email, barangay or contact"
           placeholderTextColor="#789082" style={styles.searchInput} />
-        <Text style={styles.resultText}>{matchingAccounts.length} {filter === "pending" ? "pending applications" : "community accounts"} · 5 per page</Text>
+        <Text style={styles.resultText}>{matchingAccounts.length} {mode === "volunteers" ? "volunteer records" : "resident accounts"} · 5 per page</Text>
         {matchingAccounts.length === 0 ? (
           <AdminEmptyState icon="people-outline"
-            title={filter === "pending" ? "No pending volunteer reviews" : "No matching community accounts"}
+            title={filter === "pending" ? "No pending volunteer reviews" : mode === "volunteers" ? "No volunteer records found" : "No matching residents"}
             description={search ? "Try a different search or clear the search." : "There are no records in this view."}
             actionLabel={search ? "Clear search" : undefined}
             onAction={search ? () => {setSearch(""); setPage(1);} : undefined} />
@@ -1042,12 +1046,14 @@ const styles =
 
     filterRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 10,
       marginBottom: 16,
     },
 
     filterButton: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: 130,
       padding: 11,
       borderRadius: 12,
       backgroundColor: "#FFFFFF",
