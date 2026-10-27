@@ -1,6 +1,7 @@
 /** Ensure VS Code and npm tsc discover TSX files using the project's React JSX config. */
 const ts = require("typescript");
 const path = require("node:path");
+const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
 const root = path.resolve(__dirname, "..");
@@ -25,4 +26,7 @@ for (const file of mustInclude) {
 }
 console.log("PASS: Expo JSX emit:", ts.JsxEmit[parsed.options.jsx]);
 console.log("PASS: all critical TSX files are included in project tsconfig");
+const settings = JSON.parse(fs.readFileSync(path.join(root, ".vscode/settings.json"), "utf8"));
+assert.equal(settings["typescript.tsdk"], "node_modules/typescript/lib",
+  "VS Code must resolve project-local TypeScript SDK");
 console.log("PASS: VS Code configured for local node_modules TypeScript");
