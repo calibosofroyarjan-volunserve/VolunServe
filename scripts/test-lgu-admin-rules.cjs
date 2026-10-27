@@ -20,6 +20,7 @@ const ADMIN = "security-test-admin";
 const TARGET = "security-test-staff";
 const OTHER = "security-test-resident";
 const STALE = "security-test-stale";
+const SUSPENDED = "security-test-suspended-admin";
 const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
 let pass = 0;
 let fail = 0;
@@ -69,6 +70,7 @@ async function main() {
       const db = ctx.firestore();
       await db.doc("users/" + SU).set({uid: SU, email:"superadmin@example.test",role:"superadmin",status:"approved",fullName:"Test Super Admin"});
       await db.doc("users/" + ADMIN).set({uid: ADMIN, email:"admin@example.test",role:"admin",status:"approved",adminStatus:"active"});
+      await db.doc("users/" + SUSPENDED).set({uid:SUSPENDED,email:"suspended@example.test",role:"admin",status:"approved",adminStatus:"suspended"});
       await db.doc("users/" + TARGET).set(baseResident(TARGET, "staff@example.test"));
       await db.doc("users/" + OTHER).set(baseResident(OTHER, "resident@example.test"));
       await db.doc("users/" + STALE).set(baseResident(STALE, "stale@example.test"));
@@ -79,9 +81,19 @@ async function main() {
     });
     const superDb = env.authenticatedContext(SU).firestore();
     const adminDb = env.authenticatedContext(ADMIN).firestore();
+    const suspendedDb = env.authenticatedContext(SUSPENDED).firestore();
     const residentDb = env.authenticatedContext(TARGET).firestore();
     const unrelatedDb = env.authenticatedContext(OTHER).firestore();
     const unauthDb = env.unauthenticatedContext().firestore();
+
+    await check("Active LGU Admin can list user records for authorized verification", () =>
+      adminDb.collection("users").get());
+    await check("Suspended LGU Admin cannot list private user records", () =>
+      suspendedDb.collection("users").get(), true);
+    await check("Suspended LGU Admin cannot read another resident profile", () =>
+      suspendedDb.doc("users/" + OTHER).get(), true);
+    await check("Suspended LGU Admin may still inspect own profile for status", () =>
+      suspendedDb.doc("users/" + SUSPENDED).get());
 
     await check("Anonymous cannot read private LGU reviews",
       () => unauthDb.doc("lguAdminCredentialReviews/" + STALE).get(), true);

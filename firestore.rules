@@ -22,7 +22,9 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return signedIn()
         && p.get('role', '') == 'admin'
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        // A suspended LGU administrator must lose operational access immediately.
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
@@ -35,7 +37,9 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return signedIn()
         && p.get('role', '') in ['admin', 'superadmin']
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        && (p.get('role', '') == 'superadmin'
+          || p.get('adminStatus', 'active') != 'suspended');
     }
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
@@ -5086,7 +5090,8 @@ service cloud.firestore {
         && request.resource.data.expiresAt <= request.time + duration.value(3, 'm');
       }
 
-      allow get: if isAdminOrSuperAdmin()
+      // Precise temporary organizer GPS is operational, not programmer oversight.
+      allow get: if isAdmin()
         || (
           approved()
           && eventIsOpen()
@@ -5108,7 +5113,7 @@ service cloud.firestore {
         && validLiveCoordinates();
       // A Resident organizer must be able to stop sharing after switching
       // their active account mode to Volunteer. Ownership is still enforced.
-      allow delete: if isAdminOrSuperAdmin()
+      allow delete: if isAdmin()
         || (hasResidentAccess()
           && isEventOrganizer()
           && resource.data.residentId == request.auth.uid);
@@ -5232,7 +5237,7 @@ service cloud.firestore {
 
       // Only the Admin can review a pending proposal.
       // Approval must atomically create a matching published event.
-      allow update: if isAdminOrSuperAdmin()
+      allow update: if isAdmin()
         && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data)
           .affectedKeys().hasOnly([
@@ -5281,7 +5286,7 @@ service cloud.firestore {
           && resource.data.publicationStatus == 'published');
 
       // Creation requires same-transaction Admin approval of this proposal.
-      allow create: if isAdminOrSuperAdmin()
+      allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
           'location', 'date', 'time', 'endTime', 'capacity',
@@ -5353,7 +5358,7 @@ service cloud.firestore {
         && request.resource.data.proposerName == proposalAfter().proposerName;
 
       // Admin can advance status; completion is recorded by the Admin.
-      allow update: if isAdminOrSuperAdmin()
+      allow update: if isAdmin()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
         && (
@@ -5562,8 +5567,8 @@ service cloud.firestore {
           )
           ||
           (
-            // Admin-only corrections/verification; signed-in verifier must match.
-            isAdminOrSuperAdmin()
+            // LGU Admin-only attendance corrections/verification.
+            isAdmin()
             && (
               request.resource.data.attendanceVerified == false
               || request.resource.data.attendanceVerifiedBy == request.auth.uid

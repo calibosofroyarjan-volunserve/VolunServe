@@ -517,12 +517,6 @@ export default function AllRecords() {
     },
 
     {
-      key: "donations",
-      label: "Donations",
-      icon: "gift-outline",
-    },
-
-    {
       key: "events",
       label: "Events",
       icon: "calendar-outline",
@@ -1171,14 +1165,6 @@ export default function AllRecords() {
             records.disputes.length
           }
           icon="alert-circle-outline"
-        />
-
-        <SummaryCard
-          label="Donations"
-          value={
-            records.donations.length
-          }
-          icon="gift-outline"
         />
 
         <SummaryCard

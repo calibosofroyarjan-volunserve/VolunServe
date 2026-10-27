@@ -24,6 +24,7 @@ const projectId = "demo-volunserve";
 const residentUid = "resident-test-uid";
 const volunteerUid = "volunteer-test-uid";
 const adminUid = "admin-test-uid";
+const superAdminUid = "superadmin-test-uid";
 const otherUid = "other-test-uid";
 const eventId = "proposed-community-event-test";
 const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
@@ -117,11 +118,13 @@ async function main() {
         activeMode: "resident", fullName: "Example Admin",
       });
       await db.doc("users/" + otherUid).set(residentProfile(otherUid));
+      await db.doc("users/" + superAdminUid).set({uid:superAdminUid,role:"superadmin",status:"approved",fullName:"System Programmer"});
     });
 
     const resident = env.authenticatedContext(residentUid).firestore();
     const volunteer = env.authenticatedContext(volunteerUid).firestore();
     const admin = env.authenticatedContext(adminUid).firestore();
+    const superAdmin = env.authenticatedContext(superAdminUid).firestore();
     const other = env.authenticatedContext(otherUid).firestore();
     const anonymous = env.unauthenticatedContext().firestore();
 
@@ -196,6 +199,8 @@ async function main() {
         }));
 
       if (published) {
+        await check("Programmer Super Admin cannot start operational Community Events", () =>
+          superAdmin.doc("communityEvents/" + eventId).update({ status: "active", updatedAt: stamp() }), true);
         await check("Verified volunteer reads published event", () =>
           volunteer.doc("communityEvents/" + eventId).get());
 

@@ -11,6 +11,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
 }
 const projectId = "demo-volunserve";
 const owner = "gps-cleanup-owner", other = "gps-cleanup-other";
+const superUid = "gps-cleanup-programmer", adminUid = "gps-cleanup-lgu-admin";
 const event = "gps-cleanup-event", pathFor = "communityEventLiveLocations/" + event;
 async function main() {
   const env = await initializeTestEnvironment({
@@ -27,6 +28,8 @@ async function main() {
       await db.doc("users/" + owner).set({uid:owner,role:"volunteer",
         status:"approved",activeMode:"volunteer",residentAccess:true,volunteerAccess:true,
         identityVerified:true});
+      await db.doc("users/" + superUid).set({uid:superUid,role:"superadmin",status:"approved"});
+      await db.doc("users/" + adminUid).set({uid:adminUid,role:"admin",status:"approved",adminStatus:"active"});
       await db.doc("users/" + other).set({uid:other,role:"resident",
         status:"approved",activeMode:"resident",residentAccess:true});
       await db.doc("communityEvents/" + event).set({
@@ -39,8 +42,15 @@ async function main() {
     });
     const organizer = env.authenticatedContext(owner).firestore();
     const outsider = env.authenticatedContext(other).firestore();
+    const superDb = env.authenticatedContext(superUid).firestore();
+    const adminDb = env.authenticatedContext(adminUid).firestore();
     const anonymous = env.unauthenticatedContext().firestore();
     await seed();
+    await assertFails(superDb.doc(pathFor).get());
+    await assertFails(superDb.doc(pathFor).delete());
+    console.log("PASS programmer Super Admin cannot read or remove temporary organizer GPS");
+    await assertSucceeds(adminDb.doc(pathFor).get());
+    console.log("PASS operational LGU Admin can read temporary event GPS");
     await assertFails(outsider.doc(pathFor).delete());
     console.log("PASS unrelated Resident cannot delete organizer GPS");
     await assertFails(anonymous.doc(pathFor).delete());
