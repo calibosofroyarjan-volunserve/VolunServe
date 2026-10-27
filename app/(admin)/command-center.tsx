@@ -952,9 +952,9 @@ export default function CommandCenter() {
                 <View style={styles.heroEyebrowMark} />
                 <Text style={styles.heroEyebrowText}>VOLUNSERVE  /  LGU OPERATIONS</Text>
               </View>
-              <Text style={styles.heroTitle}>Operations overview</Text>
+              <Text style={styles.heroTitle}>Command Center</Text>
               <Text style={styles.heroSubtitle}>
-                Community response, approvals, and essential services at a glance.
+                Review urgent emergencies first, then follow the appropriate LGU service workflow.
               </Text>
             </View>
             <View style={styles.heroLocality}>
@@ -1019,8 +1019,8 @@ export default function CommandCenter() {
                 <View style={styles.sectionEyebrowLine} />
                 <Text style={styles.sectionEyebrowText}>ACTION CENTER</Text>
               </View>
-              <Text style={styles.sectionTitle}>Priority workflows</Text>
-              <Text style={styles.overviewSectionSubtitle}>Continue directly to the service that needs review.</Text>
+              <Text style={styles.sectionTitle}>Priority Actions</Text>
+              <Text style={styles.overviewSectionSubtitle}>Urgent reports first; other requests follow their own approval sequence.</Text>
             </View>
             {[
               {

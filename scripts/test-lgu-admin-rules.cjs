@@ -52,8 +52,8 @@ const newReview = (uid, email) => ({
   verifiedBy: SU, verifiedAt: stamp(),
 });
 const promotion = () => ({
-  previousRole: "resident",
-  previousPrimaryRole: "resident",
+  previousRole: "applicant",
+  previousPrimaryRole: "applicant",
   role: "admin", adminStatus: "active", status: "approved",
   adminCreatedAt: stamp(), adminCreatedBy: SU,
   adminUpdatedAt: stamp(), adminUpdatedBy: SU,
@@ -71,7 +71,7 @@ async function main() {
       await db.doc("users/" + SU).set({uid: SU, email:"superadmin@example.test",role:"superadmin",status:"approved",fullName:"Test Super Admin"});
       await db.doc("users/" + ADMIN).set({uid: ADMIN, email:"admin@example.test",role:"admin",status:"approved",adminStatus:"active"});
       await db.doc("users/" + SUSPENDED).set({uid:SUSPENDED,email:"suspended@example.test",role:"admin",status:"approved",adminStatus:"suspended"});
-      await db.doc("users/" + TARGET).set(baseResident(TARGET, "staff@example.test"));
+      await db.doc("users/" + TARGET).set({uid:TARGET,email:"staff@example.test",role:"applicant",status:"pending_review",residentAccess:false,volunteerAccess:false,fullName:"Unverified LGU applicant"});
       await db.doc("users/" + OTHER).set(baseResident(OTHER, "resident@example.test"));
       await db.doc("users/" + STALE).set(baseResident(STALE, "stale@example.test"));
       await db.doc("lguAdminCredentialReviews/" + STALE).set({
@@ -110,13 +110,13 @@ async function main() {
     await check("Admin cannot forge an LGU credential review",
       () => adminDb.doc("lguAdminCredentialReviews/" + TARGET)
         .set(newReview(TARGET, "staff@example.test")), true);
-    await check("Resident cannot self-promote",
+    await check("Unverified LGU applicant cannot self-promote",
       () => residentDb.doc("users/" + TARGET).update({role:"admin",adminStatus:"active"}), true);
-    await check("Existing Admin cannot promote Resident",
+    await check("Operational LGU Admin cannot promote applicant",
       () => adminDb.doc("users/" + TARGET).update(promotion()), true);
     await check("Super Admin cannot promote without a fresh review",
       () => superDb.doc("users/" + TARGET).update(promotion()), true);
-    await check("Old LGU review cannot be reused",
+    await check("Resident cannot be promoted with a stale LGU review",
       () => superDb.doc("users/" + STALE).update(promotion()), true);
 
     await check("Mismatched staff email cannot pass credential review", () => {
@@ -161,7 +161,7 @@ async function main() {
 
     const freshAdminUid = "new-lgu-staff-verified";
     const freshAdminEmail = "verified-admin@example.test";
-    await check("Independent LGU Admin creation requires same-batch review", () => {
+    await check("Direct LGU Admin creation is blocked even with a fresh credential review", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/" + freshAdminUid),
         newReview(freshAdminUid, freshAdminEmail));
@@ -178,20 +178,17 @@ async function main() {
         createdAt:stamp(),
       });
       return batch.commit();
-    });
-    await check("Newly created LGU Admin can read own profile", () =>
-      env.authenticatedContext(freshAdminUid).firestore()
-        .doc("users/" + freshAdminUid).get());
+    }, true);
     const accountSource = fs.readFileSync(path.resolve(__dirname,
       "..", "lib/adminAccounts.ts"), "utf8");
     if (!accountSource.includes("batch.set(credentialReviewReference") ||
         !accountSource.includes("lguAdminCredentialReviews") ||
         !accountSource.includes("writeBatch(db)")) {
       fail += 1;
-      console.error("FAIL standalone LGU Admin client must batch-write a fresh credential review");
+      console.error("FAIL legacy LGU Admin provisioning routine must remain auditable if reviewed for migration");
     } else {
       pass += 1;
-      console.log("PASS standalone LGU Admin client submits credential review atomically");
+      console.log("PASS legacy provisioning source retained but server rules deny direct LGU Admin creation");
     }
 
     // LGU staff can apply for an account, but applications grant NO privileges.

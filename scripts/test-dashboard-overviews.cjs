@@ -28,7 +28,7 @@ assert(!superView.includes("Market Revenue") && !superView.includes("Daily Sales
   "Do not copy fake Xacton commerce figures");
 for(const title of [
   "Open emergencies", "Pending user profiles", "Volunteer approvals",
-  "Verified evacuation centers", "Priority workflows", "AI identity reviews",
+  "Verified evacuation centers", "Priority Actions", "AI identity reviews",
 ]) assert(adminView.includes(title),"Missing LGU Admin overview area: "+title);
 assert(adminView.includes('"applicant", "admin", "superadmin", "lgu_personnel"') &&
   adminView.includes('setPendingUserIds') &&

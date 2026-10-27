@@ -201,13 +201,8 @@ service cloud.firestore {
         && request.resource.data.province == 'Bulacan'
         && request.resource.data.city == 'City of San Jose del Monte'
         && request.resource.data.createdAt == request.time;
-      allow create: if isSuperAdmin()
-        && request.resource.data.uid == uid
-        && request.resource.data.role == 'admin'
-        && request.resource.data.status == 'approved'
-        && hasFreshLguCredentialReview()
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.reviewedBy == request.auth.uid;
+      // Direct privileged account creation is intentionally disabled.
+      // Verified LGU staff must submit a pending application and be promoted.
       allow get: if signedIn()
         && (
           request.auth.uid == uid
@@ -452,8 +447,8 @@ service cloud.firestore {
         && resource.data.role != 'superadmin'
         && (
           (
-            (resource.data.status == 'approved'
-              || (resource.data.role == 'applicant' && resource.data.status == 'pending_review'))
+            resource.data.role == 'applicant'
+            && resource.data.status == 'pending_review'
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'

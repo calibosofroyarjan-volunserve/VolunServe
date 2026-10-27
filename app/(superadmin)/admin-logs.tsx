@@ -107,7 +107,7 @@ export default function AdminLogs() {
     <View style={styles.header}>
       <View style={{ flex: 1 }}>
         <Text style={styles.eyebrow}>SUPER ADMIN · SYSTEM OVERSIGHT</Text>
-        <Text style={styles.title}>Audit Logs</Text>
+        <Text style={styles.title}>Admin Activity & Audit Logs</Text>
         <Text style={styles.subtitle}>Recorded administrative actions, including account access changes.</Text>
       </View>
       <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.back}>

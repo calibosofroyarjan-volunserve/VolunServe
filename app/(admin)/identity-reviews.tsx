@@ -389,7 +389,7 @@ export default function IdentityReviewsAdmin() {
             <Text style={styles.eyebrow}>
               ADMIN · RESIDENT VERIFICATION
             </Text>
-            <Text style={styles.title}>Identity Reviews</Text>
+            <Text style={styles.title}>Resident Identity Reviews</Text>
             <Text style={styles.subtitle}>
               Review AI-uncertain Resident identity cases. Automatic
               verification remains separate from manual LGU/Admin validation.

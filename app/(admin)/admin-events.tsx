@@ -99,7 +99,7 @@ export default function AdminEvents() {
         }
         const profile: any = await getUserProfile(user.uid);
         const role: Role = profile?.role || "user";
-        const ok = role === "admin" || role === "superadmin";
+        const ok = role === "admin" && profile?.status === "approved" && profile?.adminStatus !== "suspended";
         setAllowed(ok);
       } catch {
         setAllowed(false);
@@ -441,12 +441,12 @@ export default function AdminEvents() {
   if (!allowed) {
     return (
       <View style={styles.center}>
-        <Text style={styles.title}>Admin Events</Text>
+        <Text style={styles.title}>Volunteer Events</Text>
         <Text style={styles.danger}>
-          Access denied. Your account is not admin/superadmin.
+          Access denied. An active LGU Admin account is required.
         </Text>
         <Text style={styles.muted}>
-          Fix: set your user profile field role = "admin" or "superadmin" in users/{`{uid}`}.
+          Contact your Super Admin if your LGU Admin access needs verification or reactivation.
         </Text>
       </View>
     );
@@ -455,7 +455,7 @@ export default function AdminEvents() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Admin • Volunteer Events</Text>
+        <Text style={styles.headerTitle}>Volunteer Events</Text>
 
         <TouchableOpacity style={styles.primaryBtn} onPress={openCreate}>
           <Text style={styles.primaryBtnText}>+ Create Event</Text>

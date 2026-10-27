@@ -1113,7 +1113,7 @@ export default function AllRecords() {
         <Text
           style={styles.title}
         >
-          All Records
+          System Records (Read Only)
         </Text>
 
         <Text
@@ -1382,7 +1382,7 @@ export default function AllRecords() {
             styles.infoText
           }
         >
-          All Records is for
+          System Records is for
           Super Admin oversight only.
           Operational actions remain
           inside their proper Admin
