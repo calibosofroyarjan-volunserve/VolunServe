@@ -20,7 +20,7 @@ const checks = [
   }],
   ["One operational Command Center, no analytics shortcuts", () => {
     assert.match(command,/Priority Actions/);
-    assert.match(command,/Pending user profiles/);
+    assert.match(command,/Resident account reviews/);
     assert.doesNotMatch(analytics,/style=\{styles\.navRow\}/);
     assert.match(analytics,/Reporting & Insights/i);
     assert.match(analytics,/role === "admin"/);
