@@ -54,3 +54,8 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: npx expo export --platform web --clear --max-workers 1
+      - name: Verify exported remock routes and stamp revision (NO DEPLOY)
+        run: node scripts/verify-hosting-release.cjs
+      - name: Probe live VolunServe Hosting (informational, read-only)
+        continue-on-error: true
+        run: node scripts/check-live-hosting.cjs
