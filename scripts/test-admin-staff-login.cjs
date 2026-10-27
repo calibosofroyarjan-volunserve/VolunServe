@@ -29,12 +29,22 @@ assert(owner.includes('role === "applicant" && account.status === "pending_revie
 assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must prohibit public creation of approved Admin role");
-assert(admin.includes("Request Access from Super Admin") &&
-  apply.includes("Request Access from Super Admin") &&
-  apply.includes("Submit Request to Super Admin"),
-  "LGU staff must clearly submit their access request to the programmer Super Admin team");
-assert(apply.includes("does not grant Super Admin or LGU Admin privileges") &&
-  apply.includes("independently collect and confirm supporting LGU credentials") &&
-  owner.includes("These are requests for LGU Admin access, not Super Admin accounts."),
-  "Applicant copy must distinguish LGU/Admin grant from Super Admin powers and require independent credential review");
+assert(admin.includes("Apply as LGU Staff") &&
+  apply.includes("LGU Staff Verification Application") &&
+  apply.includes("Submit LGU Information for Verification"),
+  "LGU personnel submit their staff info, not request programmer Super Admin privileges");
+assert(apply.includes("role:\"applicant\",status:\"pending_review\"") &&
+  apply.includes("Only after successful confirmation") &&
+  owner.includes("LGU Staff Applications"),
+  "Unverified submissions remain pending and visible to programmer Super Admins");
+assert(owner.includes("setIdentityMatched") &&
+  owner.includes("setLguEmploymentConfirmed") &&
+  owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&
+  owner.includes('actionType === "promote" && !reviewComplete') &&
+  owner.includes('return "Promote Verified Staff"'),
+  "Admin promotion must be disabled until independent identity and LGU employment checks pass");
+assert(owner.includes("lguAdminCredentialReviews") &&
+  owner.includes('reviewStatus: "verified"') &&
+  owner.includes('role: "admin"'),
+  "Verification result and role promotion must be captured before operational Admin access");
 console.log("PASS staff login tabs, email-only staff auth, pending LGU applications and verified Super Admin grant");
