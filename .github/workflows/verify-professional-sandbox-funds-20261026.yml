@@ -44,6 +44,8 @@ jobs:
         run: node scripts/test-final-admin-scope.cjs
       - name: Staff login tabs, pending applications and Super Admin gate
         run: node scripts/test-admin-staff-login.cjs
+      - name: LGU staff government ID intake, private evidence and pagination contract
+        run: node scripts/test-lgu-applicant-private-evidence.cjs
       - name: LGU Admin credential security (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
       - name: Donation financial records only for LGU Admin (Firestore emulator)
