@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { auth, db } from "../../lib/firebase";
+import { AdminPageHeading, AdminMetricCard, AdminEmptyState, AdminSectionHeading, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 import { getUserProfile } from "../../lib/firebaseAuth";
 
 type EventType = "disaster" | "training";
@@ -454,16 +455,22 @@ export default function AdminEvents() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Volunteer Events</Text>
-
-        <TouchableOpacity style={styles.primaryBtn} onPress={openCreate}>
-          <Text style={styles.primaryBtnText}>+ Create Event</Text>
-        </TouchableOpacity>
+      <View style={styles.pageIntro}>
+        <AdminPageHeading eyebrow="LGU ADMIN  /  EVENTS & VOLUNTEERING"
+          title="Volunteer Events"
+          subtitle="Manage LGU-created volunteer activities, capacity and attendance. Resident-proposed events belong in Community Events."
+          actionLabel="Create Volunteer Event" actionIcon="add-circle-outline" onAction={openCreate} />
+        <AdminSectionHeading title="Event Operations" caption="Live event counts · select a record below to manage attendance or its status." />
+        <View style={styles.metricGrid}>
+          <AdminMetricCard label="Upcoming" value={events.filter(e => e.status === "upcoming").length} hint="Scheduled activities" icon="calendar-outline" />
+          <AdminMetricCard label="Active" value={events.filter(e => e.status === "active").length} hint="Currently running" icon="pulse-outline" />
+          <AdminMetricCard label="Completed" value={events.filter(e => e.status === "completed").length} hint="Finished activities" icon="checkmark-circle-outline" />
+        </View>
       </View>
 
       <View style={styles.filters}>
         <TextInput
+          accessibilityLabel="Search volunteer events by title or location"
           placeholder="Search title or location…"
           value={search}
           onChangeText={setSearch}
@@ -492,10 +499,17 @@ export default function AdminEvents() {
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {filtered.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No events found</Text>
-              <Text style={styles.muted}>Create your first event to show on volunteer screen.</Text>
-            </View>
+            <AdminEmptyState
+              title={search || filterType || filterStatus ? "No matching volunteer events" : "No volunteer events yet"}
+              description={search || filterType || filterStatus
+                ? "Try another search or clear the filters to view all activities."
+                : "Create an LGU volunteer event when an approved activity is ready for publication."}
+              actionLabel={search || filterType || filterStatus ? "Clear filters" : "Create Volunteer Event"}
+              icon="calendar-outline"
+              onAction={search || filterType || filterStatus ? () => {
+                setSearch(""); setFilterType(""); setFilterStatus("");
+              } : openCreate}
+            />
           ) : (
             filtered.map((ev) => (
               <View key={ev.id} style={styles.card}>
@@ -756,7 +770,9 @@ function Pill({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F8F7" },
+  screen: { flex: 1, backgroundColor: ADMIN_UI.paper },
+  pageIntro: {paddingHorizontal: 24, paddingTop: 24},
+  metricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 6 },
 
   header: {
     paddingTop: 56,
@@ -772,7 +788,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 16, fontWeight: "900", color: "#0f172a", flex: 1 },
 
-  filters: { padding: 16, gap: 10 },
+  filters: { paddingHorizontal: 24, paddingVertical: 16, gap: 11 },
   search: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -790,11 +806,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
-  chipActive: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
+  chipActive: { backgroundColor: ADMIN_UI.emerald, borderColor: ADMIN_UI.emerald },
   chipText: { color: "#334155", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#fff" },
 
-  list: { padding: 16, paddingBottom: 40, gap: 12 },
+  list: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 40, gap: 12 },
 
   card: {
     backgroundColor: "#fff",
@@ -804,7 +820,7 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   cardTop: { flexDirection: "row", gap: 12 },
-  cardTitle: { fontSize: 16, fontWeight: "900", color: "#0f172a", marginBottom: 6 },
+  cardTitle: { fontSize: 16, fontWeight: "900", color: ADMIN_UI.ink, marginBottom: 6 },
   meta: { color: "#64748b", marginBottom: 2 },
 
   actionsCol: { gap: 8, justifyContent: "flex-start" },
@@ -837,12 +853,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#f1f5f9",
   },
-  statusBtnActive: { backgroundColor: "#2563eb" },
+  statusBtnActive: { backgroundColor: ADMIN_UI.emerald },
   statusBtnText: { fontWeight: "800", color: "#334155", fontSize: 12 },
   statusBtnTextActive: { color: "#fff" },
 
   primaryBtn: {
-    backgroundColor: "#2563eb",
+    backgroundColor: ADMIN_UI.emerald,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
