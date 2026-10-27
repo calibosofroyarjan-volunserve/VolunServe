@@ -184,6 +184,7 @@ export default function CommandCenter() {
   const isAdmin =
     !!profile &&
     profile.role === "admin" &&
+    profile.adminStatus !== "suspended" &&
     isApprovedProfile(profile);
 
   const contentWidth = Math.min(1180, Math.max(280, width - (Platform.OS === "web" && width >= 980 ? 320 : 32)));
@@ -344,11 +345,12 @@ export default function CommandCenter() {
       onSnapshot(
         pendingUsersQuery,
         (snapshot) => {
+          // LGU staff applications belong exclusively to the programmer
+          // Super Admin queue, not Resident identity/user approvals.
           setPendingUserIds(
-            snapshot.docs.map(
-              (item) =>
-                item.id,
-            ),
+            snapshot.docs
+              .filter(item => !["applicant", "admin", "superadmin", "lgu_personnel"].includes(String(item.data().role || "").toLowerCase()))
+              .map(item => item.id),
           );
         },
         (error) => {
@@ -954,29 +956,32 @@ export default function CommandCenter() {
               <Text style={styles.heroLocalityText}>SAN JOSE DEL MONTE · BULACAN</Text>
             </View>
           </View>
-          <View style={styles.heroDivider} />
-          <View style={[styles.metricStrip, width < 760 && styles.metricStripCompact]}>
-            {[
-              { label: "Open emergency cases", value: metrics.activeCases, tone: "normal" },
-              { label: "Critical reports", value: metrics.criticalOpen, tone: "critical" },
-              { label: "Pending reviews", value: metrics.pendingReviews, tone: "normal" },
-              { label: "Evacuation centers", value: metrics.activeCenters, tone: "normal" },
-            ].map((metric, index) => (
-              <View key={metric.label} style={[
-                styles.metricItem,
-                index > 0 && width >= 760 && styles.metricItemDivider,
-                metric.tone === "critical" && styles.metricItemCritical,
-              ]}>
-                <Text style={styles.metricItemLabel}>{metric.label}</Text>
-                <Text style={[
-                  styles.metricItemValue,
-                  metric.tone === "critical" && metrics.criticalOpen > 0 && styles.metricItemValueCritical,
-                ]}>
-                  {dataError ? "—" : metric.value.toLocaleString("en-PH")}
-                </Text>
+        </View>
+        <View style={[styles.kpiGrid, width < 640 && styles.kpiGridCompact]}>
+          {([
+            {key:"cases",label:"Open emergencies",count:metrics.activeCases,icon:"alert-circle-outline" as const,route:"/(admin)/admin-cases",hint:"Incident response"},
+            {key:"residents",label:"Resident reviews",count:pendingUserIds.length,icon:"shield-checkmark-outline" as const,route:"/(admin)/identity-reviews",hint:"LGU user verification"},
+            {key:"volunteers",label:"Volunteer approvals",count:pendingVolunteerIds.length,icon:"people-outline" as const,route:"/(admin)/account-approvals",hint:"Volunteer applications"},
+            {key:"centers",label:"Verified evacuation centers",count:metrics.activeCenters,icon:"business-outline" as const,route:"/(admin)/command-center",hint:"Official active centers"},
+          ]).map((item,index) => (
+            <TouchableOpacity key={item.key} accessibilityRole="button"
+              accessibilityLabel={item.label + " · open assigned LGU workflow"}
+              onPress={() => item.key==="centers" ? setShowCenterManagement(true) : navigate(item.route)}
+              style={[styles.kpiCard,index===0 && styles.kpiCardFeatured,width < 640 && styles.kpiCardCompact]}
+              activeOpacity={0.86}>
+              <View style={styles.kpiCardHeader}>
+                <Text style={[styles.kpiCardLabel,index===0 && styles.kpiFeaturedText]}>{item.label}</Text>
+                <Ionicons name={item.icon} color={index===0?"#E7FFF4":"#147B5A"} size={19}/>
               </View>
-            ))}
-          </View>
+              <Text style={[styles.kpiCardValue,index===0 && styles.kpiFeaturedText]}>
+                {dataError ? "—" : item.count.toLocaleString("en-PH")}
+              </Text>
+              <View style={styles.kpiCardFoot}>
+                <Text style={[styles.kpiCardHint,index===0 && styles.kpiFeaturedHint]}>{item.hint}</Text>
+                <Ionicons name="arrow-forward-outline" size={15} color={index===0?"#CBF4E2":"#8CA99B"}/>
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {dataError && (
@@ -1020,17 +1025,18 @@ export default function CommandCenter() {
                 route: "/(admin)/admin-cases",
               },
               {
-                key: "accounts", label: "Resident & volunteer approvals",
+                key: "resident", label: "Resident verification",
                 detail: dataError ? "Live status unavailable" :
-                  `${pendingUserIds.length} account review${pendingUserIds.length === 1 ? "" : "s"} · ${pendingVolunteerIds.length} volunteer application${pendingVolunteerIds.length === 1 ? "" : "s"}`,
-                icon: "people-outline" as const, count: metrics.pendingReviews,
-                route: "/(admin)/account-approvals",
+                  pendingUserIds.length + " non-staff user account review(s) · identity decisions in dedicated queue",
+                icon: "shield-checkmark-outline" as const, count: pendingUserIds.length,
+                route: "/(admin)/identity-reviews",
               },
               {
-                key: "identity", label: "Identity verification",
-                detail: "Review identity submissions and exceptions",
-                icon: "shield-checkmark-outline" as const, count: null,
-                route: "/(admin)/identity-reviews",
+                key: "volunteers", label: "Volunteer applications",
+                detail: dataError ? "Live status unavailable" :
+                  pendingVolunteerIds.length + " volunteer application(s) awaiting review",
+                icon: "people-outline" as const, count: pendingVolunteerIds.length,
+                route: "/(admin)/account-approvals",
               },
               {
                 key: "relief", label: "Relief operations",
@@ -1831,6 +1837,20 @@ function CenterInput({
 
 const styles =
   StyleSheet.create({
+    // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
+    kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:24},
+    kpiGridCompact: {gap:9},
+    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
+      padding:17,borderWidth:1,borderColor:"#D9E7DF"},
+    kpiCardCompact: {minWidth:136,padding:13},
+    kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
+    kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
+    kpiCardLabel: {fontSize:11,fontWeight:"750",color:"#688073",flex:1,lineHeight:16},
+    kpiCardValue: {fontSize:29,fontWeight:"800",color:"#164535",marginTop:13,fontVariant:["tabular-nums"]},
+    kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:9},
+    kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
+    kpiFeaturedText: {color:"#FFFFFF"},
+    kpiFeaturedHint: {color:"#C5EDDF"},
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
       overflow: "hidden", position: "relative", backgroundColor: "#103E33",
