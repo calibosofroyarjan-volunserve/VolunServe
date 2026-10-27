@@ -1,8 +1,9 @@
 import { collection, onSnapshot } from "firebase/firestore";
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Platform, ScrollView, StyleSheet, Text,
-  View, useWindowDimensions,
+  TouchableOpacity, View, useWindowDimensions,
 } from "react-native";
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import { db } from "../../lib/firebase";
@@ -23,6 +24,7 @@ export default function SuperAdminDashboard() {
   const authorized = !!user && profile?.role === "superadmin" && profile?.status === "approved";
   const [counts, setCounts] = useState<Partial<Record<Source, number>>>({});
   const [approved, setApproved] = useState<number | null>(null);
+  const [staffStats, setStaffStats] = useState({ pending: 0, active: 0, suspended: 0 });
   const [errors, setErrors] = useState<Partial<Record<Source, boolean>>>({});
   const [loaded, setLoaded] = useState<Partial<Record<Source, boolean>>>({});
 
@@ -30,6 +32,7 @@ export default function SuperAdminDashboard() {
     if (!authorized) {
       setCounts({});
       setApproved(null);
+      setStaffStats({ pending: 0, active: 0, suspended: 0 });
       setErrors({});
       setLoaded({});
       return;
@@ -39,7 +42,13 @@ export default function SuperAdminDashboard() {
       (snapshot) => {
         setCounts((old) => ({ ...old, [key]: snapshot.size }));
         if (key === "users") {
-          setApproved(snapshot.docs.filter((doc) => doc.data().status === "approved").length);
+          const accounts = snapshot.docs.map(item => item.data());
+          setApproved(accounts.filter(item => item.status === "approved").length);
+          setStaffStats({
+            pending: accounts.filter(item => item.role === "applicant" && item.status === "pending_review").length,
+            active: accounts.filter(item => item.role === "admin" && item.status === "approved" && item.adminStatus !== "suspended").length,
+            suspended: accounts.filter(item => item.role === "admin" && item.adminStatus === "suspended").length,
+          });
         }
         setErrors((old) => ({ ...old, [key]: false }));
         setLoaded((old) => ({ ...old, [key]: true }));
@@ -77,7 +86,7 @@ export default function SuperAdminDashboard() {
           <Text style={styles.eyebrow}>SYSTEM ADMINISTRATION</Text>
         </View>
         <Text style={[styles.title, compact && styles.compactTitle]}>System overview</Text>
-        <Text style={styles.subtitle}>Access governance and system records for VolunServe.</Text>
+        <Text style={styles.subtitle}>LGU staff verification, account access, technical oversight and system audit trails. City operations remain under authorized LGU Admin personnel.</Text>
       </View>
 
       <View style={[styles.metricRow, compact && styles.metricRowCompact]}>
@@ -107,8 +116,34 @@ export default function SuperAdminDashboard() {
 
       <View style={styles.secondarySection}>
         <View style={styles.secondaryHead}>
-          <Text style={styles.sectionTitle}>Account authorization</Text>
-          <Text style={styles.sectionHint}>Registered account status</Text>
+          <Text style={styles.sectionTitle}>LGU staff verification & account governance</Text>
+          <Text style={styles.sectionHint}>Real-time account status from Firestore</Text>
+        </View>
+        <View style={styles.governanceRow}>
+          {([
+            {label: "Pending LGU reviews", count: staffStats.pending},
+            {label: "Active LGU Admins", count: staffStats.active},
+            {label: "Suspended LGU Admins", count: staffStats.suspended},
+          ] as const).map(item => (
+            <View key={item.label} style={styles.governanceStat}>
+              <Text style={styles.governanceLabel}>{item.label}</Text>
+              <Text style={styles.governanceValue}>{!loaded.users ? "…" : errors.users ? "—" : item.count.toLocaleString("en-PH")}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.governanceActions}>
+          <TouchableOpacity accessibilityRole="button"
+            accessibilityLabel="Review LGU staff applications and Admin accounts"
+            onPress={() => router.push("/(superadmin)/admin-accounts" as any)}
+            style={styles.governancePrimary}>
+            <Text style={styles.governancePrimaryText}>Review LGU Applications</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button"
+            accessibilityLabel="Open Super Admin security and audit logs"
+            onPress={() => router.push("/(superadmin)/admin-logs" as any)}
+            style={styles.governanceSecondary}>
+            <Text style={styles.governanceSecondaryText}>View Audit Logs</Text>
+          </TouchableOpacity>
         </View>
         {showApproval ?
           <View style={styles.approvalRow}>
@@ -156,6 +191,18 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 11, fontWeight: "600", color: "#62786F" },
   metricValue: { fontSize: 28, fontWeight: "700", color: "#173D32", marginTop: 6, fontVariant: ["tabular-nums"] },
   secondarySection: { marginTop: 34 },
+  governanceRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 14 },
+  governanceStat: { flexGrow: 1, flexBasis: "27%", minWidth: 156, borderColor: "#DCE9E1",
+    borderWidth: 1, backgroundColor: "#FFFFFF", borderRadius: 10, padding: 17 },
+  governanceLabel: { fontSize: 11, fontWeight: "700", color: "#607D70" },
+  governanceValue: { fontSize: 26, fontWeight: "800", color: "#195743", marginTop: 7, fontVariant: ["tabular-nums"] },
+  governanceActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 18 },
+  governancePrimary: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 9,
+    backgroundColor: "#087F61", justifyContent: "center", alignItems: "center" },
+  governancePrimaryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  governanceSecondary: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 9,
+    borderWidth: 1, borderColor: "#BDD8CA", justifyContent: "center", alignItems: "center" },
+  governanceSecondaryText: { color: "#087F61", fontSize: 12, fontWeight: "800" },
   secondaryHead: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 14 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#173D32" },
   sectionHint: { fontSize: 12, color: "#6C7F77" },
