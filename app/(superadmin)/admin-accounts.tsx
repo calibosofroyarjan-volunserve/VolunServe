@@ -22,6 +22,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -94,6 +95,7 @@ const nameFor = (
 };
 
 export default function AdminAccounts() {
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const {
     user: sessionUser,
     profile: sessionProfile,
@@ -1816,10 +1818,9 @@ export default function AdminAccounts() {
           }
         >
           <View
-            style={
-              styles.confirmCard
-            }
+            style={[styles.confirmCard, { maxWidth: actionType === "promote" ? 880 : 500, maxHeight: viewportHeight * 0.9, padding: viewportWidth < 720 ? 16 : 26 }]}
           >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
             <View
               style={
                 styles.confirmIcon
@@ -1900,14 +1901,14 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
-                <Text style={styles.reviewKicker}>STEP 2 · VERIFY LGU STAFF BEFORE PROMOTION</Text>
+                <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
                   Compare the applicant's information with an independently obtained official LGU source.
                   Completing this review is required before activating any Admin account.
                 </Text>
                 {actionTarget?.role === "applicant" && (
-                  <View style={styles.credentialReview}>
-                    <Text style={styles.reviewLabel}>APPLICANT-SUBMITTED DETAILS · NOT YET VERIFIED</Text>
+                  <View style={styles.applicantDetails}>
+                    <Text style={styles.reviewLabel}>Applicant details · Not yet verified</Text>
                     <Text style={styles.reviewHelp}>Name: {nameFor(actionTarget)}</Text>
                     <Text style={styles.reviewHelp}>Email: {actionTarget.email || "Not provided"}</Text>
                     <Text style={styles.reviewHelp}>Office: {String((actionTarget as any).lguOffice || "Not provided")}</Text>
@@ -1916,7 +1917,7 @@ export default function AdminAccounts() {
                     <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
                   </View>
                 )}
-                <ScrollView style={styles.reviewScroll} keyboardShouldPersistTaps="handled">
+                <View style={styles.reviewScroll}>
                   {([
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
                     { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
@@ -1977,7 +1978,7 @@ export default function AdminAccounts() {
                       I independently reviewed LGU credentials and confirmed that the selected account belongs to the authorized staff member.
                     </Text>
                   </TouchableOpacity>
-                </ScrollView>
+                </View>
                 <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
               </View>
             ) : null}
@@ -2004,6 +2005,7 @@ export default function AdminAccounts() {
               </View>
             )}
 
+            </ScrollView>
             <View
               style={
                 styles.confirmActions
@@ -2073,15 +2075,16 @@ export default function AdminAccounts() {
 
 const styles =
   StyleSheet.create({
-    credentialReview: { marginTop: 12, marginBottom: 10, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 14 },
-    reviewKicker: { fontSize: 10, fontWeight: "700", letterSpacing: 0.9, color: "#247459" },
-    reviewHelp: { color: "#64776D", fontSize: 12, lineHeight: 18, marginTop: 6, marginBottom: 12 },
-    reviewScroll: { maxHeight: 275 },
-    reviewField: { marginBottom: 10 },
-    reviewLabel: { fontSize: 12, fontWeight: "600", color: "#355247", marginBottom: 5 },
-    reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 8, paddingHorizontal: 11, minHeight: 43, fontSize: 13, color: "#173D32" },
-    confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginVertical: 8 },
-    confirmReviewText: { flex: 1, color: "#3B594B", fontSize: 12, lineHeight: 18 },
+    credentialReview: { marginTop: 20, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 19 },
+    applicantDetails: { padding: 17, marginTop: 14, marginBottom: 16, backgroundColor: "#F3F9F6", borderWidth: 1, borderColor: "#DCEBE2", borderRadius: 13 },
+    reviewKicker: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4, color: "#247459" },
+    reviewHelp: { color: "#556E61", fontSize: 13, lineHeight: 21, marginTop: 8, marginBottom: 12 },
+    reviewScroll: { width: "100%" },
+    reviewField: { marginBottom: 17 },
+    reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 },
+    reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
+    confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
+    confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
     reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
     confirmDisabled: { opacity: 0.5 },
     accessFlow: { paddingVertical: 16, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 18 },
@@ -2574,7 +2577,7 @@ const styles =
 
     confirmCard: {
       width: "100%",
-      maxWidth: 460,
+      maxWidth: 880,
       alignSelf: "center",
       backgroundColor:
         "#FFFFFF",
@@ -2598,7 +2601,7 @@ const styles =
 
     confirmTitle: {
       color: "#173D32",
-      fontSize: 21,
+      fontSize: 26,
       fontWeight: "900",
     },
 
