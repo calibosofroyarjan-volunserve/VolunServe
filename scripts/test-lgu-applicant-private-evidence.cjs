@@ -71,4 +71,9 @@ assert(app.includes('getMetadata(storageRef(storage,priorPath))') &&
   app.includes('return priorPath;') &&
   app.includes('newlyCreated && !profileCreated'),
   "Immutable private Storage uploads require fail-closed idempotent retries without deleting pre-existing accounts");
+assert(app.includes('const emulatorRequested = process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === "true"') &&
+  app.includes('(!emulatorRequested &&') &&
+  app.includes('emulatorRequested && !usingFirebaseEmulators') &&
+  app.includes('Mobile test devices must never upload synthetic IDs to the production Firebase project.'),
+  "Android/native emulator mode MUST fail closed instead of uploading government ID photos to production");
 console.log("PASS LGU government ID intake, 5-step wizard, private data rules, 5-item queue and promotion evidence gate");
