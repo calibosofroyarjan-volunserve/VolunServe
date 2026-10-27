@@ -11466,6 +11466,12 @@ app.post(
     }
   },
 );
+// Optional private LGU staff face-similarity screening. This endpoint is
+// Super Admin-only and NEVER grants identityVerified or operational Admin role.
+// It reads only restricted ID/selfie objects and requires real internal AI config.
+require("./lguStaffFaceScreening").mountLguStaffFaceScreening(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
 const port =
   Number(
     process.env.PORT ||
