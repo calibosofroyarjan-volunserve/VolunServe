@@ -30,7 +30,9 @@ assert(events.includes("allow create: if isAdmin()") &&
   !events.includes("allow update: if isAdminOrSuperAdmin()"),
   "Programmer Super Admin must not publish or start LGU events");
 const liveGps = ruleSection("match /communityEventLiveLocations/{eventId}", "match /communityEventProposals/{proposalId}");
-assert(liveGps.includes("allow delete: if isAdmin()") &&
+assert(liveGps.includes("allow get: if isAdmin()") &&
+  liveGps.includes("allow delete: if isAdmin()") &&
+  !liveGps.includes("allow get: if isAdminOrSuperAdmin()") &&
   !liveGps.includes("allow delete: if isAdminOrSuperAdmin()"),
   "GPS cleanup belongs to operational LGU Admin or the event organizer, never programmers");
 const attendance = rules.slice(rules.indexOf("match /communityEventParticipants/{participantId}"));
