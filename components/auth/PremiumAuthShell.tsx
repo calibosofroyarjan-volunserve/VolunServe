@@ -42,7 +42,7 @@ export default function PremiumAuthShell({ active, children }: Props) {
     return () => clearInterval(timer);
   }, []);
 
-  const heroHeight = compact ? (narrow ? 290 : 340) : Math.max(height, 710);
+  const heroHeight = compact ? (narrow ? 325 : 355) : Math.max(height, 710);
   const selected = active === "resident";
 
   return (
@@ -78,7 +78,7 @@ export default function PremiumAuthShell({ active, children }: Props) {
               </Text>
             </View>
 
-            {!narrow && (
+            {!compact && (
               <View style={styles.heroBottom}>
                 <View style={styles.featureRow}>
                   {([
