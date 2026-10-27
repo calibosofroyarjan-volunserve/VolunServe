@@ -70,7 +70,7 @@ export default function AdministrativeLogin() {
       if (!permitted) {
         // Reject a valid Resident/Volunteer password at this restricted entry.
         await signOut(auth);
-        setError("This portal is reserved for an active Admin or Super Admin account. Residents should use the community sign-in.");
+        setError(profile.role === "applicant" ? "Your LGU staff application is awaiting independent Super Admin credential approval. You cannot access the Admin Command Center yet." : "This portal is reserved for an active Admin or Super Admin account. Residents should use the community sign-in.");
         return;
       }
       router.replace(
@@ -218,6 +218,11 @@ export default function AdministrativeLogin() {
               <Text style={styles.actionText}>Forgot your administrative password?</Text>
             </TouchableOpacity>
             <View style={styles.separator} />
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/admin-request")}
+              style={styles.communityLink}>
+              <Ionicons name="document-text-outline" size={17} color="#087D5D"/>
+              <Text style={styles.communityLinkText}>Request LGU Admin Access</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.communityLink}
               accessibilityRole="button"
