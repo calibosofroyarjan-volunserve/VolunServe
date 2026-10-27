@@ -1904,8 +1904,9 @@ export default function AdminAccounts() {
               <View style={styles.credentialReview}>
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
-                  Compare the applicant's information with an independently obtained official LGU source.
-                  Completing this review is required before activating any Admin account.
+                  Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
+                  Submitted documents or ID images alone are insufficient. If official confirmation is unavailable, keep the application pending.
+                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check.
                 </Text>
                 {actionTarget?.role === "applicant" && (
                   <View style={styles.applicantDetails}>
@@ -2001,7 +2002,7 @@ export default function AdminAccounts() {
                   >
                     <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
                     <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
+                      I independently confirmed current LGU employment, appointment and authority with the official LGU office or records, using independently obtained contact details.
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -2049,11 +2050,14 @@ export default function AdminAccounts() {
 
             </ScrollView>
             <View
-              style={
-                styles.confirmActions
-              }
+              style={[
+                styles.confirmActions,
+                viewportWidth < 480 && styles.confirmActionsCompact,
+              ]}
             >
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Cancel staff account action"
                 disabled={
                   !!savingUid
                 }
@@ -2075,6 +2079,8 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={actionButtonLabel(actionType)}
                 disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
                 style={[
                   styles.confirmButton,
@@ -2703,6 +2709,11 @@ const styles =
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 10,
+    },
+
+    confirmActionsCompact: {
+      flexDirection: "column-reverse",
+      alignItems: "stretch",
     },
 
     confirmButton: {
