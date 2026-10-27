@@ -29,11 +29,12 @@ assert(owner.includes('role === "applicant" && account.status === "pending_revie
 assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must prohibit public creation of approved Admin role");
-assert(admin.includes("Apply as LGU Staff") &&
+assert(admin.includes("Request Super Admin Access") &&
   apply.includes("LGU Staff Verification Application") &&
   apply.includes("Submit LGU Information for Verification"),
-  "LGU personnel submit their staff info, not request programmer Super Admin privileges");
-assert(apply.includes("role:\"applicant\",status:\"pending_review\"") &&
+  "LGU staff access requests must display the approved Super Admin CTA and route to the staff verification form");
+assert(admin.includes("not Super Admin privileges") &&
+  apply.includes("role:\"applicant\",status:\"pending_review\"") &&
   apply.includes("Only after successful confirmation") &&
   owner.includes("LGU Staff Applications"),
   "Unverified submissions remain pending and visible to programmer Super Admins");

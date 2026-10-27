@@ -158,9 +158,9 @@ export default function AdministrativeLogin() {
         <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/admin-request")}
           disabled={working} style={[styles.outlineAction, authCornerCut(10)]}>
           <Ionicons name="document-text-outline" size={19} color="#087B62" />
-          <Text style={styles.outlineActionText}>Apply as LGU Staff</Text>
+          <Text style={styles.outlineActionText}>Request Super Admin Access</Text>
         </TouchableOpacity>
-        <Text style={styles.footer}>Submit your LGU staff information for programmer Super Admin review. Only confirmed LGU personnel may be promoted to Admin. Applying does not grant access.</Text>
+        <Text style={styles.footer}>Submit LGU staff information for Super Admin verification. This button requests review by the Super Admin team, not Super Admin privileges. Verified personnel may be promoted to LGU Admin only.</Text>
       </PremiumAuthShell>
     </KeyboardAvoidingView>
   );
