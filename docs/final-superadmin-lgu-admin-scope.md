@@ -63,6 +63,26 @@ Existing routes stay intact and are grouped into one clear workspace:
 
 **UI:** role identity says *LGU Administration*, one Command Center, five organized collapsible module groups, no second donations page, no redundant overview cards, responsive accessible labels and active navigation, restrained evergreen/emerald-white theme.
 
+## 4A. Final Xacton-inspired role-specific dashboard presentation (October 27)
+
+The reference image is used for layout hierarchy, **not** literal financial or imaginary sales charts. Both roles keep the existing dark emerald navigational shell, restrained white cards, accessible current-state labels, and native responsive layout.
+
+**Programmer Super Admin System Overview:**
+- Four live Firestore KPI tiles: pending LGU staff applications (\`applicant/pending_review\`), approved active LGU Admins, suspended Admins, and registered accounts. Placeholder/loading and permission-denied states must never masquerade as zero.
+- Real source-comparison chart: accounts, emergency reports, assistance requests, and community events. These are read-only **record counts**, not daily growth or uptime.
+- Recent LGU Admin activity from \`adminLogs\` and \`adminActivityLogs\`, restricted to actors currently marked LGU Admin. Actor, action, description and real timestamp appear only when recorded. The complete audit list remains at \`/(superadmin)/admin-logs\`.
+- System/access changes from recorded administrative audit events, including credential administration or settings updates. This is **not** a GitHub deployment or system-uptime monitor; unavailable records are labeled, never invented.
+- Access to verification, audit and system settings remains linked to existing routes. Operational LGU-only payment and response controls remain absent.
+
+**LGU Admin Command Center:**
+- Xacton-inspired KPI row uses current incident reports, non-staff pending user profiles, pending volunteer applications and only independently verified active evacuation centers.
+- Distinct workflow targets for account review (\`/(admin)/account-approvals\`), Render-based AI identity verification (\`/(admin)/identity-reviews\`), emergencies (\`/(admin)/admin-cases\`), volunteer approvals and relief. AI identity review count is not invented using generic pending-user counts.
+- LGU personnel applicants (\`role=applicant\`) are excluded from Resident/Volunteer approval queue; only the programmer Super Admin can inspect and promote them.
+- Existing workload chart, real capacity data and expanded evacuation-center management remain, without creating new dashboard pages or duplicating service modules.
+- No speculative responder activity, payment balance, maps availability, trendline or live-vehicle movement is shown.
+
+**Limitations and launch gates:** the Super Admin feed includes only actions successfully written to admin audit collections and may not capture every Admin operation; coverage must be tested for sensitive workflows before claiming complete monitoring. Emulator/TypeScript/build checks are not a substitute for authenticated production end-to-end tests. The dashboard visual revision requires a separate Hosting deployment; changed Firestore permissions from other merged PRs must be deployed and verified explicitly.
+
 ## 5. End-to-end workflows and owner
 
 ### LGU staff verification (Super Admin owns)
