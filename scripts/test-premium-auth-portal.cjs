@@ -25,6 +25,37 @@ for (const s of [
   "useWindowDimensions",
   "ScrollView",
 ]) assert(shell.includes(s), "Missing login reference-design element: "+s);
+// Regression: the original left-side carousel is mandatory on desktop.
+// Design references apply to the RIGHT form only, never replace the slideshow.
+const heroStart = shell.indexOf('<View style={[styles.hero,');
+const rightStart = shell.indexOf('<View style={[styles.right,');
+assert(heroStart > 0 && rightStart > heroStart, "Original two-column layout must remain");
+const left = shell.slice(heroStart, rightStart);
+for (const requirement of [
+  'source={SLIDES[slide]}',
+  'Report Emergencies',
+  'Build Safer Communities',
+  'Emergency Reports',
+  'Request Assistance',
+  'Community Events',
+  'Stronger People.',
+  'Safer Communities.',
+  'SLIDES.map',
+  'setSlide(index)',
+]) assert(left.includes(requirement), "The original left carousel lost: " + requirement);
+assert(shell.includes('setInterval(() => setSlide('),
+  "The left carousel must auto-advance");
+assert(shell.includes('6500'), "Preserve original slide interval");
+assert(shell.includes('slide1.jpg') && shell.includes('slide2.jpg') && shell.includes('slide3.jpg'),
+  "Preserve all three original slides");
+const right = shell.slice(rightStart);
+assert(right.includes("auth-resident-hero.webp") === false,
+  "Photo assets must be declared in the source map, not reloaded dynamically");
+for (const required of ["styles.photoFrame","styles.wave","styles.formFields",
+  'accessibilityRole="tab"', "{children}", "styles.roleRow"]) {
+  assert(right.includes(required), "New right-only login design missing: " + required);
+}
+
 assert(fs.existsSync(path.join(__dirname,"..","assets/images/auth-resident-hero.webp")),
   "Missing local Resident volunteer photo");
 assert(fs.existsSync(path.join(__dirname,"..","assets/images/auth-admin-hero.webp")),
