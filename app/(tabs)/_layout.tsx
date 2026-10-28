@@ -41,12 +41,6 @@ const residentDesktopTabs: TabDefinition[] = [
     activeIcon: "home",
   },
   {
-    name: "map-tracking",
-    label: "Response Map",
-    icon: "map-outline",
-    activeIcon: "map",
-  },
-  {
     name: "disaster-response",
     label: "Emergency Reports",
     icon: "alert-circle-outline",
@@ -91,12 +85,6 @@ const volunteerDesktopTabs: TabDefinition[] = [
     label: "Home",
     icon: "home-outline",
     activeIcon: "home",
-  },
-  {
-    name: "map-tracking",
-    label: "Live Response Map",
-    icon: "map-outline",
-    activeIcon: "map",
   },
   {
     name: "volunteer",
@@ -179,12 +167,6 @@ const residentMobileTabs: TabDefinition[] = [
     activeIcon: "home",
   },
   {
-    name: "map-tracking",
-    label: "Map",
-    icon: "location-outline",
-    activeIcon: "location",
-  },
-  {
     name: "disaster-response",
     label: "Report",
     icon: "alert-circle-outline",
@@ -210,12 +192,6 @@ const volunteerMobileTabs: TabDefinition[] = [
     label: "Home",
     icon: "home-outline",
     activeIcon: "home",
-  },
-  {
-    name: "map-tracking",
-    label: "Map",
-    icon: "location-outline",
-    activeIcon: "location",
   },
   {
     name: "volunteer",
