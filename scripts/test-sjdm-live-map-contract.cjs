@@ -130,3 +130,14 @@ test("web/Android do not expose roads, outside pins or invalid city camera targe
   assert.match(native, /inCity\(point.latitude, point.longitude\)/);
   assert.match(native, /inCity\(center.latitude, center.longitude\)/);
 });
+
+
+test("city overview fits all SJDM bounds and outside is fully opaque", () => {
+  const web = fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  const native = fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
+  assert.match(web, /map\.fitBounds\(\[\[area\.west, area\.south\], \[area\.east, area\.north\]\]/);
+  assert.match(web, /"fill-color": "#E7EEEA", "fill-opacity": 1/);
+  assert.match(native, /fillColor="rgba\(231,238,234,1\)"/);
+  assert.match(native, /onRegionChangeComplete=\{region =>/);
+  assert.match(web, /City boundary unavailable\. SJDM-only map|SJDM boundary unavailable\. Map is hidden/);
+});
