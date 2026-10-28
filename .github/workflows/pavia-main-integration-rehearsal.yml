@@ -34,15 +34,39 @@ jobs:
           cat /tmp/rehearsal-merge.log
           git diff --name-only --diff-filter=U > /tmp/rehearsal-conflicts.txt
           if [ "$rc" -ne 0 ]; then
-            echo "Integration conflicts:"
+            echo "Integration conflicts detected (temporary checkout only):"
             cat /tmp/rehearsal-conflicts.txt
-            git merge --abort || true
-            echo "The temporary CI checkout has been reset; no branch was modified."
-            exit 1
+            while IFS= read -r conflict; do
+              case "$conflict" in
+                "app/(tabs)/_layout.tsx"|"components/auth/PremiumAuthShell.tsx"|"components/home/Home.web.tsx"|"scripts/test-admin-staff-login.cjs"|"scripts/test-final-admin-scope.cjs"|"scripts/test-premium-auth-portal.cjs") ;;
+                *) echo "Unexpected conflict: $conflict"; exit 1 ;;
+              esac
+              # In the throwaway runner, test protecting newest main Login/Home.
+              git checkout --theirs -- "$conflict"
+              git add -- "$conflict"
+            done < /tmp/rehearsal-conflicts.txt
+            if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+              echo "Unresolved conflicts remain"; exit 1
+            fi
           fi
-          echo "No textual merge conflicts in temporary checkout."
-          git merge --abort || true
-          echo "Merge rehearsal complete. No commit, push, or deployment."
+          git commit -m "TEST ONLY: merge candidate with main auth/home preference"
+          echo "Temporary merged commit: $(git rev-parse HEAD)"
+          echo "NOT PUSHED. Testing exact temporarily merged tree."
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify temporary merged client and governance contracts
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node scripts/test-pavia-pagination-email.cjs
+          npx expo export --platform web
+          echo "PASS: merged candidate compiles and preserves Login, governance and web export; no push/deploy."
+
       - name: Upload conflict listing if needed
         if: always()
         uses: actions/upload-artifact@v4
