@@ -120,6 +120,12 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
+        // The profile email must be the Firebase Auth email, not a user-supplied alias.
+        && request.auth.token.get('email', '') == request.resource.data.email
+        // Self-reported age restriction; original-ID review remains separate.
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 120
         && request.resource.data.province in [
           'Bulacan',
           'BULACAN',
@@ -228,6 +234,12 @@ service cloud.firestore {
       allow list: if isAdminOrSuperAdmin();
       allow update: if signedIn()
         && request.auth.uid == uid
+        // Edits must not downgrade a previously adult account below the age policy.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
+          || (request.resource.data.age is int && request.resource.data.age >= 18
+              && request.resource.data.age <= 120)
+        )
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
