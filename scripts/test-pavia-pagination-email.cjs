@@ -510,3 +510,24 @@ test("Super Admin LGU staff promotion has no legacy direct-create or arbitrary a
   assert.match(screen, /batch\.set\(doc\(db, "lguAdminCredentialReviews", account\.id\)/);
   assert.match(screen, /await batch\.commit\(\)/);
 });
+
+test("Super Admin oversight covers proposals, verified attendance and LGU credential review without operational writes", () => {
+  const screen=read("app/(superadmin)/all-records.tsx");
+  const rules=read("firestore.rules");
+  const sources=[
+    ["communityEventProposals","Event Proposals"],
+    ["communityEventParticipants","Volunteer Attendance"],
+    ["lguAdminCredentialReviews","LGU Credential Reviews"],
+  ];
+  for(const [collectionName,label] of sources) {
+    assert.ok(screen.includes('collectionName: "'+collectionName+'"'), "Missing read-only source "+collectionName);
+    assert.ok(screen.includes('label: "'+label+'"'), "Missing record tab "+label);
+    assert.ok(rules.includes("match /"+collectionName+"/{"), "Firestore rules must define "+collectionName);
+  }
+  for(const tab of ["eventProposals","eventParticipants","credentialReviews"])
+    assert.ok(screen.includes('activeTab === "'+tab+'"'), "Missing tailored view "+tab);
+  assert.match(screen,/const PAGE_SIZE = 5/);
+  assert.match(screen,/visibleRecords\.slice\(\(activePage - 1\) \* PAGE_SIZE, activePage \* PAGE_SIZE\)/);
+  assert.doesNotMatch(screen,/writeBatch\(|updateDoc\(|deleteDoc\(|addDoc\(/,
+    "System Records must remain read-only; LGU operational actions belong to Admin");
+});
