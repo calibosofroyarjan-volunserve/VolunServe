@@ -134,3 +134,15 @@ test("AI face similarity cannot directly promote a Resident without LGU ID/name 
   assert.match(backend,/identityVerified: false/);
   assert.doesNotMatch(backend,/if \(decision === "verified"\) \{\s*transaction\.set\(userRef/);
 });
+
+
+test("Privileged Firestore roles require the shared email-verified approval gate",()=>{
+  const rules=fs.readFileSync(path.join(root,"firestore.rules"),"utf8");
+  for(const helper of ["isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
+    const start=rules.indexOf("function "+helper+"() {");
+    assert.ok(start>=0,helper+" must exist");
+    const body=rules.slice(start,rules.indexOf("\\n    }",start));
+    assert.match(body,/return approved\\(\\)/,helper+" must enforce approved/email_verified");
+  }
+  assert.match(rules,/request\\.auth\\.token\\.get\\('email_verified', false\\) == true/);
+});
