@@ -98,7 +98,11 @@ export default function PasswordResetModal({
               <Ionicons name="checkmark-circle-outline" size={22} color="#75E6BC" />
               <View style={styles.messageColumn}>
                 <Text style={styles.successTitle}>Check your email</Text>
-                <Text style={styles.successText}>{RESET_CONFIRMATION}</Text>
+                <Text style={styles.successText}>
+                  {administrative
+                    ? "If this email belongs to an authorized LGU password account, a reset link will arrive shortly. Check your Inbox and Spam folder."
+                    : RESET_CONFIRMATION}
+                </Text>
               </View>
             </View>
           ) : (
