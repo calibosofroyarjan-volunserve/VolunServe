@@ -33,7 +33,7 @@
 | Emergency and Assistance Management missing naming | `Emergency Reports`, `Assistance Requests` actual modules | Paper revised |
 | Map should be INSIDE Emergency Reports | Resident `Report Emergency / Track Response`; Admin `admin-cases` → authorized map; no duplicate Resident sidebar | Existing draft PR #144; not deployed |
 | Redundant admin sidebar/old Attendance route | Route grouping exists; avoid breaking existing Event Attendance processing | Still open: human usability walkthrough |
-| Announcements should allow barangay dropdown | Current LGU role is bound to **assigned barangay** by `firestore.rules`; unrestricted dropdown would produce unauthorized writes or leak scope | **Requires decision**, do not fake selectable city-wide option |
+| Announcements should allow barangay dropdown | Searchable 62 official SJDM barangays; Firestore create permits approved city LGU Admin selecting exactly one verified SJDM barangay, forbids Residents/Super Admin and creator impersonation | **Changed here; authorization expanded beyond previously assigned-only area — LGU approval required** |
 | Event approval past-date validation | Admin checks future date and endTime; client now also refuses joining expired events | Changed here |
 | Community Events participant list | `app/(admin)/community-events.tsx` renders joined Volunteers | Existing code |
 | Donation/assistance process | Actual transactions, approval, evidence and permissions; sandbox-only claims | Still open: full simulated end-to-end |
@@ -65,7 +65,7 @@
 | Time-In/Time-Out/certificates | Existing server-timestamp and Admin verification logic | Existing code |
 | Event member list | Existing joined participants view | Existing code |
 | Event GPS organizer privacy | Uses consent and joined participant scope | Existing code, verify permission rules |
-| Request Assistance text, dropdown, confirmation checkbox, errors | Must remain clear and avoid unnecessary red boxes; align field labels to actual categories | Still open |
+| Request Assistance text, dropdown, confirmation checkbox, errors | Added optional suggested short descriptions with free-text fallback and a mandatory accessible declaration checkbox before submission; existing amount, supporting evidence and step validation retained | **Changed here; real form/browser test still required** |
 | Volunteer history/notification duplication | Use My Progress/Notifications for Volunteer; personal Donations through Resident Mode | Paper revised; navigation audit open |
 | Profile edit dropdown | Occupation category/specialization implemented | Existing code |
 
@@ -82,7 +82,7 @@
 ## Release/test gates
 1. `node --test scripts/test-pavia-final-flows.cjs` for event schedule boundaries and UI wiring.
 2. `npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-pavia-resident-registration-rules.cjs"` for actual registration permissions (synthetic records only).
-3. Run existing admin, staff auth, emergency, event and GPS route regression checks.
+3. Test announcement role and author permissions using `scripts/test-pavia-announcement-rules.cjs`; run existing admin, staff auth, emergency, event and GPS route checks.
 4. `npx tsc --noEmit` + `npx expo export --platform web`.
 5. Browser manual: Resident signup and identity review; Admin and Super Admin login; case, volunteer approval and event Join/Decline; original profile name/occupation after refresh; mobile width.
 6. Do **not** merge, call live fully functional, or update Firebase production until branch-stack review and real-account preview acceptance.
