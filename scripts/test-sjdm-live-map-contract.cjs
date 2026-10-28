@@ -12,7 +12,9 @@ function importLocalTs(file) {
     target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS,
   }}).outputText;
   const mod = { exports: {} };
-  new Function("module", "exports", "require", output)(mod, mod.exports, require);
+  const scopedRequire = name => name === "../constants/sjdmBoundaryReference"
+    ? importLocalTs("constants/sjdmBoundaryReference.ts") : require(name);
+  new Function("module", "exports", "require", output)(mod, mod.exports, scopedRequire);
   return mod.exports;
 }
 const boundary = importLocalTs("lib/sjdmMapBoundary.ts");
@@ -72,4 +74,14 @@ test("both map targets render GIS polygon and approved live facilities", () => {
   assert.match(native,/<Polygon/);
   assert.match(native,/setMapBoundaries/);
   assert.doesNotMatch(web,/const LGU_BASE =/);
+});
+
+test("real bundled SJDM geometry is verified and available without network", async () => {
+  const city = await boundary.loadSjdmBoundary();
+  assert.equal(city.type, "Feature");
+  assert.match(city.properties.source, /geoBoundaries/);
+  assert.ok(boundary.boundaryRings(city)[0][0].length > 100);
+  const box = boundary.boundaryBounds(city);
+  assert.ok(box.north > 14.82 && box.south < 14.79);
+  assert.ok(box.west < 121.04 && box.east > 121.15);
 });
