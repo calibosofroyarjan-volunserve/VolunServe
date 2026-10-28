@@ -42,7 +42,14 @@ jobs:
                 *) echo "Unexpected conflict: $conflict"; exit 1 ;;
               esac
               # In the throwaway runner, test protecting newest main Login/Home.
-              git checkout --theirs -- "$conflict"
+              case "$conflict" in
+                "scripts/test-admin-staff-login.cjs"|"scripts/test-final-admin-scope.cjs")
+                  # PR #145 changes approved LGU application/governance contracts.
+                  git checkout --ours -- "$conflict" ;;
+                *)
+                  # The latest main protects premium Login and Resident Home.
+                  git checkout --theirs -- "$conflict" ;;
+              esac
               git add -- "$conflict"
             done < /tmp/rehearsal-conflicts.txt
             if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
