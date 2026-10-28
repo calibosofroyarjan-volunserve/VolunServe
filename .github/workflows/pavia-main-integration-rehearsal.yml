@@ -49,6 +49,21 @@ jobs:
               echo "Unresolved conflicts remain"; exit 1
             fi
           fi
+          # Both branches introduced the same dialog-host import in different
+          # locations. Git's textual merge can duplicate it without a conflict.
+          # Resolve ONLY in the throwaway checkout and test the merged code.
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path("app/_layout.tsx")
+          source=path.read_text()
+          item='import AppDialogHost from "../components/ui/AppDialogHost";'
+          count=source.count(item)
+          if count != 2:
+              raise SystemExit(f"Expected exactly two duplicate AppDialogHost imports, got {count}; inspect merge manually")
+          source=source.replace(item+"\\n","",1)
+          path.write_text(source)
+          PY
+          git add app/_layout.tsx
           git commit -m "TEST ONLY: merge candidate with main auth/home preference"
           echo "Temporary merged commit: $(git rev-parse HEAD)"
           echo "NOT PUSHED. Testing exact temporarily merged tree."
