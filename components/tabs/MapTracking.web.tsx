@@ -353,6 +353,7 @@ const mapDocument = `
       let hasFitted = false;
       let lastLocation = null;
       let cityBoundary = null;
+      let lastCityBounds = null;
       let lastValidCityCenter = [121.045, 14.813];
       // Browser DOM markers render above the map canvas. Always geofence the
       // marker records as well as painting the outside of the city.
@@ -850,6 +851,7 @@ const mapDocument = `
           payload.outsideMask || { type: "FeatureCollection", features: [] }
         );
         const area = payload.boundaryBounds;
+        lastCityBounds = cityBoundary ? area : null;
         if (cityBoundary && area && Number.isFinite(area.north) &&
             Number.isFinite(area.south) && Number.isFinite(area.east) &&
             Number.isFinite(area.west)) {
@@ -1132,6 +1134,14 @@ const mapDocument = `
 
         if (data?.kind === "set-map-data") {
           render(data);
+        } else if (data?.kind === "fit-whole-sjdm") {
+          const box = lastCityBounds;
+          if (cityBoundary && box && Number.isFinite(box.west) &&
+              Number.isFinite(box.east) && Number.isFinite(box.south) &&
+              Number.isFinite(box.north)) {
+            map.fitBounds([[box.west, box.south],[box.east, box.north]],
+              {padding:36,maxZoom:15,duration:450});
+          }
         } else if (
           data?.kind === "update-user-location"
         ) {
@@ -5399,9 +5409,18 @@ export default function WebMapTracking() {
               padding:"9px 11px",borderRadius:11,background:"rgba(255,255,255,.97)",
               boxShadow:"0 3px 14px rgba(16,44,33,.15)",border:"1px solid #BBDCD0",
               color:"#174635",fontSize:11}}>
-            <strong style={{display:"block",fontSize:10,letterSpacing:".05em",marginBottom:5}}>
-              SJDM VERIFIED FACILITY RECORDS
-            </strong>
+            <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between",marginBottom:5}}>
+              <strong style={{fontSize:10,letterSpacing:".05em"}}>
+                SJDM VERIFIED FACILITY RECORDS
+              </strong>
+              <button type="button" disabled={!sjdmBoundary}
+                title="Zoom out to see the entire San Jose del Monte city boundary"
+                onClick={() => frame.current?.contentWindow?.postMessage({kind:"fit-whole-sjdm"},"*")}
+                style={{border:"1px solid #BDDCCF",borderRadius:7,padding:"5px 7px",
+                  fontSize:10,fontWeight:700,cursor:"pointer",background:"#F4FAF7",color:"#17664E"}}>
+                Full SJDM
+              </button>
+            </div>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
               <span title="LGU buildings appear only after official approval and coordinate verification"
                 style={{background:"#E9F5EF",padding:"5px 7px",borderRadius:7,fontWeight:700}}>
