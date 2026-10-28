@@ -52,7 +52,7 @@
 | Terms match actual platform | 18+, SJDM, no automatic 911 dispatch, consent/location dependency and sandbox donation limits added to mobile/web terms | Changed here |
 | ID capture button and loading | Existing web camera flow; cannot assert all device browsers are functional | Still open: browser/mobile capture smoke |
 | AI verifies valid government ID/name | Face-only AI decisions always stay pending; LGU Admin must independently review original ID and confirm legal name. No automatic official-ID issuance/OCR authenticity proof exists | Manual gate implemented; **automated ID authenticity/real name matching still open** |
-| Edit profile name/occupation | Profile writes canonical name and separate legal fields, updates Firebase Auth displayName, has occupation dropdown | Existing code; test persistence after logout/login |
+| Edit profile name/occupation | Resident name and contact details save independently of occupation selection; canonical `fullName` plus separate name fields go to Firestore and Firebase Auth display name mirrors the change; Home and profile dropdown prioritize canonical name; optional occupation dropdown retained | Fixed on PR #145; source regression added; **real-account edit → reload → logout/login confirmation still open** |
 
 ## 4. Emergency, assistance, events and Volunteer
 | Observation | Decision / evidence | Status |
