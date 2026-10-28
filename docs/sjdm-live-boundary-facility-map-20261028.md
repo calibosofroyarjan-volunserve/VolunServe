@@ -41,9 +41,11 @@ Useful source leads (not sources of live operational status):
 4. Evacuation center: verify a locally seeded *synthetic* location appears only when active and verified; reject wrong/out-of-polygon records; verify capacity date is not advertised as instantaneous.
 5. Live operational LGU GPS remains scoped to its assigned emergency case; no cross-resident private movement leak.
 6. When no facilities/center data exists, show honest empty state rather than filling map with fabricated pins. Add verified records and proper permissions before the Friday demonstration.
-7. No deployment or production rules application has been done by this branch.
+7. LGU Admin must enter an independently reviewed real location (no invented pins), source, barangay, coordinates, and verification state in `/(admin)/sjdm-facilities`. Test pending → verified → active, later closed/inactive, and actual Firestore `onSnapshot` map update.
+8. Test security rules under Firestore emulator: unrelated Residents, pending applicants and Super Admin must not create official facility records; Approved LGU Admin can; a pending office cannot be published active; and both record types are geographically bounded at the rules layer (a coarse envelope only, while UI uses the actual polygon).
+9. No deployment or production rules application has been done by this branch.
 
 ## Known limitations
 - The bundled geoBoundaries polygon is a **simplified reference shape**, not an LGU-signed legal boundary or certified survey. It should be reviewed against the city's official planning maps and any known contested sections before a critical operations release. Attribution is included in the map and source.
 - Camera bounding boxes constrain rectangular map views; only the polygon shows irregular geographic extent. Navigation to locations just outside city limits might show neighboring map areas. No guarantee that an emergency trip cannot cross geographic boundaries.
-- The full LGU facility-maintenance UI and authoritative live shelter occupancy API have **not yet been built**. Firestore updates require independent LGU-authorized record management. No live occupancy is claimed.
+- An LGU Admin record-maintenance screen now exists at `/(admin)/sjdm-facilities`, with separate Evacuation Center and fixed LGU Facility editors, SJDM city polygon validation, barangay dropdown, per-record verification source, administrative status, capacity/occupancy controls, and 5-per-page review. **This is draft branch code, not deployed or acceptance-tested on actual accounts yet.** There is no authoritative live occupancy sensor/API; timestamps reflect the most recent authorized LGU record update. No live occupancy is claimed.
