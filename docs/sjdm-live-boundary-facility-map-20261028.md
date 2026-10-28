@@ -9,6 +9,14 @@
 - New `lguMapFacilities` Firestore feed is for **fixed LGU buildings only**: city government, CDRRMO, fire, police, health and barangay offices. Distinct map icons identify their categories. Only LGU Admin can create/update verified records, guarded by Firestore rules. Status must be active and verified to be rendered. These records are **not** live vehicle locations and must never claim movement.
 - Existing *case-authorized* LGU responder GPS pins and vehicle icons remain separately governed by prior security rules and fresh GPS time checks.
 
+## City government address references available in LGU Admin screen
+The **Official city references for verification** panel links directly to city-published records. Its "Review draft" button copies an address and barangay suggestion **without coordinates, approval, current status or capacity**, and keeps verification pending. No Firestore record is auto-seeded. These are starting points for the authorized Admin's independent review:
+- New Government Center — Barangay Dulong Bayan, from the official CSJDM Contact Us page (address confirmed, GPS unpublished by this feature).
+- CDRRMO Building — Productivity Complex/Motorpool, Sapang Palay Proper, from the official CDRRMO page (canonical signup barangay dropdown says "Sapang Palay"; verify naming directly).
+- Historical central evacuation site — Productivity Center, Sapang Palay Proper, from the City's **2018** Ecological Profile. This historical reference does **not** prove the site remains a designated or open evacuation center in 2026. Do not mark active solely based on this archival listing.
+
+For the map popup, active means the **LGU-recorded status**, not that the site is confirmed open at this moment. Capacity, occupancy and available spaces are *last LGU-reported counts* with an update time, not IoT/live sensor feeds. Before using a shelter in a real emergency, verify with official LGU channels.
+
 ## Facility data publication (LGU only, no inventing locations)
 The collection has deliberately **not been auto-seeded**. For each independently verified facility, an authorized LGU Admin publishes:
 ```json
