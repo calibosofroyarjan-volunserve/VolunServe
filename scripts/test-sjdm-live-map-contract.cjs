@@ -177,11 +177,10 @@ test("active Resident/Volunteer/LGU response views keep real shelter feeds and s
   assert.doesNotMatch(web,/centers: missionMode\s*\?\s*\[\]/);
   assert.match(web,/activeResponseView: isResidentMode \|\| missionMode \|\| adminMissionMode \|\| lguPersonnelMissionMode/);
   assert.match(web,/if \(!payload\.activeResponseView\)/);
-  assert.match(web,/verifiedCityShelterCount/);
-  assert.match(web,/verifiedCityLguCount/);
-  assert.match(web,/No LGU-verified active shelter records/);
-  assert.match(web,/No LGU-verified active office pins/);
-  assert.match(web,/No offline\/fake pins will be shown/);
+  assert.match(web,/visibleCenters/);
+  assert.match(web,/lguFacilities/);
+  assert.match(web,/publicPlaces: publicPlacePins\.map/);
+  assert.doesNotMatch(web,/SJDM VERIFIED FACILITY RECORDS/);
 });
 
 test("Minuyan Proper verified history is a SOURCE REFERENCE only, not an active shelter pin", () => {
@@ -198,6 +197,33 @@ test("Residents can reveal the full authentic SJDM outline without switching off
   const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
   assert.match(web,/data\?\.kind === "fit-whole-sjdm"/);
   assert.match(web,/map\.fitBounds\(\[\[box\.west, box\.south\],\[box\.east, box\.north\]\]/);
-  assert.match(web,/Full SJDM/);
-  assert.match(web,/kind:"fit-whole-sjdm"/);
+  assert.match(web,/map\.fitBounds\(\[\[area\.west, area\.south\], \[area\.east, area\.north\]\]/);
+  assert.doesNotMatch(web,/SJDM VERIFIED FACILITY RECORDS/);
+});
+
+
+test("Only sourced real SJDM infrastructure coordinates become default public map icons", async () => {
+  const city=await boundary.loadSjdmBoundary();
+  const publicFeed=importLocalTs("lib/sjdmPublicMapPlaces.ts");
+  const pins=publicFeed.SJDM_PUBLIC_MAP_PLACE_PINS;
+  assert.ok(pins.length>=3, "map needs several grounded locations");
+  assert.ok(pins.some(item=>item.kind==="government"));
+  assert.ok(pins.some(item=>item.kind==="police_station"));
+  assert.ok(pins.some(item=>item.kind==="fire_station"));
+  assert.ok(pins.some(item=>item.kind==="cdrrmo"));
+  for (const item of pins) {
+    assert.ok(boundary.insideSjdmBoundary(city,item.latitude,item.longitude),
+      item.name+" must be physically inside SJDM");
+    assert.match(item.sourceUrl,/^https:\/\//);
+    assert.match(item.note,/not|unconfirmed|approximate|must be verified/i);
+    assert.ok(!("availability" in item), "must not invent live occupancy");
+  }
+  const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(web,/publicPlaceMarkers\.push\(marker\)/);
+  assert.match(web,/makeSourcedPlaceElement/);
+  assert.match(web,/publicPlacePins/);
+  assert.match(web,/fetchMappedSjdmPublicPlaces/);
+  assert.match(web,/withinCity\(item\.latitude, item\.longitude\)/);
+  assert.match(web,/public-place-marker/);
+  assert.doesNotMatch(web,/SJDM VERIFIED FACILITY RECORDS/);
 });
