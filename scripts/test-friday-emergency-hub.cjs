@@ -88,3 +88,7 @@ test("Emergency hub uses restrained typography and mobile-size accessible contro
   assert.match(hub, /accessibilityState=\{\{ selected: view === "tracking" \}\}/);
   assert.match(hub, /serviceTitle/);
 });
+
+// Defense release gate: include the repository-wide native-dialog scan and
+// existing five-per-page regression suite in the CI navigation test job.
+require("./test-pavia-pagination-email.cjs");
