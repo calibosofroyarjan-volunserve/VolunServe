@@ -6,7 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
-import { isEventJoinableNow } from "../../lib/communityEventEligibility";
+import { isEventJoinableNow, sjdmEventTimeMillis, validSjdmEventSchedule } from "../../lib/communityEventEligibility";
 import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
 import { router } from "expo-router";
 import {
@@ -1329,24 +1329,12 @@ export default function CommunityEventsScreen() {
       return;
     }
 
-    const dateOkay =
-      /^\d{4}-\d{2}-\d{2}$/.test(form.date);
-
-    const timeOkay =
-      /^([01]\d|2[0-3]):[0-5]\d$/.test(form.time);
-
-    const endTimeOkay = /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.endTime);
-    if (!endTimeOkay || (timeOkay && form.endTime <= form.time)) {
-      setNotice("Choose an end time later than the start time, on the same day.");
+    // Both Resident proposal and LGU Admin publishing use Philippine time.
+    const startMillis = sjdmEventTimeMillis(form.date, form.time);
+    if (!validSjdmEventSchedule({date: form.date, time: form.time, endTime: form.endTime})) {
+      setNotice("Choose valid event start and end times on the same Philippine calendar day.");
       return;
     }
-
-    const parsed =
-      dateOkay && timeOkay
-        ? new Date(
-            `${form.date}T${form.time}:00`
-          )
-        : null;
 
     if (
       title.length < 5 ||
@@ -1361,9 +1349,8 @@ export default function CommunityEventsScreen() {
     }
 
     if (
-      !parsed ||
-      Number.isNaN(parsed.getTime()) ||
-      parsed.getTime() <= Date.now()
+      startMillis === null ||
+      startMillis <= Date.now()
     ) {
       setNotice(
         "Enter a valid future date and time."
