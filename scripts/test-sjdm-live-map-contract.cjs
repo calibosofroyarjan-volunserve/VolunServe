@@ -206,11 +206,11 @@ test("Only sourced real SJDM infrastructure coordinates become default public ma
   const city=await boundary.loadSjdmBoundary();
   const publicFeed=importLocalTs("lib/sjdmPublicMapPlaces.ts");
   const pins=publicFeed.SJDM_PUBLIC_MAP_PLACE_PINS;
-  assert.ok(pins.length>=3, "map needs several grounded locations");
+  assert.equal(pins.length,2,"Only independently corroborated locations may be published.");
   assert.ok(pins.some(item=>item.kind==="government"));
-  assert.ok(pins.some(item=>item.kind==="police_station"));
-  assert.ok(pins.some(item=>item.kind==="fire_station"));
-  assert.ok(pins.some(item=>item.kind==="cdrrmo"));
+  assert.ok(pins.some(item=>item.kind==="barangay_hall"));
+  assert.ok(!pins.some(item=>["fire_station","cdrrmo","evacuation_site"].includes(item.kind)),
+    "No unresolved relocated or unverified site should have a hardcoded default pin.");
   for (const item of pins) {
     assert.ok(boundary.insideSjdmBoundary(city,item.latitude,item.longitude),
       item.name+" must be physically inside SJDM");
@@ -222,7 +222,11 @@ test("Only sourced real SJDM infrastructure coordinates become default public ma
   assert.match(web,/publicPlaceMarkers\.push\(marker\)/);
   assert.match(web,/makeSourcedPlaceElement/);
   assert.match(web,/publicPlacePins/);
-  assert.match(web,/fetchMappedSjdmPublicPlaces/);
+  assert.doesNotMatch(web,/fetchMappedSjdmPublicPlaces/);
+  assert.doesNotMatch(web,/osmMappedPlaces/);
+  const native=fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
+  assert.doesNotMatch(native,/fetchMappedSjdmPublicPlaces/);
+  assert.doesNotMatch(native,/osmMappedPlaces/);
   assert.match(web,/withinCity\(item\.latitude, item\.longitude\)/);
   assert.match(web,/public-place-marker/);
   assert.doesNotMatch(web,/SJDM VERIFIED FACILITY RECORDS/);
@@ -236,8 +240,11 @@ test("web map popup is readable, actionable and never displays raw OSM technical
   assert.match(source,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
   assert.match(source,/makeVerifiedMapPopup\(item,true\)/);
   assert.match(source,/makeVerifiedMapPopup\(item,false\)/);
-  assert.match(source,/View map source/);
-  assert.match(source,/Call office/);
+  assert.doesNotMatch(source,/View map source/);
+  assert.doesNotMatch(source,/Official information/);
+  assert.match(source,/Directions in Google Maps/);
+  assert.match(source,/facilityDirectionsUrl/);
+  assert.match(source,/www\.google\.com\/maps\/dir\/\?api=1&destination=/);
   assert.match(source,/Call SJDM CDRRMO/);
   assert.doesNotMatch(source,/item\.sourceLabel \+ " · " \+ item\.note/);
   assert.doesNotMatch(source,/typeof url !== "string" \|\| !\/\^https:/);
@@ -295,4 +302,25 @@ test("programmer Super Admin is not a field LGU dispatcher", () => {
   const source=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
   assert.match(source,/const isOperationalLgu = accountRole === "admin" \|\| isLguPersonnel/);
   assert.match(source,/const adminMissionMode =\s*!!focusedCaseId && isOperationalLgu/);
+});
+
+
+test("all visible types of public safety facility pins support correct coordinate-based directions", async () => {
+  const map = importLocalTs("lib/sjdmPublicMapPlaces.ts");
+  const u = map.googleMapsFacilityDirections(14.82785,121.04486);
+  assert.equal(u,
+    "https://www.google.com/maps/dir/?api=1&destination=14.827850%2C121.044860&travelmode=driving");
+  assert.throws(()=>map.googleMapsFacilityDirections(Infinity,121),/Invalid facility/);
+  assert.throws(()=>map.googleMapsFacilityDirections(14.8,200),/Invalid facility/);
+  const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(web,/safePopupLink\(navigationUrl, "Directions in Google Maps", links\)/);
+  assert.match(web,/const navigationUrl = facilityDirectionsUrl\(item.latitude, item.longitude\)/);
+  assert.match(web,/if \(!validPoint\(latitude, longitude\) \|\| !withinCity\(latitude, longitude\)\)/);
+  const native=fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
+  assert.match(native,/function|const openVerifiedDirections/);
+  assert.match(native,/Linking\.openURL\(googleMapsFacilityDirections\(latitude,longitude\)\)/);
+  assert.match(native,/onCalloutPress=\{\(\) => openVerifiedDirections\(place.latitude,place.longitude\)\}/);
+  assert.match(native,/onCalloutPress=\{\(\) => openVerifiedDirections\(facility.latitude,facility.longitude\)\}/);
+  assert.match(native,/onCalloutPress=\{\(\) => openVerifiedDirections\(center.latitude,center.longitude\)\}/);
+  assert.match(native,/<Callout>/);
 });
