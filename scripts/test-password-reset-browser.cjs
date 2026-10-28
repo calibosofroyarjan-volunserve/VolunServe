@@ -3,7 +3,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const http=require("node:http");
 const assert=require("node:assert/strict");
-const {chromium}=require("@playwright/test");
+const {chromium,expect}=require("@playwright/test");
 
 const root=path.resolve(__dirname,"..");
 const dist=path.join(root,"dist");
@@ -78,8 +78,7 @@ async function main(){
       await loginField.fill("sample@example.com");
       await forgot.click();
       await page.getByText("Reset your password",{exact:true}).waitFor({timeout:10000});
-      assert.equal(await dialogEmail.inputValue(),"sample@example.com",
-        "Reset modal must prefill login email");
+      await expect(dialogEmail).toHaveValue("sample@example.com",{timeout:10000});
       await page.screenshot({path:path.join(evidence,route.replaceAll("/","")+"-reset-popup.png"),fullPage:false});
       await page.getByRole("button",{name:"Close password reset dialog"}).click();
       await page.getByText("Reset your password",{exact:true}).waitFor({state:"hidden",timeout:10000});
