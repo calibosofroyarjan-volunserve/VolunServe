@@ -23,6 +23,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { signUpUser } from "../lib/firebaseAuth";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -483,7 +484,8 @@ export default function Signup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = /^9\d{9}$/.test(phoneDigits);
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
+      !isKnownDisposableEmail(formData.email);
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -853,7 +855,9 @@ export default function Signup() {
                   />
 
                   {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email format.</ValidationText>
+                    <ValidationText ok={false}>{isKnownDisposableEmail(formData.email)
+                      ? "Temporary email addresses are not accepted. Use a permanent email."
+                      : "Enter a valid email format."}</ValidationText>
                   ) : null}
 
                   <View style={styles.formRow}>

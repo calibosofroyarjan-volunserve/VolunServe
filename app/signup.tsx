@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -505,7 +506,8 @@ export default function Signup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
+      !isKnownDisposableEmail(formData.email);
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -752,7 +754,7 @@ export default function Signup() {
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
               <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : "Enter a valid email format."}</ValidationText>
+              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : isKnownDisposableEmail(formData.email) ? "Temporary emails are not accepted. Use a permanent email." : "Enter a valid email format."}</ValidationText>
 
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
