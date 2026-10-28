@@ -1057,6 +1057,7 @@ export default function AdminAccounts() {
               <Ionicons name="close-circle" size={19} color="#698579" />
             </TouchableOpacity>}
           </View>
+          <ListPagination page={safeApplicantPage} total={pendingLguApplications.length} pageSize={ADMIN_PAGE_SIZE} onChange={setApplicantPage} />
           {pendingLguApplications.length === 0 ? (
             <View style={styles.applicationEmpty}>
               <Ionicons name={applicationSearch ? "search-outline" : "checkmark-done-outline"} size={27} color="#548D76" />
@@ -1086,7 +1087,7 @@ export default function AdminAccounts() {
               </TouchableOpacity>
             </View>
           ))}
-          <ListPagination page={safeApplicantPage} total={pendingLguApplications.length} pageSize={ADMIN_PAGE_SIZE} onChange={setApplicantPage} />
+
         </View>
 
         <View style={styles.accountSectionHeading}>
@@ -1273,6 +1274,7 @@ export default function AdminAccounts() {
           })}
         </View>
 
+        <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
         {adminAccounts.length ===
         0 ? (
           <View
@@ -1600,7 +1602,7 @@ export default function AdminAccounts() {
             }
           )
         )}
-        <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
+
 
         {/* Secondary privacy requests stay within this workspace, after core staff approval and access management. */}
         <View style={styles.privacySection}>
