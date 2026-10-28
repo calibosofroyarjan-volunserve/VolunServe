@@ -74,9 +74,6 @@ function fixture() {
       });},
     }),
   };
-  // Stages are immutable governance records, separate from the financial
-  // release state and carrying no wallet, amounts or private recipient fields.
-  const auditRows=()=>[...tables.adminActivityLogs.values()];
   const routes=new Map();
   const app={
     get:(path,...handlers)=>routes.set("GET "+path,handlers),
@@ -155,6 +152,13 @@ test("release review rejects legacy balance and accepts only provider-funded goa
   assert.equal(okay.statusCode,201);
   assert.equal(tables.fundReleaseDemos.get(verifiedId).status,"reviewed");
   assert.equal(tables.fundReleaseDemos.get(verifiedId).amountCents,500000);
+  const logged=[...tables.adminActivityLogs.values()];
+  assert.equal(logged.length,1,"Approved sandbox review must have one governance log");
+  assert.equal(logged[0].actionType,"fund_demo_reviewed");
+  assert.equal(logged[0].simulated,true);
+  for(const privateField of ["walletLast4","amountCents","recipientUid","method"])
+    assert.equal(Object.hasOwn(logged[0],privateField),false,
+      "Governance logs must not expose private fund beneficiary/payment data");
   const again=await invoke("POST","/api/admin/donations/fund-releases/review",
     {...body,campaignId:verifiedId});
   assert.equal(again.statusCode,409);
@@ -244,6 +248,15 @@ test("Resident owns their fictional wallet alias; Admin cannot override release 
   assert.ok(stored.simulationReference.startsWith("VS-DEMO-"));
   assert.ok(tables.notifications.has(
     "fund_demo_"+verifiedId+"_simulated_sent_resident_"+residentId));
+  const recorded=[...tables.adminActivityLogs.values()];
+  assert.deepEqual(recorded.map(x=>x.actionType), [
+    "fund_demo_reviewed", "fund_demo_authorized", "fund_demo_simulated_sent",
+  ]);
+  for(const entry of recorded) {
+    assert.equal(entry.simulated,true);
+    for(const field of ["walletLast4","amountCents","recipientUid","method"])
+      assert.equal(Object.hasOwn(entry,field),false);
+  }
 
   const replay=await invoke("POST",base+"/"+verifiedId+"/simulate",{
     method:"maya",confirmedSandbox:true,
