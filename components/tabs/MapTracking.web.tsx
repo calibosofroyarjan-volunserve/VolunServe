@@ -240,7 +240,13 @@ const mapDocument = `
     .place-popup-category { display: block; font-size: 11px; color: #4D7365; margin-top: 3px; }
     .place-popup-note { font-size: 11px; line-height: 1.5; color: #4B6359; margin: 10px 0 8px; }
     .place-popup-links { display: flex; gap: 11px; flex-wrap: wrap; }
-    .place-popup-links a { font-size: 11px; font-weight: 750; color: #05795B; }
+    .place-popup-links a, .place-popup-links button { font-size: 11px; font-weight: 750; color: #05795B; }
+    .place-popup-links button { border: 1px solid #8ECBB6; background: #EAF8F2; padding: 9px 11px; border-radius: 8px; cursor: pointer; min-height: 40px; }
+    .place-popup-links button:focus-visible { outline: 3px solid #087668; outline-offset: 2px; }
+    #facility-route-status { position: absolute; bottom: 16px; left: 12px; right: 12px; z-index: 25; background: rgba(255,255,255,.98); border: 1px solid #B9DACC; border-radius: 12px; box-shadow: 0 6px 22px #12382C22; padding: 11px 13px; display: none; align-items: center; gap: 12px; max-width: 560px; color: #123F35; font-size: 12px; line-height: 1.45; }
+    #facility-route-status strong { display: block; font-size: 13px; margin-bottom: 2px; }
+    #facility-route-status button { margin-left: auto; flex-shrink: 0; border: 1px solid #BDD6CD; background: #F4F9F7; border-radius: 8px; min-height: 40px; padding: 7px 12px; font-size: 12px; cursor: pointer; }
+    #facility-route-status button:focus-visible { outline: 3px solid #087668; outline-offset: 2px; }
     .place-popup-status { font-size: 10px; font-weight: 700; margin: 8px 0 0; color: #87601A; }
     .vehicle-response-marker {
       width: 42px;
@@ -353,6 +359,10 @@ const mapDocument = `
 <body>
   <div id="map"></div>
   <div id="notice">Loading live response map…</div>
+  <section id="facility-route-status" role="status" aria-live="polite">
+    <div><strong id="facility-route-title">In-app directions</strong><span id="facility-route-message"></span></div>
+    <button type="button" id="facility-route-close">Clear</button>
+  </section>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
   <script>
@@ -482,21 +492,132 @@ const mapDocument = `
           evacuation_site: "Evacuation Site",
         }[kind] || "Public facility";
       }
-      function facilityDirectionsUrl(latitude, longitude) {
-        if (!validPoint(latitude, longitude) || !withinCity(latitude, longitude))
-          return null;
-        return "https://www.google.com/maps/dir/?api=1&destination=" +
-          Number(latitude).toFixed(6) + "%2C" +
-          Number(longitude).toFixed(6) + "&travelmode=driving&dir_action=navigate";
+      // Road directions stay inside the actual MapLibre map, using OSRM road
+      // geometry. The user's browser GPS is requested ONLY on an explicit
+      // click, is sent to OSRM to calculate the route and is not written to Firebase.
+      // OSRM is not Google Maps and does not include live traffic.
+      let facilityRouteController = null;
+      let facilityOriginMarker = null;
+      const facilityRoutePanel = document.getElementById("facility-route-status");
+      const facilityRouteTitle = document.getElementById("facility-route-title");
+      const facilityRouteMessage = document.getElementById("facility-route-message");
+      function facilityRouteNotice(title, message) {
+        facilityRouteTitle.textContent = title;
+        facilityRouteMessage.textContent = message;
+        facilityRoutePanel.style.display = "flex";
       }
-      function safePopupLink(url, label, container) {
-        if (typeof url !== "string" || !url.startsWith("https://")) return;
-        const a = document.createElement("a");
-        a.href = url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = label;
-        container.appendChild(a);
+      function clearFacilityRoute() {
+        if (facilityRouteController) facilityRouteController.abort();
+        facilityRouteController = null;
+        facilityOriginMarker?.remove();
+        facilityOriginMarker = null;
+        map.getSource("facility-road-route")?.setData({
+          type: "FeatureCollection", features: []
+        });
+        facilityRoutePanel.style.display = "none";
+      }
+      document.getElementById("facility-route-close").addEventListener("click", clearFacilityRoute);
+
+      function routeInsideCity(coordinates) {
+        if (!Array.isArray(coordinates) || coordinates.length < 2 ||
+            coordinates.length > 20000) return false;
+        let previous = null;
+        for (const point of coordinates) {
+          if (!Array.isArray(point) || point.length < 2 ||
+              !validPoint(point[1], point[0]) ||
+              !withinCity(point[1], point[0])) return false;
+          if (previous) {
+            const spread = Math.max(Math.abs(point[0] - previous[0]),
+              Math.abs(point[1] - previous[1]));
+            const samples = Math.ceil(spread / 0.00012);
+            if (samples > 10000) return false;
+            for (let i = 1; i < samples; i++) {
+              const lng = previous[0] + (point[0] - previous[0]) * i / samples;
+              const lat = previous[1] + (point[1] - previous[1]) * i / samples;
+              if (!withinCity(lat, lng)) return false;
+            }
+          }
+          previous = point;
+        }
+        return true;
+      }
+
+      function showFacilityRoute(latitude, longitude, name) {
+        clearFacilityRoute();
+        if (!withinCity(latitude, longitude)) {
+          facilityRouteNotice("Directions unavailable", "This destination is not a validated location inside SJDM.");
+          return;
+        }
+        if (!navigator.geolocation) {
+          facilityRouteNotice("Location unavailable", "This browser cannot access device GPS. Enable location access to show an in-app route.");
+          return;
+        }
+        facilityRouteNotice("Getting your location", "Allow browser location access to calculate the driving route to " + (name || "the selected facility") + ".");
+        navigator.geolocation.getCurrentPosition(async position => {
+          const latitudeFrom = position.coords.latitude;
+          const longitudeFrom = position.coords.longitude;
+          if (!withinCity(latitudeFrom, longitudeFrom)) {
+            facilityRouteNotice("Outside SJDM", "Your device is outside SJDM or its location is invalid. This city-only map cannot provide a route from outside the city.");
+            return;
+          }
+          const controller = new AbortController();
+          facilityRouteController = controller;
+          facilityRouteNotice("Calculating road route", "Checking OpenStreetMap road routing. No live traffic data is used.");
+          try {
+            const start = longitudeFrom + "," + latitudeFrom;
+            const end = longitude + "," + latitude;
+            const endpoint = "https://router.project-osrm.org/route/v1/driving/" +
+              start + ";" + end + "?overview=full&geometries=geojson&alternatives=false";
+            const response = await fetch(endpoint, {signal:controller.signal});
+            if (!response.ok) throw Error("Routing service unavailable");
+            const data = await response.json();
+            if (controller.signal.aborted) return;
+            const route = data?.routes?.[0];
+            if (!route || route.geometry?.type !== "LineString" ||
+                !Number.isFinite(route.distance) || route.distance < 0 ||
+                !Number.isFinite(route.duration) || route.duration < 0 ||
+                !routeInsideCity(route.geometry.coordinates)) {
+              throw Error("No verified in-city road route found");
+            }
+            const coordinates = route.geometry.coordinates;
+            map.getSource("facility-road-route")?.setData({
+              type:"Feature", properties:{}, geometry:{
+                type:"LineString",coordinates
+              }
+            });
+            facilityOriginMarker?.remove();
+            facilityOriginMarker = new maplibregl.Marker({color:"#2563EB"})
+              .setLngLat([longitudeFrom,latitudeFrom])
+              .setPopup(new maplibregl.Popup({offset:18}).setText("Your device GPS"))
+              .addTo(map);
+            const bounds = new maplibregl.LngLatBounds();
+            coordinates.forEach(point => bounds.extend(point));
+            map.fitBounds(bounds,{padding:65,maxZoom:16,duration:450});
+            const distance = (route.distance / 1000).toFixed(1);
+            const minutes = Math.max(1,Math.ceil(route.duration / 60));
+            facilityRouteNotice("Road route · " + (name || "Facility"),
+              distance + " km · Approx. " + minutes + " min driving (OSRM estimate, not live traffic). Blue line follows mapped roads. Confirm conditions before travel.");
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            facilityRouteNotice("Road route unavailable",
+              "No valid road route entirely inside SJDM was returned. No straight-line route or ETA has been invented.");
+          } finally {
+            if (facilityRouteController === controller) facilityRouteController = null;
+          }
+        }, () => {
+          facilityRouteNotice("GPS permission needed",
+            "Allow location access in your browser to see a road route here. Nothing was sent to Firebase.");
+        }, {enableHighAccuracy:false,timeout:12000,maximumAge:60000});
+      }
+      function appendInAppRouteButton(item, container) {
+        if (!validPoint(item.latitude, item.longitude) ||
+            !withinCity(item.latitude, item.longitude)) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Show road route here";
+        button.addEventListener("click", () =>
+          showFacilityRoute(Number(item.latitude),Number(item.longitude),String(item.name || "Facility")));
+        container.appendChild(button);
       }
       function makePublicPlacePopup(item) {
         const card = document.createElement("div");
@@ -515,8 +636,7 @@ const mapDocument = `
         card.appendChild(note);
         const links = document.createElement("div");
         links.className = "place-popup-links";
-        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
-        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
+        appendInAppRouteButton(item, links);
         if (typeof item.officialContact === "string" &&
           item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
           [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
@@ -569,8 +689,7 @@ const mapDocument = `
         card.appendChild(status);
         const links = document.createElement("div");
         links.className = "place-popup-links";
-        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
-        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
+        appendInAppRouteButton(item, links);
         if (isShelter) {
           const emergencyCall = document.createElement("a");
           emergencyCall.href = "tel:09326000119";
@@ -1269,6 +1388,10 @@ const mapDocument = `
 
         if (data?.kind === "set-map-data") {
           render(data);
+        } else if (data?.kind === "route-to-facility" &&
+                   validPoint(data.latitude,data.longitude)) {
+          showFacilityRoute(data.latitude,data.longitude,
+            typeof data.name === "string" ? data.name.slice(0,120) : "Facility");
         } else if (data?.kind === "fit-whole-sjdm") {
           const box = lastCityBounds;
           if (cityBoundary && box && Number.isFinite(box.west) &&
@@ -1314,6 +1437,19 @@ const mapDocument = `
           type: "line",
           source: "sjdm-boundary",
           paint: { "line-color": "#07815E", "line-width": 4, "line-opacity": 0.95 },
+        });
+        map.addSource("facility-road-route", {
+          type:"geojson", data:{type:"FeatureCollection",features:[]}
+        });
+        map.addLayer({
+          id:"facility-road-route-casing",type:"line",
+          source:"facility-road-route",layout:{"line-join":"round","line-cap":"round"},
+          paint:{"line-color":"#FFFFFF","line-width":9}
+        });
+        map.addLayer({
+          id:"facility-road-route-line",type:"line",
+          source:"facility-road-route",layout:{"line-join":"round","line-cap":"round"},
+          paint:{"line-color":"#2563EB","line-width":6}
         });
         map.addSource("response-route", {
           type: "geojson",
@@ -5547,6 +5683,7 @@ export default function WebMapTracking() {
           <iframe
             ref={frame}
             title="VolunServe live disaster response map for San Jose del Monte"
+            allow="geolocation"
             srcDoc={mapDocument}
             sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           />
@@ -6645,13 +6782,17 @@ export default function WebMapTracking() {
                 </p>
               </div>
               {mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude) && (
-                <a
-                  href={mapsDirectionsUrl(selectedCenter.latitude, selectedCenter.longitude)!}
-                  target="_blank" rel="noopener noreferrer"
+                <button type="button"
+                  onClick={() => frame.current?.contentWindow?.postMessage({
+                    kind: "route-to-facility",
+                    latitude: Number(selectedCenter.latitude),
+                    longitude: Number(selectedCenter.longitude),
+                    name: selectedCenter.name || "Evacuation center"
+                  }, "*")}
                   className="primary-button" style={{ display: "inline-flex", marginTop: 12 }}
                 >
-                  Open directions in Google Maps
-                </a>
+                  Show road route here
+                </button>
               )}
             </>
           ) : (
