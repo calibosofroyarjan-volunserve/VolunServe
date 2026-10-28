@@ -3962,8 +3962,8 @@ service cloud.firestore {
           'city_government','cdrrmo','fire_station','police_station',
           'health_center','barangay_hall'
         ]
-        && d.latitude is number && d.latitude > 14.6 && d.latitude < 15.05
-        && d.longitude is number && d.longitude > 120.8 && d.longitude < 121.3
+        && d.latitude is number && d.latitude > 14.74 && d.latitude < 14.90
+        && d.longitude is number && d.longitude > 120.99 && d.longitude < 121.20
         && d.status in ['active','inactive']
         && d.verificationStatus in ['pending','verified']
         && d.verificationSource is string
@@ -3992,8 +3992,8 @@ service cloud.firestore {
           && rd.address.size() <= 320
           && rd.barangay is string
           && rd.barangay.size() >= 2
-          && rd.latitude is number && rd.latitude >= -90 && rd.latitude <= 90
-          && rd.longitude is number && rd.longitude >= -180 && rd.longitude <= 180
+          && rd.latitude is number && rd.latitude > 14.74 && rd.latitude < 14.90
+          && rd.longitude is number && rd.longitude > 120.99 && rd.longitude < 121.20
           && rd.capacity is int && rd.capacity >= 1
           && rd.occupied is int && rd.occupied >= 0
           && rd.occupied <= rd.capacity
