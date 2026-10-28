@@ -651,15 +651,15 @@ export default function Signup() {
 
       const successTitle = "Basic Account Created";
       const successMessage = googleBound
-        ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
-        : "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
+        ? "Your account is ready. Google and email/password sign-in are linked. Your account starts in Resident Mode."
+        : "Your Basic Resident account has been saved. We sent an email verification link. Open it before signing in, then use your email and password.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace("/(tabs)");
+        router.replace(googleBound ? "/(tabs)" : "/login");
       } else {
         Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace("/(tabs)") },
+          { text: "OK", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
         ]);
       }
     } catch (e: any) {
