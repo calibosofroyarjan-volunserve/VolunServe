@@ -5309,6 +5309,8 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const targetUid = cleanText(request.params?.uid || "", 200);
       const action = cleanText(request.body?.action || "", 40).toLowerCase();
+      const originalDocumentReviewed = request.body?.originalDocumentReviewed === true;
+      const registeredNameMatched = request.body?.registeredNameMatched === true;
       const notes = cleanText(request.body?.notes || "", 1000);
       const validationMethod = cleanText(
         request.body?.validationMethod || "",
@@ -5349,6 +5351,14 @@ app.post(
           400,
           "manual_validation_method_required",
           "Select the LGU validation method used before manually verifying this Resident.",
+        );
+      }
+      if (action === "verify" &&
+          (!originalDocumentReviewed || !registeredNameMatched)) {
+        throw makeHttpError(
+          400,
+          "identity_name_and_document_check_required",
+          "Review the original government ID or an independently validated official record, and confirm that the full name matches this Resident account. A mismatch must require a retry or investigation.",
         );
       }
       if (
@@ -5425,6 +5435,8 @@ app.post(
               ? validationMethod
               : "",
           manualReviewNotes: notes,
+          originalDocumentReviewed: action === "verify" ? originalDocumentReviewed : false,
+          registeredNameMatched: action === "verify" ? registeredNameMatched : false,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
           reviewedByName,
@@ -5469,6 +5481,8 @@ app.post(
             ),
             matchScore: numberOrNull(verification.matchScore),
             validationMethod,
+            originalDocumentReviewed: true,
+            registeredNameMatched: true,
             notes,
             performedBy: adminUid,
             performedByName: reviewedByName,
