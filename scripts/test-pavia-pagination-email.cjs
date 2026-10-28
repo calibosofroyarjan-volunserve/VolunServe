@@ -199,3 +199,18 @@ test("Reviewer-visible Super Admin analytics and pagination are never hidden on 
   assert.match(paging,/disabled=\{safePage <= 1\}/);
   assert.match(paging,/disabled=\{safePage >= pages\}/);
 });
+
+
+test("Minimal Super Admin design has one chart and numbered pagination",()=>{
+ const overview=read("app/(superadmin)/index.tsx");
+ const paging=read("components/ui/ListPagination.tsx");
+ assert.equal((overview.match(/<WorkspaceBarChart/g)||[]).length,1);
+ assert.ok(overview.includes('orientation="vertical"'));
+ for(const name of ["Registered Accounts","Active LGU Admins","Pending LGU Applications","Suspended Admins"])
+   assert.ok(overview.includes(name),name);
+ assert.ok(overview.includes("pagedAdminActions.map"));
+ assert.ok(overview.includes("pagedSystemChanges.map"));
+ assert.ok(!overview.includes("styles.secondarySection"));
+ assert.ok(paging.includes("visiblePages.map"));
+ assert.ok(paging.includes("number === safePage"));
+});
