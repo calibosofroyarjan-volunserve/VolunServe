@@ -92,6 +92,8 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
       - name: Event organizer GPS privacy after mode switch (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-organizer-gps-cleanup.cjs"
+      - name: SJDM polygon boundary and LGU facility safety contracts
+        run: node --test scripts/test-sjdm-live-map-contract.cjs
       - name: Community event road maps and shelter usability
         run: node scripts/test-event-map-route-ux.cjs
       - name: Resident Community Event pin picker UX
