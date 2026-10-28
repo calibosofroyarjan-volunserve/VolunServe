@@ -525,6 +525,7 @@ export default function AssistanceRequestScreen() {
   ] = useState("");
 
   const [title, setTitle] = useState("");
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [description, setDescription] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState("");
   const [releasePreference,setReleasePreference]=useState<ReleasePreference>("gcash");
@@ -710,6 +711,7 @@ export default function AssistanceRequestScreen() {
     setBeneficiaryName("");
     setRelationshipToBeneficiary("");
     setTitle("");
+    setDeclarationAccepted(false);
     setDescription("");
     setEstimatedAmount("");
     setCurrentSituation("");
@@ -1381,6 +1383,14 @@ export default function AssistanceRequestScreen() {
         "You can review the Request Assistance design for now, but submission stays locked until the new VolunServe identity verification flow is completed.",
       );
 
+      return;
+    }
+
+    if (!declarationAccepted) {
+      Alert.alert(
+        "Confirmation required",
+        "Please tick the confirmation checkbox to acknowledge that the information is accurate before submitting.",
+      );
       return;
     }
 
@@ -3142,6 +3152,18 @@ export default function AssistanceRequestScreen() {
                     </View>
                   )}
 
+                  <DropdownField
+                    label="Suggested request title (optional)"
+                    value={["Hospital bill assistance","Medicine and treatment support","Food and essential supplies","Home repair materials","Temporary shelter assistance"].includes(title) ? title : ""}
+                    placeholder="Choose a suggested title, or type your own"
+                    options={[
+                      "Hospital bill assistance","Medicine and treatment support",
+                      "Food and essential supplies","Home repair materials",
+                      "Temporary shelter assistance","Other — write my own",
+                    ].map(label => ({value:label,label}))}
+                    onSelect={value => setTitle(value === "Other — write my own" ? "" : value)}
+                  />
+
                   <FieldLabel
                     label="Title / short description"
                     required
@@ -4185,38 +4207,25 @@ export default function AssistanceRequestScreen() {
                     </View>
                   </View>
 
-                  <View
-                    style={
-                      styles.declarationCard
-                    }
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityLabel="Confirm that the assistance request is accurate and subject to LGU verification"
+                    accessibilityState={{checked:declarationAccepted}}
+                    onPress={() => setDeclarationAccepted(value => !value)}
+                    style={[styles.declarationCard,
+                      declarationAccepted && {borderColor:"#0F766E",backgroundColor:"#EAF8F2"}]}
                   >
                     <Ionicons
-                      name="shield-checkmark-outline"
-                      size={20}
-                      color="#0F766E"
+                      name={declarationAccepted ? "checkbox" : "square-outline"}
+                      size={25}
+                      color={declarationAccepted ? "#0F766E" : "#64748B"}
                     />
-
-                    <Text
-                      style={
-                        styles.declarationText
-                      }
-                    >
-                      By submitting, you
-                      confirm that the
-                      information is
-                      accurate to the
-                      best of your
-                      knowledge and
-                      understand that
-                      the LGU may
-                      request additional
-                      verification before
-                      providing
-                      assistance or
-                      opening public
-                      donation support.
+                    <Text style={styles.declarationText}>
+                      I confirm that this request is accurate to the best of my knowledge.
+                      I understand that the LGU may ask for additional documents or
+                      verification before providing assistance or opening donation support.
                     </Text>
-                  </View>
+                  </Pressable>
 
                   <View
                     style={
