@@ -252,6 +252,7 @@ async function main() {
     const pendingProfile = {
       uid: pendingUid, email: pendingEmail, fullName: "Authorized Staff Applicant",
       age: 0, phoneNumber: "", role: "applicant", status: "pending_review",
+       emailVerificationRequired: true,
       residentAccess: false, volunteerAccess: false,
       region:"Region III – Central Luzon", province:"Bulacan",
       city:"City of San Jose del Monte", barangay:"Poblacion",
