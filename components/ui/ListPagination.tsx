@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /** Five-record list paging, consistent for LGU review queues on web/mobile. */
 export default function ListPagination({
@@ -25,6 +25,7 @@ export default function ListPagination({
           accessibilityLabel={`Page ${number} of ${pages}`}
           accessibilityHint={`Show records on page ${number}`}
           accessibilityState={{ selected: number === safePage }}
+          {...(Platform.OS === "web" && number === safePage ? ({ "aria-current": "page" } as any) : {})}
           onPress={() => onChange(number)}
           style={[styles.pagePill, number === safePage && styles.pageSelected]}>
           <Text style={[styles.pagePillText, number === safePage && styles.pageSelectedText]}>{number}</Text>
