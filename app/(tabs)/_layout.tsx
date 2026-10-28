@@ -4,7 +4,6 @@ import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
