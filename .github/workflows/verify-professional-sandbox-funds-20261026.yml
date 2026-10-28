@@ -64,6 +64,8 @@ jobs:
         run: node scripts/test-lgu-staff-face-screening.cjs
       - name: AWS active liveness session security (mocked provider, no AWS credentials)
         run: node --test scripts/test-lgu-staff-liveness.cjs
+      - name: AWS browser liveness protocol and score-free UI contract
+        run: node --test scripts/test-lgu-liveness-web-contract.cjs
       - name: Mock private LGU staff facial screen, role access and forced manual review
         run: node --test scripts/test-lgu-staff-face-screening-integration.cjs
       - name: LGU staff government-ID and facial-photo private Storage access (Firestore+Storage emulators)

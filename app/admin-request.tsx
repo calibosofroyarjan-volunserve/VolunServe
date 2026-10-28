@@ -7,7 +7,7 @@ import { connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAut
 import { connectFirestoreEmulator, doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import { connectStorageEmulator, getMetadata, getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
 import React, { useState } from "react";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import LguStaffWithdrawalPanel from "../components/auth/LguStaffWithdrawalPanel";
 import { firebaseConfig, usingFirebaseEmulators } from "../lib/firebase";
@@ -286,6 +286,11 @@ export default function LguStaffApplication() {
               <Ionicons name="checkmark-circle" color="#068360" size={37}/>
               <Text style={styles.successTitle}>Application received</Text>
               <Text style={styles.help}>Your staff profile and private evidence were submitted. This is NOT an AI verification or Admin approval. Super Admin will manually review your identity and confirm employment directly with the LGU office before making a decision.</Text>
+              {process.env.EXPO_PUBLIC_LGU_STAFF_ACTIVE_LIVENESS_ENABLED==="true"&&
+                <TouchableOpacity accessibilityRole="button" style={styles.submit}
+                  onPress={()=>void Linking.openURL("https://volunserve.onrender.com/lgu-face-check/")}>
+                  <Text style={styles.submitLabel}>Continue to secure camera check</Text>
+                </TouchableOpacity>}
               <TouchableOpacity style={styles.submit} onPress={()=>router.replace("/admin-login")}>
                 <Text style={styles.submitLabel}>Return to Administration Login</Text>
               </TouchableOpacity>

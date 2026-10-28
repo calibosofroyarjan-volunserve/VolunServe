@@ -17,7 +17,8 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
   ]);
   if(withdrew)records.set("lguApplicantPrivacyRequests/"+USER,{uid:USER,status:"requested"});
   const DELETE=Symbol("delete");
-  const counts={create:0,results:0};let now=nowTime;
+  const counts={create:0,results:0,credentials:0};let now=nowTime;
+  let duringCredentials=null,duringResults=null;
   function ref(key){return {
     key,async get(){return snapshot(key);},
   }}
@@ -37,7 +38,8 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
     },
   };
   const sdk={async create(){counts.create++;if(providerFailure)throw Error("mock AWS offline");return SESSION;},
-    async results(){counts.results++;if(providerFailure)throw Error("mock AWS offline");
+    async results(){counts.results++;if(duringResults)await duringResults();
+      if(providerFailure)throw Error("mock AWS offline");
       return{status:providerStatus,confidence:providerConfidence};}};
   const routes=new Map(),mod={exports:{}};
   vm.runInNewContext(source,{
@@ -46,6 +48,7 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
       LGU_STAFF_ACTIVE_LIVENESS_ENABLED:enabled?"true":"false",
       AWS_REKOGNITION_REGION:REGION,
       LGU_STAFF_LIVENESS_MIN_CONFIDENCE:threshold,
+      LGU_STAFF_LIVENESS_STREAM_ROLE_ARN:"arn:aws:iam::123456789012:role/test-stream",
     }},
     require(name){if(name==="node:crypto")return require("node:crypto");
       throw Error("Unexpected SDK import in mock tests: "+name);},
@@ -54,6 +57,12 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
     db,FieldValue:{serverTimestamp:()=>"SERVER_TIMESTAMP",delete:()=>DELETE},
     requireFirebaseUser(req,res,next){next?.();},
     providerFactory:()=>sdk,now:()=>now,
+    credentialsFactory:(_region,roleArn)=>async()=>{
+      assert.equal(roleArn,"arn:aws:iam::123456789012:role/test-stream");
+      counts.credentials++;if(duringCredentials)await duringCredentials();
+      return {accessKeyId:"ASIAEXAMPLETEST",secretAccessKey:"temporary-only",
+        sessionToken:"fake-session-token",expiration:new Date(now+900000).toISOString()};
+    },
   });
   async function call(route,{uid=USER,sessionId=SESSION,emailVerified=verified}={}){
     let status=200,result=null;
@@ -63,7 +72,10 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
     },response);
     return{status,result};
   }
-  return{call,records,counts,advance(ms){now+=ms;},USER,SESSION};
+  return{call,records,counts,advance(ms){now+=ms;},USER,SESSION,
+    onIssueCredentials(fn){duringCredentials=fn;},
+    onGetResults(fn){duringResults=fn;},
+  };
 }
 test("default-off AWS liveness cannot start or leak a real session",async()=>{
   const h=harness({enabled:false}),r=await h.call("start");
@@ -132,4 +144,32 @@ test("missing approved threshold fails closed even when provider says succeeded"
   const h=harness({threshold:""});await h.call("start");
   const r=await h.call("result");assert.equal(r.status,503);
   assert.equal(r.result.error,"liveness_threshold_not_approved");
+});
+
+test("Stream credentials are owned by this pending applicant's AWS session",async()=>{
+  const h=harness();
+  assert.equal((await h.call("credentials")).status,409);
+  await h.call("start");
+  assert.equal((await h.call("credentials",{sessionId:"another-session-id-12345"})).status,403);
+  const r=await h.call("credentials");
+  assert.equal(r.status,200);assert.equal(r.result.ok,true);
+  assert.equal(h.counts.credentials,1);
+  assert.equal(r.result.credentials.accessKeyId,"ASIAEXAMPLETEST");
+  assert(!JSON.stringify(r.result).includes("96"));
+});
+test("Temporary streaming AWS credentials cannot be issued after withdrawal",async()=>{
+  const h=harness();await h.call("start");
+  h.onIssueCredentials(()=>h.records.set("lguApplicantPrivacyRequests/"+h.USER,{status:"requested"}));
+  const r=await h.call("credentials");assert.equal(r.status,403);
+  assert.equal(r.result.error,"applicant_review_unavailable");
+});
+test("Withdrawn applicant cannot have AWS results saved after delayed Get",async()=>{
+  const h=harness();await h.call("start");
+  h.onGetResults(()=>h.records.set("lguApplicantPrivacyRequests/"+h.USER,{status:"requested"}));
+  const r=await h.call("result");assert.equal(r.status,403);
+  assert.equal(h.records.get("lguApplicantLivenessSessions/"+h.USER).state,"ready");
+});
+test("Liveness credentials cannot be requested for a failed/reused session",async()=>{
+  const h=harness();await h.call("start");await h.call("result");
+  const r=await h.call("credentials");assert.equal(r.status,409);
 });

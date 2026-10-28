@@ -1,0 +1,19 @@
+@import "@aws-amplify/ui-react/styles.css";
+:root {font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#173f32;background:#eef8f2;}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}
+.shell{min-height:100vh;padding:28px 16px;display:flex;justify-content:center;align-items:flex-start;background:radial-gradient(circle at top right,#cbf1d9 0,transparent 45%),linear-gradient(130deg,#f2faf4,#e6f4eb)}
+.card{width:100%;max-width:740px;background:white;border:1px solid #cfe5d5;border-radius:22px;padding:clamp(20px,5vw,38px);box-shadow:0 14px 45px #15583c15}
+.eyebrow{font-size:11px;font-weight:800;color:#168769;letter-spacing:2px;margin:0 0 12px}
+h1{font-size:clamp(24px,4vw,32px);margin:0 0 12px;letter-spacing:-.7px}h2{font-size:19px}
+.explain,.subtle{color:#577767;font-size:13px;line-height:1.65}.steps{display:flex;gap:6px;margin:20px 0}
+.steps span{height:5px;flex:1;background:#dbece1;border-radius:6px}.steps span.on{background:#0e896b}
+label{display:block;font-size:12px;font-weight:750;margin:18px 0 7px}
+input{width:100%;padding:13px 14px;border-radius:11px;border:1px solid #b9d8c6;background:#fbfdfb;min-height:46px}
+button{cursor:pointer;min-height:47px;border:0;border-radius:11px;padding:12px 20px;font-weight:800}
+.primary{background:linear-gradient(110deg,#12a27d,#006a4e);color:white;width:100%;margin-top:18px}
+.secondary{background:#e5f3eb;color:#146449}.primary:disabled{opacity:.55;cursor:not-allowed}
+.result{border-radius:11px;padding:14px;background:#eef8f2;color:#196b4f;line-height:1.6;font-size:13px;margin-top:16px}
+.error{background:#fff0ed;color:#8c382c}.shield{font-size:13px;color:#517869;margin:18px 0}
+.camera{border:1px solid #cae4d3;border-radius:16px;overflow:hidden;min-height:270px}
+.foot{font-size:11px;color:#648272;line-height:1.65;margin-top:20px}
+@media(max-width:480px){.shell{padding:10px}.card{border-radius:15px;padding:16px}.camera{min-height:250px}}

@@ -8,6 +8,7 @@ const crypto=require("node:crypto");
 const UID=/^[a-zA-Z0-9_-]{8,128}$/;
 const MAX_ATTEMPTS=3;
 const SESSION_MS=2*60*1000;
+const STREAM_ROLE=/^arn:aws[a-z-]*:iam::\d{12}:role\/[A-Za-z0-9_+=,.@\/-]{1,120}$/;
 function secureUid(value){return typeof value==="string"&&UID.test(value)?value:"";}
 function httpError(status,code){const e=new Error(code);e.status=status;e.code=code;throw e;}
 function validSessionId(s){return typeof s==="string"&&/^[a-zA-Z0-9-]{20,100}$/.test(s);}
@@ -27,7 +28,29 @@ function sdkClient(region){
     },
   };
 }
-function mountLguStaffLiveness(app,{db,FieldValue,requireFirebaseUser,providerFactory=sdkClient,now=()=>Date.now()}){
+function temporaryStreamingCredentials(region,roleArn){
+  const {STSClient,AssumeRoleCommand}=require("@aws-sdk/client-sts");
+  const client=new STSClient({region,maxAttempts:2});
+  return async(uid)=>{
+    const roleSessionName="VS-"+crypto.createHash("sha256").update(uid).digest("hex").slice(0,32);
+    // Limit to one AWS Rekognition *stream action*. AWS IAM must enforce
+    // this as an intersection with the dedicated least-privileged role.
+    const response=await client.send(new AssumeRoleCommand({
+      RoleArn:roleArn,RoleSessionName:roleSessionName,DurationSeconds:900,
+      Policy:JSON.stringify({Version:"2012-10-17",Statement:[{
+        Effect:"Allow",Action:["rekognition:StartFaceLivenessSession"],Resource:"*",
+      }]}),
+    }));
+    const c=response.Credentials;
+    if(!c?.AccessKeyId||!c.SecretAccessKey||!c.SessionToken||!c.Expiration)
+      httpError(503,"stream_credentials_unavailable");
+    return {accessKeyId:c.AccessKeyId,secretAccessKey:c.SecretAccessKey,
+      sessionToken:c.SessionToken,expiration:new Date(c.Expiration).toISOString()};
+  };
+}
+function mountLguStaffLiveness(app,{db,FieldValue,requireFirebaseUser,
+  providerFactory=sdkClient,credentialsFactory=temporaryStreamingCredentials,
+  now=()=>Date.now()}){
   async function verifyApplicant(req){
     const uid=secureUid(req.firebaseUser?.uid);
     if(!uid)httpError(401,"unauthenticated");
@@ -95,6 +118,39 @@ function mountLguStaffLiveness(app,{db,FieldValue,requireFirebaseUser,providerFa
         expiresInSeconds:120,status:"camera_challenge_required"});
     }catch(e){return res.status(e.status||503).json(noSecrets(e));}
   });
+  app.post("/api/lgu-staff/liveness/credentials",requireFirebaseUser,async(req,res)=>{
+    try{
+      client(); // No credentials or role discovery while feature is disabled.
+      const uid=await verifyApplicant(req);
+      const roleArn=process.env.LGU_STAFF_LIVENESS_STREAM_ROLE_ARN||"";
+      if(!STREAM_ROLE.test(roleArn))httpError(503,"stream_role_not_configured");
+      const snap=await db.collection("lguApplicantLivenessSessions").doc(uid).get();
+      const item=snap.data()||{};
+      if(item.state!=="ready"||!validSessionId(item.sessionId)||
+         item.expiresAtMs<=now())httpError(409,"liveness_session_not_ready");
+      if(req.body?.sessionId!==item.sessionId)
+        httpError(403,"liveness_session_mismatch");
+      const issueCredentials=credentialsFactory(process.env.AWS_REKOGNITION_REGION,roleArn);
+      let credentials;
+      try{credentials=await issueCredentials(uid);}
+      catch{httpError(503,"stream_credentials_unavailable");}
+      // Do not issue temporary AWS credentials if withdrawal/disable happened
+      // during STS latency or the session was consumed/expired.
+      await verifyApplicant(req);
+      const latest=await db.collection("lguApplicantLivenessSessions").doc(uid).get();
+      const state=latest.data()||{};
+      if(state.state!=="ready"||state.sessionId!==item.sessionId||
+          state.expiresAtMs<=now())
+        httpError(409,"liveness_session_expired");
+      if(!credentials||!/^ASIA[A-Z0-9]+$/.test(credentials.accessKeyId||"")||
+        typeof credentials.secretAccessKey!=="string"||
+        typeof credentials.sessionToken!=="string"||
+        !Number.isFinite(Date.parse(credentials.expiration||""))||
+        Date.parse(credentials.expiration)<=now())
+        httpError(503,"stream_credentials_unavailable");
+      return res.json({ok:true,credentials});
+    }catch(e){return res.status(e.status||503).json(noSecrets(e));}
+  });
   app.post("/api/lgu-staff/liveness/result",requireFirebaseUser,async(req,res)=>{
     try{
       const sdk=client(),uid=await verifyApplicant(req);
@@ -124,8 +180,19 @@ function mountLguStaffLiveness(app,{db,FieldValue,requireFirebaseUser,providerFa
         Number.isFinite(result.confidence)&&result.confidence>=threshold &&
         result.confidence<=100
           ?"live_presence_signal_present":"manual_review_required";
+      // Recheck withdrawal and expiry BEFORE a completed signal is recorded.
+      // This must be transactional to prevent stale "live" results after the
+      // applicant withdraws during the provider's network request.
       await db.runTransaction(async tx=>{
-        const current=await tx.get(ref),doc=current.data()||{};
+        const userRef=db.collection("users").doc(uid);
+        const privacyRef=db.collection("lguApplicantPrivacyRequests").doc(uid);
+        const gateRef=db.collection("lguIdentityIntake").doc("release");
+        const [current,userDoc,withdrawal,gate]=await Promise.all([
+          tx.get(ref),tx.get(userRef),tx.get(privacyRef),tx.get(gateRef)]);
+        const doc=current.data()||{},u=userDoc.data()||{};
+        if(withdrawal.exists||u.role!=="applicant"||
+          u.status!=="pending_review"||!gate.exists||
+          gate.data()?.enabled!==true)httpError(403,"applicant_review_unavailable");
         if(doc.state!=="ready"||doc.sessionId!==s.sessionId||
            doc.expiresAtMs<=now())httpError(409,"liveness_session_expired");
         tx.update(ref,{state:"completed",signal,
