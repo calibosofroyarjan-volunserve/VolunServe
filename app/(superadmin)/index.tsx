@@ -153,36 +153,39 @@ export default function SuperAdminDashboard() {
           <Text style={styles.eyebrow}>SYSTEM GOVERNANCE</Text>
         </View>
         <Text style={[styles.title, compact && styles.compactTitle]}>System Overview</Text>
-        <Text style={styles.subtitle}>LGU staff verification, account access, technical oversight and system audit trails. City operations remain under authorized LGU Admin personnel.</Text>
+        <Text style={styles.subtitle}>Account governance and live system records. Operational emergency and donation decisions remain with LGU Admin.</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Review LGU Applications"
+          onPress={() => router.push("/(superadmin)/admin-accounts" as any)} style={styles.headerAction}>
+          <Text style={styles.headerActionText}>Review LGU Applications</Text>
+          <Ionicons name="arrow-forward-outline" color="#087F61" size={15} />
+        </TouchableOpacity>
       </View>
 
       <View style={[styles.metricRow,compact && styles.metricRowCompact]}>
         {([
-          {key:"pending",label:"LGU applications",value:staffStats.pending,icon:"person-add-outline" as const},
+          {key:"users",label:"Registered Accounts",value:total,icon:"people-outline" as const},
           {key:"active",label:"Active LGU Admins",value:staffStats.active,icon:"shield-checkmark-outline" as const},
+          {key:"pending",label:"Pending LGU Applications",value:staffStats.pending,icon:"person-add-outline" as const},
           {key:"suspended",label:"Suspended Admins",value:staffStats.suspended,icon:"lock-closed-outline" as const},
-          {key:"users",label:"Registered accounts",value:total,icon:"people-outline" as const},
         ]).map((item,index) => (
-          <View key={item.key} style={[styles.metric,index === 0 && styles.metricFeatured,compact && styles.metricCompact]}>
+          <View key={item.key} style={[styles.metric,compact && styles.metricCompact]}>
             <View style={styles.metricHeading}>
-              <Text style={[styles.metricLabel,index===0 && styles.metricLabelFeatured]}>{item.label}</Text>
-              <Ionicons name={item.icon} size={18} color={index===0 ? "#D4F7EA" : "#1B8A66"}/>
+              <Text style={styles.metricLabel}>{item.label}</Text>
+              <Ionicons name={item.icon} size={18} color="#1B8A66"/>
             </View>
-            <Text style={[styles.metricValue,index===0 && styles.metricValueFeatured]}>
+            <Text style={styles.metricValue}>
               {!loaded.users ? "…" : errors.users ? "—" : item.value.toLocaleString("en-PH")}
             </Text>
-            <Text style={[styles.metricDetail,index===0 && styles.metricDetailFeatured]}>
-              {item.key==="pending" ? "Awaiting programmer verification" :
-               item.key==="users" ? "Firestore user profiles" : "Access governance"}
+            <Text style={styles.metricDetail}>
+              {item.key==="pending" ? "Awaiting credential review" :
+               item.key==="users" ? (showApproval ? `${approvedPercentage}% approved accounts` : "Firestore user profiles") :
+               item.key==="active" ? "Authorized LGU personnel" : "Restricted Admin access"}
             </Text>
           </View>
         ))}
       </View>
 
-      <View style={styles.visualSection}>
-        <Text style={styles.sectionTitle}>System records at a glance</Text>
-        <Text style={styles.sectionHint}>Actual collection totals—not fabricated monthly growth or revenue.</Text>
-      </View>
+      <View style={styles.graphCard}>
       <WorkspaceBarChart
         title="Live System Records · Bar Graph"
         subtitle="Vertical bar chart · Current Firestore totals, not fabricated monthly trends or performance percentages."
@@ -192,6 +195,7 @@ export default function SuperAdminDashboard() {
           ? "Source: authorized Firestore records. Values update when records change."
           : "Some sources are loading or unavailable. Missing counts are never shown as zero."}
       />
+      </View>
 
       <View style={[styles.activityColumns,compact && styles.activityColumnsStack]}>
         <View style={styles.activityPanel}>
@@ -247,41 +251,6 @@ export default function SuperAdminDashboard() {
         </View>
       </View>
 
-      <View style={styles.secondarySection}>
-        <View style={styles.secondaryHead}>
-          <Text style={styles.sectionTitle}>Account approval summary</Text>
-          <Text style={styles.sectionHint}>Real-time account status from Firestore</Text>
-        </View>
-        <View style={styles.governanceActions}>
-          <TouchableOpacity accessibilityRole="button"
-            accessibilityLabel="Review LGU staff applications and Admin accounts"
-            onPress={() => router.push("/(superadmin)/admin-accounts" as any)}
-            style={styles.governancePrimary}>
-            <Text style={styles.governancePrimaryText}>Review LGU Applications</Text>
-          </TouchableOpacity>
-
-        </View>
-        {showApproval ?
-          <View style={styles.approvalRow}>
-            <View style={styles.approvalMain}>
-              <Text style={styles.largePercentage}>{approvedPercentage ?? 0}%</Text>
-              <Text style={styles.approvalDescription}>
-                {approved?.toLocaleString("en-PH")} approved of {total.toLocaleString("en-PH")} registered accounts
-              </Text>
-            </View>
-            <View style={styles.percentageTrack}>
-              <View style={[styles.percentageFill, { width: `${approvedPercentage ?? 0}%` as `${number}%` }]} />
-            </View>
-          </View> :
-          <Text style={styles.pendingText}>
-            {!loaded.users ? "Loading account status…" : "Account approval figures are unavailable."}
-          </Text>
-        }
-        <Text style={styles.note}>
-          Start with LGU Staff & Admin Accounts to review applications. The charts above summarize records; detailed case handling and donations remain exclusively in the LGU Admin workspace.
-        </Text>
-      </View>
-
       {hasUnavailable &&
         <Text style={styles.error}>Some records could not be read. Check deployed Firestore permissions before presenting these totals.</Text>}
     </ScrollView>
@@ -293,16 +262,19 @@ const styles = StyleSheet.create({
   webScroll: { overflowY: "scroll", scrollbarWidth: "auto", scrollbarColor: "#A4B7AF #F6F8F7" } as any,
   content: { width: "100%", maxWidth: 1250, alignSelf: "center", paddingHorizontal: 38, paddingTop: 36, paddingBottom: 70 },
   compactContent: { paddingHorizontal: 17, paddingTop: 24 },
-  header: { paddingBottom: 28 },
+  header: { paddingBottom: 20, paddingHorizontal: 22, paddingVertical: 20, backgroundColor: "#EAF8F1", borderRadius: 16, borderWidth: 1, borderColor: "#D4EAE0", marginBottom: 18 },
+  headerAction: {alignSelf:"flex-start",marginTop:14,flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:14,paddingVertical:10,backgroundColor:"#FFFFFF",borderRadius:9,borderWidth:1,borderColor:"#C9E5D6"},
+  headerActionText: {fontSize:12,fontWeight:"800",color:"#087F61"},
+  graphCard: {backgroundColor:"#FFFFFF",borderRadius:14,borderWidth:1,borderColor:"#DEE9E2",padding:20},
   eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#23765F" },
   eyebrow: { color: "#568174", fontSize: 10, fontWeight: "700", letterSpacing: 1.3 },
   title: { fontSize: 31, lineHeight: 38, letterSpacing: -0.6, fontWeight: "700", color: "#133A30" },
   compactTitle: { fontSize: 26, lineHeight: 33 },
   subtitle: { color: "#688076", fontSize: 13, lineHeight: 19, marginTop: 7 },
-  metricRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 25 },
+  metricRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 15 },
   metricRowCompact: { flexWrap: "wrap" },
-  metric: { flexGrow: 1, flexBasis: "23%", minWidth: 165, paddingVertical: 18, paddingHorizontal: 17, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#DFEAE3" },
+  metric: { flexGrow: 1, flexBasis: "23%", minWidth: 165, paddingVertical: 15, paddingHorizontal: 16, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#DFEAE3" },
   metricCompact: { flexBasis: "47%", minWidth: 136, paddingHorizontal: 13 },
   metricLabel: { fontSize: 11, fontWeight: "700", color: "#62786F", flex: 1, lineHeight: 16 },
   metricValue: { fontSize: 30, fontWeight: "800", color: "#173D32", marginTop: 10, fontVariant: ["tabular-nums"] },
@@ -313,7 +285,7 @@ const styles = StyleSheet.create({
   metricDetail: {fontSize:10.5,color:"#8D9F95",marginTop:6},
   metricDetailFeatured: {color:"#D0F6E7"},
   visualSection: {marginBottom:14},
-  activityColumns: {flexDirection:"row",gap:15,alignItems:"flex-start",marginTop:20},
+  activityColumns: {flexDirection:"row",gap:15,alignItems:"stretch",marginTop:16},
   activityColumnsStack: {flexDirection:"column"},
   activityPanel: {backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DEE9E2",borderRadius:12,padding:19,flex:1,minWidth:0,width:"100%"},
   activityHead: {flexDirection:"row",alignItems:"flex-start",gap:10,marginBottom:16},
