@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/professional-sandbox-payout-20261026
+      - fix/sjdm-strict-map-boundary-20261028
   pull_request:
     branches:
       - main
