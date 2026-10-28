@@ -277,8 +277,13 @@ test("OpenStreetMap map-viewer script compiles to valid JavaScript", () => {
   walk(parsed);
   assert.equal(literals.length,1);
   const initial=literals[0];
-  assert.ok(ts.isNoSubstitutionTemplateLiteral(initial),"expected static iframe document");
-  const scripts=[...initial.text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
+  assert.ok(ts.isTemplateExpression(initial) || ts.isNoSubstitutionTemplateLiteral(initial),
+    "expected template literal with the MapLibre iframe document");
+  const html=ts.isTemplateExpression(initial)
+    ? initial.head.text + initial.templateSpans.map(span =>
+        "0" + span.literal.text).join("")
+    : initial.text;
+  const scripts=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
   assert.ok(scripts.length>=1,"expected inline MapLibre script");
   const vm=require("node:vm");
   for(const block of scripts)if(block[1].trim())
