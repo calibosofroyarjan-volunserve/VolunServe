@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -429,7 +430,7 @@ export default function WebHome() {
       await setActiveUserMode(nextMode);
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Unable to switch mode",
         error?.message || "Please try again."
       );
@@ -453,7 +454,7 @@ export default function WebHome() {
       await logoutUser();
       router.replace("/login");
     } catch (error: any) {
-      Alert.alert("Log out failed", error?.message || "Please try again.");
+      AppAlert.alert("Log out failed", error?.message || "Please try again.");
     } finally {
       setLoggingOut(false);
     }

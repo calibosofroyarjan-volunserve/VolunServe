@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
@@ -20,7 +21,7 @@ export default function PublicDonation() {
   const [refNumber, setRefNumber] = useState("");
 
   const handleDonation = () => {
-    Alert.alert(
+    AppAlert.alert(
       "Login Required",
       "Please login or create an account to submit a donation.",
       [{ text: "OK" }]
