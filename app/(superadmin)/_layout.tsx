@@ -41,17 +41,19 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "1. System Overview", icon: "stats-chart-outline", route: "/(superadmin)", match: "/" },
-  { label: "2. LGU Staff & Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
-  { label: "3. System Records", icon: "albums-outline", route: "/(superadmin)/all-records", match: "/all-records" },
-  { label: "4. Audit Logs", icon: "time-outline", route: "/(superadmin)/admin-logs", match: "/admin-logs" },
-  { label: "5. System Settings", icon: "settings-outline", route: "/(superadmin)/system-settings", match: "/system-settings" },
+  { label: "System Overview", icon: "stats-chart-outline", route: "/(superadmin)", match: "/" },
+  { label: "LGU Staff & Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
+  { label: "System Records", icon: "albums-outline", route: "/(superadmin)/all-records", match: "/all-records" },
+  { label: "Audit Logs", icon: "time-outline", route: "/(superadmin)/admin-logs", match: "/admin-logs" },
+  { label: "System Settings", icon: "settings-outline", route: "/(superadmin)/system-settings", match: "/system-settings" },
 ];
 
 export default function SuperAdminLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [accountOpen,setAccountOpen] = useState(false);
+  const pathname = usePathname();
 
   if (loading) {
     return (
@@ -212,12 +214,23 @@ export default function SuperAdminLayout() {
     }
   };
 
+  const confirmSignOut = () => {
+    setAccountOpen(false);
+    AppAlert.alert("Sign Out", "Sign out of your VolunServe Super Admin account?", [
+      { text:"Cancel",style:"cancel" },
+      { text:"Sign Out",style:"destructive",onPress:()=>void signOut() },
+    ]);
+  };
+  const activeItem = navItems.find(item => item.match === "/"
+    ? pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin"
+    : pathname.endsWith(item.match));
+
   return (
     <View style={styles.shell}>
       {desktop ? (
         <SuperAdminSidebar
           onNavigate={(route) => router.push(route as Href)}
-          onSignOut={signOut}
+          onSignOut={confirmSignOut}
         />
       ) : (
         <Modal
@@ -238,7 +251,7 @@ export default function SuperAdminLayout() {
                 setDrawerOpen(false);
                 router.push(route as Href);
               }}
-              onSignOut={signOut}
+              onSignOut={confirmSignOut}
             />
           </View>
         </Modal>
@@ -257,10 +270,17 @@ export default function SuperAdminLayout() {
               <Ionicons name="menu" size={24} color="#17213A" />
             </TouchableOpacity>
           ) : (
-            <View />
+            <View style={styles.breadcrumb}>
+              <Ionicons name="home-outline" size={17} color="#246B55" />
+              <Text style={styles.breadcrumbMuted}>Super Admin</Text>
+              <Ionicons name="chevron-forward" size={13} color="#8BA99A"/>
+              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{activeItem?.label || "System Overview"}</Text>
+            </View>
           )}
 
-          <View style={styles.accountArea}>
+          <TouchableOpacity style={styles.accountArea} accessibilityRole="button"
+            accessibilityLabel="Super Admin account menu" accessibilityState={{expanded:accountOpen}}
+            onPress={()=>setAccountOpen(open=>!open)}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
@@ -269,10 +289,22 @@ export default function SuperAdminLayout() {
               <Text style={styles.accountName} numberOfLines={1}>
                 {fullName}
               </Text>
-              <Text style={styles.accountRole}>Programmer · Super Admin</Text>
+              <Text style={styles.accountRole}>Super Admin</Text>
             </View>
-          </View>
+            <Ionicons name={accountOpen?"chevron-up":"chevron-down"} size={16} color="#426D5C"/>
+          </TouchableOpacity>
         </View>
+        {accountOpen && <View style={styles.profileMenu}>
+          <TouchableOpacity accessibilityRole="button" style={styles.profileMenuAction}
+            onPress={()=>{setAccountOpen(false);router.push("/(superadmin)/system-settings" as Href);}}>
+            <Ionicons name="settings-outline" size={18} color="#116D54"/>
+            <Text style={styles.profileMenuText}>System Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" style={styles.profileMenuAction} onPress={confirmSignOut}>
+            <Ionicons name="log-out-outline" size={18} color="#B42318"/>
+            <Text style={[styles.profileMenuText,{color:"#B42318"}]}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>}
 
         <View style={styles.contentArea}>
           <Stack
@@ -321,10 +353,11 @@ function SuperAdminSidebar({
         />
         <View style={styles.brandCopy}>
           <Text style={styles.brandName}>VolunServe</Text>
-          <Text style={styles.brandTagline}>SYSTEM ADMINISTRATION</Text>
+          <Text style={styles.brandTagline}>Community · People · Action</Text>
         </View>
       </TouchableOpacity>
-      <Text style={styles.sidebarLabel}>SYSTEM GOVERNANCE · WORKFLOW</Text>
+      <Text style={styles.sidebarTitle}>SUPER ADMIN PORTAL</Text>
+      <Text style={styles.sidebarLabel}>System Administration</Text>
 
       <ScrollView
         style={styles.sidebarScroll}
@@ -399,7 +432,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#123E36",
+    backgroundColor: "#083E34",
     borderRightWidth: 1,
     borderRightColor: "#DDE8E3",
   },
@@ -409,7 +442,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   brand: {
-    minHeight: 91,
+    minHeight: 79,
     paddingTop: 20,
     paddingBottom: 13,
     paddingHorizontal: 22,
@@ -440,6 +473,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.65,
   },
+  sidebarTitle: { color:"#FFFFFF",fontSize:13,fontWeight:"900",letterSpacing:.4,marginTop:9,marginLeft:24 },
   sidebarLabel: {
     flexShrink: 0,
     marginTop: 5,
@@ -473,7 +507,7 @@ const styles = StyleSheet.create({
   },
   navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
-    backgroundColor: "#226859",
+    backgroundColor: "#087D61",
   },
   navIcon: {
     width: 35,
@@ -528,7 +562,7 @@ const styles = StyleSheet.create({
   workspace: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: "#F2F9FC",
+    backgroundColor: "#F6F9F8",
   },
   topbar: {
     minHeight: 65,
@@ -539,7 +573,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5EAF1",
+    borderBottomColor: "#E1ECE6",
   },
   menuButton: {
     width: 42,
@@ -551,6 +585,12 @@ const styles = StyleSheet.create({
     borderColor: "#E3E8F0",
     backgroundColor: "#FFFFFF",
   },
+  breadcrumb:{flexDirection:"row",gap:10,alignItems:"center",minWidth:0,flexShrink:1},
+  breadcrumbMuted:{fontSize:12,color:"#71877E"},
+  breadcrumbCurrent:{fontSize:12,fontWeight:"900",color:"#17382E",flexShrink:1},
+  profileMenu:{position:"absolute",top:61,right:17,zIndex:10,backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#D6E5DE",padding:7,minWidth:205,shadowColor:"#13392C",shadowOpacity:.13,shadowRadius:12,elevation:6},
+  profileMenuAction:{minHeight:43,paddingHorizontal:9,flexDirection:"row",alignItems:"center",gap:10},
+  profileMenuText:{fontSize:12,fontWeight:"800",color:"#174B3E"},
   accountArea: {
     flexDirection: "row",
     alignItems: "center",
