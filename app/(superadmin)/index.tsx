@@ -7,6 +7,7 @@ import {
   TouchableOpacity, View, useWindowDimensions,
 } from "react-native";
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
+import ListPagination from "../../components/ui/ListPagination";
 import { db } from "../../lib/firebase";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -14,6 +15,7 @@ type Source = "users" | "disasterCases" | "assistanceRequests" | "communityEvent
 type AuditSource = "adminLogs" | "adminActivityLogs";
 type AuditItem = {id:string; source:AuditSource; actorUid:string; actorName:string; actionType:string; description:string; createdAt:any};
 const AUDIT_SOURCES: AuditSource[] = ["adminLogs", "adminActivityLogs"];
+const PAGE_SIZE = 5;
 const textValue = (value:unknown) => typeof value === "string" ? value : "";
 const millis = (value:any) => value?.toMillis?.() || 0;
 const dateLabel = (value:any) => value?.toDate?.()
@@ -39,6 +41,8 @@ export default function SuperAdminDashboard() {
   const [auditLoaded,setAuditLoaded] = useState<Partial<Record<AuditSource,boolean>>>({});
   const [auditErrors,setAuditErrors] = useState<Partial<Record<AuditSource,boolean>>>({});
   const [staffStats, setStaffStats] = useState({ pending: 0, active: 0, suspended: 0 });
+  const [adminActivityPage, setAdminActivityPage] = useState(1);
+  const [systemChangesPage, setSystemChangesPage] = useState(1);
   const [errors, setErrors] = useState<Partial<Record<Source, boolean>>>({});
   const [loaded, setLoaded] = useState<Partial<Record<Source, boolean>>>({});
 
@@ -113,12 +117,16 @@ export default function SuperAdminDashboard() {
     AUDIT_SOURCES.flatMap(source => auditRows[source] || [])
       .sort((a,b) => millis(b.createdAt) - millis(a.createdAt)),[auditRows]);
   const adminActions = useMemo(() =>
-    latestRecorded.filter(item => adminUids.includes(item.actorUid)).slice(0,5),
+    latestRecorded.filter(item => adminUids.includes(item.actorUid)),
     [latestRecorded,adminUids]);
   const systemChanges = useMemo(() =>
     latestRecorded.filter(item =>
       /system_settings|admin_account|credential|access|suspend|reactivat|promot/i.test(item.actionType)
-    ).slice(0,4),[latestRecorded]);
+    ),[latestRecorded]);
+  const safeActivityPage = Math.min(adminActivityPage, Math.max(1, Math.ceil(adminActions.length / PAGE_SIZE)));
+  const safeChangesPage = Math.min(systemChangesPage, Math.max(1, Math.ceil(systemChanges.length / PAGE_SIZE)));
+  const pagedAdminActions = adminActions.slice((safeActivityPage - 1) * PAGE_SIZE, safeActivityPage * PAGE_SIZE);
+  const pagedSystemChanges = systemChanges.slice((safeChangesPage - 1) * PAGE_SIZE, safeChangesPage * PAGE_SIZE);
   const total = counts.users ?? 0;
   const approvedPercentage = total > 0 && approved !== null
     ? Math.round((approved / total) * 100) : null;
@@ -194,7 +202,7 @@ export default function SuperAdminDashboard() {
           {(auditLoading || !loaded.users) ? <ActivityIndicator color="#168566" style={styles.activityLoading}/> :
             (auditUnavailable || errors.users) ? <Text style={styles.activityEmpty}>Audit feed unavailable. Check Firestore access.</Text> :
             adminActions.length===0 ? <Text style={styles.activityEmpty}>No recorded LGU Admin actions found. Only logged activities appear here.</Text> :
-            adminActions.map(item => <View key={item.source+":"+item.id} style={styles.activityRow}>
+            pagedAdminActions.map(item => <View key={item.source+":"+item.id} style={styles.activityRow}>
               <View style={styles.activityIcon}><Ionicons name="document-text-outline" color="#1C8465" size={17}/></View>
               <View style={styles.activityCopy}>
                 <Text style={styles.activityName}>{actionLabel(item.actionType)}</Text>
@@ -202,6 +210,7 @@ export default function SuperAdminDashboard() {
                 <Text style={styles.activityMeta}>{item.actorName || item.actorUid} · {dateLabel(item.createdAt)}</Text>
               </View>
             </View>)}
+          {!auditLoading && !auditUnavailable && !errors.users && <ListPagination page={safeActivityPage} total={adminActions.length} onChange={setAdminActivityPage} />}
           <TouchableOpacity style={styles.activityLink} onPress={() => router.push("/(superadmin)/admin-logs" as any)}
             accessibilityRole="button" accessibilityLabel="View all recorded administrative audit actions">
             <Text style={styles.activityLinkText}>Full audit history</Text>
@@ -219,13 +228,14 @@ export default function SuperAdminDashboard() {
           {auditLoading ? <ActivityIndicator color="#168566" style={styles.activityLoading}/> :
             auditUnavailable ? <Text style={styles.activityEmpty}>System update logs unavailable.</Text> :
             systemChanges.length===0 ? <Text style={styles.activityEmpty}>No system or access changes recorded yet.</Text> :
-            systemChanges.map(item => <View key={item.source+":"+item.id} style={styles.changeRow}>
+            pagedSystemChanges.map(item => <View key={item.source+":"+item.id} style={styles.changeRow}>
               <View style={styles.changeDot}/>
               <View style={styles.activityCopy}>
                 <Text style={styles.activityName}>{actionLabel(item.actionType)}</Text>
                 <Text style={styles.activityMeta}>{dateLabel(item.createdAt)} · {item.actorName || item.actorUid || "Unknown actor"}</Text>
               </View>
             </View>)}
+          {!auditLoading && !auditUnavailable && <ListPagination page={safeChangesPage} total={systemChanges.length} onChange={setSystemChangesPage} />}
           <TouchableOpacity style={styles.activityLink} onPress={() => router.push("/(superadmin)/system-settings" as any)}
             accessibilityRole="button" accessibilityLabel="Manage authorized technical system settings">
             <Text style={styles.activityLinkText}>System settings</Text>
