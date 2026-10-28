@@ -391,8 +391,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later use Identity Verification, verification evidence is handled as private data and must only be used for the verification process.</Text>
           <Text style={styles.termsH2}>Consent</Text>
           <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and the Volunteer Application are separate steps after account creation.</Text>
-          <Text style={styles.termsH2}>Security</Text>
-          <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
+          <Text style={styles.termsH2}>Account Eligibility</Text>
+          <Text style={styles.termsP}>Registration is for people aged 18 or older residing in the City of San Jose del Monte, Bulacan. Use your own permanent email address; disposable addresses may be rejected. Identity verification and volunteer authorization are separate processes.</Text>
+          <Text style={styles.termsH2}>Emergency Service Limitations</Text>
+          <Text style={styles.termsP}>Submitting a VolunServe emergency report does not automatically dispatch 911 or an LGU vehicle. Actual response depends on authorized LGU action. Maps, road routes and optional location sharing require connectivity, device permission and reliable GPS. Call 911 directly for immediate danger.</Text>
+          <Text style={styles.termsH2}>Donations and Security</Text>
+          <Text style={styles.termsP}>Payment demonstrations use PayMongo sandbox, not live transfers. Use a strong password and never share your login credentials.</Text>
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -730,13 +734,12 @@ export default function Signup() {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={handleGooglePress}
-                disabled={!request || googleProfileLoaded}
-                style={[styles.googleBtn, (!request || googleProfileLoaded) && styles.googleBtnDisabled]}
-              >
-                <Text style={styles.googleBtnText}>{googleProfileLoaded ? "✓ Google Account Connected" : "Continue with Google"}</Text>
-              </TouchableOpacity>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoBoxText}>
+                  Create your account with an email address and password below.
+                  Google sign-in is not required.
+                </Text>
+              </View>
 
               {googleBound ? (
                 <View style={styles.infoBox}>
