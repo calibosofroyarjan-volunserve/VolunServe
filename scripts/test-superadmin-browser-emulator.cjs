@@ -105,11 +105,11 @@ async function main() {
     await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
     await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
     await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
-    await page.getByText("Synthetic Staff 1",{exact:true}).first().waitFor({timeout:25000});
+    await page.getByText("Synthetic Staff 6",{exact:true}).first().waitFor({timeout:25000});
     await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
     await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
     await page.getByRole("button",{name:"Next page"}).first().click();
-    await page.getByText("Synthetic Staff 6",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Synthetic Staff 1",{exact:true}).first().waitFor({timeout:15000});
     await page.getByRole("textbox",{name:"Search pending LGU staff applications"})
       .fill("Synthetic Staff 3");
     await page.getByText("Synthetic Staff 3",{exact:true}).first().waitFor({timeout:15000});
