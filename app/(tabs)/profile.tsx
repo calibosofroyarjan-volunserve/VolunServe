@@ -1,6 +1,9 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { User } from "firebase/auth";
+import { updateProfile, User } from "firebase/auth";
+import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../../constants/occupationOptions";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import {
   collection,
   doc,
@@ -11,14 +14,15 @@ import {
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -315,11 +319,9 @@ export default function Profile() {
   ] =
     useState(false);
 
-  const [
-    fullName,
-    setFullName,
-  ] =
-    useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   const [
     phoneNumber,
@@ -333,11 +335,17 @@ export default function Profile() {
   ] =
     useState("");
 
-  const [
-    occupation,
-    setOccupation,
-  ] =
-    useState("");
+  const [occupationCategory, setOccupationCategory] = useState("");
+  const [occupationSpecialization, setOccupationSpecialization] = useState("");
+  const [occupationOther, setOccupationOther] = useState("");
+  const [occupationTouched, setOccupationTouched] = useState(false);
+  const editProfileRef = useRef(edit === "1");
+  const editDraftInitializedRef = useRef(false);
+  const [barangay, setBarangay] = useState("");
+  const [barangayTouched, setBarangayTouched] = useState(false);
+  const [barangayOpen, setBarangayOpen] = useState(false);
+  const [occupationOpen, setOccupationOpen] = useState(false);
+  const [specializationOpen, setSpecializationOpen] = useState(false);
 
   const [
     residentCases,
@@ -386,6 +394,56 @@ export default function Profile() {
     setCertificateError,
   ] =
     useState("");
+
+  const hydrateEditableProfile = (nextProfile: UserProfile) => {
+    const canonicalName = String(nextProfile.fullName || "");
+    const comma = canonicalName.indexOf(",");
+    const lastFromName = comma >= 0 ? canonicalName.slice(0, comma).trim() : canonicalName.trim().split(/\s+/).slice(-1)[0] || "";
+    const givenFromName = comma >= 0 ? canonicalName.slice(comma + 1).trim().split(/\s+/) : canonicalName.trim().split(/\s+/);
+    setLastName(nextProfile.lastName || lastFromName);
+    setFirstName(nextProfile.firstName || givenFromName[0] || "");
+    setMiddleName(nextProfile.middleName || (comma >= 0 ? givenFromName.slice(1).join(" ") : givenFromName.slice(1, -1).join(" ")));
+
+    setPhoneNumber(
+      nextProfile.phoneNumber ||
+        "",
+    );
+
+    setAddress(
+      nextProfile.address ||
+        "",
+    );
+    setBarangay(nextProfile.barangay || "");
+    setBarangayTouched(false);
+    setBarangayOpen(false);
+
+    const previousOccupation = nextProfile.occupation || "";
+    const category = nextProfile.occupationCategory ||
+      (previousOccupation
+        ? (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)")
+        : "");
+    setOccupationCategory(category);
+    setOccupationSpecialization(nextProfile.occupationSpecialization || "");
+    setOccupationOther(nextProfile.occupationOther ||
+      (category === "Other (Specify)" && previousOccupation !== "Other (Specify)" ? previousOccupation : ""));
+    setOccupationTouched(false);
+    setOccupationOpen(false);
+    setSpecializationOpen(false);
+
+    editDraftInitializedRef.current = true;
+  };
+
+  const openProfileEditor = () => {
+    if (!profile) return;
+    hydrateEditableProfile(profile);
+    editProfileRef.current = true;
+    setEditOpen(true);
+  };
+
+  const closeProfileEditor = () => {
+    editProfileRef.current = false;
+    setEditOpen(false);
+  };
 
   useEffect(() => {
     const unsubscribeAuth =
@@ -446,25 +504,10 @@ export default function Profile() {
             nextProfile,
           );
 
-          setFullName(
-            nextProfile.fullName ||
-              "",
-          );
-
-          setPhoneNumber(
-            nextProfile.phoneNumber ||
-              "",
-          );
-
-          setAddress(
-            nextProfile.address ||
-              "",
-          );
-
-          setOccupation(
-            nextProfile.occupation ||
-              "",
-          );
+          // Never erase unsaved name edits when the live profile changes.
+          if (!editProfileRef.current || !editDraftInitializedRef.current) {
+            hydrateEditableProfile(nextProfile);
+          }
 
           setLoading(
             false,
@@ -886,66 +929,78 @@ export default function Profile() {
       .trim()
       .toLowerCase();
 
-  const saveProfile =
-    async () => {
-      if (!user) {
-        return;
-      }
+  const saveProfile = async () => {
+    if (!user || !profile) return;
 
-      const cleanName =
-        fullName
-          .trim()
-          .replace(
-            /\s+/g,
-            " ",
-          );
+    const first = firstName.trim().replace(/\s+/g, " ");
+    const middle = middleName.trim().replace(/\s+/g, " ");
+    const last = lastName.trim().replace(/\s+/g, " ");
+    if (first.length < 2 || last.length < 2) {
+      AppAlert.alert("Invalid name", "First name and last name are required.");
+      return;
+    }
+    // Name and contact changes must be saveable without first providing an
+    // unrelated occupation. Legacy Resident profiles may have no occupation.
+    const editingOccupation = occupationTouched;
+    if (editingOccupation && occupationCategory && !OCCUPATION_OPTIONS.includes(occupationCategory)) {
+      AppAlert.alert("Select occupation", "Choose an occupation from the list.");
+      return;
+    }
+    const choices = editingOccupation ? SPECIALIZATIONS[occupationCategory] || [] : [];
+    if (editingOccupation && choices.length > 0 && !choices.includes(occupationSpecialization)) {
+      AppAlert.alert("Choose specialization", "Select a valid specialization.");
+      return;
+    }
+    if (editingOccupation && occupationCategory === "Other (Specify)" &&
+        occupationOther.trim().length < 2) {
+      AppAlert.alert("Specify occupation", "Please enter your occupation.");
+      return;
+    }
 
-      if (
-        cleanName.length <
-        2
-      ) {
-        Alert.alert(
-          "Invalid name",
-          "Please enter your full name.",
-        );
-
-        return;
-      }
-
-      setSaving(true);
-
-      try {
-        await updateUserProfile(
-          user.uid,
-          {
-            fullName:
-              cleanName,
-            phoneNumber:
-              phoneNumber.trim(),
-            address:
-              address.trim(),
-            occupation:
-              occupation.trim(),
-          },
-        );
-
-        setEditOpen(
-          false,
-        );
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Unable to save",
-          error?.message ||
-            "Please try again.",
-        );
-      } finally {
-        setSaving(
-          false,
-        );
-      }
+    if (barangayTouched && !SJDM_BARANGAYS.includes(barangay)) {
+      AppAlert.alert("Select barangay", "Choose an official San Jose del Monte barangay from the dropdown.");
+      return;
+    }
+    const cleanName = last + ", " + first + (middle ? " " + middle : "");
+    // Firestore users/{uid}.fullName is the canonical name across Home,
+    // My Profile and the account dropdown. Do not overwrite old occupation
+    // values when the user is only editing personal information.
+    const changes: Partial<UserProfile> = {
+      fullName: cleanName,
+      firstName: first,
+      middleName: middle,
+      lastName: last,
+      phoneNumber: phoneNumber.trim(),
+      address: address.trim(),
     };
+    if (barangayTouched) changes.barangay = barangay;
+    if (editingOccupation) {
+      changes.occupationCategory = occupationCategory;
+      changes.occupationSpecialization = choices.length ? occupationSpecialization : "";
+      changes.occupationOther = occupationCategory === "Other (Specify)" ? occupationOther.trim() : "";
+      changes.occupation = occupationCategory === "Other (Specify)"
+        ? occupationOther.trim()
+        : occupationSpecialization || occupationCategory;
+    }
+    setSaving(true);
+    try {
+      await updateUserProfile(user.uid, changes);
+      // Firestore is the authoritative VolunServe profile. Mirror the
+      // display name in Firebase Auth without claiming two-system atomicity.
+      try {
+        if (user.displayName !== cleanName) {
+          await updateProfile(user, { displayName: cleanName });
+        }
+      } catch {
+        AppAlert.alert("Profile updated", "Your VolunServe name was saved. Your sign-in display name may take another sign-in to refresh.");
+      }
+      closeProfileEditor();
+    } catch (error: any) {
+      AppAlert.alert("Unable to save", error?.message || "Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -1036,9 +1091,8 @@ export default function Profile() {
       contentContainerStyle={
         styles.page
       }
-      showsVerticalScrollIndicator={
-        false
-      }
+      showsVerticalScrollIndicator
+      persistentScrollbar
     >
       <View
         style={
@@ -1248,11 +1302,7 @@ export default function Profile() {
             activeOpacity={
               0.82
             }
-            onPress={() =>
-              setEditOpen(
-                true,
-              )
-            }
+            onPress={openProfileEditor}
           >
             <Ionicons
               name="create-outline"
@@ -1403,6 +1453,8 @@ export default function Profile() {
                 displayRole
               }
             />
+
+            <InfoRow label="Barangay" value={profile.barangay || "Not provided"} />
 
             <InfoRow
               label="Address"
@@ -1652,183 +1704,105 @@ export default function Profile() {
           </View>
         )}
 
-      <Modal
-        visible={
-          editOpen
-        }
-        transparent
-        animationType="fade"
-        onRequestClose={() =>
-          setEditOpen(
-            false,
-          )
-        }
-      >
-        <View
-          style={
-            styles.modalBackdrop
-          }
-        >
-          <View
-            style={
-              styles.modalCard
-            }
-          >
-            <View
-              style={
-                styles.modalHeader
-              }
-            >
-              <View>
-                <Text
-                  style={
-                    styles.modalTitle
-                  }
-                >
-                  Edit Profile
-                </Text>
-
-                <Text
-                  style={
-                    styles.modalSubtitle
-                  }
-                >
-                  Update your basic account information.
-                </Text>
+      <Modal visible={editOpen} transparent animationType="fade" onRequestClose={closeProfileEditor}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIcon}>
+                <Ionicons name="person-circle-outline" size={27} color="#087A5D"/>
               </View>
-
-              <TouchableOpacity
-                style={
-                  styles.modalClose
-                }
-                onPress={() =>
-                  setEditOpen(
-                    false,
-                  )
-                }
-              >
-                <Ionicons
-                  name="close"
-                  size={22}
-                  color="#475569"
-                />
+              <View style={styles.modalHeaderCopy}>
+                <Text style={styles.modalEyebrow}>ACCOUNT INFORMATION</Text>
+                <Text style={styles.modalTitle}>Edit Profile</Text>
+                <Text style={styles.modalSubtitle}>Keep your personal details accurate and up to date.</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close Edit Profile"
+                disabled={saving} style={styles.modalClose} onPress={closeProfileEditor}>
+                <Ionicons name="close" size={20} color="#42675B"/>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={
-                false
-              }
-            >
-              <ProfileInput
-                label="Full Name"
-                value={
-                  fullName
-                }
-                onChange={
-                  setFullName
-                }
-                placeholder="Full name"
-              />
+            <ScrollView style={[styles.modalScroll,Platform.OS === "web" && styles.webModalScroll]}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled" nestedScrollEnabled
+              showsVerticalScrollIndicator persistentScrollbar
+              accessibilityLabel="Scroll Edit Profile fields">
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Personal information</Text>
+              </View>
+              <View style={styles.nameGrid}>
+                <View style={styles.nameField}>
+                  <ProfileInput label="First Name" value={firstName} onChange={setFirstName} placeholder="First name" required/>
+                </View>
+                <View style={styles.nameField}>
+                  <ProfileInput label="Middle Name" value={middleName} onChange={setMiddleName} placeholder="Optional"/>
+                </View>
+                <View style={styles.nameField}>
+                  <ProfileInput label="Last Name" value={lastName} onChange={setLastName} placeholder="Last name" required/>
+                </View>
+              </View>
+              <Text style={styles.modalHelper}>Email and identity-verification status are managed separately for account security.</Text>
 
-              <ProfileInput
-                label="Phone Number"
-                value={
-                  phoneNumber
-                }
-                onChange={
-                  setPhoneNumber
-                }
-                placeholder="Phone number"
-              />
+              <View style={styles.modalDivider}/>
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Contact & address</Text>
+              </View>
+              <ProfileInput label="Phone Number" value={phoneNumber}
+                onChange={setPhoneNumber} placeholder="+63 9XX XXX XXXX"
+                keyboardType="phone-pad" maxLength={24}/>
+              <ProfileDropdown label="Barangay" value={barangay} placeholder="Select an SJDM barangay"
+                options={SJDM_BARANGAYS} open={barangayOpen} searchable
+                onToggle={() => {setBarangayOpen(v=>!v);setOccupationOpen(false);setSpecializationOpen(false);}}
+                onSelect={value => {setBarangay(value);setBarangayTouched(true);setBarangayOpen(false);}}/>
+              <ProfileInput label="Complete Address" value={address} onChange={setAddress}
+                placeholder="House number, street, subdivision, purok" maxLength={240}/>
+              <Text style={styles.modalHelper}>City of San Jose del Monte, Bulacan · Region III. Only official city barangays are selectable.</Text>
 
-              <ProfileInput
-                label="Address"
-                value={
-                  address
-                }
-                onChange={
-                  setAddress
-                }
-                placeholder="Complete address"
-              />
+              <View style={styles.modalDivider}/>
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Occupation details</Text>
+              </View>
+              <Text style={styles.modalHelper}>Optional. Your name can be saved without editing your occupation.</Text>
+              <ProfileDropdown label="Occupation Category" value={occupationCategory}
+                placeholder="Choose occupation (optional)" options={["Not specified",...OCCUPATION_OPTIONS]} open={occupationOpen}
+                onToggle={() => {setOccupationOpen(v=>!v);setBarangayOpen(false);setSpecializationOpen(false);}}
+                onSelect={value => {setOccupationTouched(true);setOccupationCategory(value==="Not specified"?"":value);setOccupationSpecialization("");setOccupationOther("");setOccupationOpen(false);setSpecializationOpen(false);}}/>
+              {(SPECIALIZATIONS[occupationCategory] || []).length > 0 && (
+                <ProfileDropdown label="Specialization" value={occupationSpecialization} placeholder="Choose specialization"
+                  options={SPECIALIZATIONS[occupationCategory] || []} open={specializationOpen}
+                  onToggle={() => {setSpecializationOpen(v=>!v);setBarangayOpen(false);setOccupationOpen(false);}}
+                  onSelect={value => {setOccupationTouched(true);setOccupationSpecialization(value);setSpecializationOpen(false);}}/>
+              )}
+              {occupationCategory === "Other (Specify)" && (
+                <ProfileInput label="Specify Occupation" value={occupationOther}
+                  onChange={value => {setOccupationTouched(true);setOccupationOther(value);}}
+                  placeholder="Your occupation" maxLength={100}/>
+              )}
+            </ScrollView>
 
-              <ProfileInput
-                label="Occupation"
-                value={
-                  occupation
-                }
-                onChange={
-                  setOccupation
-                }
-                placeholder="Occupation"
-              />
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <TouchableOpacity
-                  style={
-                    styles.cancelButton
-                  }
-                  disabled={
-                    saving
-                  }
-                  onPress={() =>
-                    setEditOpen(
-                      false,
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      styles.cancelButtonText
-                    }
-                  >
-                    Cancel
-                  </Text>
+            <View style={styles.modalFooter}>
+              <Text style={styles.modalFooterHint}>Changes are saved to your VolunServe profile.</Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity accessibilityRole="button" style={styles.cancelButton} disabled={saving} onPress={closeProfileEditor}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={
-                    styles.saveButton
-                  }
-                  disabled={
-                    saving
-                  }
-                  onPress={() =>
-                    void saveProfile()
-                  }
-                >
-                  {saving ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFFFFF"
-                    />
-                  ) : (
+                <TouchableOpacity accessibilityRole="button" style={[styles.saveButton,saving && styles.buttonSaving]}
+                  disabled={saving} onPress={() => void saveProfile()}>
+                  {saving ? <ActivityIndicator size="small" color="#FFFFFF"/> : (
                     <>
-                      <Ionicons
-                        name="checkmark"
-                        size={18}
-                        color="#FFFFFF"
-                      />
-
-                      <Text
-                        style={
-                          styles.saveButtonText
-                        }
-                      >
-                        Save Changes
-                      </Text>
+                      <Ionicons name="checkmark" size={18} color="#FFFFFF"/>
+                      <Text style={styles.saveButtonText}>Save Changes</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </View>
           </View>
         </View>
+
       </Modal>
     </ScrollView>
   );
@@ -2219,7 +2193,7 @@ function IdentityAccessCard({
           style={styles.verifyLearnButton}
           activeOpacity={0.84}
           onPress={() =>
-            Alert.alert(
+            AppAlert.alert(
               "Identity Verification",
               "VolunServe compares the face from your government ID with your face scan using AI-assisted 1-to-1 verification. Uncertain results are sent to LGU/Admin manual review.",
             )
@@ -2749,50 +2723,74 @@ function InlineLoading() {
   );
 }
 
-function ProfileInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (
-    value: string,
-  ) => void;
-  placeholder: string;
-}) {
-  return (
-    <View
-      style={
-        styles.inputGroup
-      }
-    >
-      <Text
-        style={
-          styles.inputLabel
-        }
-      >
-        {label}
+type ProfileDropdownProps = {
+  label:string;
+  value:string;
+  placeholder:string;
+  options:string[];
+  open:boolean;
+  searchable?:boolean;
+  onToggle:()=>void;
+  onSelect:(value:string)=>void;
+};
+function ProfileDropdown({label,value,placeholder,options,open,searchable=false,onToggle,onSelect}:ProfileDropdownProps) {
+  const [search,setSearch]=useState("");
+  useEffect(()=>{if(!open)setSearch("");},[open]);
+  const visibleOptions=searchable
+    ? options.filter(option=>option.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    : options;
+  return <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TouchableOpacity accessibilityRole="button"
+      accessibilityLabel={label+": "+(value || placeholder)}
+      accessibilityState={{expanded:open}}
+      onPress={onToggle}
+      style={[styles.dropdownTrigger,open && styles.dropdownTriggerOpen]}>
+      <Text style={[styles.dropdownValue,!value && styles.dropdownPlaceholder]} numberOfLines={1}>
+        {value || placeholder}
       </Text>
+      <Ionicons name={open?"chevron-up":"chevron-down"} size={18} color="#087A5D"/>
+    </TouchableOpacity>
+    {open && <View style={styles.dropdownPanel}>
+      {searchable && <View style={styles.dropdownSearch}>
+        <Ionicons name="search-outline" size={17} color="#6C9082"/>
+        <TextInput accessibilityLabel={"Search "+label} value={search}
+          onChangeText={setSearch} placeholder="Search barangay..."
+          placeholderTextColor="#93A8A0" autoCapitalize="none" autoCorrect={false}
+          style={styles.dropdownSearchInput}/>
+      </View>}
+      <ScrollView style={[styles.dropdownOptions,Platform.OS==="web" && styles.webModalScroll]}
+        nestedScrollEnabled keyboardShouldPersistTaps="always" showsVerticalScrollIndicator persistentScrollbar>
+        {visibleOptions.length === 0
+          ? <Text style={styles.dropdownEmpty}>No matching options.</Text>
+          : visibleOptions.map(option=><TouchableOpacity key={option}
+            accessibilityRole="button" accessibilityLabel={"Select "+option}
+            onPress={()=>onSelect(option)}
+            style={[styles.dropdownOption,(value===option || (!value && option==="Not specified")) && styles.dropdownOptionSelected]}>
+            <Text style={styles.dropdownOptionText} numberOfLines={2}>{option}</Text>
+            {(value===option || (!value && option==="Not specified")) &&
+              <Ionicons name="checkmark" color="#087A5D" size={17}/>}
+          </TouchableOpacity>)}
+      </ScrollView>
+    </View>}
+  </View>;
+}
 
-      <TextInput
-        value={
-          value
-        }
-        onChangeText={
-          onChange
-        }
-        placeholder={
-          placeholder
-        }
-        placeholderTextColor="#94A3B8"
-        style={
-          styles.input
-        }
-      />
-    </View>
-  );
+function ProfileInput({label,value,onChange,placeholder,required=false,keyboardType,maxLength}:{
+  label:string;
+  value:string;
+  onChange:(value:string)=>void;
+  placeholder:string;
+  required?:boolean;
+  keyboardType?:React.ComponentProps<typeof TextInput>["keyboardType"];
+  maxLength?:number;
+}) {
+  return <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}{required && <Text style={styles.requiredAsterisk}> *</Text>}</Text>
+    <TextInput accessibilityLabel={label} value={value} onChangeText={onChange}
+      placeholder={placeholder} placeholderTextColor="#93A8A0" style={styles.input}
+      keyboardType={keyboardType} maxLength={maxLength} autoCorrect={false}/>
+  </View>;
 }
 
 const styles =
@@ -2858,7 +2856,7 @@ const styles =
     cover: {
       height: 116,
       backgroundColor:
-        "#173A63",
+        "#0B4D3C",
     },
 
     profileHeroBody: {
@@ -2915,11 +2913,11 @@ const styles =
       justifyContent:
         "center",
       backgroundColor:
-        "#E0E7FF",
+        "#D7F2E4",
     },
 
     avatarInitials: {
-      color: "#3730A3",
+      color: "#087A5D",
       fontSize: 34,
       fontWeight: "900",
     },
@@ -2991,15 +2989,15 @@ const styles =
       paddingHorizontal: 15,
       borderRadius: 11,
       backgroundColor:
-        "#F5F3FF",
+        "#E7F7EE",
       borderWidth: 1,
       borderColor:
-        "#DDD6FE",
+        "#BCE2CE",
       marginTop: 18,
     },
 
     editProfileText: {
-      color: "#4338CA",
+      color: "#087A5D",
       fontSize: 13,
       fontWeight: "800",
     },
@@ -3032,7 +3030,7 @@ const styles =
 
     tabActive: {
       backgroundColor:
-        "#4F46E5",
+        "#087A5D",
     },
 
     tabText: {
@@ -3501,125 +3499,94 @@ const styles =
     },
 
     modalBackdrop: {
-      flex: 1,
-      justifyContent:
-        "center",
-      padding: 20,
-      backgroundColor:
-        "rgba(15, 23, 42, 0.50)",
+      flex:1,justifyContent:"center",padding:14,
+      backgroundColor:"rgba(8,34,29,0.63)",
     },
-
     modalCard: {
-      width: "100%",
-      maxWidth: 520,
-      maxHeight: "88%",
-      alignSelf: "center",
-      padding: 22,
-      borderRadius: 18,
-      backgroundColor:
-        "#FFFFFF",
+      width:"100%",maxWidth:660,maxHeight:"91%",
+      alignSelf:"center",borderRadius:18,overflow:"hidden",
+      backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#CFE6D9",
+      shadowColor:"#082A1C",shadowOffset:{width:0,height:12},
+      shadowOpacity:0.22,shadowRadius:28,elevation:8,
     },
-
     modalHeader: {
-      flexDirection: "row",
-      alignItems:
-        "flex-start",
-      justifyContent:
-        "space-between",
-      gap: 15,
-      marginBottom: 20,
+      flexDirection:"row",alignItems:"center",gap:12,
+      paddingHorizontal:22,paddingVertical:17,
+      backgroundColor:"#EDF9F2",borderBottomWidth:1,borderBottomColor:"#D5EBDD",
     },
-
-    modalTitle: {
-      color: "#0F172A",
-      fontSize: 20,
-      fontWeight: "900",
+    modalIcon:{
+      height:48,width:48,borderRadius:14,backgroundColor:"#D8F0E3",
+      alignItems:"center",justifyContent:"center",
     },
-
-    modalSubtitle: {
-      marginTop: 4,
-      color: "#64748B",
-      fontSize: 12.5,
+    modalHeaderCopy:{flex:1,minWidth:0},
+    modalEyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
+    modalTitle:{fontSize:21,fontWeight:"900",color:"#0D3429",letterSpacing:-0.5},
+    modalSubtitle:{fontSize:12,color:"#537366",lineHeight:17,marginTop:3},
+    modalClose:{
+      height:36,width:36,borderRadius:9,backgroundColor:"#FFFFFF",
+      alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#D9EAE0",
     },
-
-    modalClose: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#F8FAFC",
+    modalScroll:{flexShrink:1,minHeight:0},
+    webModalScroll:{overflowY:"auto",scrollbarWidth:"auto",scrollbarColor:"#5D9B84 #EDF7F1"} as any,
+    modalScrollContent:{paddingHorizontal:23,paddingTop:18,paddingBottom:24},
+    modalSectionHeader:{flexDirection:"row",alignItems:"center",gap:9,marginBottom:13},
+    sectionMarker:{width:4,height:18,borderRadius:2,backgroundColor:"#0B8868"},
+    modalSectionTitle:{fontSize:14,fontWeight:"900",color:"#193D31"},
+    modalHelper:{fontSize:11,color:"#668276",lineHeight:16,marginBottom:12},
+    modalDivider:{height:1,backgroundColor:"#E6EFE9",marginBottom:20,marginTop:7},
+    nameGrid:{flexDirection:"row",flexWrap:"wrap",gap:11},
+    nameField:{flexGrow:1,flexBasis:"29%",minWidth:145},
+    inputGroup:{marginBottom:13},
+    inputLabel:{fontSize:12,fontWeight:"800",color:"#2C5041",marginBottom:7},
+    requiredAsterisk:{color:"#D4413A"},
+    input:{
+      minHeight:45,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
+      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize:13,color:"#173A2B",
     },
-
-    inputGroup: {
-      marginBottom: 13,
+    dropdownTrigger:{
+      minHeight:46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
+      backgroundColor:"#FCFEFD",flexDirection:"row",alignItems:"center",
+      paddingHorizontal:13,justifyContent:"space-between",gap:10,
     },
-
-    inputLabel: {
-      marginBottom: 6,
-      color: "#334155",
-      fontSize: 12,
-      fontWeight: "800",
+    dropdownTriggerOpen:{borderColor:"#0B896C",backgroundColor:"#F1FBF6"},
+    dropdownValue:{fontSize:13,fontWeight:"700",color:"#214F3E",flex:1},
+    dropdownPlaceholder:{fontWeight:"500",color:"#799588"},
+    dropdownPanel:{
+      borderWidth:1,borderColor:"#CDE4D6",borderRadius:10,
+      backgroundColor:"#FFFFFF",marginTop:6,overflow:"hidden",
     },
-
-    input: {
-      minHeight: 46,
-      paddingHorizontal: 13,
-      borderRadius: 11,
-      borderWidth: 1,
-      borderColor:
-        "#DCE3EB",
-      color: "#0F172A",
-      backgroundColor:
-        "#FFFFFF",
-      fontSize: 13,
+    dropdownSearch:{
+      minHeight:42,flexDirection:"row",alignItems:"center",gap:8,
+      paddingHorizontal:12,backgroundColor:"#F6FBF8",borderBottomWidth:1,borderBottomColor:"#E3F0E9",
     },
-
-    modalActions: {
-      marginTop: 8,
-      flexDirection: "row",
-      justifyContent:
-        "flex-end",
-      gap: 10,
+    dropdownSearchInput:{minHeight:40,flex:1,fontSize:12,color:"#214A39",paddingVertical:6},
+    dropdownOptions:{maxHeight:188},
+    dropdownOption:{
+      paddingHorizontal:13,paddingVertical:11,minHeight:40,
+      flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:8,
+      borderBottomWidth:1,borderBottomColor:"#F0F4F1",
     },
-
-    cancelButton: {
-      minHeight: 44,
-      justifyContent:
-        "center",
-      paddingHorizontal: 16,
-      borderRadius: 11,
-      borderWidth: 1,
-      borderColor:
-        "#CBD5E1",
+    dropdownOptionSelected:{backgroundColor:"#E6F7ED"},
+    dropdownOptionText:{flex:1,fontSize:12,color:"#234B3D",fontWeight:"600"},
+    dropdownEmpty:{fontSize:12,color:"#718A7B",padding:15},
+    modalFooter:{
+      backgroundColor:"#F9FCFA",borderTopWidth:1,borderTopColor:"#E0EDE5",
+      paddingHorizontal:22,paddingVertical:14,flexDirection:"row",
+      justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,
     },
-
-    cancelButtonText: {
-      color: "#475569",
-      fontSize: 13,
-      fontWeight: "800",
+    modalFooterHint:{fontSize:10.5,lineHeight:15,color:"#709181",flex:1,minWidth:110},
+    modalActions:{flexDirection:"row",alignItems:"center",gap:9},
+    cancelButton:{
+      minHeight:43,justifyContent:"center",alignItems:"center",paddingHorizontal:16,
+      borderRadius:9,borderWidth:1,borderColor:"#CFE1D7",backgroundColor:"#FFFFFF",
     },
-
-    saveButton: {
-      minHeight: 44,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      paddingHorizontal: 17,
-      borderRadius: 11,
-      backgroundColor:
-        "#4F46E5",
+    cancelButtonText:{color:"#355C4B",fontSize:12.5,fontWeight:"800"},
+    saveButton:{
+      minHeight:43,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
+      paddingHorizontal:18,borderRadius:9,backgroundColor:"#087C61",
     },
-
-    saveButtonText: {
-      color: "#FFFFFF",
-      fontSize: 13,
-      fontWeight: "900",
-    },
+    buttonSaving:{opacity:.7},
+    saveButtonText:{color:"#FFFFFF",fontSize:12.5,fontWeight:"900"},
 
     verifyResidentCard: {
       width: "100%",
