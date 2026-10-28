@@ -39,7 +39,9 @@ function fixture() {
     users:new Map([["Admin00001",{role:"admin",status:"approved"}],
       [residentId,{role:"resident",status:"approved",identityVerified:true}]]),
     notifications:new Map(),
+    adminActivityLogs:new Map(),
   };
+  let nextAuditId=0;
   const snapshot=(id,data)=>({id,exists:!!data,data:()=>data});
   const reference=(name,id)=>({
     name,id,async get(){return snapshot(id,tables[name].get(id));},
@@ -49,7 +51,7 @@ function fixture() {
   const query=(name,filters=[],max=Infinity)=>({
     where(field,op,value){return query(name,[...filters,[field,op,value]],max);},
     limit(n){return query(name,filters,n);},
-    doc(id){return reference(name,id);},
+    doc(id){return reference(name,id || `auto-audit-${++nextAuditId}`);},
     async get(){
       const docs=[...tables[name]].filter(([,data])=>
         filters.every(([field,op,value])=>op==="=="?
@@ -72,6 +74,9 @@ function fixture() {
       });},
     }),
   };
+  // Stages are immutable governance records, separate from the financial
+  // release state and carrying no wallet, amounts or private recipient fields.
+  const auditRows=()=>[...tables.adminActivityLogs.values()];
   const routes=new Map();
   const app={
     get:(path,...handlers)=>routes.set("GET "+path,handlers),
