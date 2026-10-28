@@ -34,6 +34,16 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     positionQuality: "osm_feature",
   },
   {
+    id: "osm-way-1427519892",
+    name: "Dulong Bayan Barangay Hall",
+    kind: "barangay_hall",
+    latitude: 14.82682, longitude: 121.04482,
+    sourceUrl: "https://www.openstreetmap.org/way/1427519892",
+    sourceLabel: "OpenStreetMap mapped barangay hall building",
+    note: "Mapped public building; hours and staff availability unconfirmed.",
+    positionQuality: "osm_feature",
+  },
+  {
     id: "osm-node-340384547",
     name: "SJDM Police Station (mapped location)",
     kind: "police_station",
