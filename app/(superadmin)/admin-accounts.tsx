@@ -1089,8 +1089,11 @@ export default function AdminAccounts() {
           <ListPagination page={safeApplicantPage} total={pendingLguApplications.length} pageSize={ADMIN_PAGE_SIZE} onChange={setApplicantPage} />
         </View>
 
-        {/* This is part of the existing Super Admin staff workspace, not a separate module. */}
-        <LguStaffPrivacyRequestsPanel/>
+        <View style={styles.accountSectionHeading}>
+          <Text style={styles.sectionEyebrow}>APPROVED STAFF ACCESS</Text>
+          <Text style={styles.sectionHeading}>Existing LGU Admin Accounts</Text>
+          <Text style={styles.sectionDescription}>Manage authorized Admin accounts after staff verification. Suspend, reactivate, or revoke access as required; changes are recorded in the audit log.</Text>
+        </View>
 
         <View style={[styles.statsRow, compact && styles.statsRowCompact]}>
           <View
@@ -1598,6 +1601,14 @@ export default function AdminAccounts() {
           )
         )}
         <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
+
+        {/* Secondary privacy requests stay within this workspace, after core staff approval and access management. */}
+        <View style={styles.privacySection}>
+          <Text style={styles.sectionEyebrow}>STAFF DATA GOVERNANCE</Text>
+          <Text style={styles.sectionHeading}>Staff Privacy Requests</Text>
+          <Text style={styles.sectionDescription}>Handle staff data requests separately from credentials and Admin role approvals.</Text>
+          <LguStaffPrivacyRequestsPanel/>
+        </View>
       </ScrollView>
 
 
@@ -2211,6 +2222,8 @@ const styles =
     stepDescription: { marginTop: 3, fontSize: 11, lineHeight: 16, color: "#71857C" },
     flowNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginTop: 14, padding: 12, backgroundColor: "#EFF9F3", borderRadius: 10 },
     applicationPanel: { padding: 19, borderRadius: 15, borderWidth: 1, borderColor: "#DFEBE4", backgroundColor: "#FFFFFF", marginBottom: 18, gap: 13 },
+    accountSectionHeading: { marginTop: 3, marginBottom: 14, paddingHorizontal: 2 },
+    privacySection: { marginTop: 24, paddingTop: 21, borderTopWidth: 1, borderTopColor: "#E0EAE4", gap: 9 },
     pendingBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 20, backgroundColor: "#FFF5DE", alignSelf: "flex-start" },
     pendingBadgeText: { color: "#8A5E21", fontWeight: "800", fontSize: 11 },
     pendingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#C28A2D" },
