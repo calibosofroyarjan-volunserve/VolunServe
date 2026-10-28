@@ -1537,6 +1537,16 @@ export default function MapTracking() {
           )}
         </MapView>
 
+        {sjdmBoundary && <View style={{
+          position:"absolute",top:10,right:12,zIndex:8,
+          backgroundColor:"rgba(255,255,255,0.94)",borderRadius:9,
+          borderWidth:1,borderColor:"#CDEFE1",paddingHorizontal:9,paddingVertical:6,
+        }}>
+          <Text style={{color:"#135E47",fontSize:10}}>
+            SJDM outline · geoBoundaries CC BY 4.0
+          </Text>
+        </View>}
+
         {boundaryUnavailable && <View style={{
           position:"absolute",top:10,right:12,left:12,zIndex:10,
           backgroundColor:"rgba(255,255,255,0.94)",borderRadius:10,
