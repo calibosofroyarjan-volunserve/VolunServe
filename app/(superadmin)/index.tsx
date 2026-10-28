@@ -132,6 +132,8 @@ export default function SuperAdminDashboard() {
     ? Math.round((approved / total) * 100) : null;
   const data = useMemo(() => SOURCES.map(({ key, label }) => ({
     key, label,
+    shortLabel: ({users:"Accounts",disasterCases:"Emergencies",assistanceRequests:"Assistance",communityEvents:"Events"} as Record<Source,string>)[key],
+    color: ({users:"#087B63",disasterCases:"#24A18A",assistanceRequests:"#4CBFA3",communityEvents:"#79CEB8"} as Record<Source,string>)[key],
     value: errors[key] || !loaded[key] ? null : (counts[key] ?? 0),
   })), [counts, errors, loaded]);
   const hasUnavailable = SOURCES.some(({ key }) => errors[key]);
@@ -182,8 +184,9 @@ export default function SuperAdminDashboard() {
         <Text style={styles.sectionHint}>Actual collection totals—not fabricated monthly growth or revenue.</Text>
       </View>
       <WorkspaceBarChart
-        title="Records by service area"
-        subtitle="Comparison of live Firestore record totals. Bars represent counts, not monthly trends."
+        title="Live System Records · Bar Graph"
+        subtitle="Vertical bar chart · Current Firestore totals, not fabricated monthly trends or performance percentages."
+        orientation="vertical"
         bars={data}
         footer={allLoaded && !hasUnavailable
           ? "Source: authorized Firestore records. Values update when records change."
