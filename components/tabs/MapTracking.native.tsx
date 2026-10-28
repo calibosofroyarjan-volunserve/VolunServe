@@ -32,6 +32,7 @@ import { auth, db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, isRecentShelterReport, vehicleInfo } from "../../lib/emergencyMapTypes";
 import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
+import {SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON, fetchMappedSjdmPublicPlaces, type SjdmPublicMapPlace} from "../../lib/sjdmPublicMapPlaces";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -141,8 +142,34 @@ export default function MapTracking() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [osmMappedPlaces, setOsmMappedPlaces] = useState<SjdmPublicMapPlace[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
   const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
+  useEffect(() => {
+    if (!sjdmBoundary) return;
+    let active = true;
+    const controller = new AbortController();
+    void fetchMappedSjdmPublicPlaces(controller.signal)
+      .then(list => { if(active) setOsmMappedPlaces(list); })
+      .catch(() => { if(active) setOsmMappedPlaces([]); });
+    return () => { active=false; controller.abort(); };
+  }, [sjdmBoundary]);
+
+  const publicPlaces = useMemo(() => {
+    if(!sjdmBoundary) return [];
+    const result:SjdmPublicMapPlace[]=[];
+    for(const place of [...SJDM_PUBLIC_MAP_PLACE_PINS, ...osmMappedPlaces]){
+      if(!insideSjdmBoundary(sjdmBoundary,place.latitude,place.longitude)) continue;
+      if(result.some(existing=>existing.kind===place.kind &&
+        Math.abs(existing.latitude-place.latitude)<0.00055 &&
+        Math.abs(existing.longitude-place.longitude)<0.00055)) continue;
+      if(lguFacilities.some(active=>
+        Math.abs(active.latitude-place.latitude)<0.00045 &&
+        Math.abs(active.longitude-place.longitude)<0.00045)) continue;
+      result.push(place);
+    }
+    return result.slice(0,100);
+  }, [sjdmBoundary,osmMappedPlaces,lguFacilities]);
   const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
@@ -1488,6 +1515,21 @@ export default function MapTracking() {
                 backgroundColor:point.vehicle.color,borderWidth:2,borderColor:"#FFFFFF",
               }}>
                 <Text style={{fontSize:23,color:"#FFFFFF"}}>{point.vehicle.symbol}</Text>
+              </View>
+            </Marker>
+          ))}
+
+          {/* Sourced map-place markers: static mapped infrastructure (gold ring).
+              This is NOT a live responder or currently-open shelter status. */}
+          {publicPlaces.map(place => (
+            <Marker key={"mapped-"+place.id}
+              coordinate={{latitude:place.latitude,longitude:place.longitude}}
+              title={place.name}
+              description={place.note+" · "+place.sourceLabel}>
+              <View style={{width:40,height:40,borderRadius:23,
+                alignItems:"center",justifyContent:"center",backgroundColor:"#FFFFFF",
+                borderWidth:3,borderColor:"#E9C12F"}}>
+                <Text style={{fontSize:21}}>{SJDM_PUBLIC_PLACE_ICON[place.kind]}</Text>
               </View>
             </Marker>
           ))}
