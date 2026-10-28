@@ -214,3 +214,15 @@ test("Minimal Super Admin design has one chart and numbered pagination",()=>{
  assert.ok(paging.includes("visiblePages.map"));
  assert.ok(paging.includes("number === safePage"));
 });
+
+
+test("Resident web and mobile logout use the branded dialog, not browser confirmation",()=>{
+ const screen=read("app/(tabs)/_layout.tsx");
+ const host=read("app/_layout.tsx");
+ const dialog=read("lib/appDialog.ts");
+ assert.match(screen,/onPress=\{confirmMobileLogout\}/);
+ assert.match(screen,/AppAlert\.alert\("Log Out", "Are you sure you want to log out of VolunServe\?"/);
+ assert.doesNotMatch(screen,/onPress=\{\(\) => void logoutUser\(\)\}/);
+ assert.ok(host.includes("<AppDialogHost />"));
+ assert.doesNotMatch(dialog,/window\.confirm\(/);
+});
