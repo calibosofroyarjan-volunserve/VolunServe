@@ -35,6 +35,22 @@ function installFundReleaseDemoRoutes({
   };
   const releases = db.collection("fundReleaseDemos");
   const residentWallets = db.collection("fundReleaseWalletProfiles");
+  // Cross-module governance audit, without financial amounts, wallet aliases,
+  // or recipient identity. This does NOT give Super Admin fund-release control.
+  const auditStage = (tx, campaignId, stage, actorUid, actorKind = "lgu_admin") => {
+    tx.create(db.collection("adminActivityLogs").doc(), {
+      actionType: "fund_demo_" + stage,
+      action: "Internal fund demo " + stage.replace(/_/g, " "),
+      targetType: "fund_release_demo",
+      targetId: campaignId,
+      adminUid: actorUid,
+      adminName: actorKind === "resident" ? "Verified Resident" : "LGU Administrator",
+      description: "Internal sandbox simulation only; no actual wallet transfer.",
+      simulated: true,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  };
+
   const send = (res, err) => {
     const code = Number(err?.statusCode) || 500;
     if (code >= 500) console.error("Fund release demo endpoint:", err);
@@ -340,6 +356,7 @@ function installFundReleaseDemoRoutes({
             "Campaign funding changed during review. Refresh and reconcile again.", 409);
         }
         const at = FieldValue.serverTimestamp();
+        auditStage(tx, campaignId, "reviewed", uid);
         tx.create(releaseRef, {
           campaignId, campaignTitle: safe(campaign.title, 160),
           assistanceRequestId: sourceId, recipientUid,
@@ -377,6 +394,7 @@ function installFundReleaseDemoRoutes({
           authorizedAt:at,updatedAt:at,
           audit: FieldValue.arrayUnion({stage,actorUid:uid,at:new Date().toISOString()}),
         });
+        auditStage(tx, campaignId, stage, uid);
         sendAdminNotices(tx,recipients,campaignId,stage,
           decision === "approve" ? "Fund release authorized" : "Fund release rejected",
           "The simulated release review decision has been recorded.");
@@ -435,6 +453,7 @@ function installFundReleaseDemoRoutes({
           simulatedAt:at,updatedAt:at,
           audit:FieldValue.arrayUnion({stage:"simulated_sent",actorUid:uid,at:new Date().toISOString()}),
         });
+        auditStage(tx, campaignId, "simulated_sent", uid);
         sendAdminNotices(tx,recipients,campaignId,"simulated_sent",
           "Demo fund release recorded",
           "A VolunServe INTERNAL SANDBOX "+method.toUpperCase()+" release has been recorded for Resident review. No external payout was attempted.");
@@ -565,6 +584,7 @@ function installFundReleaseDemoRoutes({
             status:stage,acknowledgmentNote:note,acknowledgedAt:at,updatedAt:at,
             audit:FieldValue.arrayUnion({stage,actorUid:uid,at:new Date().toISOString()}),
           });
+          auditStage(tx, campaignId, stage, uid, "resident");
           sendAdminNotices(tx,recipients,campaignId,stage,
             decision==="acknowledge"?"Resident acknowledged demo record":"Resident disputed demo release",
             decision==="acknowledge"?
