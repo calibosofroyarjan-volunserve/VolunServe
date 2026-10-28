@@ -483,3 +483,17 @@ test("System Settings official emergency hotline is select-only and rules reject
   assert.match(rules, /request\.resource\.data\.emergencyHotline in \[/);
   assert.doesNotMatch(rules, /request\.resource\.data\.emergencyHotline\.size\(\) <= 160/);
 });
+
+test("Super Admin System Records shows current Community Events and distinct legacy events with emergency/assistance read-only", () => {
+  const source = read("app/(superadmin)/all-records.tsx");
+  const rules = read("firestore.rules");
+  for (const collectionName of ["disasterCases", "assistanceRequests", "communityEvents", "volunteerEvents"]) {
+    assert.ok(source.includes('collectionName: "' + collectionName + '"'), "Missing oversight collection: " + collectionName);
+  }
+  assert.match(source, /key: "communityEvents",\s*label: "Community Events"/);
+  assert.match(source, /key: "events",\s*label: "Legacy Volunteer Events"/);
+  assert.match(source, /activeTab === "events" \|\| activeTab === "communityEvents"/);
+  assert.match(source, /pagedRecords = visibleRecords\.slice/);
+  assert.match(rules, /match \/communityEvents\/\{eventId\}/);
+  assert.doesNotMatch(source, /collectionName: "donationTransactions"/);
+});
