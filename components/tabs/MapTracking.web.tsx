@@ -2536,7 +2536,7 @@ export default function WebMapTracking() {
       });
 
       router.replace(
-        `/map-tracking?caseId=${encodeURIComponent(onlyCase.id)}` as any,
+        `/disaster-response?view=tracking&caseId=${encodeURIComponent(onlyCase.id)}` as any,
       );
       return;
     }
@@ -3588,7 +3588,7 @@ export default function WebMapTracking() {
     });
 
     router.replace(
-      `/map-tracking?caseId=${encodeURIComponent(caseId)}` as any,
+      `/disaster-response?view=tracking&caseId=${encodeURIComponent(caseId)}` as any,
     );
   };
 
@@ -3602,7 +3602,7 @@ export default function WebMapTracking() {
     setRouteError("");
     setSelected(null);
 
-    router.replace("/map-tracking" as any);
+    router.replace("/disaster-response?view=tracking" as any);
   };
 
   const residentResponderLastShared = Math.max(
@@ -5127,7 +5127,7 @@ export default function WebMapTracking() {
       : missionMode
         ? "Volunteer Response Map"
         : isResidentMode
-          ? "Resident Map Tracking"
+          ? "Emergency Response Tracking"
           : "Volunteer Response Map";
 
   const pageSubtitle =
@@ -5140,7 +5140,7 @@ export default function WebMapTracking() {
       : missionMode
         ? "Respond, navigate, arrive, and complete the mission in one clear flow."
         : isResidentMode
-          ? "Track the official LGU response and any accepted Volunteer support in real time."
+          ? "Follow LGU case updates and authorized responder locations when available."
           : "View evacuation centers here. Open an assigned emergency from Volunteer Tasks to start live response navigation.";
 
   return (
@@ -5235,15 +5235,15 @@ export default function WebMapTracking() {
             <span className="clean-kicker">CASE-SPECIFIC TRACKING</span>
             <h2>
               {residentActiveCases.length > 0
-                ? "Choose the emergency you want to track"
-                : "No active emergency to track"}
+                ? "Select an emergency report"
+                : "No active emergency reports"}
             </h2>
             <p>
               {residentActiveCases.length > 1
-                ? "You have multiple active emergencies. Select one so the Resident, LGU, Volunteer, route, distance, ETA, and live GPS all stay linked to the same case."
+                ? "Select the report to view its status, location, and official response updates."
                 : residentActiveCases.length === 1
-                  ? "Opening your active emergency response…"
-                  : "When you have an active emergency, its official response tracking will appear here."}
+                  ? "Opening your latest active report…"
+                  : "Submitted emergencies will appear here after they are saved. For immediate danger, call 911."}
             </p>
           </div>
 
@@ -5257,7 +5257,7 @@ export default function WebMapTracking() {
                   onClick={() => chooseResidentCase(item.id)}
                 >
                   <span className="resident-case-option-main">
-                    <strong>{item.title || "Emergency report"}</strong>
+                    <strong>{item.category || item.title || "Emergency report"}</strong>
                     <small>
                       {item.location ||
                         item.reporterAddress ||
@@ -5269,7 +5269,7 @@ export default function WebMapTracking() {
                     <i className={`clean-status-pill status-${normalize(item.status || "reported")}`}>
                       {statusLabel(item.status || "reported")}
                     </i>
-                    <b>Track response →</b>
+                    <b>View tracking →</b>
                   </span>
                 </button>
               ))}
