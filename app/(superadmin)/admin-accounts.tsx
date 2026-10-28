@@ -1030,7 +1030,7 @@ export default function AdminAccounts() {
           <View style={[styles.sectionTitleRow, compact && styles.sectionTitleRowCompact]}>
             <View style={styles.sectionHeadingText}>
               <Text style={styles.sectionEyebrow}>LGU STAFF ONBOARDING</Text>
-              <Text style={styles.sectionHeading}>Pending Applications</Text>
+              <Text style={styles.sectionHeading}>LGU Staff Applications</Text>
               <Text style={styles.sectionDescription}>Review genuine staff submissions, confirm appointment details independently and record each approval.</Text>
             </View>
             <View style={styles.pendingBadge}>
@@ -1080,7 +1080,7 @@ export default function AdminAccounts() {
               <TouchableOpacity accessibilityRole="button"
                 accessibilityLabel={"Review LGU credentials for " + nameFor(account)}
                 style={[styles.reviewApplicationButton, compact && styles.reviewApplicationButtonCompact]}
-                onPress={() => openAdminAction("promote", account)}>
+                onPress={() => openAdminAction("promote",account)}>
                 <Text style={styles.reviewApplicationText}>Review application</Text>
                 <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
               </TouchableOpacity>
