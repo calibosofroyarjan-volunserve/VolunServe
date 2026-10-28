@@ -1,4 +1,4 @@
-import { User } from "firebase/auth";
+import { User, signOut } from "firebase/auth";
 
 import {
     doc,
@@ -68,6 +68,15 @@ export function useUserSession(): SessionState {
               snapshot.exists()
                 ? (snapshot.data() as UserProfile)
                 : null;
+
+            // Signups cannot bypass email ownership confirmation through a
+            // persisted Firebase session or direct navigation to /tabs.
+            if (profileData?.emailVerificationRequired === true &&
+                !user.emailVerified) {
+              setState({ loading: false, user: null, profile: null });
+              void signOut(auth).catch(() => undefined);
+              return;
+            }
 
             setState({
               loading: false,
