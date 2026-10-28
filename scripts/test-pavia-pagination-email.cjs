@@ -166,3 +166,21 @@ test("Super Admin overview uses independent five-item paging for real audit list
   assert.match(screen,/<ListPagination page=\{safeChangesPage\} total=\{systemChanges\.length\} onChange=\{setSystemChangesPage\}/);
   assert.doesNotMatch(screen,/latestRecorded\.filter\(item => adminUids\.includes\(item\.actorUid\)\)\.slice\(0,5\)/);
 });
+
+
+test("Super Admin workflow avoids duplicate overview audit shortcuts and explains settings",()=>{
+  const overview=read("app/(superadmin)/index.tsx");
+  const settings=read("app/(superadmin)/system-settings.tsx");
+  const sidebar=read("app/(superadmin)/_layout.tsx");
+  assert.doesNotMatch(overview,/View Audit Logs<\/Text>/);
+  assert.match(overview,/Review LGU Applications/);
+  assert.match(overview,/approvedPercentage/);
+  assert.match(overview,/<WorkspaceBarChart/);
+  for(const label of ["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs","System Settings"])
+    assert.ok(sidebar.includes(label),label);
+  assert.match(settings,/Step 1 of 3/);
+  assert.match(settings,/Step 2 of 3/);
+  assert.match(settings,/Step 3 · Save System Settings/);
+  assert.match(settings,/NOT a working automatic cleanup switch/);
+  assert.match(settings,/Custom value — enter below/);
+});
