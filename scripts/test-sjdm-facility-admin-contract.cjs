@@ -49,3 +49,18 @@ test("Map shows verified fixed LGU facilities independently of assigned vehicle 
   assert.match(native,/lguResponseLocations/);
   assert.match(native,/active.*verified|verified.*active|isVerifiedActiveCenter/);
 });
+
+test("Official city source references are address-only, never auto-published as live emergency pins", () => {
+  const source = read("constants/sjdmOfficialFacilityReview.ts");
+  const admin = read("app/(admin)/sjdm-facilities.tsx");
+  assert.match(source, /https:\/\/csjdm\.gov\.ph\/contact-us\//);
+  assert.match(source, /https:\/\/csjdm\.gov\.ph\/city-disaster-risk-reduction-and-management-office\//);
+  assert.match(source, /Ecological-ProfileP-2018\.pdf/);
+  assert.doesNotMatch(source, /latitude\s*:/);
+  assert.doesNotMatch(source, /longitude\s*:/);
+  assert.match(admin, /loadOfficialReference/);
+  assert.match(admin, /verificationStatus: "pending"/);
+  assert.match(admin, /latitude: ""/);
+  assert.match(admin, /longitude: ""/);
+  assert.match(admin, /Official city references for verification/);
+});
