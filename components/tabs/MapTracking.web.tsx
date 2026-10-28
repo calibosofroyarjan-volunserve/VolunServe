@@ -484,7 +484,7 @@ const mapDocument = `
         }[kind] || "Public facility";
       }
       function safePopupLink(url, label, container) {
-        if (typeof url !== "string" || !/^https:\/\/[a-z0-9.-]+\//i.test(url)) return;
+        if (typeof url !== "string" || !url.startsWith("https://")) return;
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
@@ -511,7 +511,9 @@ const mapDocument = `
         links.className = "place-popup-links";
         safePopupLink(item.officialInfoUrl, "Official information", links);
         safePopupLink(item.sourceUrl, "View map source", links);
-        if (item.officialContact && /^\+?[0-9 ()-]{7,21}$/.test(item.officialContact)) {
+        if (typeof item.officialContact === "string" &&
+          item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
+          [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
           const call = document.createElement("a");
           call.href = "tel:" + item.officialContact.replace(/[^0-9+]/g, "");
           call.textContent = "Call office";
