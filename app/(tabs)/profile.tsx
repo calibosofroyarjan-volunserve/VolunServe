@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { updateProfile, User } from "firebase/auth";
@@ -902,21 +903,21 @@ export default function Profile() {
     const middle = middleName.trim().replace(/\s+/g, " ");
     const last = lastName.trim().replace(/\s+/g, " ");
     if (first.length < 2 || last.length < 2) {
-      Alert.alert("Invalid name", "First name and last name are required.");
+      AppAlert.alert("Invalid name", "First name and last name are required.");
       return;
     }
     if (!occupationCategory || !OCCUPATION_OPTIONS.includes(occupationCategory)) {
-      Alert.alert("Select occupation", "Choose your occupation from the list.");
+      AppAlert.alert("Select occupation", "Choose your occupation from the list.");
       return;
     }
     const choices = SPECIALIZATIONS[occupationCategory] || [];
     if (choices.length > 0 && !choices.includes(occupationSpecialization)) {
-      Alert.alert("Choose specialization", "Select a valid specialization.");
+      AppAlert.alert("Choose specialization", "Select a valid specialization.");
       return;
     }
     if (occupationCategory === "Other (Specify)" &&
         occupationOther.trim().length < 2) {
-      Alert.alert("Specify occupation", "Please enter your occupation.");
+      AppAlert.alert("Specify occupation", "Please enter your occupation.");
       return;
     }
 
@@ -945,11 +946,11 @@ export default function Profile() {
           await updateProfile(user, { displayName: cleanName });
         }
       } catch {
-        Alert.alert("Profile updated", "Your VolunServe name was saved. Your sign-in display name may take another sign-in to refresh.");
+        AppAlert.alert("Profile updated", "Your VolunServe name was saved. Your sign-in display name may take another sign-in to refresh.");
       }
       setEditOpen(false);
     } catch (error: any) {
-      Alert.alert("Unable to save", error?.message || "Please try again.");
+      AppAlert.alert("Unable to save", error?.message || "Please try again.");
     } finally {
       setSaving(false);
     }
@@ -2265,7 +2266,7 @@ function IdentityAccessCard({
           style={styles.verifyLearnButton}
           activeOpacity={0.84}
           onPress={() =>
-            Alert.alert(
+            AppAlert.alert(
               "Identity Verification",
               "VolunServe compares the face from your government ID with your face scan using AI-assisted 1-to-1 verification. Uncertain results are sent to LGU/Admin manual review.",
             )

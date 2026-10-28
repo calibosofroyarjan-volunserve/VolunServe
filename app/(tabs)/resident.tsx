@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -742,7 +743,7 @@ export default function AssistanceRequestScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access so you can attach a clear photo or screenshot of the supporting document.",
       );
@@ -765,7 +766,7 @@ export default function AssistanceRequestScreen() {
       typeof asset.fileSize === "number" &&
       asset.fileSize > MAX_DOCUMENT_BYTES
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "File Too Large",
         "Use an image smaller than 10 MB.",
       );
@@ -807,7 +808,7 @@ export default function AssistanceRequestScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access so you can choose the required public campaign photo.",
       );
@@ -829,7 +830,7 @@ export default function AssistanceRequestScreen() {
       typeof asset.fileSize === "number" &&
       asset.fileSize > MAX_DOCUMENT_BYTES
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Too Large",
         "Use a public campaign photo smaller than 10 MB.",
       );
@@ -1340,7 +1341,7 @@ export default function AssistanceRequestScreen() {
       validateStep(step);
 
     if (problem) {
-      Alert.alert(
+      AppAlert.alert(
         "Complete This Step",
         problem,
       );
@@ -1378,7 +1379,7 @@ export default function AssistanceRequestScreen() {
     }
 
     if (!isVerifiedResident) {
-      Alert.alert(
+      AppAlert.alert(
         "Preview Mode Only",
         "You can review the Request Assistance design for now, but submission stays locked until the new VolunServe identity verification flow is completed.",
       );
@@ -1387,7 +1388,7 @@ export default function AssistanceRequestScreen() {
     }
 
     if (!declarationAccepted) {
-      Alert.alert(
+      AppAlert.alert(
         "Confirmation required",
         "Please tick the confirmation checkbox to acknowledge that the information is accurate before submitting.",
       );
@@ -1405,7 +1406,7 @@ export default function AssistanceRequestScreen() {
       if (problem) {
         setStep(targetStep);
 
-        Alert.alert(
+        AppAlert.alert(
           "Incomplete Request",
           problem,
         );
@@ -1420,7 +1421,7 @@ export default function AssistanceRequestScreen() {
 
       setPageError(message);
 
-      Alert.alert(
+      AppAlert.alert(
         "Barangay Information Required",
         message,
       );
@@ -2396,7 +2397,7 @@ export default function AssistanceRequestScreen() {
           "Your request was saved, but secure evidence finalization was interrupted. The LGU/Admin can check the existing request. Do not submit a duplicate request.",
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Request Saved — Evidence Finalization Pending",
           "The Request Assistance record was created, but secure evidence finalization was interrupted after several attempts. Do not submit the same request again. The LGU/Admin can check the existing request.",
         );
@@ -2405,7 +2406,7 @@ export default function AssistanceRequestScreen() {
           message,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Submission Failed",
           message,
         );

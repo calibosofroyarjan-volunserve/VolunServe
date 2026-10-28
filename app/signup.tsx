@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -466,7 +467,7 @@ export default function Signup() {
       try {
         const idToken = response.params?.id_token;
         if (!idToken) {
-          Alert.alert("Google Error", "No ID token returned.");
+          AppAlert.alert("Google Error", "No ID token returned.");
           return;
         }
 
@@ -485,9 +486,9 @@ export default function Signup() {
         setStep(1);
         setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0);
 
-        Alert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
+        AppAlert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
       } catch (error: any) {
-        Alert.alert("Firebase Error", getFriendlyAuthError(error));
+        AppAlert.alert("Firebase Error", getFriendlyAuthError(error));
       }
     };
     handleGoogleSuccess();
@@ -568,7 +569,7 @@ export default function Signup() {
         4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
       };
       
-      Alert.alert("Incomplete Step", stepMessages[step]);
+      AppAlert.alert("Incomplete Step", stepMessages[step]);
       return;
     }
     Keyboard.dismiss();
@@ -590,18 +591,18 @@ export default function Signup() {
     try {
       await promptAsync();
     } catch (error: any) {
-      Alert.alert("Google Error", getFriendlyAuthError(error));
+      AppAlert.alert("Google Error", getFriendlyAuthError(error));
     }
   }, [promptAsync]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
     if (!validation.step4Valid) {
-      Alert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
+      AppAlert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
       return;
     }
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Residents must be at least 18 years old at the time of registration.");
+      AppAlert.alert("Ineligible", "Residents must be at least 18 years old at the time of registration.");
       return;
     }
     try {
@@ -624,7 +625,7 @@ export default function Signup() {
         occupationOther: formData.occupationOther || "",
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "VolunServe Registration",
         googleBound
           ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
@@ -632,7 +633,7 @@ export default function Signup() {
         [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
-      Alert.alert("Registration Error", getFriendlyAuthError(e));
+      AppAlert.alert("Registration Error", getFriendlyAuthError(e));
     } finally {
       setLoadingSubmit(false);
     }

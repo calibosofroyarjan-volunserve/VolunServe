@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -537,7 +538,7 @@ export default function VolunteerTasks() {
       if (
         situationSummary.trim().length < 10
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Situation Summary Required",
           "Describe the actual situation you observed on site in at least 10 characters."
         );
@@ -545,7 +546,7 @@ export default function VolunteerTasks() {
       }
 
       if (!contributionType.trim()) {
-        Alert.alert(
+        AppAlert.alert(
           "Contribution Type Required",
           "Select the type of assistance you provided."
         );
@@ -555,7 +556,7 @@ export default function VolunteerTasks() {
       if (
         contributionSummary.trim().length < 10
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Assistance Provided Required",
           "Describe the assistance you actually provided in at least 10 characters."
         );
@@ -567,7 +568,7 @@ export default function VolunteerTasks() {
         people < 0 ||
         people > 999
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "People Helped",
           "Enter a whole number from 0 to 999."
         );
@@ -578,7 +579,7 @@ export default function VolunteerTasks() {
         remainingNeeds.includes("Other") &&
         remainingNeedsNote.trim().length < 3
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Describe Other Need",
           "Add a short note describing the other remaining need."
         );
@@ -588,7 +589,7 @@ export default function VolunteerTasks() {
       if (
         remainingNeedsNote.trim().length > 1500
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Remaining Needs Note",
           "Remaining-needs notes must be 1500 characters or fewer."
         );
@@ -596,7 +597,7 @@ export default function VolunteerTasks() {
       }
 
       if (lguFollowUpRequired === null) {
-        Alert.alert(
+        AppAlert.alert(
           "LGU Follow-up Required?",
           "Select Yes or No so LGU/Admin knows whether further action is needed."
         );
@@ -606,7 +607,7 @@ export default function VolunteerTasks() {
       if (
         completionNotes.trim().length > 600
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Completion Notes",
           "Completion notes must be 600 characters or fewer."
         );
@@ -943,29 +944,29 @@ export default function VolunteerTasks() {
       );
 
       if (next === "accepted") {
-        Alert.alert(
+        AppAlert.alert(
           "Assignment Accepted",
           "Select Start Response when you begin travelling or responding."
         );
 
         setFilter("active");
       } else if (next === "declined") {
-        Alert.alert(
+        AppAlert.alert(
           "Assignment Declined",
           "Admin will see the decline and can offer the case to another qualified volunteer."
         );
       } else if (next === "responding") {
-        Alert.alert(
+        AppAlert.alert(
           "Response Started",
           "Your status is now Responding. Keep the Live Response Map available while travelling to the incident."
         );
       } else if (next === "on_site") {
-        Alert.alert(
+        AppAlert.alert(
           "Arrival Recorded",
           "Your status is now On Site. Complete the mission only after the assigned assistance is finished."
         );
       } else {
-        Alert.alert(
+        AppAlert.alert(
           "Field Report Submitted",
           "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action."
         );
@@ -981,7 +982,7 @@ export default function VolunteerTasks() {
 
       setError(message);
 
-      Alert.alert(
+      AppAlert.alert(
         "Update Failed",
         message
       );

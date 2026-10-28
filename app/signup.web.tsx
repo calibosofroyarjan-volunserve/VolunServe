@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -556,7 +557,7 @@ export default function Signup() {
         4: "Please create a password and agree to the terms.",
       };
 
-      Alert.alert("Incomplete Step", stepMessages[step]);
+      AppAlert.alert("Incomplete Step", stepMessages[step]);
       return;
     }
 
@@ -617,12 +618,12 @@ export default function Signup() {
     if (loadingSubmit) return;
 
     if (!validation.step4Valid) {
-      Alert.alert("Incomplete", "Please satisfy all security and consent requirements.");
+      AppAlert.alert("Incomplete", "Please satisfy all security and consent requirements.");
       return;
     }
 
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Users must be at least 18 years old at the time of registration.");
+      AppAlert.alert("Ineligible", "Users must be at least 18 years old at the time of registration.");
       return;
     }
 
@@ -658,7 +659,7 @@ export default function Signup() {
         window.alert(`${successTitle}\n\n${successMessage}`);
         router.replace(googleBound ? "/(tabs)" : "/login");
       } else {
-        Alert.alert(successTitle, successMessage, [
+        AppAlert.alert(successTitle, successMessage, [
           { text: "OK", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
         ]);
       }
@@ -668,7 +669,7 @@ export default function Signup() {
       if (Platform.OS === "web") {
         window.alert(`Registration Error\n\n${message}`);
       } else {
-        Alert.alert("Registration Error", message);
+        AppAlert.alert("Registration Error", message);
       }
     } finally {
       setLoadingSubmit(false);

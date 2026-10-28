@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -218,7 +219,7 @@ export default function VolunteerApplication() {
 
   const submitApplication = async () => {
     if (!user || !profile) {
-      Alert.alert(
+      AppAlert.alert(
         "Sign in required",
         "Please sign in again before submitting your volunteer application."
       );
@@ -226,7 +227,7 @@ export default function VolunteerApplication() {
     }
 
     if (approvedVolunteer) {
-      Alert.alert(
+      AppAlert.alert(
         "Already approved",
         "Your account already has volunteer access."
       );
@@ -234,7 +235,7 @@ export default function VolunteerApplication() {
     }
 
     if (!identityVerified) {
-      Alert.alert(
+      AppAlert.alert(
         "Identity Verification Required",
         "Volunteer applications are available only to Verified Residents. Complete Resident Identity Verification first."
       );
@@ -245,7 +246,7 @@ export default function VolunteerApplication() {
       application &&
       application.status !== "rejected"
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Application already submitted",
         "You already have a volunteer application on record."
       );
@@ -259,7 +260,7 @@ export default function VolunteerApplication() {
       ).trim();
 
     if (cleanPhone.length < 8) {
-      Alert.alert(
+      AppAlert.alert(
         "Contact Number Required",
         "Add a valid contact number in Account Settings before applying as a volunteer."
       );
@@ -267,7 +268,7 @@ export default function VolunteerApplication() {
     }
 
     if (!formValid) {
-      Alert.alert(
+      AppAlert.alert(
         "Complete the form",
         "Select at least one skill and availability, choose a preferred activity, and complete your experience and motivation within the allowed lengths."
       );
@@ -353,7 +354,7 @@ export default function VolunteerApplication() {
 
       setEditingRejected(false);
 
-      Alert.alert(
+      AppAlert.alert(
         "Application submitted",
         "Your volunteer application is now pending administrator review. Your Resident access stays active while you wait."
       );
@@ -363,7 +364,7 @@ export default function VolunteerApplication() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Unable to submit",
         error?.code === "permission-denied"
           ? "Submission was blocked. Make sure your identity is verified and the latest Firestore rules are deployed."
@@ -385,7 +386,7 @@ export default function VolunteerApplication() {
       await setActiveUserMode("volunteer");
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Mode switch failed",
         error?.message ||
           "Unable to switch to Volunteer Mode."

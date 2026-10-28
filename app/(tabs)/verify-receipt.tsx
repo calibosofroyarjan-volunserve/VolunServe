@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -50,7 +51,7 @@ export default function VerifyReceipt() {
     const ref = refNumber.trim();
 
     if (!/^\d{13}$/.test(ref)) {
-      Alert.alert("Invalid", "Reference number must be exactly 13 digits.");
+      AppAlert.alert("Invalid", "Reference number must be exactly 13 digits.");
       return;
     }
 
@@ -85,7 +86,7 @@ export default function VerifyReceipt() {
       }
     } catch (e) {
       console.log(e);
-      Alert.alert("Error", "Failed to verify. Please try again.");
+      AppAlert.alert("Error", "Failed to verify. Please try again.");
     } finally {
       setLoading(false);
     }

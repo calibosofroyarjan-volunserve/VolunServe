@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 
@@ -824,7 +825,7 @@ export default function CertificateScreen() {
     }
 
     if (Platform.OS !== "web") {
-      Alert.alert(
+      AppAlert.alert(
         "Print / Save PDF",
         "Open My Certificates in the VolunServe web portal to print or save this certificate as a PDF.",
       );
@@ -881,7 +882,7 @@ export default function CertificateScreen() {
     } catch (problem) {
       console.error("Certificate print failed:", problem);
       setError("Could not prepare printable certificate. Check the browser console for details.");
-      Alert.alert("Print / Save PDF", "Unable to open the printable certificate. Please try again.");
+      AppAlert.alert("Print / Save PDF", "Unable to open the printable certificate. Please try again.");
     }
   };
 
