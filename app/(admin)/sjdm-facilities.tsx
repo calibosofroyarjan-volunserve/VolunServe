@@ -6,9 +6,10 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text, TextInput,
-  TouchableOpacity, useWindowDimensions, View,
+  TouchableOpacity, useWindowDimensions, View, Linking,
 } from "react-native";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
+import { SJDM_OFFICIAL_REVIEW_CANDIDATES, type ReviewCandidate } from "../../constants/sjdmOfficialFacilityReview";
 import { db } from "../../lib/firebase";
 import { useUserSession } from "../../lib/useUserSession";
 import {
@@ -149,6 +150,30 @@ export default function SjdmFacilities() {
     setShowForm(true);
   };
 
+  const loadOfficialReference = (item: ReviewCandidate) => {
+    // Reference-only import: NEVER import coordinates or mark a place operational.
+    setError("");
+    setNotice("Official city address loaded as a review draft. Verify the exact GPS, barangay and current operational status before publishing.");
+    setConfirmed(false);
+    setEditing(null);
+    setBarangayOpen(false);
+    setForm({
+      ...EMPTY,
+      name: item.name,
+      address: item.address,
+      barangay: item.barangay,
+      facilityType: item.facilityType || "cdrrmo",
+      verificationSource: item.sourceLabel + " — " + item.sourceUrl,
+      status: item.kind === "lgu" ? "inactive" : "pending_verification",
+      verificationStatus: "pending",
+      latitude: "",
+      longitude: "",
+      capacity: "",
+      occupied: "0",
+    });
+    setShowForm(true);
+  };
+
   const save = async () => {
     if (saving || !isAdmin || !user) return;
     setError(""); setNotice("");
@@ -248,6 +273,27 @@ export default function SjdmFacilities() {
         style={[styles.tab,kind===option.value&&styles.activeTab]}>
         <Text style={[styles.tabText,kind===option.value&&styles.activeTabText]}>{option.label}</Text>
       </TouchableOpacity>)}
+    </View>
+    <View style={styles.listCard}>
+      <Text style={styles.listTitle}>Official city references for verification</Text>
+      <Text style={styles.hint}>References are not map pins. The Admin must independently check the precise GPS position, current status, capacity and official designation.</Text>
+      {SJDM_OFFICIAL_REVIEW_CANDIDATES.filter(item => item.kind === kind).map(item => (
+        <View key={item.id} style={styles.listRow}>
+          <View style={styles.recordIcon}><Text style={{fontSize:19}}>{item.kind === "lgu" ? "🏛️" : "🏠"}</Text></View>
+          <View style={{flex:1}}>
+            <Text style={styles.recordTitle}>{item.name}</Text>
+            <Text style={styles.recordSub}>{item.address}</Text>
+            <Text style={styles.recordSub}>{item.historic ? "Historical inventory only — not evidence of an open shelter. " : ""}{item.sourceContext}</Text>
+            <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(item.sourceUrl)}>
+              <Text style={styles.mapLinkText}>Official source: {item.sourceLabel}</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity accessibilityLabel={"Load address-only draft for " + item.name}
+            style={styles.editButton} onPress={() => loadOfficialReference(item)}>
+            <Ionicons name="document-text-outline" size={17} color="#087D5B"/><Text style={styles.editText}>Review draft</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
     </View>
     <View style={[styles.metrics,compact&&{flexWrap:"wrap"}]}>
       <View style={styles.metric}><Text style={styles.metricCount}>{rows.length}</Text><Text style={styles.metricLabel}>Registered locations</Text></View>
