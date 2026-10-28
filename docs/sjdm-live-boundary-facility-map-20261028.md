@@ -57,3 +57,52 @@ Useful source leads (not sources of live operational status):
 - The bundled geoBoundaries polygon is a **simplified reference shape**, not an LGU-signed legal boundary or certified survey. It should be reviewed against the city's official planning maps and any known contested sections before a critical operations release. Attribution is included in the map and source.
 - Camera bounding boxes constrain rectangular map views; only the polygon shows irregular geographic extent. Navigation to locations just outside city limits might show neighboring map areas. No guarantee that an emergency trip cannot cross geographic boundaries.
 - An LGU Admin record-maintenance screen now exists at `/(admin)/sjdm-facilities`, with separate Evacuation Center and fixed LGU Facility editors, SJDM city polygon validation, barangay dropdown, per-record verification source, administrative status, capacity/occupancy controls, and 5-per-page review. **This is draft branch code, not deployed or acceptance-tested on actual accounts yet.** There is no authoritative live occupancy sensor/API; timestamps reflect the most recent authorized LGU record update. No live occupancy is claimed.
+
+
+## Real-time status contract and live database acceptance
+**Firebase live means a subscribed database view, not independently verified real-world availability.**
+
+| Data | Live feed | Requirements before showing active marker | Real physical status |
+|---|---|---|---|
+| Fixed LGU office | `lguMapFacilities` Firestore `onSnapshot` | Approved LGU Admin, official location source, verified GPS, `status=active`, `verificationStatus=verified` | Office location is fixed; recent service availability is NOT guaranteed |
+| Evacuation center | `evacuation_centers` Firestore `onSnapshot` | LGU Admin confirms actual evacuation-site designation, coordinates, capacity and `lastVerifiedAt` | Capacity/occupancy are **last reported by LGU**, not live sensor data |
+| Assigned LGU vehicle | `lguResponseLocations/{caseId}` with assignment security | Approved, case-assigned LGU responder actively shares device GPS; fresh time window (2min) | GPS position may lag or disconnect; absence of marker doesn't mean absence of responders |
+
+For immediate evacuation **the app must not automatically recommend an unrecently verified shelter**. Native nearest-shelter routing now requires an LGU-confirmed update within the past **24 hours**; stale or missing verification does not qualify as a route recommendation. The map can continue to display verified historical locations with prominent stale-status warnings, so residents may contact CDRRMO. A report updated within 24 hours is **not** a guarantee of real-time opening or vacancy.
+
+### Repeatable emulator test
+Run in an isolated test environment; no actual LGU or personal data:
+```sh
+npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-sjdm-live-firebase-subscriptions.cjs"
+node --test scripts/test-sjdm-live-map-contract.cjs
+```
+The authenticated Resident listener receives a verified shelter when created, a changed occupancy count, then loses that active marker on LGU closure. A second listener sees fixed LGU office publication and removal after deactivation. Security rules separately prevent Residents, suspended Admin and programmer Super Admin from publishing official map records.
+
+**Production gate:** The connector in this session can edit GitHub but cannot query the project's deployed Firestore collection or publish Firebase rules. No verified active 2026 evacuation-center inventory, independent GPS coordinates, live occupancy API, LGU dispatch position or real-device checks have been confirmed by this commit. Do not claim active 2026 shelter data exists merely because city government published older historical facility lists.
+
+
+
+## October 28 verified facility naming and real-response acceptance
+
+**Response to on-screen map acceptance issue:** Public-OSM map pins are useful physical location references, but NOT proof of municipal affiliation, current opening, current staffing, evacuation suitability, or live dispatch. Gold circular icon means mapped place, and a green circular outline denotes an authorized LGU-verified fixed facility from `lguMapFacilities`. Moving LGU response vehicle icons still require an assigned LGU device actively transmitting fresh GPS to `lguResponseLocations/{caseId}`.
+
+- New Government Center: Dulong Bayan address independently published by CSJDM; OSM polygon mapping position approximate to the mapped structure.
+- City Disaster Risk Reduction and Management Office: city-published address at Productivity Complex/Motorpool, Sapang Palay Proper; the public fallback coordinate is approximate from a separate mapping site and must be independently LGU-attested before treating it as an operational facility marker.
+- **BFP current-office discrepancy:** official City of San Jose del Monte Fire Station BFP info hub lists its NEW office at **2nd floor, former CDRRM office, Productivity Center, Sapang Palay Proper**. Therefore OSM's mapped fire station reference in another location is labelled **"Fire Station (Mapped Site)"** with an explicit relocation warning, not represented as the currently active BFP dispatch office. The official current-office address is offered as an LGU Admin review draft without fake GPS.
+- Historic city center inventory: the **City Socio-Economic Profile 2022** lists Central Evacuation Center at CDRRMO Building/Productivity Center, Assumption SRSCP Auditorium, and Bagong Buhay Elementary School as evacuation-center references. PAGCOR independently reports inauguration of a multi-purpose site in Minuyan Proper (2022). These are included as **address-only historical Admin review candidates**; no 2026 open status/occupancy or verified GPS is claimed or seeded.
+- A no-responder emergency must display **"Awaiting LGU assignment"**, not a fake active responder. Resident has a functional `tel:911` and `tel:09326000119` emergency fallback. Assigned responders lacking current GPS display **WAITING GPS**, not an invented distance/ETA.
+- Map popups render concise name, public-service category, operational caveat, official information URL, OSM map source URL, and available official phone where sourced. Unverified site popups cannot claim live emergency availability. Live authorized shelter popups show last LGU-verified information, marked explicitly as last reported and not a live occupancy sensor.
+
+**Acceptance still pending:** exact current BFP and evacuation site coordinates, LGU official verification and Firestore production rules access, physically assigned responder sharing GPS, browser link and GPS behavior, and the latest preview release source revision. Do not deploy to production `volunserve.com` without these explicit checks.
+
+
+## Oct 28 — strict source and Google Maps navigation correction
+
+Residents reported that some former public POI links did not open and that a relocated BFP site / approximated CDRRMO point might be inaccurate.
+
+- Default map now displays only two independently corroborated geolocated buildings: New SJDM Government Center (14.82785, 121.04486, official city-government Dulong Bayan address + mapped government-center footprint) and Dulong Bayan Barangay Hall (14.82682, 121.04482, mapped named building). Sources are retained **internally** for review, not exposed as dead OpenStreetMap source links in the resident popup.
+- Dynamically fetched third-party Overpass POIs are disabled: an external map tag does **not** establish current government office status, shelter opening, or authoritative evacuation routing. Police, relocated BFP and approximate CDRRMO references are withheld from automatic public pins until their exact current GPS is independently verified by authorized LGU review. Historical evacuation sites stay address-only pending review.
+- Each permitted public, verified LGU office, or verified shelter pin has a **Google Maps Directions** action for its exact in-city destination coordinates. The user's current location is handled by Google Maps if permission is available. No fabricated in-app ETA or Google routing service availability is assumed.
+- The web map does not surface raw OSM source URLs or unreliable external office pages. The Android map uses `onCalloutPress` + `Linking.openURL` to launch Google Maps Directions from a tapped location callout.
+- External Google Maps may navigate outside the city even though every selectable destination is inside the SJDM polygon; the VolunServe map itself continues to mask outside-SJDM geography.
+- **No 2026 active evacuation centers were seeded**. A verified LGU administrator must inspect official GPS and currently open status before publication. Real-time Firestore subscription means database refresh, not automated shelter vacancy measurement. Existing deployed Firebase security permissions must still be separately validated.

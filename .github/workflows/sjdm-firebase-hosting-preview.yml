@@ -1,0 +1,69 @@
+name: VolunServe SJDM Web Preview (No Production Deploy)
+
+# Manual opt-in only: the owner's terminal already supports preview deploys.
+# Do not make every feature-branch push fail merely because CI has no
+# Firebase Hosting service-account key.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sjdm-web-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Verify Firebase deployment credentials are configured
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service-account GitHub secret. Add FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B or FIREBASE_SERVICE_ACCOUNT. No deployment occurred."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify city-only map contracts and TypeScript
+        run: |
+          node --test scripts/test-sjdm-live-map-contract.cjs
+          node --test scripts/test-sjdm-facility-admin-contract.cjs
+          npx tsc --noEmit
+      - name: Export web app
+        run: npx expo export --platform web
+      - name: Stamp deployed source revision and verify exported routes
+        run: node scripts/verify-hosting-release.cjs
+      - name: Deploy ONLY to temporary Firebase Hosting preview
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: sjdm-friday-preview
+          expires: 7d
+      - name: Confirm preview HTTP routes and exact GitHub revision
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.deploy.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Report preview link
+        if: success()
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.details_url }}
+        run: |
+          echo "## SJDM-only web preview deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview expires in 7 days. Production volunserve.com unchanged." >> "$GITHUB_STEP_SUMMARY"
+          echo "Warning: preview uses real Firebase backend. Use synthetic test accounts only." >> "$GITHUB_STEP_SUMMARY"

@@ -23,8 +23,11 @@ import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
 import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
-import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
+import {
+  SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON, type SjdmPublicMapPlace,
+} from "../../lib/sjdmPublicMapPlaces";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -101,6 +104,7 @@ type CenterRow = {
   verificationStatus?: string;
   verificationSource?: string;
   updatedAt?: any;
+  lastVerifiedAt?: any;
 };
 
 type BrowserLocation = {
@@ -207,6 +211,37 @@ const mapDocument = `
     .center-pin {
       background: #23765f;
     }
+    /* Map-anchored icon markers, like transit-terminal place symbols.
+       Gold ring = public mapped place; green = LGU-approved live Firestore place. */
+    .public-place-marker {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      border: 3px solid #efc327;
+      box-shadow: 0 3px 9px rgba(18,39,33,.23);
+      cursor: pointer;
+      font-size: 21px;
+    }
+    .public-place-marker.uncertain-location { border-style: dashed; }
+    .public-place-marker.verified-place-marker { border-color: #19855D; }
+    .public-place-marker:hover { transform: scale(1.10); }
+    .maplibregl-popup-content {
+      border-radius: 14px;
+      box-shadow: 0 9px 30px rgba(14,45,36,.16);
+      padding: 13px 15px;
+      max-width: 250px;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    .place-popup { max-width: 250px; font-size: 12px; color: #19392D; }
+    .place-popup-title { display: block; font-size: 14px; font-weight: 800; line-height: 1.35; }
+    .place-popup-category { display: block; font-size: 11px; color: #4D7365; margin-top: 3px; }
+    .place-popup-note { font-size: 11px; line-height: 1.5; color: #4B6359; margin: 10px 0 8px; }
+    .place-popup-links { display: flex; gap: 11px; flex-wrap: wrap; }
+    .place-popup-links a { font-size: 11px; font-weight: 750; color: #05795B; }
+    .place-popup-status { font-size: 10px; font-weight: 700; margin: 8px 0 0; color: #87601A; }
     .vehicle-response-marker {
       width: 42px;
       height: 42px;
@@ -346,11 +381,37 @@ const mapDocument = `
       let incidentMarkers = [];
       let centerMarkers = [];
       let baseMarkers = [];
+      let publicPlaceMarkers = [];
       let responderMarkers = new Map();
       let residentMarkers = [];
       let userMarker = null;
       let hasFitted = false;
       let lastLocation = null;
+      let cityBoundary = null;
+      let lastCityBounds = null;
+      let lastValidCityCenter = [121.045, 14.813];
+      // Browser DOM markers render above the map canvas. Always geofence the
+      // marker records as well as painting the outside of the city.
+      function insideRing(point, ring) {
+        let within = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const a = ring[i], b = ring[j];
+          if ((a[1] > point[1]) !== (b[1] > point[1]) &&
+              point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0])
+            within = !within;
+        }
+        return within;
+      }
+      function withinCity(latitude, longitude) {
+        if (!cityBoundary || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+        const g = cityBoundary.geometry;
+        if (!g) return false;
+        const polygons = g.type === "Polygon" ? [g.coordinates] :
+          g.type === "MultiPolygon" ? g.coordinates : [];
+        return polygons.some(rings => rings.length > 0 &&
+          insideRing([longitude, latitude], rings[0]) &&
+          !rings.slice(1).some(hole => insideRing([longitude, latitude], hole)));
+      }
 
       function validPoint(latitude, longitude) {
         return (
@@ -405,31 +466,136 @@ const mapDocument = `
 
       function makeCenterElement() {
         const element = document.createElement("div");
-        element.className = "pin center-pin";
-        const symbol = document.createElement("span");
-        symbol.textContent = "🏠";
-        element.title = "LGU-verified evacuation shelter";
-        element.appendChild(symbol);
+        element.className = "public-place-marker verified-place-marker";
+        element.textContent = "🏠";
+        element.title = "LGU-verified mapped shelter (check last verification and availability)";
         return element;
       }
 
-      function makeLguBaseElement(item) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "lgu-base-marker";
+      function categoryName(kind) {
+        return {
+          government: "City Government",
+          barangay_hall: "Barangay Hall",
+          police_station: "Police Station",
+          fire_station: "Fire Service",
+          cdrrmo: "Disaster Response Office",
+          evacuation_site: "Evacuation Site",
+        }[kind] || "Public facility";
+      }
+      function facilityDirectionsUrl(latitude, longitude) {
+        if (!validPoint(latitude, longitude) || !withinCity(latitude, longitude))
+          return null;
+        return "https://www.google.com/maps/dir/?api=1&destination=" +
+          Number(latitude).toFixed(6) + "%2C" +
+          Number(longitude).toFixed(6) + "&travelmode=driving&dir_action=navigate";
+      }
+      function safePopupLink(url, label, container) {
+        if (typeof url !== "string" || !url.startsWith("https://")) return;
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = label;
+        container.appendChild(a);
+      }
+      function makePublicPlacePopup(item) {
+        const card = document.createElement("div");
+        card.className = "place-popup";
+        const title = document.createElement("strong");
+        title.className = "place-popup-title";
+        title.textContent = item.name;
+        card.appendChild(title);
+        const category = document.createElement("span");
+        category.className = "place-popup-category";
+        category.textContent = categoryName(item.kind) + " · San Jose del Monte";
+        card.appendChild(category);
+        const note = document.createElement("p");
+        note.className = "place-popup-note";
+        note.textContent = item.note;
+        card.appendChild(note);
+        const links = document.createElement("div");
+        links.className = "place-popup-links";
+        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
+        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
+        if (typeof item.officialContact === "string" &&
+          item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
+          [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
+          const call = document.createElement("a");
+          call.href = "tel:" + item.officialContact.replace(/[^0-9+]/g, "");
+          call.textContent = "Call office";
+          links.appendChild(call);
+        }
+        card.appendChild(links);
+        const caution = document.createElement("p");
+        caution.className = "place-popup-status";
+        caution.textContent = "Mapped location · Current operations not verified";
+        card.appendChild(caution);
+        return card;
+      }
+      function makeVerifiedMapPopup(item, isShelter) {
+        const card = document.createElement("div");
+        card.className = "place-popup";
+        const heading = document.createElement("strong");
+        heading.className = "place-popup-title";
+        heading.textContent = item.name || (isShelter ? "Evacuation Center" : "LGU Facility");
+        card.appendChild(heading);
+        const category = document.createElement("span");
+        category.className = "place-popup-category";
+        category.textContent = isShelter ? "Evacuation Center · LGU record" : "LGU-verified public office";
+        card.appendChild(category);
+        const address = document.createElement("p");
+        address.className = "place-popup-note";
+        address.textContent = item.address || item.barangay || "Address not supplied";
+        card.appendChild(address);
+        const status = document.createElement("p");
+        status.className = "place-popup-status";
+        if (isShelter) {
+          const verified = item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt)
+            && Date.now() - item.lastVerifiedAt >= -300000
+            && Date.now() - item.lastVerifiedAt <= 86400000;
+          status.textContent = verified
+            ? "Recently LGU-checked · confirm availability before travel"
+            : "Shelter opening NOT recently confirmed — call CDRRMO";
+          const details = document.createElement("p");
+          details.className = "place-popup-note";
+          details.textContent = item.capacity != null && item.occupied != null
+            ? "Last reported occupancy: " + item.occupied + " / " + item.capacity +
+              " · Not a live sensor reading"
+            : "Capacity unconfirmed";
+          card.appendChild(details);
+        } else {
+          status.textContent = "LGU-verified fixed facility · Not a live responder location";
+        }
+        card.appendChild(status);
+        const links = document.createElement("div");
+        links.className = "place-popup-links";
+        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
+        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
+        if (isShelter) {
+          const emergencyCall = document.createElement("a");
+          emergencyCall.href = "tel:09326000119";
+          emergencyCall.textContent = "Call SJDM CDRRMO";
+          links.appendChild(emergencyCall);
+        }
+        card.appendChild(links);
+        return card;
+      }
 
-        const label = document.createElement("div");
-        label.className = "lgu-base-label";
-        label.textContent = String(item.facilityType || "LGU").replaceAll("_", " ").toUpperCase();
-
+      function makeSourcedPlaceElement(item) {
         const pin = document.createElement("div");
-        pin.className = "pin";
-        const symbol = document.createElement("span");
-        symbol.textContent = item.icon || "🏛️";
-        pin.appendChild(symbol);
+        pin.className = "public-place-marker" +
+          (item.positionQuality === "third_party_approximate" ? " uncertain-location" : "");
+        pin.textContent = item.icon || "🏛️";
+        pin.title = item.name + " · public mapped location; not live availability";
+        return pin;
+      }
 
-        wrapper.appendChild(label);
-        wrapper.appendChild(pin);
-        return wrapper;
+      function makeLguBaseElement(item) {
+        const pin = document.createElement("div");
+        pin.className = "public-place-marker verified-place-marker";
+        pin.textContent = item.icon || "🏛️";
+        pin.title = item.name || "LGU-verified facility";
+        return pin;
       }
 
       function makeUserElement(role) {
@@ -596,7 +762,8 @@ const mapDocument = `
         let count = 0;
 
         for (const person of people || []) {
-          if (!validPoint(person.latitude, person.longitude)) {
+          if (!validPoint(person.latitude, person.longitude) ||
+              !withinCity(person.latitude, person.longitude)) {
             continue;
           }
 
@@ -689,6 +856,9 @@ const mapDocument = `
         for (const marker of baseMarkers) {
           marker.remove();
         }
+        for (const marker of publicPlaceMarkers) {
+          marker.remove();
+        }
 
         for (const marker of residentMarkers) {
           marker.remove();
@@ -697,6 +867,7 @@ const mapDocument = `
         incidentMarkers = [];
         centerMarkers = [];
         baseMarkers = [];
+        publicPlaceMarkers = [];
         residentMarkers = [];
       }
 
@@ -758,7 +929,8 @@ const mapDocument = `
 
         if (
           !location ||
-          !validPoint(location.latitude, location.longitude)
+          !validPoint(location.latitude, location.longitude) ||
+          !withinCity(location.latitude, location.longitude)
         ) {
           if (userMarker) {
             userMarker.remove();
@@ -815,21 +987,35 @@ const mapDocument = `
 
         const bounds = new maplibregl.LngLatBounds();
         const incidentPoints = [];
-        if (payload.boundary && map.getSource("sjdm-boundary")) {
-          map.getSource("sjdm-boundary").setData(payload.boundary);
-          const area = payload.boundaryBounds;
-          if (area && Number.isFinite(area.north) && Number.isFinite(area.south) &&
-              Number.isFinite(area.east) && Number.isFinite(area.west)) {
-            map.setMaxBounds([[area.west - 0.006, area.south - 0.006],
-                              [area.east + 0.006, area.north + 0.006]]);
-            // This rectangle limits map camera movement; the green polygon
-            // alone represents the actual administrative reference boundary.
+        cityBoundary = payload.boundary || null;
+        map.getSource("sjdm-boundary")?.setData(
+          cityBoundary || { type: "FeatureCollection", features: [] }
+        );
+        map.getSource("sjdm-outside-mask")?.setData(
+          payload.outsideMask || { type: "FeatureCollection", features: [] }
+        );
+        const area = payload.boundaryBounds;
+        lastCityBounds = cityBoundary ? area : null;
+        if (cityBoundary && area && Number.isFinite(area.north) &&
+            Number.isFinite(area.south) && Number.isFinite(area.east) &&
+            Number.isFinite(area.west)) {
+          map.setMaxBounds([[area.west - 0.004, area.south - 0.004],
+                            [area.east + 0.004, area.north + 0.004]]);
+          const center = map.getCenter();
+          if (!withinCity(center.lat, center.lng)) map.jumpTo({center:lastValidCityCenter});
+          // Default overview opens with the entire SJDM administrative scope.
+          // Case-specific navigation may zoom in, but never outside the city.
+          if (!hasFitted && !payload.navigationView) {
+            map.fitBounds([[area.west, area.south], [area.east, area.north]],
+              {padding: 35, maxZoom: 15, duration: 0});
+            hasFitted = true;
           }
         }
         let pointCount = 0;
 
         for (const item of payload.incidents || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
@@ -878,22 +1064,30 @@ const mapDocument = `
           pointCount += 1;
         }
 
+        // Sourced OpenStreetMap place markers are not Firebase verified staff
+        // or dispatched vehicles. Only actual geometry within SJDM is shown.
+        for (const item of payload.publicPlaces || []) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) continue;
+          const icon = makeSourcedPlaceElement(item);
+          const popup = new maplibregl.Popup({offset:24})
+            .setDOMContent(makePublicPlacePopup(item));
+          const marker = new maplibregl.Marker({element:icon})
+            .setLngLat([item.longitude,item.latitude]).setPopup(popup).addTo(map);
+          publicPlaceMarkers.push(marker);
+          // Place reference pins must never override response camera bounds.
+        }
+
         for (const item of payload.bases || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
           const element = makeLguBaseElement(item);
 
-          const popup = new maplibregl.Popup({
-            offset: 22,
-            closeButton: false,
-          }).setText(
-            [item.name || "LGU Facility", item.address || "",
-             "LGU verified · last updated " + (item.updatedAt ? new Date(item.updatedAt).toLocaleString("en-PH") : "not supplied")]
-              .filter(Boolean)
-              .join(" · ")
-          );
+          const popup = new maplibregl.Popup({offset:22})
+            .setDOMContent(makeVerifiedMapPopup(item,false));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
@@ -918,7 +1112,8 @@ const mapDocument = `
         }
 
         for (const item of payload.centers || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
@@ -935,20 +1130,8 @@ const mapDocument = `
             );
           });
 
-          const popup = new maplibregl.Popup({
-            offset: 22,
-            closeButton: false,
-          }).setText([
-            item.name || "Evacuation center",
-            item.address || item.barangay || "",
-            "LGU-recorded active (confirm status before travel)",
-            item.updatedAt && Number.isFinite(item.updatedAt)
-              ? "Last LGU update " + new Date(item.updatedAt).toLocaleString("en-PH")
-              : "No current update timestamp",
-            item.capacity != null && item.occupied != null
-              ? String(Math.max(0, item.capacity - item.occupied)) + " last-reported spaces (NOT live occupancy)"
-              : "Capacity unconfirmed",
-          ].filter(Boolean).join(" · "));
+          const popup = new maplibregl.Popup({offset:22})
+            .setDOMContent(makeVerifiedMapPopup(item,true));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
@@ -959,11 +1142,12 @@ const mapDocument = `
             .addTo(map);
 
           centerMarkers.push(marker);
-          bounds.extend([
-            item.longitude,
-            item.latitude
-          ]);
-          pointCount += 1;
+          // Keep the live response camera focused on the assigned Resident,
+          // not a distant shelter that happens to be inside SJDM.
+          if (!payload.activeResponseView) {
+            bounds.extend([item.longitude, item.latitude]);
+            pointCount += 1;
+          }
         }
 
         if (payload.navigationView) {
@@ -1000,7 +1184,7 @@ const mapDocument = `
         for (const coordinate of routeCoordinates) {
           if (
             Array.isArray(coordinate) &&
-            validPoint(coordinate[1], coordinate[0])
+            validPoint(coordinate[1], coordinate[0]) && withinCity(coordinate[1], coordinate[0])
           ) {
             bounds.extend([coordinate[0], coordinate[1]]);
           }
@@ -1008,7 +1192,8 @@ const mapDocument = `
 
         for (const person of payload.residents || []) {
           if (
-            !validPoint(person.latitude, person.longitude)
+            !validPoint(person.latitude, person.longitude) ||
+            !withinCity(person.latitude, person.longitude)
           ) {
             continue;
           }
@@ -1053,7 +1238,7 @@ const mapDocument = `
           validPoint(
             lastLocation.latitude,
             lastLocation.longitude
-          )
+          ) && withinCity(lastLocation.latitude, lastLocation.longitude)
         ) {
           bounds.extend([
             lastLocation.longitude,
@@ -1063,6 +1248,7 @@ const mapDocument = `
         }
 
         if (
+          payload.navigationView &&
           (payload.fit || !hasFitted) &&
           pointCount > 0
         ) {
@@ -1083,6 +1269,14 @@ const mapDocument = `
 
         if (data?.kind === "set-map-data") {
           render(data);
+        } else if (data?.kind === "fit-whole-sjdm") {
+          const box = lastCityBounds;
+          if (cityBoundary && box && Number.isFinite(box.west) &&
+              Number.isFinite(box.east) && Number.isFinite(box.south) &&
+              Number.isFinite(box.north)) {
+            map.fitBounds([[box.west, box.south],[box.east, box.north]],
+              {padding:36,maxZoom:15,duration:450});
+          }
         } else if (
           data?.kind === "update-user-location"
         ) {
@@ -1095,6 +1289,10 @@ const mapDocument = `
       });
 
       map.on("load", () => {
+        map.addSource("sjdm-outside-mask", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
         map.addSource("sjdm-boundary", {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -1104,6 +1302,12 @@ const mapDocument = `
           type: "fill",
           source: "sjdm-boundary",
           paint: { "fill-color": "#0A8B6A", "fill-opacity": 0.06 },
+        });
+        map.addLayer({
+          id: "sjdm-exterior-blocked",
+          type: "fill",
+          source: "sjdm-outside-mask",
+          paint: { "fill-color": "#E7EEEA", "fill-opacity": 1 },
         });
         map.addLayer({
           id: "sjdm-city-outline",
@@ -1186,6 +1390,15 @@ const mapDocument = `
         );
       });
 
+      map.on("moveend", () => {
+        if (!cityBoundary) return;
+        const center = map.getCenter();
+        if (withinCity(center.lat, center.lng)) {
+          lastValidCityCenter = [center.lng, center.lat];
+        } else {
+          map.easeTo({center:lastValidCityCenter,duration:180});
+        }
+      });
       map.on("error", (event) => {
         console.error(
           "Map error",
@@ -1459,7 +1672,8 @@ export default function WebMapTracking() {
 
   const isLguPersonnel = accountRole === "lgu_personnel";
 
-  const isOperationalLgu = isAdministrator || isLguPersonnel;
+  // Programmers' Super Admin may inspect data but cannot act as LGU dispatch.
+  const isOperationalLgu = accountRole === "admin" || isLguPersonnel;
 
   const isVolunteerMode =
     !isAdministrator &&
@@ -1500,6 +1714,8 @@ export default function WebMapTracking() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [shelterFeedState, setShelterFeedState] = useState<"loading" | "ready" | "error">("loading");
+  const [lguFacilityFeedState, setLguFacilityFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
   const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -1517,17 +1733,42 @@ export default function WebMapTracking() {
   useEffect(() => {
     if (!user || !profile || !isApprovedProfile(profile)) {
       setLguFacilities([]);
+      setLguFacilityFeedState("loading");
       return;
     }
+    setLguFacilityFeedState("loading");
     return onSnapshot(collection(db, "lguMapFacilities"),
-      snapshot => setLguFacilities(snapshot.docs
-        .map(doc => verifiedLguMapFacility(doc.id, doc.data()))
-        .filter((value): value is LguMapFacility => value !== null)),
+      snapshot => {
+        setLguFacilities(snapshot.docs
+          .map(doc => verifiedLguMapFacility(doc.id, doc.data()))
+          .filter((value): value is LguMapFacility => value !== null));
+        setLguFacilityFeedState("ready");
+      },
       error => {
         console.error("LGU map facility listener", error);
         setLguFacilities([]);
+        setLguFacilityFeedState("error");
       });
   }, [user?.uid, profile?.status]);
+
+  const publicPlacePins = useMemo(() => {
+    if (!sjdmBoundary) return [];
+    const combined = SJDM_PUBLIC_MAP_PLACE_PINS;
+    const unique:SjdmPublicMapPlace[] = [];
+    for (const item of combined) {
+      if (!insideSjdmBoundary(sjdmBoundary,item.latitude,item.longitude)) continue;
+      // Don't double-pin a mapped source and the same place from the
+      // Overpass refresh; preserve category-specific separate sites.
+      if (unique.some(previous => previous.kind === item.kind &&
+          Math.abs(previous.latitude-item.latitude)<0.00055 &&
+          Math.abs(previous.longitude-item.longitude)<0.00055)) continue;
+      if (lguFacilities.some(approved =>
+          Math.abs(approved.latitude-item.latitude)<0.00045 &&
+          Math.abs(approved.longitude-item.longitude)<0.00045)) continue;
+      unique.push(item);
+    }
+    return unique.slice(0,100);
+  }, [sjdmBoundary, lguFacilities]);
 
   const [userLocation, setUserLocation] =
     useState<BrowserLocation | null>(null);
@@ -1896,11 +2137,11 @@ export default function WebMapTracking() {
   ]);
 
   useEffect(() => {
-    if (missionMode || adminMissionMode) {
-      setCenters([]);
-      return;
-    }
-
+    // Emergency response and Volunteer mission views ALSO require the current
+    // shelter feed. Do not drop the listener simply because a case is focused.
+    // Authorized public shelter metadata remains subject to verified/active
+    // status and the true SJDM boundary before being displayed.
+    setShelterFeedState("loading");
     return onSnapshot(
       collection(db, "evacuation_centers"),
       (snapshot) => {
@@ -1910,19 +2151,16 @@ export default function WebMapTracking() {
             ...(item.data() as Omit<CenterRow, "id">),
           })),
         );
+        setShelterFeedState("ready");
       },
       (cause) => {
-        console.error(
-          "evacuation_centers map listener",
-          cause,
-        );
-
-        setError(
-          "Could not load evacuation centers. Check Firestore permissions and your connection.",
-        );
+        console.error("evacuation_centers map listener", cause);
+        setCenters([]);
+        setShelterFeedState("error");
+        setError("Could not load evacuation centers. Check Firestore permissions and your connection.");
       },
     );
-  }, [missionMode, adminMissionMode]);
+  }, []);
 
   const visibleCases = useMemo(() => {
     if (missionMode || adminMissionMode) {
@@ -1977,7 +2215,7 @@ export default function WebMapTracking() {
   ]);
 
   const visibleCenters = useMemo(() => {
-    if (missionMode || adminMissionMode || !showCenters) return [];
+    if (!showCenters) return [];
 
     const needle = normalize(search);
 
@@ -1994,7 +2232,18 @@ export default function WebMapTracking() {
         .map(normalize)
         .some((value) => value.includes(needle));
     });
-  }, [centers, search, showCenters, missionMode, adminMissionMode, isResidentMode]);
+  }, [centers, search, showCenters]);
+
+  const verifiedCityShelterCount = useMemo(() =>
+    centers.filter(item => !!sjdmBoundary && hasCoordinates(item) &&
+      isVerifiedActiveCenter(item) &&
+      insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude))).length,
+  [centers, sjdmBoundary]);
+
+  const verifiedCityLguCount = useMemo(() =>
+    lguFacilities.filter(item => !!sjdmBoundary &&
+      insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)).length,
+  [lguFacilities, sjdmBoundary]);
 
   const residentActiveCases = useMemo(
     () =>
@@ -3820,7 +4069,9 @@ export default function WebMapTracking() {
     frame.current?.contentWindow?.postMessage(
       {
         kind: "set-map-data",
-        responders: mapResponderPins.map((person: any) => ({
+        responders: mapResponderPins.filter(person => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, person.latitude, person.longitude))
+          .map((person: any) => ({
           ...person,
           vehicleType: (person.role === "lgu" || person.responderRole === "lgu")
             ? (isResidentMode
@@ -3830,8 +4081,12 @@ export default function WebMapTracking() {
                   : missionCase?.responseVehicleType) || "on_foot"
             : "on_foot",
         })),
-        residents: isResidentMode ? [] : residentLivePins,
-        route: roadRoute
+        residents: isResidentMode ? [] : residentLivePins.filter(person => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, person.latitude, person.longitude)),
+        route: roadRoute && sjdmBoundary && routeStaysInSjdm(
+          sjdmBoundary, roadRoute.geometry.coordinates.map(
+            ([longitude, latitude]) => ({latitude, longitude})
+          ))
           ? {
               type: "Feature",
               properties: {},
@@ -3847,7 +4102,9 @@ export default function WebMapTracking() {
             isResidentMode &&
             selectedCase?.id === item.id &&
             residentUsingOwnLiveDestination &&
-            !!userLocation;
+            !!userLocation &&
+            !!sjdmBoundary &&
+            insideSjdmBoundary(sjdmBoundary, userLocation!.latitude, userLocation!.longitude);
 
           return {
             id: item.id,
@@ -3868,12 +4125,17 @@ export default function WebMapTracking() {
             residentSelf: isResidentMode,
             reporterName: item.reporterName || "Resident",
           };
-        }),
+        }).filter(item => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude))),
 
         boundary: sjdmBoundary,
+        outsideMask: sjdmBoundary ? sjdmOutsideMask(sjdmBoundary) : null,
         boundaryBounds: sjdmBoundary ? boundaryBounds(sjdmBoundary) : null,
+        publicPlaces: publicPlacePins.map(item => ({
+          ...item, icon: SJDM_PUBLIC_PLACE_ICON[item.kind],
+        })),
         bases: lguFacilities
-          .filter(item => !sjdmBoundary || insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
+          .filter(item => !!sjdmBoundary && insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
           .map(item => ({
             ...item,
             icon: LGU_FACILITY_ICONS[item.facilityType],
@@ -3885,13 +4147,11 @@ export default function WebMapTracking() {
         // references, but they no longer stretch fitBounds across the map.
         navigationView: missionMode,
 
-        // Keep active response navigation focused on the mission. Evacuation
-        // centers remain available on overview maps, but they are intentionally
-        // hidden from the focused Volunteer mission map so unrelated locations
-        // cannot clutter or stretch the camera.
-        centers: missionMode
-          ? []
-          : visibleCenters.filter(item => !sjdmBoundary ||
+        // Render verified shelters even during an active Resident, LGU or
+        // Volunteer mission. Do NOT include unrelated facility locations in
+        // the mission navigation camera bounds.
+        activeResponseView: isResidentMode || missionMode || adminMissionMode || lguPersonnelMissionMode,
+        centers: visibleCenters.filter(item => !!sjdmBoundary &&
             insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude)))
             .map((item) => ({
               id: item.id,
@@ -3903,6 +4163,7 @@ export default function WebMapTracking() {
               capacity: item.capacity ?? null,
               occupied: item.occupied ?? null,
               updatedAt: timestampMillis(item.updatedAt),
+              lastVerifiedAt: timestampMillis(item.lastVerifiedAt),
             })),
 
         fit,
@@ -3938,6 +4199,7 @@ export default function WebMapTracking() {
     mapIncidentCases,
     visibleCenters,
     lguFacilities,
+    publicPlacePins,
     sjdmBoundary,
     mapResponderPins,
     residentCoordinationCase?.responseVehicleType,
@@ -3949,6 +4211,8 @@ export default function WebMapTracking() {
     isResidentMode,
     missionMode,
     adminMissionMode,
+    lguPersonnelMissionMode,
+    isResidentMode,
     residentUsingOwnLiveDestination,
     selectedCase?.id,
   ]);
@@ -3962,7 +4226,9 @@ export default function WebMapTracking() {
         location:
           isAdministrator || isResidentMode
             ? null
-            : userLocation,
+            : userLocation && sjdmBoundary &&
+              insideSjdmBoundary(sjdmBoundary, userLocation.latitude, userLocation.longitude)
+              ? userLocation : null,
         follow:
           !isAdministrator &&
           !isResidentMode &&
@@ -5153,18 +5419,18 @@ export default function WebMapTracking() {
             </div>
 
             <div className="clean-summary-person">
-              <span>Active responder</span>
+              <span>LGU response</span>
               <strong>
                 {residentLguPin?.name ||
                   residentCoordinationCase?.activeLguResponderName ||
-                  "LGU coordinating response"}
+                  "Awaiting LGU assignment"}
               </strong>
               <small>
                 {residentLguPin
                   ? `Official LGU responder · ${residentLguPin.stale ? "STALE" : "LIVE"}`
                   : residentCoordinationCase?.activeLguResponderUid
                     ? "Official LGU responder · WAITING GPS"
-                    : "Waiting for official LGU responder"}
+                    : "No LGU responder assigned yet"}
               </small>
               {residentActiveVolunteerAssignment && (
                 <small>
@@ -5282,16 +5548,13 @@ export default function WebMapTracking() {
             ref={frame}
             title="VolunServe live disaster response map for San Jose del Monte"
             srcDoc={mapDocument}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           />
-          <div style={{position:"absolute",top:12,right:12,zIndex:10,maxWidth:240,
-            padding:"7px 10px",borderRadius:10,background:"rgba(255,255,255,.94)",
-            border:"1px solid #CDEFE1",fontSize:11,color:"#135E47",pointerEvents:"none"}}>
-            {sjdmBoundary ? "SJDM city boundary · geoBoundaries CC BY 4.0" :
-              boundaryUnavailable ? "SJDM boundary unavailable · verified facilities only" :
-              "Loading official SJDM boundary…"}
-          </div>
-
+          {!sjdmBoundary && <div role="status" style={{position:"absolute",inset:0,zIndex:9,
+            background:"#E7EEEA",display:"flex",justifyContent:"center",alignItems:"center",
+            padding:28,textAlign:"center",color:"#124D39",fontWeight:700}}>
+            SJDM boundary unavailable. Map is hidden until geographic scope is verified.
+          </div>}
           {(missionMode || adminMissionMode) &&
             navigationActive &&
             (adminMissionMode || ["responding", "on_site"].includes(missionAssignmentStatus)) && (
@@ -5379,8 +5642,8 @@ export default function WebMapTracking() {
             {(missionMode || adminMissionMode || isResidentMode) && roadRoute && (
               <span><i className="legend-route-line" /> Road route</span>
             )}
-            {(volunteerOverviewMode || (isAdministrator && !adminMissionMode)) && (
-              <span><i className="legend-dot center" /> Evacuation center</span>
+            {showCenters && verifiedCityShelterCount > 0 && (
+              <span><i className="legend-dot center" /> Verified shelter location</span>
             )}
           </div>
         </div>
@@ -6156,11 +6419,11 @@ export default function WebMapTracking() {
             <>
               <div className="clean-side-heading">
                 <div>
-                  <span className="clean-kicker">ACTIVE RESPONDER</span>
+                  <span className="clean-kicker">LGU RESPONSE</span>
                   <h2>
                     {residentLguPin?.name ||
                       residentCoordinationCase?.activeLguResponderName ||
-                      "LGU coordinating response"}
+                      "Awaiting LGU assignment"}
                   </h2>
                 </div>
                 <span
@@ -6174,7 +6437,7 @@ export default function WebMapTracking() {
                       : "LGU LIVE"
                     : residentCoordinationCase?.activeLguResponderUid
                       ? "WAITING GPS"
-                      : "WAITING"}
+                      : "UNASSIGNED"}
                 </span>
               </div>
 
@@ -6206,7 +6469,8 @@ export default function WebMapTracking() {
                       ? routeResponderPoint.stale
                         ? "STALE"
                         : "LIVE"
-                      : "WAITING"}
+                      : residentCoordinationCase?.activeLguResponderUid
+                        ? "WAITING GPS" : "NOT ASSIGNED"}
                   </strong>
                 </div>
               </div>
@@ -6218,8 +6482,23 @@ export default function WebMapTracking() {
                     : "The official LGU response is active. The green pin is your location and the red LGU pin shows the responder in real time."
                   : residentCoordinationCase?.activeLguResponderUid
                     ? "An official LGU responder is assigned. Waiting for the responder's first or next GPS update."
-                    : "Your green Resident pin stays visible while VolunServe waits for the official LGU response."}
+                    : "No official LGU responder is assigned to this case yet. Your report is saved; live GPS and ETA will appear only after authorized LGU assignment and active location sharing."}
               </div>
+
+              {!residentLguPin && (
+                <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:10,marginBottom:10}}>
+                  <a href="tel:911" className="secondary-button"
+                    style={{padding:"9px 12px",borderRadius:9,background:"#FFF2E8",
+                      textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
+                    Call 911 · Emergency
+                  </a>
+                  <a href="tel:09326000119" className="secondary-button"
+                    style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
+                      textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
+                    Call SJDM CDRRMO
+                  </a>
+                </div>
+              )}
 
               {residentLguArrivalStatus === "pending" && (
                 <div className="resident-arrival-confirm-card">
