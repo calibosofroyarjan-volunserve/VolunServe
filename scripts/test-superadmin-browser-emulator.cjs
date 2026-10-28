@@ -66,7 +66,7 @@ async function seedEmulator() {
       uid:result.localId,role:"superadmin",status:"approved",email,
       fullName:"Emulator QA Super Admin",
     });
-    for(let i=1;i<=6;i++) {
+    for(let i=1;i<=10;i++) {
       const uid="browser-staff-"+i;
       await db.doc("users/"+uid).set({
         uid,role:"applicant",status:"pending_review",email:"staff-"+i+"@example.test",
@@ -111,8 +111,10 @@ async function main() {
     await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
     await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
     await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
-    await page.getByText("Synthetic Staff 6",{exact:true}).first().waitFor({timeout:25000});
-    await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    await page.getByText("Synthetic Staff 10",{exact:true}).first().waitFor({timeout:25000});
+    await page.getByText("Showing 1–5 of 10 records",{exact:false}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByRole("button",{name:/Review LGU credentials for/}).count(),5,
+      "Page 1 must show only five staff application accounts, with no scrolling list of 10");
     const applicantPageOne=page.getByRole("button",{name:"Page 1 of 2"}).first();
     const pageTwo=page.getByRole("button",{name:"Page 2 of 2"}).first();
     await applicantPageOne.scrollIntoViewIfNeeded();
@@ -128,8 +130,10 @@ async function main() {
       "Previous must be disabled on page 1");
     await page.screenshot({path:path.join(evidenceDir,"pagination-desktop-page-1.png"),fullPage:false});
     await page.getByRole("button",{name:"Page 2 of 2"}).first().click();
-    await page.getByText("Synthetic Staff 1",{exact:true}).first().waitFor({timeout:15000});
-    await page.getByText("Showing 6–6 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    await page.getByText("Synthetic Staff 5",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 6–10 of 10 records",{exact:false}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByRole("button",{name:/Review LGU credentials for/}).count(),5,
+      "Page 2 must show the NEXT five applications only");
     assert.equal(await page.getByRole("button",{name:"Page 2 of 2"}).first().getAttribute("aria-current"),"page");
     assert(await page.getByRole("button",{name:"Next page"}).first().isDisabled(),
       "Next must be disabled on final page");
@@ -140,7 +144,9 @@ async function main() {
     await page.getByText("Existing LGU Admin Accounts",{exact:true}).first().scrollIntoViewIfNeeded();
     await page.getByText("Synthetic Admin 1",{exact:true}).first().waitFor({timeout:15000});
     await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).click();
-    await page.getByText("Synthetic Admin 6",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Synthetic Admin 10",{exact:true}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByText(/^Synthetic Admin [0-9]+$/).count(),5,
+      "Second Admin Accounts page must display only five approved accounts");
     await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(evidenceDir,"pagination-admin-accounts.png"),fullPage:false});
     await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
@@ -167,7 +173,7 @@ async function main() {
       counters:applicantCountLabels,
     }));
     await page.screenshot({path:path.join(evidenceDir,"pagination-search-reset.png"),fullPage:false});
-    await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 1–5 of 10 records",{exact:false}).first().waitFor({timeout:15000});
     await page.setViewportSize({width:390,height:844});
     const narrowNumber=page.getByRole("button",{name:"Page 1 of 2"}).first();
     await narrowNumber.scrollIntoViewIfNeeded();
@@ -186,7 +192,7 @@ async function main() {
     assert.equal(dialogs.length,0,"Native alert/confirm/prompt dialog must not display.");
     assert.equal(jsExceptions.length,0,"Browser JS errors: "+jsExceptions.join("; "));
     assert.equal(consoleErrors.length,0,"Export server errors: "+consoleErrors.join("; "));
-    console.log("PASS browser: emulator-only Super Admin Login, verified emerald numbered pagination on two lists and mobile viewport, paging/search, guarded staff review modal, no native dialogs");
+    console.log("PASS browser: exact five accounts per page in both Super Admin lists, top-mounted numbered pagination, switching without infinite scrolling, accessible emerald indicators, narrow web, guarded credentials");
     await context.close();
   } finally {
     if(browser) await browser.close();
