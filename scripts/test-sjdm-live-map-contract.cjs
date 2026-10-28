@@ -122,7 +122,7 @@ test("web/Android do not expose roads, outside pins or invalid city camera targe
   assert.match(web, /map\.on\("moveend"/);
   assert.match(web, /routeStaysInSjdm/);
   assert.match(native, /SJDM_MASK_EXTERIOR/);
-  assert.match(native, /holes=\{boundaryRings\(sjdmBoundary\)/);
+  assert.match(native, /holes=\{sjdmOutsideMask\(sjdmBoundary\)/);
   assert.match(native, /onRegionChangeComplete/);
   assert.match(native, /routeStaysInSjdm/);
   assert.match(native, /inCity\(geocoded.latitude, geocoded.longitude\)/);
