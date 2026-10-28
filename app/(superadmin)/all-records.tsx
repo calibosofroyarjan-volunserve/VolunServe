@@ -36,6 +36,9 @@ type RecordType =
   | "donations"
   | "events"
   | "communityEvents"
+  | "eventProposals"
+  | "eventParticipants"
+  | "credentialReviews"
   | "certificates";
 
 type GenericRecord = {
@@ -59,6 +62,9 @@ const emptyRecords: RecordGroup = {
   donations: [],
   events: [],
   communityEvents: [],
+  eventProposals: [],
+  eventParticipants: [],
+  credentialReviews: [],
   certificates: [],
 };
 
@@ -102,6 +108,18 @@ const recordSources: Array<{
   {
     type: "communityEvents",
     collectionName: "communityEvents",
+  },
+  {
+    type: "eventProposals",
+    collectionName: "communityEventProposals",
+  },
+  {
+    type: "eventParticipants",
+    collectionName: "communityEventParticipants",
+  },
+  {
+    type: "credentialReviews",
+    collectionName: "lguAdminCredentialReviews",
   },
   {
     type: "certificates",
@@ -534,6 +552,21 @@ export default function AllRecords() {
       icon: "calendar-outline",
     },
     {
+      key: "eventProposals",
+      label: "Event Proposals",
+      icon: "document-text-outline",
+    },
+    {
+      key: "eventParticipants",
+      label: "Volunteer Attendance",
+      icon: "checkmark-circle-outline",
+    },
+    {
+      key: "credentialReviews",
+      label: "LGU Credential Reviews",
+      icon: "shield-checkmark-outline",
+    },
+    {
       key: "events",
       label: "Legacy Volunteer Events",
       icon: "calendar-outline",
@@ -964,6 +997,63 @@ export default function AllRecords() {
                 "Donation ID",
               value: item.id,
             },
+          ]}
+        />
+      );
+    }
+
+    if (activeTab === "eventProposals") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="document-text-outline"
+          title={firstText(item.title, "Community Event Proposal")}
+          subtitle={firstText(item.barangay, item.location)}
+          status={firstText(item.status, "pending")}
+          rows={[
+            { label: "Resident proposer", value: firstText(item.proposerName, item.proposedBy) },
+            { label: "Category", value: firstText(item.category) },
+            { label: "Scheduled date", value: firstText(item.date) },
+            { label: "Admin review note", value: firstText(item.adminNote) },
+            { label: "Proposal reference", value: item.id },
+          ]}
+        />
+      );
+    }
+
+    if (activeTab === "eventParticipants") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="checkmark-circle-outline"
+          title={firstText(item.fullName, "Volunteer Participation")}
+          subtitle={firstText(item.eventId, "Community event")}
+          status={firstText(item.status, "unknown")}
+          rows={[
+            { label: "Volunteer UID", value: firstText(item.uid) },
+            { label: "Time in", value: readableDate(item.checkedInAt) },
+            { label: "Time out", value: readableDate(item.checkedOutAt) },
+            { label: "Attendance verified", value: item.attendanceVerified === true ? "Yes" : "No" },
+            { label: "Record reference", value: item.id },
+          ]}
+        />
+      );
+    }
+
+    if (activeTab === "credentialReviews") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="shield-checkmark-outline"
+          title={firstText(item.office, "LGU Credential Review")}
+          subtitle={firstText(item.position, item.accountEmail)}
+          status={firstText(item.reviewStatus, "not reviewed")}
+          rows={[
+            { label: "LGU account", value: firstText(item.accountEmail) },
+            { label: "Verification method", value: firstText(item.verificationMethod) },
+            { label: "Identity confirmation", value: item.identityPresenceConfirmed === true ? "Confirmed in person" : "Not confirmed" },
+            { label: "Reviewed by UID", value: firstText(item.verifiedBy) },
+            { label: "Reviewed at", value: readableDate(item.verifiedAt) },
           ]}
         />
       );
