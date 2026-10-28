@@ -1863,9 +1863,9 @@ export default function AdminAccounts() {
           }
         >
           <View
-            style={[styles.confirmCard, { maxWidth: actionType === "promote" ? 880 : 500, maxHeight: viewportHeight * 0.9, padding: viewportWidth < 720 ? 16 : 26 }]}
+            style={[styles.confirmCard, { maxWidth: actionType === "promote" ? 850 : 500, maxHeight: viewportHeight * 0.92, padding: compact ? 17 : 24 }]}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator persistentScrollbar contentContainerStyle={styles.confirmScrollContent}>
             <View
               style={
                 styles.confirmIcon
@@ -1946,6 +1946,13 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
+                <View style={styles.verificationHeading}>
+                  <View style={styles.verificationHeadingIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#087A62" /></View>
+                  <View style={styles.verificationHeadingContent}>
+                    <Text style={styles.verificationTitle}>Independent staff authorization</Text>
+                    <Text style={styles.verificationSubtitle}>Human credential review · Mandatory before access is granted</Text>
+                  </View>
+                </View>
                 <LguApplicantEvidencePanel uid={actionTarget?.id || ""} onReady={setEvidenceReady} />
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
@@ -1964,13 +1971,13 @@ export default function AdminAccounts() {
                     <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
                   </View>
                 )}
-                <View style={styles.reviewScroll}>
+                <View style={[styles.reviewScroll, !compact && styles.reviewScrollWide]}>
                   {([
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
                     { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
                     { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
                   ] as const).map((field) => (
-                    <View key={field.label} style={styles.reviewField}>
+                    <View key={field.label} style={[styles.reviewField, !compact && styles.reviewFieldWide, field.label === "Verification Reference" && styles.reviewFieldFull]}>
                       <Text style={styles.reviewLabel}>{field.label}</Text>
                       <TextInput
                         accessibilityLabel={field.label}
@@ -1984,7 +1991,7 @@ export default function AdminAccounts() {
                       />
                     </View>
                   ))}
-                  <View style={styles.reviewField}>
+                  <View style={[styles.reviewField, styles.reviewFieldFull]}>
                     <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
                     <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
                     {[
@@ -2026,6 +2033,7 @@ export default function AdminAccounts() {
                         editable={!savingUid} style={styles.reviewInput} />
                     )}
                   </View>
+                  <Text style={[styles.reviewLabel, styles.reviewChecksHeading]}>Required reviewer confirmations</Text>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: identityMatched }}
@@ -2079,7 +2087,14 @@ export default function AdminAccounts() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
+                <View style={styles.reviewPrivacyNotice}>
+                  <Ionicons name="lock-closed-outline" color="#23765F" size={16} />
+                  <Text style={styles.reviewHint}>Review stores only the authorized reference and reviewer. No applicant passwords or ID photos are copied into approval logs.</Text>
+                </View>
+                <View style={[styles.reviewStatus, reviewComplete && styles.reviewStatusReady]}>
+                  <Ionicons name={reviewComplete ? "checkmark-circle-outline" : "information-circle-outline"} size={20} color={reviewComplete ? "#087D60" : "#987334"} />
+                  <Text style={styles.reviewStatusText}>{reviewComplete ? "All verification conditions recorded. Ready for Super Admin approval." : "Approval stays locked until all required evidence and confirmations are completed."}</Text>
+                </View>
               </View>
             ) : null}
 
@@ -2220,7 +2235,21 @@ const styles =
     reviewApplicationText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
     statsRowCompact: { gap: 9 },
 
-    credentialReview: { marginTop: 20, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 19 },
+    credentialReview: { marginTop: 18, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 18 },
+    verificationHeading: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 13 },
+    verificationHeadingIcon: { height: 41, width: 41, borderRadius: 12, backgroundColor: "#E3F5EA", alignItems: "center", justifyContent: "center" },
+    verificationHeadingContent: { flex: 1 },
+    verificationTitle: { fontSize: 16, color: "#204735", fontWeight: "800" },
+    verificationSubtitle: { fontSize: 11.5, lineHeight: 18, color: "#658074", marginTop: 3 },
+    confirmScrollContent: { paddingBottom: 13 },
+    reviewScrollWide: { flexDirection: "row", flexWrap: "wrap", columnGap: 13, alignItems: "flex-start" },
+    reviewFieldWide: { flexGrow: 1, flexBasis: "45%", minWidth: 220 },
+    reviewFieldFull: { flexBasis: "100%", width: "100%" },
+    reviewChecksHeading: { width: "100%", marginTop: 6, marginBottom: 7 },
+    reviewPrivacyNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 11, backgroundColor: "#F3F9F5", borderRadius: 11, marginTop: 9 },
+    reviewStatus: { flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: "#EADCB9", borderRadius: 10, padding: 12, marginTop: 14, backgroundColor: "#FFFBF1" },
+    reviewStatusReady: { borderColor: "#CDE8D6", backgroundColor: "#F0FBF3" },
+    reviewStatusText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "700", color: "#536F60" },
     applicantDetails: { padding: 17, marginTop: 14, marginBottom: 16, backgroundColor: "#F3F9F6", borderWidth: 1, borderColor: "#DCEBE2", borderRadius: 13 },
     reviewKicker: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4, color: "#247459" },
     reviewHelp: { color: "#556E61", fontSize: 13, lineHeight: 21, marginTop: 8, marginBottom: 12 },
@@ -2230,7 +2259,7 @@ const styles =
     reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
     confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
-    reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
+    reviewHint: { flex: 1, color: "#607D6C", fontSize: 11.5, lineHeight: 17 },
     confirmDisabled: { opacity: 0.5 },
     accessFlow: { padding: 18, borderWidth: 1, borderRadius: 15, borderColor: "#DFEBE4", backgroundColor: "#FFFFFF", marginBottom: 18 },
     accessFlowTitle: { color: "#426658", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 11 },
@@ -2739,9 +2768,9 @@ const styles =
     },
 
     confirmIcon: {
-      width: 54,
-      height: 54,
-      borderRadius: 9,
+      width: 49,
+      height: 49,
+      borderRadius: 13,
       backgroundColor:
         "#F0FDFA",
       alignItems: "center",
@@ -2751,8 +2780,8 @@ const styles =
 
     confirmTitle: {
       color: "#173D32",
-      fontSize: 26,
-      fontWeight: "900",
+      fontSize: 23,
+      fontWeight: "800",
     },
 
     confirmMessage: {
@@ -2807,7 +2836,10 @@ const styles =
     },
 
     confirmActions: {
-      marginTop: 20,
+      marginTop: 10,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderColor: "#E3ECE5",
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 10,
