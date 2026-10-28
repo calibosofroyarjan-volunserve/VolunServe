@@ -6734,8 +6734,20 @@ export default function WebMapTracking() {
                 <p>
                   {selectedCase.location ||
                     selectedCase.reporterAddress ||
-                    "Emergency location saved"}
+                    "Location not specified"}
                 </p>
+                {hasCoordinates(selectedCase) && sjdmBoundary &&
+                 insideSjdmBoundary(sjdmBoundary, Number(selectedCase.latitude),
+                   Number(selectedCase.longitude)) ? (
+                  <small>Map pin is based on coordinates saved with the Resident's report.
+                    This is not independent LGU verification of the incident.</small>
+                ) : (
+                  <p className="route-warning" role="status">
+                    No valid in-city GPS coordinate is saved for this report.
+                    The typed address cannot be treated as a precise map pin.
+                    No location has been generated or guessed.
+                  </p>
+                )}
               </div>
             </>
           ) : selectedCase ? (
