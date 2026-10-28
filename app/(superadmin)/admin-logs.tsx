@@ -168,6 +168,7 @@ export default function AdminLogs() {
         <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
       </View>,
     )}
+    <ListPagination page={activePage} total={visible.length} onChange={setPage} />
     {loading ? <ActivityIndicator style={{ marginTop: 25 }} /> : null}
     {!loading && visible.length === 0 ?
       <View style={styles.empty}><Ionicons name="document-text-outline" size={30} color="#73918A" />
@@ -187,7 +188,6 @@ export default function AdminLogs() {
         <Text style={styles.source}>Source: {item.source}</Text>
       </View>,
     )}
-    <ListPagination page={activePage} total={visible.length} onChange={setPage} />
   </ScrollView>;
 }
 
