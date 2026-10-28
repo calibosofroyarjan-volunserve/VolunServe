@@ -1,0 +1,54 @@
+name: Pavia main integration rehearsal (read only)
+on:
+  push:
+    branches:
+      - fix/pavia-final-scope-revisions-20261028
+    paths:
+      - .github/workflows/pavia-main-integration-rehearsal.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  merge-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Safely inspect merge conflicts against current main (no push)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.email "rehearsal@users.noreply.github.com"
+          git config user.name "Read-only Merge Rehearsal"
+          git fetch --no-tags origin main
+          echo "CURRENT_BRANCH_SHA=$(git rev-parse HEAD)"
+          echo "MAIN_SHA=$(git rev-parse origin/main)"
+          set +e
+          git merge --no-commit --no-ff origin/main > /tmp/rehearsal-merge.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/rehearsal-merge.log
+          git diff --name-only --diff-filter=U > /tmp/rehearsal-conflicts.txt
+          if [ "$rc" -ne 0 ]; then
+            echo "Integration conflicts:"
+            cat /tmp/rehearsal-conflicts.txt
+            git merge --abort || true
+            echo "The temporary CI checkout has been reset; no branch was modified."
+            exit 1
+          fi
+          echo "No textual merge conflicts in temporary checkout."
+          git merge --abort || true
+          echo "Merge rehearsal complete. No commit, push, or deployment."
+      - name: Upload conflict listing if needed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pavia-main-integration-conflict-report
+          path: |
+            /tmp/rehearsal-merge.log
+            /tmp/rehearsal-conflicts.txt
+          if-no-files-found: ignore
+          retention-days: 7
