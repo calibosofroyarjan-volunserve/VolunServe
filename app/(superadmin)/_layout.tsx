@@ -231,6 +231,8 @@ export default function SuperAdminLayout() {
         <SuperAdminSidebar
           onNavigate={(route) => router.push(route as Href)}
           onSignOut={confirmSignOut}
+          fullName={fullName}
+          initials={initials}
         />
       ) : (
         <Modal
@@ -252,6 +254,8 @@ export default function SuperAdminLayout() {
                 router.push(route as Href);
               }}
               onSignOut={confirmSignOut}
+              fullName={fullName}
+              initials={initials}
             />
           </View>
         </Modal>
@@ -324,10 +328,14 @@ export default function SuperAdminLayout() {
 function SuperAdminSidebar({
   onNavigate,
   onSignOut,
+  fullName,
+  initials,
   compact = false,
 }: {
   onNavigate: (route: string) => void;
   onSignOut: () => void;
+  fullName: string;
+  initials: string;
   compact?: boolean;
 }) {
   const pathname = usePathname();
@@ -338,6 +346,9 @@ function SuperAdminSidebar({
 
   return (
     <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <View pointerEvents="none" style={styles.sidebarDecoration}>
+        <Ionicons name="leaf-outline" size={220} color="#60C79B" />
+      </View>
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"
@@ -394,6 +405,13 @@ function SuperAdminSidebar({
       </ScrollView>
 
       <View style={styles.sidebarUtility}>
+        <View style={styles.sidebarIdentity}>
+          <View style={styles.sidebarIdentityAvatar}><Text style={styles.avatarText}>{initials}</Text></View>
+          <View style={{flex:1,minWidth:0}}>
+            <Text numberOfLines={1} style={styles.sidebarIdentityName}>{fullName}</Text>
+            <Text style={styles.sidebarIdentityRole}>Super Admin</Text>
+          </View>
+        </View>
         <TouchableOpacity
           style={styles.logoutButton}
           accessibilityRole="button"
@@ -538,6 +556,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "#E1FFF6",
   },
+  sidebarDecoration:{position:"absolute",left:-73,bottom:60,opacity:.16,transform:[{rotate:"-26deg"}]},
+  sidebarIdentity:{flexDirection:"row",alignItems:"center",gap:9,paddingBottom:12,paddingHorizontal:8},
+  sidebarIdentityAvatar:{height:34,width:34,borderRadius:17,backgroundColor:"#128B6B",alignItems:"center",justifyContent:"center"},
+  sidebarIdentityName:{fontSize:11,fontWeight:"900",color:"#FFFFFF"},
+  sidebarIdentityRole:{fontSize:10,color:"#B2E2D4",marginTop:2},
   sidebarUtility: {
     flexShrink: 0,
     marginHorizontal: 17,
