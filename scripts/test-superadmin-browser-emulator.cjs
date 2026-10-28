@@ -157,9 +157,18 @@ async function main() {
     assert.equal(await promote.isDisabled(),true,"Promotion must remain disabled before credential review");
     await page.screenshot({path:path.join(evidenceDir,"review-modal.png"),fullPage:false});
     await page.getByRole("button",{name:"Cancel staff account action"}).click();
-    await page.setViewportSize({width:390,height:844});
-    await page.getByRole("textbox",{name:"Search pending LGU staff applications"}).fill("");
+    await page.waitForTimeout(500); // Let native-web modal close before changing list state.
+    const applicantSearch = page.getByRole("textbox",{name:"Search pending LGU staff applications"});
+    await applicantSearch.fill("");
+    await page.waitForTimeout(450);
+    const applicantCountLabels = await page.getByText(/Showing [0-9]+/).allTextContents();
+    console.log("Pagination search-reset state:", JSON.stringify({
+      searchValue:await applicantSearch.inputValue(),
+      counters:applicantCountLabels,
+    }));
+    await page.screenshot({path:path.join(evidenceDir,"pagination-search-reset.png"),fullPage:false});
     await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    await page.setViewportSize({width:390,height:844});
     const narrowNumber=page.getByRole("button",{name:"Page 1 of 2"}).first();
     await narrowNumber.scrollIntoViewIfNeeded();
     const narrowBounds=await narrowNumber.boundingBox();
