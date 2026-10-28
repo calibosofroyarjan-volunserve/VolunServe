@@ -966,6 +966,10 @@ export default function MapTracking() {
       }).filter((center) => isVerifiedActiveCenter(center));
 
       setCenters(data);
+    }, (error) => {
+      console.warn("evacuation_centers subscription failed", error);
+      setCenters([]);
+      setLocationError("Evacuation-center updates are unavailable. Do not assume any shelter is currently open; contact CDRRMO.");
     });
   }
 
