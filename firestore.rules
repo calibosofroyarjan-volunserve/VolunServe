@@ -230,6 +230,9 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.role == 'applicant'
         && request.resource.data.status == 'pending_review'
+        // New LGU staff must prove email ownership before any approved
+        // administrative login. This field cannot be disabled by applicants.
+        && request.resource.data.emailVerificationRequired == true
         && request.resource.data.residentAccess == false
         && request.resource.data.volunteerAccess == false
         && request.resource.data.fullName is string
