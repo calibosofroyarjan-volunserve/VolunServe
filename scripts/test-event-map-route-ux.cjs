@@ -74,7 +74,8 @@ assert(quickHelp.includes('where("reporterUid", "==", residentUid)') &&
   quickHelp.includes('collection(db, "disasterCases")') &&
   quickHelp.includes("activeStatuses"),
   "Resident case strip must listen only to reporter-authorized active cases");
-assert(quickHelp.includes('pathname: "/map-tracking"') &&
+assert(quickHelp.includes('pathname: "/disaster-response"') &&
+  quickHelp.includes('view: "tracking"') &&
   quickHelp.includes("caseId: active.id"),
   "Case tracking must use the active case ID, not a generic simulated map");
 console.log("PASS event venue markers, consent-based road route, native map and verified shelters");
