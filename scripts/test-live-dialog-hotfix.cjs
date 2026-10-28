@@ -22,3 +22,16 @@ test("Resident mobile and desktop logout use the same non-native confirmation",(
  assert.doesNotMatch(s,/\bAlert\s*\.\s*alert\s*\(/);
  assert.doesNotMatch(s,/onPress=\{\(\)\s*=>\s*void\s+logoutUser\(\)\}/);
 });
+
+test("Actual Resident Home.web logout uses VolunServe modal rather than browser confirm",()=>{
+ const home=read("components/home/Home.web.tsx");
+ const routing=read("app/(tabs)/index.tsx");
+ assert.match(routing,/import HomeWeb from "\.\.\/\.\.\/components\/home\/Home\.web"/);
+ assert.match(routing,/Platform\.OS === "web" \? HomeWeb/);
+ assert.match(home,/import \{ AppAlert \} from "\.\.\/\.\.\/lib\/appDialog"/);
+ assert.match(home,/await AppAlert\.confirm\("Log Out"/);
+ assert.match(home,/if \(!confirmed\) return/);
+ assert.doesNotMatch(home,/window\.confirm\s*\(/);
+ assert.doesNotMatch(home,/window\.alert\s*\(/);
+ assert.doesNotMatch(home,/(?<!App)Alert\.alert\s*\(/);
+});
