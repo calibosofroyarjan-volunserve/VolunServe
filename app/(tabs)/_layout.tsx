@@ -686,7 +686,7 @@ function DesktopTabBar({
             styles.desktopUtilityButton,
             pressed && styles.desktopPressed,
           ]}
-          onPress={() => void logoutUser()}
+          onPress={confirmMobileLogout}
         >
           <Ionicons
             name="log-out-outline"
