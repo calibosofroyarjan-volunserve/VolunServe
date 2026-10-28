@@ -54,6 +54,15 @@ const OPTIONS: { value: Kind; label: string; icon: string }[] = [
 const TYPES = LGU_FACILITY_TYPES.map(value => ({ value, label: CATEGORY_LABELS[value], icon: LGU_FACILITY_ICONS[value] }));
 const LAYOUT_NOTE = "Only LGU-verified facilities with independently confirmed coordinates are published on the map. Live means database updates—not real-time building occupancy.";
 
+// Defined outside the screen so editing an input does not remount it on each keystroke.
+const Field = ({ label, value, onChange, placeholder, keyboardType = "default" }:{
+  label: string; value: string; onChange: (next:string)=>void; placeholder: string; keyboardType?: any;
+}) => <View style={styles.field}>
+  <Text style={styles.fieldLabel}>{label}<Text style={styles.required}> *</Text></Text>
+  <TextInput value={value} onChangeText={onChange} placeholder={placeholder}
+    placeholderTextColor="#849B92" keyboardType={keyboardType} style={styles.input} editable={!saving} />
+</View>;
+
 export default function SjdmFacilities() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -213,13 +222,6 @@ export default function SjdmFacilities() {
     <Text style={styles.title}>LGU Admin access required</Text>
     <Text style={styles.hint}>Only approved operational Admin accounts can manage SJDM facility status.</Text></View>;
 
-  const Field = ({ label, value, onChange, placeholder, keyboardType = "default" }:{
-    label: string; value: string; onChange: (next:string)=>void; placeholder: string; keyboardType?: any;
-  }) => <View style={styles.field}>
-    <Text style={styles.fieldLabel}>{label}<Text style={styles.required}> *</Text></Text>
-    <TextInput value={value} onChangeText={onChange} placeholder={placeholder}
-      placeholderTextColor="#849B92" keyboardType={keyboardType} style={styles.input} editable={!saving} />
-  </View>;
   return <ScrollView style={styles.root} contentContainerStyle={styles.page}
       keyboardShouldPersistTaps="handled">
     <View style={styles.heading}>
