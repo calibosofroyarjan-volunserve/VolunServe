@@ -109,3 +109,11 @@
 | Mobile responsive screenshots | Need 360px/390px browser, native Android, camera permission paths | Still open |
 
 **Do not treat source existence as complete real-account user acceptance.** PR #145 remains draft and not deployed to production.
+
+
+## October 28 follow-through — tested source changes on PR #145
+
+- **Additional 5-per-page queues (new commits):** Super Admin System Records and Audit Logs, plus LGU Admin Emergency Cases and Assistance Requests. Search and status filters reset to page 1. Emergency details follow the selected case on the current page. The shared `ListPagination` handles Previous/Next and clamped page counts. Regression coverage added to `scripts/test-pavia-pagination-email.cjs`.
+- **Disposable email next-stage security:** The existing web/native/LGU intake/admin creation checks use 51,321 offline domains. Added `functions/disposable-email-domains.json` and `functions/registrationEmailBlocking.js` as a *prepared* Identity Platform `beforeUserCreated` policy. It is deliberately **not exported or deployed** while the Firebase Identity Platform upgrade/trigger availability is unknown. The tests check that it stays inactive pending readiness confirmation.
+- **No false completion claim:** These UI pages are client-paginated; Firestore listeners may still read larger result sets. A future backend query-cursor optimization is distinct from the present five-record display requirement.
+- **Still unresolved:** true Firebase Auth-level rejection of all/unknown disposable domains; actual mobile browser and camera UX; AI government-ID issuer authenticity; legacy event migration; LGU Personnel role consolidation; full cross-role emergency and donation E2E.
