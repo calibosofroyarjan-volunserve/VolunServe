@@ -141,8 +141,8 @@ test("Privileged Firestore roles require the shared email-verified approval gate
   for(const helper of ["isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
     const start=rules.indexOf("function "+helper+"() {");
     assert.ok(start>=0,helper+" must exist");
-    const body=rules.slice(start,rules.indexOf("\\n    }",start));
-    assert.match(body,/return approved\\(\\)/,helper+" must enforce approved/email_verified");
+    const body=rules.slice(start,rules.indexOf("\n    }",start));
+    assert.ok(body.includes("return approved()"),helper+" must enforce approved/email_verified");
   }
-  assert.match(rules,/request\\.auth\\.token\\.get\\('email_verified', false\\) == true/);
+  assert.ok(rules.includes("request.auth.token.get('email_verified', false) == true"));
 });
