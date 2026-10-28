@@ -54,3 +54,28 @@ test("Both signup views visibly distinguish required fields from optional inputs
     assert.match(v,/label\.replace\(/);
   }
 });
+
+test("New email signups require verified ownership before protected Resident login",()=>{
+  const auth=fs.readFileSync(path.join(root,"lib/firebaseAuth.ts"),"utf8");
+  const rules=fs.readFileSync(path.join(root,"firestore.rules"),"utf8");
+  const session=fs.readFileSync(path.join(root,"lib/useUserSession.ts"),"utf8");
+  assert.match(auth,/emailVerificationRequired: !usesGoogle/);
+  assert.match(auth,/await sendEmailVerification\(user\)/);
+  assert.match(auth,/await signOut\(auth\)/);
+  assert.match(auth,/profile\.emailVerificationRequired === true/);
+  assert.match(auth,/await reload\(user\)/);
+  assert.match(auth,/await getIdToken\(user, true\)/);
+  assert.match(rules,/p\.get\('emailVerificationRequired', false\) != true/);
+  assert.match(rules,/request\.auth\.token\.get\('email_verified', false\) == true/);
+  assert.match(session,/profileData\?\.emailVerificationRequired === true/);
+  for(const file of ["app/signup.tsx","app/signup.web.tsx"]){
+    const screen=fs.readFileSync(path.join(root,file),"utf8");
+    assert.match(screen,/googleBound \? "\/\(tabs\)" : "\/login"/);
+  }
+});
+test("Mobile Google account linking cannot skip required password",()=>{
+  const mobile=fs.readFileSync(path.join(root,"app/signup.tsx"),"utf8");
+  assert.match(mobile,/const step4Valid = passwordValid &&/);
+  assert.match(mobile,/Create a VolunServe password as well/);
+  assert.doesNotMatch(mobile,/googleBound \|\| passwordValid/);
+});
