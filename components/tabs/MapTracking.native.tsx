@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Linking,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -26,13 +27,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
+import MapView, { Marker, Callout, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, isRecentShelterReport, vehicleInfo } from "../../lib/emergencyMapTypes";
 import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
-import {SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON, fetchMappedSjdmPublicPlaces, type SjdmPublicMapPlace} from "../../lib/sjdmPublicMapPlaces";
+import {SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON, googleMapsFacilityDirections, type SjdmPublicMapPlace} from "../../lib/sjdmPublicMapPlaces";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -142,23 +143,22 @@ export default function MapTracking() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
-  const [osmMappedPlaces, setOsmMappedPlaces] = useState<SjdmPublicMapPlace[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
   const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
-  useEffect(() => {
-    if (!sjdmBoundary) return;
-    let active = true;
-    const controller = new AbortController();
-    void fetchMappedSjdmPublicPlaces(controller.signal)
-      .then(list => { if(active) setOsmMappedPlaces(list); })
-      .catch(() => { if(active) setOsmMappedPlaces([]); });
-    return () => { active=false; controller.abort(); };
-  }, [sjdmBoundary]);
+  const openVerifiedDirections = (latitude:number,longitude:number) => {
+    if (!sjdmBoundary || !insideSjdmBoundary(sjdmBoundary,latitude,longitude)) {
+      Alert.alert("Outside SJDM","Map directions are available only for verified locations within the city.");
+      return;
+    }
+    void Linking.openURL(googleMapsFacilityDirections(latitude,longitude))
+      .catch(() => Alert.alert("Navigation unavailable",
+        "Could not open Google Maps directions on this device."));
+  };
 
   const publicPlaces = useMemo(() => {
     if(!sjdmBoundary) return [];
     const result:SjdmPublicMapPlace[]=[];
-    for(const place of [...SJDM_PUBLIC_MAP_PLACE_PINS, ...osmMappedPlaces]){
+    for(const place of SJDM_PUBLIC_MAP_PLACE_PINS){
       if(!insideSjdmBoundary(sjdmBoundary,place.latitude,place.longitude)) continue;
       if(result.some(existing=>existing.kind===place.kind &&
         Math.abs(existing.latitude-place.latitude)<0.00055 &&
@@ -169,7 +169,7 @@ export default function MapTracking() {
       result.push(place);
     }
     return result.slice(0,100);
-  }, [sjdmBoundary,osmMappedPlaces,lguFacilities]);
+  }, [sjdmBoundary,lguFacilities]);
   const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
@@ -1525,12 +1525,20 @@ export default function MapTracking() {
             <Marker key={"mapped-"+place.id}
               coordinate={{latitude:place.latitude,longitude:place.longitude}}
               title={place.name}
-              description={place.note}>
+              description={place.note}
+              onCalloutPress={() => openVerifiedDirections(place.latitude,place.longitude)}>
               <View style={{width:40,height:40,borderRadius:23,
                 alignItems:"center",justifyContent:"center",backgroundColor:"#FFFFFF",
                 borderWidth:3,borderColor:"#E9C12F"}}>
                 <Text style={{fontSize:21}}>{SJDM_PUBLIC_PLACE_ICON[place.kind]}</Text>
               </View>
+              <Callout><View style={{minWidth:175,padding:6}}>
+                <Text style={{fontWeight:"700",fontSize:13,color:"#164E3B"}}>{place.name}</Text>
+                <Text style={{fontSize:11,color:"#334155",marginTop:5}}>{place.note}</Text>
+                <Text style={{fontWeight:"700",fontSize:12,color:"#0D8060",marginTop:8}}>
+                  Tap for Google Maps directions
+                </Text>
+              </View></Callout>
             </Marker>
           ))}
 
@@ -1540,13 +1548,21 @@ export default function MapTracking() {
               coordinate={{latitude: facility.latitude, longitude: facility.longitude}}
               title={facility.name}
               description={"LGU-verified " + facility.facilityType.replaceAll("_", " ") +
-                " · " + facility.address}>
+                " · " + facility.address}
+              onCalloutPress={() => openVerifiedDirections(facility.latitude,facility.longitude)}>
               <View style={{
                 width:40,height:40,borderRadius:22,alignItems:"center",justifyContent:"center",
                 backgroundColor:"#0C805F",borderWidth:2,borderColor:"#FFFFFF",
               }}>
                 <Text style={{fontSize:20}}>{LGU_FACILITY_ICONS[facility.facilityType]}</Text>
               </View>
+              <Callout><View style={{minWidth:175,padding:7}}>
+                <Text style={{fontWeight:"700",color:"#164E3B"}}>{facility.name}</Text>
+                <Text style={{fontSize:11,marginTop:5}}>{facility.address}</Text>
+                <Text style={{fontSize:12,color:"#0D8060",fontWeight:"700",marginTop:7}}>
+                  Tap for Google Maps directions
+                </Text>
+              </View></Callout>
             </Marker>
           ))}
 
@@ -1559,6 +1575,7 @@ export default function MapTracking() {
                 longitude: center.longitude,
               }}
               title={center.name}
+              onCalloutPress={() => openVerifiedDirections(center.latitude,center.longitude)}
               description={
                 (isRecentShelterReport(center)
                   ? "LGU recently reviewed (confirm before travel)"
@@ -1579,6 +1596,17 @@ export default function MapTracking() {
                 }
                 icon="home"
               />
+              <Callout><View style={{minWidth:175,padding:7}}>
+                <Text style={{fontWeight:"700",color:"#164E3B"}}>{center.name}</Text>
+                <Text style={{fontSize:11,marginTop:5}}>
+                  {isRecentShelterReport(center)
+                    ? "LGU recently reviewed; confirm space before travel."
+                    : "Current opening and capacity not confirmed."}
+                </Text>
+                <Text style={{fontSize:12,color:"#0D8060",fontWeight:"700",marginTop:7}}>
+                  Tap for Google Maps directions
+                </Text>
+              </View></Callout>
             </Marker>
           ))}
 
