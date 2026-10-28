@@ -114,3 +114,10 @@ test("LGU Admin checks future SJDM time and shared end-time validator",()=>{
  assert.match(admin,/validSjdmEventSchedule\(proposal\)/);
  assert.doesNotMatch(admin,/new Date\(\s*`\$\{proposal.date\}T\$\{proposal.time\}/);
 });
+
+test("Root route guard rejects restored unverified email/password sessions",()=>{
+  const rootLayout=fs.readFileSync(path.join(root,"app/_layout.tsx"),"utf8");
+  assert.match(rootLayout,/profile\.emailVerificationRequired === true && !authUser\.emailVerified/);
+  assert.match(rootLayout,/await logoutUser\(\)/);
+  assert.match(rootLayout,/router\.replace\("\/login"\)/);
+});
