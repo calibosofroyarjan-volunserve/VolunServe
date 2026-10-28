@@ -416,3 +416,31 @@ test("Uncommitted Super Admin settings are not erased by a Firestore settings re
   assert.ok(commitIndex >= 0 && clearIndex > commitIndex,
     "Unsaved edit guard must clear only after a confirmed settings/audit batch commit");
 });
+
+test("Super Admin staff onboarding has responsive premium cards, searchable review queue and accessible approval modal", () => {
+  const screen = read("app/(superadmin)/admin-accounts.tsx");
+  assert.match(screen, /const compact = viewportWidth < 780;/);
+  assert.match(screen, /styles\.headerCompact/);
+  assert.match(screen, /styles\.accessFlowStepsCompact/);
+  assert.match(screen, /styles\.applicationPanel/);
+  assert.match(screen, /styles\.applicationRowCompact/);
+  assert.match(screen, /styles\.reviewApplicationButtonCompact/);
+  assert.match(screen, /pendingTotal = users\.filter/);
+  assert.match(screen, /const \[applicationSearch, setApplicationSearch\] = useState\(""/);
+  assert.match(screen, /setApplicantPage\(1\); \}, \[applicationSearch\]/);
+  assert.match(screen, /accessibilityLabel="Search pending LGU staff applications"/);
+  assert.match(screen, /page=\{safeApplicantPage\} total=\{pendingLguApplications\.length\}/);
+  for (const step of ["Receive staff application", "Verify official LGU credentials", "Promote to Admin & record audit"]) {
+    assert.ok(screen.includes(step), step);
+  }
+  assert.match(screen, /styles\.reviewScrollWide/);
+  assert.match(screen, /persistentScrollbar/);
+  assert.match(screen, /styles\.confirmActionsCompact/);
+  assert.match(screen, /reviewComplete && styles\.reviewStatusReady/);
+  assert.match(screen, /actionType === "promote" && !reviewComplete/);
+  assert.match(screen, /credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady/);
+  assert.match(screen, /inPersonIdentityConfirmed/);
+  assert.match(screen, /batch\.set\(doc\(db, "lguAdminCredentialReviews", account\.id\)/);
+  assert.match(screen, /await batch\.commit\(\)/);
+  assert.doesNotMatch(screen, /onPress=\{\(\) => setShowAddAdmin\(true\)\}/);
+});
