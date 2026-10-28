@@ -36,3 +36,21 @@ test("Join eligibility rechecked after latest Firestore event read and reflected
   assert.match(screen,/setBusyEvent\(event.id\)/);
   assert.match(screen,/serverTimestamp\(\)/);
 });
+
+test("Request Assistance confirmation is mandatory and suggested titles allow free text",()=>{
+  const request=fs.readFileSync(path.join(root,"app/(tabs)/resident.tsx"),"utf8");
+  assert.match(request,/const \[declarationAccepted, setDeclarationAccepted\] = useState\(false\)/);
+  assert.match(request,/if \(!declarationAccepted\)/);
+  assert.match(request,/accessibilityRole="checkbox"/);
+  assert.match(request,/setDeclarationAccepted\(false\)/);
+  assert.match(request,/Suggested request title \(optional\)/);
+  assert.match(request,/Other — write my own/);
+  assert.match(request,/onChangeText=\{\(/);
+});
+test("Both signup views visibly distinguish required fields from optional inputs",()=>{
+  for(const p of ["app/signup.tsx","app/signup.web.tsx"]){
+    const v=fs.readFileSync(path.join(root,p),"utf8");
+    assert.match(v,/color: "#C62828"/);
+    assert.match(v,/label\.replace\(/);
+  }
+});
