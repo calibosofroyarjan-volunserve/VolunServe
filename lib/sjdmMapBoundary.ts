@@ -88,3 +88,94 @@ export async function loadSjdmBoundary(): Promise<SjdmBoundary | null> {
   if (box.east - box.west < 0.015 || box.north - box.south < 0.015) return null;
   return feature;
 }
+
+
+/** Local canvas overlay: mask everything OUTSIDE the actual boundary.
+ * This rectangle is only an exterior paint canvas, NOT the city's border.
+ * The hole(s) are the separately attributed geoBoundaries geometry.
+ */
+export const SJDM_MASK_EXTERIOR: LngLat[] = [
+  [120.2, 13.5], [122.0, 13.5], [122.0, 16.0], [120.2, 16.0], [120.2, 13.5],
+];
+
+const signedRingArea = (ring: LngLat[]): number => {
+  let area = 0;
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    area += ring[index][0] * ring[index + 1][1] -
+      ring[index + 1][0] * ring[index][1];
+  }
+  return area / 2;
+};
+const orientedRing = (input: LngLat[], positive: boolean): LngLat[] => {
+  const closed: LngLat[] = input.map(point => [point[0], point[1]]);
+  if (closed.length > 0 &&
+      (closed[0][0] !== closed[closed.length - 1][0] ||
+       closed[0][1] !== closed[closed.length - 1][1])) {
+    closed.push([closed[0][0], closed[0][1]]);
+  }
+  return (signedRingArea(closed) > 0) === positive ? closed : closed.reverse();
+};
+
+/** An outside-only fill, with the city's real outline cut out as hole(s). */
+export function sjdmOutsideMask(feature: SjdmBoundary): {
+  type: "Feature";
+  properties: { scope: string };
+  geometry: { type: "Polygon"; coordinates: LngLat[][] };
+} {
+  const cityOuters = boundaryRings(feature)
+    .filter(rings => rings.length > 0)
+    .map(rings => orientedRing(rings[0], false));
+  return {
+    type: "Feature",
+    properties: { scope: "outside-sjdm-only" },
+    geometry: {
+      type: "Polygon",
+      coordinates: [orientedRing(SJDM_MASK_EXTERIOR, true), ...cityOuters],
+    },
+  };
+}
+
+/** Never draw a route that escapes the city, including a path that leaves and
+ * re-enters the city between two in-boundary vertices. Sample at <=15m along
+ * segments (in geographic degrees for this local SJDM-only scope).
+ */
+export function routeStaysInSjdm(
+  feature: SjdmBoundary,
+  route: ReadonlyArray<{ latitude: number; longitude: number }>,
+): boolean {
+  if (route.length < 2) return false;
+  for (let i = 0; i < route.length; i++) {
+    const start = route[i];
+    if (!insideSjdmBoundary(feature, start.latitude, start.longitude)) return false;
+    if (i === 0) continue;
+    const prior = route[i - 1];
+    const extent = Math.max(
+      Math.abs(start.latitude - prior.latitude),
+      Math.abs(start.longitude - prior.longitude),
+    );
+    const samples = Math.ceil(extent / 0.00012);
+    if (samples > 10000) return false;
+    for (let step = 1; step < samples; step++) {
+      const ratio = step / samples;
+      const latitude = prior.latitude + (start.latitude - prior.latitude) * ratio;
+      const longitude = prior.longitude + (start.longitude - prior.longitude) * ratio;
+      if (!insideSjdmBoundary(feature, latitude, longitude)) return false;
+    }
+  }
+  return true;
+}
+
+/** Safe point shown when a user/route GPS is elsewhere in the Philippines. */
+export function sjdmSafeCenter(feature: SjdmBoundary): {
+  latitude: number; longitude: number;
+} {
+  if (insideSjdmBoundary(feature, SJDM_FOCUS.latitude, SJDM_FOCUS.longitude))
+    return { ...SJDM_FOCUS };
+  // A midpoint toward a polygon interior is preferable to a random city bbox.
+  const outer = boundaryRings(feature)[0]?.[0];
+  if (outer?.length) {
+    const middle = outer[Math.floor(outer.length / 2)];
+    return { longitude: middle[0], latitude: middle[1] };
+  }
+  return { ...SJDM_FOCUS };
+}
