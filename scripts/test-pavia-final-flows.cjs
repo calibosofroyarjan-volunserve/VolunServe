@@ -79,3 +79,20 @@ test("Mobile Google account linking cannot skip required password",()=>{
   assert.match(mobile,/Create a VolunServe password as well/);
   assert.doesNotMatch(mobile,/googleBound \|\| passwordValid/);
 });
+
+test("LGU identity manual verification requires independent original ID and registered-name confirmation",()=>{
+  const screen=fs.readFileSync(path.join(root,"app/(admin)/identity-reviews.tsx"),"utf8");
+  const api=fs.readFileSync(path.join(root,"backend/server.js"),"utf8");
+  assert.match(screen,/originalDocumentReviewed/);
+  assert.match(screen,/registeredNameMatched/);
+  assert.match(screen,/accessibilityRole="checkbox"/);
+  assert.match(screen,/originalDocumentReviewed: action === "verify" && originalDocumentReviewed/);
+  assert.match(screen,/registeredNameMatched: action === "verify" && registeredNameMatched/);
+  assert.match(screen,/setOriginalDocumentReviewed\(false\)/);
+  assert.match(screen,/setRegisteredNameMatched\(false\)/);
+  assert.match(api,/request\.body\?\.originalDocumentReviewed === true/);
+  assert.match(api,/request\.body\?\.registeredNameMatched === true/);
+  assert.match(api,/identity_name_and_document_check_required/);
+  assert.match(api,/originalDocumentReviewed: true/);
+  assert.match(api,/registeredNameMatched: true/);
+});
