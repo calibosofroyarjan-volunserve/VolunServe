@@ -1025,7 +1025,7 @@ export default function DisasterResponse() {
                 text: "Track Response",
                 onPress: () =>
                   router.push(
-                    `/map-tracking?caseId=${encodeURIComponent(block!.caseId)}` as any
+                    `/disaster-response?view=tracking&caseId=${encodeURIComponent(block!.caseId)}` as any
                   ),
               },
             ]

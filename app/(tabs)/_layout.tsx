@@ -41,12 +41,6 @@ const residentDesktopTabs: TabDefinition[] = [
     activeIcon: "home",
   },
   {
-    name: "map-tracking",
-    label: "Response Map",
-    icon: "map-outline",
-    activeIcon: "map",
-  },
-  {
     name: "disaster-response",
     label: "Emergency Reports",
     icon: "alert-circle-outline",
@@ -91,12 +85,6 @@ const volunteerDesktopTabs: TabDefinition[] = [
     label: "Home",
     icon: "home-outline",
     activeIcon: "home",
-  },
-  {
-    name: "map-tracking",
-    label: "Live Response Map",
-    icon: "map-outline",
-    activeIcon: "map",
   },
   {
     name: "volunteer",
@@ -179,12 +167,6 @@ const residentMobileTabs: TabDefinition[] = [
     activeIcon: "home",
   },
   {
-    name: "map-tracking",
-    label: "Map",
-    icon: "location-outline",
-    activeIcon: "location",
-  },
-  {
     name: "disaster-response",
     label: "Report",
     icon: "alert-circle-outline",
@@ -210,12 +192,6 @@ const volunteerMobileTabs: TabDefinition[] = [
     label: "Home",
     icon: "home-outline",
     activeIcon: "home",
-  },
-  {
-    name: "map-tracking",
-    label: "Map",
-    icon: "location-outline",
-    activeIcon: "location",
   },
   {
     name: "volunteer",
@@ -250,6 +226,12 @@ const residentOnlyRoutes = new Set([
   "donation-history",
 ]);
 
+// Hidden legacy map links still highlight their owning module in the sidebar.
+const owningModule = (route: string, mode: string) =>
+  route === "map-tracking"
+    ? mode === "volunteer" ? "volunteer" : "disaster-response"
+    : route;
+
 export default function TabLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
@@ -263,7 +245,7 @@ export default function TabLayout() {
   const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
   const canSwitchMode = Boolean(profile && hasResidentAccess(profile) && hasVolunteerAccess(profile));
   const adminRoute = profile ? administrativeRouteForProfile(profile) : null;
-  const currentModule = (menuItems.find((item) => item.name === segments[segments.length - 1]) || menuItems[0]).label;
+  const currentModule = (menuItems.find((item) => item.name === owningModule(String(segments[segments.length - 1] || "index"), mode)) || menuItems[0]).label;
   const identityNeedsAction = !!profile && mode === "resident" &&
     profile.identityVerified !== true &&
     (profile.identityStatus === "basic" || profile.identityStatus === "failed");
@@ -469,7 +451,7 @@ export default function TabLayout() {
                   </Pressable>
                 ) : null}
                 {menuItems.filter((item) => item.name !== "profile" && item.name !== "notifications").map((item) => {
-                  const active = item.name === (segments[segments.length - 1] || "index");
+                  const active = item.name === owningModule(String(segments[segments.length - 1] || "index"), mode);
                   return (
                     <Pressable key={item.name} accessibilityRole="button"
                       onPress={() => visit(item.name)}
@@ -584,7 +566,9 @@ function DesktopTabBar({
 
           if (routeIndex === -1) return null;
 
-          const focused = state.index === routeIndex;
+          const focused = state.index === routeIndex ||
+            (owningModule(String(state.routes[state.index]?.name || ""), mode) === item.name &&
+              state.routes[state.index]?.name === "map-tracking");
           const identity = mode === "resident"
             ? residentModuleIdentity[item.name]
             : volunteerModuleIdentity[item.name];
@@ -822,7 +806,9 @@ function CustomTabBar({
           if (routeIndex === -1) return null;
 
           const route = state.routes[routeIndex];
-          const focused = state.index === routeIndex;
+          const focused = state.index === routeIndex ||
+            (owningModule(String(state.routes[state.index]?.name || ""), mode) === item.name &&
+              state.routes[state.index]?.name === "map-tracking");
 
           return (
             <Pressable

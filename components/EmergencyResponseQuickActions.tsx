@@ -71,7 +71,7 @@ export default function EmergencyResponseQuickActions({ residentUid }: { residen
 
   const gotoTracking = () => {
     if (!active) return;
-    router.push({ pathname: "/map-tracking", params: { caseId: active.id } } as any);
+    router.push({ pathname: "/disaster-response", params: { view: "tracking", caseId: active.id } } as any);
   };
 
   const assignedVehicle = active?.activeLguResponderUid &&

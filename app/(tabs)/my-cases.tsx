@@ -1384,12 +1384,8 @@ export default function MyCases() {
       caseId: string,
     ) => {
       router.push({
-        pathname:
-          "/map-tracking" as any,
-
-        params: {
-          caseId,
-        },
+        pathname: "/disaster-response" as any,
+        params: { view: "tracking", caseId },
       });
     };
 

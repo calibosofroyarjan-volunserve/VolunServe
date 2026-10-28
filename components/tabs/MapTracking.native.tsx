@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import polyline from "@mapbox/polyline";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   collection,
@@ -131,6 +131,8 @@ type PredictionResult = {
 
 export default function MapTracking() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ caseId?: string }>();
+  const focusedCaseId = typeof params.caseId === "string" ? params.caseId : "";
   const user = auth.currentUser;
 
   const CURRENT_USER_ID = user?.uid ?? "";
@@ -141,6 +143,7 @@ export default function MapTracking() {
 
   const [location, setLocation] = useState<UserLocation | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const focusedIncident = focusedCaseId ? incidents.find(item => item.id === focusedCaseId) : null;
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -230,6 +233,16 @@ export default function MapTracking() {
       longitudeDelta: Math.max(0.06, (box.east - box.west) * 1.12),
     }, 400);
   }, [sjdmBoundary, mapLoaded]);
+
+  // A case-specific emergency link must focus on that case, not a random city pin.
+  useEffect(() => {
+    if (!mapLoaded || !sjdmBoundary || !focusedIncident ||
+      !insideSjdmBoundary(sjdmBoundary, focusedIncident.latitude, focusedIncident.longitude)) return;
+    mapRef.current?.animateCamera({
+      center: { latitude: focusedIncident.latitude, longitude: focusedIncident.longitude },
+      zoom: 15, pitch: 0, heading: 0,
+    }, { duration: 450 });
+  }, [mapLoaded, sjdmBoundary, focusedIncident?.id, focusedIncident?.latitude, focusedIncident?.longitude]);
 
   useEffect(() => {
     if (!CURRENT_USER_ID) {
@@ -1046,22 +1059,11 @@ export default function MapTracking() {
     setStats: React.Dispatch<React.SetStateAction<RouteStats | null>>
   ) {
     const setFallbackRoute = () => {
-      const directDistance = calculateDistanceKm(
-        startLat,
-        startLng,
-        endLat,
-        endLng
-      );
-
-      setCoords([
-        { latitude: startLat, longitude: startLng },
-        { latitude: endLat, longitude: endLng },
-      ]);
-
-      setStats({
-        distanceKm: Number(directDistance.toFixed(2)),
-        etaMinutes: Math.max(1, Math.ceil((directDistance / 25) * 60)),
-      });
+      // A straight line is not a valid road route and 25 km/h is not a live ETA.
+      // Fail visibly instead of inventing distance, travel time or directions.
+      setCoords([]);
+      setStats(null);
+      setLocationError("Road directions are unavailable. Check your connection or open the destination in Google Maps.");
     };
 
     try {
@@ -1505,7 +1507,9 @@ export default function MapTracking() {
 
           {/* Real assigned LGU GPS only: icon identifies actual dispatched vehicle.
               No icon appears without a fresh authorized GPS reading. */}
-          {visibleLguVehiclePins.filter(point => inCity(point.latitude, point.longitude)).map(point => (
+          {visibleLguVehiclePins.filter(point =>
+            (!focusedCaseId || point.caseId === focusedCaseId) &&
+            inCity(point.latitude, point.longitude)).map(point => (
             <Marker key={"lgu-" + point.caseId}
               coordinate={{ latitude:point.latitude, longitude:point.longitude }}
               title={"LGU responder · " + point.vehicle.label}
@@ -1611,7 +1615,9 @@ export default function MapTracking() {
           ))}
 
           {/* Disaster / active incident markers */}
-          {incidents.filter(incident => inCity(incident.latitude, incident.longitude)).map((incident) => {
+          {incidents.filter(incident =>
+            (!focusedCaseId || incident.id === focusedCaseId) &&
+            inCity(incident.latitude, incident.longitude)).map((incident) => {
             const isActive =
               incident.status === "assigned" || incident.status === "in_progress";
 
