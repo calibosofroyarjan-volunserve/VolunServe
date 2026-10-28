@@ -227,3 +227,60 @@ test("Only sourced real SJDM infrastructure coordinates become default public ma
   assert.match(web,/public-place-marker/);
   assert.doesNotMatch(web,/SJDM VERIFIED FACILITY RECORDS/);
 });
+
+
+test("web map popup is readable, actionable and never displays raw OSM technical text", () => {
+  const source=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(source,/function makePublicPlacePopup/);
+  assert.match(source,/makePublicPlacePopup\(item\)/);
+  assert.match(source,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
+  assert.match(source,/makeVerifiedMapPopup\(item,true\)/);
+  assert.match(source,/makeVerifiedMapPopup\(item,false\)/);
+  assert.match(source,/View map source/);
+  assert.match(source,/Call office/);
+  assert.match(source,/Call SJDM CDRRMO/);
+  assert.doesNotMatch(source,/item\.sourceLabel \+ " · " \+ item\.note/);
+  assert.doesNotMatch(source,/typeof url !== "string" \|\| !\/\^https:/);
+  assert.match(source,/sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"/);
+});
+
+test("response UI never describes an unassigned case as an active LGU responder", () => {
+  const source=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(source,/Awaiting LGU assignment/);
+  assert.match(source,/No LGU responder assigned yet/);
+  assert.match(source,/NOT ASSIGNED/);
+  assert.match(source,/tel:911/);
+  assert.match(source,/tel:09326000119/);
+  assert.doesNotMatch(source,/"LGU coordinating response"/);
+});
+
+test("official evacuation center names are maintained as review-only entries with no made-up GPS", () => {
+  const source=fs.readFileSync(path.join(root,"constants/sjdmOfficialFacilityReview.ts"),"utf8");
+  assert.match(source,/Assumption SRSCP Auditorium/);
+  assert.match(source,/Bagong Buhay Elementary School/);
+  assert.match(source,/CSJDM-SEP-2022\.pdf/);
+  assert.doesNotMatch(source,/latitude\s*:/);
+  assert.doesNotMatch(source,/longitude\s*:/);
+});
+
+test("OpenStreetMap map-viewer script compiles to valid JavaScript", () => {
+  const source=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  const parsed=ts.createSourceFile("MapTracking.web.tsx",source,
+    ts.ScriptTarget.ES2022,true,ts.ScriptKind.TSX);
+  const literals=[];
+  function walk(node){
+    if(ts.isVariableDeclaration(node) && node.name.getText(parsed)==="mapDocument"){
+      literals.push(node.initializer);
+    }
+    ts.forEachChild(node,walk);
+  }
+  walk(parsed);
+  assert.equal(literals.length,1);
+  const initial=literals[0];
+  assert.ok(ts.isNoSubstitutionTemplateLiteral(initial),"expected static iframe document");
+  const scripts=[...initial.text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
+  assert.ok(scripts.length>=1,"expected inline MapLibre script");
+  const vm=require("node:vm");
+  for(const block of scripts)if(block[1].trim())
+    assert.doesNotThrow(()=>new vm.Script(block[1]),"inline map code must parse");
+});
