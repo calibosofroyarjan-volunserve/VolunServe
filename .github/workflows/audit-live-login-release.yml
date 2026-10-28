@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 8
     env:
       VOLUNSERVE_HOSTING_URL: https://volunserve.com
-      VOLUNSERVE_EXPECTED_SHA: d975f4301cd1304257f2b10ab9a3d5f4203b66a0
+      VOLUNSERVE_EXPECTED_SHA: aadcae309ddb3bcf655b21cfd4ba8352478b932c
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
