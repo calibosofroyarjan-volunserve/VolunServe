@@ -80,3 +80,17 @@ The authenticated Resident listener receives a verified shelter when created, a 
 
 **Production gate:** The connector in this session can edit GitHub but cannot query the project's deployed Firestore collection or publish Firebase rules. No verified active 2026 evacuation-center inventory, independent GPS coordinates, live occupancy API, LGU dispatch position or real-device checks have been confirmed by this commit. Do not claim active 2026 shelter data exists merely because city government published older historical facility lists.
 
+
+
+## October 28 verified facility naming and real-response acceptance
+
+**Response to on-screen map acceptance issue:** Public-OSM map pins are useful physical location references, but NOT proof of municipal affiliation, current opening, current staffing, evacuation suitability, or live dispatch. Gold circular icon means mapped place, and a green circular outline denotes an authorized LGU-verified fixed facility from `lguMapFacilities`. Moving LGU response vehicle icons still require an assigned LGU device actively transmitting fresh GPS to `lguResponseLocations/{caseId}`.
+
+- New Government Center: Dulong Bayan address independently published by CSJDM; OSM polygon mapping position approximate to the mapped structure.
+- City Disaster Risk Reduction and Management Office: city-published address at Productivity Complex/Motorpool, Sapang Palay Proper; the public fallback coordinate is approximate from a separate mapping site and must be independently LGU-attested before treating it as an operational facility marker.
+- **BFP current-office discrepancy:** official City of San Jose del Monte Fire Station BFP info hub lists its NEW office at **2nd floor, former CDRRM office, Productivity Center, Sapang Palay Proper**. Therefore OSM's mapped fire station reference in another location is labelled **"Fire Station (Mapped Site)"** with an explicit relocation warning, not represented as the currently active BFP dispatch office. The official current-office address is offered as an LGU Admin review draft without fake GPS.
+- Historic city center inventory: the **City Socio-Economic Profile 2022** lists Central Evacuation Center at CDRRMO Building/Productivity Center, Assumption SRSCP Auditorium, and Bagong Buhay Elementary School as evacuation-center references. PAGCOR independently reports inauguration of a multi-purpose site in Minuyan Proper (2022). These are included as **address-only historical Admin review candidates**; no 2026 open status/occupancy or verified GPS is claimed or seeded.
+- A no-responder emergency must display **"Awaiting LGU assignment"**, not a fake active responder. Resident has a functional `tel:911` and `tel:09326000119` emergency fallback. Assigned responders lacking current GPS display **WAITING GPS**, not an invented distance/ETA.
+- Map popups render concise name, public-service category, operational caveat, official information URL, OSM map source URL, and available official phone where sourced. Unverified site popups cannot claim live emergency availability. Live authorized shelter popups show last LGU-verified information, marked explicitly as last reported and not a live occupancy sensor.
+
+**Acceptance still pending:** exact current BFP and evacuation site coordinates, LGU official verification and Firestore production rules access, physically assigned responder sharing GPS, browser link and GPS behavior, and the latest preview release source revision. Do not deploy to production `volunserve.com` without these explicit checks.
