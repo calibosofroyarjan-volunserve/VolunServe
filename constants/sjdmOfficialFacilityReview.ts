@@ -44,6 +44,17 @@ export const SJDM_OFFICIAL_REVIEW_CANDIDATES: ReviewCandidate[] = [
     sourceContext: "Office address listed by city. Confirm the precise GPS and correct current administrative barangay before publishing.",
   },
   {
+    id: "minuyan-proper-pagcor-multipurpose-shelter",
+    kind: "evacuation",
+    name: "PAGCOR-funded Multi-Purpose Evacuation Facility (2022)",
+    address: "Barangay Minuyan Proper, City of San Jose del Monte, Bulacan",
+    barangay: "Minuyan Proper",
+    sourceUrl: "https://www.pagcor.ph/press-releases/first-pagcor-funded-evacuation-facility-in-bulacan-inaugurated.php",
+    sourceLabel: "PAGCOR official press release — inaugurated June 20, 2022",
+    sourceContext: "Historical government-confirmed facility inauguration; NOT evidence of a currently open shelter, available capacity, or an independently surveyed GPS position.",
+    historic: true,
+  },
+  {
     id: "historical-central-evacuation-site",
     kind: "evacuation",
     name: "Historical central evacuation center — Productivity Center",
