@@ -24,7 +24,7 @@ service cloud.firestore {
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') == 'admin'
         && p.get('status', 'approved') == 'approved'
         // A suspended LGU administrator must lose operational access immediately.
@@ -32,14 +32,14 @@ service cloud.firestore {
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') == 'superadmin'
         && p.get('status', 'approved') == 'approved';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
         && (p.get('role', '') == 'superadmin'
