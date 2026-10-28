@@ -547,3 +547,26 @@ test("Super Admin Audit Logs support verified source feeds, category/search filt
   assert.match(source, /const pagedLogs = visible\.slice/);
   assert.match(source, /const PAGE_SIZE = 5/);
 });
+
+test("Privileged LGU decisions and Community Event operations commit immutable audit records atomically", () => {
+  const account = read("app/(admin)/account-approvals.tsx");
+  const proposals = read("app/(admin)/community-events.tsx");
+  const attendance = read("app/(admin)/community-attendance.tsx");
+  const rules = read("firestore.rules");
+  assert.doesNotMatch(account, /writeAdminLogSafely|createAdminLog/,
+    "No fire-and-forget audit logs after LGU account moderation");
+  assert.equal((account.match(/batch\.set\(doc\(collection\(db, "adminLogs"\)\)/g)||[]).length, 2,
+    "LGU volunteer decision and resident moderation must both audit in the same batch");
+  assert.equal((proposals.match(/tx\.set\(doc\(collection\(db, "adminLogs"\)\)/g)||[]).length, 2,
+    "Approval/publication and rejection must both audit in their proposal transactions");
+  assert.equal((attendance.match(/tx\.set\(doc\(collection\(db, "adminLogs"\)\)/g)||[]).length, 2,
+    "Start/completion and attendance verification must audit in their event transactions");
+  for(const action of ["volunteer_application_", "account_suspended", "account_reactivated"])
+    assert.ok(account.includes(action), "Missing audited account action: "+action);
+  for(const action of ["community_event_published", "community_event_proposal_rejected"])
+    assert.ok(proposals.includes(action), "Missing audited proposal action: "+action);
+  for(const action of ["community_event_started", "community_event_completed", "community_attendance_verified"])
+    assert.ok(attendance.includes(action), "Missing audited event action: "+action);
+  assert.match(rules, /match \/adminLogs\/\{logId\}/);
+  assert.match(rules, /allow update, delete: if false;/);
+});
