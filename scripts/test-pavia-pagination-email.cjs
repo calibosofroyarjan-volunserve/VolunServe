@@ -591,3 +591,54 @@ test("LGU announcements and sandbox releases create privacy-limited immutable go
   assert.match(fixture,/fund_demo_simulated_sent/);
   assert.match(fixture,/adminActivityLogs:new Map\(\)/);
 });
+
+test("All Super Admin record lists show five items with numbered navigation ABOVE records, never scroll-to-footer", () => {
+  const overview = read("app/(superadmin)/index.tsx");
+  const accounts = read("app/(superadmin)/admin-accounts.tsx");
+  const records = read("app/(superadmin)/all-records.tsx");
+  const audit = read("app/(superadmin)/admin-logs.tsx");
+  const privacy = read("components/admin/LguStaffPrivacyRequestsPanel.tsx");
+  const paging = read("components/ui/ListPagination.tsx");
+
+  // Two separately paged 5-row overview audit tables, controls above tables.
+  assert.equal((overview.match(/<OverviewAuditTable/g)||[]).length,2);
+  assert.match(overview,/const PAGE_SIZE = 5/);
+  assert.ok(overview.indexOf("<ListPagination page={page} total={total}") <
+    overview.indexOf("<ScrollView horizontal showsHorizontalScrollIndicator={false}"),
+    "Overview activity page selector must appear BEFORE audit table rows");
+  assert.match(overview,/pagedAdminActions = adminActions\.slice/);
+  assert.match(overview,/pagedSystemChanges = systemChanges\.slice/);
+
+  // Both staff queues already use five-per-page account rendering, controls above cards.
+  for(const [pageKey,rowsKey] of [
+    ["safeApplicantPage", "pagedLguApplications.map(account =>"],
+    ["safeAdminPage", "pagedAdminAccounts.map("],
+  ]) assert.ok(accounts.indexOf("<ListPagination page={"+pageKey+"}") <
+    accounts.indexOf(rowsKey), "Staff/Admin pagination must be above "+rowsKey);
+  assert.match(accounts,/ADMIN_PAGE_SIZE = 5/);
+
+  // Record category browsing is a proper five-per-page list and resets on search/tab.
+  assert.ok(records.indexOf("<ListPagination page={activePage}") <
+    records.indexOf("pagedRecords.map("), "System Records navigation must appear before record cards");
+  assert.match(records,/const PAGE_SIZE = 5/);
+  assert.match(records,/pagedRecords = visibleRecords\.slice/);
+
+  // Audit categories + search must not require scrolling down to click the next page.
+  assert.ok(audit.indexOf("<ListPagination page={activePage}") <
+    audit.indexOf("pagedLogs.map("), "Audit Logs navigation must appear before audit cards");
+  assert.match(audit,/const PAGE_SIZE = 5/);
+  assert.match(audit,/pagedLogs = visible\.slice/);
+
+  // Privacy queue is still five per page; paging precedes the potentially expanded cards.
+  assert.ok(privacy.indexOf("<ListPagination page={current}") <
+    privacy.indexOf("rows.map(item=>"), "Staff privacy pager must appear before request cards");
+  assert.match(privacy,/const PAGE_SIZE=5/);
+  assert.match(privacy,/items\.slice\(\(current-1\)\*PAGE_SIZE,current\*PAGE_SIZE\)/);
+
+  // The shared component must support numbered buttons, 44px tap targets and
+  // accessible active-page state; never use infinite scrolling or "load more".
+  assert.match(paging,/visiblePages\.map\(number/);
+  assert.match(paging,/minWidth:44,minHeight:44/);
+  assert.match(paging,/"aria-current": "page"/);
+  assert.doesNotMatch(accounts+records+audit+privacy,/onEndReached|Load More Records|onScrollEndDrag/);
+});
