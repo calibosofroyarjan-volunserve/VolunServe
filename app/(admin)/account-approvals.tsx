@@ -28,10 +28,6 @@ import {
 } from "react-native";
 
 import {
-  createAdminLog,
-} from "../../lib/adminLogger";
-
-import {
   auth,
   db,
 } from "../../lib/firebase";
@@ -266,24 +262,6 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
   const currentPage = Math.min(page, totalPages);
   const pagedAccounts = matchingAccounts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const writeAdminLogSafely = async (
-    payload: Parameters<typeof createAdminLog>[0]
-  ) => {
-    try {
-      await createAdminLog(payload);
-    } catch (error) {
-      /*
-       * The review itself is already committed at this point.
-       * A logging failure must not mislead the Admin into repeating
-       * a successful approval/rejection.
-       */
-      console.log(
-        "admin review log error",
-        error
-      );
-    }
-  };
-
   const reviewVolunteerApplication = async (
     account: Account,
     decision: "approved" | "rejected",
@@ -381,24 +359,17 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         }
       );
 
-      await batch.commit();
-
-      await writeAdminLogSafely({
-        actionType:
-          `volunteer_application_${decision}`,
+      // Both the decision and its immutable audit event must commit together.
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: `volunteer_application_${decision}`,
         targetType: "user",
         targetId: account.id,
         adminUid: reviewer.uid,
-        adminName:
-          reviewer.displayName ||
-          reviewer.email ||
-          "Administrator",
-        description:
-          `${
-            account.fullName ||
-            account.email
-          } volunteer application was marked as ${decision}.`,
+        adminName: reviewer.displayName || reviewer.email || "Administrator",
+        description: `${account.fullName || account.email} volunteer application was marked as ${decision}.`,
+        createdAt: serverTimestamp(),
       });
+      await batch.commit();
 
       AppAlert.alert(
         "Saved",
@@ -466,26 +437,16 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         }
       );
 
-      await batch.commit();
-
-      await writeAdminLogSafely({
-        actionType:
-          nextStatus === "suspended"
-            ? "account_suspended"
-            : "account_reactivated",
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: nextStatus === "suspended" ? "account_suspended" : "account_reactivated",
         targetType: "user",
         targetId: account.id,
         adminUid: reviewer.uid,
-        adminName:
-          reviewer.displayName ||
-          reviewer.email ||
-          "Administrator",
-        description:
-          `${
-            account.fullName ||
-            account.email
-          } community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
+        adminName: reviewer.displayName || reviewer.email || "Administrator",
+        description: `${account.fullName || account.email} community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
+        createdAt: serverTimestamp(),
       });
+      await batch.commit();
 
       AppAlert.alert(
         "Saved",
