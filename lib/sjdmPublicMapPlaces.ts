@@ -61,5 +61,5 @@ export function googleMapsFacilityDirections(latitude:number,longitude:number): 
       latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)
     throw new Error("Invalid facility coordinates for directions.");
   return "https://www.google.com/maps/dir/?api=1&destination=" +
-    latitude.toFixed(6) + "%2C" + longitude.toFixed(6) + "&travelmode=driving";
+    latitude.toFixed(6) + "%2C" + longitude.toFixed(6) + "&travelmode=driving&dir_action=navigate";
 }
