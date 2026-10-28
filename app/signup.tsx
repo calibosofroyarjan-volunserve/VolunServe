@@ -528,7 +528,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -848,30 +848,26 @@ export default function Signup() {
                 )}
               </View>
  
-              {googleBound ? (
+              {googleBound && (
                 <View style={styles.infoBox}>
                   <Text style={styles.infoBoxText}>
-                    ✓ Google account connected. Your Google sign-in will be used for this Basic Resident Account, so no additional password is required here.
+                    Google is connected. Create a VolunServe password as well to use this same account with either sign-in method.
                   </Text>
                 </View>
-              ) : (
-                <>
-                  <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
-                  <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
-                  <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
-
-                  <View style={styles.passwordPanel}>
-                    <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
-                    <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
-                  </View>
-                </>
               )}
+              <SectionTitle title="Password Security" subtitle="Create a strong password to secure this account." />
+              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
+              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
+              <View style={styles.passwordPanel}>
+                <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
+                <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
+              </View>
 
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
               <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
