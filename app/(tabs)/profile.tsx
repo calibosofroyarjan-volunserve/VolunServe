@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { User } from "firebase/auth";
+import { updateProfile, User } from "firebase/auth";
+import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../../constants/occupationOptions";
 import {
   collection,
   doc,
@@ -315,11 +316,9 @@ export default function Profile() {
   ] =
     useState(false);
 
-  const [
-    fullName,
-    setFullName,
-  ] =
-    useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   const [
     phoneNumber,
@@ -333,11 +332,11 @@ export default function Profile() {
   ] =
     useState("");
 
-  const [
-    occupation,
-    setOccupation,
-  ] =
-    useState("");
+  const [occupationCategory, setOccupationCategory] = useState("");
+  const [occupationSpecialization, setOccupationSpecialization] = useState("");
+  const [occupationOther, setOccupationOther] = useState("");
+  const [occupationOpen, setOccupationOpen] = useState(false);
+  const [specializationOpen, setSpecializationOpen] = useState(false);
 
   const [
     residentCases,
@@ -446,10 +445,15 @@ export default function Profile() {
             nextProfile,
           );
 
-          setFullName(
-            nextProfile.fullName ||
-              "",
-          );
+          // Registration saves separate legal name fields; keep edit in sync
+          // with both those fields and the canonical profile.fullName.
+          const canonicalName = String(nextProfile.fullName || "");
+          const comma = canonicalName.indexOf(",");
+          const lastFromName = comma >= 0 ? canonicalName.slice(0, comma).trim() : canonicalName.trim().split(/\s+/).slice(-1)[0] || "";
+          const givenFromName = comma >= 0 ? canonicalName.slice(comma + 1).trim().split(/\s+/) : canonicalName.trim().split(/\s+/);
+          setLastName(nextProfile.lastName || lastFromName);
+          setFirstName(nextProfile.firstName || givenFromName[0] || "");
+          setMiddleName(nextProfile.middleName || (comma >= 0 ? givenFromName.slice(1).join(" ") : givenFromName.slice(1, -1).join(" ")));
 
           setPhoneNumber(
             nextProfile.phoneNumber ||
@@ -461,10 +465,15 @@ export default function Profile() {
               "",
           );
 
-          setOccupation(
-            nextProfile.occupation ||
-              "",
-          );
+          const previousOccupation = nextProfile.occupation || "";
+          const category = nextProfile.occupationCategory ||
+            (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)");
+          setOccupationCategory(category);
+          setOccupationSpecialization(nextProfile.occupationSpecialization || "");
+          setOccupationOther(nextProfile.occupationOther ||
+            (category === "Other (Specify)" && previousOccupation !== "Other (Specify)" ? previousOccupation : ""));
+          setOccupationOpen(false);
+          setSpecializationOpen(false);
 
           setLoading(
             false,
@@ -886,66 +895,65 @@ export default function Profile() {
       .trim()
       .toLowerCase();
 
-  const saveProfile =
-    async () => {
-      if (!user) {
-        return;
-      }
+  const saveProfile = async () => {
+    if (!user || !profile) return;
 
-      const cleanName =
-        fullName
-          .trim()
-          .replace(
-            /\s+/g,
-            " ",
-          );
+    const first = firstName.trim().replace(/\s+/g, " ");
+    const middle = middleName.trim().replace(/\s+/g, " ");
+    const last = lastName.trim().replace(/\s+/g, " ");
+    if (first.length < 2 || last.length < 2) {
+      Alert.alert("Invalid name", "First name and last name are required.");
+      return;
+    }
+    if (!occupationCategory || !OCCUPATION_OPTIONS.includes(occupationCategory)) {
+      Alert.alert("Select occupation", "Choose your occupation from the list.");
+      return;
+    }
+    const choices = SPECIALIZATIONS[occupationCategory] || [];
+    if (choices.length > 0 && !choices.includes(occupationSpecialization)) {
+      Alert.alert("Choose specialization", "Select a valid specialization.");
+      return;
+    }
+    if (occupationCategory === "Other (Specify)" &&
+        occupationOther.trim().length < 2) {
+      Alert.alert("Specify occupation", "Please enter your occupation.");
+      return;
+    }
 
-      if (
-        cleanName.length <
-        2
-      ) {
-        Alert.alert(
-          "Invalid name",
-          "Please enter your full name.",
-        );
-
-        return;
-      }
-
-      setSaving(true);
-
+    const cleanName = last + ", " + first + (middle ? " " + middle : "");
+    const selectedOccupation = occupationCategory === "Other (Specify)"
+      ? occupationOther.trim()
+      : occupationSpecialization || occupationCategory;
+    setSaving(true);
+    try {
+      await updateUserProfile(user.uid, {
+        fullName: cleanName,
+        firstName: first,
+        middleName: middle,
+        lastName: last,
+        phoneNumber: phoneNumber.trim(),
+        address: address.trim(),
+        occupationCategory,
+        occupationSpecialization: choices.length ? occupationSpecialization : "",
+        occupationOther: occupationCategory === "Other (Specify)" ? occupationOther.trim() : "",
+        occupation: selectedOccupation,
+      });
+      // Firestore is the authoritative VolunServe profile. Mirror the
+      // display name in Firebase Auth without claiming two-system atomicity.
       try {
-        await updateUserProfile(
-          user.uid,
-          {
-            fullName:
-              cleanName,
-            phoneNumber:
-              phoneNumber.trim(),
-            address:
-              address.trim(),
-            occupation:
-              occupation.trim(),
-          },
-        );
-
-        setEditOpen(
-          false,
-        );
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Unable to save",
-          error?.message ||
-            "Please try again.",
-        );
-      } finally {
-        setSaving(
-          false,
-        );
+        if (user.displayName !== cleanName) {
+          await updateProfile(user, { displayName: cleanName });
+        }
+      } catch {
+        Alert.alert("Profile updated", "Your VolunServe name was saved. Your sign-in display name may take another sign-in to refresh.");
       }
-    };
+      setEditOpen(false);
+    } catch (error: any) {
+      Alert.alert("Unable to save", error?.message || "Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -1721,14 +1729,22 @@ export default function Profile() {
               }
             >
               <ProfileInput
-                label="Full Name"
-                value={
-                  fullName
-                }
-                onChange={
-                  setFullName
-                }
-                placeholder="Full name"
+                label="First Name"
+                value={firstName}
+                onChange={setFirstName}
+                placeholder="First name"
+              />
+              <ProfileInput
+                label="Middle Name (optional)"
+                value={middleName}
+                onChange={setMiddleName}
+                placeholder="Middle name"
+              />
+              <ProfileInput
+                label="Last Name"
+                value={lastName}
+                onChange={setLastName}
+                placeholder="Last name"
               />
 
               <ProfileInput
@@ -1753,16 +1769,46 @@ export default function Profile() {
                 placeholder="Complete address"
               />
 
-              <ProfileInput
-                label="Occupation"
-                value={
-                  occupation
-                }
-                onChange={
-                  setOccupation
-                }
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginBottom: 8 }}>Occupation Category</Text>
+              <TouchableOpacity accessibilityRole="button"
+                accessibilityLabel="Choose occupation category"
+                onPress={() => setOccupationOpen(v => !v)}
+                style={{ borderWidth: 1, borderColor: "#CAD6D2", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <Text style={{ color: "#123F35", fontWeight: "600", flex: 1 }}>{occupationCategory || "Select occupation"}</Text>
+                <Ionicons name={occupationOpen ? "chevron-up-outline" : "chevron-down-outline"} size={18} color="#08775D"/>
+              </TouchableOpacity>
+              {occupationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
+                {OCCUPATION_OPTIONS.map(option => (
+                  <TouchableOpacity key={option} accessibilityRole="button"
+                    onPress={() => { setOccupationCategory(option); setOccupationSpecialization(""); setOccupationOther(""); setOccupationOpen(false); setSpecializationOpen(false); }}
+                    style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationCategory === option ? "#E0F6EC" : "#FFFFFF" }}>
+                    <Text style={{ color: "#124C3C" }}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>}
+              {(SPECIALIZATIONS[occupationCategory] || []).length > 0 && <>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginBottom: 8 }}>Specialization</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose occupation specialization"
+                  onPress={() => setSpecializationOpen(v => !v)}
+                  style={{ borderWidth: 1, borderColor: "#CAD6D2", borderRadius: 12, padding: 14, flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+                  <Text style={{ color: "#123F35", flex: 1 }}>{occupationSpecialization || "Select specialization"}</Text>
+                  <Ionicons name={specializationOpen ? "chevron-up-outline" : "chevron-down-outline"} size={18} color="#08775D"/>
+                </TouchableOpacity>
+                {specializationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
+                  {(SPECIALIZATIONS[occupationCategory] || []).map(option => (
+                    <TouchableOpacity key={option} onPress={() => { setOccupationSpecialization(option); setSpecializationOpen(false); }}
+                      style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationSpecialization === option ? "#E0F6EC" : "#FFFFFF" }}>
+                      <Text style={{ color: "#124C3C" }}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>}
+              </>}
+              {occupationCategory === "Other (Specify)" && <ProfileInput
+                label="Specify Occupation"
+                value={occupationOther}
+                onChange={setOccupationOther}
                 placeholder="Occupation"
-              />
+              />}
 
               <View
                 style={
