@@ -3939,7 +3939,7 @@ export default function WebMapTracking() {
             reporterName: item.reporterName || "Resident",
           };
         }).filter(item => !!sjdmBoundary &&
-          insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)),
+          insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude))),
 
         boundary: sjdmBoundary,
         outsideMask: sjdmBoundary ? sjdmOutsideMask(sjdmBoundary) : null,
