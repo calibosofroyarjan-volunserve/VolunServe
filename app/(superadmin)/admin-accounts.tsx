@@ -1001,15 +1001,15 @@ export default function AdminAccounts() {
           <View style={styles.sectionTitleRow}>
             <View style={styles.headingIcon}><Ionicons name="git-network-outline" size={20} color="#087A62" /></View>
             <View style={styles.sectionHeadingText}>
-              <Text style={styles.accessFlowTitle}>STAFF ACCESS · APPROVAL PROCESS</Text>
+              <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
               <Text style={styles.sectionHeading}>Three-step credential verification</Text>
             </View>
           </View>
           <View style={[styles.accessFlowSteps, compact && styles.accessFlowStepsCompact]}>
             {([
-              { number: "01", title: "Application", description: "Receive the staff-owned account and its submitted evidence." },
-              { number: "02", title: "Independent review", description: "Verify original ID, employment and appointment authority." },
-              { number: "03", title: "Secure activation", description: "Grant LGU Admin permissions with a recorded audit event." },
+              { number: "01", title: "Receive staff application", description: "Receive the staff-owned account and its submitted evidence." },
+              { number: "02", title: "Verify official LGU credentials", description: "Verify original ID, employment and appointment authority." },
+              { number: "03", title: "Promote to Admin & record audit", description: "Grant LGU Admin permissions with a recorded audit event." },
             ] as const).map(step => (
               <View key={step.number} style={[styles.accessStep, compact && styles.accessStepCompact]}>
                 <View style={styles.stepNumberBox}><Text style={styles.stepNumber}>{step.number}</Text></View>
