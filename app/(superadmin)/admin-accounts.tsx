@@ -2257,7 +2257,7 @@ const styles =
     reviewField: { marginBottom: 17 },
     reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 },
     reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
-    confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
+    confirmReview: { width: "100%", flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
     reviewHint: { flex: 1, color: "#607D6C", fontSize: 11.5, lineHeight: 17 },
     confirmDisabled: { opacity: 0.5 },
