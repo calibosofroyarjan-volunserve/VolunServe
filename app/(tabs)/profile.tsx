@@ -1454,6 +1454,8 @@ export default function Profile() {
               }
             />
 
+            <InfoRow label="Barangay" value={profile.barangay || "Not provided"} />
+
             <InfoRow
               label="Address"
               value={
