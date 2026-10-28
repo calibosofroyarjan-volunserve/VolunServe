@@ -1,5 +1,5 @@
 # VolunServe — FINAL Administrative Navigation & Workflow Contract
-Last reviewed: 2026-10-27. Source of truth for administrative sidebar names and defense use-case descriptions.
+Last reviewed: 2026-10-29. Source of truth for administrative sidebar names and defense use-case descriptions.
 
 ## Terminology — locked
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-10-27. Source of truth for administrative sidebar names and 
 | System Records (Read Only) | Programmer technical oversight; not an extra operational workspace or financial payment authority. |
 | Command Center | Exactly one LGU operational landing page and overview. |
 
-**Login CTA:** Existing approved text `Request Super Admin Access` navigates to `/admin-request`. It means request **verification by** the Super Admin team. It does **not** grant/apply for the programmer `superadmin` role.
+**Login CTA:** `Request LGU Admin Access` navigates to `/admin-request`. This is a request for **credential review by** the Super Admin team—not a request to become a programmer `superadmin` or an immediate grant of Admin privileges.
 
 ## Super Admin final sidebar order — five destinations, no duplicates
 
@@ -22,11 +22,11 @@ Last reviewed: 2026-10-27. Source of truth for administrative sidebar names and 
 | --- | --- | --- | --- |
 | 01 | System Overview | `/(superadmin)` | Live pending LGU requests, active/suspended Admins, recorded Admin activity, system/access updates, shortcuts to review and audit |
 | 02 | LGU Staff & Admin Accounts | `/(superadmin)/admin-accounts` | **First:** pending LGU Staff Applications; **Second:** independent identity, office/appointment verification; **Third:** verified promotion with atomic credential review and audit; **Then:** Admin accounts including suspend/reactivate/revoke |
-| 03 | Admin Activity & Audit Logs | `/(superadmin)/admin-logs` | Inspect recorded Admin events with actor/time/target; check sensitive actions and incident-specific traceability |
-| 04 | System Records (Read Only) | `/(superadmin)/all-records` | Technical read-only inspection of authorized records, never approval or financial release |
+| 03 | System Records | `/(superadmin)/all-records` | Technical read-only inspection of authorized records, never approval or financial release |
+| 04 | Audit Logs | `/(superadmin)/admin-logs` | Inspect recorded Admin events with actor/time/target; check sensitive actions and incident-specific traceability |
 | 05 | System Settings | `/(superadmin)/system-settings` | Review authorized technical settings, edit permitted fields, save and check recorded administrative changes |
 
-**Single official onboarding path:** `LGU Staff Application → pending_review → Super Admin independent verification → approved promotion + audit → LGU Admin login → Admin Command Center`. Legacy standalone direct-Admin profile creation is **not** available through the normal interface and is denied by Firestore rules; ordinary Residents cannot be promoted directly. Suspension, reactivation, and revocation remain available for already-approved Admins. Rejection and request-more-information exception handling still require verified implementation; do not claim these buttons exist yet.
+**Single official onboarding path:** `LGU Staff Application → pending_review → Super Admin independent verification → approved promotion + audit → LGU Admin login → Admin Command Center`. Legacy standalone direct-Admin profile creation is **not** available through the normal interface and is denied by Firestore rules; ordinary Residents cannot be promoted directly. Within **LGU Staff & Admin Accounts**, the visual order is: verification flow → pending applications → existing Admin accounts (status, suspension, reactivation, revocation) → separate staff privacy requests. Credential review happens when the pending applicant's Review Application action is opened; privacy requests do not interrupt or grant Admin approvals. Suspension, reactivation, and revocation remain available for already-approved Admins. Rejection and request-more-information exception handling still require verified implementation; do not claim these buttons exist yet.
 
 **Monitoring:** Super Admin monitors **recorded** operational decisions; does not perform them. A system update in audit logs is not equivalent to uptime, a real deployment, or complete logs of every Admin operation.
 
