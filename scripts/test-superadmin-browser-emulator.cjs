@@ -101,7 +101,8 @@ async function main() {
     await page.goto(base+"/admin-login",{waitUntil:"domcontentloaded",timeout:60000});
     await page.getByLabel("Administrative email").fill(email);
     await page.getByLabel("Administrative password").fill(password);
-    await page.getByRole("button",{name:"Login as Admin"}).click();
+    await page.screenshot({path:path.join(evidenceDir,"admin-login-debug.png"),fullPage:false});
+    await page.getByText("Login as Admin",{exact:true}).click();
     await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
     await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
     await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
