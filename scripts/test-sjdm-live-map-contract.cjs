@@ -165,3 +165,30 @@ test("old shelter reports never authorize fresh available evacuation routing", (
   const web = fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
   assert.match(web,/Status NOT recently confirmed/);
 });
+
+
+test("active Resident/Volunteer/LGU response views keep real shelter feeds and show missing-data notices", () => {
+  const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(web,/setShelterFeedState\("ready"\)/);
+  assert.match(web,/setLguFacilityFeedState\("ready"\)/);
+  assert.match(web,/collection\(db, "evacuation_centers"\)/);
+  assert.doesNotMatch(web,/if \(missionMode \|\| adminMissionMode\) \{\s*setCenters\(\[\]\)/);
+  assert.doesNotMatch(web,/if \(missionMode \|\| adminMissionMode \|\| !showCenters\)/);
+  assert.doesNotMatch(web,/centers: missionMode\s*\?\s*\[\]/);
+  assert.match(web,/activeResponseView: isResidentMode \|\| missionMode \|\| adminMissionMode \|\| lguPersonnelMissionMode/);
+  assert.match(web,/if \(!payload\.activeResponseView\)/);
+  assert.match(web,/verifiedCityShelterCount/);
+  assert.match(web,/verifiedCityLguCount/);
+  assert.match(web,/No LGU-verified active shelter records/);
+  assert.match(web,/No LGU-verified active office pins/);
+  assert.match(web,/No offline\/fake pins will be shown/);
+});
+
+test("Minuyan Proper verified history is a SOURCE REFERENCE only, not an active shelter pin", () => {
+  const sources=fs.readFileSync(path.join(root,"constants/sjdmOfficialFacilityReview.ts"),"utf8");
+  assert.match(sources,/minuyan-proper-pagcor-multipurpose-shelter/);
+  assert.match(sources,/www\.pagcor\.ph\/press-releases\/first-pagcor-funded-evacuation-facility-in-bulacan-inaugurated\.php/);
+  assert.match(sources,/NOT evidence of a currently open shelter/);
+  assert.doesNotMatch(sources,/latitude\s*:/);
+  assert.doesNotMatch(sources,/longitude\s*:/);
+});
