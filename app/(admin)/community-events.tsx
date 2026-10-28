@@ -1,3 +1,4 @@
+import ListPagination from "../../components/ui/ListPagination";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import {
@@ -167,6 +168,8 @@ export default function CommunityEventAdminScreen() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [filter, setFilter] = useState<Filter>("pending");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
@@ -240,12 +243,15 @@ export default function CommunityEventAdminScreen() {
           millis(b.createdAt) - millis(a.createdAt)
       );
   }, [proposals, filter, search]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const activePage = Math.min(page, pageCount);
+  const pagedProposals = visible.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
   // Read only profiles needed for visible proposal cards, not the full user directory.
   useEffect(() => {
     if (!user || !authorized) return;
-    const uids = [...new Set(visible.slice(0, 40).map((item) => item.proposedBy).filter(Boolean))]
+    const uids = [...new Set(pagedProposals.map((item) => item.proposedBy).filter(Boolean))]
       .filter((uid) => !(uid in people));
     if (!uids.length) return;
     let active = true;
@@ -265,7 +271,7 @@ export default function CommunityEventAdminScreen() {
       });
     });
     return () => { active = false; };
-  }, [user?.uid, authorized, visible]);
+  }, [user?.uid, authorized, pagedProposals]);
   // Query only the selected published event's participants.
   useEffect(() => {
     if (!user || !authorized || !selectedProposal || selectedProposal.status !== "approved") {
@@ -591,7 +597,7 @@ export default function CommunityEventAdminScreen() {
         <TextInput
           style={styles.search}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={(value) => {setSearch(value);setPage(1);}}
           placeholder="Search event, barangay, or Resident"
           placeholderTextColor="#93A4B1"
         />
@@ -608,7 +614,7 @@ export default function CommunityEventAdminScreen() {
           ] as Filter[]).map((item) => (
             <Pressable
               key={item}
-              onPress={() => setFilter(item)}
+              onPress={() => {setFilter(item);setPage(1);}}
               style={[
                 styles.chip,
                 filter === item && styles.chipActive,
@@ -670,7 +676,7 @@ export default function CommunityEventAdminScreen() {
         </View>
       ) : (
         <View style={styles.grid}>
-          {visible.map((item) => (
+          {pagedProposals.map((item) => (
             <View
               key={item.id}
               style={styles.card}
@@ -834,6 +840,7 @@ export default function CommunityEventAdminScreen() {
               )}
             </View>
           ))}
+          <ListPagination page={activePage} total={visible.length} onChange={setPage} />
         </View>
       )}
       </ScrollView>

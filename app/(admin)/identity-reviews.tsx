@@ -1,3 +1,4 @@
+import ListPagination from "../../components/ui/ListPagination";
 import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
@@ -126,6 +127,8 @@ export default function IdentityReviewsAdmin() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<ReviewFilter>("pending");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
   const [validationMethod, setValidationMethod] = useState("");
   const [originalDocumentReviewed, setOriginalDocumentReviewed] = useState(false);
@@ -244,6 +247,10 @@ export default function IdentityReviewsAdmin() {
       return haystack.includes(query);
     });
   }, [filter, items, search]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const activePage = Math.min(page, pageCount);
+  const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   const openReview = (item: IdentityReview) => {
     setSelected(item);
@@ -466,7 +473,7 @@ export default function IdentityReviewsAdmin() {
                   styles.filterButton,
                   active && styles.filterButtonActive,
                 ]}
-                onPress={() => setFilter(item.key)}
+                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); }}
               >
                 <Text
                   style={[
@@ -505,7 +512,7 @@ export default function IdentityReviewsAdmin() {
           <TextInput
             style={styles.searchInput}
             value={search}
-            onChangeText={setSearch}
+            onChangeText={(value) => { setSearch(value); setPage(1); setSelected(null); }}
             placeholder="Search Resident, email, barangay, or verification ID"
             placeholderTextColor="#94A3B8"
           />
@@ -552,7 +559,7 @@ export default function IdentityReviewsAdmin() {
             ]}
           >
             <View style={[styles.queue, wide && styles.queueWide]}>
-              {filtered.map((item) => {
+              {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
                   <TouchableOpacity
@@ -610,6 +617,7 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
+              <ListPagination page={activePage} total={filtered.length} onChange={(next) => { setPage(next); setSelected(null); }} />
             </View>
 
             <View
