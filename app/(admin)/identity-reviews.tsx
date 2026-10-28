@@ -127,6 +127,8 @@ export default function IdentityReviewsAdmin() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<IdentityReview | null>(null);
   const [validationMethod, setValidationMethod] = useState("");
+  const [originalDocumentReviewed, setOriginalDocumentReviewed] = useState(false);
+  const [registeredNameMatched, setRegisteredNameMatched] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
 
@@ -245,6 +247,9 @@ export default function IdentityReviewsAdmin() {
   const openReview = (item: IdentityReview) => {
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
+    // Explicit acknowledgments cannot carry between different Resident cases.
+    setOriginalDocumentReviewed(false);
+    setRegisteredNameMatched(false);
     setNotes(item.manualReviewNotes || "");
   };
 
@@ -258,6 +263,11 @@ export default function IdentityReviewsAdmin() {
         "Validation Method Required",
         "Select how the Resident was independently validated by LGU/Admin.",
       );
+      return;
+    }
+
+    if (action === "verify" && (!originalDocumentReviewed || !registeredNameMatched)) {
+      Alert.alert("Identity Check Required", "Confirm that you independently reviewed the original ID or official record and that the full name matches this Resident account. If it does not match, require a retry.");
       return;
     }
 
@@ -297,6 +307,8 @@ export default function IdentityReviewsAdmin() {
             action,
             validationMethod:
               action === "verify" ? validationMethod : "",
+            originalDocumentReviewed: action === "verify" && originalDocumentReviewed,
+            registeredNameMatched: action === "verify" && registeredNameMatched,
             notes: notes.trim(),
           }),
         },
@@ -324,6 +336,8 @@ export default function IdentityReviewsAdmin() {
 
       setSelected(null);
       setValidationMethod("");
+      setOriginalDocumentReviewed(false);
+      setRegisteredNameMatched(false);
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
@@ -609,6 +623,10 @@ export default function IdentityReviewsAdmin() {
                   item={selected}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
+                  originalDocumentReviewed={originalDocumentReviewed}
+                  setOriginalDocumentReviewed={setOriginalDocumentReviewed}
+                  registeredNameMatched={registeredNameMatched}
+                  setRegisteredNameMatched={setRegisteredNameMatched}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
@@ -672,6 +690,10 @@ function ReviewDetail({
   item,
   validationMethod,
   setValidationMethod,
+  originalDocumentReviewed,
+  setOriginalDocumentReviewed,
+  registeredNameMatched,
+  setRegisteredNameMatched,
   notes,
   setNotes,
   saving,
@@ -681,6 +703,10 @@ function ReviewDetail({
   item: IdentityReview;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
+  originalDocumentReviewed: boolean;
+  setOriginalDocumentReviewed: (value: boolean) => void;
+  registeredNameMatched: boolean;
+  setRegisteredNameMatched: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
   saving: "" | "verify" | "require_retry";
@@ -812,6 +838,34 @@ function ReviewDetail({
             })}
           </View>
 
+          <View style={{ marginTop: 12, marginBottom: 14, backgroundColor: "#F0F7F5", borderRadius: 12, padding: 12, gap: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: "#163E35" }}>
+              Required before approval — {item.resident?.fullName || "Resident"}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: originalDocumentReviewed }}
+              onPress={() => setOriginalDocumentReviewed(!originalDocumentReviewed)}
+              style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
+              <Ionicons name={originalDocumentReviewed ? "checkbox" : "square-outline"} size={22} color="#087668" />
+              <Text style={{ color: "#294C46", fontSize: 13, lineHeight: 19, flex: 1 }}>
+                I independently checked the original government ID or an official identity record.
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: registeredNameMatched }}
+              onPress={() => setRegisteredNameMatched(!registeredNameMatched)}
+              style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
+              <Ionicons name={registeredNameMatched ? "checkbox" : "square-outline"} size={22} color="#087668" />
+              <Text style={{ color: "#294C46", fontSize: 13, lineHeight: 19, flex: 1 }}>
+                The full name on that document matches this Resident's registered name. If not, I must require a retry.
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ color: "#527068", fontSize: 12, lineHeight: 17 }}>
+              AI face similarity is not proof of an authentic ID, identity ownership or liveness. Do not save ID numbers in review notes.
+            </Text>
+          </View>
           <Text style={styles.inputLabel}>
             Review notes / retry reason
           </Text>
@@ -830,10 +884,10 @@ function ReviewDetail({
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving) &&
+                (!validationMethod || !originalDocumentReviewed || !registeredNameMatched || !!saving) &&
                   styles.disabledButton,
               ]}
-              disabled={!validationMethod || !!saving}
+              disabled={!validationMethod || !originalDocumentReviewed || !registeredNameMatched || !!saving}
               onPress={onVerify}
             >
               {saving === "verify" ? (
