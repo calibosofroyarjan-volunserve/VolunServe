@@ -323,7 +323,12 @@ test("Sir Pavia Edit Profile persists name to main profile without compulsory oc
   const session=read("lib/useUserSession.ts");
   const auth=read("lib/firebaseAuth.ts");
   const rules=read("firestore.rules");
-  assert.match(profile,/const editingOccupation = occupationCategory\.trim\(\)\.length > 0/);
+  assert.match(profile,/const \[occupationTouched, setOccupationTouched\] = useState\(false\)/);
+  assert.match(profile,/const editingOccupation = occupationTouched/);
+  assert.match(profile,/if \(editingOccupation && occupationCategory === "Other \(Specify\)"/);
+  assert.match(profile,/setOccupationTouched\(true\); setOccupationCategory\(option\)/);
+  assert.match(profile,/setOccupationTouched\(true\); setOccupationSpecialization\(option\)/);
+  assert.match(profile,/setOccupationTouched\(true\); setOccupationOther\(value\)/);
   assert.doesNotMatch(profile,/if \(!occupationCategory \|\| !OCCUPATION_OPTIONS\.includes\(occupationCategory\)\)/);
   assert.match(profile,/const changes: Partial<UserProfile> = \{/);
   for(const field of ["fullName: cleanName","firstName: first","middleName: middle","lastName: last"])
@@ -338,4 +343,19 @@ test("Sir Pavia Edit Profile persists name to main profile without compulsory oc
   for(const name of ["'fullName'","'firstName'","'middleName'","'lastName'"])
     assert.ok(ownerSection.includes(name),name);
   assert.ok(ownerSection.includes("request.auth.uid == uid"));
+});
+
+
+test("Edit Profile checks are source-only and require no fake or disposable accounts",()=>{
+  const profile=read("app/(tabs)/profile.tsx");
+  const auth=read("lib/firebaseAuth.ts");
+  const web=read("app/signup.web.tsx");
+  const native=read("app/signup.tsx");
+  const staff=read("app/admin-request.tsx");
+  assert.doesNotMatch(profile,/createUserWithEmailAndPassword|signUpUser\(/);
+  assert.match(profile,/await updateUserProfile\(user\.uid, changes\)/);
+  assert.match(auth,/if \(isKnownDisposableEmail\(submittedEmail\)\)/);
+  assert.match(web,/!isKnownDisposableEmail\(formData\.email\)/);
+  assert.match(native,/!isKnownDisposableEmail\(formData\.email\)/);
+  assert.match(staff,/if \(step === 0 && isKnownDisposableEmail\(form\.email\)\)/);
 });
