@@ -164,10 +164,10 @@ export default function AdminLogs() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F6F8F7" },
-  container: { width: "100%", maxWidth: 1180, alignSelf: "center", padding: 22, paddingBottom: 60 },
+  container: { width: "100%", maxWidth: 1300, alignSelf: "center", padding: 22, paddingBottom: 60 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
-  header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 },
+  header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 17, padding:20, borderRadius:14, backgroundColor:"#E5F5ED", borderWidth:1, borderColor:"#D8EBE0" },
   eyebrow: { fontSize: 11, fontWeight: "800", color: "#087657", letterSpacing: 1 },
   title: { fontSize: 27, fontWeight: "700", color: "#14392F", marginTop: 4 },
   subtitle: { fontSize: 12, color: "#657A80", marginTop: 4, lineHeight: 18 },
