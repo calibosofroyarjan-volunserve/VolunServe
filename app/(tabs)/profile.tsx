@@ -2721,50 +2721,74 @@ function InlineLoading() {
   );
 }
 
-function ProfileInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (
-    value: string,
-  ) => void;
-  placeholder: string;
-}) {
-  return (
-    <View
-      style={
-        styles.inputGroup
-      }
-    >
-      <Text
-        style={
-          styles.inputLabel
-        }
-      >
-        {label}
+type ProfileDropdownProps = {
+  label:string;
+  value:string;
+  placeholder:string;
+  options:string[];
+  open:boolean;
+  searchable?:boolean;
+  onToggle:()=>void;
+  onSelect:(value:string)=>void;
+};
+function ProfileDropdown({label,value,placeholder,options,open,searchable=false,onToggle,onSelect}:ProfileDropdownProps) {
+  const [search,setSearch]=useState("");
+  useEffect(()=>{if(!open)setSearch("");},[open]);
+  const visibleOptions=searchable
+    ? options.filter(option=>option.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    : options;
+  return <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TouchableOpacity accessibilityRole="button"
+      accessibilityLabel={label+": "+(value || placeholder)}
+      accessibilityState={{expanded:open}}
+      onPress={onToggle}
+      style={[styles.dropdownTrigger,open && styles.dropdownTriggerOpen]}>
+      <Text style={[styles.dropdownValue,!value && styles.dropdownPlaceholder]} numberOfLines={1}>
+        {value || placeholder}
       </Text>
+      <Ionicons name={open?"chevron-up":"chevron-down"} size={18} color="#087A5D"/>
+    </TouchableOpacity>
+    {open && <View style={styles.dropdownPanel}>
+      {searchable && <View style={styles.dropdownSearch}>
+        <Ionicons name="search-outline" size={17} color="#6C9082"/>
+        <TextInput accessibilityLabel={"Search "+label} value={search}
+          onChangeText={setSearch} placeholder="Search barangay..."
+          placeholderTextColor="#93A8A0" autoCapitalize="none" autoCorrect={false}
+          style={styles.dropdownSearchInput}/>
+      </View>}
+      <ScrollView style={[styles.dropdownOptions,Platform.OS==="web" && styles.webModalScroll]}
+        nestedScrollEnabled keyboardShouldPersistTaps="always" showsVerticalScrollIndicator persistentScrollbar>
+        {visibleOptions.length === 0
+          ? <Text style={styles.dropdownEmpty}>No matching options.</Text>
+          : visibleOptions.map(option=><TouchableOpacity key={option}
+            accessibilityRole="button" accessibilityLabel={"Select "+option}
+            onPress={()=>onSelect(option)}
+            style={[styles.dropdownOption,(value===option || (!value && option==="Not specified")) && styles.dropdownOptionSelected]}>
+            <Text style={styles.dropdownOptionText} numberOfLines={2}>{option}</Text>
+            {(value===option || (!value && option==="Not specified")) &&
+              <Ionicons name="checkmark" color="#087A5D" size={17}/>}
+          </TouchableOpacity>)}
+      </ScrollView>
+    </View>}
+  </View>;
+}
 
-      <TextInput
-        value={
-          value
-        }
-        onChangeText={
-          onChange
-        }
-        placeholder={
-          placeholder
-        }
-        placeholderTextColor="#94A3B8"
-        style={
-          styles.input
-        }
-      />
-    </View>
-  );
+function ProfileInput({label,value,onChange,placeholder,required=false,keyboardType,maxLength}:{
+  label:string;
+  value:string;
+  onChange:(value:string)=>void;
+  placeholder:string;
+  required?:boolean;
+  keyboardType?:React.ComponentProps<typeof TextInput>["keyboardType"];
+  maxLength?:number;
+}) {
+  return <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}{required && <Text style={styles.requiredAsterisk}> *</Text>}</Text>
+    <TextInput accessibilityLabel={label} value={value} onChangeText={onChange}
+      placeholder={placeholder} placeholderTextColor="#93A8A0" style={styles.input}
+      keyboardType={keyboardType} maxLength={maxLength} autoCorrect={false}/>
+  </View>;
 }
 
 const styles =
