@@ -226,3 +226,26 @@ test("Resident web and mobile logout use the branded dialog, not browser confirm
  assert.ok(host.includes("<AppDialogHost />"));
  assert.doesNotMatch(dialog,/window\.confirm\(/);
 });
+
+
+test("All application screens avoid native browser alerts, confirms and prompts",()=>{
+ const dirs=["app","components","lib"];
+ const violations=[];
+ const walk=(directory)=>{
+  for(const item of fs.readdirSync(path.join(root,directory),{withFileTypes:true})){
+   const relative=path.posix.join(directory,item.name);
+   if(item.isDirectory()) {walk(relative);continue;}
+   if(!/\.(tsx?|jsx?)$/.test(item.name))continue;
+   const lines=read(relative).split("\n");
+   lines.forEach((line,index)=>{
+    // Report actual calls, not ordinary AppAlert.alert or comments.
+    const source=line.trim();
+    if(source.startsWith("//")||source.startsWith("*"))return;
+    if(/\b(?:window|globalThis)\s*\.\s*(?:alert|confirm|prompt)\s*\(|\b(?:Alert|globalThis\.Alert)\s*\.\s*alert\s*\(|(^|[^\w.])(?:alert|confirm|prompt)\s*\(/.test(source))
+      violations.push(relative+":"+(index+1)+" "+source.slice(0,115));
+   });
+  }
+ };
+ dirs.forEach(walk);
+ assert.deepEqual(violations,[],"Native browser or OS dialog calls detected:\n"+violations.join("\n"));
+});
