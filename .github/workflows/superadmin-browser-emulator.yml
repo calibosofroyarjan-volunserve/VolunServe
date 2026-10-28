@@ -9,6 +9,7 @@ on:
       - app/(superadmin)/**
       - components/admin/LguApplicantEvidencePanel.tsx
       - components/auth/PremiumAuthShell.tsx
+      - components/ui/ListPagination.tsx
       - scripts/test-superadmin-browser-emulator.cjs
       - .github/workflows/superadmin-browser-emulator.yml
   workflow_dispatch:
