@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { updateProfile, User } from "firebase/auth";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../../constants/occupationOptions";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import {
   collection,
   doc,
@@ -18,10 +19,10 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -340,6 +341,9 @@ export default function Profile() {
   const [occupationTouched, setOccupationTouched] = useState(false);
   const editProfileRef = useRef(edit === "1");
   const editDraftInitializedRef = useRef(false);
+  const [barangay, setBarangay] = useState("");
+  const [barangayTouched, setBarangayTouched] = useState(false);
+  const [barangayOpen, setBarangayOpen] = useState(false);
   const [occupationOpen, setOccupationOpen] = useState(false);
   const [specializationOpen, setSpecializationOpen] = useState(false);
 
@@ -409,6 +413,9 @@ export default function Profile() {
       nextProfile.address ||
         "",
     );
+    setBarangay(nextProfile.barangay || "");
+    setBarangayTouched(false);
+    setBarangayOpen(false);
 
     const previousOccupation = nextProfile.occupation || "";
     const category = nextProfile.occupationCategory ||
@@ -935,7 +942,7 @@ export default function Profile() {
     // Name and contact changes must be saveable without first providing an
     // unrelated occupation. Legacy Resident profiles may have no occupation.
     const editingOccupation = occupationTouched;
-    if (editingOccupation && !OCCUPATION_OPTIONS.includes(occupationCategory)) {
+    if (editingOccupation && occupationCategory && !OCCUPATION_OPTIONS.includes(occupationCategory)) {
       AppAlert.alert("Select occupation", "Choose an occupation from the list.");
       return;
     }
@@ -950,6 +957,10 @@ export default function Profile() {
       return;
     }
 
+    if (barangayTouched && !SJDM_BARANGAYS.includes(barangay)) {
+      AppAlert.alert("Select barangay", "Choose an official San Jose del Monte barangay from the dropdown.");
+      return;
+    }
     const cleanName = last + ", " + first + (middle ? " " + middle : "");
     // Firestore users/{uid}.fullName is the canonical name across Home,
     // My Profile and the account dropdown. Do not overwrite old occupation
@@ -962,6 +973,7 @@ export default function Profile() {
       phoneNumber: phoneNumber.trim(),
       address: address.trim(),
     };
+    if (barangayTouched) changes.barangay = barangay;
     if (editingOccupation) {
       changes.occupationCategory = occupationCategory;
       changes.occupationSpecialization = choices.length ? occupationSpecialization : "";
@@ -1079,9 +1091,8 @@ export default function Profile() {
       contentContainerStyle={
         styles.page
       }
-      showsVerticalScrollIndicator={
-        false
-      }
+      showsVerticalScrollIndicator
+      persistentScrollbar
     >
       <View
         style={
