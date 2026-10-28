@@ -1369,8 +1369,8 @@ export default function MapTracking() {
             // Only Simulation Mode creates/moves a manual pin.
             if (mode !== "simulation") return;
             followUserRef.current = false;
-            if (sjdmBoundary && !insideSjdmBoundary(sjdmBoundary,
-              e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)) return;
+            if (!inCity(e.nativeEvent.coordinate.latitude,
+              e.nativeEvent.coordinate.longitude)) return;
             setCustomPin(e.nativeEvent.coordinate);
           }}
         >
@@ -1591,6 +1591,14 @@ export default function MapTracking() {
           )}
         </MapView>
 
+        {sjdmBoundary && location && !inCity(location.latitude, location.longitude) &&
+          <View style={{position:"absolute",top:46,left:12,right:12,zIndex:9,
+            paddingHorizontal:12,paddingVertical:8,borderRadius:10,
+            backgroundColor:"rgba(255,248,230,0.96)",borderWidth:1,borderColor:"#EBCB8E"}}>
+            <Text style={{color:"#86561C",fontSize:11}}>
+              Your GPS is outside SJDM. The map remains focused on the city; only in-city pins are shown.
+            </Text>
+          </View>}
         {sjdmBoundary && <View style={{
           position:"absolute",top:10,right:12,zIndex:8,
           backgroundColor:"rgba(255,255,255,0.94)",borderRadius:9,
