@@ -40,7 +40,7 @@ jobs:
       - name: Real Firestore rules test with synthetic accounts only
         run: |
           npx firebase emulators:exec --only firestore --project demo-volunserve \
-            "node scripts/test-pavia-resident-registration-rules.cjs && node scripts/test-pavia-announcement-rules.cjs && node scripts/test-live-emergency-map-rules.cjs && node scripts/test-community-events-rules.cjs"
+            "node scripts/test-pavia-resident-registration-rules.cjs && node scripts/test-pavia-announcement-rules.cjs && node scripts/test-live-emergency-map-rules.cjs && node scripts/test-community-events-rules.cjs && node scripts/test-pavia-event-schedule-rules.cjs"
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Build web application without deployment
