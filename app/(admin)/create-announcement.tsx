@@ -18,9 +18,10 @@ import {
 } from "expo-router";
 
 import {
-  addDoc,
   collection,
+  doc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import {
@@ -153,41 +154,30 @@ export default function CreateAnnouncement() {
     try {
       setSubmitting(true);
 
-      await addDoc(
-        collection(db, "announcements"),
-        {
-          title: cleanTitle,
-
-          message: cleanMessage,
-
-          /*
-           * Local Admin announcement.
-           *
-           * audience stores the Admin's
-           * assigned barangay.
-           */
-          audience: barangay,
-
-          priority: "normal",
-
-          /*
-           * Publish immediately.
-           */
-          publishAt: serverTimestamp(),
-
-          /*
-           * Optional fields retained for
-           * compatibility with Firestore rules.
-           */
-          linkUrl: "",
-          imageUrl: "",
-
-          createdBy: user.uid,
-
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
-      );
+      const batch = writeBatch(db);
+      const announcementRef = doc(collection(db, "announcements"));
+      batch.set(announcementRef, {
+        title: cleanTitle,
+        message: cleanMessage,
+        audience: barangay,
+        priority: "normal",
+        publishAt: serverTimestamp(),
+        linkUrl: "",
+        imageUrl: "",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: "announcement_published",
+        targetType: "announcement",
+        targetId: announcementRef.id,
+        adminUid: user.uid,
+        adminName: user.displayName || user.email || "LGU Administrator",
+        description: "Published an LGU announcement for an authorized SJDM barangay.",
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
 
       setTitle("");
       setMessage("");
