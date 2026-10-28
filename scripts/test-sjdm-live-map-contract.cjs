@@ -85,3 +85,48 @@ test("real bundled SJDM geometry is verified and available without network", asy
   assert.ok(box.north > 14.82 && box.south < 14.79);
   assert.ok(box.west < 121.04 && box.east > 121.15);
 });
+
+
+test("reference mask paints outside SJDM but cuts the real city out as a hole", async () => {
+  const city = await boundary.loadSjdmBoundary();
+  const outside = boundary.sjdmOutsideMask(city);
+  assert.equal(outside.type, "Feature");
+  assert.equal(outside.geometry.type, "Polygon");
+  assert.ok(outside.geometry.coordinates.length >= 2);
+  assert.equal(outside.geometry.coordinates[1].length, 134);
+  assert.equal(boundary.insideSjdmBoundary(city, 14.813, 121.045), true);
+  assert.equal(boundary.insideSjdmBoundary(city, 14.813, 121.20), false);
+});
+
+test("city-only road routing refuses any segment that exits SJDM", async () => {
+  const city = await boundary.loadSjdmBoundary();
+  assert.equal(boundary.routeStaysInSjdm(city, [
+    {latitude:14.813,longitude:121.045},
+    {latitude:14.8132,longitude:121.0454},
+  ]), true);
+  assert.equal(boundary.routeStaysInSjdm(city, [
+    {latitude:14.813,longitude:121.045},
+    {latitude:14.95,longitude:121.045},
+    {latitude:14.8132,longitude:121.0454},
+  ]), false);
+  assert.equal(boundary.routeStaysInSjdm(city, []), false);
+});
+
+test("web/Android do not expose roads, outside pins or invalid city camera targets", () => {
+  const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  const native=fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
+  assert.match(web, /sjdm-exterior-blocked/);
+  assert.match(web, /sjdm-outside-mask/);
+  assert.match(web, /sjdmOutsideMask\(sjdmBoundary\)/);
+  assert.match(web, /withinCity\(person.latitude, person.longitude\)/);
+  assert.match(web, /map\.on\("moveend"/);
+  assert.match(web, /routeStaysInSjdm/);
+  assert.match(native, /SJDM_MASK_EXTERIOR/);
+  assert.match(native, /holes=\{boundaryRings\(sjdmBoundary\)/);
+  assert.match(native, /onRegionChangeComplete/);
+  assert.match(native, /routeStaysInSjdm/);
+  assert.match(native, /inCity\(geocoded.latitude, geocoded.longitude\)/);
+  assert.match(native, /inCity\(incident.latitude, incident.longitude\)/);
+  assert.match(native, /inCity\(point.latitude, point.longitude\)/);
+  assert.match(native, /inCity\(center.latitude, center.longitude\)/);
+});
