@@ -6,6 +6,7 @@ import {
   linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  reload,
   sendEmailVerification,
   signOut,
   updatePassword,
@@ -191,6 +192,8 @@ export interface UserProfile {
   rejectedReason?: string;
   identityStatus?: IdentityStatus;
   identityVerified?: boolean;
+  /** Only new email/password signups require ownership confirmation; legacy accounts are unchanged. */
+  emailVerificationRequired?: boolean;
   identitySubmittedAt?: any;
   identityVerifiedAt?: any;
   identityVerifiedBy?: string;
@@ -608,6 +611,7 @@ export const signUpUser = async (
       identityStatus:
         "basic" as IdentityStatus,
       identityVerified: false,
+      emailVerificationRequired: !usesGoogle,
       profilePictureUrl:
         user.photoURL || "",
       createdAt:
@@ -623,6 +627,11 @@ export const signUpUser = async (
       } catch (emailError) {
         console.warn("Basic account saved but email verification could not be sent:", emailError);
       }
+    }
+    if (!usesGoogle) {
+      // Email/password registration is NOT verified until the email link is opened.
+      // Prevent auto-entry to protected tabs through an already-authenticated signup.
+      await signOut(auth);
     }
     return user;
   } catch (err: any) {
@@ -658,6 +667,16 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (profile.emailVerificationRequired === true) {
+      await reload(user);
+      if (!user.emailVerified) {
+        try { await sendEmailVerification(user); } catch {
+          // The user may have recently received a link; do not hide the requirement.
+        }
+        await signOut(auth);
+        throw new Error("Please verify your email address before signing in. Check your inbox and spam folder for the Firebase confirmation link, then sign in again.");
+      }
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
