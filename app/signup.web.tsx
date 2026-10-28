@@ -250,7 +250,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <View style={[styles.inputShell, focused && styles.inputFocused, !editable && styles.disabledInput, invalid && styles.inputInvalid]}>
         {icon ? <Text style={styles.inputIcon}>{icon}</Text> : null}
         <TextInput
@@ -340,7 +340,7 @@ const Dropdown = memo(function Dropdown({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <Pressable ref={triggerRef} onPress={openMenu} style={[styles.ddTrigger, !enabled && styles.disabledInput]}>
         <Text style={[styles.ddValue, !value && styles.ddPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.ddChevron}>{open ? "▲" : "▼"}</Text>
