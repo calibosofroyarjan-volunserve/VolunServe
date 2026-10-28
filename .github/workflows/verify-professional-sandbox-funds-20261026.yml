@@ -66,6 +66,10 @@ jobs:
         run: node --test scripts/test-lgu-staff-liveness.cjs
       - name: AWS browser liveness protocol and score-free UI contract
         run: node --test scripts/test-lgu-liveness-web-contract.cjs
+      - name: Build official AWS liveness React camera detector (no cloud credentials)
+        run: |
+          npm --prefix backend/liveness-web install --no-audit --no-fund
+          npm --prefix backend/liveness-web run build
       - name: Mock private LGU staff facial screen, role access and forced manual review
         run: node --test scripts/test-lgu-staff-face-screening-integration.cjs
       - name: LGU staff government-ID and facial-photo private Storage access (Firestore+Storage emulators)
