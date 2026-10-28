@@ -403,8 +403,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
           <Text style={styles.termsH2}>Consent</Text>
           <Text style={styles.termsP}>You consent to secure processing of your data for account registration, resident identity verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
-          <Text style={styles.termsH2}>Security</Text>
-          <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
+          <Text style={styles.termsH2}>Account Eligibility</Text>
+          <Text style={styles.termsP}>Registration is for adults aged 18 or older residing in the City of San Jose del Monte, Bulacan. Use a permanent email address. Temporary/disposable addresses may be rejected. Verification and Volunteer approval are separate steps.</Text>
+          <Text style={styles.termsH2}>Emergency Service Limitations</Text>
+          <Text style={styles.termsP}>An emergency report does not automatically contact 911 or dispatch an LGU responder. GPS, road routes and optional live sharing depend on location consent, signal and connectivity. For immediate danger, call 911 directly.</Text>
+          <Text style={styles.termsH2}>Donations and Security</Text>
+          <Text style={styles.termsP}>PayMongo payment demonstrations use sandbox transactions, not real funds. Use a strong password and do not share your credentials.</Text>
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
