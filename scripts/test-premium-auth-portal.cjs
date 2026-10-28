@@ -15,7 +15,7 @@ assert(shell.includes("clipPath:") &&
   shell.includes("Platform.OS === \"web\""),
   "Chamfer corners must be web-only and provide a native fallback");
 for (const name of ["Emergency Reports","Request Assistance","Community Events",
-  "Resident Login","LGU Admin Login","VolunServe","Build Safer Communities"]) {
+  "Resident & Volunteer Login","LGU & System Administration Login","VolunServe","Build Safer Communities"]) {
   assert(shell.includes(name), "Missing design element: " + name);
 }
 assert(resident.includes('<PremiumAuthShell active="resident">') &&
