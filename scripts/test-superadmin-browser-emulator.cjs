@@ -144,6 +144,11 @@ async function main() {
     await page.screenshot({path:path.join(evidenceDir,"admin-login-debug.png"),fullPage:false});
     await page.getByText("Login as Admin",{exact:true}).click();
     await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
+    const overviewPageButtons=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true});
+    await overviewPageButtons.first().waitFor({timeout:15000});
+    assert((await overviewPageButtons.count())>=2,
+      "Both Overview activity tables must have independent visible page controls above their rows");
+    await page.screenshot({path:path.join(evidenceDir,"overview-pagination-above-tables.png"),fullPage:true});
     await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
     await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
     await page.getByText("Synthetic Staff 10",{exact:true}).first().waitFor({timeout:25000});
@@ -242,13 +247,29 @@ async function main() {
     await page.getByText("Volunteer Attendance",{exact:true}).first().click();
     await page.getByText("Emulator Participant",{exact:true}).waitFor({timeout:15000});
     await page.getByText("LGU Credential Reviews",{exact:true}).first().click();
-    await page.getByText("Emulator LGU Review Office",{exact:true}).waitFor({timeout:15000});
+    const reviewRecord=page.getByText("Emulator LGU Review Office",{exact:true}).filter({visible:true});
+    await reviewRecord.waitFor({timeout:15000});
+    const recordsPageButton=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true}).first();
+    await recordsPageButton.waitFor({timeout:15000});
+    const recordPagerRect=await recordsPageButton.boundingBox();
+    const recordCardRect=await reviewRecord.boundingBox();
+    assert(recordPagerRect && recordCardRect && recordPagerRect.y < recordCardRect.y,
+      "System Records page controls must be ABOVE record cards, not below the list");
+    await recordsPageButton.scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(evidenceDir,"system-records-oversight.png"),fullPage:false});
     await page.getByText("Audit Logs",{exact:true}).first().click();
     await page.getByText("Admin Activity & Audit Logs",{exact:true}).waitFor({timeout:15000});
     await page.getByRole("button",{name:"Filter audit events: Access & Credentials"}).click();
-    await page.getByText("Admin Account Created",{exact:true})
-      .filter({visible:true}).first().waitFor({timeout:15000});
+    const visibleAccessEvent=page.getByText("Admin Account Created",{exact:true})
+      .filter({visible:true}).first();
+    await visibleAccessEvent.waitFor({timeout:15000});
+    const auditPager=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true}).first();
+    await auditPager.waitFor({timeout:15000});
+    const auditPagerRect=await auditPager.boundingBox();
+    const auditRowRect=await visibleAccessEvent.boundingBox();
+    assert(auditPagerRect && auditRowRect && auditPagerRect.y < auditRowRect.y,
+      "Audit Logs page controls must be ABOVE the audit entries, not at the end of the list");
+    await auditPager.scrollIntoViewIfNeeded();
     assert.equal(await page.getByText("System Settings Updated",{exact:true})
       .filter({visible:true}).count(),0,
       "Access filter must not mix unrelated settings changes in the visible audit table");
@@ -261,7 +282,7 @@ async function main() {
     assert.equal(await page.getByText("Others — specify",{exact:true}).count(),0,
       "Emergency hotline must not permit unverified custom numbers");
     await page.screenshot({path:path.join(evidenceDir,"official-hotline-options.png"),fullPage:false});
-    console.log("PASS browser: five-per-page accounts, guarded promotion, responsive shell, read-only records, audit filters, official-only hotline");
+    console.log("PASS browser: five-per-page accounts, top-mounted pagination in Overview, System Records and Audit Logs, guarded promotion, responsive shell, official-only hotline");
     await context.close();
   } finally {
     if(browser) await browser.close();
