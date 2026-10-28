@@ -1,11 +1,9 @@
 /**
- * Reference SJDM map boundary from GeoRisk/PSA Municipal Boundary (2015).
- * This is an administrative reference layer, NOT a certified survey of disputed
- * property boundaries. Do not guess a city polygon from a bounding rectangle.
- *
- * A failed/blocked provider query returns null: the UI must say the border is
- * unavailable instead of showing a fabricated legal boundary.
+ * SJDM map boundary from a real, attributed geoBoundaries ADM3 polygon.
+ * Simplified geometry is bundled so web/Android never depend on live GIS CORS.
+ * NOT a legal cadastral survey; do not invent city shapes from rectangles.
  */
+import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
 export type LngLat = [number, number];
 export type BoundaryBounds = { north: number; south: number; east: number; west: number };
 export type BoundaryGeometry = {
@@ -18,8 +16,7 @@ export type SjdmBoundary = {
   geometry: BoundaryGeometry;
 };
 
-const ENDPOINT = "https://ulap-nga.georisk.gov.ph/arcgis/rest/services/PSA/Municipal_2015/MapServer/0/query";
-export const SJDM_BOUNDARY_SOURCE = "GeoRisk / PSA Municipal Boundary 2015 (reference)";
+export const SJDM_BOUNDARY_SOURCE = "geoBoundaries / William & Mary geoLab (simplified ADM3, CC BY 4.0)";
 export const SJDM_FOCUS = { latitude: 14.813, longitude: 121.045 };
 
 export function boundaryRings(feature: SjdmBoundary): LngLat[][][] {
@@ -67,50 +64,27 @@ export function insideSjdmBoundary(
   );
 }
 
-/** Fetch only the city administrative reference; never mark official evacuation status. */
+/**
+ * Stable local administrative reference. Only the rendered green polygon is
+ * the city outline; camera maxBounds is a broader view constraint.
+ * geoBoundaries attribution must remain visible in web and native UI.
+ */
 export async function loadSjdmBoundary(): Promise<SjdmBoundary | null> {
-  const params = new URLSearchParams({
-    where: "city_name LIKE '%San Jose del Monte%' AND prov_name = 'Bulacan'",
-    outFields: "city_name,prov_name",
-    returnGeometry: "true",
-    outSR: "4326",
-    f: "geojson",
-  });
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  const abort = new AbortController();
-  try {
-    timeout = setTimeout(() => abort.abort(), 12000);
-    const response = await fetch(ENDPOINT + "?" + params.toString(), {
-      signal: abort.signal,
-      headers: { Accept: "application/geo+json, application/json" },
-    });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    if (payload?.type !== "FeatureCollection" || !Array.isArray(payload.features)) return null;
-    const match = payload.features.find((entry: any) => {
-      const name = String(entry?.properties?.city_name || "");
-      const province = String(entry?.properties?.prov_name || "");
-      return /san jose del monte/i.test(name) && /bulacan/i.test(province);
-    });
-    if (!match || !["Polygon", "MultiPolygon"].includes(match.geometry?.type)) return null;
-    const feature: SjdmBoundary = {
-      type: "Feature",
-      geometry: { type: match.geometry.type, coordinates: match.geometry.coordinates },
-      properties: { source: SJDM_BOUNDARY_SOURCE, city: "San Jose del Monte", province: "Bulacan" },
-    };
-    const points = allCoordinates(feature);
-    if (points.length < 4 || points.length > 100000 ||
-      !points.every(p => Array.isArray(p) && p.length >= 2 &&
+  const feature: SjdmBoundary = {
+    type: "Feature",
+    geometry: SJDM_REFERENCE_GEOMETRY as unknown as BoundaryGeometry,
+    properties: {
+      source: SJDM_BOUNDARY_SOURCE,
+      city: "City of San Jose del Monte",
+      province: "Bulacan",
+    },
+  };
+  const points = allCoordinates(feature);
+  if (points.length < 4 || points.length > 100000 ||
+      !points.every(p => Array.isArray(p) && p.length === 2 &&
         Number.isFinite(p[0]) && Number.isFinite(p[1]) &&
-        p[0] > 120.8 && p[0] < 121.3 && p[1] > 14.6 && p[1] < 15.05)) {
-      return null;
-    }
-    const bounds = boundaryBounds(feature);
-    if (bounds.east - bounds.west < 0.015 || bounds.north - bounds.south < 0.015) return null;
-    return feature;
-  } catch {
-    return null;
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
+        p[0] > 120.8 && p[0] < 121.3 && p[1] > 14.6 && p[1] < 15.05)) return null;
+  const box = boundaryBounds(feature);
+  if (box.east - box.west < 0.015 || box.north - box.south < 0.015) return null;
+  return feature;
 }
