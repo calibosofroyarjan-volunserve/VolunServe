@@ -325,6 +325,12 @@ test("Sir Pavia Edit Profile persists name to main profile without compulsory oc
   const rules=read("firestore.rules");
   assert.match(profile,/const \[occupationTouched, setOccupationTouched\] = useState\(false\)/);
   assert.match(profile,/const editingOccupation = occupationTouched/);
+  assert.match(profile,/const editProfileRef = useRef\(edit === "1"\)/);
+  assert.match(profile,/const hydrateEditableProfile = \(nextProfile: UserProfile\)/);
+  assert.match(profile,/if \(!editProfileRef\.current \|\| !editDraftInitializedRef\.current\)/);
+  assert.match(profile,/onPress=\{openProfileEditor\}/);
+  assert.match(profile,/onRequestClose=\{closeProfileEditor\}/);
+
   assert.match(profile,/if \(editingOccupation && occupationCategory === "Other \(Specify\)"/);
   assert.match(profile,/setOccupationTouched\(true\); setOccupationCategory\(option\)/);
   assert.match(profile,/setOccupationTouched\(true\); setOccupationSpecialization\(option\)/);
