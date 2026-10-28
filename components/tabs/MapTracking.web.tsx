@@ -26,8 +26,7 @@ import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsU
 import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
-  SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON,
-  fetchMappedSjdmPublicPlaces, type SjdmPublicMapPlace,
+  SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON, type SjdmPublicMapPlace,
 } from "../../lib/sjdmPublicMapPlaces";
 import {
   activeModeForProfile,
@@ -483,6 +482,13 @@ const mapDocument = `
           evacuation_site: "Evacuation Site",
         }[kind] || "Public facility";
       }
+      function facilityDirectionsUrl(latitude, longitude) {
+        if (!validPoint(latitude, longitude) || !withinCity(latitude, longitude))
+          return null;
+        return "https://www.google.com/maps/dir/?api=1&destination=" +
+          Number(latitude).toFixed(6) + "%2C" +
+          Number(longitude).toFixed(6) + "&travelmode=driving";
+      }
       function safePopupLink(url, label, container) {
         if (typeof url !== "string" || !url.startsWith("https://")) return;
         const a = document.createElement("a");
@@ -509,8 +515,8 @@ const mapDocument = `
         card.appendChild(note);
         const links = document.createElement("div");
         links.className = "place-popup-links";
-        safePopupLink(item.officialInfoUrl, "Official information", links);
-        safePopupLink(item.sourceUrl, "View map source", links);
+        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
+        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
         if (typeof item.officialContact === "string" &&
           item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
           [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
@@ -561,15 +567,17 @@ const mapDocument = `
           status.textContent = "LGU-verified fixed facility · Not a live responder location";
         }
         card.appendChild(status);
+        const links = document.createElement("div");
+        links.className = "place-popup-links";
+        const navigationUrl = facilityDirectionsUrl(item.latitude, item.longitude);
+        if (navigationUrl) safePopupLink(navigationUrl, "Directions in Google Maps", links);
         if (isShelter) {
-          const links = document.createElement("div");
-          links.className = "place-popup-links";
           const emergencyCall = document.createElement("a");
           emergencyCall.href = "tel:09326000119";
           emergencyCall.textContent = "Call SJDM CDRRMO";
           links.appendChild(emergencyCall);
-          card.appendChild(links);
         }
+        card.appendChild(links);
         return card;
       }
 
@@ -1706,7 +1714,6 @@ export default function WebMapTracking() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
-  const [osmMappedPlaces, setOsmMappedPlaces] = useState<SjdmPublicMapPlace[]>([]);
   const [shelterFeedState, setShelterFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [lguFacilityFeedState, setLguFacilityFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -1744,21 +1751,9 @@ export default function WebMapTracking() {
       });
   }, [user?.uid, profile?.status]);
 
-  // Refresh real mapped infrastructure POIs from OpenStreetMap when available.
-  // This is a place-location feed, NOT verified physical opening/occupancy.
-  useEffect(() => {
-    if (!sjdmBoundary) return;
-    let active = true;
-    const controller = new AbortController();
-    void fetchMappedSjdmPublicPlaces(controller.signal)
-      .then(list => { if (active) setOsmMappedPlaces(list); })
-      .catch(() => { if (active) setOsmMappedPlaces([]); });
-    return () => { active = false; controller.abort(); };
-  }, [sjdmBoundary]);
-
   const publicPlacePins = useMemo(() => {
     if (!sjdmBoundary) return [];
-    const combined = [...SJDM_PUBLIC_MAP_PLACE_PINS, ...osmMappedPlaces];
+    const combined = SJDM_PUBLIC_MAP_PLACE_PINS;
     const unique:SjdmPublicMapPlace[] = [];
     for (const item of combined) {
       if (!insideSjdmBoundary(sjdmBoundary,item.latitude,item.longitude)) continue;
@@ -1773,7 +1768,7 @@ export default function WebMapTracking() {
       unique.push(item);
     }
     return unique.slice(0,100);
-  }, [sjdmBoundary, osmMappedPlaces, lguFacilities]);
+  }, [sjdmBoundary, lguFacilities]);
 
   const [userLocation, setUserLocation] =
     useState<BrowserLocation | null>(null);
