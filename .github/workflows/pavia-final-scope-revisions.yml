@@ -22,6 +22,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Sir Pavia event-schedule, signup and professional login feedback
         run: |
+          node --check backend/server.js
           node --test scripts/test-pavia-final-flows.cjs
           node --test scripts/test-professional-auth-feedback.cjs
           node --test scripts/test-no-blocking-dialogs.cjs
