@@ -82,6 +82,7 @@ export default function LguStaffPrivacyRequestsPanel(){
       {loading&&<ActivityIndicator color="#08775D"/>}
       {!!error&&<Text style={styles.warning}>{error}</Text>}
       {!loading&&items.length===0&&<Text style={styles.info}>No applicant privacy requests.</Text>}
+      {!loading && !error && <ListPagination page={current} total={items.length} pageSize={PAGE_SIZE} onChange={setPage} />}
       {rows.map(item=><View style={styles.card} key={item.uid}>
         <Text style={styles.uid}>Applicant: {item.uid}</Text>
         <Text style={styles.status}>Status: {item.status.replaceAll("_"," ")}</Text>
@@ -106,7 +107,6 @@ export default function LguStaffPrivacyRequestsPanel(){
           </TouchableOpacity>
         </View>}
       </View>)}
-      {!loading && !error && <ListPagination page={current} total={items.length} pageSize={PAGE_SIZE} onChange={setPage} />}
       {!!notice&&<Text accessibilityRole="alert" style={styles.info}>{notice}</Text>}
     </View>
   );
