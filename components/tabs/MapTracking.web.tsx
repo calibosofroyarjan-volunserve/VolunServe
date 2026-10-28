@@ -5277,7 +5277,7 @@ export default function WebMapTracking() {
           <div style={{position:"absolute",top:12,right:12,zIndex:10,maxWidth:240,
             padding:"7px 10px",borderRadius:10,background:"rgba(255,255,255,.94)",
             border:"1px solid #CDEFE1",fontSize:11,color:"#135E47",pointerEvents:"none"}}>
-            {sjdmBoundary ? "SJDM city boundary · reference outline" :
+            {sjdmBoundary ? "SJDM city boundary · geoBoundaries CC BY 4.0" :
               boundaryUnavailable ? "SJDM boundary unavailable · verified facilities only" :
               "Loading official SJDM boundary…"}
           </div>
