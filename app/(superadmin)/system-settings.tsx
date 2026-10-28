@@ -589,7 +589,7 @@ const styles =
 
     container: {
       width: "100%",
-      maxWidth: 1000,
+      maxWidth: 1300,
       alignSelf: "center",
       flexGrow: 1,
       padding: 24,
@@ -600,20 +600,22 @@ const styles =
     hero: {
       padding: 21,
       borderRadius: 10,
-      backgroundColor: "#078F82",
+      backgroundColor: "#E5F5ED",
+      borderWidth: 1,
+      borderColor: "#D7EBE0",
     },
 
     title: {
       marginTop: 8,
-      color: "#FFFFFF",
-      fontSize: 26,
+      color: "#12372D",
+      fontSize: 27,
       fontWeight: "700",
     },
 
     subtitle: {
       marginTop: 5,
       maxWidth: 700,
-      color: "#E6F7F1",
+      color: "#52776A",
       lineHeight: 20,
     },
 
@@ -651,7 +653,7 @@ const styles =
       borderRadius: 17,
       backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: "#DDEAE2",
     },
 
     cardHeader: {
@@ -743,7 +745,7 @@ const styles =
       justifyContent: "center",
       flexDirection: "row",
       gap: 8,
-      backgroundColor: "#078F82",
+      backgroundColor: "#087A62",
     },
 
     buttonText: {
