@@ -1033,20 +1033,7 @@ export default function ReliefOperations() {
     const message =
       `If LGU stock is insufficient for this verified ${summary.reliefScope === "household" ? "household" : "community"} relief need in ${summary.barangay}, open Request Assistance for separate strict eligibility and financial need review. This action does not create a donation campaign.`;
 
-    // React Native Web does not reliably support multi-button Alert callbacks.
-    // On web, use the browser confirmation dialog so the route action always fires.
-    if (Platform.OS === "web") {
-      const confirmed =
-        typeof globalThis.confirm === "function"
-          ? globalThis.confirm(`Confirm Resource Shortage\n\n${message}`)
-          : true;
-
-      if (confirmed) {
-        openDonationSupportForSummary(summary);
-      }
-      return;
-    }
-
+    // In-app dialogs preserve Confirm/Cancel callbacks on web and native.
     AppAlert.alert(
       "Confirm Resource Shortage",
       message,

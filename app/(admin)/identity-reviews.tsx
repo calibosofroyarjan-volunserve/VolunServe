@@ -280,15 +280,14 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
-    const confirmFn = (globalThis as any)?.confirm;
-    if (typeof confirmFn === "function") {
-      const confirmed = confirmFn(
-        action === "verify"
-          ? "Verify this Resident identity after independent LGU/Admin validation?"
-          : "Require this Resident to retry identity verification?",
-      );
-      if (!confirmed) return;
-    }
+    const confirmed = await AppAlert.confirm(
+      "Confirm identity decision",
+      action === "verify"
+        ? "Verify this Resident identity after independent LGU/Admin validation?"
+        : "Require this Resident to retry identity verification?",
+      action === "verify" ? "Verify Resident" : "Require Retry",
+    );
+    if (!confirmed) return;
 
     try {
       setSaving(action);

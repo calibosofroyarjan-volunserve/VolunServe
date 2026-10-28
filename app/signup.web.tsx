@@ -655,22 +655,13 @@ export default function Signup() {
         ? "Your account is ready. Google and email/password sign-in are linked. Your account starts in Resident Mode."
         : "Your Basic Resident account has been saved. We sent an email verification link. Open it before signing in, then use your email and password.";
 
-      if (Platform.OS === "web") {
-        window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace(googleBound ? "/(tabs)" : "/login");
-      } else {
-        AppAlert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
-        ]);
-      }
+      AppAlert.alert(successTitle, successMessage, [
+        { text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
+      ], { cancelable: false });
     } catch (e: any) {
       const message = getFriendlyAuthError(e);
 
-      if (Platform.OS === "web") {
-        window.alert(`Registration Error\n\n${message}`);
-      } else {
-        AppAlert.alert("Registration Error", message);
-      }
+      AppAlert.alert("Registration Error", message);
     } finally {
       setLoadingSubmit(false);
     }

@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -83,12 +84,17 @@ export default function AccountSecurity() {
 
       await setVolunServePasswordForCurrentGoogleUser(newPassword);
 
-      alert(
-        "VolunServe password saved. Google sign-in still works. You can now sign in manually with this email and password."
+      AppAlert.alert(
+        "Password saved",
+        "Google sign-in still works. You can now sign in manually with this email and password.",
+        [{
+          text: "Continue to Login",
+          onPress: () => {
+            void logoutUser().finally(() => router.replace("/login" as any));
+          },
+        }],
+        { cancelable: false },
       );
-
-      await logoutUser();
-      router.replace("/login" as any);
     } catch (error: any) {
       setErrorMessage(
         error?.message || "Unable to save your VolunServe password."

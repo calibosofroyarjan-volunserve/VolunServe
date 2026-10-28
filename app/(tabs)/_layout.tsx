@@ -281,12 +281,7 @@ export default function TabLayout() {
         AppAlert.alert("Log out failed", error?.message || "Please try again.");
       }
     };
-    if (Platform.OS === "web") {
-      if (window.confirm("Are you sure you want to log out of VolunServe?")) {
-        void logOut();
-      }
-      return;
-    }
+    // The same safe confirmation is used on mobile and web.
     AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
       { text: "Cancel", style: "cancel" },
       { text: "Log Out", style: "destructive", onPress: () => void logOut() },

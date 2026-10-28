@@ -448,7 +448,9 @@ export default function WebHome() {
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
-    if (loggingOut || !window.confirm("Are you sure you want to log out of VolunServe?")) return;
+    if (loggingOut) return;
+    const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
+    if (!confirmed) return;
     setLoggingOut(true);
     try {
       await logoutUser();

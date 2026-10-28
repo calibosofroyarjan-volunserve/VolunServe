@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -451,7 +452,7 @@ export default function VolunteerTasksWeb() {
   }, [assignments, filter, sortDirection]);
 
   const showMessage = (title: string, message: string) => {
-    window.alert(`${title}\n\n${message}`);
+    AppAlert.alert(title, message);
   };
 
   const resetCompletion = () => {
