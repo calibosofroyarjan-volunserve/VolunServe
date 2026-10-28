@@ -13,6 +13,7 @@ import {
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -337,6 +338,8 @@ export default function Profile() {
   const [occupationSpecialization, setOccupationSpecialization] = useState("");
   const [occupationOther, setOccupationOther] = useState("");
   const [occupationTouched, setOccupationTouched] = useState(false);
+  const editProfileRef = useRef(edit === "1");
+  const editDraftInitializedRef = useRef(false);
   const [occupationOpen, setOccupationOpen] = useState(false);
   const [specializationOpen, setSpecializationOpen] = useState(false);
 
@@ -387,6 +390,53 @@ export default function Profile() {
     setCertificateError,
   ] =
     useState("");
+
+  const hydrateEditableProfile = (nextProfile: UserProfile) => {
+    const canonicalName = String(nextProfile.fullName || "");
+    const comma = canonicalName.indexOf(",");
+    const lastFromName = comma >= 0 ? canonicalName.slice(0, comma).trim() : canonicalName.trim().split(/\s+/).slice(-1)[0] || "";
+    const givenFromName = comma >= 0 ? canonicalName.slice(comma + 1).trim().split(/\s+/) : canonicalName.trim().split(/\s+/);
+    setLastName(nextProfile.lastName || lastFromName);
+    setFirstName(nextProfile.firstName || givenFromName[0] || "");
+    setMiddleName(nextProfile.middleName || (comma >= 0 ? givenFromName.slice(1).join(" ") : givenFromName.slice(1, -1).join(" ")));
+
+    setPhoneNumber(
+      nextProfile.phoneNumber ||
+        "",
+    );
+
+    setAddress(
+      nextProfile.address ||
+        "",
+    );
+
+    const previousOccupation = nextProfile.occupation || "";
+    const category = nextProfile.occupationCategory ||
+      (previousOccupation
+        ? (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)")
+        : "");
+    setOccupationCategory(category);
+    setOccupationSpecialization(nextProfile.occupationSpecialization || "");
+    setOccupationOther(nextProfile.occupationOther ||
+      (category === "Other (Specify)" && previousOccupation !== "Other (Specify)" ? previousOccupation : ""));
+    setOccupationTouched(false);
+    setOccupationOpen(false);
+    setSpecializationOpen(false);
+
+    editDraftInitializedRef.current = true;
+  };
+
+  const openProfileEditor = () => {
+    if (!profile) return;
+    hydrateEditableProfile(profile);
+    editProfileRef.current = true;
+    setEditOpen(true);
+  };
+
+  const closeProfileEditor = () => {
+    editProfileRef.current = false;
+    setEditOpen(false);
+  };
 
   useEffect(() => {
     const unsubscribeAuth =
@@ -447,38 +497,10 @@ export default function Profile() {
             nextProfile,
           );
 
-          // Registration saves separate legal name fields; keep edit in sync
-          // with both those fields and the canonical profile.fullName.
-          const canonicalName = String(nextProfile.fullName || "");
-          const comma = canonicalName.indexOf(",");
-          const lastFromName = comma >= 0 ? canonicalName.slice(0, comma).trim() : canonicalName.trim().split(/\s+/).slice(-1)[0] || "";
-          const givenFromName = comma >= 0 ? canonicalName.slice(comma + 1).trim().split(/\s+/) : canonicalName.trim().split(/\s+/);
-          setLastName(nextProfile.lastName || lastFromName);
-          setFirstName(nextProfile.firstName || givenFromName[0] || "");
-          setMiddleName(nextProfile.middleName || (comma >= 0 ? givenFromName.slice(1).join(" ") : givenFromName.slice(1, -1).join(" ")));
-
-          setPhoneNumber(
-            nextProfile.phoneNumber ||
-              "",
-          );
-
-          setAddress(
-            nextProfile.address ||
-              "",
-          );
-
-          const previousOccupation = nextProfile.occupation || "";
-          const category = nextProfile.occupationCategory ||
-            (previousOccupation
-              ? (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)")
-              : "");
-          setOccupationCategory(category);
-          setOccupationSpecialization(nextProfile.occupationSpecialization || "");
-          setOccupationOther(nextProfile.occupationOther ||
-            (category === "Other (Specify)" && previousOccupation !== "Other (Specify)" ? previousOccupation : ""));
-          setOccupationTouched(false);
-          setOccupationOpen(false);
-          setSpecializationOpen(false);
+          // Never erase unsaved name edits when the live profile changes.
+          if (!editProfileRef.current || !editDraftInitializedRef.current) {
+            hydrateEditableProfile(nextProfile);
+          }
 
           setLoading(
             false,
@@ -960,7 +982,7 @@ export default function Profile() {
       } catch {
         AppAlert.alert("Profile updated", "Your VolunServe name was saved. Your sign-in display name may take another sign-in to refresh.");
       }
-      setEditOpen(false);
+      closeProfileEditor();
     } catch (error: any) {
       AppAlert.alert("Unable to save", error?.message || "Please try again.");
     } finally {
@@ -1269,11 +1291,7 @@ export default function Profile() {
             activeOpacity={
               0.82
             }
-            onPress={() =>
-              setEditOpen(
-                true,
-              )
-            }
+            onPress={openProfileEditor}
           >
             <Ionicons
               name="create-outline"
@@ -1679,11 +1697,7 @@ export default function Profile() {
         }
         transparent
         animationType="fade"
-        onRequestClose={() =>
-          setEditOpen(
-            false,
-          )
-        }
+        onRequestClose={closeProfileEditor}
       >
         <View
           style={
@@ -1722,11 +1736,7 @@ export default function Profile() {
                 style={
                   styles.modalClose
                 }
-                onPress={() =>
-                  setEditOpen(
-                    false,
-                  )
-                }
+                onPress={closeProfileEditor}
               >
                 <Ionicons
                   name="close"
@@ -1835,11 +1845,7 @@ export default function Profile() {
                   disabled={
                     saving
                   }
-                  onPress={() =>
-                    setEditOpen(
-                      false,
-                    )
-                  }
+                  onPress={closeProfileEditor}
                 >
                   <Text
                     style={
