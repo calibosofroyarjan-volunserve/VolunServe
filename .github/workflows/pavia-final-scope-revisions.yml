@@ -24,6 +24,7 @@ jobs:
         run: |
           node --test scripts/test-pavia-final-flows.cjs
           node --test scripts/test-professional-auth-feedback.cjs
+          node --test scripts/test-no-blocking-dialogs.cjs
       - name: Existing Admin, LGU and emergency navigation contracts
         run: |
           node --test scripts/test-friday-emergency-hub.cjs
