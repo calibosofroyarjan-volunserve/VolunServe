@@ -21,6 +21,7 @@ import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { useAndroidPushNavigation } from "../lib/useAndroidPushNavigation";
+import AppDialogHost from "../components/ui/AppDialogHost";
 import {
   getUserProfile,
   homeRouteForProfile,
@@ -434,6 +435,7 @@ export default function RootLayout() {
         <Stack.Screen name="(superadmin)" />
         <Stack.Screen name="(lgu)" />
       </Stack>
+      <AppDialogHost />
     </GestureHandlerRootView>
   );
 }
