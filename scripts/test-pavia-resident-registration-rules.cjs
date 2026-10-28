@@ -36,6 +36,33 @@ async function main(){
     .set(profile("pavia-admin","admin@example.com",{role:"admin"})));
   await assertFails(db("pavia-no-proof","noproof@example.com").doc("users/pavia-no-proof")
     .set(profile("pavia-no-proof","noproof@example.com",{emailVerificationRequired:false})));
+  // A direct Firebase Auth SDK account cannot bypass the high-confidence
+  // disposable-domain profile gate by skipping the signup form entirely.
+  for(const [idx,address] of [
+    "person@mailinator.com",
+    "person@nested.mailinator.com",
+    "person@YOPMAIL.COM",
+    "person@sharklasers.com",
+    "person@10minutemail.com",
+  ].entries()){
+    const uid="pavia-disposable-"+idx;
+    await assertFails(db(uid,address).doc("users/"+uid).set(profile(uid,address)));
+  }
+  // Staff applicants are separate from Residents but cannot bypass the same
+  // profile-creation rule by registering directly against the Auth API.
+  const staffProfile=(uid,email)=>({
+    uid,email,fullName:"Demo LGU Staff",role:"applicant",status:"pending_review",
+    residentAccess:false,volunteerAccess:false,region:"Region III",
+    province:"Bulacan",city:"City of San Jose del Monte",barangay:"Dulong Bayan",
+    lguOffice:"City Government",lguPosition:"Applicant",
+    appointmentReference:"DEMO-SYNTHETIC-REF-999",
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  await assertSucceeds(db("pavia-staff-ok","staff@gmail.com").doc("users/pavia-staff-ok")
+    .set(staffProfile("pavia-staff-ok","staff@gmail.com")));
+  await assertFails(db("pavia-staff-disposable","staff@mailinator.com")
+    .doc("users/pavia-staff-disposable")
+    .set(staffProfile("pavia-staff-disposable","staff@mailinator.com")));
   await assertFails(good.doc("users/pavia-adult").update({age:12}));
   console.log("PASS Pavia: adult signup, own Auth email, SJDM scope, no self-admin and no age downgrade");
  }finally{await env.cleanup()}
