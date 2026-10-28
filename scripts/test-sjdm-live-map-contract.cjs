@@ -242,9 +242,15 @@ test("web map popup is readable, actionable and never displays raw OSM technical
   assert.match(source,/makeVerifiedMapPopup\(item,false\)/);
   assert.doesNotMatch(source,/View map source/);
   assert.doesNotMatch(source,/Official information/);
-  assert.match(source,/Directions in Google Maps/);
-  assert.match(source,/facilityDirectionsUrl/);
-  assert.match(source,/www\.google\.com\/maps\/dir\/\?api=1&destination=/);
+  assert.match(source,/Show road route here/);
+  assert.match(source,/appendInAppRouteButton\(item, links\)/);
+  assert.match(source,/function showFacilityRoute/);
+  assert.match(source,/navigator\.geolocation\.getCurrentPosition/);
+  assert.match(source,/router\.project-osrm\.org\/route\/v1\/driving\//);
+  assert.match(source,/routeInsideCity\(route\.geometry\.coordinates\)/);
+  assert.match(source,/facility-road-route-line/);
+  assert.doesNotMatch(source,/Directions in Google Maps/);
+  assert.match(source,/allow="geolocation"/);
   assert.match(source,/Call SJDM CDRRMO/);
   assert.doesNotMatch(source,/item\.sourceLabel \+ " · " \+ item\.note/);
   assert.doesNotMatch(source,/typeof url !== "string" \|\| !\/\^https:/);
@@ -257,7 +263,7 @@ test("response UI never describes an unassigned case as an active LGU responder"
   assert.match(source,/No LGU responder assigned yet/);
   assert.match(source,/NOT ASSIGNED/);
   assert.match(source,/tel:911/);
-  assert.match(source,/tel:09326000119/);
+  assert.match(source,/tel:09366000119/);
   assert.doesNotMatch(source,/"LGU coordinating response"/);
 });
 
@@ -313,9 +319,11 @@ test("all visible types of public safety facility pins support correct coordinat
   assert.throws(()=>map.googleMapsFacilityDirections(Infinity,121),/Invalid facility/);
   assert.throws(()=>map.googleMapsFacilityDirections(14.8,200),/Invalid facility/);
   const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
-  assert.match(web,/safePopupLink\(navigationUrl, "Directions in Google Maps", links\)/);
-  assert.match(web,/const navigationUrl = facilityDirectionsUrl\(item.latitude, item.longitude\)/);
-  assert.match(web,/if \(!validPoint\(latitude, longitude\) \|\| !withinCity\(latitude, longitude\)\)/);
+  assert.match(web,/appendInAppRouteButton\(item, links\)/);
+  assert.match(web,/if \(!validPoint\(item.latitude, item.longitude\) \|\|/);
+  assert.match(web,/!withinCity\(item.latitude, item.longitude\)/);
+  assert.match(web,/if \(!route \|\| route.geometry\?\.type !== "LineString"/);
+  assert.match(web,/facilityRouteNotice\("Road route unavailable"/);
   const native=fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
   assert.match(native,/function|const openVerifiedDirections/);
   assert.match(native,/Linking\.openURL\(googleMapsFacilityDirections\(latitude,longitude\)\)/);
