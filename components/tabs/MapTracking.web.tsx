@@ -101,6 +101,7 @@ type CenterRow = {
   verificationStatus?: string;
   verificationSource?: string;
   updatedAt?: any;
+  lastVerifiedAt?: any;
 };
 
 type BrowserLocation = {
@@ -982,10 +983,14 @@ const mapDocument = `
           }).setText([
             item.name || "Evacuation center",
             item.address || item.barangay || "",
-            "LGU-recorded active (confirm status before travel)",
-            item.updatedAt && Number.isFinite(item.updatedAt)
-              ? "Last LGU update " + new Date(item.updatedAt).toLocaleString("en-PH")
-              : "No current update timestamp",
+            item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt) &&
+              Date.now() - item.lastVerifiedAt >= -300000 &&
+              Date.now() - item.lastVerifiedAt <= 86400000
+              ? "LGU recently reviewed (confirm before travel)"
+              : "Status NOT recently confirmed — call CDRRMO",
+            item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt)
+              ? "Last LGU verification " + new Date(item.lastVerifiedAt).toLocaleString("en-PH")
+              : "LGU verification time unavailable",
             item.capacity != null && item.occupied != null
               ? String(Math.max(0, item.capacity - item.occupied)) + " last-reported spaces (NOT live occupancy)"
               : "Capacity unconfirmed",
@@ -3975,6 +3980,7 @@ export default function WebMapTracking() {
               capacity: item.capacity ?? null,
               occupied: item.occupied ?? null,
               updatedAt: timestampMillis(item.updatedAt),
+              lastVerifiedAt: timestampMillis(item.lastVerifiedAt),
             })),
 
         fit,
