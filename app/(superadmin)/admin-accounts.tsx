@@ -1,3 +1,4 @@
+import ListPagination from "../../components/ui/ListPagination";
 import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -1038,32 +1039,8 @@ export default function AdminAccounts() {
             </View>
           ))}
  
-          {pendingLguApplications.length > 5 && (
-            <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
-              flexWrap:"wrap",gap:9,marginTop:7}}>
-              <Text style={{fontSize:11,color:"#4E7865"}}>
-                Showing {(safeApplicantPage-1)*5+1}–{Math.min(pendingLguApplications.length,safeApplicantPage*5)} of {pendingLguApplications.length} · 5 per page
-              </Text>
-              <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous LGU applicant page"
-                  disabled={safeApplicantPage<=1} onPress={()=>setApplicantPage(v=>Math.max(1,v-1))}
-                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
-                    opacity:safeApplicantPage<=1?0.4:1}}>
-                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Previous</Text>
-                </TouchableOpacity>
-                <Text style={{color:"#235B48",fontWeight:"700",fontSize:12}}>
-                  {safeApplicantPage} / {applicantPageCount}
-                </Text>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next LGU applicant page"
-                  disabled={safeApplicantPage>=applicantPageCount}
-                  onPress={()=>setApplicantPage(v=>Math.min(applicantPageCount,v+1))}
-                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
-                    opacity:safeApplicantPage>=applicantPageCount?0.4:1}}>
-                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Next</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          <ListPagination page={safeApplicantPage} total={pendingLguApplications.length} pageSize={ADMIN_PAGE_SIZE} onChange={setApplicantPage} />
+
        </View>
 
         {/* This is part of the existing Super Admin staff workspace, not a separate module. */}
@@ -1578,23 +1555,7 @@ export default function AdminAccounts() {
             }
           )
         )}
-        {adminAccounts.length > 0 && (
-          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingVertical:14}}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous Admin accounts page"
-              disabled={safeAdminPage <= 1} onPress={()=>setAdminPage(Math.max(1,safeAdminPage-1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage<=1?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Previous</Text>
-            </TouchableOpacity>
-            <Text style={{fontWeight:"700",color:"#355D50"}}>
-              Page {safeAdminPage} of {adminPageCount} · {adminAccounts.length} accounts
-            </Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next Admin accounts page"
-              disabled={safeAdminPage >= adminPageCount} onPress={()=>setAdminPage(Math.min(adminPageCount,safeAdminPage+1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage>=adminPageCount?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
       </ScrollView>
 
       <CreateLguAdminModal
