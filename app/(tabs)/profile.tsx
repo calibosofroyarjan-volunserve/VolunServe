@@ -468,7 +468,9 @@ export default function Profile() {
 
           const previousOccupation = nextProfile.occupation || "";
           const category = nextProfile.occupationCategory ||
-            (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)");
+            (previousOccupation
+              ? (OCCUPATION_OPTIONS.includes(previousOccupation) ? previousOccupation : "Other (Specify)")
+              : "");
           setOccupationCategory(category);
           setOccupationSpecialization(nextProfile.occupationSpecialization || "");
           setOccupationOther(nextProfile.occupationOther ||
@@ -906,12 +908,15 @@ export default function Profile() {
       AppAlert.alert("Invalid name", "First name and last name are required.");
       return;
     }
-    if (!occupationCategory || !OCCUPATION_OPTIONS.includes(occupationCategory)) {
-      AppAlert.alert("Select occupation", "Choose your occupation from the list.");
+    // Name and contact changes must be saveable without first providing an
+    // unrelated occupation. Legacy Resident profiles may have no occupation.
+    const editingOccupation = occupationCategory.trim().length > 0;
+    if (editingOccupation && !OCCUPATION_OPTIONS.includes(occupationCategory)) {
+      AppAlert.alert("Select occupation", "Choose an occupation from the list.");
       return;
     }
-    const choices = SPECIALIZATIONS[occupationCategory] || [];
-    if (choices.length > 0 && !choices.includes(occupationSpecialization)) {
+    const choices = editingOccupation ? SPECIALIZATIONS[occupationCategory] || [] : [];
+    if (editingOccupation && choices.length > 0 && !choices.includes(occupationSpecialization)) {
       AppAlert.alert("Choose specialization", "Select a valid specialization.");
       return;
     }
@@ -922,23 +927,28 @@ export default function Profile() {
     }
 
     const cleanName = last + ", " + first + (middle ? " " + middle : "");
-    const selectedOccupation = occupationCategory === "Other (Specify)"
-      ? occupationOther.trim()
-      : occupationSpecialization || occupationCategory;
+    // Firestore users/{uid}.fullName is the canonical name across Home,
+    // My Profile and the account dropdown. Do not overwrite old occupation
+    // values when the user is only editing personal information.
+    const changes: Partial<UserProfile> = {
+      fullName: cleanName,
+      firstName: first,
+      middleName: middle,
+      lastName: last,
+      phoneNumber: phoneNumber.trim(),
+      address: address.trim(),
+    };
+    if (editingOccupation) {
+      changes.occupationCategory = occupationCategory;
+      changes.occupationSpecialization = choices.length ? occupationSpecialization : "";
+      changes.occupationOther = occupationCategory === "Other (Specify)" ? occupationOther.trim() : "";
+      changes.occupation = occupationCategory === "Other (Specify)"
+        ? occupationOther.trim()
+        : occupationSpecialization || occupationCategory;
+    }
     setSaving(true);
     try {
-      await updateUserProfile(user.uid, {
-        fullName: cleanName,
-        firstName: first,
-        middleName: middle,
-        lastName: last,
-        phoneNumber: phoneNumber.trim(),
-        address: address.trim(),
-        occupationCategory,
-        occupationSpecialization: choices.length ? occupationSpecialization : "",
-        occupationOther: occupationCategory === "Other (Specify)" ? occupationOther.trim() : "",
-        occupation: selectedOccupation,
-      });
+      await updateUserProfile(user.uid, changes);
       // Firestore is the authoritative VolunServe profile. Mirror the
       // display name in Firebase Auth without claiming two-system atomicity.
       try {
