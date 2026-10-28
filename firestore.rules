@@ -221,7 +221,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
           'residentAccess','volunteerAccess','region','province','city',
-          'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
+          'barangay','lguOffice','lguPosition','appointmentReference','emailVerificationRequired','createdAt'
         ])
         && request.resource.data.keys().hasAll([
           'uid','email','fullName','role','status','residentAccess',
