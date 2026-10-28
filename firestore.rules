@@ -3969,7 +3969,12 @@ service cloud.firestore {
         && d.verificationSource is string
         && d.verificationSource.size() >= 8 && d.verificationSource.size() <= 300
         && d.updatedAt is timestamp
-        && d.updatedBy == request.auth.uid;
+        && d.updatedBy == request.auth.uid
+        // A pending/uncorroborated office cannot be advertised as operational.
+        && (d.status != 'active' || (
+             d.verificationStatus == 'verified'
+             && d.verificationSource.size() >= 10
+        ));
       }
       allow create, update: if isAdmin() && validOfficialFacility();
       allow delete: if false;
