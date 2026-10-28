@@ -245,6 +245,11 @@ export const isApprovedProfile = (
   if (!profile) {
     return false;
   }
+  // Keep Firebase login, session guards, and Firestore operational-role rules
+  // consistent: a suspended LGU Admin is never an approved active account.
+  if (profile.role === "admin" && profile.adminStatus === "suspended") {
+    return false;
+  }
   return (
     profile.status === "approved" ||
     (
@@ -695,9 +700,10 @@ export const loginUser = async (
             : "Your registration was rejected. Please contact an administrator."
         );
       }
-      if (status === "suspended") {
+      if (status === "suspended" ||
+          (profile.role === "admin" && profile.adminStatus === "suspended")) {
         throw new Error(
-          "Your account is suspended. Please contact an administrator."
+          "Your administrative access is suspended. Contact your authorized Super Admin."
         );
       }
       throw new Error(
