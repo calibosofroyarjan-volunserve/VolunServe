@@ -52,6 +52,7 @@ async function main(){
   // profile-creation rule by registering directly against the Auth API.
   const staffProfile=(uid,email)=>({
     uid,email,fullName:"Demo LGU Staff",role:"applicant",status:"pending_review",
+     emailVerificationRequired:true,
     residentAccess:false,volunteerAccess:false,region:"Region III",
     province:"Bulacan",city:"City of San Jose del Monte",barangay:"Dulong Bayan",
     lguOffice:"City Government",lguPosition:"Applicant",
@@ -60,7 +61,10 @@ async function main(){
   });
   await assertSucceeds(db("pavia-staff-ok","staff@gmail.com").doc("users/pavia-staff-ok")
     .set(staffProfile("pavia-staff-ok","staff@gmail.com")));
-  await assertFails(db("pavia-staff-disposable","staff@mailinator.com")
+  await assertFails(db("pavia-staff-unverified","unverified@gmail.com")
+     .doc("users/pavia-staff-unverified")
+     .set({...staffProfile("pavia-staff-unverified","unverified@gmail.com"),emailVerificationRequired:false}));
+   await assertFails(db("pavia-staff-disposable","staff@mailinator.com")
     .doc("users/pavia-staff-disposable")
     .set(staffProfile("pavia-staff-disposable","staff@mailinator.com")));
   await assertFails(good.doc("users/pavia-adult").update({age:12}));
