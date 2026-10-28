@@ -5756,8 +5756,9 @@ export default function WebMapTracking() {
             )}
             {isResidentMode && (
               <>
-                <span><i className="legend-dot resident-role-dot" /> Resident / You</span>
-                <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
+                <span><i className="legend-dot resident-role-dot" /> Reported resident GPS</span>
+                {publicPlacePins.length > 0 && <span>🏛️ Mapped government building</span>}
+                {verifiedCityLguCount > 0 && <span>🏢 LGU facility (database verified)</span>}
                 {residentLguPin && (
                   <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
                 )}
