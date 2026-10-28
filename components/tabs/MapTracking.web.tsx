@@ -229,6 +229,20 @@ const mapDocument = `
     .public-place-marker.uncertain-location { border-style: dashed; }
     .public-place-marker.verified-place-marker { border-color: #19855D; }
     .public-place-marker:hover { transform: scale(1.10); }
+    .maplibregl-popup-content {
+      border-radius: 14px;
+      box-shadow: 0 9px 30px rgba(14,45,36,.16);
+      padding: 13px 15px;
+      max-width: 250px;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    .place-popup { max-width: 250px; font-size: 12px; color: #19392D; }
+    .place-popup-title { display: block; font-size: 14px; font-weight: 800; line-height: 1.35; }
+    .place-popup-category { display: block; font-size: 11px; color: #4D7365; margin-top: 3px; }
+    .place-popup-note { font-size: 11px; line-height: 1.5; color: #4B6359; margin: 10px 0 8px; }
+    .place-popup-links { display: flex; gap: 11px; flex-wrap: wrap; }
+    .place-popup-links a { font-size: 11px; font-weight: 750; color: #05795B; }
+    .place-popup-status { font-size: 10px; font-weight: 700; margin: 8px 0 0; color: #87601A; }
     .vehicle-response-marker {
       width: 42px;
       height: 42px;
@@ -459,6 +473,57 @@ const mapDocument = `
         return element;
       }
 
+      function categoryName(kind) {
+        return {
+          government: "City Government",
+          barangay_hall: "Barangay Hall",
+          police_station: "Police Station",
+          fire_station: "Fire Service",
+          cdrrmo: "Disaster Response Office",
+          evacuation_site: "Evacuation Site",
+        }[kind] || "Public facility";
+      }
+      function safePopupLink(url, label, container) {
+        if (typeof url !== "string" || !/^https:\/\/[a-z0-9.-]+\//i.test(url)) return;
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = label;
+        container.appendChild(a);
+      }
+      function makePublicPlacePopup(item) {
+        const card = document.createElement("div");
+        card.className = "place-popup";
+        const title = document.createElement("strong");
+        title.className = "place-popup-title";
+        title.textContent = item.name;
+        card.appendChild(title);
+        const category = document.createElement("span");
+        category.className = "place-popup-category";
+        category.textContent = categoryName(item.kind) + " · San Jose del Monte";
+        card.appendChild(category);
+        const note = document.createElement("p");
+        note.className = "place-popup-note";
+        note.textContent = item.note;
+        card.appendChild(note);
+        const links = document.createElement("div");
+        links.className = "place-popup-links";
+        safePopupLink(item.officialInfoUrl, "Official information", links);
+        safePopupLink(item.sourceUrl, "View map source", links);
+        if (item.officialContact && /^\+?[0-9 ()-]{7,21}$/.test(item.officialContact)) {
+          const call = document.createElement("a");
+          call.href = "tel:" + item.officialContact.replace(/[^0-9+]/g, "");
+          call.textContent = "Call office";
+          links.appendChild(call);
+        }
+        card.appendChild(links);
+        const caution = document.createElement("p");
+        caution.className = "place-popup-status";
+        caution.textContent = "Mapped location · Current operations not verified";
+        card.appendChild(caution);
+        return card;
+      }
       function makeSourcedPlaceElement(item) {
         const pin = document.createElement("div");
         pin.className = "public-place-marker" +
@@ -948,10 +1013,8 @@ const mapDocument = `
           if (!validPoint(item.latitude, item.longitude) ||
               !withinCity(item.latitude, item.longitude)) continue;
           const icon = makeSourcedPlaceElement(item);
-          const popup = new maplibregl.Popup({offset:24}).setText(
-            item.name + " · " + item.sourceLabel + " · " + item.note +
-            " · Map source: " + item.sourceUrl
-          );
+          const popup = new maplibregl.Popup({offset:24})
+            .setDOMContent(makePublicPlacePopup(item));
           const marker = new maplibregl.Marker({element:icon})
             .setLngLat([item.longitude,item.latitude]).setPopup(popup).addTo(map);
           publicPlaceMarkers.push(marker);
@@ -5463,7 +5526,7 @@ export default function WebMapTracking() {
             ref={frame}
             title="VolunServe live disaster response map for San Jose del Monte"
             srcDoc={mapDocument}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           />
           {!sjdmBoundary && <div role="status" style={{position:"absolute",inset:0,zIndex:9,
             background:"#E7EEEA",display:"flex",justifyContent:"center",alignItems:"center",
