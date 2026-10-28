@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -259,7 +260,7 @@ export default function IdentityReviewsAdmin() {
     if (!selected || !user || saving) return;
 
     if (action === "verify" && !validationMethod) {
-      Alert.alert(
+      AppAlert.alert(
         "Validation Method Required",
         "Select how the Resident was independently validated by LGU/Admin.",
       );
@@ -267,12 +268,12 @@ export default function IdentityReviewsAdmin() {
     }
 
     if (action === "verify" && (!originalDocumentReviewed || !registeredNameMatched)) {
-      Alert.alert("Identity Check Required", "Confirm that you independently reviewed the original ID or official record and that the full name matches this Resident account. If it does not match, require a retry.");
+      AppAlert.alert("Identity Check Required", "Confirm that you independently reviewed the original ID or official record and that the full name matches this Resident account. If it does not match, require a retry.");
       return;
     }
 
     if (action === "require_retry" && notes.trim().length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Retry Reason Required",
         "Enter a clear reason so the Resident knows what must be corrected.",
       );
@@ -324,7 +325,7 @@ export default function IdentityReviewsAdmin() {
         );
       }
 
-      Alert.alert(
+      AppAlert.alert(
         action === "verify"
           ? "Identity Verified"
           : "Retry Required",
@@ -341,7 +342,7 @@ export default function IdentityReviewsAdmin() {
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Save Decision",
         saveError?.message ||
           "The identity review decision could not be saved.",

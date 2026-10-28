@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -511,7 +512,7 @@ export default function CommandCenter() {
   const saveEvacuationCenter =
     async () => {
       if (!user || !isAdmin) {
-        Alert.alert(
+        AppAlert.alert(
           "Admin access required",
           "Only the LGU Admin can manage evacuation centers.",
         );
@@ -550,7 +551,7 @@ export default function CommandCenter() {
         );
 
       if (name.length < 3) {
-        Alert.alert(
+        AppAlert.alert(
           "Center name required",
           "Enter the official evacuation center name.",
         );
@@ -558,7 +559,7 @@ export default function CommandCenter() {
       }
 
       if (barangay.length < 2) {
-        Alert.alert(
+        AppAlert.alert(
           "Barangay required",
           "Enter the barangay served by this evacuation center.",
         );
@@ -566,7 +567,7 @@ export default function CommandCenter() {
       }
 
       if (address.length < 3) {
-        Alert.alert(
+        AppAlert.alert(
           "Address required",
           "Enter the evacuation center address or landmark.",
         );
@@ -581,7 +582,7 @@ export default function CommandCenter() {
         longitude < -180 ||
         longitude > 180
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid coordinates",
           "Enter valid latitude and longitude values.",
         );
@@ -592,7 +593,7 @@ export default function CommandCenter() {
         !Number.isFinite(capacity) ||
         capacity < 1
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid capacity",
           "Capacity must be at least 1 person.",
         );
@@ -604,7 +605,7 @@ export default function CommandCenter() {
         occupied < 0 ||
         occupied > capacity
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid occupancy",
           "Current occupancy must be from 0 up to the center capacity.",
         );
@@ -612,7 +613,7 @@ export default function CommandCenter() {
       }
 
       if (centerVerifiedConfirmed && verificationSource.length < 10) {
-        Alert.alert("Official verification reference required",
+        AppAlert.alert("Official verification reference required",
           "Enter the LGU or CDRRMO verification source before publishing this center.");
         return;
       }
@@ -691,7 +692,7 @@ export default function CommandCenter() {
           EMPTY_CENTER_FORM,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Evacuation Center Saved",
           published ? "LGU-verified center published to live map." : "Center saved pending verification; not shown as an open shelter.",
         );
@@ -701,7 +702,7 @@ export default function CommandCenter() {
           error,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Save Failed",
           "The evacuation center could not be saved. Check Firestore permissions and try again.",
         );
@@ -727,7 +728,7 @@ export default function CommandCenter() {
           ),
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Center Removed",
           "The evacuation center was removed from the official LGU list.",
         );
@@ -737,7 +738,7 @@ export default function CommandCenter() {
           error,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Remove Failed",
           "The evacuation center could not be removed.",
         );
@@ -747,7 +748,7 @@ export default function CommandCenter() {
   const confirmRemoveCenter = (
     center: EvacuationCenter,
   ) => {
-    Alert.alert(
+    AppAlert.alert(
       "Remove Evacuation Center?",
       `${
         center.name ||

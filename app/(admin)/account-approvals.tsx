@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 
@@ -151,7 +152,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
 
           setUsersLoading(false);
 
-          Alert.alert(
+          AppAlert.alert(
             "Error",
             "Unable to load account applications."
           );
@@ -291,7 +292,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     const reviewer = auth.currentUser;
 
     if (!reviewer) {
-      Alert.alert(
+      AppAlert.alert(
         "Session Error",
         "Please sign in again."
       );
@@ -302,7 +303,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       volunteerApplicationFor(account);
 
     if (application?.status !== "pending") {
-      Alert.alert(
+      AppAlert.alert(
         "Review Updated",
         "This volunteer application is no longer pending. Refresh the queue and review its latest status."
       );
@@ -310,7 +311,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     }
 
     if (decision === "approved" && !isVerifiedResidentAccount(account)) {
-      Alert.alert(
+      AppAlert.alert(
         "Verified Resident Required",
         "Volunteer access can only be approved for an active Verified Resident."
       );
@@ -321,7 +322,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       decision === "rejected" &&
       reason.trim().length < 5
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Reason required",
         "Please enter a clear rejection reason."
       );
@@ -399,7 +400,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
           } volunteer application was marked as ${decision}.`,
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Saved",
         decision === "approved"
           ? "Volunteer access approved. The Resident account remains active and the user may switch to Volunteer Mode."
@@ -412,7 +413,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         "The volunteer application review could not be saved. Check the latest Firestore rules and try again."
       );
@@ -429,7 +430,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     const reviewer = auth.currentUser;
 
     if (!reviewer) {
-      Alert.alert(
+      AppAlert.alert(
         "Session Error",
         "Please sign in again."
       );
@@ -441,7 +442,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       account.role === "admin" ||
       account.role === "superadmin"
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Action unavailable",
         "This moderation action applies only to community Resident/Volunteer accounts."
       );
@@ -486,7 +487,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
           } community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Saved",
         nextStatus === "suspended"
           ? "Community account suspended."
@@ -498,7 +499,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         "The account status could not be updated."
       );
@@ -510,11 +511,11 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
   const confirmReject = async () => {
     if (!selected || savingUid) return;
     if (rejectionReason.trim().length < 5) {
-      Alert.alert("Reason required", "Please enter a clear rejection reason.");
+      AppAlert.alert("Reason required", "Please enter a clear rejection reason.");
       return;
     }
     if (!isPendingVolunteerApplication(selected)) {
-      Alert.alert("Review Updated", "This volunteer application is no longer pending.");
+      AppAlert.alert("Review Updated", "This volunteer application is no longer pending.");
       return;
     }
     const saved = await reviewVolunteerApplication(selected, "rejected", rejectionReason);
