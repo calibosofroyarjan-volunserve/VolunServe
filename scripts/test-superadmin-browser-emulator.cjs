@@ -247,9 +247,11 @@ async function main() {
     await page.getByText("Audit Logs",{exact:true}).first().click();
     await page.getByText("Admin Activity & Audit Logs",{exact:true}).waitFor({timeout:15000});
     await page.getByRole("button",{name:"Filter audit events: Access & Credentials"}).click();
-    await page.getByText("Admin Account Created",{exact:true}).waitFor({timeout:15000});
-    assert.equal(await page.getByText("System Settings Updated",{exact:true}).count(),0,
-      "Access filter must not mix unrelated settings changes");
+    await page.getByText("Admin Account Created",{exact:true})
+      .filter({visible:true}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByText("System Settings Updated",{exact:true})
+      .filter({visible:true}).count(),0,
+      "Access filter must not mix unrelated settings changes in the visible audit table");
     await page.screenshot({path:path.join(evidenceDir,"audit-logs-filter.png"),fullPage:false});
     await page.getByText("System Settings",{exact:true}).first().click();
     const hotlineOptions=page.getByRole("button",{name:"Official Emergency Hotline (public) options"});
