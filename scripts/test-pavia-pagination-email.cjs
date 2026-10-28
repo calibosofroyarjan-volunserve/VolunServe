@@ -145,4 +145,9 @@ test("Prepared Identity Platform hook blocks known domains without enabling a li
   assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com"}}));
   assert.doesNotThrow(()=>callback({data:{email:"staff@agency.gov.ph"}}));
   assert.doesNotThrow(()=>callback({data:{email:"custom@institution.edu.ph"}}));
+  // Federated providers can supply an additional address in providerData.
+  assert.throws(()=>callback({data:{email:"resident@gmail.com",providerData:[{providerId:"google.com",email:"user@sub.mailinator.com"}]}}),
+    error=>error.code==="invalid-argument");
+  assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com",providerData:[{providerId:"google.com",email:"resident@gmail.com"}]}}));
+  assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com",providerData:null}}));
 });
