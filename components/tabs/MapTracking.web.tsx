@@ -1148,7 +1148,7 @@ const mapDocument = `
           id: "sjdm-exterior-blocked",
           type: "fill",
           source: "sjdm-outside-mask",
-          paint: { "fill-color": "#E7EEEA", "fill-opacity": 0.985 },
+          paint: { "fill-color": "#E7EEEA", "fill-opacity": 1 },
         });
         map.addLayer({
           id: "sjdm-city-outline",
@@ -3907,7 +3907,9 @@ export default function WebMapTracking() {
             isResidentMode &&
             selectedCase?.id === item.id &&
             residentUsingOwnLiveDestination &&
-            !!userLocation;
+            !!userLocation &&
+            !!sjdmBoundary &&
+            insideSjdmBoundary(sjdmBoundary, userLocation!.latitude, userLocation!.longitude);
 
           return {
             id: item.id,
