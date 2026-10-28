@@ -1583,7 +1583,7 @@ const styles =
       padding: 24,
       paddingBottom: 60,
       backgroundColor:
-        "#F1F5F9",
+        "#F6F9F8",
       minHeight: "100%",
     },
 
@@ -1603,13 +1603,18 @@ const styles =
     },
 
     header: {
-      marginBottom: 20,
+      marginBottom: 17,
+      backgroundColor:"#E5F5ED",
+      padding:23,
+      borderWidth:1,
+      borderColor:"#D8EBE0",
+      borderRadius:14,
     },
 
     eyebrow: {
       fontSize: 11,
       fontWeight: "900",
-      color: "#0F766E",
+      color: "#176C52",
       letterSpacing: 1.3,
     },
 
