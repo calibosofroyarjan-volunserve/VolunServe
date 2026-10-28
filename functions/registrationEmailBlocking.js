@@ -43,8 +43,15 @@ function isDisposableRegistrationEmail(value) {
 function createBeforeCreateHook() {
   const { beforeUserCreated, HttpsError } = require("firebase-functions/v2/identity");
   return beforeUserCreated({ region: "us-central1" }, event => {
-    const email = event?.data?.email;
-    if (isDisposableRegistrationEmail(email)) {
+    const account = event?.data;
+    // Federated signups may include email addresses in provider metadata.
+    // Inspect every supplied address, not only the top-level email field.
+    const emails = [
+      account?.email,
+      ...(Array.isArray(account?.providerData) ?
+        account.providerData.map(provider => provider?.email) : []),
+    ];
+    if (emails.some(isDisposableRegistrationEmail)) {
       throw new HttpsError(
         "invalid-argument",
         "Use a permanent email address. Disposable email accounts are not accepted."
