@@ -309,7 +309,7 @@ test("all visible types of public safety facility pins support correct coordinat
   const map = importLocalTs("lib/sjdmPublicMapPlaces.ts");
   const u = map.googleMapsFacilityDirections(14.82785,121.04486);
   assert.equal(u,
-    "https://www.google.com/maps/dir/?api=1&destination=14.827850%2C121.044860&travelmode=driving");
+    "https://www.google.com/maps/dir/?api=1&destination=14.827850%2C121.044860&travelmode=driving&dir_action=navigate");
   assert.throws(()=>map.googleMapsFacilityDirections(Infinity,121),/Invalid facility/);
   assert.throws(()=>map.googleMapsFacilityDirections(14.8,200),/Invalid facility/);
   const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
