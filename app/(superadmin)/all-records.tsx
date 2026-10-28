@@ -35,6 +35,7 @@ type RecordType =
   | "disputes"
   | "donations"
   | "events"
+  | "communityEvents"
   | "certificates";
 
 type GenericRecord = {
@@ -57,6 +58,7 @@ const emptyRecords: RecordGroup = {
   disputes: [],
   donations: [],
   events: [],
+  communityEvents: [],
   certificates: [],
 };
 
@@ -96,6 +98,10 @@ const recordSources: Array<{
   {
     type: "events",
     collectionName: "volunteerEvents",
+  },
+  {
+    type: "communityEvents",
+    collectionName: "communityEvents",
   },
   {
     type: "certificates",
@@ -523,8 +529,13 @@ export default function AllRecords() {
     },
 
     {
+      key: "communityEvents",
+      label: "Community Events",
+      icon: "calendar-outline",
+    },
+    {
       key: "events",
-      label: "Events",
+      label: "Legacy Volunteer Events",
       icon: "calendar-outline",
     },
 
@@ -959,10 +970,11 @@ export default function AllRecords() {
     }
 
     if (
-      activeTab === "events"
+      (activeTab === "events" || activeTab === "communityEvents")
     ) {
       const status =
         firstText(
+          item.publicationStatus,
           item.status,
           "active"
         );
@@ -973,8 +985,9 @@ export default function AllRecords() {
           icon="calendar-outline"
           title={firstText(
             item.title,
+            item.eventTitle,
             item.name,
-            "Volunteer Event"
+            "Community Event"
           )}
           subtitle={firstText(
             item.location,
