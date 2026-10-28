@@ -289,3 +289,10 @@ test("OpenStreetMap map-viewer script compiles to valid JavaScript", () => {
   for(const block of scripts)if(block[1].trim())
     assert.doesNotThrow(()=>new vm.Script(block[1]),"inline map code must parse");
 });
+
+
+test("programmer Super Admin is not a field LGU dispatcher", () => {
+  const source=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(source,/const isOperationalLgu = accountRole === "admin" \|\| isLguPersonnel/);
+  assert.match(source,/const adminMissionMode =\s*!!focusedCaseId && isOperationalLgu/);
+});
