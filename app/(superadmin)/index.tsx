@@ -121,7 +121,7 @@ export default function SuperAdminDashboard() {
     [latestRecorded,adminUids]);
   const systemChanges = useMemo(() =>
     latestRecorded.filter(item =>
-      /system_settings|admin_account|credential|access|suspend|reactivat|promot/i.test(item.actionType)
+      /system_settings|admin_account|credential|access|suspend|reactivat|promot|sign_in|login|password|role_update|privacy|data_cleanup/i.test(item.actionType)
     ),[latestRecorded]);
   const safeActivityPage = Math.min(adminActivityPage, Math.max(1, Math.ceil(adminActions.length / PAGE_SIZE)));
   const safeChangesPage = Math.min(systemChangesPage, Math.max(1, Math.ceil(systemChanges.length / PAGE_SIZE)));
@@ -132,10 +132,10 @@ export default function SuperAdminDashboard() {
     ? Math.round((approved / total) * 100) : null;
   const data = useMemo(() => SOURCES.map(({ key, label }) => ({
     key, label,
-    shortLabel: ({users:"Accounts",disasterCases:"Emergencies",assistanceRequests:"Assistance",communityEvents:"Events"} as Record<Source,string>)[key],
+    shortLabel: compact ? ({users:"Accounts",disasterCases:"Emergency",assistanceRequests:"Assistance",communityEvents:"Events"} as Record<Source,string>)[key] : label,
     color: ({users:"#087B63",disasterCases:"#24A18A",assistanceRequests:"#4CBFA3",communityEvents:"#79CEB8"} as Record<Source,string>)[key],
     value: errors[key] || !loaded[key] ? null : (counts[key] ?? 0),
-  })), [counts, errors, loaded]);
+  })), [counts, errors, loaded, compact]);
   const hasUnavailable = SOURCES.some(({ key }) => errors[key]);
   const allLoaded = SOURCES.every(({ key }) => loaded[key]);
   const showApproval = loaded.users && !errors.users && approved !== null;
