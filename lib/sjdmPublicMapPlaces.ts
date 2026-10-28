@@ -61,7 +61,7 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
   },
   {
     id: "osm-way-672667289",
-    name: "Fire Station — OSM Location Reference",
+    name: "Fire Station (Mapped Site)",
     kind: "fire_station",
     latitude: 14.80924, longitude: 121.04755,
     sourceUrl: "https://www.openstreetmap.org/way/672667289",
