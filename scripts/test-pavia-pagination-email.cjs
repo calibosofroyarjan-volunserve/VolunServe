@@ -469,3 +469,17 @@ test("LGU staff application keeps a searchable official SJDM barangay picker and
   assert.match(screen, /privateEvidenceIntakeEnabled/);
   assert.match(screen, /!privateEvidenceIntakeEnabled/);
 });
+
+test("System Settings official emergency hotline is select-only and rules reject arbitrary numbers", () => {
+  const source = read("app/(superadmin)/system-settings.tsx");
+  const rules = read("firestore.rules");
+  for (const official of ["911", "0932-600-0119", "0955-206-7200"]) {
+    assert.ok(source.includes('"' + official + '"'), "Missing official number " + official);
+    assert.ok(rules.includes("'" + official + "'"), "Firestore must permit official number " + official);
+  }
+  assert.match(source, /allowCustom=\{false\}/);
+  assert.match(source, /OFFICIAL_EMERGENCY_HOTLINES\.includes\(emergencyHotline\.trim\(\)\)/);
+  assert.match(source, /\.\.\.\(allowCustom \? \["Others — specify"\] : \[\]\)/);
+  assert.match(rules, /request\.resource\.data\.emergencyHotline in \[/);
+  assert.doesNotMatch(rules, /request\.resource\.data\.emergencyHotline\.size\(\) <= 160/);
+});
