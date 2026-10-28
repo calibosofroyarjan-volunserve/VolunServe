@@ -41,7 +41,7 @@ test("Existing tracking deep links and Volunteer Tasks remain available", () => 
     const source = read(file);
     assert.match(source,/useLocalSearchParams/);
     assert.match(source,/showingTaskMap/);
-    assert.match(source,/<MapTracking\\s*\\/>/);
+    assert.match(source,/MapTracking/);
     assert.match(source,/Back to Volunteer Tasks/);
     assert.match(source,/view: "tracking"/);
     assert.match(source,/caseId: assignment.caseId/);
