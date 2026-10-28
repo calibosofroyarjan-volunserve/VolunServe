@@ -78,3 +78,25 @@ test("Super Admin read-only records and audit feed use five-row pagination and r
   assert.doesNotMatch(records,/visibleRecords\.map\(\s*renderRecord/);
   assert.doesNotMatch(audit,/\{visible\.map\(\(item\)/);
 });
+
+test("Server-side blocking policy is ready but not silently enabled on unsupported Firebase projects",()=>{
+  const server=read("functions/registrationEmailBlocking.js");
+  const functionsEntry=read("functions/index.js");
+  const domainList=JSON.parse(read("functions/disposable-email-domains.json"));
+  const {isDisposableRegistrationEmail} = require("../functions/registrationEmailBlocking.js");
+  const {isDisposable} = importPolicy();
+  assert.ok(domainList.domains.length >= 50000);
+  for(const addr of [
+    "user@mailinator.com", "USER@YOPMAIL.COM",
+    "person@sub.mailinator.com", "test@10minutemail.com",
+    "user@guerrillamail.com", "a@gmail.com",
+    "student@school.gov.ph", "name@outlook.com"
+  ]) {
+    assert.equal(isDisposableRegistrationEmail(addr),isDisposable(addr),addr);
+  }
+  assert.match(server,/beforeUserCreated/);
+  assert.match(server,/invalid-argument/);
+  // Safety gate: do not deploy a blocking Auth hook to a project that has not
+  // confirmed the required Identity Platform upgrade and trigger configuration.
+  assert.doesNotMatch(functionsEntry,/exports\.blockDisposableEmailBeforeCreate\s*=/);
+});
