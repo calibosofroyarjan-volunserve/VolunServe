@@ -245,7 +245,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <View style={styles.passwordInputContainer}>
         <TextInput
         style={[
@@ -328,7 +328,7 @@ const Dropdown = memo(function Dropdown({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <Pressable ref={triggerRef} onPress={openMenu} style={[styles.ddTrigger, !enabled && styles.disabledInput]}>
         <Text style={[styles.ddValue, !value && styles.ddPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.ddChevron}>{open ? "▲" : "▼"}</Text>
@@ -759,7 +759,7 @@ export default function Signup() {
 
               <SectionTitle title="Birthdate & Contact" />
               <View style={styles.field}>
-                <Text style={styles.label}>🎂 Date of Birth *</Text>
+                <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#C62828", fontWeight: "800" }}>*</Text></Text>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
                   <Text style={{ fontSize: 15, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
                     {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
@@ -781,7 +781,7 @@ export default function Signup() {
                 <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
 
-              <Text style={styles.label}>📱 Mobile Number *</Text>
+              <Text style={styles.label}>📱 Mobile Number <Text style={{ color: "#C62828", fontWeight: "800" }}>*</Text></Text>
               <View style={styles.phoneWrap}>
                 <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
                 <TextInput
