@@ -202,6 +202,8 @@ test("Reviewer-visible Super Admin analytics and pagination are never hidden on 
   assert.match(paging,/Page \{safePage\} of \{pages\}/);
   assert.match(paging,/disabled=\{safePage <= 1\}/);
   assert.match(paging,/disabled=\{safePage >= pages\}/);
+  assert.match(paging, /"aria-current": "page"/);
+  assert.match(paging, /Platform\.OS === "web" && number === safePage/);
 });
 
 
