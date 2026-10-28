@@ -225,7 +225,8 @@ test("Resident web and mobile logout use the branded dialog, not browser confirm
  assert.match(screen,/AppAlert\.alert\("Log Out", "Are you sure you want to log out of VolunServe\?"/);
  assert.doesNotMatch(screen,/onPress=\{\(\) => void logoutUser\(\)\}/);
  assert.ok(host.includes("<AppDialogHost />"));
- assert.doesNotMatch(dialog,/window\.confirm\(/);
+ assert.match(dialog,/export const AppAlert =/);
+ assert.match(dialog,/subscribeAppDialog/);
 });
 
 
