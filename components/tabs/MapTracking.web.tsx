@@ -5450,6 +5450,11 @@ export default function WebMapTracking() {
                 {verifiedCityShelterCount === 0 && "No LGU-verified active shelter records. "}
                 {verifiedCityLguCount === 0 && "No LGU-verified active office pins. "}
                 Authorized LGU Admin must confirm real GPS and publish each facility.
+                <a href="https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/"
+                  target="_blank" rel="noopener noreferrer"
+                  style={{display:"block",marginTop:5,color:"#0E755C",fontWeight:700}}>
+                  Official SJDM CDRRMO contact / facilities
+                </a>
               </small>
             ) : (
               <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
