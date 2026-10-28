@@ -487,7 +487,7 @@ const mapDocument = `
           return null;
         return "https://www.google.com/maps/dir/?api=1&destination=" +
           Number(latitude).toFixed(6) + "%2C" +
-          Number(longitude).toFixed(6) + "&travelmode=driving";
+          Number(longitude).toFixed(6) + "&travelmode=driving&dir_action=navigate";
       }
       function safePopupLink(url, label, container) {
         if (typeof url !== "string" || !url.startsWith("https://")) return;
