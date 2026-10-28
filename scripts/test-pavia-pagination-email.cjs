@@ -642,3 +642,27 @@ test("All Super Admin record lists show five items with numbered navigation ABOV
   assert.match(paging,/"aria-current": "page"/);
   assert.doesNotMatch(accounts+records+audit+privacy,/onEndReached|Load More Records|onScrollEndDrag/);
 });
+
+test("LOCKED Sir Pavia Super Admin navigation: exact five modules in approved order", () => {
+  const layout = read("app/(superadmin)/_layout.tsx");
+  const match = layout.match(/const navItems: NavItem\[\] = \[([\s\S]*?)\];/);
+  assert.ok(match, "Super Admin navigation must retain its single approved navItems definition");
+  const modules = [...match[1].matchAll(/\{\s*label: "([^"]+)",\s*icon: "[^"]+",\s*route: "([^"]+)"/g)]
+    .map(m => ({label: m[1], route: m[2]}));
+  assert.deepEqual(modules, [
+    {label:"System Overview", route:"/(superadmin)"},
+    {label:"LGU Staff & Admin Accounts", route:"/(superadmin)/admin-accounts"},
+    {label:"System Records", route:"/(superadmin)/all-records"},
+    {label:"Audit Logs", route:"/(superadmin)/admin-logs"},
+    {label:"System Settings", route:"/(superadmin)/system-settings"},
+  ], "Do not reorder/add/remove Super Admin modules without a revised Sir Pavia scope decision");
+
+  const records = read("app/(superadmin)/all-records.tsx");
+  assert.match(records, /Super Admin oversight only/,
+    "System Records must remain oversight rather than a duplicate LGU operational console");
+  assert.doesNotMatch(records,/writeBatch\(|updateDoc\(|deleteDoc\(|addDoc\(/,
+    "Do not add operational write controls to the Super Admin record reader");
+  const accounts = read("app/(superadmin)/admin-accounts.tsx");
+  assert.match(accounts, /ADMIN_PAGE_SIZE = 5/);
+  assert.match(accounts, /lguAdminCredentialReviews/);
+});
