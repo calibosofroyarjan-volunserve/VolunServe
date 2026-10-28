@@ -104,7 +104,7 @@ test("Event times use Philippine UTC+08 even when browser machine timezone diffe
   assert.equal(validSjdmEventSchedule({date:"2026-10-30",time:"13:00",endTime:"12:59"}),false);
   assert.equal(validSjdmEventSchedule({date:"2026-10-30",time:"13:00",endTime:"16:00"}),true);
   assert.equal(isEventJoinableNow({status:"active",date:"2026-10-30",time:"13:00",endTime:"16:00"},
-    Date.parse("2026-10-30T09:00:00Z")),true);
+    Date.parse("2026-10-30T06:00:00Z")),true);
   assert.equal(isEventJoinableNow({status:"active",date:"2026-10-30",time:"13:00",endTime:"16:00"},
     Date.parse("2026-10-30T08:00:00Z")),false);
 });
