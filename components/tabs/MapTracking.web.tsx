@@ -524,6 +524,53 @@ const mapDocument = `
         card.appendChild(caution);
         return card;
       }
+      function makeVerifiedMapPopup(item, isShelter) {
+        const card = document.createElement("div");
+        card.className = "place-popup";
+        const heading = document.createElement("strong");
+        heading.className = "place-popup-title";
+        heading.textContent = item.name || (isShelter ? "Evacuation Center" : "LGU Facility");
+        card.appendChild(heading);
+        const category = document.createElement("span");
+        category.className = "place-popup-category";
+        category.textContent = isShelter ? "Evacuation Center · LGU record" : "LGU-verified public office";
+        card.appendChild(category);
+        const address = document.createElement("p");
+        address.className = "place-popup-note";
+        address.textContent = item.address || item.barangay || "Address not supplied";
+        card.appendChild(address);
+        const status = document.createElement("p");
+        status.className = "place-popup-status";
+        if (isShelter) {
+          const verified = item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt)
+            && Date.now() - item.lastVerifiedAt >= -300000
+            && Date.now() - item.lastVerifiedAt <= 86400000;
+          status.textContent = verified
+            ? "Recently LGU-checked · confirm availability before travel"
+            : "Shelter opening NOT recently confirmed — call CDRRMO";
+          const details = document.createElement("p");
+          details.className = "place-popup-note";
+          details.textContent = item.capacity != null && item.occupied != null
+            ? "Last reported occupancy: " + item.occupied + " / " + item.capacity +
+              " · Not a live sensor reading"
+            : "Capacity unconfirmed";
+          card.appendChild(details);
+        } else {
+          status.textContent = "LGU-verified fixed facility · Not a live responder location";
+        }
+        card.appendChild(status);
+        if (isShelter) {
+          const links = document.createElement("div");
+          links.className = "place-popup-links";
+          const emergencyCall = document.createElement("a");
+          emergencyCall.href = "tel:09326000119";
+          emergencyCall.textContent = "Call SJDM CDRRMO";
+          links.appendChild(emergencyCall);
+          card.appendChild(links);
+        }
+        return card;
+      }
+
       function makeSourcedPlaceElement(item) {
         const pin = document.createElement("div");
         pin.className = "public-place-marker" +
@@ -1029,15 +1076,8 @@ const mapDocument = `
 
           const element = makeLguBaseElement(item);
 
-          const popup = new maplibregl.Popup({
-            offset: 22,
-            closeButton: false,
-          }).setText(
-            [item.name || "LGU Facility", item.address || "",
-             "LGU verified · last updated " + (item.updatedAt ? new Date(item.updatedAt).toLocaleString("en-PH") : "not supplied")]
-              .filter(Boolean)
-              .join(" · ")
-          );
+          const popup = new maplibregl.Popup({offset:22})
+            .setDOMContent(makeVerifiedMapPopup(item,false));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
@@ -1080,24 +1120,8 @@ const mapDocument = `
             );
           });
 
-          const popup = new maplibregl.Popup({
-            offset: 22,
-            closeButton: false,
-          }).setText([
-            item.name || "Evacuation center",
-            item.address || item.barangay || "",
-            item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt) &&
-              Date.now() - item.lastVerifiedAt >= -300000 &&
-              Date.now() - item.lastVerifiedAt <= 86400000
-              ? "LGU recently reviewed (confirm before travel)"
-              : "Status NOT recently confirmed — call CDRRMO",
-            item.lastVerifiedAt && Number.isFinite(item.lastVerifiedAt)
-              ? "Last LGU verification " + new Date(item.lastVerifiedAt).toLocaleString("en-PH")
-              : "LGU verification time unavailable",
-            item.capacity != null && item.occupied != null
-              ? String(Math.max(0, item.capacity - item.occupied)) + " last-reported spaces (NOT live occupancy)"
-              : "Capacity unconfirmed",
-          ].filter(Boolean).join(" · "));
+          const popup = new maplibregl.Popup({offset:22})
+            .setDOMContent(makeVerifiedMapPopup(item,true));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
