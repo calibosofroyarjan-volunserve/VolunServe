@@ -233,6 +233,22 @@ const owningModule = (route: string, mode: string) =>
     ? mode === "volunteer" ? "volunteer" : "disaster-response"
     : route;
 
+function requestConfirmedResidentLogout() {
+    const logOut = async () => {
+      try {
+        await logoutUser();
+        router.replace("/login");
+      } catch (error: any) {
+        AppAlert.alert("Log out failed", error?.message || "Please try again.");
+      }
+    };
+    // The same safe confirmation is used on mobile and web.
+    AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Log Out", style: "destructive", onPress: () => void logOut() },
+    ]);
+}
+
 export default function TabLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
@@ -272,21 +288,7 @@ export default function TabLayout() {
     }
   };
 
-  const confirmMobileLogout = () => {
-    const logOut = async () => {
-      try {
-        await logoutUser();
-        router.replace("/login");
-      } catch (error: any) {
-        AppAlert.alert("Log out failed", error?.message || "Please try again.");
-      }
-    };
-    // The same safe confirmation is used on mobile and web.
-    AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Log Out", style: "destructive", onPress: () => void logOut() },
-    ]);
-  };
+
 
   if (loading) {
     return (
@@ -404,7 +406,7 @@ export default function TabLayout() {
                 </Pressable>
               ) : null}
               <View style={styles.mobileAccountDivider} />
-              <Pressable onPress={() => {setMobileProfileOpen(false); confirmMobileLogout();}}
+              <Pressable onPress={() => {setMobileProfileOpen(false); requestConfirmedResidentLogout();}}
                 style={styles.mobileAccountAction}>
                 <Ionicons name="log-out-outline" size={18} color="#D93545" />
                 <Text style={[styles.mobileAccountActionText, { color: "#C52B3C" }]}>Log Out</Text>
@@ -686,7 +688,7 @@ function DesktopTabBar({
             styles.desktopUtilityButton,
             pressed && styles.desktopPressed,
           ]}
-          onPress={confirmMobileLogout}
+          onPress={requestConfirmedResidentLogout}
         >
           <Ionicons
             name="log-out-outline"
