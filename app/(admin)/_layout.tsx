@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -192,7 +193,7 @@ export default function AdminLayout() {
       } catch (
         error: any
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Sign Out Failed",
           error?.message ||
             "Unable to sign out.",

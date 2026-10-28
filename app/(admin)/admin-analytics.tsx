@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { useRouter } from "expo-router";
 import { AdminPageHeading, AdminSectionHeading, AdminMetricCard, ADMIN_UI } from "../../components/admin/AdminWorkspaceUI";
 import { getAuth } from "firebase/auth";
@@ -327,7 +328,7 @@ export default function AdminAnalytics() {
         volunteer.userId;
 
       if (!targetUid) {
-        Alert.alert(
+        AppAlert.alert(
           "Cannot Send Reminder",
           "This volunteer record has no valid Firebase UID."
         );
@@ -350,7 +351,7 @@ export default function AdminAnalytics() {
         }
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Reminder Sent",
         `Reminder sent to ${
           volunteer.name || "volunteer"
@@ -362,7 +363,7 @@ export default function AdminAnalytics() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         "Failed to send reminder."
       );

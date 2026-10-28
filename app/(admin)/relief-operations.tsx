@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -1016,7 +1017,7 @@ export default function ReliefOperations() {
       ).trim();
 
     if (!assessmentId) {
-      Alert.alert(
+      AppAlert.alert(
         "Verified Need Missing",
         "This relief need is missing its assessment reference.",
       );
@@ -1046,7 +1047,7 @@ export default function ReliefOperations() {
       return;
     }
 
-    Alert.alert(
+    AppAlert.alert(
       "Confirm Resource Shortage",
       message,
       [
@@ -1132,7 +1133,7 @@ export default function ReliefOperations() {
         itemName.length < 2 ||
         itemName.length > 160
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Item Name Required",
           "Enter a clear item name from 2 to 160 characters.",
         );
@@ -1143,7 +1144,7 @@ export default function ReliefOperations() {
         unit.length < 1 ||
         unit.length > 40
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Unit Required",
           "Enter a unit such as pack, box, bottle, kit, or piece.",
         );
@@ -1156,7 +1157,7 @@ export default function ReliefOperations() {
         ) ||
         quantity <= 0
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid Quantity",
           "Received quantity must be greater than 0.",
         );
@@ -1226,7 +1227,7 @@ export default function ReliefOperations() {
           EMPTY_INVENTORY_FORM,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Stock Recorded",
           "The goods were added to the central LGU relief inventory.",
         );
@@ -1236,7 +1237,7 @@ export default function ReliefOperations() {
           problem,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Unable to Add Stock",
           problem instanceof Error
             ? problem.message
@@ -1262,7 +1263,7 @@ export default function ReliefOperations() {
         selectedSummary.assessmentIds
           .length > 50
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Too Many Open Assessments",
           "Resolve or fulfill older assessments first. One allocation can link to at most 50 assessments.",
         );
@@ -1293,7 +1294,7 @@ export default function ReliefOperations() {
         ) as InventoryCategory;
 
       if (!neededCategories.has(selectedCategory)) {
-        Alert.alert(
+        AppAlert.alert(
           "Stock Does Not Match Verified Need",
           "Choose an inventory item that matches one of the barangay's verified relief needs.",
         );
@@ -1306,7 +1307,7 @@ export default function ReliefOperations() {
         ) ||
         quantity <= 0
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid Quantity",
           "Enter a quantity greater than 0.",
         );
@@ -1314,7 +1315,7 @@ export default function ReliefOperations() {
       }
 
       if (quantity > available) {
-        Alert.alert(
+        AppAlert.alert(
           "Not Enough Available Stock",
           `Only ${formatNumber(
             available,
@@ -1551,7 +1552,7 @@ export default function ReliefOperations() {
           "allocations",
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Goods Allocated",
           `${formatNumber(
             quantity,
@@ -1569,7 +1570,7 @@ export default function ReliefOperations() {
           problem,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Allocation Failed",
           problem instanceof Error
             ? problem.message
@@ -1640,7 +1641,7 @@ export default function ReliefOperations() {
           },
         );
       } catch (problem) {
-        Alert.alert(
+        AppAlert.alert(
           "Unable to Start Distribution",
           problem instanceof Error
             ? problem.message
@@ -1666,7 +1667,7 @@ export default function ReliefOperations() {
         );
 
       if (!allocation) {
-        Alert.alert(
+        AppAlert.alert(
           "Allocation Missing",
           "The allocation could not be found.",
         );
@@ -1691,7 +1692,7 @@ export default function ReliefOperations() {
         distributed < 0 ||
         distributed > allocated
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Invalid Distributed Quantity",
           `Enter a value from 0 to ${formatNumber(
             allocated,
@@ -1890,7 +1891,7 @@ export default function ReliefOperations() {
           EMPTY_DISTRIBUTION_FORM,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Distribution Recorded",
           "The LGU allocation and central inventory were reconciled successfully.",
         );
@@ -1900,7 +1901,7 @@ export default function ReliefOperations() {
           problem,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Completion Failed",
           problem instanceof Error
             ? problem.message
@@ -1924,7 +1925,7 @@ export default function ReliefOperations() {
           allocation.quantityDistributed,
         ) > 0
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Cannot Cancel",
           "An allocation with recorded distribution cannot be cancelled.",
         );
@@ -2083,12 +2084,12 @@ export default function ReliefOperations() {
           },
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Allocation Cancelled",
           "Reserved goods were returned to available LGU inventory.",
         );
       } catch (problem) {
-        Alert.alert(
+        AppAlert.alert(
           "Cancellation Failed",
           problem instanceof Error
             ? problem.message
@@ -2117,7 +2118,7 @@ export default function ReliefOperations() {
         );
 
       if (stillActive) {
-        Alert.alert(
+        AppAlert.alert(
           "Active Allocation Exists",
           "Finish or cancel this relief need's active allocations before marking it fulfilled.",
         );
@@ -2134,7 +2135,7 @@ export default function ReliefOperations() {
         );
 
       if (!hasCompleted) {
-        Alert.alert(
+        AppAlert.alert(
           "No Distribution Record Yet",
           "Record at least one completed allocation before marking this relief need fulfilled.",
         );
@@ -2213,12 +2214,12 @@ export default function ReliefOperations() {
           },
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Relief Need Fulfilled",
           `${reliefScopeLabel(summary.reliefScope)} in ${summary.barangay} was removed from the active relief-planning list.`,
         );
       } catch (problem) {
-        Alert.alert(
+        AppAlert.alert(
           "Unable to Finalize Needs",
           problem instanceof Error
             ? problem.message

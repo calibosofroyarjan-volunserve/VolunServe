@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import React, { useState } from "react";
 
 import {
@@ -123,7 +124,7 @@ export default function CreateAnnouncement() {
     const cleanMessage = message.trim();
 
     if (!SJDM_BARANGAYS.includes(barangay)) {
-      Alert.alert(
+      AppAlert.alert(
         "Select Barangay",
         "Choose an official SJDM barangay before publishing."
       );
@@ -132,7 +133,7 @@ export default function CreateAnnouncement() {
     }
 
     if (cleanTitle.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Title",
         "Please enter a clear announcement title."
       );
@@ -141,7 +142,7 @@ export default function CreateAnnouncement() {
     }
 
     if (cleanMessage.length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Message",
         "Please enter an announcement message."
       );
@@ -191,7 +192,7 @@ export default function CreateAnnouncement() {
       setTitle("");
       setMessage("");
 
-      Alert.alert(
+      AppAlert.alert(
         "Announcement Posted",
         `The announcement was published for ${barangay}.`
       );
@@ -201,7 +202,7 @@ export default function CreateAnnouncement() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Post",
         error?.message ||
           "The announcement could not be published."

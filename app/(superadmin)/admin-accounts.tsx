@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -255,7 +256,7 @@ export default function AdminAccounts() {
 
           setLoading(false);
 
-          Alert.alert(
+          AppAlert.alert(
             "Error",
             "Unable to load user accounts."
           );
@@ -420,7 +421,7 @@ export default function AdminAccounts() {
   const verifySuperAdmin =
     () => {
       if (!sessionUser) {
-        Alert.alert(
+        AppAlert.alert(
           "Session Error",
           "Please sign in again."
         );
@@ -432,7 +433,7 @@ export default function AdminAccounts() {
         !isSuperAdmin ||
         !sessionProfile
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Access Denied",
           "Only the active Super Admin can manage Admin accounts."
         );

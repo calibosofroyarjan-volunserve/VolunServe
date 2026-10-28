@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -1200,7 +1201,7 @@ export default function AdminCertificatesScreen() {
         !profile ||
         !isAuthorized
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Access Denied",
           "Only an authorized Admin or Super Admin can issue volunteer certificates.",
         );
@@ -1212,7 +1213,7 @@ export default function AdminCertificatesScreen() {
         summary.verifiedHelps <=
         0
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "No Verified Service",
           "This volunteer has no verified assistance record available for certification.",
         );
@@ -1224,7 +1225,7 @@ export default function AdminCertificatesScreen() {
         summary.contributionIds.length ===
         0
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "No Contributions",
           "No verified contribution records were found.",
         );
@@ -1240,7 +1241,7 @@ export default function AdminCertificatesScreen() {
       if (
         alreadyIssued
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Already Issued",
           alreadyIssued.verificationStatus ===
             "revoked"
@@ -1256,7 +1257,7 @@ export default function AdminCertificatesScreen() {
           summary.certificateId,
         )
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Certificate Already Exists",
           "This certificate record already exists.",
         );
@@ -1491,7 +1492,7 @@ export default function AdminCertificatesScreen() {
 
         await batch.commit();
 
-        Alert.alert(
+        AppAlert.alert(
           "Certificate Issued",
           `Certificate ${summary.certificateId} was issued to ${summary.volunteerName}.`,
         );
@@ -1503,7 +1504,7 @@ export default function AdminCertificatesScreen() {
           problem,
         );
 
-        Alert.alert(
+        AppAlert.alert(
           "Issuance Failed",
 
           problem?.message ||

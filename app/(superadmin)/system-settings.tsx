@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -112,7 +113,7 @@ export default function SystemSettings() {
 
   const saveSettings = async () => {
     if (!isSuperAdmin || !user || !profile) {
-      Alert.alert(
+      AppAlert.alert(
         "Access Denied",
         "Only the active Super Admin can update system settings."
       );
@@ -127,7 +128,7 @@ export default function SystemSettings() {
       cityName.trim().length < 3 ||
       cityName.trim().length > 120
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid city name",
         "Enter between 3 and 120 characters."
       );
@@ -138,7 +139,7 @@ export default function SystemSettings() {
     if (
       !/^[+()0-9\s-]{3,40}$/.test(emergencyHotline.trim())
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid hotline",
         "Enter a verified official phone number (digits, spaces, +, - or parentheses only)."
       );
@@ -152,7 +153,7 @@ export default function SystemSettings() {
         supportEmail.trim()
       )
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid email",
         "Enter a valid support email or leave it blank."
       );
@@ -166,7 +167,7 @@ export default function SystemSettings() {
       publicServiceNotice.trim().length >
         500
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid public notice",
         "Enter between 10 and 500 characters."
       );
@@ -179,7 +180,7 @@ export default function SystemSettings() {
       hours < 1 ||
       hours > 720
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid retention",
         "Choose a whole number from 1 to 720 hours."
       );
@@ -245,7 +246,7 @@ export default function SystemSettings() {
           `live-location retention to ${hours} hour(s).`,
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Settings Saved",
         "Public contact information and live-location retention settings were updated."
       );
@@ -255,7 +256,7 @@ export default function SystemSettings() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Save Settings",
         error?.message ||
           "Please try again."

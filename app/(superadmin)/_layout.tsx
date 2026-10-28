@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Href,
@@ -230,7 +231,7 @@ export default function SuperAdminLayout() {
       await logoutUser();
       router.replace("/admin-login" as Href);
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Sign Out Failed",
         error?.message || "Unable to sign out. Please try again."
       );
