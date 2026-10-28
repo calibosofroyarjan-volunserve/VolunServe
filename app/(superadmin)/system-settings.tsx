@@ -38,6 +38,13 @@ import {
   useUserSession,
 } from "../../lib/useUserSession";
 
+// Verified public emergency numbers. No arbitrary hotline input is allowed.
+const OFFICIAL_EMERGENCY_HOTLINES = [
+  "911",
+  "0932-600-0119", // CSJDM CDRRMO 24-hour response
+  "0955-206-7200", // CSJDM CDRRMO 24-hour response
+];
+
 export default function SystemSettings() {
   const {
     loading: sessionLoading,
@@ -141,14 +148,11 @@ export default function SystemSettings() {
       return;
     }
 
-    if (
-      !/^[+()0-9\s-]{3,40}$/.test(emergencyHotline.trim())
-    ) {
+    if (!OFFICIAL_EMERGENCY_HOTLINES.includes(emergencyHotline.trim())) {
       AppAlert.alert(
-        "Invalid hotline",
-        "Enter a verified official phone number (digits, spaces, +, - or parentheses only)."
+        "Official hotline required",
+        "Choose 911 or a verified City of San Jose del Monte CDRRMO response number. Custom numbers are not allowed."
       );
-
       return;
     }
 
@@ -351,9 +355,10 @@ export default function SystemSettings() {
           label="Official Emergency Hotline (public)"
           value={emergencyHotline}
           onChangeText={trackEdit(setEmergencyHotline)}
-          options={["911"]}
-          placeholder="Enter verified official hotline number"
-          help="Choose the national emergency hotline or Others to enter an independently verified official contact number. Do not enter generic instructions."
+          options={OFFICIAL_EMERGENCY_HOTLINES}
+          allowCustom={false}
+          placeholder="Select an official emergency hotline"
+          help="Verified emergency contacts only: 911 (national) or CSJDM CDRRMO 24-hour response (0932-600-0119 / 0955-206-7200). No personal or custom numbers."
         />
 
         <Field
@@ -459,15 +464,15 @@ export default function SystemSettings() {
 }
 
 function PresetField({
-  label, value, onChangeText, options, help, multiline, keyboardType, maxLength, placeholder,
+  label, value, onChangeText, options, help, multiline, keyboardType, maxLength, placeholder, allowCustom = true,
 }: {
   label: string; value: string; onChangeText: (next: string) => void; options: string[];
-  help?: string; multiline?: boolean; keyboardType?: "number-pad"; maxLength?: number; placeholder?: string;
+  help?: string; multiline?: boolean; keyboardType?: "number-pad"; maxLength?: number; placeholder?: string; allowCustom?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isOther = !options.includes(value);
-  const [customMode, setCustomMode] = useState(isOther);
-  useEffect(() => { setCustomMode(!options.includes(value)); }, [value]);
+  const [customMode, setCustomMode] = useState(allowCustom && isOther);
+  useEffect(() => { setCustomMode(allowCustom && !options.includes(value)); }, [value, allowCustom]);
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
@@ -475,12 +480,13 @@ function PresetField({
         accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
         style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
         <Text style={{ flex: 1, color: "#173D32" }} numberOfLines={2}>
-          {customMode ? (value ? `Custom: ${value}` : "Custom value — enter below") : (value || "Select an option")}
+          {!allowCustom && isOther ? "Select an approved official number" :
+            customMode ? (value ? `Custom: ${value}` : "Custom value — enter below") : (value || "Select an option")}
         </Text>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
       </TouchableOpacity>
       {expanded && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 11, marginTop: 4, overflow: "hidden" }}>
-        {[...options, "Others — specify"].map((option) =>
+        [...options, ...(allowCustom ? ["Others — specify"] : [])].map((option) =>
           <TouchableOpacity key={option} accessibilityRole="button" onPress={() => {
             const other = option === "Others — specify";
             setCustomMode(other); setExpanded(false);
@@ -490,7 +496,7 @@ function PresetField({
             <Text style={{ color: "#173D32" }}>{option}</Text>
           </TouchableOpacity>)}
       </View>}
-      {customMode && <TextInput value={value} onChangeText={onChangeText}
+      {allowCustom && customMode && <TextInput value={value} onChangeText={onChangeText}
         placeholder={placeholder || "Specify your value"}
         accessibilityLabel={label + " custom value"}
         keyboardType={keyboardType}
