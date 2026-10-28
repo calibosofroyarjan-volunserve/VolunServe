@@ -151,3 +151,18 @@ test("Prepared Identity Platform hook blocks known domains without enabling a li
   assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com",providerData:[{providerId:"google.com",email:"resident@gmail.com"}]}}));
   assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com",providerData:null}}));
 });
+
+
+test("Super Admin overview uses independent five-item paging for real audit lists",()=>{
+  const screen=read("app/(superadmin)/index.tsx");
+  assert.match(screen,/const PAGE_SIZE = 5;/);
+  assert.match(screen,/const \[adminActivityPage, setAdminActivityPage\] = useState\(1\)/);
+  assert.match(screen,/const \[systemChangesPage, setSystemChangesPage\] = useState\(1\)/);
+  assert.match(screen,/pagedAdminActions = adminActions\.slice/);
+  assert.match(screen,/pagedSystemChanges = systemChanges\.slice/);
+  assert.match(screen,/pagedAdminActions\.map\(/);
+  assert.match(screen,/pagedSystemChanges\.map\(/);
+  assert.match(screen,/<ListPagination page=\{safeActivityPage\} total=\{adminActions\.length\} onChange=\{setAdminActivityPage\}/);
+  assert.match(screen,/<ListPagination page=\{safeChangesPage\} total=\{systemChanges\.length\} onChange=\{setSystemChangesPage\}/);
+  assert.doesNotMatch(screen,/latestRecorded\.filter\(item => adminUids\.includes\(item\.actorUid\)\)\.slice\(0,5\)/);
+});
