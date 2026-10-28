@@ -15,7 +15,6 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
