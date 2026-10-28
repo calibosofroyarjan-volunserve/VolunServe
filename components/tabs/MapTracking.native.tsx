@@ -1809,6 +1809,15 @@ export default function MapTracking() {
 
                     <InfoRow label="Role" value={userRole} />
 
+                    {userRole === "resident" && !nearestCenter && (
+                      <View style={{ marginTop: 12, padding: 12, borderRadius: 10,
+                        backgroundColor: "#FFF7E6", borderColor: "#F1CE85", borderWidth: 1 }}>
+                        <Text style={{ color: "#824D1F", fontSize: 12, lineHeight: 18 }}>
+                          No recently LGU-confirmed evacuation center is available for automatic routing in SJDM.
+                          A listed shelter is not proof that it is currently open. Contact CDRRMO before traveling.
+                        </Text>
+                      </View>
+                    )}
                     {userRole === "resident" && nearestCenter && (
                       <>
                         <View style={styles.commandDivider} />
@@ -1818,6 +1827,14 @@ export default function MapTracking() {
                         </Text>
 
                         <InfoRow label="Center" value={nearestCenter.name} />
+                        <InfoRow label="Last LGU check" value={
+                          nearestCenter.lastVerifiedAt?.toDate
+                            ? nearestCenter.lastVerifiedAt.toDate().toLocaleString("en-PH")
+                            : "Verification timestamp unavailable"
+                        } />
+                        <Text style={{color:"#A16122",fontSize:11,marginTop:4}}>
+                          Based on the last LGU report, not a live occupancy sensor. Confirm opening before travel.
+                        </Text>
 
                         <InfoRow
                           label="Distance"
