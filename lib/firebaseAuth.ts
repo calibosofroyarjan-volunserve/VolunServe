@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   reload,
+  getIdToken,
   sendEmailVerification,
   signOut,
   updatePassword,
@@ -676,6 +677,8 @@ export const loginUser = async (
         await signOut(auth);
         throw new Error("Please verify your email address before signing in. Check your inbox and spam folder for the Firebase confirmation link, then sign in again.");
       }
+      // Refresh the email_verified token claim used by Firestore role gates.
+      await getIdToken(user, true);
     }
     const status = profile.status;
     /**
