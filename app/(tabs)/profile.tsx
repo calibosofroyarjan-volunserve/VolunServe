@@ -1702,209 +1702,105 @@ export default function Profile() {
           </View>
         )}
 
-      <Modal
-        visible={
-          editOpen
-        }
-        transparent
-        animationType="fade"
-        onRequestClose={closeProfileEditor}
-      >
-        <View
-          style={
-            styles.modalBackdrop
-          }
-        >
-          <View
-            style={
-              styles.modalCard
-            }
-          >
-            <View
-              style={
-                styles.modalHeader
-              }
-            >
-              <View>
-                <Text
-                  style={
-                    styles.modalTitle
-                  }
-                >
-                  Edit Profile
-                </Text>
-
-                <Text
-                  style={
-                    styles.modalSubtitle
-                  }
-                >
-                  Update your basic account information.
-                </Text>
+      <Modal visible={editOpen} transparent animationType="fade" onRequestClose={closeProfileEditor}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIcon}>
+                <Ionicons name="person-circle-outline" size={27} color="#087A5D"/>
               </View>
-
-              <TouchableOpacity
-                style={
-                  styles.modalClose
-                }
-                onPress={closeProfileEditor}
-              >
-                <Ionicons
-                  name="close"
-                  size={22}
-                  color="#475569"
-                />
+              <View style={styles.modalHeaderCopy}>
+                <Text style={styles.modalEyebrow}>ACCOUNT INFORMATION</Text>
+                <Text style={styles.modalTitle}>Edit Profile</Text>
+                <Text style={styles.modalSubtitle}>Keep your personal details accurate and up to date.</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close Edit Profile"
+                disabled={saving} style={styles.modalClose} onPress={closeProfileEditor}>
+                <Ionicons name="close" size={20} color="#42675B"/>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={
-                false
-              }
-            >
-              <ProfileInput
-                label="First Name"
-                value={firstName}
-                onChange={setFirstName}
-                placeholder="First name"
-              />
-              <ProfileInput
-                label="Middle Name (optional)"
-                value={middleName}
-                onChange={setMiddleName}
-                placeholder="Middle name"
-              />
-              <ProfileInput
-                label="Last Name"
-                value={lastName}
-                onChange={setLastName}
-                placeholder="Last name"
-              />
+            <ScrollView style={[styles.modalScroll,Platform.OS === "web" && styles.webModalScroll]}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled" nestedScrollEnabled
+              showsVerticalScrollIndicator persistentScrollbar
+              accessibilityLabel="Scroll Edit Profile fields">
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Personal information</Text>
+              </View>
+              <View style={styles.nameGrid}>
+                <View style={styles.nameField}>
+                  <ProfileInput label="First Name" value={firstName} onChange={setFirstName} placeholder="First name" required/>
+                </View>
+                <View style={styles.nameField}>
+                  <ProfileInput label="Middle Name" value={middleName} onChange={setMiddleName} placeholder="Optional"/>
+                </View>
+                <View style={styles.nameField}>
+                  <ProfileInput label="Last Name" value={lastName} onChange={setLastName} placeholder="Last name" required/>
+                </View>
+              </View>
+              <Text style={styles.modalHelper}>Email and identity-verification status are managed separately for account security.</Text>
 
-              <ProfileInput
-                label="Phone Number"
-                value={
-                  phoneNumber
-                }
-                onChange={
-                  setPhoneNumber
-                }
-                placeholder="Phone number"
-              />
+              <View style={styles.modalDivider}/>
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Contact & address</Text>
+              </View>
+              <ProfileInput label="Phone Number" value={phoneNumber}
+                onChange={setPhoneNumber} placeholder="+63 9XX XXX XXXX"
+                keyboardType="phone-pad" maxLength={24}/>
+              <ProfileDropdown label="Barangay" value={barangay} placeholder="Select an SJDM barangay"
+                options={SJDM_BARANGAYS} open={barangayOpen} searchable
+                onToggle={() => {setBarangayOpen(v=>!v);setOccupationOpen(false);setSpecializationOpen(false);}}
+                onSelect={value => {setBarangay(value);setBarangayTouched(true);setBarangayOpen(false);}}/>
+              <ProfileInput label="Complete Address" value={address} onChange={setAddress}
+                placeholder="House number, street, subdivision, purok" maxLength={240}/>
+              <Text style={styles.modalHelper}>City of San Jose del Monte, Bulacan · Region III. Only official city barangays are selectable.</Text>
 
-              <ProfileInput
-                label="Address"
-                value={
-                  address
-                }
-                onChange={
-                  setAddress
-                }
-                placeholder="Complete address"
-              />
+              <View style={styles.modalDivider}/>
+              <View style={styles.modalSectionHeader}>
+                <View style={styles.sectionMarker}/>
+                <Text style={styles.modalSectionTitle}>Occupation details</Text>
+              </View>
+              <Text style={styles.modalHelper}>Optional. Your name can be saved without editing your occupation.</Text>
+              <ProfileDropdown label="Occupation Category" value={occupationCategory}
+                placeholder="Choose occupation (optional)" options={["Not specified",...OCCUPATION_OPTIONS]} open={occupationOpen}
+                onToggle={() => {setOccupationOpen(v=>!v);setBarangayOpen(false);setSpecializationOpen(false);}}
+                onSelect={value => {setOccupationTouched(true);setOccupationCategory(value==="Not specified"?"":value);setOccupationSpecialization("");setOccupationOther("");setOccupationOpen(false);setSpecializationOpen(false);}}/>
+              {(SPECIALIZATIONS[occupationCategory] || []).length > 0 && (
+                <ProfileDropdown label="Specialization" value={occupationSpecialization} placeholder="Choose specialization"
+                  options={SPECIALIZATIONS[occupationCategory] || []} open={specializationOpen}
+                  onToggle={() => {setSpecializationOpen(v=>!v);setBarangayOpen(false);setOccupationOpen(false);}}
+                  onSelect={value => {setOccupationTouched(true);setOccupationSpecialization(value);setSpecializationOpen(false);}}/>
+              )}
+              {occupationCategory === "Other (Specify)" && (
+                <ProfileInput label="Specify Occupation" value={occupationOther}
+                  onChange={value => {setOccupationTouched(true);setOccupationOther(value);}}
+                  placeholder="Your occupation" maxLength={100}/>
+              )}
+            </ScrollView>
 
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginBottom: 8 }}>Occupation Category</Text>
-              <TouchableOpacity accessibilityRole="button"
-                accessibilityLabel="Choose occupation category"
-                onPress={() => setOccupationOpen(v => !v)}
-                style={{ borderWidth: 1, borderColor: "#CAD6D2", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <Text style={{ color: "#123F35", fontWeight: "600", flex: 1 }}>{occupationCategory || "Select occupation"}</Text>
-                <Ionicons name={occupationOpen ? "chevron-up-outline" : "chevron-down-outline"} size={18} color="#08775D"/>
-              </TouchableOpacity>
-              {occupationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
-                {OCCUPATION_OPTIONS.map(option => (
-                  <TouchableOpacity key={option} accessibilityRole="button"
-                    onPress={() => { setOccupationTouched(true); setOccupationCategory(option); setOccupationSpecialization(""); setOccupationOther(""); setOccupationOpen(false); setSpecializationOpen(false); }}
-                    style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationCategory === option ? "#E0F6EC" : "#FFFFFF" }}>
-                    <Text style={{ color: "#124C3C" }}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>}
-              {(SPECIALIZATIONS[occupationCategory] || []).length > 0 && <>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginBottom: 8 }}>Specialization</Text>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose occupation specialization"
-                  onPress={() => setSpecializationOpen(v => !v)}
-                  style={{ borderWidth: 1, borderColor: "#CAD6D2", borderRadius: 12, padding: 14, flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
-                  <Text style={{ color: "#123F35", flex: 1 }}>{occupationSpecialization || "Select specialization"}</Text>
-                  <Ionicons name={specializationOpen ? "chevron-up-outline" : "chevron-down-outline"} size={18} color="#08775D"/>
+            <View style={styles.modalFooter}>
+              <Text style={styles.modalFooterHint}>Changes are saved to your VolunServe profile.</Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity accessibilityRole="button" style={styles.cancelButton} disabled={saving} onPress={closeProfileEditor}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                {specializationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
-                  {(SPECIALIZATIONS[occupationCategory] || []).map(option => (
-                    <TouchableOpacity key={option} onPress={() => { setOccupationTouched(true); setOccupationSpecialization(option); setSpecializationOpen(false); }}
-                      style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationSpecialization === option ? "#E0F6EC" : "#FFFFFF" }}>
-                      <Text style={{ color: "#124C3C" }}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>}
-              </>}
-              {occupationCategory === "Other (Specify)" && <ProfileInput
-                label="Specify Occupation"
-                value={occupationOther}
-                onChange={value => { setOccupationTouched(true); setOccupationOther(value); }}
-                placeholder="Occupation"
-              />}
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <TouchableOpacity
-                  style={
-                    styles.cancelButton
-                  }
-                  disabled={
-                    saving
-                  }
-                  onPress={closeProfileEditor}
-                >
-                  <Text
-                    style={
-                      styles.cancelButtonText
-                    }
-                  >
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={
-                    styles.saveButton
-                  }
-                  disabled={
-                    saving
-                  }
-                  onPress={() =>
-                    void saveProfile()
-                  }
-                >
-                  {saving ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFFFFF"
-                    />
-                  ) : (
+                <TouchableOpacity accessibilityRole="button" style={[styles.saveButton,saving && styles.buttonSaving]}
+                  disabled={saving} onPress={() => void saveProfile()}>
+                  {saving ? <ActivityIndicator size="small" color="#FFFFFF"/> : (
                     <>
-                      <Ionicons
-                        name="checkmark"
-                        size={18}
-                        color="#FFFFFF"
-                      />
-
-                      <Text
-                        style={
-                          styles.saveButtonText
-                        }
-                      >
-                        Save Changes
-                      </Text>
+                      <Ionicons name="checkmark" size={18} color="#FFFFFF"/>
+                      <Text style={styles.saveButtonText}>Save Changes</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </View>
           </View>
         </View>
+
       </Modal>
     </ScrollView>
   );
