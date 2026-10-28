@@ -95,8 +95,8 @@ assert(review.includes("inPersonIdentityConfirmed") &&
 assert(review.includes("LguApplicantEvidencePanel") &&
   review.includes("lguEmploymentConfirmed && evidenceReady"),
   "Super Admin promotion must require protected evidence access AND independent LGU confirmation");
-assert(panel.split('if(usingFirebaseEmulators ? !localEndpoint : !/^https:\\/\\//.test(base))').length===3 &&
-  panel.split('const localEndpoint=/^http:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(base);').length===3,
+assert(panel.split('if(usingFirebaseEmulators ? !localEndpoint : !/^https:\\/\\//.test(base))').length===4 &&
+  panel.split('const localEndpoint=/^http:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(base);').length===4,
   "Emulator auth tokens and synthetic applicant IDs must never be sent to production screening hosts");
 assert(panel.includes("onLoad={()=>setDecodedImages(") &&
   panel.includes("onError={()") &&
