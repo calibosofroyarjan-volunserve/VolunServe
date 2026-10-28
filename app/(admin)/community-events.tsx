@@ -8,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -424,6 +425,13 @@ export default function CommunityEventAdminScreen() {
           date: proposal.date,
           time: proposal.time,
           ...(proposal.endTime ? {endTime:proposal.endTime} : {}),
+          // Immutable, timestamp-based enrollment gate for new published events.
+          // Firestore checks these against request.time, not the browser clock.
+          startsAt: Timestamp.fromMillis(eventStartsAt),
+          endsAt: Timestamp.fromMillis(
+            sjdmEventTimeMillis(proposal.date, proposal.endTime || "23:59")! +
+              (proposal.endTime ? 0 : 60_000),
+          ),
           ...(Number.isFinite(Number(proposal.latitude)) && Number.isFinite(Number(proposal.longitude)) &&
              proposal.latitude != null && proposal.longitude != null
              ? {latitude:Number(proposal.latitude),longitude:Number(proposal.longitude),

@@ -5524,7 +5524,7 @@ service cloud.firestore {
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
-          'location', 'date', 'time', 'endTime', 'capacity',
+          'location', 'date', 'time', 'endTime', 'startsAt', 'endsAt', 'capacity',
           'latitude', 'longitude', 'coordinates',
           'participantsCount', 'status', 'publicationStatus',
           'sourceProposalId', 'proposedBy', 'proposerName',
@@ -5544,6 +5544,17 @@ service cloud.firestore {
         && request.resource.data.approvedAt == request.time
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        // Timestamp fields are required by the current app. The legacy branch
+        // remains readable/joinable for records published before this update.
+        && (
+          (!('startsAt' in request.resource.data) && !('endsAt' in request.resource.data))
+          || (
+            request.resource.data.get('startsAt', null) is timestamp
+            && request.resource.data.get('endsAt', null) is timestamp
+            && request.resource.data.startsAt > request.time
+            && request.resource.data.endsAt > request.resource.data.startsAt
+          )
+        )
         && proposalAfter().status == 'approved'
         && proposalAfter().publishedEventId == eventId
         && proposalAfter().reviewedBy == request.auth.uid
@@ -5616,9 +5627,26 @@ service cloud.firestore {
           )
         );
 
+      // Server-time enrollment gate for events created with startsAt/endsAt.
+      // Existing legacy events without timestamps keep their prior eligibility.
+      function joinWindowIsOpen() {
+        return (!('startsAt' in resource.data) && !('endsAt' in resource.data))
+          || (
+            resource.data.get('startsAt', null) is timestamp
+            && resource.data.get('endsAt', null) is timestamp
+            && (
+              (resource.data.status == 'upcoming' && request.time < resource.data.startsAt)
+              || (resource.data.status == 'active'
+                && request.time >= resource.data.startsAt
+                && request.time < resource.data.endsAt)
+            )
+          );
+      }
+
       // A Volunteer can increase count only when their matching Join write
       // is part of this same Firestore transaction.
       allow update: if isVolunteer()
+        && joinWindowIsOpen()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
         && resource.data.proposedBy != request.auth.uid
@@ -5657,6 +5685,21 @@ service cloud.firestore {
         ).data;
       }
 
+      function participantJoinWindowOpen() {
+        let eventData = eventBefore();
+        return (!('startsAt' in eventData) && !('endsAt' in eventData))
+          || (
+            eventData.get('startsAt', null) is timestamp
+            && eventData.get('endsAt', null) is timestamp
+            && (
+              (eventData.status == 'upcoming' && request.time < eventData.startsAt)
+              || (eventData.status == 'active'
+                && request.time >= eventData.startsAt
+                && request.time < eventData.endsAt)
+            )
+          );
+      }
+
       // Allow a Volunteer to read only their own deterministic document,
       // including when it does not exist yet (first-time Join transaction).
       allow get: if isAdminOrSuperAdmin()
@@ -5689,6 +5732,7 @@ service cloud.firestore {
           ||
           (
             request.resource.data.status == 'joined'
+            && participantJoinWindowOpen()
             && request.resource.data.keys().hasOnly([
               'eventId', 'uid', 'fullName', 'status',
               'joinedAt', 'declinedAt', 'checkedInAt',
@@ -5765,6 +5809,7 @@ service cloud.firestore {
                 && request.resource.data.updatedAt == request.time
                 && eventBefore().publicationStatus == 'published'
                 && eventBefore().status in ['upcoming', 'active']
+                && participantJoinWindowOpen()
                 && eventBefore().proposedBy != request.auth.uid
                 && eventBefore().participantsCount is int
                 && eventAfter().participantsCount == eventBefore().participantsCount + 1
