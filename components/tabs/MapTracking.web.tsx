@@ -938,7 +938,17 @@ const mapDocument = `
           const popup = new maplibregl.Popup({
             offset: 22,
             closeButton: false,
-          }).setText([item.name || "Evacuation center", item.address || item.barangay || "", "LGU verified active", item.capacity != null && item.occupied != null ? String(Math.max(0, item.capacity - item.occupied)) + " spaces based on last LGU update" : "Capacity unconfirmed"].filter(Boolean).join(" · "));
+          }).setText([
+            item.name || "Evacuation center",
+            item.address || item.barangay || "",
+            "LGU-recorded active (confirm status before travel)",
+            item.updatedAt && Number.isFinite(item.updatedAt)
+              ? "Last LGU update " + new Date(item.updatedAt).toLocaleString("en-PH")
+              : "No current update timestamp",
+            item.capacity != null && item.occupied != null
+              ? String(Math.max(0, item.capacity - item.occupied)) + " last-reported spaces (NOT live occupancy)"
+              : "Capacity unconfirmed",
+          ].filter(Boolean).join(" · "));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
