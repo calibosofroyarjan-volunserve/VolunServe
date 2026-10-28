@@ -16,8 +16,8 @@ const saItems = firstBetween(sa, "const navItems: NavItem[] = [", "export defaul
 const expectedSa = [
   ["System Overview","/(superadmin)"],
   ["LGU Staff & Admin Accounts","/(superadmin)/admin-accounts"],
-  ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
-  ["System Records (Read Only)","/(superadmin)/all-records"],
+  ["System Records","/(superadmin)/all-records"],
+  ["Audit Logs","/(superadmin)/admin-logs"],
   ["System Settings","/(superadmin)/system-settings"],
 ];
 for(let i=0;i<expectedSa.length;i++){
