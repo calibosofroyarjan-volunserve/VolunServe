@@ -170,6 +170,7 @@ service cloud.firestore {
           'status',
           'identityStatus',
           'identityVerified',
+          'emailVerificationRequired',
           'profilePictureUrl',
           'createdAt'
         ])
@@ -183,6 +184,13 @@ service cloud.firestore {
         && request.resource.data.activeMode == 'resident'
         && request.resource.data.identityStatus == 'basic'
         && request.resource.data.identityVerified == false
+        && request.resource.data.emailVerificationRequired is bool
+        // New unverified email/password accounts may not skip the login gate
+        // by creating a self-profile without the required verification marker.
+        && (
+          request.auth.token.get('email_verified', false) == true
+          || request.resource.data.emailVerificationRequired == true
+        )
         && request.resource.data.skills is list
         && request.resource.data.skills.size() == 0
         && request.resource.data.skillOther == ''
