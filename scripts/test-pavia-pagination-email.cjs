@@ -315,3 +315,27 @@ test("Approved clean Super Admin visual hierarchy and five-per-page controls",()
  assert.ok(paging.includes("visiblePages.map"));
  assert.ok(!overview.includes("Monthly Revenue"));
 });
+
+
+test("Sir Pavia Edit Profile persists name to main profile without compulsory occupation",()=>{
+  const profile=read("app/(tabs)/profile.tsx");
+  const home=read("components/home/Home.web.tsx");
+  const session=read("lib/useUserSession.ts");
+  const auth=read("lib/firebaseAuth.ts");
+  const rules=read("firestore.rules");
+  assert.match(profile,/const editingOccupation = occupationCategory\.trim\(\)\.length > 0/);
+  assert.doesNotMatch(profile,/if \(!occupationCategory \|\| !OCCUPATION_OPTIONS\.includes\(occupationCategory\)\)/);
+  assert.match(profile,/const changes: Partial<UserProfile> = \{/);
+  for(const field of ["fullName: cleanName","firstName: first","middleName: middle","lastName: last"])
+    assert.ok(profile.includes(field),field);
+  assert.match(profile,/if \(editingOccupation\) \{\s*changes\.occupationCategory/);
+  assert.match(profile,/await updateUserProfile\(user\.uid, changes\)/);
+  assert.match(profile,/await updateProfile\(user, \{ displayName: cleanName \}\)/);
+  assert.ok(home.indexOf("profile?.fullName?.trim() ||") < home.indexOf("    composedName ||"));
+  assert.match(session,/onSnapshot\(\s*doc\(db, "users", user\.uid\)/);
+  assert.match(auth,/await updateDoc\(\s*doc\(db, "users", uid\),\s*safeUpdates/);
+  const ownerSection=rules.slice(rules.indexOf("match /users/{uid}"),rules.indexOf("match /",rules.indexOf("match /users/{uid}")+1));
+  for(const name of ["'fullName'","'firstName'","'middleName'","'lastName'"])
+    assert.ok(ownerSection.includes(name),name);
+  assert.ok(ownerSection.includes("request.auth.uid == uid"));
+});
