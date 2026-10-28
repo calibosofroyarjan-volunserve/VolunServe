@@ -23,7 +23,7 @@ import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
 import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
-import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
   activeModeForProfile,
@@ -351,6 +351,30 @@ const mapDocument = `
       let userMarker = null;
       let hasFitted = false;
       let lastLocation = null;
+      let cityBoundary = null;
+      let lastValidCityCenter = [121.045, 14.813];
+      // Browser DOM markers render above the map canvas. Always geofence the
+      // marker records as well as painting the outside of the city.
+      function insideRing(point, ring) {
+        let within = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const a = ring[i], b = ring[j];
+          if ((a[1] > point[1]) !== (b[1] > point[1]) &&
+              point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0])
+            within = !within;
+        }
+        return within;
+      }
+      function withinCity(latitude, longitude) {
+        if (!cityBoundary || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+        const g = cityBoundary.geometry;
+        if (!g) return false;
+        const polygons = g.type === "Polygon" ? [g.coordinates] :
+          g.type === "MultiPolygon" ? g.coordinates : [];
+        return polygons.some(rings => rings.length > 0 &&
+          insideRing([longitude, latitude], rings[0]) &&
+          !rings.slice(1).some(hole => insideRing([longitude, latitude], hole)));
+      }
 
       function validPoint(latitude, longitude) {
         return (
@@ -596,7 +620,8 @@ const mapDocument = `
         let count = 0;
 
         for (const person of people || []) {
-          if (!validPoint(person.latitude, person.longitude)) {
+          if (!validPoint(person.latitude, person.longitude) ||
+              !withinCity(person.latitude, person.longitude)) {
             continue;
           }
 
@@ -758,7 +783,8 @@ const mapDocument = `
 
         if (
           !location ||
-          !validPoint(location.latitude, location.longitude)
+          !validPoint(location.latitude, location.longitude) ||
+          !withinCity(location.latitude, location.longitude)
         ) {
           if (userMarker) {
             userMarker.remove();
@@ -815,21 +841,27 @@ const mapDocument = `
 
         const bounds = new maplibregl.LngLatBounds();
         const incidentPoints = [];
-        if (payload.boundary && map.getSource("sjdm-boundary")) {
-          map.getSource("sjdm-boundary").setData(payload.boundary);
-          const area = payload.boundaryBounds;
-          if (area && Number.isFinite(area.north) && Number.isFinite(area.south) &&
-              Number.isFinite(area.east) && Number.isFinite(area.west)) {
-            map.setMaxBounds([[area.west - 0.006, area.south - 0.006],
-                              [area.east + 0.006, area.north + 0.006]]);
-            // This rectangle limits map camera movement; the green polygon
-            // alone represents the actual administrative reference boundary.
-          }
+        cityBoundary = payload.boundary || null;
+        map.getSource("sjdm-boundary")?.setData(
+          cityBoundary || { type: "FeatureCollection", features: [] }
+        );
+        map.getSource("sjdm-outside-mask")?.setData(
+          payload.outsideMask || { type: "FeatureCollection", features: [] }
+        );
+        const area = payload.boundaryBounds;
+        if (cityBoundary && area && Number.isFinite(area.north) &&
+            Number.isFinite(area.south) && Number.isFinite(area.east) &&
+            Number.isFinite(area.west)) {
+          map.setMaxBounds([[area.west - 0.004, area.south - 0.004],
+                            [area.east + 0.004, area.north + 0.004]]);
+          const center = map.getCenter();
+          if (!withinCity(center.lat, center.lng)) map.jumpTo({center:lastValidCityCenter});
         }
         let pointCount = 0;
 
         for (const item of payload.incidents || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
@@ -879,7 +911,8 @@ const mapDocument = `
         }
 
         for (const item of payload.bases || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
@@ -918,7 +951,8 @@ const mapDocument = `
         }
 
         for (const item of payload.centers || []) {
-          if (!validPoint(item.latitude, item.longitude)) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) {
             continue;
           }
 
@@ -1000,7 +1034,7 @@ const mapDocument = `
         for (const coordinate of routeCoordinates) {
           if (
             Array.isArray(coordinate) &&
-            validPoint(coordinate[1], coordinate[0])
+            validPoint(coordinate[1], coordinate[0]) && withinCity(coordinate[1], coordinate[0])
           ) {
             bounds.extend([coordinate[0], coordinate[1]]);
           }
@@ -1008,7 +1042,8 @@ const mapDocument = `
 
         for (const person of payload.residents || []) {
           if (
-            !validPoint(person.latitude, person.longitude)
+            !validPoint(person.latitude, person.longitude) ||
+            !withinCity(person.latitude, person.longitude)
           ) {
             continue;
           }
@@ -1053,7 +1088,7 @@ const mapDocument = `
           validPoint(
             lastLocation.latitude,
             lastLocation.longitude
-          )
+          ) && withinCity(lastLocation.latitude, lastLocation.longitude)
         ) {
           bounds.extend([
             lastLocation.longitude,
@@ -1095,6 +1130,10 @@ const mapDocument = `
       });
 
       map.on("load", () => {
+        map.addSource("sjdm-outside-mask", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
         map.addSource("sjdm-boundary", {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -1104,6 +1143,12 @@ const mapDocument = `
           type: "fill",
           source: "sjdm-boundary",
           paint: { "fill-color": "#0A8B6A", "fill-opacity": 0.06 },
+        });
+        map.addLayer({
+          id: "sjdm-exterior-blocked",
+          type: "fill",
+          source: "sjdm-outside-mask",
+          paint: { "fill-color": "#E7EEEA", "fill-opacity": 0.985 },
         });
         map.addLayer({
           id: "sjdm-city-outline",
@@ -1186,6 +1231,15 @@ const mapDocument = `
         );
       });
 
+      map.on("moveend", () => {
+        if (!cityBoundary) return;
+        const center = map.getCenter();
+        if (withinCity(center.lat, center.lng)) {
+          lastValidCityCenter = [center.lng, center.lat];
+        } else {
+          map.easeTo({center:lastValidCityCenter,duration:180});
+        }
+      });
       map.on("error", (event) => {
         console.error(
           "Map error",
@@ -3820,7 +3874,9 @@ export default function WebMapTracking() {
     frame.current?.contentWindow?.postMessage(
       {
         kind: "set-map-data",
-        responders: mapResponderPins.map((person: any) => ({
+        responders: mapResponderPins.filter(person => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, person.latitude, person.longitude))
+          .map((person: any) => ({
           ...person,
           vehicleType: (person.role === "lgu" || person.responderRole === "lgu")
             ? (isResidentMode
@@ -3830,8 +3886,12 @@ export default function WebMapTracking() {
                   : missionCase?.responseVehicleType) || "on_foot"
             : "on_foot",
         })),
-        residents: isResidentMode ? [] : residentLivePins,
-        route: roadRoute
+        residents: isResidentMode ? [] : residentLivePins.filter(person => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, person.latitude, person.longitude)),
+        route: roadRoute && sjdmBoundary && routeStaysInSjdm(
+          sjdmBoundary, roadRoute.geometry.coordinates.map(
+            ([longitude, latitude]) => ({latitude, longitude})
+          ))
           ? {
               type: "Feature",
               properties: {},
@@ -3868,12 +3928,14 @@ export default function WebMapTracking() {
             residentSelf: isResidentMode,
             reporterName: item.reporterName || "Resident",
           };
-        }),
+        }).filter(item => !!sjdmBoundary &&
+          insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)),
 
         boundary: sjdmBoundary,
+        outsideMask: sjdmBoundary ? sjdmOutsideMask(sjdmBoundary) : null,
         boundaryBounds: sjdmBoundary ? boundaryBounds(sjdmBoundary) : null,
         bases: lguFacilities
-          .filter(item => !sjdmBoundary || insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
+          .filter(item => !!sjdmBoundary && insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
           .map(item => ({
             ...item,
             icon: LGU_FACILITY_ICONS[item.facilityType],
@@ -3891,7 +3953,7 @@ export default function WebMapTracking() {
         // cannot clutter or stretch the camera.
         centers: missionMode
           ? []
-          : visibleCenters.filter(item => !sjdmBoundary ||
+          : visibleCenters.filter(item => !!sjdmBoundary &&
             insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude)))
             .map((item) => ({
               id: item.id,
@@ -3962,7 +4024,9 @@ export default function WebMapTracking() {
         location:
           isAdministrator || isResidentMode
             ? null
-            : userLocation,
+            : userLocation && sjdmBoundary &&
+              insideSjdmBoundary(sjdmBoundary, userLocation.latitude, userLocation.longitude)
+              ? userLocation : null,
         follow:
           !isAdministrator &&
           !isResidentMode &&
@@ -5284,6 +5348,11 @@ export default function WebMapTracking() {
             srcDoc={mapDocument}
             sandbox="allow-scripts allow-same-origin"
           />
+          {!sjdmBoundary && <div role="status" style={{position:"absolute",inset:0,zIndex:9,
+            background:"#E7EEEA",display:"flex",justifyContent:"center",alignItems:"center",
+            padding:28,textAlign:"center",color:"#124D39",fontWeight:700}}>
+            SJDM boundary unavailable. Map is hidden until geographic scope is verified.
+          </div>}
           <div style={{position:"absolute",top:12,right:12,zIndex:10,maxWidth:240,
             padding:"7px 10px",borderRadius:10,background:"rgba(255,255,255,.94)",
             border:"1px solid #CDEFE1",fontSize:11,color:"#135E47",pointerEvents:"none"}}>
