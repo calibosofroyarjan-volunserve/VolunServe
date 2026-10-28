@@ -75,6 +75,11 @@ async function seedEmulator() {
         appointmentReference:"EMULATOR-ONLY-"+i,
         createdAt:new Date(2026,9,i),
       });
+      await db.doc("users/browser-admin-"+i).set({
+        uid:"browser-admin-"+i,role:"admin",status:"approved",adminStatus:"active",
+        fullName:"Synthetic Admin "+i,email:"admin-"+i+"@example.test",
+        barangay:"Muzon Proper",
+      });
     }
   });
   return {env,email,password};
@@ -108,20 +113,60 @@ async function main() {
     await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
     await page.getByText("Synthetic Staff 6",{exact:true}).first().waitFor({timeout:25000});
     await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
-    await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
-    await page.getByRole("button",{name:"Next page"}).first().click();
+    const applicantPageOne=page.getByRole("button",{name:"Page 1 of 2"}).first();
+    const pageTwo=page.getByRole("button",{name:"Page 2 of 2"}).first();
+    await applicantPageOne.scrollIntoViewIfNeeded();
+    const firstNumberBounds=await applicantPageOne.boundingBox();
+    assert(firstNumberBounds && firstNumberBounds.width>=43 && firstNumberBounds.height>=43,
+      "Numbered pagination must provide a 44px tap target");
+    const activeColor=await applicantPageOne.evaluate(node=>getComputedStyle(node).backgroundColor);
+    assert.equal(activeColor,"rgb(8, 122, 98)","Active page should use the approved emerald color");
+    assert.equal(await applicantPageOne.getAttribute("aria-selected"),"true",
+      "Current page must be visibly and accessibly selected");
+    assert(await pageTwo.isVisible(),"The second numbered page button must be displayed");
+    assert(await page.getByRole("button",{name:"Previous page"}).first().isDisabled(),
+      "Previous must be disabled on page 1");
+    await page.screenshot({path:path.join(evidenceDir,"pagination-desktop-page-1.png"),fullPage:false});
+    await page.getByRole("button",{name:"Page 2 of 2"}).first().click();
     await page.getByText("Synthetic Staff 1",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 6–6 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByRole("button",{name:"Page 2 of 2"}).first().getAttribute("aria-selected"),"true");
+    assert(await page.getByRole("button",{name:"Next page"}).first().isDisabled(),
+      "Next must be disabled on final page");
+    await page.getByRole("button",{name:"Page 2 of 2"}).first().scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidenceDir,"pagination-desktop-page-2.png"),fullPage:false});
+
+    // Separately verify the second list: approved LGU Admin accounts.
+    await page.getByText("Existing LGU Admin Accounts",{exact:true}).first().scrollIntoViewIfNeeded();
+    await page.getByText("Synthetic Admin 1",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).click();
+    await page.getByText("Synthetic Admin 6",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidenceDir,"pagination-admin-accounts.png"),fullPage:false});
+    await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
     await page.getByRole("textbox",{name:"Search pending LGU staff applications"})
       .fill("Synthetic Staff 3");
     await page.getByText("Synthetic Staff 3",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 1–1 of 1 records",{exact:false}).first().waitFor({timeout:15000});
+    assert(await page.getByRole("button",{name:"Page 1 of 1"}).first().isVisible(),
+      "Pagination must remain visible even for one matching search result");
     await page.getByRole("button",{name:/Review LGU credentials for Synthetic Staff 3/}).click();
     await page.getByText("Independent staff authorization",{exact:true}).waitFor({timeout:20000});
+    await page.waitForTimeout(450); // Capture the settled review modal, not the fade transition.
     const promote=page.getByRole("button",{name:"Promote Verified Staff"});
     assert.equal(await promote.isDisabled(),true,"Promotion must remain disabled before credential review");
     await page.screenshot({path:path.join(evidenceDir,"review-modal.png"),fullPage:false});
     await page.getByRole("button",{name:"Cancel staff account action"}).click();
     await page.setViewportSize({width:390,height:844});
-    await page.waitForTimeout(700);
+    await page.getByRole("textbox",{name:"Search pending LGU staff applications"}).fill("");
+    await page.getByText("Showing 1–5 of 6 records",{exact:false}).first().waitFor({timeout:15000});
+    const narrowNumber=page.getByRole("button",{name:"Page 1 of 2"}).first();
+    await narrowNumber.scrollIntoViewIfNeeded();
+    const narrowBounds=await narrowNumber.boundingBox();
+    assert(narrowBounds && narrowBounds.width>=43 && narrowBounds.height>=43,
+      "Mobile-width pagination must retain readable 44px page buttons");
+    await page.screenshot({path:path.join(evidenceDir,"pagination-narrow-web.png"),fullPage:false});
+    await page.waitForTimeout(450);
     const overflow=await page.evaluate(()=>({
       scroll:document.documentElement.scrollWidth,
       client:document.documentElement.clientWidth,
@@ -132,7 +177,7 @@ async function main() {
     assert.equal(dialogs.length,0,"Native alert/confirm/prompt dialog must not display.");
     assert.equal(jsExceptions.length,0,"Browser JS errors: "+jsExceptions.join("; "));
     assert.equal(consoleErrors.length,0,"Export server errors: "+consoleErrors.join("; "));
-    console.log("PASS browser: emulator-only Super Admin Login, staff queue, paging, search, guarded credential modal, narrow web, no native dialogs");
+    console.log("PASS browser: emulator-only Super Admin Login, verified emerald numbered pagination on two lists and mobile viewport, paging/search, guarded staff review modal, no native dialogs");
     await context.close();
   } finally {
     if(browser) await browser.close();
