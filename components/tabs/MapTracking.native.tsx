@@ -29,7 +29,7 @@ import {
 import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
-import { isVerifiedActiveCenter, vehicleInfo } from "../../lib/emergencyMapTypes";
+import { isVerifiedActiveCenter, isRecentShelterReport, vehicleInfo } from "../../lib/emergencyMapTypes";
 import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
@@ -415,9 +415,12 @@ export default function MapTracking() {
   });
 
   const nearestCenter = useMemo(() => {
-    if (!location || centers.length === 0) return null;
+    if (!location || !inCity(location.latitude, location.longitude) || centers.length === 0) return null;
 
-    const availableCenters = centers.filter(center => inCity(center.latitude, center.longitude))
+    // Only route residents to facilities whose status was independently checked
+    // by LGU recently; database live updates are not physical occupancy sensors.
+    const availableCenters = centers.filter(center =>
+      inCity(center.latitude, center.longitude) && isRecentShelterReport(center))
       .filter((center) => {
       const capacity = center.capacity ?? 0;
       const occupied = center.occupied ?? 0;
@@ -1511,13 +1514,15 @@ export default function MapTracking() {
               }}
               title={center.name}
               description={
-                "LGU-verified facility · " +
+                (isRecentShelterReport(center)
+                  ? "LGU recently reviewed (confirm before travel)"
+                  : "Status NOT recently confirmed — call CDRRMO") + " · " +
                 (center.capacity
                   ? "Last reported occupancy: " + (center.occupied ?? 0) + "/" + center.capacity
                   : "Capacity unavailable") +
-                (center.updatedAt?.toDate
-                  ? " · Updated " + center.updatedAt.toDate().toLocaleDateString("en-PH")
-                  : " · Update time unavailable")
+                (center.lastVerifiedAt?.toDate
+                  ? " · Verified " + center.lastVerifiedAt.toDate().toLocaleString("en-PH")
+                  : " · Verification date unavailable")
               }
             >
               <MapPin
