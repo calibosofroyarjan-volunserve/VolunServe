@@ -51,7 +51,7 @@ for (let i = 0; i < staffFlowMarkers.length; i++) {
       "Incorrect staff approval/manage/privacy layout order");
   }
 }
-assert.equal((accounts.match(/<LguStaffPrivacyRequestsPanel\\s*\\/>/g) || []).length, 1,
+assert.equal((accounts.match(/<LguStaffPrivacyRequestsPanel\s*\/>/g) || []).length, 1,
   "Do not duplicate staff privacy handling");
 assert(guide.includes("verification flow → pending applications → existing Admin accounts"),
   "Documentation must explain the in-module approval sequence");
