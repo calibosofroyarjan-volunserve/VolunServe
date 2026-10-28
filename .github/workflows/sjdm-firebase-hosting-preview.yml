@@ -1,9 +1,10 @@
 name: VolunServe SJDM Web Preview (No Production Deploy)
 
+# Manual opt-in only: the owner's terminal already supports preview deploys.
+# Do not make every feature-branch push fail merely because CI has no
+# Firebase Hosting service-account key.
 on:
-  push:
-    branches:
-      - fix/sjdm-strict-map-boundary-20261028
+  workflow_dispatch:
 
 permissions:
   contents: read
