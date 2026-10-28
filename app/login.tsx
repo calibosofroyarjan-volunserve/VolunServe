@@ -1,4 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import GoogleBrandMark from "../components/auth/GoogleBrandMark";
+import AuthFeedback from "../components/auth/AuthFeedback";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
@@ -48,6 +51,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
+  const showError = (message: string) => setFeedback({ type: "error", message });
+  const showSuccess = (message: string) => setFeedback({ type: "success", message });
+  const clearFeedback = () => setFeedback({ type: "error", message: "" });
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
   const applyRememberMe = async () => {
@@ -113,9 +120,7 @@ export default function Login() {
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password) {
-      alert(
-        "Please enter your email address and password."
-      );
+      showError("Please enter your email address and password.");
       return;
     }
 
@@ -124,6 +129,7 @@ export default function Login() {
     }
 
     try {
+      clearFeedback();
       setLoading(true);
 
       await applyRememberMe();
@@ -141,7 +147,7 @@ export default function Login() {
 
       router.replace(destination as any);
     } catch (error: any) {
-      alert(error?.message || "Login failed.");
+      showError(error?.message || "Unable to sign in. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -155,11 +161,12 @@ export default function Login() {
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail) {
-      alert("Enter your email address first, then select Forgot password.");
+      showError("Enter your email address first, then select Forgot password.");
       return;
     }
 
     try {
+      clearFeedback();
       setLoading(true);
 
       await sendPasswordResetEmail(
@@ -167,21 +174,16 @@ export default function Login() {
         cleanEmail
       );
 
-      alert(
-        "Password reset email sent. Check your inbox and spam folder for the reset link."
-      );
+      showSuccess("If this account uses email and password, check your inbox and spam folder for the reset link.");
     } catch (error: any) {
       const code = String(error?.code || "");
 
       if (code === "auth/invalid-email") {
-        alert("Please enter a valid email address.");
+        showError("Please enter a valid email address.");
       } else if (code === "auth/too-many-requests") {
-        alert("Too many reset attempts. Please wait and try again later.");
+        showError("Too many reset attempts. Please wait and try again later.");
       } else {
-        alert(
-          error?.message ||
-            "Unable to send the password reset email."
-        );
+        showError(error?.message || "Unable to send the password reset email.");
       }
     } finally {
       setLoading(false);
@@ -194,13 +196,14 @@ export default function Login() {
     }
 
     try {
+      clearFeedback();
       setGoogleLoading(true);
 
       const result = await promptGoogleAsync();
 
       if (result.type !== "success") {
         if (result.type !== "dismiss" && result.type !== "cancel") {
-          alert("Google sign-in was not completed. Please try again.");
+          showError("Google sign-in was not completed. Please try again.");
         }
         return;
       }
@@ -229,10 +232,7 @@ export default function Login() {
     } catch (error: any) {
       await firebaseSignOut(auth).catch(() => undefined);
 
-      alert(
-        error?.message ||
-          "Google sign-in failed. Please try again."
-      );
+      showError(error?.message || "Google sign-in failed. Please try again.");
     } finally {
       setGoogleLoading(false);
     }
@@ -243,17 +243,12 @@ export default function Login() {
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PremiumAuthShell active="resident">
-        <View style={styles.intro}>
-          <Text style={styles.kicker}>—  VOLUNSERVE ACCOUNT  —</Text>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to stay connected with your community and help build a safer, stronger city.</Text>
-        </View>
         <Text style={styles.label}>Email Address</Text>
         <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
-          <Ionicons name="mail-outline" size={21} color="#64748B" />
-          <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={setEmail}
-            accessibilityLabel="Resident email address"
-            placeholder="Enter your email address" placeholderTextColor="#8BA0B4"
+          <Ionicons name="mail-outline" size={21} color="#194F41" />
+          <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
+            accessibilityLabel="Resident or volunteer email address"
+            placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
             textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
             returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
@@ -261,9 +256,9 @@ export default function Login() {
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
         <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
-          <TextInput style={styles.input} value={password} onChangeText={setPassword}
-            accessibilityLabel="Resident password"
-            placeholder="Enter your password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
+          <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
+            accessibilityLabel="Resident or volunteer password"
+            placeholder="Password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
             editable={!loading && !googleLoading} returnKeyType="done"
             onSubmitEditing={() => void handleLogin()} onFocus={() => setFocused("password")}
@@ -272,7 +267,7 @@ export default function Login() {
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             onPress={() => setShowPassword(value => !value)} disabled={loading || googleLoading}
             style={styles.eye}>
-            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#57728C" />
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
         <View style={styles.options}>
@@ -288,13 +283,27 @@ export default function Login() {
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
+        {!!feedback.message && (
+          <AuthFeedback
+            message={feedback.message}
+            type={feedback.type}
+            onDismiss={clearFeedback}
+          />
+        )}
         <Pressable accessibilityRole="button" onPress={() => void handleLogin()}
           disabled={loading || googleLoading}
-          style={({ pressed }) => [styles.signIn, authCornerCut(12),
+          style={({ pressed }) => [styles.signIn,
             (pressed || loading || googleLoading) && styles.disabled]}>
-          {loading ? <ActivityIndicator color="#FFFFFF" /> :
+          <LinearGradient colors={["#16A780", "#00573F"]} start={{x:0,y:0}} end={{x:1,y:1}}
+            style={StyleSheet.absoluteFillObject} pointerEvents="none"/>
+          {loading ? (
             <View style={styles.centerRow}>
-              <Text style={styles.signInText}>Sign In</Text>
+              <ActivityIndicator color="#FFFFFF" />
+              <Text style={styles.signInText}>Signing in...</Text>
+            </View>
+          ) :
+            <View style={styles.centerRow}>
+              <Text style={styles.signInText}>Login as Resident / Volunteer</Text>
               <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
             </View>}
         </Pressable>
@@ -305,11 +314,16 @@ export default function Login() {
         </View>
         <TouchableOpacity accessibilityRole="button" onPress={() => void handleGoogleLogin()}
           disabled={!googleRequest || loading || googleLoading}
-          style={[styles.outlineButton, authCornerCut(10),
+          style={[styles.outlineButton,
             (!googleRequest || loading || googleLoading) && styles.disabled]}>
-          {googleLoading ? <ActivityIndicator color="#087F66" /> :
+          {googleLoading ? (
             <View style={styles.centerRow}>
-              <Ionicons name="logo-google" color="#2563EB" size={19} />
+              <ActivityIndicator color="#087F66" />
+              <Text style={styles.outlineText}>Connecting to Google...</Text>
+            </View>
+          ) :
+            <View style={styles.centerRow}>
+              <GoogleBrandMark size={21} />
               <Text style={styles.outlineText}>Continue with Google</Text>
             </View>}
         </TouchableOpacity>
@@ -322,47 +336,51 @@ export default function Login() {
           </View>
         </TouchableOpacity>
         <View style={styles.createRow}>
-          <Text style={styles.muted}>Don't have an account? </Text>
-          <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/signup")}
-            disabled={loading || googleLoading}>
-            <Text style={styles.createLink}>Create account</Text>
-          </TouchableOpacity>
+          <Text style={styles.muted}>Don't have an account?</Text>
         </View>
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Create a resident or volunteer account"
+          onPress={() => router.push("/signup")}
+          disabled={loading || googleLoading}
+          style={styles.createButton}>
+          <Ionicons name="person-add-outline" color="#08785D" size={19} />
+          <Text style={styles.createLink}>Create An Account</Text>
+        </TouchableOpacity>
       </PremiumAuthShell>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#ECF6F1" },
-  intro: { alignItems: "center", marginBottom: 15, gap: 8 },
-  kicker: { fontSize: 10, fontWeight: "900", letterSpacing: 2.2, color: "#087C64" },
-  title: { fontSize: 34, fontWeight: "900", color: "#112333", letterSpacing: -1.1, textAlign: "center" },
-  subtitle: { maxWidth: 380, color: "#718198", fontSize: 13, textAlign: "center", lineHeight: 21 },
-  label: { fontSize: 12, fontWeight: "900", color: "#18283A", marginBottom: -5 },
-  passwordLabel: { marginTop: 5 },
-  inputBox: { minHeight: 56, flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 17, gap: 11, backgroundColor: "#FCFDFD", borderWidth: 1, borderColor: "#C5D8DC" },
-  focused: { borderColor: "#008A6E", backgroundColor: "#FFFFFF" },
-  input: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 13, color: "#122F38" },
-  eye: { padding: 5 },
-  options: { flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: -2 },
-  checkRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
-  muted: { color: "#728095", fontSize: 12 },
-  forgot: { color: "#007B60", fontWeight: "800", fontSize: 12 },
-  signIn: { minHeight: 57, justifyContent: "center", alignItems: "center",
-    backgroundColor: "#007F62", marginTop: 4, shadowColor: "#087F61", shadowOpacity: .2,
-    shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  centerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  signInText: { fontSize: 16, fontWeight: "900", color: "#FFFFFF" },
-  divider: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 3 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#D5E1E1" },
-  outlineButton: { minHeight: 51, borderWidth: 1, borderColor: "#C9D8DA",
-    backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  outlineText: { fontSize: 13, color: "#172E3B", fontWeight: "800" },
-  createRow: { flexDirection: "row", alignItems: "center", justifyContent: "center",
-    flexWrap: "wrap", paddingTop: 10 },
-  createLink: { fontSize: 12, fontWeight: "900", color: "#008365" },
-  disabled: { opacity: .5 },
+  root: {flex:1,backgroundColor:"#E8FBEF"},
+  label: {position:"absolute",opacity:0,height:0,width:0},
+  passwordLabel: {},
+  inputBox: {minHeight:57,flexDirection:"row",alignItems:"center",paddingHorizontal:17,
+    gap:12,backgroundColor:"rgba(255,255,255,.84)",borderColor:"#C8E0D2",
+    borderRadius:13,borderWidth:1,marginBottom:2},
+  input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
+  focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
+  eye:{padding:7},
+  options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
+  checkRow:{flexDirection:"row",gap:7,alignItems:"center",minHeight:40},
+  muted:{color:"#527766",fontSize:13},
+  forgot:{color:"#076B51",fontSize:13,fontWeight:"800"},
+  signIn:{minHeight:59,overflow:"hidden",borderRadius:16,justifyContent:"center",
+    alignItems:"center",marginTop:3,shadowColor:"#00684A",shadowOpacity:0.18,
+    shadowRadius:10,shadowOffset:{width:0,height:5},elevation:3},
+  signInText:{fontSize:16,fontWeight:"800",color:"#FFFFFF"},
+  centerRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingHorizontal:7},
+  divider:{flexDirection:"row",alignItems:"center",gap:10,marginTop:8,marginBottom:2},
+  dividerLine:{flex:1,height:1,backgroundColor:"#CAE0D5"},
+  outlineButton:{minHeight:51,borderWidth:1,borderColor:"#C6DECF",
+    backgroundColor:"rgba(255,255,255,.50)",alignItems:"center",justifyContent:"center",
+    borderRadius:14},
+  outlineText:{fontSize:13,fontWeight:"800",color:"#19493B"},
+  createRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",marginTop:7},
+  createButton:{borderWidth:1,borderColor:"#9DC9B4",borderRadius:18,minHeight:56,
+    flexDirection:"row",alignItems:"center",justifyContent:"center",gap:11,
+    backgroundColor:"rgba(255,255,255,.36)"},
+  createLink:{fontSize:15,fontWeight:"800",color:"#075B44"},
+  disabled:{opacity:0.55},
 });

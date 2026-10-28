@@ -1,8 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   sendPasswordResetEmail,
   signOut,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from "firebase/auth";
 import React, { useState } from "react";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
@@ -35,6 +39,7 @@ export default function AdministrativeLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [working, setWorking] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -49,6 +54,9 @@ export default function AdministrativeLogin() {
     }
     setWorking(true);
     try {
+      if (Platform.OS === "web") {
+        await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+      }
       const { profile } = await loginUser(cleanEmail, password);
       const admin = profile.role === "admin";
       const superAdmin = profile.role === "superadmin";
@@ -98,23 +106,14 @@ export default function AdministrativeLogin() {
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PremiumAuthShell active="admin">
-        <View style={styles.intro}>
-          <Text style={styles.kicker}>—  AUTHORIZED LGU ACCESS  —</Text>
-          <Text style={styles.title}>Administration Portal</Text>
-          <Text style={styles.subtitle}>Sign in securely with your issued administrative email and password.</Text>
-        </View>
-        <View style={[styles.adminNotice, authCornerCut(8)]}>
-          <Ionicons name="shield-checkmark-outline" color="#087B62" size={18} />
-          <Text style={styles.adminNoticeText}>Verified LGU Admins and system administrators only. No Google authentication.</Text>
-        </View>
         <Text style={styles.label}>Administrative Email</Text>
         <View style={[styles.inputBox, authCornerCut(10)]}>
-          <Ionicons name="mail-outline" size={21} color="#657A89" />
+          <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput accessibilityLabel="Administrative email" style={styles.input}
             value={email} onChangeText={setEmail} editable={!working}
             autoCapitalize="none" autoCorrect={false} textContentType="emailAddress"
             autoComplete="email" keyboardType="email-address"
-            placeholder="name@example.gov.ph" placeholderTextColor="#91A3AE" />
+            placeholder="Email address" placeholderTextColor="#91A3AE" />
         </View>
         <Text style={[styles.label, { marginTop: 5 }]}>Password</Text>
         <View style={[styles.inputBox, authCornerCut(10)]}>
@@ -123,20 +122,29 @@ export default function AdministrativeLogin() {
             value={password} onChangeText={setPassword} editable={!working}
             autoCapitalize="none" secureTextEntry={!showPassword}
             textContentType="password" autoComplete="password"
-            placeholder="Enter password" placeholderTextColor="#91A3AE"
+            placeholder="Password" placeholderTextColor="#91A3AE"
             onSubmitEditing={() => void signIn()} />
           <TouchableOpacity accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             onPress={() => setShowPassword(value => !value)} disabled={working}
             style={styles.eye}>
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"}
-              size={20} color="#57728C" />
+              size={20} color="#245947" />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.forgot} accessibilityRole="button"
-          disabled={working} onPress={() => void resetPassword()}>
-          <Text style={styles.forgotText}>Forgot your administrative password?</Text>
-        </TouchableOpacity>
+        <View style={styles.options}>
+          <TouchableOpacity accessibilityRole="checkbox"
+            accessibilityState={{checked: rememberMe}}
+            disabled={working} onPress={()=>setRememberMe(value=>!value)}
+            style={styles.rememberRow}>
+            <Ionicons name={rememberMe?"checkbox-outline":"square-outline"} size={20} color="#08795E"/>
+            <Text style={styles.rememberText}>Remember me</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.forgot} accessibilityRole="button"
+            disabled={working} onPress={() => void resetPassword()}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+        </View>
         {!!error && (
           <View accessibilityRole="alert" style={styles.errorBox}>
             <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
@@ -147,53 +155,61 @@ export default function AdministrativeLogin() {
         <TouchableOpacity accessibilityRole="button"
           accessibilityLabel="Sign in to LGU administration"
           disabled={working} onPress={() => void signIn()}
-          style={[styles.submit, authCornerCut(12), working && styles.disabled]}>
+          style={[styles.submit, working && styles.disabled]}>
+          <LinearGradient colors={["#16A780","#00573F"]} start={{x:0,y:0}} end={{x:1,y:1}}
+            style={StyleSheet.absoluteFillObject} pointerEvents="none"/>
           {working ? <ActivityIndicator color="#FFFFFF" /> :
             <View style={styles.rowCenter}>
-              <Text style={styles.submitText}>Sign In to Administration</Text>
+              <Text style={styles.submitText}>Login as Admin</Text>
               <Ionicons name="arrow-forward-outline" size={20} color="#FFFFFF" />
             </View>}
         </TouchableOpacity>
-        <View style={styles.divider} />
+        <View style={styles.divider}>
+          <View style={styles.dividerLine}/>
+          <Text style={styles.dividerText}>Authorized accounts only</Text>
+          <View style={styles.dividerLine}/>
+        </View>
         <TouchableOpacity accessibilityRole="button" onPress={() => router.push("/admin-request")}
-          disabled={working} style={[styles.outlineAction, authCornerCut(10)]}>
+          disabled={working} style={styles.outlineAction}>
           <Ionicons name="document-text-outline" size={19} color="#087B62" />
-          <Text style={styles.outlineActionText}>Request Super Admin Access</Text>
+          <Text style={styles.outlineActionText}>Request LGU Admin Access</Text>
         </TouchableOpacity>
-        <Text style={styles.footer}>Submit LGU staff information for Super Admin verification. This button requests review by the Super Admin team, not Super Admin privileges. Verified personnel may be promoted to LGU Admin only.</Text>
+        <Text style={styles.footer}>LGU staff applicants receive no privileges until independently verified and approved by Super Admin.</Text>
       </PremiumAuthShell>
     </KeyboardAvoidingView>
   );
 }
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#EAF7F0" },
-  intro: { alignItems: "center", marginBottom: 13, gap: 7 },
-  kicker: { color: "#087D62", fontSize: 10, letterSpacing: 2.1, fontWeight: "900" },
-  title: { color: "#14283A", fontSize: 29, fontWeight: "900", textAlign: "center", letterSpacing: -.7 },
-  subtitle: { fontSize: 13, lineHeight: 20, maxWidth: 370, textAlign: "center", color: "#738293" },
-  adminNotice: { backgroundColor: "#E7F8EF", paddingHorizontal: 13, paddingVertical: 11,
-    flexDirection: "row", alignItems: "center", gap: 10 },
-  adminNoticeText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#286D58", fontWeight: "600" },
-  label: { fontSize: 12, color: "#182838", fontWeight: "900", marginBottom: -4 },
-  inputBox: { minHeight: 56, paddingHorizontal: 16, flexDirection: "row", alignItems: "center",
-    borderWidth: 1, borderColor: "#C9DAD8", gap: 11, backgroundColor: "#FCFDFD" },
-  input: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 13, color: "#152F36" },
-  eye: { padding: 5 },
-  forgot: { alignSelf: "flex-end", paddingVertical: 6 },
-  forgotText: { color: "#007F62", fontSize: 12, fontWeight: "800" },
-  errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12,
-    backgroundColor: "#FFF0EF", borderWidth: 1, borderColor: "#FFD5D0" },
-  errorText: { fontSize: 12, lineHeight: 17, color: "#B42318", flex: 1 },
-  notice: { color: "#087F62", fontSize: 12, lineHeight: 17 },
-  submit: { marginTop: 5, minHeight: 56, backgroundColor: "#007F62", alignItems: "center",
-    justifyContent: "center", shadowColor: "#007F62", shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: .18, elevation: 2 },
-  rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  submitText: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
-  disabled: { opacity: .55 },
-  divider: { height: 1, backgroundColor: "#DBE5E1", marginVertical: 4 },
-  outlineAction: { flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "#C5DCD4", minHeight: 52, gap: 9 },
-  outlineActionText: { color: "#08785F", fontSize: 13, fontWeight: "800" },
-  footer: { textAlign: "center", color: "#718A80", fontSize: 10, lineHeight: 16 },
+  root:{flex:1,backgroundColor:"#E8FBEF"},
+  label:{position:"absolute",opacity:0,width:0,height:0},
+  inputBox:{minHeight:57,flexDirection:"row",alignItems:"center",
+    paddingHorizontal:17,gap:12,backgroundColor:"rgba(255,255,255,.84)",
+    borderWidth:1,borderColor:"#C8E0D2",borderRadius:13,marginBottom:4},
+  input:{flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
+  eye:{padding:7},
+  options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+    flexWrap:"wrap",gap:10,marginTop:3,marginBottom:2},
+  rememberRow:{flexDirection:"row",alignItems:"center",gap:7,minHeight:42},
+  rememberText:{color:"#527766",fontSize:13},
+  forgot:{justifyContent:"center",minHeight:42},
+  forgotText:{color:"#076B51",fontSize:13,fontWeight:"800"},
+  errorBox:{flexDirection:"row",gap:8,padding:12,alignItems:"center",
+    backgroundColor:"#FFF1ED",borderWidth:1,borderColor:"#FCD5C9",borderRadius:12},
+  errorText:{flex:1,fontSize:12,lineHeight:18,color:"#B42318"},
+  notice:{fontSize:12,lineHeight:18,color:"#08795E"},
+  submit:{minHeight:59,overflow:"hidden",alignItems:"center",justifyContent:"center",
+    borderRadius:16,backgroundColor:"#007F62",marginTop:6,
+    shadowColor:"#00684A",shadowOpacity:0.18,shadowRadius:10,
+    shadowOffset:{width:0,height:5},elevation:3},
+  rowCenter:{flexDirection:"row",gap:11,justifyContent:"center",alignItems:"center"},
+  submitText:{color:"#FFFFFF",fontWeight:"800",fontSize:16},
+  disabled:{opacity:0.55},
+  divider:{flexDirection:"row",alignItems:"center",gap:10,marginTop:8,marginBottom:4},
+  dividerLine:{flex:1,height:1,backgroundColor:"#CAE0D5"},
+  dividerText:{color:"#648577",fontSize:12},
+  outlineAction:{minHeight:54,flexDirection:"row",alignItems:"center",
+    justifyContent:"center",gap:10,borderRadius:17,
+    borderWidth:1,borderColor:"#A5CEBA",backgroundColor:"rgba(255,255,255,.40)"},
+  outlineActionText:{color:"#075B44",fontWeight:"800",fontSize:15},
+  footer:{color:"#668777",textAlign:"center",fontSize:11,lineHeight:17,marginTop:4},
 });

@@ -8,7 +8,7 @@ const apply = read("app/admin-request.tsx");
 const owner = read("app/(superadmin)/admin-accounts.tsx");
 const rules = read("firestore.rules");
 const shell = read("components/auth/PremiumAuthShell.tsx");
-assert(shell.includes("Resident Login") && shell.includes("LGU Admin Login") &&
+assert(shell.includes("Resident & Volunteer Login") && shell.includes("LGU & System Administration Login") &&
   resident.includes('<PremiumAuthShell active="resident">') &&
   admin.includes('<PremiumAuthShell active="admin">'),
   "Both login entrypoints must share the Resident/LGU Admin tabs");
@@ -29,11 +29,11 @@ assert(owner.includes('role === "applicant" && account.status === "pending_revie
 assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must prohibit public creation of approved Admin role");
-assert(admin.includes("Request Super Admin Access") &&
+assert(admin.includes("Request LGU Admin Access") &&
   apply.includes("LGU Staff Verification Application") &&
   apply.includes("Submit LGU Information for Verification"),
   "LGU staff access requests must display the approved Super Admin CTA and route to the staff verification form");
-assert(admin.includes("not Super Admin privileges") &&
+assert(admin.includes("LGU staff applicants receive no privileges until independently verified and approved by Super Admin.") &&
   apply.includes("role:\"applicant\",status:\"pending_review\"") &&
   apply.includes("Only after successful confirmation") &&
   owner.includes("LGU Staff Applications"),
