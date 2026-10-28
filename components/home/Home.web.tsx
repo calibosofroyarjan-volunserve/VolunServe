@@ -168,9 +168,11 @@ export default function WebHome() {
     .join(" ")
     .trim();
 
+  // Use the canonical Firestore fullName after a Resident edits their profile.
+  // Avoid showing an old composed name in the Home header and account menu.
   const displayName =
-    composedName ||
     profile?.fullName?.trim() ||
+    composedName ||
     user?.displayName?.trim() ||
     profile?.email?.split("@")[0] ||
     user?.email?.split("@")[0] ||

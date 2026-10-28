@@ -1,0 +1,26 @@
+name: Resident Name Sync Release Validation (No Deploy)
+on:
+  push:
+    branches:
+      - hotfix/resident-home-canonical-name-20261029
+  pull_request:
+    paths:
+      - components/home/Home.web.tsx
+      - scripts/test-resident-profile-release.cjs
+      - .github/workflows/resident-home-name-validation.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test scripts/test-resident-profile-release.cjs scripts/test-login-ui-release.cjs
+      - run: npx tsc --noEmit
+      - run: npx expo export --platform web
