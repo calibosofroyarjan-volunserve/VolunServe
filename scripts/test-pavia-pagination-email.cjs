@@ -52,6 +52,16 @@ test("Super Admin Admin accounts and LGU applicant review remain five per page",
   assert.equal((s.match(/<ListPagination page=/g) || []).length,2);
   assert.match(s,/page=\{safeAdminPage\} total=\{adminAccounts\.length\}/);
   assert.match(s,/page=\{safeApplicantPage\} total=\{pendingLguApplications\.length\}/);
+  // One numbered pager is immediately available BEFORE each five-record batch.
+  // The reviewer can jump to page 2 without scrolling past five large account cards.
+  assert.ok(s.indexOf('<ListPagination page={safeApplicantPage}') <
+    s.indexOf('pagedLguApplications.map(account =>'), "Staff pagination must precede applicant cards");
+  assert.ok(s.indexOf('<ListPagination page={safeAdminPage}') <
+    s.indexOf('pagedAdminAccounts.map('), "Admin Accounts pagination must precede account cards");
+  assert.doesNotMatch(s, /pagedLguApplications\.map\([\s\S]*?<ListPagination page=\{safeApplicantPage\}/,
+    "Do not hide staff navigation below the applicant list");
+  assert.doesNotMatch(s, /pagedAdminAccounts\.map\([\s\S]*?<ListPagination page=\{safeAdminPage\}/,
+    "Do not hide Admin account navigation below all five cards");
 });
 test("LGU resident directory, volunteer approvals, Identity Reviews and Events show five items per page",()=>{
   const a=read("app/(admin)/account-approvals.tsx");
