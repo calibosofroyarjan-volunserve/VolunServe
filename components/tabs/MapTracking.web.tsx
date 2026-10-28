@@ -26,6 +26,10 @@ import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsU
 import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
+  SJDM_PUBLIC_MAP_PLACE_PINS, SJDM_PUBLIC_PLACE_ICON,
+  fetchMappedSjdmPublicPlaces, type SjdmPublicMapPlace,
+} from "../../lib/sjdmPublicMapPlaces";
+import {
   activeModeForProfile,
   hasVolunteerAccess,
   isApprovedProfile,
@@ -208,6 +212,22 @@ const mapDocument = `
     .center-pin {
       background: #23765f;
     }
+    /* Map-anchored icon markers, like transit-terminal place symbols.
+       Gold ring = public mapped place; green = LGU-approved live Firestore place. */
+    .public-place-marker {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      border: 3px solid #efc327;
+      box-shadow: 0 3px 9px rgba(18,39,33,.23);
+      cursor: pointer;
+      font-size: 21px;
+    }
+    .public-place-marker.uncertain-location { border-style: dashed; }
+    .public-place-marker:hover { transform: scale(1.10); }
     .vehicle-response-marker {
       width: 42px;
       height: 42px;
@@ -347,6 +367,7 @@ const mapDocument = `
       let incidentMarkers = [];
       let centerMarkers = [];
       let baseMarkers = [];
+      let publicPlaceMarkers = [];
       let responderMarkers = new Map();
       let residentMarkers = [];
       let userMarker = null;
@@ -437,6 +458,15 @@ const mapDocument = `
         element.title = "LGU-verified evacuation shelter";
         element.appendChild(symbol);
         return element;
+      }
+
+      function makeSourcedPlaceElement(item) {
+        const pin = document.createElement("div");
+        pin.className = "public-place-marker" +
+          (item.positionQuality === "third_party_approximate" ? " uncertain-location" : "");
+        pin.textContent = item.icon || "🏛️";
+        pin.title = item.name + " · public mapped location; not live availability";
+        return pin;
       }
 
       function makeLguBaseElement(item) {
@@ -716,6 +746,9 @@ const mapDocument = `
         for (const marker of baseMarkers) {
           marker.remove();
         }
+        for (const marker of publicPlaceMarkers) {
+          marker.remove();
+        }
 
         for (const marker of residentMarkers) {
           marker.remove();
@@ -724,6 +757,7 @@ const mapDocument = `
         incidentMarkers = [];
         centerMarkers = [];
         baseMarkers = [];
+        publicPlaceMarkers = [];
         residentMarkers = [];
       }
 
@@ -918,6 +952,22 @@ const mapDocument = `
             item.latitude
           ]);
           pointCount += 1;
+        }
+
+        // Sourced OpenStreetMap place markers are not Firebase verified staff
+        // or dispatched vehicles. Only actual geometry within SJDM is shown.
+        for (const item of payload.publicPlaces || []) {
+          if (!validPoint(item.latitude, item.longitude) ||
+              !withinCity(item.latitude, item.longitude)) continue;
+          const icon = makeSourcedPlaceElement(item);
+          const popup = new maplibregl.Popup({offset:24}).setText(
+            item.name + " · " + item.sourceLabel + " · " + item.note +
+            " · Map source: " + item.sourceUrl
+          );
+          const marker = new maplibregl.Marker({element:icon})
+            .setLngLat([item.longitude,item.latitude]).setPopup(popup).addTo(map);
+          publicPlaceMarkers.push(marker);
+          // Place reference pins must never override response camera bounds.
         }
 
         for (const item of payload.bases || []) {
@@ -1578,6 +1628,7 @@ export default function WebMapTracking() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [osmMappedPlaces, setOsmMappedPlaces] = useState<SjdmPublicMapPlace[]>([]);
   const [shelterFeedState, setShelterFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [lguFacilityFeedState, setLguFacilityFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -1614,6 +1665,37 @@ export default function WebMapTracking() {
         setLguFacilityFeedState("error");
       });
   }, [user?.uid, profile?.status]);
+
+  // Refresh real mapped infrastructure POIs from OpenStreetMap when available.
+  // This is a place-location feed, NOT verified physical opening/occupancy.
+  useEffect(() => {
+    if (!sjdmBoundary) return;
+    let active = true;
+    const controller = new AbortController();
+    void fetchMappedSjdmPublicPlaces(controller.signal)
+      .then(list => { if (active) setOsmMappedPlaces(list); })
+      .catch(() => { if (active) setOsmMappedPlaces([]); });
+    return () => { active = false; controller.abort(); };
+  }, [sjdmBoundary]);
+
+  const publicPlacePins = useMemo(() => {
+    if (!sjdmBoundary) return [];
+    const combined = [...SJDM_PUBLIC_MAP_PLACE_PINS, ...osmMappedPlaces];
+    const unique:SjdmPublicMapPlace[] = [];
+    for (const item of combined) {
+      if (!insideSjdmBoundary(sjdmBoundary,item.latitude,item.longitude)) continue;
+      // Don't double-pin a mapped source and the same place from the
+      // Overpass refresh; preserve category-specific separate sites.
+      if (unique.some(previous => previous.kind === item.kind &&
+          Math.abs(previous.latitude-item.latitude)<0.00055 &&
+          Math.abs(previous.longitude-item.longitude)<0.00055)) continue;
+      if (lguFacilities.some(approved =>
+          Math.abs(approved.latitude-item.latitude)<0.00045 &&
+          Math.abs(approved.longitude-item.longitude)<0.00045)) continue;
+      unique.push(item);
+    }
+    return unique.slice(0,100);
+  }, [sjdmBoundary, osmMappedPlaces, lguFacilities]);
 
   const [userLocation, setUserLocation] =
     useState<BrowserLocation | null>(null);
@@ -3976,6 +4058,9 @@ export default function WebMapTracking() {
         boundary: sjdmBoundary,
         outsideMask: sjdmBoundary ? sjdmOutsideMask(sjdmBoundary) : null,
         boundaryBounds: sjdmBoundary ? boundaryBounds(sjdmBoundary) : null,
+        publicPlaces: publicPlacePins.map(item => ({
+          ...item, icon: SJDM_PUBLIC_PLACE_ICON[item.kind],
+        })),
         bases: lguFacilities
           .filter(item => !!sjdmBoundary && insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
           .map(item => ({
@@ -4041,6 +4126,7 @@ export default function WebMapTracking() {
     mapIncidentCases,
     visibleCenters,
     lguFacilities,
+    publicPlacePins,
     sjdmBoundary,
     mapResponderPins,
     residentCoordinationCase?.responseVehicleType,
@@ -5396,73 +5482,6 @@ export default function WebMapTracking() {
             padding:28,textAlign:"center",color:"#124D39",fontWeight:700}}>
             SJDM boundary unavailable. Map is hidden until geographic scope is verified.
           </div>}
-          <div style={{position:"absolute",top:12,right:12,zIndex:10,maxWidth:240,
-            padding:"7px 10px",borderRadius:10,background:"rgba(255,255,255,.94)",
-            border:"1px solid #CDEFE1",fontSize:11,color:"#135E47",pointerEvents:"none"}}>
-            {sjdmBoundary ? "SJDM city boundary · geoBoundaries CC BY 4.0" :
-              boundaryUnavailable ? "SJDM boundary unavailable · verified facilities only" :
-              "Loading official SJDM boundary…"}
-          </div>
-
-          <div role="status" aria-label="Verified city facility feed status"
-            style={{position:"absolute",top:53,right:12,zIndex:11,width:"min(300px,calc(100% - 35px))",
-              padding:"9px 11px",borderRadius:11,background:"rgba(255,255,255,.97)",
-              boxShadow:"0 3px 14px rgba(16,44,33,.15)",border:"1px solid #BBDCD0",
-              color:"#174635",fontSize:11}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between",marginBottom:5}}>
-              <strong style={{fontSize:10,letterSpacing:".05em"}}>
-                SJDM VERIFIED FACILITY RECORDS
-              </strong>
-              <button type="button" disabled={!sjdmBoundary}
-                title="Zoom out to see the entire San Jose del Monte city boundary"
-                onClick={() => frame.current?.contentWindow?.postMessage({kind:"fit-whole-sjdm"},"*")}
-                style={{border:"1px solid #BDDCCF",borderRadius:7,padding:"5px 7px",
-                  fontSize:10,fontWeight:700,cursor:"pointer",background:"#F4FAF7",color:"#17664E"}}>
-                Full SJDM
-              </button>
-            </div>
-            <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-              <span title="LGU buildings appear only after official approval and coordinate verification"
-                style={{background:"#E9F5EF",padding:"5px 7px",borderRadius:7,fontWeight:700}}>
-                🏛️ LGU {lguFacilityFeedState === "ready" ? verifiedCityLguCount :
-                  lguFacilityFeedState === "error" ? "ERROR" : "…"}
-              </span>
-              <button type="button" aria-pressed={showCenters}
-                title="Toggle LGU-verified evacuation center markers"
-                onClick={() => setShowCenters(value => !value)}
-                style={{border:"1px solid #C7E4DA",background:showCenters?"#E9F5EF":"#F1F5F9",
-                  padding:"5px 7px",borderRadius:7,fontWeight:700,cursor:"pointer",color:"#174635"}}>
-                🏠 Shelters {shelterFeedState === "ready" ? verifiedCityShelterCount :
-                  shelterFeedState === "error" ? "ERROR" : "…"} {showCenters ? "✓" : "off"}
-              </button>
-            </div>
-            {(shelterFeedState === "error" || lguFacilityFeedState === "error") ? (
-              <small style={{display:"block",marginTop:6,color:"#9C3E30",lineHeight:1.4}}>
-                Firebase facility feed unavailable; locations cannot be confirmed.
-                No offline/fake pins will be shown.
-              </small>
-            ) : shelterFeedState === "loading" || lguFacilityFeedState === "loading" ? (
-              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
-                Subscribing to current Firestore facility records…
-              </small>
-            ) : verifiedCityShelterCount === 0 || verifiedCityLguCount === 0 ? (
-              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
-                {verifiedCityShelterCount === 0 && "No LGU-verified active shelter records. "}
-                {verifiedCityLguCount === 0 && "No LGU-verified active office pins. "}
-                Authorized LGU Admin must confirm real GPS and publish each facility.
-                <a href="https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/"
-                  target="_blank" rel="noopener noreferrer"
-                  style={{display:"block",marginTop:5,color:"#0E755C",fontWeight:700}}>
-                  Official SJDM CDRRMO contact / facilities
-                </a>
-              </small>
-            ) : (
-              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
-                Live Firebase records, not live building occupancy. Confirm before visiting.
-              </small>
-            )}
-          </div>
-
           {(missionMode || adminMissionMode) &&
             navigationActive &&
             (adminMissionMode || ["responding", "on_site"].includes(missionAssignmentStatus)) && (
