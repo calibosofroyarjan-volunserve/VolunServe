@@ -334,7 +334,7 @@ test("Sir Pavia Edit Profile persists name to main profile without compulsory oc
   assert.match(profile,/if \(editingOccupation && occupationCategory === "Other \(Specify\)"/);
   assert.match(profile,/setOccupationTouched\(true\);setOccupationCategory\(value==="Not specified"\?"":value\)/);
   assert.match(profile,/setOccupationTouched\(true\);setOccupationSpecialization\(value\)/);
-  assert.match(profile,/setOccupationTouched\(true\); setOccupationOther\(value\)/);
+  assert.match(profile,/setOccupationTouched\(true\);\s*setOccupationOther\(value\)/);
   assert.doesNotMatch(profile,/if \(!occupationCategory \|\| !OCCUPATION_OPTIONS\.includes\(occupationCategory\)\)/);
   assert.match(profile,/const changes: Partial<UserProfile> = \{/);
   for(const field of ["fullName: cleanName","firstName: first","middleName: middle","lastName: last"])
