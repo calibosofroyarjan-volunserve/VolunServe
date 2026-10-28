@@ -1,3 +1,4 @@
+import ListPagination from "../ui/ListPagination";
 import { Ionicons } from "@expo/vector-icons";
 import { collection, onSnapshot } from "firebase/firestore";
 import React from "react";
@@ -105,13 +106,7 @@ export default function LguStaffPrivacyRequestsPanel(){
           </TouchableOpacity>
         </View>}
       </View>)}
-      {items.length>PAGE_SIZE&&<View style={styles.pagination}>
-        <TouchableOpacity accessibilityRole="button" disabled={current<=1}
-          onPress={()=>setPage(v=>Math.max(1,v-1))}><Text style={styles.secondaryLabel}>Previous</Text></TouchableOpacity>
-        <Text style={styles.info}>Page {current} / {count} · 5 per page</Text>
-        <TouchableOpacity accessibilityRole="button" disabled={current>=count}
-          onPress={()=>setPage(v=>Math.min(count,v+1))}><Text style={styles.secondaryLabel}>Next</Text></TouchableOpacity>
-      </View>}
+      {!loading && !error && <ListPagination page={current} total={items.length} pageSize={PAGE_SIZE} onChange={setPage} />}
       {!!notice&&<Text accessibilityRole="alert" style={styles.info}>{notice}</Text>}
     </View>
   );
