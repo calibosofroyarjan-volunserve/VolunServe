@@ -1,0 +1,31 @@
+name: Resident Profile Premium UI Production Validation (No Deploy)
+on:
+  push:
+    branches:
+      - hotfix/resident-profile-emerald-ui-20261029
+  pull_request:
+    paths:
+      - app/(tabs)/profile.tsx
+      - constants/occupationOptions.ts
+      - scripts/test-resident-profile-release.cjs
+      - .github/workflows/resident-profile-ui-validation.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check profile dropdown and save behavior without accounts
+        run: node --test scripts/test-resident-profile-release.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Build production website without deploying
+        run: npx expo export --platform web
