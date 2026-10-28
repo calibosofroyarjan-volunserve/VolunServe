@@ -2069,6 +2069,17 @@ export default function WebMapTracking() {
     });
   }, [centers, search, showCenters]);
 
+  const verifiedCityShelterCount = useMemo(() =>
+    centers.filter(item => !!sjdmBoundary && hasCoordinates(item) &&
+      isVerifiedActiveCenter(item) &&
+      insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude))).length,
+  [centers, sjdmBoundary]);
+
+  const verifiedCityLguCount = useMemo(() =>
+    lguFacilities.filter(item => !!sjdmBoundary &&
+      insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)).length,
+  [lguFacilities, sjdmBoundary]);
+
   const residentActiveCases = useMemo(
     () =>
       isResidentMode
@@ -5383,6 +5394,51 @@ export default function WebMapTracking() {
               "Loading official SJDM boundary…"}
           </div>
 
+          <div role="status" aria-label="Verified city facility feed status"
+            style={{position:"absolute",top:53,right:12,zIndex:11,width:"min(300px,calc(100% - 35px))",
+              padding:"9px 11px",borderRadius:11,background:"rgba(255,255,255,.97)",
+              boxShadow:"0 3px 14px rgba(16,44,33,.15)",border:"1px solid #BBDCD0",
+              color:"#174635",fontSize:11}}>
+            <strong style={{display:"block",fontSize:10,letterSpacing:".05em",marginBottom:5}}>
+              SJDM VERIFIED FACILITY RECORDS
+            </strong>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+              <span title="LGU buildings appear only after official approval and coordinate verification"
+                style={{background:"#E9F5EF",padding:"5px 7px",borderRadius:7,fontWeight:700}}>
+                🏛️ LGU {lguFacilityFeedState === "ready" ? verifiedCityLguCount :
+                  lguFacilityFeedState === "error" ? "ERROR" : "…"}
+              </span>
+              <button type="button" aria-pressed={showCenters}
+                title="Toggle LGU-verified evacuation center markers"
+                onClick={() => setShowCenters(value => !value)}
+                style={{border:"1px solid #C7E4DA",background:showCenters?"#E9F5EF":"#F1F5F9",
+                  padding:"5px 7px",borderRadius:7,fontWeight:700,cursor:"pointer",color:"#174635"}}>
+                🏠 Shelters {shelterFeedState === "ready" ? verifiedCityShelterCount :
+                  shelterFeedState === "error" ? "ERROR" : "…"} {showCenters ? "✓" : "off"}
+              </button>
+            </div>
+            {(shelterFeedState === "error" || lguFacilityFeedState === "error") ? (
+              <small style={{display:"block",marginTop:6,color:"#9C3E30",lineHeight:1.4}}>
+                Firebase facility feed unavailable; locations cannot be confirmed.
+                No offline/fake pins will be shown.
+              </small>
+            ) : shelterFeedState === "loading" || lguFacilityFeedState === "loading" ? (
+              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
+                Subscribing to current Firestore facility records…
+              </small>
+            ) : verifiedCityShelterCount === 0 || verifiedCityLguCount === 0 ? (
+              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
+                {verifiedCityShelterCount === 0 && "No LGU-verified active shelter records. "}
+                {verifiedCityLguCount === 0 && "No LGU-verified active office pins. "}
+                Authorized LGU Admin must confirm real GPS and publish each facility.
+              </small>
+            ) : (
+              <small style={{display:"block",marginTop:6,lineHeight:1.4}}>
+                Live Firebase records, not live building occupancy. Confirm before visiting.
+              </small>
+            )}
+          </div>
+
           {(missionMode || adminMissionMode) &&
             navigationActive &&
             (adminMissionMode || ["responding", "on_site"].includes(missionAssignmentStatus)) && (
@@ -5470,8 +5526,8 @@ export default function WebMapTracking() {
             {(missionMode || adminMissionMode || isResidentMode) && roadRoute && (
               <span><i className="legend-route-line" /> Road route</span>
             )}
-            {(volunteerOverviewMode || (isAdministrator && !adminMissionMode)) && (
-              <span><i className="legend-dot center" /> Evacuation center</span>
+            {showCenters && verifiedCityShelterCount > 0 && (
+              <span><i className="legend-dot center" /> Verified shelter location</span>
             )}
           </div>
         </div>
