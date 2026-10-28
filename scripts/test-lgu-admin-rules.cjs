@@ -49,7 +49,19 @@ const newReview = (uid, email) => ({
   office: "City Public Safety Office", position: "LGU Response Officer",
   credentialReference: "PUBLIC-OFFICE-REFERENCE-TEST",
   verificationMethod: "Confirmed directly with the official LGU office",
+  identityPresenceMethod:"in_person_original_government_id_review",
+  identityPresenceConfirmed:true,
   verifiedBy: SU, verifiedAt: stamp(),
+});
+const submittedEvidence = uid => ({
+  uid, idType: "ph_national_id",
+  front: "lguStaffEvidence/"+uid+"/front.jpg",
+  back: "lguStaffEvidence/"+uid+"/back.png",
+  selfie: "lguStaffEvidence/"+uid+"/selfie.webp",
+  lguProof: "lguStaffEvidence/"+uid+"/lgu_proof.jpg",
+  reviewStatus:"pending_manual_review",
+  aiStatus:"not_run", officialOfficeStatus:"unconfirmed",
+  consentVersion:"lgu-intake-v1",createdAt:stamp(),
 });
 const promotion = () => ({
   previousRole: "applicant",
@@ -127,6 +139,47 @@ async function main() {
       return batch.commit();
     }, true);
 
+    await check("Super Admin cannot approve staff without submitted ID and LGU evidence", () => {
+      const batch = superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
+        newReview(TARGET, "staff@example.test"));
+      batch.update(superDb.doc("users/" + TARGET), promotion());
+      return batch.commit();
+    }, true);
+    await env.withSecurityRulesDisabled(async ctx => {
+      await ctx.firestore().doc("lguApplicantEvidence/"+TARGET).set(submittedEvidence(TARGET));
+    });
+    await check("Without an in-person ID check, forged Admin review is denied",()=>{
+      const batch=superDb.batch();
+      const claim=newReview(TARGET,"staff@example.test");
+      delete claim.identityPresenceMethod;
+      delete claim.identityPresenceConfirmed;
+      batch.set(superDb.doc("lguAdminCredentialReviews/"+TARGET),claim);
+      batch.update(superDb.doc("users/"+TARGET),promotion());
+      return batch.commit();
+    },true);
+    // Regression: even if an old applicant still looks pending, a trusted
+    // withdrawal request must forbid any programmer Super Admin role grant.
+    const withdrawn="withdrawn-lgu-applicant";
+    await env.withSecurityRulesDisabled(async ctx=>{
+      const q=ctx.firestore();
+      await q.doc("users/"+withdrawn).set({
+        uid:withdrawn,email:"withdrawn@example.test",
+        role:"applicant",status:"pending_review",
+        residentAccess:false,volunteerAccess:false,
+      });
+      await q.doc("lguApplicantEvidence/"+withdrawn).set(submittedEvidence(withdrawn));
+      await q.doc("lguApplicantPrivacyRequests/"+withdrawn).set({
+        uid:withdrawn,status:"requested",
+      });
+    });
+    await check("Withdrawal request prevents forged LGU Admin promotion despite evidence", () => {
+      const batch=superDb.batch();
+      batch.set(superDb.doc("lguAdminCredentialReviews/"+withdrawn),
+        newReview(withdrawn,"withdrawn@example.test"));
+      batch.update(superDb.doc("users/"+withdrawn),promotion());
+      return batch.commit();
+    },true);
     await check("Valid batch: fresh LGU review and Admin promotion together", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/" + TARGET),
@@ -220,6 +273,9 @@ async function main() {
       adminDb.doc("users/"+pendingUid).update(promotion()), true);
     await check("Super Admin cannot approve pending staff without a fresh review", () =>
       superDb.doc("users/"+pendingUid).update(promotion()), true);
+    await env.withSecurityRulesDisabled(async ctx => {
+      await ctx.firestore().doc("lguApplicantEvidence/"+pendingUid).set(submittedEvidence(pendingUid));
+    });
     await check("Super Admin can approve applicant only in an atomic credential review batch", () => {
       const batch = superDb.batch();
       batch.set(superDb.doc("lguAdminCredentialReviews/"+pendingUid),

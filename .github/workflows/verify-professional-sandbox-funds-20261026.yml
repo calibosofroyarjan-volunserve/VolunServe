@@ -23,10 +23,20 @@ jobs:
       - name: Node syntax
         run: |
           node --check backend/server.js
+          node --check backend/lguStaffFaceScreening.js
+          node --check backend/lguStaffLiveness.js
+          node --check backend/lguStaffDocumentScreening.js
+          node --check backend/lguStaffPrivacy.js
           node --check backend/fundReleaseDemoRoutes.js
           node --check functions/index.js
       - name: Identity AI Python syntax (offline, no provider calls)
-        run: python -m py_compile identity-ai/main.py identity-ai/firebase_admin_config.py
+        run: python -m py_compile identity-ai/main.py identity-ai/lgu_id_ocr.py identity-ai/test_lgu_id_ocr.py identity-ai/firebase_admin_config.py
+      - name: Philippine National ID, passport, drivers license and rejected school ID OCR heuristics (synthetic)
+        run: python -m unittest discover -s identity-ai -p 'test_lgu_id_ocr.py'
+      - name: Super Admin-only front/back government ID OCR screening (mock integration)
+        run: node --test scripts/test-lgu-staff-document-screening.cjs
+      - name: LGU staff withdrawal, evidence purge and privacy audit (synthetic-only)
+        run: node --test scripts/test-lgu-staff-privacy.cjs
       - name: Donation reconciliation and sandbox release tests
         run: node --test backend/tests/fundReleaseReconciliation.test.js
       - name: Install Java for Firestore emulator
@@ -44,8 +54,26 @@ jobs:
         run: node scripts/test-final-admin-scope.cjs
       - name: Staff login tabs, pending applications and Super Admin gate
         run: node scripts/test-admin-staff-login.cjs
+      - name: LGU staff government ID intake, private evidence and pagination contract
+        run: node scripts/test-lgu-applicant-private-evidence.cjs
       - name: LGU Admin credential security (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-admin-rules.cjs"
+      - name: LGU applicant government ID, privacy and manual-review metadata rules (Firestore emulator)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-lgu-applicant-evidence-rules.cjs"
+      - name: LGU staff private AI face screening security regression (offline)
+        run: node scripts/test-lgu-staff-face-screening.cjs
+      - name: AWS active liveness session security (mocked provider, no AWS credentials)
+        run: node --test scripts/test-lgu-staff-liveness.cjs
+      - name: AWS browser liveness protocol and score-free UI contract
+        run: node --test scripts/test-lgu-liveness-web-contract.cjs
+      - name: Build official AWS liveness React camera detector (no cloud credentials)
+        run: |
+          npm --prefix backend/liveness-web install --no-audit --no-fund
+          npm --prefix backend/liveness-web run build
+      - name: Mock private LGU staff facial screen, role access and forced manual review
+        run: node --test scripts/test-lgu-staff-face-screening-integration.cjs
+      - name: LGU staff government-ID and facial-photo private Storage access (Firestore+Storage emulators)
+        run: npx firebase emulators:exec --only firestore,storage --project demo-volunserve "node scripts/test-lgu-applicant-storage-rules.cjs"
       - name: Donation financial records only for LGU Admin (Firestore emulator)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-donation-lgu-role-isolation.cjs"
       - name: Ensure local VolunServe backup folders are excluded from TypeScript

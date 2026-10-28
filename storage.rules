@@ -58,6 +58,47 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Private government ID / live selfie / redacted LGU appointment evidence.
+    // Never store public download URLs in Firestore; only applicant and programmer Super Admin can read.
+    function isSuperAdmin() {
+      return signedIn()
+        && profile().role == 'superadmin'
+        && profile().status == 'approved';
+    }
+    // Server-controlled release gate. Missing/false is DENIED even if a client
+    // bypasses the React Native environment flag and calls Firebase directly.
+    // Keep to one config get plus profile get (Storage Rules 2-doc limit).
+    function lguEvidenceIntakeReleased() {
+      return firestore.get(/databases/(default)/documents/lguIdentityIntake/release).data.enabled == true;
+    }
+    match /lguStaffEvidence/{uid}/{filename} {
+      allow create: if signedIn()
+        && lguEvidenceIntakeReleased()
+        && resource == null
+        && request.auth.uid == uid
+        && profile().role == 'applicant'
+        && profile().status == 'pending_review'
+        && filename.matches('(front|back|selfie|lgu_proof)[.](jpg|png|webp)')
+        && request.resource.size > 1024
+        && request.resource.size <= 4 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && (
+          (filename.matches('.*[.]jpg') && request.resource.contentType == 'image/jpeg')
+          || (filename.matches('.*[.]png') && request.resource.contentType == 'image/png')
+          || (filename.matches('.*[.]webp') && request.resource.contentType == 'image/webp')
+        )
+        && ('purpose' in request.resource.metadata)
+        && request.resource.metadata.purpose == 'lgu_staff_manual_review'
+        && ('idType' in request.resource.metadata)
+        && request.resource.metadata.idType in [
+          'ph_national_id', 'ph_drivers_license', 'ph_passport'
+        ];
+      allow get: if signedIn()
+        && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

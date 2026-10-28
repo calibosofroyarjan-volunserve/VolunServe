@@ -6,12 +6,15 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build:liveness-web": "npm --prefix liveness-web install --no-audit --no-fund && npm --prefix liveness-web run build",
     "check": "node --check server.js && node --check firebaseAdmin.js && node --check identityAiReadiness.js && node --test test-identityAiReadiness.js"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1156.0",
+    "@aws-sdk/client-sts": "^3.1156.0",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",

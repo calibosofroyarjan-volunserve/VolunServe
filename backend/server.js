@@ -11466,6 +11466,39 @@ app.post(
     }
   },
 );
+// Optional private LGU staff face-similarity screening. This endpoint is
+// Super Admin-only and NEVER grants identityVerified or operational Admin role.
+// It reads only restricted ID/selfie objects and requires real internal AI config.
+require("./lguStaffFaceScreening").mountLguStaffFaceScreening(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
+require("./lguStaffDocumentScreening").mountLguStaffDocumentScreening(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
+// Withdrawal immediately blocks Admin promotion; sensitive purge is OFF by default.
+require("./lguStaffPrivacy").mountLguStaffPrivacy(app,{
+  db, adminApp:require("./firebaseAdmin").app, FieldValue, requireFirebaseUser,
+});
+// AWS challenge sessions are applicant-only and OFF until approved release.
+// Never accept client-reported live/spoof results or return confidence scores.
+require("./lguStaffLiveness").mountLguStaffLiveness(app,{
+  db,FieldValue,requireFirebaseUser,
+});
+// Built Vite + official Amplify React Face Liveness SDK, browser camera
+// streaming supported (mobile Chrome/desktop). This stays completely hidden
+// until explicitly enabled; do not expose sensitive flow on an unapproved release.
+const lguLivenessWebDir=require("node:path").join(__dirname,"liveness-web","dist");
+app.use("/lgu-face-check",(request,response,next)=>{
+  if(process.env.LGU_STAFF_ACTIVE_LIVENESS_ENABLED!=="true"){
+    return response.status(503).json({ok:false,
+      error:"active_liveness_not_configured"});
+  }
+  response.setHeader("Cache-Control","no-store");
+  response.setHeader("X-Frame-Options","DENY");
+  response.setHeader("Referrer-Policy","no-referrer");
+  next();
+});
+app.use("/lgu-face-check",express.static(lguLivenessWebDir,{index:"index.html"}));
 const port =
   Number(
     process.env.PORT ||

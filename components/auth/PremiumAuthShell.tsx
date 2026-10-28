@@ -2,9 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
+import Svg, { Path } from "react-native-svg";
 import {
-  Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions,
+  Image, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions,
 } from "react-native";
+
+const COVER = {
+  resident: require("../../assets/images/auth-resident-hero.webp"),
+  admin: require("../../assets/images/auth-admin-hero.webp"),
+};
 
 /**
  * Shared premium login frame. Both sign-in routes use the same visual shell;
@@ -120,32 +126,91 @@ export default function PremiumAuthShell({ active, children }: Props) {
           />
         </View>
 
+        {/* The left-side slideshow remains exactly as in the original live shell. */}
         <View style={[styles.right, compact && styles.rightCompact]}>
-          <View style={[styles.formCard, compact && styles.formCardCompact, authCornerCut(compact ? 12 : 29)]}>
-            <View style={[styles.tabs, authCornerCut(10)]} accessibilityLabel="Choose account sign-in">
-              <TouchableOpacity accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                accessibilityLabel="Resident Login"
-                onPress={() => { if (!selected) router.replace("/login"); }}
-                style={[styles.tab, selected && styles.activeTab, selected && authCornerCut(9)]}>
-                <Ionicons name="person" size={17} color={selected ? "#FFFFFF" : "#31564C"} />
-                <Text style={[styles.tabText, selected && styles.activeTabText]}>Resident Login</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="tab"
-                accessibilityState={{ selected: !selected }}
-                accessibilityLabel="LGU Admin Login"
-                onPress={() => { if (selected) router.replace("/admin-login"); }}
-                style={[styles.tab, !selected && styles.activeTab, !selected && authCornerCut(9)]}>
-                <Ionicons name="business-outline" size={18} color={!selected ? "#FFFFFF" : "#31564C"} />
-                <Text style={[styles.tabText, !selected && styles.activeTabText]}>LGU Admin Login</Text>
-              </TouchableOpacity>
+          <View style={styles.switcher} accessibilityLabel="Choose account sign-in">
+            <TouchableOpacity accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              accessibilityLabel="Resident & Volunteer Login"
+              onPress={() => { if (!selected) router.replace("/login"); }}
+              style={[styles.switchTab, selected && styles.selectedTab]}>
+              <Ionicons name="people-outline" color={selected ? "#FFFFFF" : "#286A55"} size={16} />
+              <Text style={[styles.switchText, selected && styles.selectedText]}>Residents & Volunteers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="tab"
+              accessibilityState={{ selected: !selected }}
+              accessibilityLabel="LGU & System Administration Login"
+              onPress={() => { if (selected) router.replace("/admin-login"); }}
+              style={[styles.switchTab, !selected && styles.selectedTab]}>
+              <Ionicons name="business-outline" color={!selected ? "#FFFFFF" : "#286A55"} size={16} />
+              <Text style={[styles.switchText, !selected && styles.selectedText]}>LGU & System Admin</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.formCard}>
+            <View style={styles.photoFrame}>
+              <ImageBackground
+                source={COVER[active]}
+                imageStyle={styles.photoImage}
+                style={styles.photo}
+                resizeMode="cover"
+              >
+                <LinearGradient colors={["rgba(9,73,52,0.08)", "rgba(8,66,48,0.17)"]}
+                  style={StyleSheet.absoluteFillObject} />
+              </ImageBackground>
+              <Svg style={styles.wave} width="100%" height={68} viewBox="0 0 700 90"
+                preserveAspectRatio="none" pointerEvents="none">
+                <Path d="M0 25 C110 68 188 90 305 74 C430 53 496 22 700 32 L700 90 L0 90 Z"
+                  fill="#E8FBEF" />
+              </Svg>
             </View>
-            {children}
+            <View style={styles.heroIcon}>
+              <LinearGradient colors={["#0F7654", "#004B39"]} style={styles.heroIconGradient}>
+                <Ionicons name={selected ? "people" : "shield-checkmark"}
+                  color="#FFFFFF" size={32} />
+              </LinearGradient>
+            </View>
+            <View style={styles.formHeading}>
+              <Text style={[styles.formTitle, narrow && styles.formTitleNarrow]}>
+                {selected ? "Resident & Volunteer Login" : "LGU & System\nAdministration Login"}
+              </Text>
+              <Text style={styles.formSubtitle}>
+                {selected
+                  ? "Access community services, join events, request assistance, and make a difference."
+                  : "Access administrative tools, manage operations, and maintain the VolunServe platform."}
+              </Text>
+            </View>
+            <View style={[styles.formFields, narrow && styles.formFieldsNarrow]}>
+              {children}
+            </View>
+            <View style={styles.roleRow}>
+              {selected ? (
+                <>
+                  <AuthRole icon="home" label={"Basic\nResident"} />
+                  <AuthRole icon="shield-checkmark" label={"Verified\nResident"} />
+                  <AuthRole icon="people" label="Volunteer" />
+                </>
+              ) : (
+                <>
+                  <AuthRole icon="business" label={"LGU\nAdmin"} />
+                  <View style={styles.roleSeparator} />
+                  <AuthRole icon="settings" label={"Super\nAdmin"} />
+                </>
+              )}
+            </View>
           </View>
           <Text style={styles.location}>VolunServe · City of San Jose del Monte, Bulacan</Text>
         </View>
       </View>
     </ScrollView>
+  );
+}
+
+function AuthRole({ icon, label }: {icon: React.ComponentProps<typeof Ionicons>["name"]; label: string}) {
+  return (
+    <View style={styles.role}>
+      <Ionicons name={icon} size={25} color="#07513D" />
+      <Text style={styles.roleText}>{label}</Text>
+    </View>
   );
 }
 
@@ -190,20 +255,46 @@ const styles = StyleSheet.create({
   dot: { height: 7, width: 7, borderRadius: 4, backgroundColor: "#A5CBBB" },
   dotActive: { width: 25, backgroundColor: "#7AFFCF" },
   cornerWash: { position: "absolute", bottom: -90, left: -70, right: -50, height: 105, transform: [{rotate: "-5deg"}] },
-  right: { flex: 1, minWidth: 0, justifyContent: "center", alignItems: "center",
-    paddingHorizontal: 30, paddingVertical: 28, backgroundColor: "#E8F7F1" },
-  rightCompact: { paddingHorizontal: 13, paddingVertical: 20 },
-  formCard: { width: "100%", maxWidth: 635, backgroundColor: "#FFFFFF",
-    paddingHorizontal: 32, paddingVertical: 35, shadowColor: "#1A5B46",
-    shadowOpacity: 0.09, shadowRadius: 26, shadowOffset: { width: 0, height: 9 },
-    elevation: 4, gap: 12 },
-  formCardCompact: { paddingHorizontal: 19, paddingVertical: 22 },
-  tabs: { flexDirection: "row", backgroundColor: "#F5F8F7", marginBottom: 17,
-    borderColor: "#DDEAE5", borderWidth: 1, gap: 2, padding: 3 },
-  tab: { flex: 1, minHeight: 52, justifyContent: "center", alignItems: "center",
-    flexDirection: "row", paddingHorizontal: 5, gap: 7 },
-  activeTab: { backgroundColor: "#008469" },
-  tabText: { fontSize: 12, fontWeight: "800", color: "#1C3E37", textAlign: "center" },
-  activeTabText: { color: "#FFFFFF" },
-  location: { textAlign: "center", paddingTop: 14, fontSize: 10, color: "#6C8B80" },
+  // Right-side form only: this section can change without touching the slideshow.
+  right: {flex: 1, minWidth: 0, justifyContent: "center", alignItems: "center",
+    paddingHorizontal: 22, paddingVertical: 16, backgroundColor: "#E8F7F1"},
+  rightCompact: {paddingHorizontal: 13, paddingVertical: 20},
+  switcher: {width: "100%", maxWidth: 620, flexDirection: "row", gap: 4, padding: 4,
+    backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1,
+    borderColor: "#C4E2D2", marginBottom: 12},
+  switchTab: {flex: 1, minHeight: 43, borderRadius: 11, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 4, gap: 6},
+  selectedTab: {backgroundColor: "#087A5A"},
+  switchText: {fontSize: 11, color: "#245B48", fontWeight: "800", textAlign: "center"},
+  selectedText: {color: "#FFFFFF"},
+  formCard: {width: "100%", maxWidth: 620, backgroundColor: "#E8FBEF",
+    borderRadius: 21, overflow: "hidden", borderWidth: 1, borderColor: "#C6E4D4",
+    shadowColor: "#0F5B47", shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.12, shadowRadius: 18, elevation: 4},
+  photoFrame: {height: 141, position: "relative", overflow: "hidden"},
+  photo: {width: "100%", height: 141},
+  photoImage: {width: "100%"},
+  wave: {position: "absolute", left: 0, bottom: -1, right: 0},
+  heroIcon: {alignSelf: "center", width: 82, height: 82, borderRadius: 43,
+    marginTop: -40, backgroundColor: "#FFFFFF", padding: 5,
+    borderWidth: 2, borderColor: "#C8E7D8", overflow: "hidden",
+    shadowColor: "#07412F", shadowOpacity: 0.16, shadowRadius: 7, elevation: 5},
+  heroIconGradient: {flex: 1, borderRadius: 40,
+    alignItems: "center", justifyContent: "center"},
+  formHeading: {alignItems: "center", paddingHorizontal: 15, paddingTop: 2, paddingBottom: 8},
+  formTitle: {fontFamily: Platform.select({web: "Georgia, serif", ios: "Georgia", android: "serif"}),
+    fontSize: 26, lineHeight: 31, letterSpacing: -0.6, color: "#0B4936",
+    fontWeight: "800", textAlign: "center"},
+  formTitleNarrow: {fontSize: 24, lineHeight: 29},
+  formSubtitle: {fontSize: 12, lineHeight: 18, color: "#556F62",
+    marginTop: 6, maxWidth: 440, textAlign: "center"},
+  formFields: {width: "100%", paddingHorizontal: 26, paddingTop: 6, paddingBottom: 10, gap: 8},
+  formFieldsNarrow: {paddingHorizontal: 17},
+  roleRow: {flexDirection: "row", justifyContent: "space-evenly",
+    alignItems: "center", gap: 6, paddingHorizontal: 12,
+    paddingTop: 5, paddingBottom: 14},
+  role: {flex: 1, alignItems: "center", gap: 4},
+  roleText: {color: "#154C3E", fontSize: 11, fontWeight: "700", textAlign: "center", lineHeight: 14},
+  roleSeparator: {height: 38, width: 1, backgroundColor: "#C6DED4"},
+  location: {textAlign: "center", paddingTop: 11, fontSize: 10, color: "#6C8B80"},
 });

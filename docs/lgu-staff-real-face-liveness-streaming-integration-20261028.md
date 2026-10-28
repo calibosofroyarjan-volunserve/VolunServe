@@ -1,0 +1,23 @@
+# Real AWS liveness detector integration — PR #139 (2026-10-28)
+
+The LGU staff onboarding is no longer limited to a static selfie in the proposed architecture. This branch includes a **separate, official AWS Amplify FaceLivenessDetectorCore web application** with Firebase applicant sign-in, backend-created AWS Rekognition sessions, temporary STS credentials, video-streaming challenge and backend-only result validation. The app never displays scores or auto-approves LGU Admin.
+
+## Components
+- `backend/liveness-web/`: independent Vite + React frontend, served from the Node Render backend at `/lgu-face-check/`, built by `cd backend && npm run build:liveness-web`. Uses React 19, AWS Amplify UI FaceLivenessDetectorCore and Firebase Auth, including supported mobile browsers (e.g. Chrome on Android).
+- `backend/lguStaffLiveness.js`: three Firebase bearer authenticated endpoints:
+  - `POST /api/lgu-staff/liveness/start` (creates an owner-bound AWS session).
+  - `POST /api/lgu-staff/liveness/credentials` (verifies owner/session/expiry, checks no withdrawal, then obtains limited 15-minute STS AssumeRole credentials; inline policy only permits StartFaceLivenessSession).
+  - `POST /api/lgu-staff/liveness/result` (reads genuine AWS provider result, never trusts browser-reported success, and transactionally rejects withdrawals or release revocation).
+- `app/admin-request.tsx`: after submission, when `EXPO_PUBLIC_LGU_STAFF_ACTIVE_LIVENESS_ENABLED=true`, a browser launch control opens the secure camera page; native Android can use its supported browser to perform the SDK challenge. This is **not a native Android SDK integration** and the original five-step form/login carousel is preserved.
+- Protected Firestore liveness session documents are backend-only; even Super Admin browser cannot access them. Scores never leave the backend provider result call and are not persisted.
+
+## Release configuration (DO NOT ENABLE without privacy & IAM approval)
+1. Valid AWS account with Face Liveness access and billing in supported region.
+2. Trusted backend IAM with `rekognition:CreateFaceLivenessSession`, `rekognition:GetFaceLivenessSessionResults` and `sts:AssumeRole` for a dedicated narrowly scoped streaming role; this dedicated role trusts only backend's principal. It has `rekognition:StartFaceLivenessSession` and no other privileges. AWS temporary credentials are delivered to applicant's browser memory only. AWS resource-level restriction for StartFaceLivenessSession must be separately assessed; the inline policy uses Resource: "*", so protect the issuing endpoint, session owner, role and duration.
+3. Env on backend Render: `LGU_STAFF_ACTIVE_LIVENESS_ENABLED=true`, `AWS_REKOGNITION_REGION`, `LGU_STAFF_LIVENESS_STREAM_ROLE_ARN`, `LGU_STAFF_LIVENESS_MIN_CONFIDENCE` (approved internal threshold, never display), AWS SDK default credential chain (set via Render secret management, never commit keys), and server-side `lguIdentityIntake/release.enabled:true` **only after signed-off privacy release**.
+4. Build web detector on backend before deployment: set Render build command to `npm install && npm run build:liveness-web` (service rootDir is `backend`). No automatic deploy has been triggered. React app dependencies are in `backend/liveness-web/package.json`; run/install and commit nested lockfile for repeatable release builds when dependency registry access is available. Existing backend lockfile also requires regeneration after SDK changes.
+5. Ensure authorized Firebase email/password applicant sign-in, AWS camera + CDN websocket connectivity, mobile Chrome camera permissions, supported device/region and a tested privacy consent/retention/deletion plan. Test actual spoof attempts and false reject/accept rates with **consented non-real-ID QA only**.
+6. Importantly: AWS **live presence** is separate from **government issuer authenticity** and from matching the *same* face to the **government ID**. The existing MediaPipe landmark-to-selfie signal is only an informational review aid and not a calibrated certified match. Official National ID verification, original physical government ID review and independent LGU office confirmation still need human/authorized confirmation before Admin role grant.
+
+## Current safety
+This is code committed to a DRAFT PR and NOT deployed. The web page and all session routes default fail-closed until an explicit server release. Do not describe it as live/working in production without valid AWS credentials and an actual camera test. No numeric match scores, success fabrication, self-approval, or public government-ID media URLs.

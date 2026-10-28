@@ -1,0 +1,38 @@
+# LGU Staff / LGU Admin Applicant Verification — REQUIRED Final Flow
+Status: **IMPLEMENTATION SPECIFICATION ONLY**. NOT an operational face-ID, OCR, authenticity, or liveness capability in the live `/admin-request` form. Do not mark as shipped or defense-ready until the acceptance checks pass.
+
+## Scope and privileges
+- New staff applicant has `role: applicant` with **zero Resident, Volunteer, LGU Admin and Super Admin permissions**.
+- Only programmer **Super Admin** can review LGU employment/appointment authorization and promote an applicant to operational `admin`. LGU Admin cannot promote other LGU Admins.
+- An AI result, face similarity score, government-ID classification, OCR output or applicant-provided LGU proof **never** grants privileges automatically.
+
+## Applicant guided steps
+1. **LGU staff profile:** legal name, government/official work email, department/office, role/designation, barangay, non-sensitive appointment reference and password. Prevent browser/password-manager autofill from placing email into the appointment reference.
+2. **Government-issued identity document:** allow **Philippine National ID (PhilSys/ePhilID when current supported process verifies it), Philippine passport, or Philippine driver's license** as initial whitelist. Explicitly reject school ID, company ID, barangay/corporate cards and arbitrary images as government-ID substitutes. Do not use a misleading `Other ID` escape hatch. Additional government IDs require an explicit reviewed support policy. Collect front/back **when that ID actually has a reverse side**; passports require the relevant identity page instead of a fictional mandatory backside. Preview both, ask consent, limit retries, and never allow free-form ID entry to bypass server-side document classification.
+3. **OCR/document analysis:** protected backend checks document type and extracts only minimum necessary fields (e.g. name, birth date, expiration and issuing authority if available); validates field consistency across captured sides, crop quality, expiration, and tamper indicators. OCR **cannot prove authenticity**. If OCR is unavailable/inconclusive, go to manual review rather than labeling the ID verified.
+4. **Live selfie and liveness:** camera capture with active liveness / anti-spoof challenge from a tested service; compare captured live face **to the portrait in the government ID**, never just to any detected person in an image. Avoid unvalidated face matching scores or fake progress bars. Reject static replay/photo/screen spoof when detected; inconclusive or failed checks route to human review. Record non-sensitive attempt/result references only; avoid persistent raw face embeddings.
+5. **LGU employment evidence (separate from ID):** require a safe appointment memo/reference, department certification or employment proof with only necessary appointment/office details. Instruct applicant to redact unrelated employee data, signatures/QRs if unnecessary, payroll, salary, government ID numbers, TIN/SSS/PhilHealth details, passwords, personal addresses, and other third-party information. Evidence must be uploaded via a **private, authorization-checked channel**, not public URLs/chat/notification payloads. Maintain file-type, size, access, and retention rules; add malware scanning before privileged viewing.
+6. **Independent LGU office confirmation:** Super Admin uses independently sourced official LGU office contact details, verifies employment/appointment authority; where available, schedule **in-person verification** or formally recorded remote confirmation with an authorized LGU signatory. Submission alone cannot count as confirmation.
+7. **Super Admin review:** explicit checklist: government ID validity/consistency, OCR/manual data check, **ID portrait versus live self** result, liveness, non-sensitive LGU proof, independently confirmed LGU appointment, and reviewer acknowledgment. Status flow: Draft -> Identity Pending -> Identity Review / Failed -> LGU Evidence Pending -> Official Confirmation Pending -> Approved / Rejected. On failures offer limited controlled retries then manual review; never silently auto-approve.
+8. **Promotion:** secure Super Admin-only backend/transaction records `lguAdminCredentialReviews`, reviewer identity, method, time, official reference, resulting role/status and audit log. Use Firestore and server-side guard rules; do not trust client-provided `identityVerified` or `reviewed=true`.
+
+## Data governance and integrity
+- Government IDs and biometric images are **sensitive personal data** even when users label other LGU documents “non-sensitive.” Collect explicit informed consent and a privacy notice specific to identity checks; define lawful purpose, access controls, encryption in transit/at rest, minimal fields, deletion/retention policy and breach handling.
+- Government ID authenticity cannot be independently guaranteed through OCR + face similarity alone; lack of issuer verification means call the outcome **document consistency / identity-match screening**, pending independent identity and LGU employment confirmation.
+- Use the existing Resident AI endpoint only as a reference: **`/api/identity/verify` currently denies `applicant` profiles and writes Resident identity status**. Never redirect LGU applicant traffic there or silently upgrade Resident identity to LGU staff authorization.
+- Distinct LGU identity endpoint must authenticate the **applicant** securely and keep outcomes separated from Resident `identityVerifications`. A secure and reviewed backend must handle front/back and OCR, not a client-side image classifier with hardcoded scores.
+- Review evidence may be examined by Super Admin only. Do not add government ID images or biometric files to Firestore documents, public Firebase Storage URLs, UI notifications, debug logs, or analytics.
+- In `/admin-request`, show **Not yet available** for any scan/AI feature that is not actually wired to tested backend services. Do not call it “AI Verified” before results are validated.
+
+## Acceptance tests before release
+- Unsupported non-government and school ID rejected **server-side**; arbitrary `idType` string and forged multipart metadata cannot bypass checks.
+- National ID front/back, passport identity page, and driver's license front/back processed according to real layout. Missing required side, blurry images, inconsistent OCR and expired credentials go to retry/manual.
+- Liveness challenge screens, printouts, held-up phone/video replay attempts and mismatched ID photo are not auto-verified; unknown or model failure never becomes success.
+- Three unsuccessful attempts (or configured limit) route to manual review without unbounded brute-force attempts or permanent lockout from human support.
+- In-person/independent office confirmation has auditable status; unauthorized LGU Admin, Resident, Volunteer or applicant cannot promote accounts or access other applicants' evidence.
+- Document upload fails closed if protected storage/backend cannot be reached; no credential files saved to public media services.
+- Real camera-browser and Android tests with permission denial, short screen, connection loss and back-button behavior.
+- Firebase Emulator tests for owner-read-only identity status, Super Admin review, audit, notification privacy; CI TypeScript, web and Android exports.
+- Test data uses fictional/synthetic samples; never commit actual government IDs or facial images.
+
+**Release sequencing**: complete and test secure private applicant identity/evidence backend + rules first; then wire guided UI; then review and deploy backend/rules and web/mobile with explicit release approval. No automatic admin access at any point.

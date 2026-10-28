@@ -2,6 +2,7 @@ import { deleteApp, initializeApp } from "firebase/app";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 import {
+    connectAuthEmulator,
     createUserWithEmailAndPassword,
     deleteUser,
     getAuth,
@@ -20,6 +21,7 @@ import {
     auth,
     db,
     firebaseConfig,
+    usingFirebaseEmulators,
 } from "./firebase";
 
 export type CreateAdminInput = {
@@ -79,6 +81,11 @@ export async function createAdminAccount(
   );
 
   const secondaryAuth = getAuth(secondaryApp);
+  if (usingFirebaseEmulators) {
+    connectAuthEmulator(secondaryAuth, "http://127.0.0.1:9099", {
+      disableWarnings: true,
+    });
+  }
 
   let createdUser: Awaited<
     ReturnType<typeof createUserWithEmailAndPassword>

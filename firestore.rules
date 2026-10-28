@@ -87,6 +87,21 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
+      // An applicant cannot become LGU Admin unless government-ID, selfie and
+      // LGU-document evidence metadata was submitted before the review.
+      // This is an existence/consistency gate, NOT proof of ID authenticity.
+      function hasSubmittedLguEvidence() {
+        let path = /databases/$(database)/documents/lguApplicantEvidence/$(uid);
+        return exists(path)
+          && get(path).data.uid == uid
+          && get(path).data.idType in [
+            'ph_national_id', 'ph_drivers_license', 'ph_passport'
+          ]
+          && get(path).data.reviewStatus == 'pending_manual_review'
+          && get(path).data.aiStatus == 'not_run'
+          && get(path).data.officialOfficeStatus == 'unconfirmed'
+          && !exists(/databases/$(database)/documents/lguApplicantPrivacyRequests/$(uid));
+      }
       // A role grant is only valid with a same-commit, reviewed LGU credential record.
       // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
       // rather than a stale record from an earlier promotion.
@@ -98,7 +113,9 @@ service cloud.firestore {
           && review.reviewStatus == 'verified'
           && review.verifiedBy == request.auth.uid
           && review.verifiedAt == request.time
-          && review.accountEmail == request.resource.data.email;
+          && review.accountEmail == request.resource.data.email
+          && review.identityPresenceConfirmed == true
+          && review.identityPresenceMethod == 'in_person_original_government_id_review';
       }
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -452,6 +469,7 @@ service cloud.firestore {
             && request.resource.data.role == 'admin'
             && request.resource.data.status == 'approved'
             && request.resource.data.adminStatus == 'active'
+            && hasSubmittedLguEvidence()
             && hasFreshLguCredentialReview()
             && request.resource.data.adminCreatedBy == request.auth.uid
             && request.resource.data.adminUpdatedBy == request.auth.uid
@@ -3881,7 +3899,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['read'])
         && request.resource.data.read == true;
-      allow read, update, delete: if isAdmin();
+      // Private inbox access is scoped to the recipient for every role.
     }
     match /tickets/{ticketId} {
       allow create: if approved()
@@ -4982,17 +5000,110 @@ service cloud.firestore {
     }
     // Private human-verified LGU credentials: reference only, never ID scans.
     // Admin access requires a fresh review in the same commit as role promotion.
+    // Private evidence metadata. The application record can NEVER self-verify.
+    // Raw ID and selfie pixels are in restricted Storage objects, not Firestore.
+    // Unlike EXPO_PUBLIC_* flags, this release is enforced by Firebase rules.
+    // Admin SDK / emulator fixture only: no browser, applicant, LGU Admin or
+    // programmer Super Admin client can enable intake.
+    match /lguIdentityIntake/{configId} {
+      allow read, write: if false;
+    }
+    function lguEvidenceIntakeReleased() {
+      let path = /databases/$(database)/documents/lguIdentityIntake/release;
+      return exists(path) && get(path).data.enabled == true;
+    }
+    // Backend-only privacy lifecycle; browser clients cannot forge completion.
+    match /lguApplicantPrivacyRequests/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+    match /lguApplicantPrivacyAudits/{auditId} {
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+    match /lguApplicantEvidence/{uid} {
+      function validIntake() {
+        let applicant = get(/databases/$(database)/documents/users/$(uid)).data;
+        let data = request.resource.data;
+        return signedIn()
+          && request.auth.uid == uid
+          && applicant.role == 'applicant'
+          && applicant.status == 'pending_review'
+          && data.keys().hasOnly([
+            'uid','idType','front','back','selfie','lguProof',
+            'reviewStatus','aiStatus','officialOfficeStatus',
+            'consentVersion','createdAt'
+          ])
+          && data.keys().hasAll([
+            'uid','idType','front','back','selfie','lguProof',
+            'reviewStatus','aiStatus','officialOfficeStatus',
+            'consentVersion','createdAt'
+          ])
+          && data.uid == uid
+          && data.idType in ['ph_national_id','ph_drivers_license','ph_passport']
+          && data.front is string
+          && data.front.matches('lguStaffEvidence/' + uid + '/front[.](jpg|png|webp)')
+          && data.back is string
+          && (
+            (data.idType == 'ph_passport' && data.back == '')
+            || (data.idType in ['ph_national_id','ph_drivers_license']
+              && data.back.matches('lguStaffEvidence/' + uid + '/back[.](jpg|png|webp)'))
+          )
+          && data.selfie is string
+          && data.selfie.matches('lguStaffEvidence/' + uid + '/selfie[.](jpg|png|webp)')
+          && data.lguProof is string
+          && data.lguProof.matches('lguStaffEvidence/' + uid + '/lgu_proof[.](jpg|png|webp)')
+          && data.reviewStatus == 'pending_manual_review'
+          && data.aiStatus == 'not_run'
+          && data.officialOfficeStatus == 'unconfirmed'
+          && data.consentVersion == 'lgu-intake-v1'
+          && data.createdAt == request.time;
+      }
+      allow create: if lguEvidenceIntakeReleased() && validIntake();
+      allow get: if signedIn() && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
+    // AI-assisted face-similarity signals remain informational. Only the
+    // authenticated backend may write; clients cannot forge a match score.
+    // No record in this collection grants applicant/admin permissions.
+    // OCR provides only a document TYPE signal, never issuer authentication.
+    // Server Admin SDK writes the review result; all client writes are denied.
+    match /lguApplicantDocumentScreenings/{uid} {
+      allow get: if signedIn() &&
+        (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+    // AWS liveness session ownership, nonces and response signals exist
+    // server-side only. Clients MUST use authenticated backend endpoints.
+    match /lguApplicantLivenessSessions/{uid} {
+      allow read, write: if false;
+    }
+    match /lguApplicantFaceScreenings/{uid} {
+      allow get: if signedIn() &&
+        (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
     match /lguAdminCredentialReviews/{targetUid} {
       function validReview() {
         return isSuperAdmin()
           && request.auth.uid != targetUid
+          && exists(/databases/$(database)/documents/lguApplicantEvidence/$(targetUid))
           && request.resource.data.keys().hasOnly([
             'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
-            'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
+            'credentialReference', 'verificationMethod',
+            'identityPresenceMethod', 'identityPresenceConfirmed',
+            'verifiedBy', 'verifiedAt'
           ])
           && request.resource.data.keys().hasAll([
             'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
-            'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
+            'credentialReference', 'verificationMethod',
+            'identityPresenceMethod', 'identityPresenceConfirmed',
+            'verifiedBy', 'verifiedAt'
           ])
           && request.resource.data.targetUid == targetUid
           && request.resource.data.reviewStatus == 'verified'
@@ -5011,6 +5122,8 @@ service cloud.firestore {
           && request.resource.data.verificationMethod is string
           && request.resource.data.verificationMethod.size() >= 8
           && request.resource.data.verificationMethod.size() <= 200
+          && request.resource.data.identityPresenceMethod == 'in_person_original_government_id_review'
+          && request.resource.data.identityPresenceConfirmed == true
           && request.resource.data.verifiedBy == request.auth.uid
           && request.resource.data.verifiedAt == request.time;
       }

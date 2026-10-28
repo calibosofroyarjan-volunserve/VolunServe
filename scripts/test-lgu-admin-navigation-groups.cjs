@@ -16,6 +16,6 @@ const groupLabels = [...groups[1].matchAll(/labels:\s*\[([^\]]+)\]/g)]
 assert.equal(labels[0], "Command Center", "Command Center must remain the first pinned destination");
 assert.equal(new Set(paths).size, paths.length, "Duplicated Admin module routes");
 assert.deepEqual([...groupLabels].sort(), labels.slice(1).sort(),
-  "A module was removed, duplicated, or moved outside the five workflow groups");
+  "A module was removed, duplicated, or moved outside the LGU workflow groups");
 assert(s.includes("onPress={() => openRoute(item.route)}"), "Module navigation callbacks are missing");
 console.log("PASS " + paths.length + " Admin module routes retained, grouped and reachable");

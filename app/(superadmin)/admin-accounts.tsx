@@ -27,6 +27,8 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguApplicantEvidencePanel from "../../components/admin/LguApplicantEvidencePanel";
+import LguStaffPrivacyRequestsPanel from "../../components/admin/LguStaffPrivacyRequestsPanel";
 
 import {
   db,
@@ -135,6 +137,7 @@ export default function AdminAccounts() {
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
+  const [applicantPage, setApplicantPage] = useState(1);
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); }, [search, filter]);
 
@@ -172,16 +175,22 @@ export default function AdminAccounts() {
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
+  const [evidenceReady, setEvidenceReady] = useState(false);
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
   const [identityMatched, setIdentityMatched] = useState(false);
+  // Until validated active liveness exists, require a human observation of
+  // the living applicant AND the original government-issued ID in person.
+  const [inPersonIdentityConfirmed, setInPersonIdentityConfirmed] = useState(false);
   const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
   const clearCredentialReview = () => {
     setLguOffice("");
     setLguPosition("");
     setLguReference("");
     setLguVerificationMethod("");
+    setEvidenceReady(false);
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
+    setInPersonIdentityConfirmed(false);
     setLguEmploymentConfirmed(false);
   };
   const reviewComplete =
@@ -192,7 +201,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady &&
+    inPersonIdentityConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -380,6 +390,12 @@ export default function AdminAccounts() {
   const pendingLguApplications = users
     .filter(account => account.role === "applicant" && account.status === "pending_review")
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
+  const applicantPageCount = Math.max(1, Math.ceil(pendingLguApplications.length / 5));
+  const safeApplicantPage = Math.min(applicantPage, applicantPageCount);
+  const pagedLguApplications = pendingLguApplications.slice(
+    (safeApplicantPage - 1) * 5, safeApplicantPage * 5
+  );
+
 
   const totalAdmins =
     users.filter(
@@ -611,6 +627,8 @@ export default function AdminAccounts() {
             position: lguPosition.trim(),
             credentialReference: lguReference.trim(),
             verificationMethod: lguVerificationMethod.trim(),
+            identityPresenceMethod: "in_person_original_government_id_review",
+            identityPresenceConfirmed: true,
             verifiedBy: verified.current.uid,
             verifiedAt: serverTimestamp(),
           });
@@ -999,7 +1017,7 @@ export default function AdminAccounts() {
           </Text>
           {pendingLguApplications.length===0 ? (
             <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
-          ) : pendingLguApplications.slice(0,20).map(account => (
+          ) : pagedLguApplications.map(account => (
             <View key={account.id} style={{padding:12,backgroundColor:"#FFFFFF",
               borderWidth:1,borderColor:"#DCEAE1",borderRadius:10,
               flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12}}>
@@ -1018,7 +1036,37 @@ export default function AdminAccounts() {
               </TouchableOpacity>
             </View>
           ))}
-        </View>
+ 
+          {pendingLguApplications.length > 5 && (
+            <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+              flexWrap:"wrap",gap:9,marginTop:7}}>
+              <Text style={{fontSize:11,color:"#4E7865"}}>
+                Showing {(safeApplicantPage-1)*5+1}–{Math.min(pendingLguApplications.length,safeApplicantPage*5)} of {pendingLguApplications.length} · 5 per page
+              </Text>
+              <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous LGU applicant page"
+                  disabled={safeApplicantPage<=1} onPress={()=>setApplicantPage(v=>Math.max(1,v-1))}
+                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
+                    opacity:safeApplicantPage<=1?0.4:1}}>
+                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Previous</Text>
+                </TouchableOpacity>
+                <Text style={{color:"#235B48",fontWeight:"700",fontSize:12}}>
+                  {safeApplicantPage} / {applicantPageCount}
+                </Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next LGU applicant page"
+                  disabled={safeApplicantPage>=applicantPageCount}
+                  onPress={()=>setApplicantPage(v=>Math.min(applicantPageCount,v+1))}
+                  style={{borderWidth:1,borderColor:"#B9D9C7",borderRadius:8,paddingHorizontal:12,paddingVertical:9,
+                    opacity:safeApplicantPage>=applicantPageCount?0.4:1}}>
+                  <Text style={{color:"#17694F",fontWeight:"800",fontSize:12}}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+       </View>
+
+        {/* This is part of the existing Super Admin staff workspace, not a separate module. */}
+        <LguStaffPrivacyRequestsPanel/>
 
         <View
           style={
@@ -1902,10 +1950,12 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
+                <LguApplicantEvidencePanel uid={actionTarget?.id || ""} onReady={setEvidenceReady} />
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
-                  Compare the applicant's information with an independently obtained official LGU source.
-                  Completing this review is required before activating any Admin account.
+                  Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
+                  Submitted documents or ID images alone are insufficient. If official confirmation is unavailable, keep the application pending.
+                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check. Without validated active liveness, a supervised in-person examination of the original ID and applicant is mandatory for approval.
                 </Text>
                 {actionTarget?.role === "applicant" && (
                   <View style={styles.applicantDetails}>
@@ -1994,6 +2044,18 @@ export default function AdminAccounts() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
+                    accessibilityState={{ checked: inPersonIdentityConfirmed }}
+                    style={styles.confirmReview}
+                    onPress={() => setInPersonIdentityConfirmed(v => !v)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons name={inPersonIdentityConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>
+                      I personally observed this applicant in person, inspected the original government-issued ID, and compared the portrait with the applicant's face. A photo upload or video call alone does not satisfy this confirmation.
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
                     accessibilityState={{ checked: lguEmploymentConfirmed }}
                     style={styles.confirmReview}
                     onPress={() => setLguEmploymentConfirmed(v => !v)}
@@ -2001,7 +2063,7 @@ export default function AdminAccounts() {
                   >
                     <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
                     <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
+                      I independently confirmed current LGU employment, appointment and authority with the official LGU office or records, using independently obtained contact details.
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -2049,11 +2111,14 @@ export default function AdminAccounts() {
 
             </ScrollView>
             <View
-              style={
-                styles.confirmActions
-              }
+              style={[
+                styles.confirmActions,
+                viewportWidth < 480 && styles.confirmActionsCompact,
+              ]}
             >
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Cancel staff account action"
                 disabled={
                   !!savingUid
                 }
@@ -2075,6 +2140,8 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={actionButtonLabel(actionType)}
                 disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
                 style={[
                   styles.confirmButton,
@@ -2703,6 +2770,11 @@ const styles =
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 10,
+    },
+
+    confirmActionsCompact: {
+      flexDirection: "column-reverse",
+      alignItems: "stretch",
     },
 
     confirmButton: {

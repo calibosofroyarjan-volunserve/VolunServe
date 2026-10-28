@@ -48,33 +48,44 @@ type NavItem = {
   route: string;
 };
 
-// Final LGU operational hierarchy: each destination appears once.
+// Final LGU operational hierarchy: one destination per section.
+// Residents and Volunteers use ONE approved LGU Admin account and backend.
 const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
-  { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
-  { label: "User & Volunteer Approvals", icon: "people-outline", route: "/(admin)/account-approvals" },
-  { label: "LGU Personnel", icon: "business-outline", route: "/(admin)/lgu-members" },
-  { label: "LGU Attendance", icon: "time-outline", route: "/(admin)/lgu-attendance" },
-  { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
+  { label: "Resident Directory", icon: "people-outline", route: "/(admin)/residents" },
+  { label: "Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
-  { label: "Relief Operations", icon: "cube-outline", route: "/(admin)/relief-operations" },
   { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
+  { label: "Resident Notifications", icon: "notifications-outline", route: "/(admin)/resident-notifications" },
+  { label: "Volunteer Applications", icon: "person-add-outline", route: "/(admin)/volunteers" },
   { label: "Volunteer Events", icon: "calendar-outline", route: "/(admin)/admin-events" },
   { label: "Event Attendance", icon: "checkmark-done-outline", route: "/(admin)/community-attendance" },
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
+  { label: "Volunteer Notifications", icon: "notifications-outline", route: "/(admin)/volunteer-notifications" },
+  { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
+  { label: "Relief Operations", icon: "cube-outline", route: "/(admin)/relief-operations" },
+  { label: "LGU Personnel", icon: "business-outline", route: "/(admin)/lgu-members" },
+  { label: "LGU Attendance", icon: "time-outline", route: "/(admin)/lgu-attendance" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
   { label: "Announcements", icon: "megaphone-outline", route: "/(admin)/create-announcement" },
   { label: "Disputes", icon: "shield-checkmark-outline", route: "/(admin)/admin-disputes" },
   { label: "Analytics", icon: "analytics-outline", route: "/(admin)/admin-analytics" },
 ];
 
-type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
+type NavSectionId = "residents" | "volunteers" | "emergency" | "staff" | "funds" | "reports";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
-  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "User & Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
-  { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
-  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Volunteer Events", "Event Attendance", "Certificates"] },
-  { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
-  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes", "Analytics"] },
+  { id: "residents", title: "Residents Management", icon: "people-outline",
+    labels: ["Resident Directory", "Identity Reviews", "Assistance Requests", "Community Events", "Resident Notifications"] },
+  { id: "volunteers", title: "Volunteers Management", icon: "heart-outline",
+    labels: ["Volunteer Applications", "Volunteer Events", "Event Attendance", "Certificates", "Volunteer Notifications"] },
+  { id: "emergency", title: "Emergency & Relief", icon: "alert-circle-outline",
+    labels: ["Emergency Reports", "Relief Operations"] },
+  { id: "staff", title: "LGU Staff Operations", icon: "business-outline",
+    labels: ["LGU Personnel", "LGU Attendance"] },
+  { id: "funds", title: "Donations & Funds", icon: "wallet-outline",
+    labels: ["Donation Management"] },
+  { id: "reports", title: "Communications & Reports", icon: "analytics-outline",
+    labels: ["Announcements", "Disputes", "Analytics"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
