@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import PasswordResetModal from "../components/auth/PasswordResetModal";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
@@ -9,7 +10,6 @@ import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
-  sendPasswordResetEmail,
   signInWithCredential,
   setPersistence,
   browserLocalPersistence,
@@ -57,6 +57,7 @@ export default function Login() {
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
+  const [resetVisible, setResetVisible] = useState(false);
   const applyRememberMe = async () => {
     if (Platform.OS === "web") {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
@@ -153,41 +154,11 @@ export default function Login() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (loading || googleLoading) {
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail) {
-      showError("Enter your email address first, then select Forgot password.");
-      return;
-    }
-
-    try {
-      clearFeedback();
-      setLoading(true);
-
-      await sendPasswordResetEmail(
-        auth,
-        cleanEmail
-      );
-
-      showSuccess("If this account uses email and password, check your inbox and spam folder for the reset link.");
-    } catch (error: any) {
-      const code = String(error?.code || "");
-
-      if (code === "auth/invalid-email") {
-        showError("Please enter a valid email address.");
-      } else if (code === "auth/too-many-requests") {
-        showError("Too many reset attempts. Please wait and try again later.");
-      } else {
-        showError(error?.message || "Unable to send the password reset email.");
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleForgotPassword = () => {
+    if (loading || googleLoading) return;
+    clearFeedback();
+    // Open the dialog first. No reset email is sent until the user confirms.
+    setResetVisible(true);
   };
 
   const handleGoogleLogin = async () => {
@@ -278,7 +249,7 @@ export default function Login() {
             <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
             <Text style={styles.muted}>Remember me</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+          <TouchableOpacity accessibilityRole="button" onPress={handleForgotPassword}
             disabled={loading || googleLoading}>
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
@@ -347,6 +318,8 @@ export default function Login() {
           <Text style={styles.createLink}>Create An Account</Text>
         </TouchableOpacity>
       </PremiumAuthShell>
+      <PasswordResetModal visible={resetVisible} initialEmail={email}
+        onClose={() => setResetVisible(false)} />
     </KeyboardAvoidingView>
   );
 }
