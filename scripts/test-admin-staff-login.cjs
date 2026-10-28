@@ -33,7 +33,7 @@ assert(admin.includes("Request LGU Admin Access") &&
   apply.includes("LGU Staff Verification Application") &&
   apply.includes("Submit LGU Information for Verification"),
   "LGU staff access requests must display the approved Super Admin CTA and route to the staff verification form");
-assert(admin.includes("not Super Admin privileges") &&
+assert(admin.includes("LGU staff applicants receive no privileges until independently verified and approved by Super Admin.") &&
   apply.includes("role:\"applicant\",status:\"pending_review\"") &&
   apply.includes("Only after successful confirmation") &&
   owner.includes("LGU Staff Applications"),
