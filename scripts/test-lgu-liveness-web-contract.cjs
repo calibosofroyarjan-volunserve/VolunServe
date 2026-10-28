@@ -10,6 +10,7 @@ const backend=read("backend/server.js");
 const web=JSON.parse(read("backend/liveness-web/package.json"));
 const node=JSON.parse(read("backend/package.json"));
 const app=read("app/admin-request.tsx");
+const panel=read("components/admin/LguApplicantEvidencePanel.tsx");
 const rules=read("firestore.rules");
 test("Real AWS Amplify camera streaming rather than fake selfie-liveness",()=>{
   assert(client.includes("FaceLivenessDetectorCore"));
@@ -54,4 +55,15 @@ test("Protected React camera challenge is not publicly deployed by default",()=>
   assert(app.includes('EXPO_PUBLIC_LGU_STAFF_ACTIVE_LIVENESS_ENABLED==="true"'));
   assert(app.includes('https://volunserve.onrender.com/lgu-face-check/'));
   assert(backend.includes('X-Frame-Options'));
+});
+
+test("Super Admin sees only private, nonnumeric AWS presence status",()=>{
+  assert(liveness.includes('"/api/lgu-staff/liveness/reviewer-status"'));
+  assert(liveness.includes('reviewer.role!=="superadmin"'));
+  assert(liveness.includes('state.state==="completed"'));
+  assert(panel.includes("Review live camera check"));
+  assert(panel.includes("/api/lgu-staff/liveness/reviewer-status"));
+  assert(panel.includes("Live camera presence check completed"));
+  assert(!panel.includes("livenessScore"));
+  assert(!panel.includes("livenessConfidence"));
 });

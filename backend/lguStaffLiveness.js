@@ -151,6 +151,33 @@ function mountLguStaffLiveness(app,{db,FieldValue,requireFirebaseUser,
       return res.json({ok:true,credentials});
     }catch(e){return res.status(e.status||503).json(noSecrets(e));}
   });
+  // Only programmer Super Admin can see a neutral evidence-status summary.
+  // Never leak AWS session identifiers, temporary credentials or confidence.
+  app.post("/api/lgu-staff/liveness/reviewer-status",requireFirebaseUser,async(req,res)=>{
+    try{
+      const reviewerUid=secureUid(req.firebaseUser?.uid);
+      const targetUid=secureUid(req.body?.applicantUid);
+      if(!reviewerUid||!targetUid)httpError(400,"invalid_reviewer_request");
+      const reviewer=(await db.collection("users").doc(reviewerUid).get()).data()||{};
+      if(reviewer.role!=="superadmin"||reviewer.status!=="approved")
+        httpError(403,"superadmin_only");
+      const [evidence,withdrawal,session]=await Promise.all([
+        db.collection("lguApplicantEvidence").doc(targetUid).get(),
+        db.collection("lguApplicantPrivacyRequests").doc(targetUid).get(),
+        db.collection("lguApplicantLivenessSessions").doc(targetUid).get(),
+      ]);
+      if(!evidence.exists)httpError(404,"applicant_evidence_missing");
+      const state=session.data()||{};
+      const status=withdrawal.exists?"manual_review_required":
+        state.state==="completed"&&state.signal==="live_presence_signal_present"
+          ?"live_presence_checked":
+        state.state==="completed"?"manual_review_required":
+        "awaiting_camera_check";
+      return res.json({ok:true,status,
+        identityDecision:"manual_review_required",
+        documentAuthenticityVerified:false,adminAccessGranted:false});
+    }catch(e){return res.status(e.status||503).json(noSecrets(e));}
+  });
   app.post("/api/lgu-staff/liveness/result",requireFirebaseUser,async(req,res)=>{
     try{
       const sdk=client(),uid=await verifyApplicant(req);

@@ -32,6 +32,8 @@ export default function LguApplicantEvidencePanel({
   const [ocrBusy,setOcrBusy]=React.useState(false);
   const [ocrMessage,setOcrMessage]=React.useState("");
   const [ocrStatus,setOcrStatus]=React.useState("");
+  const [livenessBusy,setLivenessBusy]=React.useState(false);
+  const [livenessMessage,setLivenessMessage]=React.useState("");
   React.useEffect(()=>{
     let cancelled=false;
     let objectUrls: string[]=[];
@@ -39,6 +41,7 @@ export default function LguApplicantEvidencePanel({
     setDecodedImages([]);setPreviewUid("");
     setScreenBusy(false);setScreenMessage("");setScreenStatus("");
     setOcrBusy(false);setOcrMessage("");setOcrStatus("");
+    setLivenessBusy(false);setLivenessMessage("");
     onReady(false);
     const load=async()=>{
       if (!uid) throw new Error("No staff applicant selected.");
@@ -146,6 +149,42 @@ export default function LguApplicantEvidencePanel({
       setScreenMessage(String(e?.message||"Face screening could not be completed."));
     }finally{setScreenBusy(false);}
   };
+  const checkActiveLiveness=async()=>{
+    if(!uid||!previewsDecoded||livenessBusy)return;
+    setLivenessBusy(true);setLivenessMessage("");
+    try{
+      const configured=process.env.EXPO_PUBLIC_LGU_FACE_SCREEN_API_URL?.trim();
+      if(usingFirebaseEmulators&&!configured)
+        throw new Error("Configure the local privacy review backend before emulator QA.");
+      if(Platform.OS!=="web")
+        throw new Error("Use the authorized web dashboard to review private verification.");
+      const user=auth.currentUser;
+      if(!user)throw new Error("Your Super Admin session has expired.");
+      const base=(configured||
+        process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim()||
+        "https://volunserve.onrender.com")
+        .replace(/\/api\/identity\/(verify|status|engine-health)\/?$/,"")
+        .replace(/\/+$/,"");
+      const localEndpoint=/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base);
+      if(usingFirebaseEmulators ? !localEndpoint : !/^https:\/\//.test(base))
+        throw new Error("Secure review endpoint is not configured.");
+      const response=await fetch(base+"/api/lgu-staff/liveness/reviewer-status",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+await user.getIdToken(),
+          "Content-Type":"application/json"},
+        body:JSON.stringify({applicantUid:uid}),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||result.ok!==true)
+        throw new Error("Secure camera-presence status is unavailable. Use independent manual review.");
+      setLivenessMessage(result.status==="live_presence_checked"
+        ?"Live camera presence check completed. Original government ID and LGU employment verification are still required."
+        :result.status==="manual_review_required"
+          ?"Additional in-person identity verification is required."
+          :"Live camera presence has not been confirmed. Continue with manual identity review.");
+    }catch(e:any){setLivenessMessage(String(e?.message||"Camera-presence review is unavailable."));}
+    finally{setLivenessBusy(false);}
+  };
   const runOcrScreen=async()=>{
     if(!info||!uid||ocrBusy||!previewsDecoded)return;
     setOcrBusy(true);setOcrMessage("");setOcrStatus("");
@@ -199,7 +238,7 @@ export default function LguApplicantEvidencePanel({
         <Ionicons name="document-lock-outline" color="#126F54" size={19}/>
         <Text style={styles.heading}>Private identity and LGU documents</Text>
       </View>
-      <Text style={styles.note}>Restricted to Super Admin. Inspect government ID front/back (as applicable), portrait versus selfie and redacted staff proof. OCR and facial comparison are optional reviewer checks; active liveness is NOT available.</Text>
+      <Text style={styles.note}>Restricted to programmer Super Admin. Inspect the original government ID and official LGU evidence. AI photo comparison and optional provider-backed camera presence are separate signals; neither grants Admin access.</Text>
       {loading&&<ActivityIndicator color="#0A7A5C"/>}
       {!!error&&<Text style={styles.error}>{error}</Text>}
       {info&&<Text style={styles.label}>ID selected: {info.idType.replaceAll("_"," ")} · Status: awaiting independent manual review</Text>}
@@ -221,7 +260,19 @@ export default function LguApplicantEvidencePanel({
       {!loading&&!error&&!previewsDecoded&&<Text style={styles.note}>
         Private evidence is loading into the secure reviewer view. Approval remains locked until all document photos display successfully.
       </Text>}
-      <Text style={styles.warning}>File presence or successful preview is not government ID authentication, liveness or proof of LGU employment. Confirm independently before checking all approval fields.</Text>
+      <Text style={styles.warning}>An uploaded photo, live camera check, or preview does not independently prove a government ID was officially issued or that the applicant works for the LGU. Verify both before approval.</Text>
+      <TouchableOpacity accessibilityRole="button"
+        accessibilityLabel="Check restricted live camera presence review status"
+        disabled={livenessBusy||!previewsDecoded}
+        onPress={()=>void checkActiveLiveness()}
+        style={[styles.screenButton,(livenessBusy||!previewsDecoded)&&{opacity:0.5}]}>
+        {livenessBusy?<ActivityIndicator color="#FFFFFF"/>:
+          <Text style={styles.screenButtonText}>Review live camera check</Text>}
+      </TouchableOpacity>
+      {!!livenessMessage&&<View style={styles.signalBox}>
+        <Text style={styles.signalLabel}>Live presence · Super Admin review</Text>
+        <Text style={styles.note}>{livenessMessage}</Text>
+      </View>}
       <TouchableOpacity accessibilityRole="button"
         accessibilityLabel="Run private OCR document type consistency screening"
         disabled={ocrBusy||!previewsDecoded}

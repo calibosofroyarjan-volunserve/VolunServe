@@ -4,13 +4,14 @@ const assert=require("node:assert/strict");
 const test=require("node:test");
 const fs=require("node:fs"),vm=require("node:vm"),path=require("node:path");
 const source=fs.readFileSync(path.join(__dirname,"../backend/lguStaffLiveness.js"),"utf8");
-const USER="synthetic-lgu-liveness-applicant_2026",REGION="ap-northeast-1";
+const USER="synthetic-lgu-liveness-applicant_2026",REVIEWER="synthetic-programmer-superadmin_26",REGION="ap-northeast-1";
 const SESSION="e42689ae-0d6c-4453-9e9c-3760fdfd59ab";
 function harness({enabled=true,release=true,role="applicant",verified=true,
   consent=true,withdrew=false,providerConfidence=96,providerStatus="SUCCEEDED",
   threshold="90",providerFailure=false,nowTime=100000}={}){
   const records=new Map([
     ["users/"+USER,{role,status:"pending_review"}],
+    ["users/"+REVIEWER,{role:"superadmin",status:"approved"}],
     ["lguApplicantEvidence/"+USER,{uid:USER,idType:"ph_national_id",
       reviewStatus:"pending_manual_review",...(consent?{consentVersion:"lgu-intake-v1"}:{})}],
     ["lguIdentityIntake/release",{enabled:release}],
@@ -64,15 +65,15 @@ function harness({enabled=true,release=true,role="applicant",verified=true,
         sessionToken:"fake-session-token",expiration:new Date(now+900000).toISOString()};
     },
   });
-  async function call(route,{uid=USER,sessionId=SESSION,emailVerified=verified}={}){
+  async function call(route,{uid=USER,sessionId=SESSION,emailVerified=verified,applicantUid=USER}={}){
     let status=200,result=null;
     const response={status(x){status=x;return this;},json(data){result=data;return data;}};
     await routes.get("/api/lgu-staff/liveness/"+route)({
-      firebaseUser:{uid,email_verified:emailVerified},body:{sessionId},
+      firebaseUser:{uid,email_verified:emailVerified},body:{sessionId,applicantUid},
     },response);
     return{status,result};
   }
-  return{call,records,counts,advance(ms){now+=ms;},USER,SESSION,
+  return{call,records,counts,advance(ms){now+=ms;},USER,SESSION,REVIEWER,
     onIssueCredentials(fn){duringCredentials=fn;},
     onGetResults(fn){duringResults=fn;},
   };
@@ -172,4 +173,23 @@ test("Withdrawn applicant cannot have AWS results saved after delayed Get",async
 test("Liveness credentials cannot be requested for a failed/reused session",async()=>{
   const h=harness();await h.call("start");await h.call("result");
   const r=await h.call("credentials");assert.equal(r.status,409);
+});
+
+test("Only approved programmer Super Admin can inspect a sanitized live-presence status",async()=>{
+  const h=harness();await h.call("start");await h.call("result");
+  const blocked=await h.call("reviewer-status");
+  assert.equal(blocked.status,403);
+  assert.equal(blocked.result.error,"superadmin_only");
+  const allowed=await h.call("reviewer-status",{uid:h.REVIEWER});
+  assert.equal(allowed.status,200);
+  assert.equal(allowed.result.status,"live_presence_checked");
+  assert.equal(allowed.result.adminAccessGranted,false);
+  assert(!JSON.stringify(allowed.result).match(/sessionId|accessKey|confidence|score/i));
+});
+test("Withdrawn applicants cannot display completed live signal to reviewers",async()=>{
+  const h=harness();await h.call("start");await h.call("result");
+  h.records.set("lguApplicantPrivacyRequests/"+h.USER,{status:"requested"});
+  const response=await h.call("reviewer-status",{uid:h.REVIEWER});
+  assert.equal(response.status,200);
+  assert.equal(response.result.status,"manual_review_required");
 });
