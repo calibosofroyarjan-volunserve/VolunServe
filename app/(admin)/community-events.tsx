@@ -467,6 +467,15 @@ export default function CommunityEventAdminScreen() {
           reviewedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        tx.set(doc(collection(db, "adminLogs")), {
+          actionType: "community_event_published",
+          targetType: "community_event",
+          targetId: item.id,
+          adminUid: user.uid,
+          adminName: user.displayName || user.email || "LGU Administrator",
+          description: "Community Event proposal approved and published.",
+          createdAt: serverTimestamp(),
+        });
       });
       setNotice(
         `Published successfully: ${item.title}`
@@ -511,6 +520,15 @@ export default function CommunityEventAdminScreen() {
           reviewedBy: user.uid,
           reviewedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+        });
+        tx.set(doc(collection(db, "adminLogs")), {
+          actionType: "community_event_proposal_rejected",
+          targetType: "community_event_proposal",
+          targetId: item.id,
+          adminUid: user.uid,
+          adminName: user.displayName || user.email || "LGU Administrator",
+          description: "Community Event proposal rejected following LGU review.",
+          createdAt: serverTimestamp(),
         });
       });
       setRejectId(null);
