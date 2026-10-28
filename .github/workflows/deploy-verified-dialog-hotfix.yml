@@ -1,0 +1,78 @@
+name: Publish Verified VolunServe Dialog Hotfix (Hosting Only)
+on:
+  push:
+    branches:
+      - hotfix/live-branded-dialogs-20261029
+    paths:
+      - .github/workflows/deploy-verified-dialog-hotfix.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify exact Resident logout hotfix and TypeScript
+        run: |
+          node --test scripts/test-live-dialog-hotfix.cjs
+          npx tsc --noEmit
+      - name: Export web application
+        run: npx expo export --platform web
+      - name: Stamp release SHA in exported Hosting assets
+        run: |
+          node -e "require('fs').writeFileSync('dist/volunserve-release.json', JSON.stringify({sha:process.env.GITHUB_SHA,scope:'branded-dialog-hotfix',project:'volunserve-3aa5b'}))"
+      - name: Require configured Firebase Hosting deploy credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase Hosting service-account secret. No deploy attempted."
+            exit 1
+          fi
+      - name: Deploy Hosting ONLY to production live channel
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact revision served by the custom production domain
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const https = require("node:https");
+          const expected = process.env.EXPECTED_SHA;
+          const url = "https://volunserve.com/volunserve-release.json?sha=" + expected;
+          const check = () => new Promise(resolve => {
+            https.get(url,{headers:{"Cache-Control":"no-cache"}},res => {
+              let data="";
+              res.on("data",chunk=>data+=chunk);
+              res.on("end",()=>{
+                try {const json=JSON.parse(data); resolve(res.statusCode===200 && json.sha===expected);}
+                catch {resolve(false);}
+              });
+            }).on("error",()=>resolve(false));
+          });
+          (async()=>{
+            for(let i=0;i<12;i++){
+              if(await check()){console.log("Verified live Hosting revision "+expected);process.exit(0);}
+              await new Promise(resolve=>setTimeout(resolve,5000));
+            }
+            console.error("Hosting deploy issued, but volunserve.com has not confirmed exact revision "+expected);
+            process.exit(1);
+          })();
+          NODE
