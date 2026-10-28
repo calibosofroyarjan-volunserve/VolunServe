@@ -570,3 +570,21 @@ test("Privileged LGU decisions and Community Event operations commit immutable a
   assert.match(rules, /match \/adminLogs\/\{logId\}/);
   assert.match(rules, /allow update, delete: if false;/);
 });
+
+test("LGU announcements and sandbox releases create privacy-limited immutable governance audits", () => {
+  const announce=read("app/(admin)/create-announcement.tsx");
+  const fund=read("backend/fundReleaseDemoRoutes.js");
+  const fixture=read("backend/tests/fundReleaseReconciliation.test.js");
+  assert.match(announce,/batch\.set\(announcementRef,/);
+  assert.match(announce,/batch\.set\(doc\(collection\(db, "adminLogs"\)\)/);
+  assert.match(announce,/actionType: "announcement_published"/);
+  assert.match(announce,/await batch\.commit\(\)/);
+  assert.doesNotMatch(announce,/await addDoc\(/);
+  for(const action of ["reviewed", "authorized", "simulated_sent", "acknowledged_demo", "disputed"])
+    assert.ok(fund.includes(action), "Missing sandbox fund stage "+action);
+  assert.match(fund,/tx\.create\(db\.collection\("adminActivityLogs"\)\.doc\(\)/);
+  assert.match(fund,/simulated: true,/);
+  assert.doesNotMatch(fund,/auditStage\([\s\S]*?walletLast4:/);
+  assert.match(fixture,/fund_demo_simulated_sent/);
+  assert.match(fixture,/adminActivityLogs:new Map\(\)/);
+});
