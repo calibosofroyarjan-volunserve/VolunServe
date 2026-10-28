@@ -16,7 +16,11 @@ service cloud.firestore {
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        );
+        )
+        // Legacy users are unchanged; new password accounts need confirmed
+        // Firebase email ownership to access approved-role operations.
+        && (p.get('emailVerificationRequired', false) != true
+          || request.auth.token.get('email_verified', false) == true);
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
