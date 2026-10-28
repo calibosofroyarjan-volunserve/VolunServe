@@ -2,9 +2,10 @@ import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  collection,
   doc,
   serverTimestamp,
-  setDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 import React, {
@@ -21,10 +22,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import {
-  createAdminLog,
-} from "../../lib/adminLogger";
 
 import { db } from "../../lib/firebase";
 
@@ -190,60 +187,28 @@ export default function SystemSettings() {
     setSaving(true);
 
     try {
-      await setDoc(
-        doc(
-          db,
-          "systemSettings",
-          "public"
-        ),
-        {
-          cityName:
-            cityName.trim(),
-
-          emergencyHotline:
-            emergencyHotline.trim(),
-
-          supportEmail:
-            supportEmail
-              .trim()
-              .toLowerCase(),
-
-          publicServiceNotice:
-            publicServiceNotice.trim(),
-
-          liveLocationRetentionHours:
-            hours,
-
-          updatedAt:
-            serverTimestamp(),
-
-          updatedBy:
-            user.uid,
-        }
-      );
-
-      await createAdminLog({
-        actionType:
-          "system_settings_updated",
-
-        targetType:
-          "system_settings",
-
-        targetId:
-          "public",
-
-        adminUid:
-          user.uid,
-
-        adminName:
-          profile.fullName ||
-          profile.email ||
-          "Super Administrator",
-
-        description:
-          `Updated public contact settings and set ` +
-          `live-location retention to ${hours} hour(s).`,
+      // An approved settings change must never succeed without its audit entry.
+      // Firestore commits both writes atomically or rejects both.
+      const batch = writeBatch(db);
+      batch.set(doc(db, "systemSettings", "public"), {
+        cityName: cityName.trim(),
+        emergencyHotline: emergencyHotline.trim(),
+        supportEmail: supportEmail.trim().toLowerCase(),
+        publicServiceNotice: publicServiceNotice.trim(),
+        liveLocationRetentionHours: hours,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
       });
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: "system_settings_updated",
+        targetType: "system_settings",
+        targetId: "public",
+        adminUid: user.uid,
+        adminName: profile.fullName || profile.email || "Super Administrator",
+        description: `Updated public contact settings and set live-location retention to ${hours} hour(s).`,
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
 
       AppAlert.alert(
         "Settings Saved",
