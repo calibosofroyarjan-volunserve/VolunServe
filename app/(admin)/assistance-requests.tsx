@@ -1,3 +1,4 @@
+import ListPagination from "../../components/ui/ListPagination";
 import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -607,6 +608,8 @@ export default function AssistanceRequestsAdmin() {
   const [filter, setFilter] =
     useState<ReviewFilter>("pending");
   const [search, setSearch] = useState("");
+  const [queuePage, setQueuePage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -955,6 +958,9 @@ export default function AssistanceRequestsAdmin() {
     filter,
     search,
   ]);
+  const queuePageCount = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const activeQueuePage = Math.min(queuePage, queuePageCount);
+  const pagedRequests = filteredRequests.slice((activeQueuePage - 1) * PAGE_SIZE, activeQueuePage * PAGE_SIZE);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -2143,27 +2149,25 @@ This still does not automatically create a Donation Campaign.`,
                 label="Pending"
                 count={stats.pending}
                 active={filter === "pending"}
-                onPress={() => setFilter("pending")}
+                onPress={() => { setFilter("pending"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Under Review"
                 count={stats.underReview}
                 active={filter === "under_review"}
-                onPress={() =>
-                  setFilter("under_review")
-                }
+                onPress={() => { setFilter("under_review"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Verified"
                 count={stats.verified}
                 active={filter === "verified"}
-                onPress={() => setFilter("verified")}
+                onPress={() => { setFilter("verified"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Rejected"
                 count={stats.rejected}
                 active={filter === "rejected"}
-                onPress={() => setFilter("rejected")}
+                onPress={() => { setFilter("rejected"); setQueuePage(1); }}
               />
 
               <View style={styles.mockTopTabsSpacer} />
@@ -2174,9 +2178,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "completed" &&
                     styles.mockHistoryButtonActive,
                 ]}
-                onPress={() =>
-                  setFilter("completed")
-                }
+                onPress={() => { setFilter("completed"); setQueuePage(1); }}
               >
                 <Ionicons
                   name="archive-outline"
@@ -2208,7 +2210,7 @@ This still does not automatically create a Donation Campaign.`,
                 />
                 <TextInput
                   value={search}
-                  onChangeText={setSearch}
+                  onChangeText={value => { setSearch(value); setQueuePage(1); }}
                   placeholder="Search request ID, Resident, beneficiary, barangay, or title"
                   placeholderTextColor="#94A3B8"
                   style={styles.searchInput}
@@ -2221,7 +2223,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "all" &&
                     styles.mockAllButtonActive,
                 ]}
-                onPress={() => setFilter("all")}
+                onPress={() => { setFilter("all"); setQueuePage(1); }}
               >
                 <Text
                   style={[
@@ -2287,7 +2289,7 @@ This still does not automatically create a Donation Campaign.`,
                   </Text>
                 </View>
               ) : (
-                filteredRequests.map((item) => (
+                pagedRequests.map((item) => (
                   <MockQueueRow
                     key={item.id}
                     request={item}
@@ -2297,6 +2299,7 @@ This still does not automatically create a Donation Campaign.`,
                   />
                 ))
               )}
+              <ListPagination page={activeQueuePage} total={filteredRequests.length} onChange={setQueuePage} />
             </View>
           </>
         </ScrollView>

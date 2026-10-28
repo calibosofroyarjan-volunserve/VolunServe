@@ -1,3 +1,4 @@
+import ListPagination from "../../components/ui/ListPagination";
 import { AppAlert } from "../../lib/appDialog";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
@@ -576,6 +577,8 @@ export default function AdminCases() {
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [caseSearch, setCaseSearch] = useState("");
+  const [casePage, setCasePage] = useState(1);
+  const PAGE_SIZE = 5;
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
@@ -1349,20 +1352,27 @@ export default function AdminCases() {
     );
   }, [sortedFiltered, caseSearch]);
 
+  const casePageCount = Math.max(1, Math.ceil(visibleCases.length / PAGE_SIZE));
+  const activeCasePage = Math.min(casePage, casePageCount);
+  const pagedCases = useMemo(() =>
+    visibleCases.slice((activeCasePage - 1) * PAGE_SIZE, activeCasePage * PAGE_SIZE),
+    [visibleCases, activeCasePage]
+  );
+
   useEffect(() => {
-    if (visibleCases.length === 0) {
+    if (pagedCases.length === 0) {
       setSelectedCaseId("");
       return;
     }
 
-    if (!visibleCases.some((item) => item.id === selectedCaseId)) {
-      setSelectedCaseId(visibleCases[0].id);
+    if (!pagedCases.some((item) => item.id === selectedCaseId)) {
+      setSelectedCaseId(pagedCases[0].id);
     }
-  }, [visibleCases, selectedCaseId]);
+  }, [pagedCases, selectedCaseId]);
 
   const selectedCase =
-    visibleCases.find((item) => item.id === selectedCaseId) ||
-    visibleCases[0] ||
+    pagedCases.find((item) => item.id === selectedCaseId) ||
+    pagedCases[0] ||
     null;
 
   useEffect(() => {
@@ -3421,7 +3431,7 @@ export default function AdminCases() {
               <Text style={styles.searchIcon}>⌕</Text>
               <TextInput
                 value={caseSearch}
-                onChangeText={setCaseSearch}
+                onChangeText={value => { setCaseSearch(value); setCasePage(1); }}
                 placeholder="Search case, resident, location…"
                 placeholderTextColor="#94a3b8"
                 style={styles.searchInput}
@@ -3464,7 +3474,7 @@ export default function AdminCases() {
                   <TouchableOpacity
                     key={status}
                     style={[styles.pill, active && styles.pillActive]}
-                    onPress={() => setFilterStatus(status)}
+                    onPress={() => { setFilterStatus(status); setCasePage(1); }}
                   >
                     <Text
                       style={[
@@ -3491,7 +3501,7 @@ export default function AdminCases() {
                     <TouchableOpacity
                       key={severity}
                       style={[styles.pill, active && styles.pillActive]}
-                      onPress={() => setFilterSeverity(severity)}
+                      onPress={() => { setFilterSeverity(severity); setCasePage(1); }}
                     >
                       <Text
                         style={[
@@ -3533,7 +3543,7 @@ export default function AdminCases() {
             </View>
 
             <View style={styles.caseListItems}>
-              {visibleCases.map((item) => {
+              {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
                 const thumb = firstIncidentImage(item.attachments);
 
@@ -3576,6 +3586,7 @@ export default function AdminCases() {
                 );
               })}
             </View>
+            <ListPagination page={activeCasePage} total={visibleCases.length} onChange={setCasePage} />
           </View>
 
           <View style={styles.caseDetailPane}>
