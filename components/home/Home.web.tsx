@@ -169,9 +169,10 @@ export default function WebHome() {
     .join(" ")
     .trim();
 
+  // Use the same canonical name shown in My Profile and mobile account menu.
   const displayName =
-    composedName ||
     profile?.fullName?.trim() ||
+    composedName ||
     user?.displayName?.trim() ||
     profile?.email?.split("@")[0] ||
     user?.email?.split("@")[0] ||
