@@ -408,6 +408,14 @@ export default function CommunityEventAdminScreen() {
             "The proposed event date has already passed."
           );
         }
+        // Recheck the whole schedule, not just its start time. A stale or
+        // invalid event must never be published as open for volunteering.
+        if (proposal.endTime && (
+          !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(proposal.endTime)) ||
+          String(proposal.endTime) <= String(proposal.time)
+        )) {
+          throw new Error("Event end time must be later than its start time on the same day.");
+        }
         // Proposal ID is reused as Event ID to prevent duplicates.
         tx.set(eventRef, {
           title: proposal.title,
