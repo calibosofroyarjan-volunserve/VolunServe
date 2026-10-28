@@ -1,5 +1,6 @@
 
 import { useFonts } from "expo-font";
+import AppDialogHost from "../components/ui/AppDialogHost";
 import {
   Stack,
   useRouter,
@@ -434,6 +435,7 @@ export default function RootLayout() {
         <Stack.Screen name="(superadmin)" />
         <Stack.Screen name="(lgu)" />
       </Stack>
+      <AppDialogHost />
     </GestureHandlerRootView>
   );
 }

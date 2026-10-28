@@ -1,0 +1,33 @@
+name: Production Branded Dialog Hotfix Validation (No Deploy)
+on:
+  push:
+    branches:
+      - hotfix/live-branded-dialogs-20261029
+  pull_request:
+    paths:
+      - app/_layout.tsx
+      - app/(tabs)/_layout.tsx
+      - lib/appDialog.ts
+      - components/ui/AppDialogHost.tsx
+      - scripts/test-live-dialog-hotfix.cjs
+      - .github/workflows/live-dialog-hotfix-validation.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify branded confirmation and absence of native logout popup
+        run: node --test scripts/test-live-dialog-hotfix.cjs
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Web production export (no deployment)
+        run: npx expo export --platform web
