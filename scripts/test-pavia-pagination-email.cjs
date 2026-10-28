@@ -49,8 +49,9 @@ test("Super Admin Admin accounts and LGU applicant review remain five per page",
   assert.match(s,/ADMIN_PAGE_SIZE = 5/);
   assert.match(s,/pagedAdminAccounts = adminAccounts\.slice/);
   assert.match(s,/pagedLguApplications = pendingLguApplications\.slice/);
-  assert.match(s,/Previous Admin accounts page/);
-  assert.match(s,/Next LGU applicant page/);
+  assert.equal((s.match(/<ListPagination page=/g) || []).length,2);
+  assert.match(s,/page=\{safeAdminPage\} total=\{adminAccounts\.length\}/);
+  assert.match(s,/page=\{safeApplicantPage\} total=\{pendingLguApplications\.length\}/);
 });
 test("LGU resident directory, volunteer approvals, Identity Reviews and Events show five items per page",()=>{
   const a=read("app/(admin)/account-approvals.tsx");
