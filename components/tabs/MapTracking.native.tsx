@@ -420,7 +420,7 @@ export default function MapTracking() {
     // Only route residents to facilities whose status was independently checked
     // by LGU recently; database live updates are not physical occupancy sensors.
     const availableCenters = centers.filter(center =>
-      inCity(center.latitude, center.longitude) && isRecentShelterReport(center))
+      inCity(center.latitude, center.longitude) && isRecentShelterReport(center, gpsClock))
       .filter((center) => {
       const capacity = center.capacity ?? 0;
       const occupied = center.occupied ?? 0;
@@ -455,7 +455,7 @@ export default function MapTracking() {
       ...nearest,
       distanceKm: minDistance,
     };
-  }, [location, centers, sjdmBoundary]);
+  }, [location, centers, sjdmBoundary, gpsClock]);
 
   const myAssignedIncident = useMemo(() => {
     if (userRole !== "volunteer" || !CURRENT_USER_ID) return null;
