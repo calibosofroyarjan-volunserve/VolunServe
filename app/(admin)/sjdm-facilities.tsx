@@ -55,12 +55,12 @@ const TYPES = LGU_FACILITY_TYPES.map(value => ({ value, label: CATEGORY_LABELS[v
 const LAYOUT_NOTE = "Only LGU-verified facilities with independently confirmed coordinates are published on the map. Live means database updates—not real-time building occupancy.";
 
 // Defined outside the screen so editing an input does not remount it on each keystroke.
-const Field = ({ label, value, onChange, placeholder, keyboardType = "default" }:{
-  label: string; value: string; onChange: (next:string)=>void; placeholder: string; keyboardType?: any;
+const Field = ({ label, value, onChange, placeholder, keyboardType = "default", disabled = false }:{
+  label: string; value: string; onChange: (next:string)=>void; placeholder: string; keyboardType?: any; disabled?: boolean;
 }) => <View style={styles.field}>
   <Text style={styles.fieldLabel}>{label}<Text style={styles.required}> *</Text></Text>
   <TextInput value={value} onChangeText={onChange} placeholder={placeholder}
-    placeholderTextColor="#849B92" keyboardType={keyboardType} style={styles.input} editable={!saving} />
+    placeholderTextColor="#849B92" keyboardType={keyboardType} style={styles.input} editable={!disabled} />
 </View>;
 
 export default function SjdmFacilities() {
@@ -273,8 +273,8 @@ export default function SjdmFacilities() {
       </View>
       <View style={[styles.formGrid,compact&&{flexDirection:"column"}]}>
         <View style={styles.formColumn}>
-          <Field label="Official facility name" placeholder="As confirmed by the responsible LGU" value={form.name} onChange={value=>setField("name",value)}/>
-          <Field label="Full address" placeholder="Street, barangay, SJDM, Bulacan" value={form.address} onChange={value=>setField("address",value)}/>
+          <Field disabled={saving} label="Official facility name" placeholder="As confirmed by the responsible LGU" value={form.name} onChange={value=>setField("name",value)}/>
+          <Field disabled={saving} label="Full address" placeholder="Street, barangay, SJDM, Bulacan" value={form.address} onChange={value=>setField("address",value)}/>
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>SJDM barangay<Text style={styles.required}> *</Text></Text>
             <TouchableOpacity style={styles.input} onPress={()=>setBarangayOpen(value=>!value)}>
@@ -287,9 +287,9 @@ export default function SjdmFacilities() {
               </TouchableOpacity>)}
             </ScrollView>}
           </View>
-          <Field label="Latitude" placeholder="Verified decimal latitude" value={form.latitude}
+          <Field disabled={saving} label="Latitude" placeholder="Verified decimal latitude" value={form.latitude}
             keyboardType="numbers-and-punctuation" onChange={value=>setField("latitude",value)}/>
-          <Field label="Longitude" placeholder="Verified decimal longitude" value={form.longitude}
+          <Field disabled={saving} label="Longitude" placeholder="Verified decimal longitude" value={form.longitude}
             keyboardType="numbers-and-punctuation" onChange={value=>setField("longitude",value)}/>
         </View>
         <View style={styles.formColumn}>
@@ -302,12 +302,12 @@ export default function SjdmFacilities() {
             </TouchableOpacity>)}</View>
           </View>}
           {kind === "evacuation" && <>
-            <Field label="Capacity (last confirmed)" placeholder="Enter officially reported capacity"
+            <Field disabled={saving} label="Capacity (last confirmed)" placeholder="Enter officially reported capacity"
               value={form.capacity} keyboardType="number-pad" onChange={value=>setField("capacity",value)}/>
-            <Field label="Occupancy (last confirmed)" placeholder="Last approved LGU count, not a live sensor"
+            <Field disabled={saving} label="Occupancy (last confirmed)" placeholder="Last approved LGU count, not a live sensor"
               value={form.occupied} keyboardType="number-pad" onChange={value=>setField("occupied",value)}/>
           </>}
-          <Field label="Official verification source" placeholder="Office/record reference, inspection date, or official document"
+          <Field disabled={saving} label="Official verification source" placeholder="Office/record reference, inspection date, or official document"
             value={form.verificationSource} onChange={value=>setField("verificationSource",value)}/>
           <Text style={styles.fieldLabel}>Verification state</Text>
           <View style={styles.chipWrap}>{(["pending","verified"] as const).map(value=><TouchableOpacity
