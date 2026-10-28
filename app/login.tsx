@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
+import AuthFeedback from "../components/auth/AuthFeedback";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
@@ -50,6 +51,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
+  const showError = (message: string) => setFeedback({ type: "error", message });
+  const showSuccess = (message: string) => setFeedback({ type: "success", message });
+  const clearFeedback = () => setFeedback({ type: "error", message: "" });
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
   const applyRememberMe = async () => {
@@ -115,9 +120,7 @@ export default function Login() {
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password) {
-      alert(
-        "Please enter your email address and password."
-      );
+      showError("Please enter your email address and password.");
       return;
     }
 
@@ -126,6 +129,7 @@ export default function Login() {
     }
 
     try {
+      clearFeedback();
       setLoading(true);
 
       await applyRememberMe();
@@ -143,7 +147,7 @@ export default function Login() {
 
       router.replace(destination as any);
     } catch (error: any) {
-      alert(error?.message || "Login failed.");
+      showError(error?.message || "Unable to sign in. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -157,11 +161,12 @@ export default function Login() {
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail) {
-      alert("Enter your email address first, then select Forgot password.");
+      showError("Enter your email address first, then select Forgot password.");
       return;
     }
 
     try {
+      clearFeedback();
       setLoading(true);
 
       await sendPasswordResetEmail(
@@ -169,21 +174,16 @@ export default function Login() {
         cleanEmail
       );
 
-      alert(
-        "Password reset email sent. Check your inbox and spam folder for the reset link."
-      );
+      showSuccess("If this account uses email and password, check your inbox and spam folder for the reset link.");
     } catch (error: any) {
       const code = String(error?.code || "");
 
       if (code === "auth/invalid-email") {
-        alert("Please enter a valid email address.");
+        showError("Please enter a valid email address.");
       } else if (code === "auth/too-many-requests") {
-        alert("Too many reset attempts. Please wait and try again later.");
+        showError("Too many reset attempts. Please wait and try again later.");
       } else {
-        alert(
-          error?.message ||
-            "Unable to send the password reset email."
-        );
+        showError(error?.message || "Unable to send the password reset email.");
       }
     } finally {
       setLoading(false);
@@ -196,13 +196,14 @@ export default function Login() {
     }
 
     try {
+      clearFeedback();
       setGoogleLoading(true);
 
       const result = await promptGoogleAsync();
 
       if (result.type !== "success") {
         if (result.type !== "dismiss" && result.type !== "cancel") {
-          alert("Google sign-in was not completed. Please try again.");
+          showError("Google sign-in was not completed. Please try again.");
         }
         return;
       }
@@ -231,10 +232,7 @@ export default function Login() {
     } catch (error: any) {
       await firebaseSignOut(auth).catch(() => undefined);
 
-      alert(
-        error?.message ||
-          "Google sign-in failed. Please try again."
-      );
+      showError(error?.message || "Google sign-in failed. Please try again.");
     } finally {
       setGoogleLoading(false);
     }
@@ -248,7 +246,7 @@ export default function Login() {
         <Text style={styles.label}>Email Address</Text>
         <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
-          <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={setEmail}
+          <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
@@ -258,7 +256,7 @@ export default function Login() {
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
         <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
-          <TextInput style={styles.input} value={password} onChangeText={setPassword}
+          <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer password"
             placeholder="Password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
@@ -285,13 +283,25 @@ export default function Login() {
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
+        {!!feedback.message && (
+          <AuthFeedback
+            message={feedback.message}
+            type={feedback.type}
+            onDismiss={clearFeedback}
+          />
+        )}
         <Pressable accessibilityRole="button" onPress={() => void handleLogin()}
           disabled={loading || googleLoading}
           style={({ pressed }) => [styles.signIn,
             (pressed || loading || googleLoading) && styles.disabled]}>
           <LinearGradient colors={["#16A780", "#00573F"]} start={{x:0,y:0}} end={{x:1,y:1}}
             style={StyleSheet.absoluteFillObject} pointerEvents="none"/>
-          {loading ? <ActivityIndicator color="#FFFFFF" /> :
+          {loading ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color="#FFFFFF" />
+              <Text style={styles.signInText}>Signing in...</Text>
+            </View>
+          ) :
             <View style={styles.centerRow}>
               <Text style={styles.signInText}>Login as Resident / Volunteer</Text>
               <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
@@ -306,7 +316,12 @@ export default function Login() {
           disabled={!googleRequest || loading || googleLoading}
           style={[styles.outlineButton,
             (!googleRequest || loading || googleLoading) && styles.disabled]}>
-          {googleLoading ? <ActivityIndicator color="#087F66" /> :
+          {googleLoading ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color="#087F66" />
+              <Text style={styles.outlineText}>Connecting to Google...</Text>
+            </View>
+          ) :
             <View style={styles.centerRow}>
               <GoogleBrandMark size={21} />
               <Text style={styles.outlineText}>Continue with Google</Text>
