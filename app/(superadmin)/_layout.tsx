@@ -42,36 +42,11 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  {
-    label: "System Overview",
-    icon: "home-outline",
-    route: "/(superadmin)",
-    match: "/",
-  },
-  {
-    label: "LGU Staff & Admin Accounts",
-    icon: "people-outline",
-    route: "/(superadmin)/admin-accounts",
-    match: "/admin-accounts",
-  },
-  {
-    label: "Admin Activity & Audit Logs",
-    icon: "time-outline",
-    route: "/(superadmin)/admin-logs",
-    match: "/admin-logs",
-  },
-  {
-    label: "System Records (Read Only)",
-    icon: "albums-outline",
-    route: "/(superadmin)/all-records",
-    match: "/all-records",
-  },
-  {
-    label: "System Settings",
-    icon: "settings-outline",
-    route: "/(superadmin)/system-settings",
-    match: "/system-settings",
-  },
+  { label: "1. System Overview", icon: "stats-chart-outline", route: "/(superadmin)", match: "/" },
+  { label: "2. LGU Staff & Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
+  { label: "3. System Records", icon: "albums-outline", route: "/(superadmin)/all-records", match: "/all-records" },
+  { label: "4. Audit Logs", icon: "time-outline", route: "/(superadmin)/admin-logs", match: "/admin-logs" },
+  { label: "5. System Settings", icon: "settings-outline", route: "/(superadmin)/system-settings", match: "/system-settings" },
 ];
 
 export default function SuperAdminLayout() {
@@ -350,7 +325,7 @@ function SuperAdminSidebar({
           <Text style={styles.brandTagline}>SYSTEM ADMINISTRATION</Text>
         </View>
       </TouchableOpacity>
-      <Text style={styles.sidebarLabel}>SYSTEM GOVERNANCE</Text>
+      <Text style={styles.sidebarLabel}>SYSTEM GOVERNANCE · WORKFLOW</Text>
 
       <ScrollView
         style={styles.sidebarScroll}
