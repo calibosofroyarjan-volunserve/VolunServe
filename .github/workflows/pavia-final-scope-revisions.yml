@@ -1,0 +1,44 @@
+name: Sir Pavia Final Revisions - No Deploy
+on:
+  push:
+    branches:
+      - fix/pavia-final-scope-revisions-20261028
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pavia-final-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Sir Pavia event-schedule and signup behavior regressions
+        run: node --test scripts/test-pavia-final-flows.cjs
+      - name: Existing Admin, LGU and emergency navigation contracts
+        run: |
+          node --test scripts/test-friday-emergency-hub.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-event-map-route-ux.cjs
+      - name: Prepare local Firebase emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Real Firestore rules test with synthetic accounts only
+        run: |
+          npx firebase emulators:exec --only firestore --project demo-volunserve \
+            "node scripts/test-pavia-resident-registration-rules.cjs && node scripts/test-live-emergency-map-rules.cjs && node scripts/test-community-events-rules.cjs"
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build web application without deployment
+        run: npx expo export --platform web
