@@ -12,7 +12,7 @@ export default function ListPagination({
   const firstButton = Math.max(1, Math.min(safePage - 2, pages - 4));
   const visiblePages = Array.from({ length: Math.min(pages, 5) }, (_, index) => firstButton + index);
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityLabel="Records pagination">
       <Text style={styles.caption}>Showing {first}–{last} of {total} records · {pageSize} per page</Text>
       <View style={styles.buttons}>
         <TouchableOpacity accessibilityRole="button"
@@ -23,6 +23,7 @@ export default function ListPagination({
         </TouchableOpacity>
         {visiblePages.map(number => <TouchableOpacity key={number} accessibilityRole="button"
           accessibilityLabel={`Page ${number} of ${pages}`}
+          accessibilityHint={`Show records on page ${number}`}
           accessibilityState={{ selected: number === safePage }}
           onPress={() => onChange(number)}
           style={[styles.pagePill, number === safePage && styles.pageSelected]}>
@@ -42,15 +43,15 @@ export default function ListPagination({
 const styles = StyleSheet.create({
   container:{flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:9,
     marginTop:10,paddingTop:11,borderTopWidth:1,borderColor:"#E8EFEB"},
-  caption:{fontSize:10.8,color:"#6D8178",fontWeight:"600"},
-  buttons:{flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"center",gap:5},
-  button:{minHeight:42,paddingHorizontal:12,borderWidth:1,borderColor:"#E1EAE5",borderRadius:7,
-    backgroundColor:"#F9FCFA",alignItems:"center",justifyContent:"center"},
-  text:{fontSize:11,fontWeight:"800",color:"#366C58"},
-  pagePill:{minWidth:38,minHeight:42,paddingHorizontal:7,backgroundColor:"#FFFFFF",borderWidth:1,
-    borderColor:"#E2EBE5",borderRadius:7,alignItems:"center",justifyContent:"center"},
+  caption:{fontSize:12,lineHeight:18,color:"#557366",fontWeight:"700"},
+  buttons:{flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"center",gap:7},
+  button:{minHeight:44,paddingHorizontal:14,borderWidth:1,borderColor:"#D4E5D9",borderRadius:10,
+    backgroundColor:"#F6FBF8",alignItems:"center",justifyContent:"center"},
+  text:{fontSize:12,fontWeight:"800",color:"#25654F"},
+  pagePill:{minWidth:44,minHeight:44,paddingHorizontal:10,backgroundColor:"#FFFFFF",borderWidth:1,
+    borderColor:"#D4E5D9",borderRadius:10,alignItems:"center",justifyContent:"center"},
   pageSelected:{backgroundColor:"#087A62",borderColor:"#087A62"},
-  pagePillText:{fontSize:11,fontWeight:"800",color:"#2D5144"},
+  pagePillText:{fontSize:13,fontWeight:"800",color:"#265A47"},
   pageSelectedText:{color:"#FFFFFF"},
-  disabled:{opacity:.38},
+  disabled:{opacity:.4},
 });
