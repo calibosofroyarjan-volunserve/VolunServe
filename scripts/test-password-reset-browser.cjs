@@ -72,8 +72,7 @@ async function main(){
       assert.equal(resetCalls.length,0,"Invalid input must never trigger Firebase email");
       await page.screenshot({path:path.join(evidence,route.replaceAll("/","")+"-reset-validation.png"),fullPage:false});
       await page.getByRole("button",{name:"Cancel"}).click();
-      assert.equal(await page.getByText("Reset your password",{exact:true}).isVisible(),false,
-        "Cancel must dismiss password reset modal");
+      await page.getByText("Reset your password",{exact:true}).waitFor({state:"hidden",timeout:10000});
       const loginField=page.getByLabel(route==="/login"
         ? "Resident or volunteer email address":"Administrative email");
       await loginField.fill("sample@example.com");
@@ -83,7 +82,7 @@ async function main(){
         "Reset modal must prefill login email");
       await page.screenshot({path:path.join(evidence,route.replaceAll("/","")+"-reset-popup.png"),fullPage:false});
       await page.getByRole("button",{name:"Close password reset dialog"}).click();
-      assert.equal(await page.getByText("Reset your password",{exact:true}).isVisible(),false);
+      await page.getByText("Reset your password",{exact:true}).waitFor({state:"hidden",timeout:10000});
     }
     await page.setViewportSize({width:390,height:844});
     await page.goto(base+"/login",{waitUntil:"domcontentloaded",timeout:60000});
