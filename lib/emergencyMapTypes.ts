@@ -43,3 +43,40 @@ export function isVerifiedActiveCenter(center: {
     center.status === "active" &&
     validCoordinates(center.latitude, center.longitude);
 }
+
+
+/**
+ * Firebase real-time listeners deliver *database* changes, but do not mean
+ * a physical shelter is open or has available beds at this moment.
+ * Route recommendations require a *recent* LGU-confirmed shelter check.
+ * A stale center may still be displayed with an explicit caution.
+ */
+export const SHELTER_STATUS_RECHECK_MS = 24 * 60 * 60 * 1000;
+export type ShelterReportTimestamp =
+  | number
+  | { toMillis?: () => number }
+  | null
+  | undefined;
+
+export function shelterReportMillis(value: ShelterReportTimestamp): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  try {
+    const millis = value?.toMillis?.();
+    return typeof millis === "number" && Number.isFinite(millis) ? millis : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** A recently verified report is NOT a live sensor reading. */
+export function isRecentShelterReport(
+  center: { status?: string; verificationStatus?: string;
+    lastVerifiedAt?: ShelterReportTimestamp },
+  nowMs = Date.now(),
+): boolean {
+  const last = shelterReportMillis(center.lastVerifiedAt);
+  const age = nowMs - last;
+  return center.status === "active" &&
+    center.verificationStatus === "verified" &&
+    last > 0 && age >= -5 * 60 * 1000 && age <= SHELTER_STATUS_RECHECK_MS;
+}
