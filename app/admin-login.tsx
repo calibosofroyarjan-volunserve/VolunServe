@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  sendPasswordResetEmail,
   signOut,
   setPersistence,
   browserLocalPersistence,
@@ -10,6 +9,7 @@ import {
 } from "firebase/auth";
 import React, { useState } from "react";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
+import PasswordResetModal from "../components/auth/PasswordResetModal";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -40,13 +40,12 @@ export default function AdministrativeLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [working, setWorking] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [resetVisible, setResetVisible] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   const signIn = async () => {
     if (working) return;
     setError("");
-    setNotice("");
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
       setError("Enter your authorized administrative email and password.");
@@ -79,28 +78,11 @@ export default function AdministrativeLogin() {
     }
   };
 
-  const resetPassword = async () => {
+  const resetPassword = () => {
     if (working) return;
     setError("");
-    setNotice("");
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError("Enter your administrative email first to request a reset.");
-      return;
-    }
-    setWorking(true);
-    try {
-      await sendPasswordResetEmail(auth, cleanEmail);
-      setNotice("If this email has an eligible password account, a reset link has been sent. Check your inbox and spam folder.");
-    } catch (err: any) {
-      if (err?.code === "auth/invalid-email") {
-        setError("Enter a valid email address.");
-      } else {
-        setNotice("If this email has an eligible password account, check your inbox and spam folder.");
-      }
-    } finally {
-      setWorking(false);
-    }
+    // The email is collected and confirmed in a secure popup.
+    setResetVisible(true);
   };
 
   return (
@@ -141,7 +123,7 @@ export default function AdministrativeLogin() {
             <Text style={styles.rememberText}>Remember me</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.forgot} accessibilityRole="button"
-            disabled={working} onPress={() => void resetPassword()}>
+            disabled={working} onPress={resetPassword}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
@@ -151,7 +133,6 @@ export default function AdministrativeLogin() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-        {!!notice && <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text>}
         <TouchableOpacity accessibilityRole="button"
           accessibilityLabel="Sign in to LGU administration"
           disabled={working} onPress={() => void signIn()}
@@ -176,6 +157,8 @@ export default function AdministrativeLogin() {
         </TouchableOpacity>
         <Text style={styles.footer}>LGU staff applicants receive no privileges until independently verified and approved by Super Admin.</Text>
       </PremiumAuthShell>
+      <PasswordResetModal visible={resetVisible} initialEmail={email}
+        administrative onClose={() => setResetVisible(false)} />
     </KeyboardAvoidingView>
   );
 }
@@ -196,7 +179,6 @@ const styles = StyleSheet.create({
   errorBox:{flexDirection:"row",gap:8,padding:12,alignItems:"center",
     backgroundColor:"#FFF1ED",borderWidth:1,borderColor:"#FCD5C9",borderRadius:12},
   errorText:{flex:1,fontSize:12,lineHeight:18,color:"#B42318"},
-  notice:{fontSize:12,lineHeight:18,color:"#08795E"},
   submit:{minHeight:59,overflow:"hidden",alignItems:"center",justifyContent:"center",
     borderRadius:16,backgroundColor:"#007F62",marginTop:6,
     shadowColor:"#00684A",shadowOpacity:0.18,shadowRadius:10,
