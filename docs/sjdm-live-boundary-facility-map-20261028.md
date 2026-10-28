@@ -94,3 +94,15 @@ The authenticated Resident listener receives a verified shelter when created, a 
 - Map popups render concise name, public-service category, operational caveat, official information URL, OSM map source URL, and available official phone where sourced. Unverified site popups cannot claim live emergency availability. Live authorized shelter popups show last LGU-verified information, marked explicitly as last reported and not a live occupancy sensor.
 
 **Acceptance still pending:** exact current BFP and evacuation site coordinates, LGU official verification and Firestore production rules access, physically assigned responder sharing GPS, browser link and GPS behavior, and the latest preview release source revision. Do not deploy to production `volunserve.com` without these explicit checks.
+
+
+## Oct 28 — strict source and Google Maps navigation correction
+
+Residents reported that some former public POI links did not open and that a relocated BFP site / approximated CDRRMO point might be inaccurate.
+
+- Default map now displays only two independently corroborated geolocated buildings: New SJDM Government Center (14.82785, 121.04486, official city-government Dulong Bayan address + mapped government-center footprint) and Dulong Bayan Barangay Hall (14.82682, 121.04482, mapped named building). Sources are retained **internally** for review, not exposed as dead OpenStreetMap source links in the resident popup.
+- Dynamically fetched third-party Overpass POIs are disabled: an external map tag does **not** establish current government office status, shelter opening, or authoritative evacuation routing. Police, relocated BFP and approximate CDRRMO references are withheld from automatic public pins until their exact current GPS is independently verified by authorized LGU review. Historical evacuation sites stay address-only pending review.
+- Each permitted public, verified LGU office, or verified shelter pin has a **Google Maps Directions** action for its exact in-city destination coordinates. The user's current location is handled by Google Maps if permission is available. No fabricated in-app ETA or Google routing service availability is assumed.
+- The web map does not surface raw OSM source URLs or unreliable external office pages. The Android map uses `onCalloutPress` + `Linking.openURL` to launch Google Maps Directions from a tapped location callout.
+- External Google Maps may navigate outside the city even though every selectable destination is inside the SJDM polygon; the VolunServe map itself continues to mask outside-SJDM geography.
+- **No 2026 active evacuation centers were seeded**. A verified LGU administrator must inspect official GPS and currently open status before publication. Real-time Firestore subscription means database refresh, not automated shelter vacancy measurement. Existing deployed Firebase security permissions must still be separately validated.
