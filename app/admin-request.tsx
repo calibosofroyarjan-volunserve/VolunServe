@@ -11,6 +11,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Scro
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import LguStaffWithdrawalPanel from "../components/auth/LguStaffWithdrawalPanel";
 import { firebaseConfig, usingFirebaseEmulators } from "../lib/firebase";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { EvidenceSlot, LGU_APPLICATION_NOTICE, LGU_ID_TYPES, LGU_STAFF_STEPS, LguIdType, lguIdRequiresBack, validLguApplication } from "../lib/lguStaffApplicationPolicy";
 
 type FormFields = {
@@ -84,6 +85,10 @@ export default function LguStaffApplication() {
   };
   const next = () => {
     setError("");
+    if (step === 0 && isKnownDisposableEmail(form.email)) {
+      setError("Temporary or disposable email accounts cannot apply for LGU access. Use your official, permanent work email.");
+      return;
+    }
     if (!stepValid()) {
       setError(step===0
         ? "Complete all staff details, official department, barangay and a strong 12+ character password."
@@ -133,6 +138,10 @@ export default function LguStaffApplication() {
 
   const submit = async () => {
     if (busy || step!==4 || !stepValid()) return;
+    if (isKnownDisposableEmail(form.email)) {
+      setError("Temporary email providers are not accepted for LGU applications.");
+      return;
+    }
     if (!privateEvidenceIntakeEnabled) {
       setError(emulatorRequested && !usingFirebaseEmulators
         ? "Local emulator mode is supported only in a localhost web browser. Mobile test devices must never upload synthetic IDs to the production Firebase project."

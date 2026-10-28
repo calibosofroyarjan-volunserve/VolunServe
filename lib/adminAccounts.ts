@@ -1,5 +1,6 @@
 import { deleteApp, initializeApp } from "firebase/app";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
+import { isKnownDisposableEmail } from "./registrationEmailPolicy";
 
 import {
     connectAuthEmulator,
@@ -53,6 +54,10 @@ export async function createAdminAccount(
   const email = input.email
     .trim()
     .toLowerCase();
+
+  if (isKnownDisposableEmail(email)) {
+    throw new Error("Temporary or disposable email addresses cannot be used to create LGU Admin accounts.");
+  }
 
   const lguOffice = input.lguOffice.trim();
   const lguPosition = input.lguPosition.trim();
