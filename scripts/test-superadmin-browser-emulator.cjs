@@ -142,11 +142,17 @@ async function main() {
 
     // Separately verify the second list: approved LGU Admin accounts.
     await page.getByText("Existing LGU Admin Accounts",{exact:true}).first().scrollIntoViewIfNeeded();
-    await page.getByText("Synthetic Admin 1",{exact:true}).first().waitFor({timeout:15000});
+    const adminNames=page.getByText(/^Synthetic Admin [0-9]+$/);
+    await adminNames.first().waitFor({timeout:15000});
+    assert.equal(await adminNames.count(),5,"First Admin Accounts page must show exactly five accounts");
+    const adminFirstPage=new Set(await adminNames.allTextContents());
     await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).click();
-    await page.getByText("Synthetic Admin 10",{exact:true}).first().waitFor({timeout:15000});
-    assert.equal(await page.getByText(/^Synthetic Admin [0-9]+$/).count(),5,
-      "Second Admin Accounts page must display only five approved accounts");
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1)
+      .evaluate(node => {if(node.getAttribute("aria-current")!=="page") throw Error("Admin page two is not selected");});
+    const adminSecondPage=new Set(await adminNames.allTextContents());
+    assert.equal(adminSecondPage.size,5,"Second Admin Accounts page must show exactly five accounts");
+    for(const name of adminSecondPage)
+      assert(!adminFirstPage.has(name),"Both Admin pages must contain different accounts: "+name);
     await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(evidenceDir,"pagination-admin-accounts.png"),fullPage:false});
     await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
