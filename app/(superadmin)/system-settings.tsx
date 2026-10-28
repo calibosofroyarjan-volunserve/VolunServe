@@ -486,7 +486,7 @@ function PresetField({
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
       </TouchableOpacity>
       {expanded && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 11, marginTop: 4, overflow: "hidden" }}>
-        [...options, ...(allowCustom ? ["Others — specify"] : [])].map((option) =>
+        {[...options, ...(allowCustom ? ["Others — specify"] : [])].map((option) =>
           <TouchableOpacity key={option} accessibilityRole="button" onPress={() => {
             const other = option === "Others — specify";
             setCustomMode(other); setExpanded(false);
