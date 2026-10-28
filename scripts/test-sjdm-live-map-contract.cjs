@@ -215,7 +215,7 @@ test("Only sourced real SJDM infrastructure coordinates become default public ma
     assert.ok(boundary.insideSjdmBoundary(city,item.latitude,item.longitude),
       item.name+" must be physically inside SJDM");
     assert.match(item.sourceUrl,/^https:\/\//);
-    assert.match(item.note,/not|unconfirmed|approximate|must be verified|confirm/i);
+    assert.match(item.note,/not|unconfirmed|approximate|verify|confirm/i);
     assert.ok(!("availability" in item), "must not invent live occupancy");
   }
   const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
