@@ -15,6 +15,7 @@ const profile=(uid,email,overrides={})=>({
   requestedRole:"resident",primaryRole:"resident",residentAccess:true,
   volunteerAccess:false,volunteerStatus:"not_applied",activeMode:"resident",
   status:"approved",identityStatus:"basic",identityVerified:false,
+  emailVerificationRequired:true,
   profilePictureUrl:"",createdAt:firebase.firestore.FieldValue.serverTimestamp(),...overrides
 });
 async function main(){
@@ -33,6 +34,8 @@ async function main(){
     .set(profile("pavia-outside","outside@example.com",{city:"Quezon City"})));
   await assertFails(db("pavia-admin","admin@example.com").doc("users/pavia-admin")
     .set(profile("pavia-admin","admin@example.com",{role:"admin"})));
+  await assertFails(db("pavia-no-proof","noproof@example.com").doc("users/pavia-no-proof")
+    .set(profile("pavia-no-proof","noproof@example.com",{emailVerificationRequired:false})));
   await assertFails(good.doc("users/pavia-adult").update({age:12}));
   console.log("PASS Pavia: adult signup, own Auth email, SJDM scope, no self-admin and no age downgrade");
  }finally{await env.cleanup()}
