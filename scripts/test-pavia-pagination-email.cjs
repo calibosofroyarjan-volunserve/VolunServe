@@ -190,7 +190,7 @@ test("Reviewer-visible Super Admin analytics and pagination are never hidden on 
   const overview=read("app/(superadmin)/index.tsx");
   const paging=read("components/ui/ListPagination.tsx");
   assert.match(overview,/orientation="vertical"/);
-  assert.match(overview,/Live System Records · Bar Graph/);
+  assert.match(overview,/System Records by Service Area/);
   assert.match(overview,/shortLabel:/);
   assert.match(overview,/approvedPercentage/);
   assert.doesNotMatch(paging,/if \(total <= pageSize\) return null/);
@@ -284,4 +284,30 @@ test("All application source avoids native browser and React Native popup calls 
  };
  dirs.forEach(walk);
  assert.deepEqual(violations,[],"Native dialog calls detected:\n"+violations.join("\n"));
+});
+
+
+test("Approved clean Super Admin visual hierarchy and five-per-page controls",()=>{
+ const overview=read("app/(superadmin)/index.tsx");
+ const shell=read("app/(superadmin)/_layout.tsx");
+ const accounts=read("app/(superadmin)/admin-accounts.tsx");
+ const records=read("app/(superadmin)/all-records.tsx");
+ const audit=read("app/(superadmin)/admin-logs.tsx");
+ const paging=read("components/ui/ListPagination.tsx");
+ assert.ok(overview.includes("System Overview"));
+ assert.ok(overview.includes("S Y S T E M   G O V E R N A N C E"));
+ assert.ok(overview.includes("System Records by Service Area"));
+ assert.equal((overview.match(/<OverviewAuditTable/g)||[]).length,2);
+ assert.equal((overview.match(/<WorkspaceBarChart/g)||[]).length,1);
+ assert.ok(overview.includes("const PAGE_SIZE = 5"));
+ assert.ok(overview.includes("pagedAdminActions"));
+ assert.ok(overview.includes("pagedSystemChanges"));
+ assert.ok(shell.includes("confirmSignOut"));
+ assert.ok(shell.includes('AppAlert.alert("Sign Out"'));
+ assert.ok(shell.includes("LGU Staff & Admin Accounts"));
+ assert.equal((accounts.match(/<ListPagination/g)||[]).length,2);
+ assert.ok(records.includes("<ListPagination"));
+ assert.ok(audit.includes("<ListPagination"));
+ assert.ok(paging.includes("visiblePages.map"));
+ assert.ok(!overview.includes("Monthly Revenue"));
 });
