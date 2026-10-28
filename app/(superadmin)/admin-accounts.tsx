@@ -28,7 +28,6 @@ import {
   View,
 } from "react-native";
 
-import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 import LguApplicantEvidencePanel from "../../components/admin/LguApplicantEvidencePanel";
 import LguStaffPrivacyRequestsPanel from "../../components/admin/LguStaffPrivacyRequestsPanel";
 
@@ -148,8 +147,6 @@ export default function AdminAccounts() {
     setShowAddAdmin,
   ] = useState(false);
 
-  const [showCreateIndependentAdmin, setShowCreateIndependentAdmin] = useState(false);
-  const [creationNotice, setCreationNotice] = useState("");
 
   const [
     promoteSearch,
@@ -990,12 +987,6 @@ export default function AdminAccounts() {
 
         </View>
 
-        {!!creationNotice && (
-          <Text accessibilityRole="alert" style={{color:"#16654B",fontWeight:"700",marginVertical:8}}>
-            {creationNotice}
-          </Text>
-        )}
-
         <View style={styles.accessFlow}>
           <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
           <View style={styles.accessFlowSteps}>
@@ -1558,14 +1549,6 @@ export default function AdminAccounts() {
         <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
       </ScrollView>
 
-      <CreateLguAdminModal
-        visible={showCreateIndependentAdmin}
-        onClose={() => setShowCreateIndependentAdmin(false)}
-        onCreated={(email) => {
-          setShowCreateIndependentAdmin(false);
-          setCreationNotice("Authorized LGU Admin created: " + email + ". Sign in using /admin-login.");
-        }}
-      />
 
       <Modal
         visible={showAddAdmin}
