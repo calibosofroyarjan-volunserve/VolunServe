@@ -91,6 +91,8 @@ type EvacuationCenter = {
   occupied?: number;
   status?: string;
   verificationStatus?: string;
+  updatedAt?: { toDate?: () => Date; toMillis?: () => number };
+  lastVerifiedAt?: { toDate?: () => Date; toMillis?: () => number };
 };
 
 type Volunteer = {
@@ -944,6 +946,8 @@ export default function MapTracking() {
           occupied: Number(raw.occupied ?? 0),
           status: String(raw.status ?? "pending_verification"),
           verificationStatus: String(raw.verificationStatus ?? "pending"),
+          updatedAt: raw.updatedAt,
+          lastVerifiedAt: raw.lastVerifiedAt,
         };
       }).filter((center) => isVerifiedActiveCenter(center));
 
@@ -1461,9 +1465,13 @@ export default function MapTracking() {
               }}
               title={center.name}
               description={
-                center.capacity
-                  ? `Capacity: ${center.occupied ?? 0}/${center.capacity}`
-                  : "Evacuation Center"
+                "LGU-verified facility · " +
+                (center.capacity
+                  ? "Last reported occupancy: " + (center.occupied ?? 0) + "/" + center.capacity
+                  : "Capacity unavailable") +
+                (center.updatedAt?.toDate
+                  ? " · Updated " + center.updatedAt.toDate().toLocaleDateString("en-PH")
+                  : " · Update time unavailable")
               }
             >
               <MapPin
