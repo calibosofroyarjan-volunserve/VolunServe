@@ -100,3 +100,22 @@ test("Server-side blocking policy is ready but not silently enabled on unsupport
   // confirmed the required Identity Platform upgrade and trigger configuration.
   assert.doesNotMatch(functionsEntry,/exports\.blockDisposableEmailBeforeCreate\s*=/);
 });
+
+test("LGU emergency and assistance queues paginate five records and reset on filters",()=>{
+  const emergency=read("app/(admin)/admin-cases.tsx");
+  const assistance=read("app/(admin)/assistance-requests.tsx");
+  assert.match(emergency,/PAGE_SIZE = 5/);
+  assert.match(emergency,/pagedCases = useMemo/);
+  assert.match(emergency,/\{pagedCases\.map\(/);
+  assert.match(emergency,/pagedCases\.find\(\(item\) => item\.id === selectedCaseId\)/);
+  assert.match(emergency,/<ListPagination page=\{activeCasePage\} total=\{visibleCases\.length\}/);
+  assert.match(emergency,/setCaseSearch\(value\); setCasePage\(1\)/);
+  assert.match(emergency,/setFilterStatus\(status\); setCasePage\(1\)/);
+  assert.match(emergency,/setFilterSeverity\(severity\); setCasePage\(1\)/);
+  assert.match(assistance,/PAGE_SIZE = 5/);
+  assert.match(assistance,/pagedRequests = filteredRequests\.slice/);
+  assert.match(assistance,/pagedRequests\.map\(/);
+  assert.match(assistance,/<ListPagination page=\{activeQueuePage\} total=\{filteredRequests\.length\}/);
+  assert.match(assistance,/setSearch\(value\); setQueuePage\(1\)/);
+  assert.match(assistance,/setFilter\("pending"\); setQueuePage\(1\)/);
+});
