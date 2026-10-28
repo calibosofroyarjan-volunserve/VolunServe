@@ -236,6 +236,7 @@ test("All application screens avoid native browser alerts, confirms and prompts"
    const relative=path.posix.join(directory,item.name);
    if(item.isDirectory()) {walk(relative);continue;}
    if(!/\.(tsx?|jsx?)$/.test(item.name))continue;
+   if(relative==="lib/appDialog.ts")continue; // Defines safe AppAlert.confirm, not a call.
    const lines=read(relative).split("\n");
    lines.forEach((line,index)=>{
     // Report actual calls, not ordinary AppAlert.alert or comments.
