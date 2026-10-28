@@ -737,8 +737,10 @@ service cloud.firestore {
         && request.resource.data.cityName.size() >= 3
         && request.resource.data.cityName.size() <= 120
         && request.resource.data.emergencyHotline is string
-        && request.resource.data.emergencyHotline.size() >= 3
-        && request.resource.data.emergencyHotline.size() <= 160
+        // Allow only verified public emergency lines; a client cannot bypass the preset dropdown.
+        && request.resource.data.emergencyHotline in [
+          '911', '0932-600-0119', '0955-206-7200'
+        ]
         && request.resource.data.supportEmail is string
         && request.resource.data.supportEmail.size() <= 160
         && request.resource.data.publicServiceNotice is string
