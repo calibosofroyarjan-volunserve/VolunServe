@@ -266,6 +266,9 @@ function OverviewAuditTable({
         </TouchableOpacity>
       </View>
 
+      {!loading && !unavailable && (
+        <ListPagination page={page} total={total} onChange={onPageChange} pageSize={PAGE_SIZE} />
+      )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tableHorizontal} accessibilityLabel={title + " records"}>
         <View style={styles.tableInner}>
@@ -300,9 +303,6 @@ function OverviewAuditTable({
         </View>
       </ScrollView>
 
-      {!loading && !unavailable && (
-        <ListPagination page={page} total={total} onChange={onPageChange} pageSize={PAGE_SIZE} />
-      )}
     </View>
   );
 }
