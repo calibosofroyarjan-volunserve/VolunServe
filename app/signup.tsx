@@ -625,9 +625,11 @@ export default function Signup() {
       });
 
       Alert.alert(
-        "Welcome to VolunServe",
-        "Your Basic Resident Account is ready. You can sign in and use basic safety services now. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.",
-        [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
+        "VolunServe Registration",
+        googleBound
+          ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
+          : "Account saved. Check your email for the verification link, open it, then sign in using your email and password.",
+        [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
