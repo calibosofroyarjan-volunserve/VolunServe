@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ListPagination from "../../components/ui/ListPagination";
 import { useRouter } from "expo-router";
 import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -43,6 +44,8 @@ export default function AdminLogs() {
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
   const sources = ["adminLogs", "adminActivityLogs"];
 
   useEffect(() => {
@@ -95,6 +98,9 @@ export default function AdminLogs() {
         item.targetId, item.description].join(" ").toLowerCase().includes(needle),
     );
   }, [logs, search]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const activePage = Math.min(page, pageCount);
+  const pagedLogs = visible.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   if (sessionLoading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
   if (!authorized) {
@@ -125,7 +131,7 @@ export default function AdminLogs() {
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" color="#64748B" size={20} />
       <TextInput
-        style={styles.searchInput} value={search} onChangeText={setSearch}
+        style={styles.searchInput} value={search} onChangeText={value => { setSearch(value); setPage(1); }}
         placeholder="Search action, account, actor or reference"
         placeholderTextColor="#94A3B8" autoCapitalize="none"
       />
@@ -140,7 +146,7 @@ export default function AdminLogs() {
       <View style={styles.empty}><Ionicons name="document-text-outline" size={30} color="#73918A" />
         <Text style={styles.emptyText}>{search ? "No matching audit events." : "No administrative audit events recorded yet."}</Text>
       </View> : null}
-    {visible.map((item) =>
+    {pagedLogs.map((item) =>
       <View key={item.source + ":" + item.id} style={styles.event}>
         <View style={styles.eventHeader}>
           <Text style={styles.action}>{prettyAction(item.actionType)}</Text>
@@ -152,6 +158,7 @@ export default function AdminLogs() {
         <Text style={styles.source}>Source: {item.source}</Text>
       </View>,
     )}
+    <ListPagination page={activePage} total={visible.length} onChange={setPage} />
   </ScrollView>;
 }
 
