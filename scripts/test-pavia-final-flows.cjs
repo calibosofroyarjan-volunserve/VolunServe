@@ -9,8 +9,8 @@ const code = fs.readFileSync(path.join(root,"lib/communityEventEligibility.ts"),
 const js = ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
 const exportsForTest = {};
 new Function("exports", js)(exportsForTest);
-const {isEventJoinableNow} = exportsForTest;
-const at=(d,h,m)=>new Date(d+"T"+h+":"+m+":00").getTime();
+const {isEventJoinableNow, sjdmEventTimeMillis, validSjdmEventSchedule} = exportsForTest;
+const at=(d,h,m)=>new Date(d+"T"+h+":"+m+":00+08:00").getTime();
 test("past upcoming events cannot be joined even if status was not closed",()=>{
   assert.equal(isEventJoinableNow({status:"upcoming",date:"2026-10-01",time:"10:00"},at("2026-10-28","15","00")),false);
 });
@@ -95,4 +95,22 @@ test("LGU identity manual verification requires independent original ID and regi
   assert.match(api,/identity_name_and_document_check_required/);
   assert.match(api,/originalDocumentReviewed: true/);
   assert.match(api,/registeredNameMatched: true/);
+});
+
+test("Event times use Philippine UTC+08 even when browser machine timezone differs",()=>{
+  assert.equal(sjdmEventTimeMillis("2026-10-30","13:00"),
+    Date.parse("2026-10-30T13:00:00+08:00"));
+  assert.equal(sjdmEventTimeMillis("2026-02-31","09:00"),null);
+  assert.equal(validSjdmEventSchedule({date:"2026-10-30",time:"13:00",endTime:"12:59"}),false);
+  assert.equal(validSjdmEventSchedule({date:"2026-10-30",time:"13:00",endTime:"16:00"}),true);
+  assert.equal(isEventJoinableNow({status:"active",date:"2026-10-30",time:"13:00",endTime:"16:00"},
+    Date.parse("2026-10-30T09:00:00Z")),true);
+  assert.equal(isEventJoinableNow({status:"active",date:"2026-10-30",time:"13:00",endTime:"16:00"},
+    Date.parse("2026-10-30T08:00:00Z")),false);
+});
+test("LGU Admin checks future SJDM time and shared end-time validator",()=>{
+ const admin=fs.readFileSync(path.join(root,"app/(admin)/community-events.tsx"),"utf8");
+ assert.match(admin,/sjdmEventTimeMillis\(proposal.date, proposal.time\)/);
+ assert.match(admin,/validSjdmEventSchedule\(proposal\)/);
+ assert.doesNotMatch(admin,/new Date\(\s*`\$\{proposal.date\}T\$\{proposal.time\}/);
 });

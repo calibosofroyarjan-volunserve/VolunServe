@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
+import { sjdmEventTimeMillis, validSjdmEventSchedule } from "../../lib/communityEventEligibility";
 import { useUserSession } from "../../lib/useUserSession";
 type ProposalStatus = "pending" | "approved" | "rejected";
 type Filter = ProposalStatus | "all";
@@ -397,24 +398,12 @@ export default function CommunityEventAdminScreen() {
             "Proposal is incomplete and cannot be published."
           );
         }
-        const eventDate = new Date(
-          `${proposal.date}T${proposal.time}:00`
-        );
-        if (
-          Number.isNaN(eventDate.getTime()) ||
-          eventDate.getTime() <= Date.now()
-        ) {
-          throw new Error(
-            "The proposed event date has already passed."
-          );
+        const eventStartsAt = sjdmEventTimeMillis(proposal.date, proposal.time);
+        if (eventStartsAt === null || eventStartsAt <= Date.now()) {
+          throw new Error("Event must have a valid future Philippine date and start time.");
         }
-        // Recheck the whole schedule, not just its start time. A stale or
-        // invalid event must never be published as open for volunteering.
-        if (proposal.endTime && (
-          !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(proposal.endTime)) ||
-          String(proposal.endTime) <= String(proposal.time)
-        )) {
-          throw new Error("Event end time must be later than its start time on the same day.");
+        if (!validSjdmEventSchedule(proposal)) {
+          throw new Error("Event end time must be later than start time on the same day.");
         }
         // Proposal ID is reused as Event ID to prevent duplicates.
         tx.set(eventRef, {
