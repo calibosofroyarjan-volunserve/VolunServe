@@ -10,6 +10,7 @@ import {
 
 import React, {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -75,7 +76,15 @@ export default function SystemSettings() {
   const [saving, setSaving] =
     useState(false);
 
+  // Keep edits intact when the public Firestore settings listener refreshes.
+  const editingDraft = useRef(false);
+  const trackEdit = (setter: (value: string) => void) => (value: string) => {
+    editingDraft.current = true;
+    setter(value);
+  };
+
   useEffect(() => {
+    if (editingDraft.current) return;
     setCityName(settings.cityName);
 
     setEmergencyHotline(
@@ -209,6 +218,7 @@ export default function SystemSettings() {
         createdAt: serverTimestamp(),
       });
       await batch.commit();
+      editingDraft.current = false;
 
       AppAlert.alert(
         "Settings Saved",
@@ -333,14 +343,14 @@ export default function SystemSettings() {
         <Field
           label="City / Service Name (shown publicly)"
           value={cityName}
-          onChangeText={setCityName}
+          onChangeText={trackEdit(setCityName)}
           maxLength={120}
         />
 
         <PresetField
           label="Official Emergency Hotline (public)"
           value={emergencyHotline}
-          onChangeText={setEmergencyHotline}
+          onChangeText={trackEdit(setEmergencyHotline)}
           options={["911"]}
           placeholder="Enter verified official hotline number"
           help="Choose the national emergency hotline or Others to enter an independently verified official contact number. Do not enter generic instructions."
@@ -349,7 +359,7 @@ export default function SystemSettings() {
         <Field
           label="Support Email (optional — public contact)"
           value={supportEmail}
-          onChangeText={setSupportEmail}
+          onChangeText={trackEdit(setSupportEmail)}
           autoCapitalize="none"
           keyboardType="email-address"
           maxLength={160}
@@ -358,7 +368,7 @@ export default function SystemSettings() {
         <PresetField
           label="Public Service Notice"
           value={publicServiceNotice}
-          onChangeText={setPublicServiceNotice}
+          onChangeText={trackEdit(setPublicServiceNotice)}
           options={[
             "VolunServe requires internet connectivity and does not replace emergency hotlines.",
             "For immediate life-threatening emergencies, call 911. VolunServe reports require connectivity.",
@@ -393,7 +403,7 @@ export default function SystemSettings() {
         <PresetField
           label="Retention Period (Hours)"
           value={retentionHours}
-          onChangeText={setRetentionHours}
+          onChangeText={trackEdit(setRetentionHours)}
           options={["24", "48", "72"]}
           keyboardType="number-pad"
           maxLength={3}
