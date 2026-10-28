@@ -400,3 +400,19 @@ test("System Settings and governance audit entry use one atomic Firestore batch"
   assert.match(rules, /match \/systemSettings\/\{settingId\}/);
   assert.match(rules, /match \/adminLogs\/\{logId\}/);
 });
+
+test("Uncommitted Super Admin settings are not erased by a Firestore settings refresh", () => {
+  const source = read("app/(superadmin)/system-settings.tsx");
+  assert.match(source, /const editingDraft = useRef\(false\)/);
+  assert.match(source, /const trackEdit = \(setter: \(value: string\) => void\)/);
+  assert.match(source, /editingDraft\.current = true;/);
+  assert.match(source, /useEffect\(\(\) => \{\s*if \(editingDraft\.current\) return;/);
+  for (const setter of [
+    "setCityName", "setEmergencyHotline", "setSupportEmail",
+    "setPublicServiceNotice", "setRetentionHours"
+  ]) assert.ok(source.includes(`onChangeText={trackEdit(${setter})}`), setter);
+  const commitIndex = source.indexOf("await batch.commit();");
+  const clearIndex = source.indexOf("editingDraft.current = false;");
+  assert.ok(commitIndex >= 0 && clearIndex > commitIndex,
+    "Unsaved edit guard must clear only after a confirmed settings/audit batch commit");
+});
