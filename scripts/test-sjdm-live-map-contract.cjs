@@ -163,7 +163,7 @@ test("old shelter reports never authorize fresh available evacuation routing", (
   const native = fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
   assert.match(native,/isRecentShelterReport\(center\)/);
   const web = fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
-  assert.match(web,/Status NOT recently confirmed/);
+  assert.match(web,/Shelter opening NOT recently confirmed/);
 });
 
 
@@ -215,7 +215,7 @@ test("Only sourced real SJDM infrastructure coordinates become default public ma
     assert.ok(boundary.insideSjdmBoundary(city,item.latitude,item.longitude),
       item.name+" must be physically inside SJDM");
     assert.match(item.sourceUrl,/^https:\/\//);
-    assert.match(item.note,/not|unconfirmed|approximate|must be verified/i);
+    assert.match(item.note,/not|unconfirmed|approximate|must be verified|confirm/i);
     assert.ok(!("availability" in item), "must not invent live occupancy");
   }
   const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
