@@ -99,8 +99,8 @@ async function main() {
       if (response.status()>=500 && response.url().startsWith(base)) consoleErrors.push(response.status()+" "+response.url());
     });
     await page.goto(base+"/admin-login",{waitUntil:"domcontentloaded",timeout:60000});
-    await page.getByRole("textbox",{name:"Administrative email"}).fill(email);
-    await page.getByRole("textbox",{name:"Administrative password"}).fill(password);
+    await page.getByLabel("Administrative email").fill(email);
+    await page.getByLabel("Administrative password").fill(password);
     await page.getByRole("button",{name:"Login as Admin"}).click();
     await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
     await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
