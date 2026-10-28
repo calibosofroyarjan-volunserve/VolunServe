@@ -1983,6 +1983,7 @@ export default function WebMapTracking() {
           "evacuation_centers map listener",
           cause,
         );
+        setCenters([]);
 
         setError(
           "Could not load evacuation centers. Check Firestore permissions and your connection.",
