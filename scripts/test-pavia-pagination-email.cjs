@@ -386,3 +386,17 @@ test("Final emerald Resident Edit Profile has visible vertical scrolling and off
  assert.match(s,/backgroundColor:"#087C61"/);
  assert.match(s,/label="Barangay" value=\{profile\.barangay \|\| "Not provided"\}/);
 });
+
+test("System Settings and governance audit entry use one atomic Firestore batch", () => {
+  const source = read("app/(superadmin)/system-settings.tsx");
+  const rules = read("firestore.rules");
+  assert.match(source, /const batch = writeBatch\(db\);/);
+  assert.match(source, /batch\.set\(doc\(db, "systemSettings", "public"\)/);
+  assert.match(source, /batch\.set\(doc\(collection\(db, "adminLogs"\)\)/);
+  assert.match(source, /actionType: "system_settings_updated"/);
+  assert.match(source, /createdAt: serverTimestamp\(\)/);
+  assert.match(source, /await batch\.commit\(\);/);
+  assert.doesNotMatch(source, /await (?:setDoc|createAdminLog)\(/);
+  assert.match(rules, /match \/systemSettings\/\{settingId\}/);
+  assert.match(rules, /match \/adminLogs\/\{logId\}/);
+});
