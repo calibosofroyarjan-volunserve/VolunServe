@@ -10,7 +10,6 @@ import {
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
