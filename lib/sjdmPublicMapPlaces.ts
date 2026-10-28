@@ -83,7 +83,7 @@ export async function fetchMappedSjdmPublicPlaces(
 ): Promise<SjdmPublicMapPlace[]> {
   const south=14.70, west=120.98, north=14.96, east=121.22;
   const bbox=`${south},${west},${north},${east}`;
-  const query=`[out:json][timeout:20];(nwr["amenity"~"^(townhall|police|fire_station)$"](${bbox});nwr["emergency"~"^(evacuation_centre|evacuation_center|assembly_point)$"](${bbox}););out center 180;`;
+  const query=`[out:json][timeout:20];(nwr["amenity"~"^(townhall|police|fire_station)$"](${bbox});nwr["emergency"~"^(evacuation_centre|evacuation_center|assembly_point)$"](${bbox});nwr["evacuation_center"](${bbox});nwr["emergency:social_facility"="shelter"](${bbox});nwr["social_facility"="shelter"]["social_facility:for"="displaced"](${bbox}););out center 180;`;
   const url="https://overpass.kumi.systems/api/interpreter?data="+encodeURIComponent(query);
   const res=await fetch(url,{signal,headers:{Accept:"application/json"}});
   if(!res.ok) throw Error("Map places temporarily unavailable: "+res.status);
@@ -106,7 +106,11 @@ export async function fetchMappedSjdmPublicPlaces(
       case "police":kind="police_station";break;
       case "townhall":kind="government";break;
     }
-    if(!kind && ["evacuation_centre","evacuation_center","assembly_point"].includes(tags.emergency))
+    if (!kind && (["evacuation_centre","evacuation_center","assembly_point"].includes(tags.emergency)
+      || tags["emergency:social_facility"]==="shelter"
+      || (tags.social_facility==="shelter" && tags["social_facility:for"]==="displaced")
+      || (typeof tags.evacuation_center==="string" &&
+          !["no","false","0"].includes(tags.evacuation_center.toLowerCase()))))
       kind="evacuation_site";
     if(!kind || !["node","way","relation"].includes(feature.type) ||
        !Number.isSafeInteger(feature.id) || feature.id <= 0) continue;
