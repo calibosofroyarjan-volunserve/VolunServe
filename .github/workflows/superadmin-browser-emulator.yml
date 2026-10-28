@@ -1,0 +1,56 @@
+name: Super Admin Browser Acceptance - Emulators Only
+on:
+  push:
+    branches:
+      - fix/pavia-final-scope-revisions-20261028
+    paths:
+      - app/admin-login.tsx
+      - app/admin-request.tsx
+      - app/(superadmin)/**
+      - components/admin/LguApplicantEvidencePanel.tsx
+      - components/auth/PremiumAuthShell.tsx
+      - scripts/test-superadmin-browser-emulator.cjs
+      - .github/workflows/superadmin-browser-emulator.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: superadmin-browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  web-emulator-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_PUBLIC_USE_FIREBASE_EMULATORS: "true"
+      GCLOUD_PROJECT: demo-volunserve
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install isolated Playwright browser harness (CI only)
+        run: |
+          npm install --no-save --package-lock=false @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Export emulator-targeted web bundle (no deploy)
+        run: npx expo export --platform web
+      - name: Playwright login and staff approval browser acceptance (synthetic emulator accounts)
+        run: |
+          npx firebase emulators:exec --only auth,firestore --project demo-volunserve \
+            "node scripts/test-superadmin-browser-emulator.cjs"
+      - name: Upload browser screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: superadmin-browser-emulator-screenshots
+          path: evidence/superadmin-browser/
+          if-no-files-found: ignore
+          retention-days: 7
