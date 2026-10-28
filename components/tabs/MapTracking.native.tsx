@@ -1525,7 +1525,7 @@ export default function MapTracking() {
             <Marker key={"mapped-"+place.id}
               coordinate={{latitude:place.latitude,longitude:place.longitude}}
               title={place.name}
-              description={place.note+" · "+place.sourceLabel}>
+              description={place.note}>
               <View style={{width:40,height:40,borderRadius:23,
                 alignItems:"center",justifyContent:"center",backgroundColor:"#FFFFFF",
                 borderWidth:3,borderColor:"#E9C12F"}}>
