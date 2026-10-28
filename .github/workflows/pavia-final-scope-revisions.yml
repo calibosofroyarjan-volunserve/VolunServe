@@ -20,8 +20,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Sir Pavia event-schedule and signup behavior regressions
-        run: node --test scripts/test-pavia-final-flows.cjs
+      - name: Sir Pavia event-schedule, signup and professional login feedback
+        run: |
+          node --test scripts/test-pavia-final-flows.cjs
+          node --test scripts/test-professional-auth-feedback.cjs
       - name: Existing Admin, LGU and emergency navigation contracts
         run: |
           node --test scripts/test-friday-emergency-hub.cjs
