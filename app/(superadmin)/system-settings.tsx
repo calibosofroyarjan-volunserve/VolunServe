@@ -14,7 +14,6 @@ import React, {
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
