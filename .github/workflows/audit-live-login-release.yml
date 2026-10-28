@@ -1,0 +1,22 @@
+name: Verify VolunServe Live Login Revision (Read Only)
+on:
+  push:
+    branches:
+      - audit/live-login-release-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: d975f4301cd1304257f2b10ab9a3d5f4203b66a0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only probe login/admin-login and exact Firebase Hosting revision
+        run: node scripts/check-live-hosting.cjs
