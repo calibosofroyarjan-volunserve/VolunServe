@@ -119,3 +119,30 @@ test("LGU emergency and assistance queues paginate five records and reset on fil
   assert.match(assistance,/setSearch\(value\); setQueuePage\(1\)/);
   assert.match(assistance,/setFilter\("pending"\); setQueuePage\(1\)/);
 });
+
+test("Prepared Identity Platform hook blocks known domains without enabling a live trigger",()=>{
+  const vm = require("node:vm");
+  const raw = read("functions/registrationEmailBlocking.js");
+  const fakeFunctions = {
+    beforeUserCreated: (_options, handler) => handler,
+    HttpsError: class TestHttpsError extends Error {
+      constructor(code,message) { super(message); this.code=code; }
+    },
+  };
+  const module = {exports:{}};
+  const mockRequire = (name) => name === "firebase-functions/v2/identity"
+    ? fakeFunctions
+    : name === "./disposable-email-domains.json"
+      ? JSON.parse(read("functions/disposable-email-domains.json"))
+      : require(name);
+  vm.runInNewContext(raw,{module,exports:module.exports,require:mockRequire,Set});
+  const callback = module.exports.createBeforeCreateHook();
+  for(const email of ["user@mailinator.com","person@nested.mailinator.com",
+                       "person@yopmail.com","student@guerrillamail.com"]){
+    assert.throws(()=>callback({data:{email}}),
+      error=>error.code==="invalid-argument"&&/permanent email/.test(error.message),email);
+  }
+  assert.doesNotThrow(()=>callback({data:{email:"resident@gmail.com"}}));
+  assert.doesNotThrow(()=>callback({data:{email:"staff@agency.gov.ph"}}));
+  assert.doesNotThrow(()=>callback({data:{email:"custom@institution.edu.ph"}}));
+});
