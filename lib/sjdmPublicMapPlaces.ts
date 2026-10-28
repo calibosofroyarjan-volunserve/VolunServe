@@ -94,10 +94,24 @@ export async function fetchMappedSjdmPublicPlaces(
   const south=14.70, west=120.98, north=14.96, east=121.22;
   const bbox=`${south},${west},${north},${east}`;
   const query=`[out:json][timeout:20];(nwr["amenity"~"^(townhall|police|fire_station)$"](${bbox});nwr["emergency"~"^(evacuation_centre|evacuation_center|assembly_point)$"](${bbox});nwr["evacuation_center"](${bbox});nwr["emergency:social_facility"="shelter"](${bbox});nwr["social_facility"="shelter"]["social_facility:for"="displaced"](${bbox}););out center 180;`;
-  const url="https://overpass.kumi.systems/api/interpreter?data="+encodeURIComponent(query);
-  const res=await fetch(url,{signal,headers:{Accept:"application/json"}});
-  if(!res.ok) throw Error("Map places temporarily unavailable: "+res.status);
-  const payload:unknown=await res.json();
+  // Public map-data service redundancy. Failure must never suppress the
+  // source-confirmed static markers or force an empty operational LGU map.
+  const endpoints=[
+    "https://overpass-api.de/api/interpreter?data=",
+    "https://overpass.kumi.systems/api/interpreter?data=",
+  ];
+  let payload:unknown=null;
+  for (const endpoint of endpoints) {
+    try {
+      const res=await fetch(endpoint+encodeURIComponent(query),
+        {signal,headers:{Accept:"application/json"}});
+      if(!res.ok) continue;
+      payload=await res.json();
+      break;
+    } catch (error) {
+      if(signal?.aborted) throw error;
+    }
+  }
   if (!payload || typeof payload !== "object" ||
       !("elements" in payload) || !Array.isArray(payload.elements)) return [];
   const output:SjdmPublicMapPlace[]=[];
