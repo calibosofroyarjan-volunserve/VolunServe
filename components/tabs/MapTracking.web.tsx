@@ -23,6 +23,8 @@ import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
 import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
+import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -146,15 +148,6 @@ const BACKEND_URL = "https://volunserve.onrender.com";
 const SJDM_CENTER = {
   latitude: 14.813,
   longitude: 121.045,
-};
-
-const LGU_BASE = {
-  id: "csjdm-lgu-base",
-  name: "LGU Base / CDRRMO",
-  address:
-    "Del Monte Road, Sapang Palay Proper, San Jose del Monte, 3023 Bulacan, Philippines",
-  latitude: 14.838344,
-  longitude: 121.046243,
 };
 
 const mapDocument = `
@@ -420,17 +413,19 @@ const mapDocument = `
         return element;
       }
 
-      function makeLguBaseElement() {
+      function makeLguBaseElement(item) {
         const wrapper = document.createElement("div");
         wrapper.className = "lgu-base-marker";
 
         const label = document.createElement("div");
         label.className = "lgu-base-label";
-        label.textContent = "LGU BASE";
+        label.textContent = String(item.facilityType || "LGU").replaceAll("_", " ").toUpperCase();
 
         const pin = document.createElement("div");
         pin.className = "pin";
-        pin.innerHTML = "<span>⌂</span>";
+        const symbol = document.createElement("span");
+        symbol.textContent = item.icon || "🏛️";
+        pin.appendChild(symbol);
 
         wrapper.appendChild(label);
         wrapper.appendChild(pin);
@@ -820,6 +815,17 @@ const mapDocument = `
 
         const bounds = new maplibregl.LngLatBounds();
         const incidentPoints = [];
+        if (payload.boundary && map.getSource("sjdm-boundary")) {
+          map.getSource("sjdm-boundary").setData(payload.boundary);
+          const area = payload.boundaryBounds;
+          if (area && Number.isFinite(area.north) && Number.isFinite(area.south) &&
+              Number.isFinite(area.east) && Number.isFinite(area.west)) {
+            map.setMaxBounds([[area.west - 0.006, area.south - 0.006],
+                              [area.east + 0.006, area.north + 0.006]]);
+            // This rectangle limits map camera movement; the green polygon
+            // alone represents the actual administrative reference boundary.
+          }
+        }
         let pointCount = 0;
 
         for (const item of payload.incidents || []) {
@@ -877,13 +883,14 @@ const mapDocument = `
             continue;
           }
 
-          const element = makeLguBaseElement();
+          const element = makeLguBaseElement(item);
 
           const popup = new maplibregl.Popup({
             offset: 22,
             closeButton: false,
           }).setText(
-            [item.name || "LGU Base", item.address || ""]
+            [item.name || "LGU Facility", item.address || "",
+             "LGU verified · last updated " + (item.updatedAt ? new Date(item.updatedAt).toLocaleString("en-PH") : "not supplied")]
               .filter(Boolean)
               .join(" · ")
           );
@@ -931,7 +938,17 @@ const mapDocument = `
           const popup = new maplibregl.Popup({
             offset: 22,
             closeButton: false,
-          }).setText([item.name || "Evacuation center", item.address || item.barangay || "", "LGU verified active", item.capacity != null && item.occupied != null ? String(Math.max(0, item.capacity - item.occupied)) + " spaces based on last LGU update" : "Capacity unconfirmed"].filter(Boolean).join(" · "));
+          }).setText([
+            item.name || "Evacuation center",
+            item.address || item.barangay || "",
+            "LGU-recorded active (confirm status before travel)",
+            item.updatedAt && Number.isFinite(item.updatedAt)
+              ? "Last LGU update " + new Date(item.updatedAt).toLocaleString("en-PH")
+              : "No current update timestamp",
+            item.capacity != null && item.occupied != null
+              ? String(Math.max(0, item.capacity - item.occupied)) + " last-reported spaces (NOT live occupancy)"
+              : "Capacity unconfirmed",
+          ].filter(Boolean).join(" · "));
 
           const marker = new maplibregl.Marker({ element })
             .setLngLat([
@@ -1078,6 +1095,22 @@ const mapDocument = `
       });
 
       map.on("load", () => {
+        map.addSource("sjdm-boundary", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "sjdm-area-fill",
+          type: "fill",
+          source: "sjdm-boundary",
+          paint: { "fill-color": "#0A8B6A", "fill-opacity": 0.06 },
+        });
+        map.addLayer({
+          id: "sjdm-city-outline",
+          type: "line",
+          source: "sjdm-boundary",
+          paint: { "line-color": "#07815E", "line-width": 4, "line-opacity": 0.95 },
+        });
         map.addSource("response-route", {
           type: "geojson",
           data: {
@@ -1466,7 +1499,35 @@ export default function WebMapTracking() {
 
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
+  const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
+  const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void loadSjdmBoundary().then(boundary => {
+      if (!active) return;
+      setSjdmBoundary(boundary);
+      setBoundaryUnavailable(!boundary);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !profile || !isApprovedProfile(profile)) {
+      setLguFacilities([]);
+      return;
+    }
+    return onSnapshot(collection(db, "lguMapFacilities"),
+      snapshot => setLguFacilities(snapshot.docs
+        .map(doc => verifiedLguMapFacility(doc.id, doc.data()))
+        .filter((value): value is LguMapFacility => value !== null)),
+      error => {
+        console.error("LGU map facility listener", error);
+        setLguFacilities([]);
+      });
+  }, [user?.uid, profile?.status]);
 
   const [userLocation, setUserLocation] =
     useState<BrowserLocation | null>(null);
@@ -3809,10 +3870,15 @@ export default function WebMapTracking() {
           };
         }),
 
-        bases:
-          missionMode || adminMissionMode || isResidentMode
-            ? [LGU_BASE]
-            : [],
+        boundary: sjdmBoundary,
+        boundaryBounds: sjdmBoundary ? boundaryBounds(sjdmBoundary) : null,
+        bases: lguFacilities
+          .filter(item => !sjdmBoundary || insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude))
+          .map(item => ({
+            ...item,
+            icon: LGU_FACILITY_ICONS[item.facilityType],
+            updatedAt: timestampMillis(item.updatedAt),
+          })),
 
         // Volunteer mission camera follows the active route/destination.
         // LGU Base and LGU responder pins stay rendered as coordination
@@ -3825,7 +3891,9 @@ export default function WebMapTracking() {
         // cannot clutter or stretch the camera.
         centers: missionMode
           ? []
-          : visibleCenters.map((item) => ({
+          : visibleCenters.filter(item => !sjdmBoundary ||
+            insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude)))
+            .map((item) => ({
               id: item.id,
               name: item.name || "Evacuation center",
               latitude: numericCoordinate(item.latitude),
@@ -3869,6 +3937,8 @@ export default function WebMapTracking() {
     mapReady,
     mapIncidentCases,
     visibleCenters,
+    lguFacilities,
+    sjdmBoundary,
     mapResponderPins,
     residentCoordinationCase?.responseVehicleType,
     adminCase?.responseVehicleType,
@@ -5210,10 +5280,17 @@ export default function WebMapTracking() {
         <div className="map-card clean-map-card">
           <iframe
             ref={frame}
-            title="VolunServe live disaster response map"
+            title="VolunServe live disaster response map for San Jose del Monte"
             srcDoc={mapDocument}
             sandbox="allow-scripts allow-same-origin"
           />
+          <div style={{position:"absolute",top:12,right:12,zIndex:10,maxWidth:240,
+            padding:"7px 10px",borderRadius:10,background:"rgba(255,255,255,.94)",
+            border:"1px solid #CDEFE1",fontSize:11,color:"#135E47",pointerEvents:"none"}}>
+            {sjdmBoundary ? "SJDM city boundary · geoBoundaries CC BY 4.0" :
+              boundaryUnavailable ? "SJDM boundary unavailable · verified facilities only" :
+              "Loading official SJDM boundary…"}
+          </div>
 
           {(missionMode || adminMissionMode) &&
             navigationActive &&

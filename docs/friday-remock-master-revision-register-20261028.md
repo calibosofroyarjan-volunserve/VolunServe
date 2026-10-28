@@ -92,3 +92,19 @@ For each item capture **branch/commit, file(s), test command, user role, browser
 
 ## Do not ship / self-approve
 The private LGU staff evidence intake remains **disabled by default** in production. OCR keywords do not establish official ID authenticity; MediaPipe face landmarks are not a calibrated biometric identity match; AWS active liveness needs real provider credentials, privacy approvals and physical camera QA. No code or UI should silently promote an Admin based on AI, and no fake successful validation may appear in defense.
+
+## SJDM map follow-up — added after latest adviser instruction
+**Status:** Implemented in draft PR #142, live deployment and physical-device GIS testing pending; this does not replace any original adviser item.
+
+- [x] Bundled, attributed geoBoundaries polygon for **City of San Jose del Monte** on both web MapLibre and Android Google Maps, plus camera bounding limits. The polygon is a reference; the camera rectangle alone is not the legal city outline.
+- [x] Approved Firestore `evacuation_centers` subscribe/listener; display only LGU-verified active records, and clarify last-reported occupancy rather than real-time sensor occupancy.
+- [x] `lguMapFacilities` verified fixed LGU office markers, six differentiated facility categories, independently from actual responder/vehicle GPS.
+- [x] One LGU Admin registration/review screen for evacuation centers and LGU offices, SJDM barangay selector and city polygon geofence for submitted GPS.
+- [x] Official government website address references (New Government Center, CDRRMO, historical 2018 central evacuation inventory) as **pending address-only drafts**. No invented coordinates, seeded operational records or current emergency capacity claims.
+- [x] Offline synthetic polygon tests, form/permission contract and Firestore emulator access tests.
+- [ ] Real browser test with map tiles and city outline; confirm markers, zoom/pan, no duplicate hardcoded LGU base.
+- [ ] Real Android APK on physical phone with location permission, geo-boundary, tap marker and live subscription.
+- [ ] Authorized LGU Admin confirms exact real facility coordinates, operating status and source; enters official records in deployed Firestore.
+- [ ] Real-site Web/Android end-to-end testing and explicit approval before production merge/deploy.
+
+**Operational limitation:** An independently verified city address by itself is not enough to publish an active evacuation shelter. A Firestore real-time listener updates when the Admin enters data; it does not certify live physical occupancy, availability or a dispatch response.

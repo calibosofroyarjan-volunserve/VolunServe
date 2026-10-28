@@ -26,10 +26,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, vehicleInfo } from "../../lib/emergencyMapTypes";
+import { SJDM_FOCUS, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -89,6 +91,8 @@ type EvacuationCenter = {
   occupied?: number;
   status?: string;
   verificationStatus?: string;
+  updatedAt?: { toDate?: () => Date; toMillis?: () => number };
+  lastVerifiedAt?: { toDate?: () => Date; toMillis?: () => number };
 };
 
 type Volunteer = {
@@ -136,6 +140,9 @@ export default function MapTracking() {
   const [location, setLocation] = useState<UserLocation | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
+  const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
+  const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
   const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
@@ -162,6 +169,51 @@ export default function MapTracking() {
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const mapRef = useRef<MapView | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    void loadSjdmBoundary().then(result => {
+      if (!current) return;
+      setSjdmBoundary(result);
+      setBoundaryUnavailable(!result);
+    });
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!sjdmBoundary || !mapLoaded) return;
+    const box = boundaryBounds(sjdmBoundary);
+    // Google Maps native API restricts the camera center to a bounding box.
+    // Polygon layers below show the actual non-rectangular city reference.
+    mapRef.current?.setMapBoundaries(
+      { latitude: box.north + 0.006, longitude: box.east + 0.006 },
+      { latitude: box.south - 0.006, longitude: box.west - 0.006 },
+    );
+    mapRef.current?.animateToRegion({
+      latitude: (box.north + box.south) / 2,
+      longitude: (box.east + box.west) / 2,
+      latitudeDelta: Math.max(0.06, (box.north - box.south) * 1.12),
+      longitudeDelta: Math.max(0.06, (box.east - box.west) * 1.12),
+    }, 400);
+  }, [sjdmBoundary, mapLoaded]);
+
+  useEffect(() => {
+    if (!CURRENT_USER_ID) {
+      setLguFacilities([]);
+      return;
+    }
+    return onSnapshot(collection(db, "lguMapFacilities"),
+      snapshot => setLguFacilities(snapshot.docs
+        .map(entry => verifiedLguMapFacility(entry.id, entry.data()))
+        .filter((facility): facility is LguMapFacility => facility !== null)),
+      error => {
+        console.log("LGU map facilities unavailable:", error);
+        setLguFacilities([]);
+      });
+  }, [CURRENT_USER_ID]);
+
+
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const lastSyncRef = useRef(0);
   const watchingRef = useRef(false);
@@ -894,6 +946,8 @@ export default function MapTracking() {
           occupied: Number(raw.occupied ?? 0),
           status: String(raw.status ?? "pending_verification"),
           verificationStatus: String(raw.verificationStatus ?? "pending"),
+          updatedAt: raw.updatedAt,
+          lastVerifiedAt: raw.lastVerifiedAt,
         };
       }).filter((center) => isVerifiedActiveCenter(center));
 
@@ -1262,11 +1316,14 @@ export default function MapTracking() {
           showsMyLocationButton={false}
           followsUserLocation={false}
           customMapStyle={LIGHT_MAP_STYLE}
+          onMapReady={() => setMapLoaded(true)}
+          minZoomLevel={10}
+          maxZoomLevel={19}
           initialRegion={{
-            latitude: location.latitude,
-            longitude: location.longitude,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
+            latitude: SJDM_FOCUS.latitude,
+            longitude: SJDM_FOCUS.longitude,
+            latitudeDelta: 0.15,
+            longitudeDelta: 0.15,
           }}
           scrollEnabled={true}
           zoomEnabled={true}
@@ -1281,9 +1338,20 @@ export default function MapTracking() {
             // Only Simulation Mode creates/moves a manual pin.
             if (mode !== "simulation") return;
             followUserRef.current = false;
+            if (sjdmBoundary && !insideSjdmBoundary(sjdmBoundary,
+              e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)) return;
             setCustomPin(e.nativeEvent.coordinate);
           }}
         >
+          {sjdmBoundary && boundaryRings(sjdmBoundary).map((rings, index) => (
+            <Polygon key={"sjdm-border-" + index}
+              coordinates={rings[0].map(([longitude, latitude]) => ({latitude, longitude}))}
+              holes={rings.slice(1).map(ring => ring.map(([longitude, latitude]) => ({latitude, longitude})))}
+              strokeColor="#07815E"
+              strokeWidth={4}
+              fillColor="rgba(7,129,94,0.06)"
+              tappable={false}/>
+          ))}
           {/* Manual simulation pin */}
           {customPin && mode === "simulation" && (
             <Marker
@@ -1369,8 +1437,26 @@ export default function MapTracking() {
             </Marker>
           ))}
 
-          {/* Evacuation centers */}
-          {centers.map((center) => (
+          {/* Verified LGU facilities: fixed offices, not moving personnel GPS. */}
+          {lguFacilities.filter(item => !sjdmBoundary ||
+            insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)).map(facility => (
+            <Marker key={"facility-" + facility.id}
+              coordinate={{latitude: facility.latitude, longitude: facility.longitude}}
+              title={facility.name}
+              description={"LGU-verified " + facility.facilityType.replaceAll("_", " ") +
+                " · " + facility.address}>
+              <View style={{
+                width:40,height:40,borderRadius:22,alignItems:"center",justifyContent:"center",
+                backgroundColor:"#0C805F",borderWidth:2,borderColor:"#FFFFFF",
+              }}>
+                <Text style={{fontSize:20}}>{LGU_FACILITY_ICONS[facility.facilityType]}</Text>
+              </View>
+            </Marker>
+          ))}
+
+          {/* Verified evacuation centers. Occupancy is a last LGU update, NOT a sensor. */}
+          {centers.filter(center => !sjdmBoundary ||
+            insideSjdmBoundary(sjdmBoundary, center.latitude, center.longitude)).map((center) => (
             <Marker
               key={center.id}
               coordinate={{
@@ -1379,9 +1465,13 @@ export default function MapTracking() {
               }}
               title={center.name}
               description={
-                center.capacity
-                  ? `Capacity: ${center.occupied ?? 0}/${center.capacity}`
-                  : "Evacuation Center"
+                "LGU-verified facility · " +
+                (center.capacity
+                  ? "Last reported occupancy: " + (center.occupied ?? 0) + "/" + center.capacity
+                  : "Capacity unavailable") +
+                (center.updatedAt?.toDate
+                  ? " · Updated " + center.updatedAt.toDate().toLocaleDateString("en-PH")
+                  : " · Update time unavailable")
               }
             >
               <MapPin
@@ -1455,6 +1545,26 @@ export default function MapTracking() {
           )}
         </MapView>
 
+        {sjdmBoundary && <View style={{
+          position:"absolute",top:10,right:12,zIndex:8,
+          backgroundColor:"rgba(255,255,255,0.94)",borderRadius:9,
+          borderWidth:1,borderColor:"#CDEFE1",paddingHorizontal:9,paddingVertical:6,
+        }}>
+          <Text style={{color:"#135E47",fontSize:10}}>
+            SJDM outline · geoBoundaries CC BY 4.0
+          </Text>
+        </View>}
+
+        {boundaryUnavailable && <View style={{
+          position:"absolute",top:10,right:12,left:12,zIndex:10,
+          backgroundColor:"rgba(255,255,255,0.94)",borderRadius:10,
+          borderWidth:1,borderColor:"#CDEFE1",padding:9,
+        }}>
+          <Text style={{color:"#135E47",fontSize:11}}>
+            SJDM boundary unavailable — displaying only LGU-verified facility records.
+          </Text>
+        </View>}
+
         {/* Critical nearby incident banner */}
         {criticalNearbyIncident && (
           <View style={styles.criticalBanner}>
@@ -1527,6 +1637,7 @@ export default function MapTracking() {
                 icon="home"
                 label="Evacuation Center"
               />
+              <LegendItem color="#0C805F" icon="business" label="LGU-verified Facility" />
             </View>
           )}
         </Animated.View>

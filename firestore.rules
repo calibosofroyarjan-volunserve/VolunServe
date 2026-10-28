@@ -3941,6 +3941,44 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
+    // LGU-verified fixed facilities are not emergency response GPS points.
+    // Only operational LGU Admin can publish a facility to the live map.
+    match /lguMapFacilities/{facilityId} {
+      allow read: if approved();
+      function validOfficialFacility() {
+        let d = request.resource.data;
+        return d.keys().hasOnly([
+          'name','address','barangay','facilityType','latitude','longitude',
+          'status','verificationStatus','verificationSource','updatedAt','updatedBy'
+        ])
+        && d.keys().hasAll([
+          'name','address','barangay','facilityType','latitude','longitude',
+          'status','verificationStatus','verificationSource','updatedAt','updatedBy'
+        ])
+        && d.name is string && d.name.size() >= 3 && d.name.size() <= 160
+        && d.address is string && d.address.size() >= 3 && d.address.size() <= 320
+        && d.barangay is string && d.barangay.size() >= 2 && d.barangay.size() <= 120
+        && d.facilityType in [
+          'city_government','cdrrmo','fire_station','police_station',
+          'health_center','barangay_hall'
+        ]
+        && d.latitude is number && d.latitude > 14.74 && d.latitude < 14.90
+        && d.longitude is number && d.longitude > 120.99 && d.longitude < 121.20
+        && d.status in ['active','inactive']
+        && d.verificationStatus in ['pending','verified']
+        && d.verificationSource is string
+        && d.verificationSource.size() >= 8 && d.verificationSource.size() <= 300
+        && d.updatedAt is timestamp
+        && d.updatedBy == request.auth.uid
+        // A pending/uncorroborated office cannot be advertised as operational.
+        && (d.status != 'active' || (
+             d.verificationStatus == 'verified'
+             && d.verificationSource.size() >= 10
+        ));
+      }
+      allow create, update: if isAdmin() && validOfficialFacility();
+      allow delete: if false;
+    }
     match /evacuation_centers/{centerId} {
       // Public may read facility metadata, but clients display ACTIVE only when
       // LGU has supplied independent verification and official coordinates.
@@ -3954,8 +3992,8 @@ service cloud.firestore {
           && rd.address.size() <= 320
           && rd.barangay is string
           && rd.barangay.size() >= 2
-          && rd.latitude is number && rd.latitude >= -90 && rd.latitude <= 90
-          && rd.longitude is number && rd.longitude >= -180 && rd.longitude <= 180
+          && rd.latitude is number && rd.latitude > 14.74 && rd.latitude < 14.90
+          && rd.longitude is number && rd.longitude > 120.99 && rd.longitude < 121.20
           && rd.capacity is int && rd.capacity >= 1
           && rd.occupied is int && rd.occupied >= 0
           && rd.occupied <= rd.capacity
