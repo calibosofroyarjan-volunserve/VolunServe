@@ -417,7 +417,8 @@ export default function MapTracking() {
   const nearestCenter = useMemo(() => {
     if (!location || centers.length === 0) return null;
 
-    const availableCenters = centers.filter((center) => {
+    const availableCenters = centers.filter(center => inCity(center.latitude, center.longitude))
+      .filter((center) => {
       const capacity = center.capacity ?? 0;
       const occupied = center.occupied ?? 0;
       return capacity === 0 || occupied < capacity;
@@ -451,7 +452,7 @@ export default function MapTracking() {
       ...nearest,
       distanceKm: minDistance,
     };
-  }, [location, centers]);
+  }, [location, centers, sjdmBoundary]);
 
   const myAssignedIncident = useMemo(() => {
     if (userRole !== "volunteer" || !CURRENT_USER_ID) return null;
@@ -477,10 +478,11 @@ export default function MapTracking() {
           incident.latitude,
           incident.longitude
         );
-        return incident.severity === "critical" && incident.status !== "resolved" && dist <= 2;
+        return inCity(incident.latitude, incident.longitude) &&
+          incident.severity === "critical" && incident.status !== "resolved" && dist <= 2;
       }) ?? null
     );
-  }, [location, incidents]);
+  }, [location, incidents, sjdmBoundary]);
 
   const prediction = useMemo<PredictionResult>(() => {
     const unresolved = incidents.filter((i) => i.status !== "resolved");
@@ -1377,7 +1379,7 @@ export default function MapTracking() {
             coordinates={SJDM_MASK_EXTERIOR.map(([longitude,latitude])=>({latitude,longitude}))}
             holes={boundaryRings(sjdmBoundary).map(rings=>
               rings[0].map(([longitude,latitude])=>({latitude,longitude})))}
-            fillColor="rgba(231,238,234,0.985)"
+            fillColor="rgba(231,238,234,1)"
             strokeColor="rgba(231,238,234,0)"
             strokeWidth={0}
             tappable={false}
@@ -1402,7 +1404,10 @@ export default function MapTracking() {
               onDragEnd={(event) => {
                 if (inCity(event.nativeEvent.coordinate.latitude,
                   event.nativeEvent.coordinate.longitude)) setCustomPin(event.nativeEvent.coordinate);
-                else setCustomPin(sjdmSafeCenter(sjdmBoundary!));
+                else {
+                  setCustomPin(previous => previous ? {...previous} : sjdmSafeCenter(sjdmBoundary!));
+                  Alert.alert("Outside SJDM", "Simulation pins must stay inside San Jose del Monte.");
+                }
               }}
               title="Simulation Pin"
               description="Drag this pin or tap the map to move it"
