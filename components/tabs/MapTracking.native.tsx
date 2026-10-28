@@ -30,7 +30,7 @@ import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, vehicleInfo } from "../../lib/emergencyMapTypes";
-import { SJDM_FOCUS, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
   activeModeForProfile,
@@ -170,6 +170,13 @@ export default function MapTracking() {
 
   const mapRef = useRef<MapView | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const cityBoundaryRef = useRef<SjdmBoundary | null>(null);
+  const lastCityCenterRef = useRef(SJDM_FOCUS);
+  cityBoundaryRef.current = sjdmBoundary;
+  const inCity = (latitude: number, longitude: number) =>
+    !!sjdmBoundary && insideSjdmBoundary(sjdmBoundary, latitude, longitude);
+  const validCityRoute = (points: UserLocation[]) =>
+    !!sjdmBoundary && routeStaysInSjdm(sjdmBoundary, points);
 
   useEffect(() => {
     let current = true;
@@ -191,8 +198,7 @@ export default function MapTracking() {
       { latitude: box.south - 0.006, longitude: box.west - 0.006 },
     );
     mapRef.current?.animateToRegion({
-      latitude: (box.north + box.south) / 2,
-      longitude: (box.east + box.west) / 2,
+      ...sjdmSafeCenter(sjdmBoundary),
       latitudeDelta: Math.max(0.06, (box.north - box.south) * 1.12),
       longitudeDelta: Math.max(0.06, (box.east - box.west) * 1.12),
     }, 400);
@@ -293,9 +299,10 @@ export default function MapTracking() {
       followUserRef.current = false;
       modeRef.current = "simulation";
       setMode("simulation");
-      setCustomPin((previous) => previous ?? location);
+      setCustomPin((previous) => previous && inCity(previous.latitude, previous.longitude)
+        ? previous : location && inCity(location.latitude, location.longitude) ? location : SJDM_FOCUS);
 
-      if (location) {
+      if (location && inCity(location.latitude, location.longitude)) {
         mapRef.current?.animateCamera(
           { center: location, zoom: 18, pitch: 0, heading: 0 },
           { duration: 600 }
@@ -793,7 +800,9 @@ export default function MapTracking() {
 
           setLocation(updatedLoc);
 
-          if (followUserRef.current && modeRef.current === "map") {
+          if (followUserRef.current && modeRef.current === "map" &&
+              cityBoundaryRef.current &&
+              insideSjdmBoundary(cityBoundaryRef.current, updatedLoc.latitude, updatedLoc.longitude)) {
             mapRef.current?.animateCamera(
               { center: updatedLoc },
               { duration: 650 }
@@ -1105,7 +1114,7 @@ export default function MapTracking() {
       const databaseMatch =
         centerMatch ?? volunteerMatch ?? residentMatch ?? incidentMatch;
 
-      if (databaseMatch) {
+      if (databaseMatch && inCity(databaseMatch.latitude, databaseMatch.longitude)) {
         const result = {
           latitude: databaseMatch.latitude,
           longitude: databaseMatch.longitude,
@@ -1151,6 +1160,11 @@ export default function MapTracking() {
         return;
       }
 
+      if (!inCity(geocoded.latitude, geocoded.longitude)) {
+        Alert.alert("Outside San Jose del Monte",
+          "VolunServe map searches and pins are restricted to locations within the city's reference boundary.");
+        return;
+      }
       const result = {
         latitude: geocoded.latitude,
         longitude: geocoded.longitude,
@@ -1174,14 +1188,17 @@ export default function MapTracking() {
   }
 
   function recenterMap() {
-    if (!location) return;
+    if (!sjdmBoundary) return;
+    const target = location && inCity(location.latitude, location.longitude)
+      ? location : sjdmSafeCenter(sjdmBoundary);
 
-    followUserRef.current = mode === "map";
+    followUserRef.current = mode === "map" && !!location &&
+      inCity(location.latitude, location.longitude);
     setSearchResult(null);
 
     mapRef.current?.animateCamera(
       {
-        center: location,
+        center: target,
         zoom: 16,
         pitch: 0,
         heading: 0,
@@ -1317,7 +1334,18 @@ export default function MapTracking() {
           followsUserLocation={false}
           customMapStyle={LIGHT_MAP_STYLE}
           onMapReady={() => setMapLoaded(true)}
-          minZoomLevel={10}
+          onRegionChangeComplete={region => {
+            const feature = cityBoundaryRef.current;
+            if (!feature) return;
+            if (insideSjdmBoundary(feature, region.latitude, region.longitude)) {
+              lastCityCenterRef.current = {latitude:region.latitude, longitude:region.longitude};
+            } else {
+              // Google Maps setMapBoundaries only restricts a rectangular camera
+              // center. Snap out-of-city centers back to the true polygon.
+              mapRef.current?.animateCamera({center:lastCityCenterRef.current},{duration:180});
+            }
+          }}
+          minZoomLevel={11}
           maxZoomLevel={19}
           initialRegion={{
             latitude: SJDM_FOCUS.latitude,
@@ -1343,6 +1371,17 @@ export default function MapTracking() {
             setCustomPin(e.nativeEvent.coordinate);
           }}
         >
+          {/* Exterior is a neutral mask. The shape CUT OUT of this paint is
+              the real city boundary; no Google base-map details beyond SJDM. */}
+          {sjdmBoundary && <Polygon
+            coordinates={SJDM_MASK_EXTERIOR.map(([longitude,latitude])=>({latitude,longitude}))}
+            holes={boundaryRings(sjdmBoundary).map(rings=>
+              rings[0].map(([longitude,latitude])=>({latitude,longitude})))}
+            fillColor="rgba(231,238,234,0.985)"
+            strokeColor="rgba(231,238,234,0)"
+            strokeWidth={0}
+            tappable={false}
+          />}
           {sjdmBoundary && boundaryRings(sjdmBoundary).map((rings, index) => (
             <Polygon key={"sjdm-border-" + index}
               coordinates={rings[0].map(([longitude, latitude]) => ({latitude, longitude}))}
@@ -1361,7 +1400,9 @@ export default function MapTracking() {
                 followUserRef.current = false;
               }}
               onDragEnd={(event) => {
-                setCustomPin(event.nativeEvent.coordinate);
+                if (inCity(event.nativeEvent.coordinate.latitude,
+                  event.nativeEvent.coordinate.longitude)) setCustomPin(event.nativeEvent.coordinate);
+                else setCustomPin(sjdmSafeCenter(sjdmBoundary!));
               }}
               title="Simulation Pin"
               description="Drag this pin or tap the map to move it"
@@ -1370,7 +1411,7 @@ export default function MapTracking() {
             </Marker>
           )}
 
-          {searchResult && (
+          {searchResult && inCity(searchResult.latitude, searchResult.longitude) && (
             <Marker
               coordinate={searchResult}
               title={searchResult.label}
@@ -1382,7 +1423,8 @@ export default function MapTracking() {
 
           {/* Other live residents */}
           {residents
-            .filter((resident) => resident.id !== CURRENT_USER_ID)
+            .filter((resident) => resident.id !== CURRENT_USER_ID &&
+              inCity(resident.latitude, resident.longitude))
             .map((resident) => (
               <Marker
                 key={resident.id}
@@ -1398,7 +1440,7 @@ export default function MapTracking() {
             ))}
 
           {/* Relief / responding volunteers */}
-          {volunteers.map((volunteer) => (
+          {volunteers.filter(volunteer => inCity(volunteer.latitude, volunteer.longitude)).map((volunteer) => (
             <Marker
               key={volunteer.id}
               coordinate={{
@@ -1423,7 +1465,7 @@ export default function MapTracking() {
 
           {/* Real assigned LGU GPS only: icon identifies actual dispatched vehicle.
               No icon appears without a fresh authorized GPS reading. */}
-          {visibleLguVehiclePins.map(point => (
+          {visibleLguVehiclePins.filter(point => inCity(point.latitude, point.longitude)).map(point => (
             <Marker key={"lgu-" + point.caseId}
               coordinate={{ latitude:point.latitude, longitude:point.longitude }}
               title={"LGU responder · " + point.vehicle.label}
@@ -1438,8 +1480,7 @@ export default function MapTracking() {
           ))}
 
           {/* Verified LGU facilities: fixed offices, not moving personnel GPS. */}
-          {lguFacilities.filter(item => !sjdmBoundary ||
-            insideSjdmBoundary(sjdmBoundary, item.latitude, item.longitude)).map(facility => (
+          {lguFacilities.filter(item => inCity(item.latitude, item.longitude)).map(facility => (
             <Marker key={"facility-" + facility.id}
               coordinate={{latitude: facility.latitude, longitude: facility.longitude}}
               title={facility.name}
@@ -1455,8 +1496,7 @@ export default function MapTracking() {
           ))}
 
           {/* Verified evacuation centers. Occupancy is a last LGU update, NOT a sensor. */}
-          {centers.filter(center => !sjdmBoundary ||
-            insideSjdmBoundary(sjdmBoundary, center.latitude, center.longitude)).map((center) => (
+          {centers.filter(center => inCity(center.latitude, center.longitude)).map((center) => (
             <Marker
               key={center.id}
               coordinate={{
@@ -1486,7 +1526,7 @@ export default function MapTracking() {
           ))}
 
           {/* Disaster / active incident markers */}
-          {incidents.map((incident) => {
+          {incidents.filter(incident => inCity(incident.latitude, incident.longitude)).map((incident) => {
             const isActive =
               incident.status === "assigned" || incident.status === "in_progress";
 
@@ -1527,7 +1567,7 @@ export default function MapTracking() {
           })}
 
           {/* Resident route to nearest evacuation center */}
-          {userRole === "resident" && routeCoords.length > 0 && (
+          {userRole === "resident" && validCityRoute(routeCoords) && (
             <Polyline
               coordinates={routeCoords}
               strokeWidth={5}
@@ -1536,7 +1576,7 @@ export default function MapTracking() {
           )}
 
           {/* Volunteer route to assigned incident */}
-          {userRole === "volunteer" && assignedIncidentRoute.length > 0 && (
+          {userRole === "volunteer" && validCityRoute(assignedIncidentRoute) && (
             <Polyline
               coordinates={assignedIncidentRoute}
               strokeWidth={5}
@@ -1555,6 +1595,17 @@ export default function MapTracking() {
           </Text>
         </View>}
 
+        {sjdmBoundary && ((routeCoords.length >= 2 && !validCityRoute(routeCoords)) ||
+          (assignedIncidentRoute.length >= 2 && !validCityRoute(assignedIncidentRoute))) && <View style={{
+            position:"absolute",bottom:132,left:16,right:16,zIndex:12,
+            padding:9,borderRadius:9,backgroundColor:"rgba(255,247,237,0.96)",
+            borderWidth:1,borderColor:"#F1B587",
+          }}>
+          <Text style={{fontSize:11,color:"#934719"}}>
+            Road route crosses outside the SJDM boundary, so it is hidden on this city-only map.
+            Verify the route with official navigation if needed.
+          </Text>
+        </View>}
         {boundaryUnavailable && <View style={{
           position:"absolute",top:10,right:12,left:12,zIndex:10,
           backgroundColor:"rgba(255,255,255,0.94)",borderRadius:10,
@@ -1565,6 +1616,14 @@ export default function MapTracking() {
           </Text>
         </View>}
 
+        {!sjdmBoundary && <View style={{
+          ...StyleSheet.absoluteFillObject,zIndex:9,backgroundColor:"#E7EEEA",
+          alignItems:"center",justifyContent:"center",padding:25,
+        }}>
+          <Text style={{color:"#15553F",fontWeight:"700",textAlign:"center"}}>
+            SJDM map unavailable until city boundary has loaded.
+          </Text>
+        </View>}
         {/* Critical nearby incident banner */}
         {criticalNearbyIncident && (
           <View style={styles.criticalBanner}>
