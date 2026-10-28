@@ -332,8 +332,8 @@ test("Sir Pavia Edit Profile persists name to main profile without compulsory oc
   assert.match(profile,/onRequestClose=\{closeProfileEditor\}/);
 
   assert.match(profile,/if \(editingOccupation && occupationCategory === "Other \(Specify\)"/);
-  assert.match(profile,/setOccupationTouched\(true\); setOccupationCategory\(option\)/);
-  assert.match(profile,/setOccupationTouched\(true\); setOccupationSpecialization\(option\)/);
+  assert.match(profile,/setOccupationTouched\(true\);setOccupationCategory\(value==="Not specified"\?"":value\)/);
+  assert.match(profile,/setOccupationTouched\(true\);setOccupationSpecialization\(value\)/);
   assert.match(profile,/setOccupationTouched\(true\); setOccupationOther\(value\)/);
   assert.doesNotMatch(profile,/if \(!occupationCategory \|\| !OCCUPATION_OPTIONS\.includes\(occupationCategory\)\)/);
   assert.match(profile,/const changes: Partial<UserProfile> = \{/);
@@ -364,4 +364,25 @@ test("Edit Profile checks are source-only and require no fake or disposable acco
   assert.match(web,/!isKnownDisposableEmail\(formData\.email\)/);
   assert.match(native,/!isKnownDisposableEmail\(formData\.email\)/);
   assert.match(staff,/if \(step === 0 && isKnownDisposableEmail\(form\.email\)\)/);
+});
+
+test("Final emerald Resident Edit Profile has visible vertical scrolling and official searchable dropdowns",()=>{
+ const s=read("app/(tabs)/profile.tsx");
+ assert.match(s,/import \{ SJDM_BARANGAYS \} from/);
+ assert.match(s,/label="Barangay" value=\{barangay\}/);
+ assert.match(s,/options=\{SJDM_BARANGAYS\} open=\{barangayOpen\} searchable/);
+ assert.match(s,/if \(barangayTouched && !SJDM_BARANGAYS\.includes\(barangay\)\)/);
+ assert.match(s,/if \(barangayTouched\) changes\.barangay = barangay/);
+ assert.match(s,/options=\{\["Not specified",\.\.\.OCCUPATION_OPTIONS\]\}/);
+ assert.match(s,/options=\{SPECIALIZATIONS\[occupationCategory\] \|\| \[\]\}/);
+ assert.match(s,/showsVerticalScrollIndicator persistentScrollbar/);
+ assert.match(s,/overflowY:"auto"/);
+ assert.match(s,/function ProfileDropdown\(/);
+ assert.match(s,/onSelect=\{value => \{setBarangay\(value\);setBarangayTouched\(true\);/);
+ const modal=s.slice(s.indexOf('<Modal visible={editOpen}'),s.indexOf('</Modal>',s.indexOf('<Modal visible={editOpen}')));
+ assert.ok(modal.indexOf('</ScrollView>')<modal.indexOf('<View style={styles.modalFooter}>'),"Footer must remain visible outside scrollable edit fields");
+ for(const label of ['label="First Name"','label="Middle Name"','label="Last Name"','label="Phone Number"','label="Complete Address"'])
+   assert.ok(modal.includes(label),label);
+ assert.match(s,/backgroundColor:"#087C61"/);
+ assert.match(s,/label="Barangay" value=\{profile\.barangay \|\| "Not provided"\}/);
 });
