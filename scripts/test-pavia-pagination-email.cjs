@@ -531,3 +531,19 @@ test("Super Admin oversight covers proposals, verified attendance and LGU creden
   assert.doesNotMatch(screen,/writeBatch\(|updateDoc\(|deleteDoc\(|addDoc\(/,
     "System Records must remain read-only; LGU operational actions belong to Admin");
 });
+
+test("Super Admin Audit Logs support verified source feeds, category/search filtering, and explicit failures", () => {
+  const source = read("app/(superadmin)/admin-logs.tsx");
+  const rules = read("firestore.rules");
+  for(const auditSource of ["adminLogs", "adminActivityLogs"]) {
+    assert.ok(source.includes('"'+auditSource+'"'), "Missing audit feed "+auditSource);
+    assert.ok(rules.includes("match /"+auditSource+"/{logId}"), "Missing append-only audit rule");
+  }
+  for(const label of ["All activity", "Access & Credentials", "System Settings", "Other Admin Activity"])
+    assert.ok(source.includes('label: "'+label+'"'), "Missing audit category "+label);
+  assert.match(source, /categoryFor\(item\.actionType\) === category/);
+  assert.match(source, /setCategory\(item\.key\); setPage\(1\);/);
+  assert.match(source, /Object\.keys\(errors\)\.length > 0/);
+  assert.match(source, /const pagedLogs = visible\.slice/);
+  assert.match(source, /const PAGE_SIZE = 5/);
+});
