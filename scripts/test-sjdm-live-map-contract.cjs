@@ -19,6 +19,7 @@ function importLocalTs(file) {
 }
 const boundary = importLocalTs("lib/sjdmMapBoundary.ts");
 const facilities = importLocalTs("lib/lguMapFacilities.ts");
+const emergency = importLocalTs("lib/emergencyMapTypes.ts");
 const polygon = {
   type: "Feature",
   properties: {city:"Synthetic",province:"Synthetic",source:"Test only"},
@@ -140,4 +141,27 @@ test("city overview fits all SJDM bounds and outside is fully opaque", () => {
   assert.match(native, /fillColor="rgba\(231,238,234,1\)"/);
   assert.match(native, /onRegionChangeComplete=\{region =>/);
   assert.match(web, /City boundary unavailable\. SJDM-only map|SJDM boundary unavailable\. Map is hidden/);
+});
+
+
+test("old shelter reports never authorize fresh available evacuation routing", () => {
+  const t = Date.parse("2026-10-28T08:00:00Z");
+  const base = { status:"active", verificationStatus:"verified" };
+  assert.equal(emergency.isRecentShelterReport({
+    ...base, lastVerifiedAt: {toMillis:()=>t-60*60*1000}
+  },t),true);
+  assert.equal(emergency.isRecentShelterReport({
+    ...base, lastVerifiedAt: {toMillis:()=>t-25*60*60*1000}
+  },t),false);
+  assert.equal(emergency.isRecentShelterReport({...base},t),false);
+  assert.equal(emergency.isRecentShelterReport({
+    ...base, status:"closed",lastVerifiedAt:{toMillis:()=>t}
+  },t),false);
+  assert.equal(emergency.isRecentShelterReport({
+    ...base, lastVerifiedAt:{toMillis:()=>t+60*60*1000}
+  },t),false);
+  const native = fs.readFileSync(path.join(root,"components/tabs/MapTracking.native.tsx"),"utf8");
+  assert.match(native,/isRecentShelterReport\(center\)/);
+  const web = fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(web,/Status NOT recently confirmed/);
 });
