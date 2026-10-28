@@ -38,7 +38,24 @@ jobs:
         run: |
           node --test scripts/test-sjdm-live-map-contract.cjs
           node --test scripts/test-sjdm-facility-admin-contract.cjs
+      - name: Verify Community Events map and emergency integrations
+        run: node scripts/test-event-map-route-ux.cjs
+      - name: Install Java 21 for local Firebase emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Test real Firestore rules and live facility listeners (synthetic emulator only)
+        run: |
+          npx firebase emulators:exec --only firestore --project demo-volunserve \
+            "node scripts/test-live-emergency-map-rules.cjs && node scripts/test-sjdm-live-firebase-subscriptions.cjs"
       - name: Typecheck app
         run: npx tsc --noEmit
       - name: Export production web bundle (NO DEPLOYMENT)
         run: npx expo export --platform web
+      - name: Check existing Friday preview (read-only; report revision mismatch)
+        continue-on-error: true
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve-3aa5b--sjdm-friday-preview-o9qxt66d.web.app
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
