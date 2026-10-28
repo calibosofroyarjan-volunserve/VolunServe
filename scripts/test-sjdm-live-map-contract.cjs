@@ -192,3 +192,12 @@ test("Minuyan Proper verified history is a SOURCE REFERENCE only, not an active 
   assert.doesNotMatch(sources,/latitude\s*:/);
   assert.doesNotMatch(sources,/longitude\s*:/);
 });
+
+
+test("Residents can reveal the full authentic SJDM outline without switching off case/verified pins", () => {
+  const web=fs.readFileSync(path.join(root,"components/tabs/MapTracking.web.tsx"),"utf8");
+  assert.match(web,/data\?\.kind === "fit-whole-sjdm"/);
+  assert.match(web,/map\.fitBounds\(\[\[box\.west, box\.south\],\[box\.east, box\.north\]\]/);
+  assert.match(web,/Full SJDM/);
+  assert.match(web,/kind:"fit-whole-sjdm"/);
+});
