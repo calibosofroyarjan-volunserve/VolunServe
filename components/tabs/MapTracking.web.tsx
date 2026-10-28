@@ -856,6 +856,13 @@ const mapDocument = `
                             [area.east + 0.004, area.north + 0.004]]);
           const center = map.getCenter();
           if (!withinCity(center.lat, center.lng)) map.jumpTo({center:lastValidCityCenter});
+          // Default overview opens with the entire SJDM administrative scope.
+          // Case-specific navigation may zoom in, but never outside the city.
+          if (!hasFitted && !payload.navigationView) {
+            map.fitBounds([[area.west, area.south], [area.east, area.north]],
+              {padding: 35, maxZoom: 15, duration: 0});
+            hasFitted = true;
+          }
         }
         let pointCount = 0;
 
@@ -1098,6 +1105,7 @@ const mapDocument = `
         }
 
         if (
+          payload.navigationView &&
           (payload.fit || !hasFitted) &&
           pointCount > 0
         ) {
