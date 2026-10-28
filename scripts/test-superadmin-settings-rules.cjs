@@ -74,6 +74,17 @@ async function main() {
       throw Error("Authorized system settings update was not persisted");
     }
     await assertSucceeds(superDb.doc("adminLogs/accepted").get());
+    // A Super Admin cannot substitute a fabricated personal/mobile hotline.
+    for (const fake of ["0912-345-6789", "555-1234", "911; 0912-345-6789", "999"]) {
+      await assertFails(superDb.doc("systemSettings/public").set({
+        ...payload("governance-super"), emergencyHotline: fake,
+      }));
+    }
+    for (const official of ["911", "0932-600-0119", "0955-206-7200"]) {
+      await assertSucceeds(superDb.doc("systemSettings/public").set({
+        ...payload("governance-super"), emergencyHotline: official,
+      }));
+    }
     await assertFails(adminDb.doc("adminLogs/accepted").get());
     await assertFails(residentDb.collection("adminLogs").get());
 
