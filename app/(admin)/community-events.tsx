@@ -245,7 +245,10 @@ export default function CommunityEventAdminScreen() {
   }, [proposals, filter, search]);
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const activePage = Math.min(page, pageCount);
-  const pagedProposals = visible.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  const pagedProposals = useMemo(
+    () => visible.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE),
+    [visible, activePage],
+  );
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
   // Read only profiles needed for visible proposal cards, not the full user directory.
