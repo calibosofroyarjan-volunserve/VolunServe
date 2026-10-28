@@ -497,3 +497,16 @@ test("Super Admin System Records shows current Community Events and distinct leg
   assert.match(rules, /match \/communityEvents\/\{eventId\}/);
   assert.doesNotMatch(source, /collectionName: "donationTransactions"/);
 });
+
+test("Super Admin LGU staff promotion has no legacy direct-create or arbitrary account picker", () => {
+  const screen = read("app/(superadmin)/admin-accounts.tsx");
+  for (const obsolete of [
+    "showAddAdmin", "setShowAddAdmin", "promoteSearch", "eligibleUsers",
+    "Select Registered Staff Account",
+  ]) assert.ok(!screen.includes(obsolete), "Obsolete Admin creation shortcut: " + obsolete);
+  assert.match(screen, /account\.role === "applicant" && account\.status === "pending_review"/);
+  assert.match(screen, /actionTarget\?\.role === "applicant"/);
+  assert.match(screen, /action === "promote" && !reviewComplete/);
+  assert.match(screen, /batch\.set\(doc\(db, "lguAdminCredentialReviews", account\.id\)/);
+  assert.match(screen, /await batch\.commit\(\)/);
+});
