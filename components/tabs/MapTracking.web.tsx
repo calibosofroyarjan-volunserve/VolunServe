@@ -5397,18 +5397,18 @@ export default function WebMapTracking() {
             </div>
 
             <div className="clean-summary-person">
-              <span>Active responder</span>
+              <span>LGU response</span>
               <strong>
                 {residentLguPin?.name ||
                   residentCoordinationCase?.activeLguResponderName ||
-                  "LGU coordinating response"}
+                  "Awaiting LGU assignment"}
               </strong>
               <small>
                 {residentLguPin
                   ? `Official LGU responder · ${residentLguPin.stale ? "STALE" : "LIVE"}`
                   : residentCoordinationCase?.activeLguResponderUid
                     ? "Official LGU responder · WAITING GPS"
-                    : "Waiting for official LGU responder"}
+                    : "No LGU responder assigned yet"}
               </small>
               {residentActiveVolunteerAssignment && (
                 <small>
@@ -6397,11 +6397,11 @@ export default function WebMapTracking() {
             <>
               <div className="clean-side-heading">
                 <div>
-                  <span className="clean-kicker">ACTIVE RESPONDER</span>
+                  <span className="clean-kicker">LGU RESPONSE</span>
                   <h2>
                     {residentLguPin?.name ||
                       residentCoordinationCase?.activeLguResponderName ||
-                      "LGU coordinating response"}
+                      "Awaiting LGU assignment"}
                   </h2>
                 </div>
                 <span
@@ -6415,7 +6415,7 @@ export default function WebMapTracking() {
                       : "LGU LIVE"
                     : residentCoordinationCase?.activeLguResponderUid
                       ? "WAITING GPS"
-                      : "WAITING"}
+                      : "UNASSIGNED"}
                 </span>
               </div>
 
@@ -6447,7 +6447,8 @@ export default function WebMapTracking() {
                       ? routeResponderPoint.stale
                         ? "STALE"
                         : "LIVE"
-                      : "WAITING"}
+                      : residentCoordinationCase?.activeLguResponderUid
+                        ? "WAITING GPS" : "NOT ASSIGNED"}
                   </strong>
                 </div>
               </div>
@@ -6459,8 +6460,23 @@ export default function WebMapTracking() {
                     : "The official LGU response is active. The green pin is your location and the red LGU pin shows the responder in real time."
                   : residentCoordinationCase?.activeLguResponderUid
                     ? "An official LGU responder is assigned. Waiting for the responder's first or next GPS update."
-                    : "Your green Resident pin stays visible while VolunServe waits for the official LGU response."}
+                    : "No official LGU responder is assigned to this case yet. Your report is saved; live GPS and ETA will appear only after authorized LGU assignment and active location sharing."}
               </div>
+
+              {!residentLguPin && (
+                <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:10,marginBottom:10}}>
+                  <a href="tel:911" className="secondary-button"
+                    style={{padding:"9px 12px",borderRadius:9,background:"#FFF2E8",
+                      textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
+                    Call 911 · Emergency
+                  </a>
+                  <a href="tel:09326000119" className="secondary-button"
+                    style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
+                      textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
+                    Call SJDM CDRRMO
+                  </a>
+                </div>
+              )}
 
               {residentLguArrivalStatus === "pending" && (
                 <div className="resident-arrival-confirm-card">
