@@ -121,3 +121,16 @@ test("Root route guard rejects restored unverified email/password sessions",()=>
   assert.match(rootLayout,/await logoutUser\(\)/);
   assert.match(rootLayout,/router\.replace\("\/login"\)/);
 });
+
+test("AI face similarity cannot directly promote a Resident without LGU ID/name review",()=>{
+  const backend = fs.readFileSync(path.join(root,"backend/server.js"),"utf8");
+  const match = backend.match(/function identityAttemptOutcome\(decision, attempts\) \{[\s\S]*?\n\}/);
+  assert.ok(match,"identity attempt outcome function must be present");
+  const fn = new Function("MAX_IDENTITY_AI_ATTEMPTS", "return (" + match[0] + ");")(3);
+  assert.deepEqual(fn("verified",1),{status:"pending",requiresManualReview:true});
+  assert.deepEqual(fn("manual_review",1),{status:"pending",requiresManualReview:true});
+  assert.deepEqual(fn("failed",1),{status:"failed",requiresManualReview:false});
+  assert.deepEqual(fn("failed",3),{status:"pending",requiresManualReview:true});
+  assert.match(backend,/identityVerified: false/);
+  assert.doesNotMatch(backend,/if \(decision === "verified"\) \{\s*transaction\.set\(userRef/);
+});
