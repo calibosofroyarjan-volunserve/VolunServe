@@ -184,3 +184,18 @@ test("Super Admin workflow avoids duplicate overview audit shortcuts and explain
   assert.match(settings,/NOT a working automatic cleanup switch/);
   assert.match(settings,/Custom value — enter below/);
 });
+
+
+test("Reviewer-visible Super Admin analytics and pagination are never hidden on one-page queues",()=>{
+  const overview=read("app/(superadmin)/index.tsx");
+  const paging=read("components/ui/ListPagination.tsx");
+  assert.match(overview,/orientation="vertical"/);
+  assert.match(overview,/Live System Records · Bar Graph/);
+  assert.match(overview,/shortLabel:/);
+  assert.match(overview,/approvedPercentage/);
+  assert.doesNotMatch(paging,/if \(total <= pageSize\) return null/);
+  assert.match(paging,/Showing \{first\}–\{last\} of \{total\} records/);
+  assert.match(paging,/Page \{safePage\} of \{pages\}/);
+  assert.match(paging,/disabled=\{safePage <= 1\}/);
+  assert.match(paging,/disabled=\{safePage >= pages\}/);
+});
