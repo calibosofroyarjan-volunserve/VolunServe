@@ -1664,7 +1664,8 @@ export default function WebMapTracking() {
 
   const isLguPersonnel = accountRole === "lgu_personnel";
 
-  const isOperationalLgu = isAdministrator || isLguPersonnel;
+  // Programmers' Super Admin may inspect data but cannot act as LGU dispatch.
+  const isOperationalLgu = accountRole === "admin" || isLguPersonnel;
 
   const isVolunteerMode =
     !isAdministrator &&
