@@ -444,3 +444,16 @@ test("Super Admin staff onboarding has responsive premium cards, searchable revi
   assert.match(screen, /await batch\.commit\(\)/);
   assert.doesNotMatch(screen, /onPress=\{\(\) => setShowAddAdmin\(true\)\}/);
 });
+
+test("LGU staff application keeps a searchable official SJDM barangay picker and readable web progress steps", () => {
+  const screen = read("app/admin-request.tsx");
+  assert.match(screen, /const \[barangaySearch, setBarangaySearch\] = useState\(""/);
+  assert.match(screen, /accessibilityLabel="Search official SJDM barangays"/);
+  assert.match(screen, /SJDM_BARANGAYS\.filter\(name =>/);
+  assert.match(screen, /name\.toLowerCase\(\)\.includes\(barangaySearch\.trim\(\)\.toLowerCase\(\)\)/);
+  assert.match(screen, /index===step&&styles\.progressTextActive/);
+  assert.doesNotMatch(screen, /index<=step&&styles\.progressTextActive/);
+  assert.match(screen, /role:"applicant",status:"pending_review"/);
+  assert.match(screen, /privateEvidenceIntakeEnabled/);
+  assert.match(screen, /!privateEvidenceIntakeEnabled/);
+});
