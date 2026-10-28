@@ -174,6 +174,7 @@ export default function LguStaffApplication() {
         await setDoc(doc(candidateDb,"users",uid),{
           uid,email,fullName:form.fullName.trim().replace(/\s+/g," "),
           age:0,phoneNumber:"",role:"applicant",status:"pending_review",
+          emailVerificationRequired:true,
           residentAccess:false,volunteerAccess:false,region:"Region III – Central Luzon",
           province:"Bulacan",city:"City of San Jose del Monte",barangay:form.barangay,
           lguOffice:form.lguOffice.trim(),lguPosition:form.lguPosition.trim(),
