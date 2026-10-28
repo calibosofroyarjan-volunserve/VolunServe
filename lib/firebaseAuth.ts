@@ -700,10 +700,14 @@ export const loginUser = async (
             : "Your registration was rejected. Please contact an administrator."
         );
       }
-      if (status === "suspended" ||
-          (profile.role === "admin" && profile.adminStatus === "suspended")) {
+      if (profile.role === "admin" && profile.adminStatus === "suspended") {
         throw new Error(
           "Your administrative access is suspended. Contact your authorized Super Admin."
+        );
+      }
+      if (status === "suspended") {
+        throw new Error(
+          "Your account is suspended. Please contact an administrator."
         );
       }
       throw new Error(
