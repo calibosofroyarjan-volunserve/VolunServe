@@ -246,7 +246,7 @@ export default function SuperAdminDashboard() {
 
       <View style={styles.secondarySection}>
         <View style={styles.secondaryHead}>
-          <Text style={styles.sectionTitle}>LGU staff verification & account governance</Text>
+          <Text style={styles.sectionTitle}>Account approval summary</Text>
           <Text style={styles.sectionHint}>Real-time account status from Firestore</Text>
         </View>
         <View style={styles.governanceActions}>
@@ -256,12 +256,7 @@ export default function SuperAdminDashboard() {
             style={styles.governancePrimary}>
             <Text style={styles.governancePrimaryText}>Review LGU Applications</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button"
-            accessibilityLabel="Open Super Admin security and audit logs"
-            onPress={() => router.push("/(superadmin)/admin-logs" as any)}
-            style={styles.governanceSecondary}>
-            <Text style={styles.governanceSecondaryText}>View Audit Logs</Text>
-          </TouchableOpacity>
+
         </View>
         {showApproval ?
           <View style={styles.approvalRow}>
@@ -280,7 +275,7 @@ export default function SuperAdminDashboard() {
           </Text>
         }
         <Text style={styles.note}>
-          Review LGU credentials before granting Admin permissions. System administrators manage access and settings; operational donations belong to the LGU Admin workspace.
+          Start with LGU Staff & Admin Accounts to review applications. The charts above summarize records; detailed case handling and donations remain exclusively in the LGU Admin workspace.
         </Text>
       </View>
 
