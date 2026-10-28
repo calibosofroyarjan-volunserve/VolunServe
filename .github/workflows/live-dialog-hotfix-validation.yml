@@ -2,11 +2,13 @@ name: Production Branded Dialog Hotfix Validation (No Deploy)
 on:
   push:
     branches:
-      - hotfix/live-branded-dialogs-20261029
+      - hotfix/live-home-web-logout-20261029
   pull_request:
     paths:
       - app/_layout.tsx
       - app/(tabs)/_layout.tsx
+      - components/home/Home.web.tsx
+      - app/(tabs)/index.tsx
       - lib/appDialog.ts
       - components/ui/AppDialogHost.tsx
       - scripts/test-live-dialog-hotfix.cjs
