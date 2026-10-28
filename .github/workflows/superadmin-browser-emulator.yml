@@ -8,6 +8,7 @@ on:
       - app/admin-request.tsx
       - app/(superadmin)/**
       - components/admin/LguApplicantEvidencePanel.tsx
+      - components/admin/LguStaffPrivacyRequestsPanel.tsx
       - components/auth/PremiumAuthShell.tsx
       - components/ui/ListPagination.tsx
       - scripts/test-superadmin-browser-emulator.cjs
