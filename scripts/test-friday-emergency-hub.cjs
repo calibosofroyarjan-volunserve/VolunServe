@@ -48,21 +48,21 @@ test("Community Events retains in-module location and directions", () => {
 
 test("Resident map case selection stays inside Emergency Reports", () => {
   const map = read("components/tabs/MapTracking.web.tsx");
-  assert.match(map, /disaster-response\\?view=tracking&caseId=\\$\\{encodeURIComponent\\(caseId\\)\\}/);
-  assert.match(map, /disaster-response\\?view=tracking&caseId=\\$\\{encodeURIComponent\\(onlyCase.id\\)\\}/);
-  assert.match(map, /router\\.replace\\("\\/disaster-response\\?view=tracking"/);
-  assert.doesNotMatch(map, /router\\.replace\\("\\/map-tracking"/);
-  assert.match(map, /item\\.category \\|\\| item\\.title/);
+  assert.match(map, /disaster-response\?view=tracking&caseId=\$\{encodeURIComponent\(caseId\)\}/);
+  assert.match(map, /disaster-response\?view=tracking&caseId=\$\{encodeURIComponent\(onlyCase.id\)\}/);
+  assert.match(map, /router\.replace\("\/disaster-response\?view=tracking"/);
+  assert.doesNotMatch(map, /router\.replace\("\/map-tracking"/);
+  assert.match(map, /item\.category \|\| item\.title/);
 });
 
 test("Native case links focus on the selected emergency without invented travel times", () => {
   const map = read("components/tabs/MapTracking.native.tsx");
   assert.match(map, /useLocalSearchParams/);
   assert.match(map, /focusedIncident/);
-  assert.match(map, /incident\\.id === focusedCaseId/);
-  assert.match(map, /point\\.caseId === focusedCaseId/);
+  assert.match(map, /incident\.id === focusedCaseId/);
+  assert.match(map, /point\.caseId === focusedCaseId/);
   assert.match(map, /Road directions are unavailable/);
-  assert.doesNotMatch(map, /Math\\.ceil\\(\\(directDistance \\/ 25\\)/);
+  assert.doesNotMatch(map, /Math\.ceil\(\(directDistance \/ 25\)/);
 });
 
 test("Hidden response map links keep the correct owning module highlighted", () => {
@@ -75,6 +75,6 @@ test("Emergency hub uses restrained typography and mobile-size accessible contro
   const hub = read("app/(tabs)/disaster-response.tsx");
   assert.match(hub, /minHeight: 48/);
   assert.match(hub, /compactActionGroup/);
-  assert.match(hub, /accessibilityState=\\{\\{ selected: view === "tracking" \\}\\}/);
+  assert.match(hub, /accessibilityState=\{\{ selected: view === "tracking" \}\}/);
   assert.match(hub, /serviceTitle/);
 });
