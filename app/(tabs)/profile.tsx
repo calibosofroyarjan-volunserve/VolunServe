@@ -336,6 +336,7 @@ export default function Profile() {
   const [occupationCategory, setOccupationCategory] = useState("");
   const [occupationSpecialization, setOccupationSpecialization] = useState("");
   const [occupationOther, setOccupationOther] = useState("");
+  const [occupationTouched, setOccupationTouched] = useState(false);
   const [occupationOpen, setOccupationOpen] = useState(false);
   const [specializationOpen, setSpecializationOpen] = useState(false);
 
@@ -475,6 +476,7 @@ export default function Profile() {
           setOccupationSpecialization(nextProfile.occupationSpecialization || "");
           setOccupationOther(nextProfile.occupationOther ||
             (category === "Other (Specify)" && previousOccupation !== "Other (Specify)" ? previousOccupation : ""));
+          setOccupationTouched(false);
           setOccupationOpen(false);
           setSpecializationOpen(false);
 
@@ -910,7 +912,7 @@ export default function Profile() {
     }
     // Name and contact changes must be saveable without first providing an
     // unrelated occupation. Legacy Resident profiles may have no occupation.
-    const editingOccupation = occupationCategory.trim().length > 0;
+    const editingOccupation = occupationTouched;
     if (editingOccupation && !OCCUPATION_OPTIONS.includes(occupationCategory)) {
       AppAlert.alert("Select occupation", "Choose an occupation from the list.");
       return;
@@ -920,7 +922,7 @@ export default function Profile() {
       AppAlert.alert("Choose specialization", "Select a valid specialization.");
       return;
     }
-    if (occupationCategory === "Other (Specify)" &&
+    if (editingOccupation && occupationCategory === "Other (Specify)" &&
         occupationOther.trim().length < 2) {
       AppAlert.alert("Specify occupation", "Please enter your occupation.");
       return;
@@ -1791,7 +1793,7 @@ export default function Profile() {
               {occupationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
                 {OCCUPATION_OPTIONS.map(option => (
                   <TouchableOpacity key={option} accessibilityRole="button"
-                    onPress={() => { setOccupationCategory(option); setOccupationSpecialization(""); setOccupationOther(""); setOccupationOpen(false); setSpecializationOpen(false); }}
+                    onPress={() => { setOccupationTouched(true); setOccupationCategory(option); setOccupationSpecialization(""); setOccupationOther(""); setOccupationOpen(false); setSpecializationOpen(false); }}
                     style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationCategory === option ? "#E0F6EC" : "#FFFFFF" }}>
                     <Text style={{ color: "#124C3C" }}>{option}</Text>
                   </TouchableOpacity>
@@ -1807,7 +1809,7 @@ export default function Profile() {
                 </TouchableOpacity>
                 {specializationOpen && <View style={{ borderWidth: 1, borderColor: "#E3EAE6", borderRadius: 12, marginBottom: 12 }}>
                   {(SPECIALIZATIONS[occupationCategory] || []).map(option => (
-                    <TouchableOpacity key={option} onPress={() => { setOccupationSpecialization(option); setSpecializationOpen(false); }}
+                    <TouchableOpacity key={option} onPress={() => { setOccupationTouched(true); setOccupationSpecialization(option); setSpecializationOpen(false); }}
                       style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: occupationSpecialization === option ? "#E0F6EC" : "#FFFFFF" }}>
                       <Text style={{ color: "#124C3C" }}>{option}</Text>
                     </TouchableOpacity>
@@ -1817,7 +1819,7 @@ export default function Profile() {
               {occupationCategory === "Other (Specify)" && <ProfileInput
                 label="Specify Occupation"
                 value={occupationOther}
-                onChange={setOccupationOther}
+                onChange={value => { setOccupationTouched(true); setOccupationOther(value); }}
                 placeholder="Occupation"
               />}
 
