@@ -1005,11 +1005,12 @@ const mapDocument = `
             .addTo(map);
 
           centerMarkers.push(marker);
-          bounds.extend([
-            item.longitude,
-            item.latitude
-          ]);
-          pointCount += 1;
+          // Keep the live response camera focused on the assigned Resident,
+          // not a distant shelter that happens to be inside SJDM.
+          if (!payload.activeResponseView) {
+            bounds.extend([item.longitude, item.latitude]);
+            pointCount += 1;
+          }
         }
 
         if (payload.navigationView) {
@@ -1567,6 +1568,8 @@ export default function WebMapTracking() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
+  const [shelterFeedState, setShelterFeedState] = useState<"loading" | "ready" | "error">("loading");
+  const [lguFacilityFeedState, setLguFacilityFeedState] = useState<"loading" | "ready" | "error">("loading");
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
   const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -1584,15 +1587,21 @@ export default function WebMapTracking() {
   useEffect(() => {
     if (!user || !profile || !isApprovedProfile(profile)) {
       setLguFacilities([]);
+      setLguFacilityFeedState("loading");
       return;
     }
+    setLguFacilityFeedState("loading");
     return onSnapshot(collection(db, "lguMapFacilities"),
-      snapshot => setLguFacilities(snapshot.docs
-        .map(doc => verifiedLguMapFacility(doc.id, doc.data()))
-        .filter((value): value is LguMapFacility => value !== null)),
+      snapshot => {
+        setLguFacilities(snapshot.docs
+          .map(doc => verifiedLguMapFacility(doc.id, doc.data()))
+          .filter((value): value is LguMapFacility => value !== null));
+        setLguFacilityFeedState("ready");
+      },
       error => {
         console.error("LGU map facility listener", error);
         setLguFacilities([]);
+        setLguFacilityFeedState("error");
       });
   }, [user?.uid, profile?.status]);
 
@@ -1963,11 +1972,11 @@ export default function WebMapTracking() {
   ]);
 
   useEffect(() => {
-    if (missionMode || adminMissionMode) {
-      setCenters([]);
-      return;
-    }
-
+    // Emergency response and Volunteer mission views ALSO require the current
+    // shelter feed. Do not drop the listener simply because a case is focused.
+    // Authorized public shelter metadata remains subject to verified/active
+    // status and the true SJDM boundary before being displayed.
+    setShelterFeedState("loading");
     return onSnapshot(
       collection(db, "evacuation_centers"),
       (snapshot) => {
@@ -1977,20 +1986,16 @@ export default function WebMapTracking() {
             ...(item.data() as Omit<CenterRow, "id">),
           })),
         );
+        setShelterFeedState("ready");
       },
       (cause) => {
-        console.error(
-          "evacuation_centers map listener",
-          cause,
-        );
+        console.error("evacuation_centers map listener", cause);
         setCenters([]);
-
-        setError(
-          "Could not load evacuation centers. Check Firestore permissions and your connection.",
-        );
+        setShelterFeedState("error");
+        setError("Could not load evacuation centers. Check Firestore permissions and your connection.");
       },
     );
-  }, [missionMode, adminMissionMode]);
+  }, []);
 
   const visibleCases = useMemo(() => {
     if (missionMode || adminMissionMode) {
@@ -2045,7 +2050,7 @@ export default function WebMapTracking() {
   ]);
 
   const visibleCenters = useMemo(() => {
-    if (missionMode || adminMissionMode || !showCenters) return [];
+    if (!showCenters) return [];
 
     const needle = normalize(search);
 
@@ -2062,7 +2067,7 @@ export default function WebMapTracking() {
         .map(normalize)
         .some((value) => value.includes(needle));
     });
-  }, [centers, search, showCenters, missionMode, adminMissionMode, isResidentMode]);
+  }, [centers, search, showCenters]);
 
   const residentActiveCases = useMemo(
     () =>
@@ -3963,13 +3968,11 @@ export default function WebMapTracking() {
         // references, but they no longer stretch fitBounds across the map.
         navigationView: missionMode,
 
-        // Keep active response navigation focused on the mission. Evacuation
-        // centers remain available on overview maps, but they are intentionally
-        // hidden from the focused Volunteer mission map so unrelated locations
-        // cannot clutter or stretch the camera.
-        centers: missionMode
-          ? []
-          : visibleCenters.filter(item => !!sjdmBoundary &&
+        // Render verified shelters even during an active Resident, LGU or
+        // Volunteer mission. Do NOT include unrelated facility locations in
+        // the mission navigation camera bounds.
+        activeResponseView: isResidentMode || missionMode || adminMissionMode || lguPersonnelMissionMode,
+        centers: visibleCenters.filter(item => !!sjdmBoundary &&
             insideSjdmBoundary(sjdmBoundary, Number(item.latitude), Number(item.longitude)))
             .map((item) => ({
               id: item.id,
@@ -4028,6 +4031,8 @@ export default function WebMapTracking() {
     isResidentMode,
     missionMode,
     adminMissionMode,
+    lguPersonnelMissionMode,
+    isResidentMode,
     residentUsingOwnLiveDestination,
     selectedCase?.id,
   ]);
