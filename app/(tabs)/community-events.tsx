@@ -6,6 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
+import { isEventJoinableNow } from "../../lib/communityEventEligibility";
 import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
 import { router } from "expo-router";
 import {
@@ -1533,6 +1534,11 @@ export default function CommunityEventsScreen() {
       return;
     }
 
+    if (!isEventJoinableNow(event)) {
+      setNotice("This event is not open for joining at its scheduled date and time. Refresh for the latest Admin updates.");
+      return;
+    }
+
     setBusyEvent(event.id);
     setNotice("");
 
@@ -1581,9 +1587,9 @@ export default function CommunityEventsScreen() {
               current.status
             );
 
-          if (!isOpen) {
+          if (!isOpen || !isEventJoinableNow(current)) {
             throw new Error(
-              "This event is no longer open for volunteers."
+              "This event is closed or its scheduled time has passed. Refresh the event list."
             );
           }
 
@@ -1793,9 +1799,7 @@ export default function CommunityEventsScreen() {
       Number(event.participantsCount || 0) >=
       Number(event.capacity || 0);
 
-    const open =
-      event.status === "upcoming" ||
-      event.status === "active";
+    const open = isEventJoinableNow(event);
 
     const expanded =
       expandedEvent === event.id;
@@ -2061,7 +2065,7 @@ export default function CommunityEventsScreen() {
     const joined = participation?.status === "joined";
     const owned = event.proposedBy === user?.uid;
     const full = Number(event.participantsCount || 0) >= Number(event.capacity || 0);
-    const open = event.status === "active" || event.status === "upcoming";
+    const open = isEventJoinableNow(event);
     const detailsOpen = expandedEvent === event.id;
     const selected = detailsOpen;
     const cover = eventCover(event);
