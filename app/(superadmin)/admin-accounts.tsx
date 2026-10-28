@@ -2152,7 +2152,7 @@ const styles =
       padding: 24,
       paddingBottom: 60,
       backgroundColor:
-        "#F1F5F9",
+        "#F6F9F8",
       minHeight: "100%",
     },
 
@@ -2193,13 +2193,18 @@ const styles =
       flexWrap: "wrap",
       alignItems: "flex-start",
       gap: 16,
-      marginBottom: 22,
+      marginBottom: 17,
+      padding: 23,
+      backgroundColor:"#E5F5ED",
+      borderRadius:14,
+      borderWidth:1,
+      borderColor:"#D8EBE0",
     },
 
     eyebrow: {
       fontSize: 11,
       fontWeight: "900",
-      color: "#0F766E",
+      color: "#176C52",
       letterSpacing: 1.4,
       marginBottom: 5,
     },
@@ -2244,10 +2249,10 @@ const styles =
     statCard: {
       flexGrow: 1,
       minWidth: 140,
-      backgroundColor: "transparent",
-      borderRadius: 0,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      backgroundColor: "#FFFFFF",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#E0EBE5",
       padding: 16,
     },
 
