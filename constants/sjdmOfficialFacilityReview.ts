@@ -12,7 +12,7 @@ export type ReviewCandidate = {
   name: string;
   address: string;
   barangay: string;
-  facilityType?: "city_government" | "cdrrmo";
+  facilityType?: "city_government" | "cdrrmo" | "fire_station";
   sourceUrl: string;
   sourceLabel: string;
   sourceContext: string;
@@ -42,6 +42,17 @@ export const SJDM_OFFICIAL_REVIEW_CANDIDATES: ReviewCandidate[] = [
     sourceUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
     sourceLabel: "Official CSJDM CDRRMO office page",
     sourceContext: "Office address listed by city. Confirm the precise GPS and correct current administrative barangay before publishing.",
+  },
+  {
+    id: "bfp-fire-station-sapang-palay-current-office",
+    kind: "lgu",
+    name: "City of San Jose del Monte Fire Station — BFP Office",
+    address: "2nd Floor, Former CDRRM Office, Productivity Center, Barangay Sapang Palay Proper, City of San Jose del Monte, Bulacan",
+    barangay: "Sapang Palay",
+    facilityType: "fire_station",
+    sourceUrl: "https://csjdmfsinfohub.my.canva.site/",
+    sourceLabel: "City Fire Station BFP Region III official information hub",
+    sourceContext: "BFP publishes this as its NEW office address. Confirm the building's exact GPS with BFP before an operational LGU marker is approved; an older OSM fire-station pin may not refer to this new office.",
   },
   {
     id: "minuyan-proper-pagcor-multipurpose-shelter",
