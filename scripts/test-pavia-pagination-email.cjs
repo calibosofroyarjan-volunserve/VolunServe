@@ -63,3 +63,18 @@ test("LGU resident directory, volunteer approvals, Identity Reviews and Events s
     assert.match(s,/\.slice\(\(activePage - 1\) \* PAGE_SIZE, activePage \* PAGE_SIZE\)/,file);
   }
 });
+
+test("Super Admin read-only records and audit feed use five-row pagination and reset search",()=>{
+  const records=read("app/(superadmin)/all-records.tsx");
+  const audit=read("app/(superadmin)/admin-logs.tsx");
+  for(const [label,source] of [["System Records",records],["Audit Logs",audit]]){
+    assert.match(source,/PAGE_SIZE = 5/,label);
+    assert.match(source,/<ListPagination page=\{activePage\} total=/,label);
+    assert.match(source,/setPage\(1\)/,label);
+    assert.match(source,/\.slice\(\(activePage - 1\) \* PAGE_SIZE, activePage \* PAGE_SIZE\)/,label);
+  }
+  assert.match(records,/pagedRecords\.map\(/);
+  assert.match(audit,/pagedLogs\.map\(/);
+  assert.doesNotMatch(records,/visibleRecords\.map\(\s*renderRecord/);
+  assert.doesNotMatch(audit,/\{visible\.map\(\(item\)/);
+});
