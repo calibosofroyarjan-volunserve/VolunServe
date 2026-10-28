@@ -323,7 +323,7 @@ export default function SystemSettings() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Manage system-wide public contact information and technical live-location retention controls.
+          Configure public contact details and the GPS record retention preference. These are technical settings—not LGU emergency dispatch or donation controls.
         </Text>
       </View>
 
@@ -340,7 +340,7 @@ export default function SystemSettings() {
           </Text>
 
           <Text style={styles.noticeText}>
-            This page is intentionally limited to global configuration. Admin account management remains in the separate Admin Accounts module, and operational Admin tools remain in the Admin portal.
+            Use this page in three steps: (1) verify the public contact details below, (2) select how long temporary GPS records should be retained, and (3) save. LGU account approval belongs in LGU Staff & Admin Accounts. Emergency response, assistance and donations belong to the LGU Admin portal.
           </Text>
         </View>
       </View>
@@ -361,20 +361,20 @@ export default function SystemSettings() {
             </Text>
 
             <Text style={styles.cardSubtitle}>
-              These values may be displayed to VolunServe users where public service and emergency contact information is needed.
+              Step 1 of 3 · Public-facing information. Only enter contacts confirmed by the LGU; do not use personal or sample numbers.
             </Text>
           </View>
         </View>
 
         <Field
-          label="City / Service Name"
+          label="City / Service Name (shown publicly)"
           value={cityName}
           onChangeText={setCityName}
           maxLength={120}
         />
 
         <PresetField
-          label="Official Emergency Hotline"
+          label="Official Emergency Hotline (public)"
           value={emergencyHotline}
           onChangeText={setEmergencyHotline}
           options={["911"]}
@@ -383,7 +383,7 @@ export default function SystemSettings() {
         />
 
         <Field
-          label="Support Email (Optional)"
+          label="Support Email (optional — public contact)"
           value={supportEmail}
           onChangeText={setSupportEmail}
           autoCapitalize="none"
@@ -421,7 +421,7 @@ export default function SystemSettings() {
             </Text>
 
             <Text style={styles.cardSubtitle}>
-              Configure the intended retention window for temporary resident and volunteer live-location records.
+              Step 2 of 3 · This is the intended storage lifetime for temporary location records. It does not change GPS accuracy, update frequency, or activate tracking.
             </Text>
           </View>
         </View>
@@ -433,11 +433,11 @@ export default function SystemSettings() {
           options={["24", "48", "72"]}
           keyboardType="number-pad"
           maxLength={3}
-          help="Select a retention preference or Others for 1–720 hours. Changing it does not activate automatic deletion."
+          help="24 hours = 1 day, 48 hours = 2 days, 72 hours = 3 days. Choose a custom value only with an approved retention policy. Saving does not itself delete old records."
         />
 
         <Text style={styles.helper}>
-          Valid range: 1–720 hours. This setting records the approved retention period. Automatic deletion still depends on the cleanup mechanism implemented by the system.
+          Important: the value is a retention preference, NOT a working automatic cleanup switch. Old GPS records require a separately verified cleanup process.
         </Text>
       </View>
 
@@ -475,7 +475,7 @@ export default function SystemSettings() {
             />
 
             <Text style={styles.buttonText}>
-              Save System Settings
+              Step 3 · Save System Settings
             </Text>
           </>
         )}
@@ -493,7 +493,7 @@ function PresetField({
   const [expanded, setExpanded] = useState(false);
   const isOther = !options.includes(value);
   const [customMode, setCustomMode] = useState(isOther);
-  useEffect(() => { if (!options.includes(value)) setCustomMode(true); }, [value, options]);
+  useEffect(() => { setCustomMode(!options.includes(value)); }, [value]);
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
@@ -501,7 +501,7 @@ function PresetField({
         accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
         style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
         <Text style={{ flex: 1, color: "#173D32" }} numberOfLines={2}>
-          {customMode ? "Others — specify" : (value || "Select an option")}
+          {customMode ? (value ? `Custom: ${value}` : "Custom value — enter below") : (value || "Select an option")}
         </Text>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
       </TouchableOpacity>
