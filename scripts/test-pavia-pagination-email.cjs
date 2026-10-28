@@ -161,10 +161,11 @@ test("Super Admin overview uses independent five-item paging for real audit list
   assert.match(screen,/const \[systemChangesPage, setSystemChangesPage\] = useState\(1\)/);
   assert.match(screen,/pagedAdminActions = adminActions\.slice/);
   assert.match(screen,/pagedSystemChanges = systemChanges\.slice/);
-  assert.match(screen,/pagedAdminActions\.map\(/);
-  assert.match(screen,/pagedSystemChanges\.map\(/);
-  assert.match(screen,/<ListPagination page=\{safeActivityPage\} total=\{adminActions\.length\} onChange=\{setAdminActivityPage\}/);
-  assert.match(screen,/<ListPagination page=\{safeChangesPage\} total=\{systemChanges\.length\} onChange=\{setSystemChangesPage\}/);
+  assert.match(screen,/rows=\{pagedAdminActions\}/);
+  assert.match(screen,/rows=\{pagedSystemChanges\}/);
+  assert.match(screen,/page=\{safeActivityPage\}/);
+  assert.match(screen,/page=\{safeChangesPage\}/);
+  assert.match(screen,/<ListPagination page=\{page\} total=\{total\} onChange=\{onPageChange\}/);
   assert.doesNotMatch(screen,/latestRecorded\.filter\(item => adminUids\.includes\(item\.actorUid\)\)\.slice\(0,5\)/);
 });
 
@@ -174,7 +175,9 @@ test("Super Admin workflow avoids duplicate overview audit shortcuts and explain
   const settings=read("app/(superadmin)/system-settings.tsx");
   const sidebar=read("app/(superadmin)/_layout.tsx");
   assert.doesNotMatch(overview,/View Audit Logs<\/Text>/);
-  assert.match(overview,/Review LGU Applications/);
+  assert.match(overview,/Recent LGU Admin Activity/);
+  assert.match(overview,/System & Access Changes/);
+  assert.match(overview,/View All/);
   assert.match(overview,/approvedPercentage/);
   assert.match(overview,/<WorkspaceBarChart/);
   for(const label of ["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs","System Settings"])
@@ -209,8 +212,8 @@ test("Minimal Super Admin design has one chart and numbered pagination",()=>{
  assert.ok(overview.includes('orientation="vertical"'));
  for(const name of ["Registered Accounts","Active LGU Admins","Pending LGU Applications","Suspended Admins"])
    assert.ok(overview.includes(name),name);
- assert.ok(overview.includes("pagedAdminActions.map"));
- assert.ok(overview.includes("pagedSystemChanges.map"));
+ assert.ok(overview.includes("rows={pagedAdminActions}"));
+ assert.ok(overview.includes("rows={pagedSystemChanges}"));
  assert.ok(!overview.includes("styles.secondarySection"));
  assert.ok(paging.includes("visiblePages.map"));
  assert.ok(paging.includes("number === safePage"));
