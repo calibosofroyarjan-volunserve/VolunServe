@@ -21,6 +21,8 @@ export type SjdmPublicMapPlace = {
   /** Always public mapping only; no guarantee of current operations. */
   note: string;
   positionQuality: "osm_feature" | "third_party_approximate";
+  officialInfoUrl?: string;
+  officialContact?: string;
 };
 export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
   {
@@ -30,8 +32,10 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     latitude: 14.82785, longitude: 121.04486,
     sourceUrl: "https://www.openstreetmap.org/way/1126178501",
     sourceLabel: "OpenStreetMap building (way 1126178501); official address csjdm.gov.ph",
-    note: "Mapped government building, not real-time LGU staff position.",
+    note: "City government headquarters in Dulong Bayan. This map pin shows a building, not a live LGU vehicle.",
     positionQuality: "osm_feature",
+    officialInfoUrl: "https://csjdm.gov.ph/contact-us/",
+    officialContact: "044-919-7370",
   },
   {
     id: "osm-way-1427519892",
@@ -40,38 +44,44 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     latitude: 14.82682, longitude: 121.04482,
     sourceUrl: "https://www.openstreetmap.org/way/1427519892",
     sourceLabel: "OpenStreetMap mapped barangay hall building",
-    note: "Mapped public building; hours and staff availability unconfirmed.",
+    note: "Barangay hall mapped on OpenStreetMap; confirm its current office services with the barangay.",
     positionQuality: "osm_feature",
   },
   {
     id: "osm-node-340384547",
-    name: "SJDM Police Station (mapped location)",
+    name: "San Jose del Monte City Police Station",
     kind: "police_station",
     latitude: 14.81062, longitude: 121.04469,
     sourceUrl: "https://www.openstreetmap.org/node/340384547",
     sourceLabel: "OpenStreetMap police station (node 340384547)",
-    note: "Mapped location, not a live police vehicle or dispatch status.",
+    note: "Police station map reference. Does not indicate live patrols, station staffing or dispatch.",
     positionQuality: "osm_feature",
+    officialInfoUrl: "https://csjdm.gov.ph/contact-us/",
+    officialContact: "0916-432-0401",
   },
   {
     id: "osm-way-672667289",
-    name: "San Jose del Monte Fire Station",
+    name: "Fire Station — OSM Location Reference",
     kind: "fire_station",
     latitude: 14.80924, longitude: 121.04755,
     sourceUrl: "https://www.openstreetmap.org/way/672667289",
     sourceLabel: "OpenStreetMap fire station (way 672667289)",
-    note: "Mapped building; current staffing or emergency readiness unconfirmed.",
+    note: "OSM-mapped fire-station site. The BFP publishes a NEW office address at the former CDRRM office, Productivity Center, Sapang Palay Proper; verify this map pin before visiting.",
     positionQuality: "osm_feature",
+    officialInfoUrl: "https://csjdmfsinfohub.my.canva.site/",
+    officialContact: "0932-373-2444",
   },
   {
     id: "mapped-cdrrmo-productivity-complex",
-    name: "SJDM CDRRMO — Productivity Complex",
+    name: "City Disaster Risk Reduction & Management Office",
     kind: "cdrrmo",
     latitude: 14.82746, longitude: 121.08109,
     sourceUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
     sourceLabel: "CSJDM official CDRRMO office; third-party listed GPS approximate",
-    note: "Office address confirmed by city. GPS from independent place listing is approximate and must be verified by LGU.",
+    note: "CDRRMO office: Productivity Complex, Sapang Palay Proper. Pin is an approximate site reference, not a live responder.",
     positionQuality: "third_party_approximate",
+    officialInfoUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
+    officialContact: "0932-600-0119",
   },
 ];
 
