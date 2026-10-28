@@ -277,6 +277,24 @@ async function main() {
       } else skip("Admin publish and Volunteer workflow");
     } else skip("Resident read, Admin publish and Volunteer workflow");
 
+    // Audited operational changes: LGU Admin may append, but no actor can alter
+    // an immutable audit record; residents/volunteers cannot inspect it.
+    const auditRef = admin.doc("adminLogs/community-audit-security-emulator");
+    await check("LGU Admin can create an immutable Community Event audit", () =>
+      auditRef.set({
+        actionType:"community_event_completed",targetType:"community_event",
+        targetId:eventId,adminUid,adminName:"Emulator LGU",
+        description:"Emulator lifecycle completion",createdAt:stamp(),
+      }));
+    await check("Super Admin can inspect recorded Community Event audit", () =>
+      superAdmin.doc("adminLogs/community-audit-security-emulator").get());
+    await check("Volunteer cannot read privileged audit", () =>
+      volunteer.doc("adminLogs/community-audit-security-emulator").get(), true);
+    await check("LGU Admin cannot overwrite a past audit", () =>
+      auditRef.update({description:"rewritten"}), true);
+    await check("Super Admin cannot delete a past audit", () =>
+      superAdmin.doc("adminLogs/community-audit-security-emulator").delete(), true);
+
     console.log("\nCommunity Events rule tests: " + passed +
       " passed, " + failed + " failed, " + skipped + " skipped.");
     if (failed) {
