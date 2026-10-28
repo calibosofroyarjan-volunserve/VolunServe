@@ -67,6 +67,16 @@ service cloud.firestore {
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
     }
     match /users/{uid} {
+    // Defense in depth: direct Auth SDK signups with common disposable domains
+    // cannot self-create a usable Resident or staff applicant profile.
+    // Firebase Auth UID creation itself is NOT blocked by this Firestore rule.
+    function allowedSignupEmail() {
+      return request.auth.token.get('email', '') is string
+        && !request.auth.token.get('email', '').matches(
+          '(?i)^.*@([a-z0-9-]+\\.)*(mailinator\\.com|yopmail\\.com|guerrillamail\\.com|guerrillamailblock\\.com|sharklasers\\.com|10minutemail\\.com|temp-mail\\.org|tempmail\\.com|tempmail\\.net|maildrop\\.cc|dispostable\\.com|trashmail\\.com|getnada\\.com|minuteinbox\\.com|emailondeck\\.com|throwawaymail\\.com)$'
+        );
+    }
+
 
       function hasVerifiedIdentity(data) {
         return (
@@ -126,6 +136,7 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         // The profile email must be the Firebase Auth email, not a user-supplied alias.
         && request.auth.token.get('email', '') == request.resource.data.email
+        && allowedSignupEmail()
         // Self-reported age restriction; original-ID review remains separate.
         && request.resource.data.age is int
         && request.resource.data.age >= 18
@@ -206,6 +217,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '') == request.resource.data.email
+        && allowedSignupEmail()
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
           'residentAccess','volunteerAccess','region','province','city',
