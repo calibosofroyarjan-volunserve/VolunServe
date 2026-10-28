@@ -30,7 +30,7 @@ import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
 import { isVerifiedActiveCenter, vehicleInfo } from "../../lib/emergencyMapTypes";
-import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
+import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
 import {
   activeModeForProfile,
@@ -1378,8 +1378,8 @@ export default function MapTracking() {
               the real city boundary; no Google base-map details beyond SJDM. */}
           {sjdmBoundary && <Polygon
             coordinates={SJDM_MASK_EXTERIOR.map(([longitude,latitude])=>({latitude,longitude}))}
-            holes={boundaryRings(sjdmBoundary).map(rings=>
-              rings[0].map(([longitude,latitude])=>({latitude,longitude})))}
+            holes={sjdmOutsideMask(sjdmBoundary).geometry.coordinates.slice(1).map(ring=>
+              ring.map(([longitude,latitude])=>({latitude,longitude})))}
             fillColor="rgba(231,238,234,1)"
             strokeColor="rgba(231,238,234,0)"
             strokeWidth={0}
