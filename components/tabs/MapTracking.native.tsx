@@ -1145,8 +1145,9 @@ export default function MapTracking() {
       for (const candidate of queriesToTry) {
         try {
           const results = await Location.geocodeAsync(candidate);
-          if (results.length > 0) {
-            geocoded = results[0];
+          const inScope = results.find(point => inCity(point.latitude, point.longitude));
+          if (inScope) {
+            geocoded = inScope;
             break;
           }
         } catch (geocodeError) {
@@ -1331,7 +1332,7 @@ export default function MapTracking() {
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
-          showsUserLocation={true}
+          showsUserLocation={!!location && inCity(location.latitude, location.longitude)}
           showsMyLocationButton={false}
           followsUserLocation={false}
           customMapStyle={LIGHT_MAP_STYLE}
