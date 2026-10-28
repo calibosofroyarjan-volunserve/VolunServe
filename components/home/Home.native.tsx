@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
@@ -58,7 +59,7 @@ export default function HomeScreen() {
       await setActiveUserMode("volunteer");
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert("Unable to switch mode", error?.message || "Please try again.");
+      AppAlert.alert("Unable to switch mode", error?.message || "Please try again.");
     }
   };
   const displayName =

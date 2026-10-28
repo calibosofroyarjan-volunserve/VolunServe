@@ -35,8 +35,18 @@ test("Report success, duplicate report, quick action and history lead to correct
 test("Existing tracking deep links and Volunteer Tasks remain available", () => {
   assert.match(read("app/(tabs)/map-tracking.tsx"), /MapTracking/);
   assert.match(read("app/(tabs)/map-tracking.web.tsx"), /MapTracking.web/);
-  assert.match(read("app/(tabs)/volunteer.tsx"), /"\/map-tracking"/);
-  assert.match(read("app/(tabs)/volunteer.web.tsx"), /"\/map-tracking"/);
+
+
+  for (const file of ["app/(tabs)/volunteer.tsx", "app/(tabs)/volunteer.web.tsx"]) {
+    const source = read(file);
+    assert.match(source,/useLocalSearchParams/);
+    assert.match(source,/showingTaskMap/);
+    assert.match(source,/MapTracking/);
+    assert.match(source,/Back to Volunteer Tasks/);
+    assert.match(source,/view: "tracking"/);
+    assert.match(source,/caseId: assignment.caseId/);
+  }
+
 });
 
 test("Community Events retains in-module location and directions", () => {
@@ -78,3 +88,7 @@ test("Emergency hub uses restrained typography and mobile-size accessible contro
   assert.match(hub, /accessibilityState=\{\{ selected: view === "tracking" \}\}/);
   assert.match(hub, /serviceTitle/);
 });
+
+// Defense release gate: include the repository-wide native-dialog scan and
+// existing five-per-page regression suite in the CI navigation test job.
+require("./test-pavia-pagination-email.cjs");

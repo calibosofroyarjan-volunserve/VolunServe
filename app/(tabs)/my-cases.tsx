@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
@@ -987,7 +988,7 @@ export default function MyCases() {
     const draft = draftForCase(incident.id);
 
     if (existingCount + draft.photos.length >= 10) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Limit",
         "This emergency already has the maximum number of evidence photos.",
       );
@@ -998,7 +999,7 @@ export default function MyCases() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access to attach the additional evidence requested by the LGU.",
       );
@@ -1025,7 +1026,7 @@ export default function MyCases() {
       typeof asset.fileSize === "number" &&
       asset.fileSize >= 10 * 1024 * 1024
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Too Large",
         "Each additional evidence photo must be under 10 MB.",
       );
@@ -1047,7 +1048,7 @@ export default function MyCases() {
     const draft = draftForCase(incident.id);
 
     if (existingCount >= 2 && !draft.video) {
-      Alert.alert(
+      AppAlert.alert(
         "Video Limit",
         "This emergency already has the maximum number of optional evidence videos.",
       );
@@ -1058,7 +1059,7 @@ export default function MyCases() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access to attach an optional evidence video.",
       );
@@ -1084,7 +1085,7 @@ export default function MyCases() {
       typeof asset.fileSize === "number" &&
       asset.fileSize >= 50 * 1024 * 1024
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Video Too Large",
         "The optional additional evidence video must be under 50 MB.",
       );
@@ -1308,7 +1309,7 @@ export default function MyCases() {
         return next;
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Evidence Submitted",
         "Your new evidence was added to the same emergency case. The LGU can now review it again.",
       );

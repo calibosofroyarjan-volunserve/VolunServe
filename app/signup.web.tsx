@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -22,6 +23,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { signUpUser } from "../lib/firebaseAuth";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -250,7 +252,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <View style={[styles.inputShell, focused && styles.inputFocused, !editable && styles.disabledInput, invalid && styles.inputInvalid]}>
         {icon ? <Text style={styles.inputIcon}>{icon}</Text> : null}
         <TextInput
@@ -340,7 +342,7 @@ const Dropdown = memo(function Dropdown({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <Pressable ref={triggerRef} onPress={openMenu} style={[styles.ddTrigger, !enabled && styles.disabledInput]}>
         <Text style={[styles.ddValue, !value && styles.ddPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.ddChevron}>{open ? "▲" : "▼"}</Text>
@@ -403,8 +405,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
           <Text style={styles.termsH2}>Consent</Text>
           <Text style={styles.termsP}>You consent to secure processing of your data for account registration, resident identity verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
-          <Text style={styles.termsH2}>Security</Text>
-          <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
+          <Text style={styles.termsH2}>Account Eligibility</Text>
+          <Text style={styles.termsP}>Registration is for adults aged 18 or older residing in the City of San Jose del Monte, Bulacan. Use your own permanent email address. Known temporary and disposable email domains are not accepted. Verification and Volunteer approval are separate steps.</Text>
+          <Text style={styles.termsH2}>Emergency Service Limitations</Text>
+          <Text style={styles.termsP}>An emergency report does not automatically contact 911 or dispatch an LGU responder. GPS, road routes and optional live sharing depend on location consent, signal and connectivity. For immediate danger, call 911 directly.</Text>
+          <Text style={styles.termsH2}>Donations and Security</Text>
+          <Text style={styles.termsP}>PayMongo payment demonstrations use sandbox transactions, not real funds. Use a strong password and do not share your credentials.</Text>
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -478,7 +484,8 @@ export default function Signup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = /^9\d{9}$/.test(phoneDigits);
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
+      !isKnownDisposableEmail(formData.email);
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -552,7 +559,7 @@ export default function Signup() {
         4: "Please create a password and agree to the terms.",
       };
 
-      Alert.alert("Incomplete Step", stepMessages[step]);
+      AppAlert.alert("Incomplete Step", stepMessages[step]);
       return;
     }
 
@@ -613,12 +620,12 @@ export default function Signup() {
     if (loadingSubmit) return;
 
     if (!validation.step4Valid) {
-      Alert.alert("Incomplete", "Please satisfy all security and consent requirements.");
+      AppAlert.alert("Incomplete", "Please satisfy all security and consent requirements.");
       return;
     }
 
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Users must be at least 18 years old at the time of registration.");
+      AppAlert.alert("Ineligible", "Users must be at least 18 years old at the time of registration.");
       return;
     }
 
@@ -647,25 +654,16 @@ export default function Signup() {
 
       const successTitle = "Basic Account Created";
       const successMessage = googleBound
-        ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
-        : "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
+        ? "Your account is ready. Google and email/password sign-in are linked. Your account starts in Resident Mode."
+        : "Your Basic Resident account has been saved. We sent an email verification link. Open it before signing in, then use your email and password.";
 
-      if (Platform.OS === "web") {
-        window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace("/(tabs)") },
-        ]);
-      }
+      AppAlert.alert(successTitle, successMessage, [
+        { text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
+      ], { cancelable: false });
     } catch (e: any) {
       const message = getFriendlyAuthError(e);
 
-      if (Platform.OS === "web") {
-        window.alert(`Registration Error\n\n${message}`);
-      } else {
-        Alert.alert("Registration Error", message);
-      }
+      AppAlert.alert("Registration Error", message);
     } finally {
       setLoadingSubmit(false);
     }
@@ -857,7 +855,9 @@ export default function Signup() {
                   />
 
                   {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email format.</ValidationText>
+                    <ValidationText ok={false}>{isKnownDisposableEmail(formData.email)
+                      ? "Temporary email addresses are not accepted. Use a permanent email."
+                      : "Enter a valid email format."}</ValidationText>
                   ) : null}
 
                   <View style={styles.formRow}>

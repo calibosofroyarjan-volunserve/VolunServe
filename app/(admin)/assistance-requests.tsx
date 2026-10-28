@@ -1,3 +1,5 @@
+import ListPagination from "../../components/ui/ListPagination";
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -219,7 +221,7 @@ const confirmAdminAction = (
     const browserConfirm = (globalThis as any).confirm;
 
     if (typeof browserConfirm !== "function") {
-      Alert.alert(
+      AppAlert.alert(
         "Confirmation Unavailable",
         "This browser cannot open the confirmation dialog. Refresh the page and try again.",
       );
@@ -233,7 +235,7 @@ const confirmAdminAction = (
     return;
   }
 
-  Alert.alert(title, message, [
+  AppAlert.alert(title, message, [
     { text: "Cancel", style: "cancel" },
     {
       text: confirmText,
@@ -606,6 +608,8 @@ export default function AssistanceRequestsAdmin() {
   const [filter, setFilter] =
     useState<ReviewFilter>("pending");
   const [search, setSearch] = useState("");
+  const [queuePage, setQueuePage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -954,6 +958,9 @@ export default function AssistanceRequestsAdmin() {
     filter,
     search,
   ]);
+  const queuePageCount = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const activeQueuePage = Math.min(queuePage, queuePageCount);
+  const pagedRequests = filteredRequests.slice((activeQueuePage - 1) * PAGE_SIZE, activeQueuePage * PAGE_SIZE);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -1290,10 +1297,10 @@ export default function AssistanceRequestsAdmin() {
         if (typeof browserAlert === "function") {
           browserAlert(message);
         } else {
-          Alert.alert("Saved", message);
+          AppAlert.alert("Saved", message);
         }
       } else {
-        Alert.alert("Saved", message);
+        AppAlert.alert("Saved", message);
       }
     } catch (error: any) {
       const message =
@@ -1309,10 +1316,10 @@ export default function AssistanceRequestsAdmin() {
             `Verification Save Failed\n\n${message}`,
           );
         } else {
-          Alert.alert("Verification Save Failed", message);
+          AppAlert.alert("Verification Save Failed", message);
         }
       } else {
-        Alert.alert("Verification Save Failed", message);
+        AppAlert.alert("Verification Save Failed", message);
       }
     } finally {
       setSavingAction("");
@@ -1420,10 +1427,10 @@ export default function AssistanceRequestsAdmin() {
         if (typeof browserAlert === "function") {
           browserAlert(message);
         } else {
-          Alert.alert("Saved", message);
+          AppAlert.alert("Saved", message);
         }
       } else {
-        Alert.alert("Saved", message);
+        AppAlert.alert("Saved", message);
       }
     } catch (error: any) {
       console.error(
@@ -1442,10 +1449,10 @@ export default function AssistanceRequestsAdmin() {
             `Update Failed\n\n${message}`,
           );
         } else {
-          Alert.alert("Update Failed", message);
+          AppAlert.alert("Update Failed", message);
         }
       } else {
-        Alert.alert("Update Failed", message);
+        AppAlert.alert("Update Failed", message);
       }
     } finally {
       setSavingAction("");
@@ -1533,10 +1540,10 @@ export default function AssistanceRequestsAdmin() {
             if (typeof browserAlert === "function") {
               browserAlert(diagnosticMessage);
             } else {
-              Alert.alert("Unable to Start Review", diagnosticMessage);
+              AppAlert.alert("Unable to Start Review", diagnosticMessage);
             }
           } else {
-            Alert.alert("Unable to Start Review", diagnosticMessage);
+            AppAlert.alert("Unable to Start Review", diagnosticMessage);
           }
         } finally {
           setSavingAction("");
@@ -1551,7 +1558,7 @@ export default function AssistanceRequestsAdmin() {
     const note = adminNote.trim();
 
     if (note.length < 10) {
-      Alert.alert(
+      AppAlert.alert(
         "Verification Note Required",
         "Explain exactly what information or evidence the resident must clarify or provide.",
       );
@@ -1565,7 +1572,7 @@ export default function AssistanceRequestsAdmin() {
         note,
       );
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Request More Information Failed",
         error?.message || "The review could not be updated.",
       );
@@ -1578,7 +1585,7 @@ export default function AssistanceRequestsAdmin() {
     if (!selected || !reviewDraft) return;
 
     if (!reviewReadyForVerification(reviewDraft)) {
-      Alert.alert(
+      AppAlert.alert(
         "Private Verification Incomplete",
         "Complete document consistency, duplicate, beneficiary, residency, required facility/cost checks, and any required video/site visit. Resolve every risk flag before verifying the need.",
       );
@@ -1607,7 +1614,7 @@ This still does not automatically create a Donation Campaign.`,
             adminNote.trim() || "LGU verification completed.",
           );
         } catch (error: any) {
-          Alert.alert(
+          AppAlert.alert(
             "Verification Failed",
             error?.message || "The private verification could not be finalized.",
           );
@@ -1624,7 +1631,7 @@ This still does not automatically create a Donation Campaign.`,
     const reason = rejectionReason.trim();
 
     if (reason.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Rejection Reason Required",
         "Enter a clear evidence-based reason for rejecting the assistance request.",
       );
@@ -1643,7 +1650,7 @@ This still does not automatically create a Donation Campaign.`,
             reason,
           );
         } catch (error: any) {
-          Alert.alert(
+          AppAlert.alert(
             "Rejection Failed",
             error?.message || "The review could not be rejected.",
           );
@@ -1657,7 +1664,7 @@ This still does not automatically create a Donation Campaign.`,
 
   const saveResourceAssessment = () => {
     if (!selected || selected.verificationStatus !== "verified") {
-      Alert.alert(
+      AppAlert.alert(
         "Verified Need Required",
         "Complete LGU verification before recording the support decision.",
       );
@@ -1665,7 +1672,7 @@ This still does not automatically create a Donation Campaign.`,
     }
 
     if (!["internal_support", "donation_support", "not_required"].includes(supportDecision)) {
-      Alert.alert("Support Decision Required", "Select how the verified need will be supported.");
+      AppAlert.alert("Support Decision Required", "Select how the verified need will be supported.");
       return;
     }
 
@@ -1673,12 +1680,12 @@ This still does not automatically create a Donation Campaign.`,
     const verifiedCap = Number(verificationReview?.verifiedUncoveredAmount || 0);
 
     if (!Number.isFinite(amount) || amount < 0) {
-      Alert.alert("Invalid Remaining Amount", "Enter a valid remaining unmet amount, or 0 if none.");
+      AppAlert.alert("Invalid Remaining Amount", "Enter a valid remaining unmet amount, or 0 if none.");
       return;
     }
 
     if (supportDecision === "donation_support" && amount > verifiedCap) {
-      Alert.alert(
+      AppAlert.alert(
         "Amount Exceeds Verified Need",
         `Donation support cannot exceed the private LGU-verified uncovered amount of PHP ${verifiedCap.toLocaleString("en-PH")}.`,
       );
@@ -1686,7 +1693,7 @@ This still does not automatically create a Donation Campaign.`,
     }
 
     if (supportDecision === "donation_support" && amount <= 0) {
-      Alert.alert(
+      AppAlert.alert(
         "Remaining Need Required",
         "Enter the verified remaining unmet amount before opening Donation Support.",
       );
@@ -1715,7 +1722,7 @@ This still does not automatically create a Donation Campaign.`,
             supportDecision,
         )
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Support Decision",
           "Mark Assistance Provided only when LGU/partner support has been provided or no additional external support is required.",
         );
@@ -1759,7 +1766,7 @@ This still does not automatically create a Donation Campaign.`,
         selected.verificationStatus !==
           "verified"
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Verified Need Required",
           "Set the official public service location only after the request is verified.",
         );
@@ -1771,7 +1778,7 @@ This still does not automatically create a Donation Campaign.`,
         locationName.trim().length < 3 ||
         locationAddress.trim().length < 5
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Official Location Required",
           "Select a location type and enter the official public location name and address.",
         );
@@ -1864,7 +1871,7 @@ This still does not automatically create a Donation Campaign.`,
     item: StoredDocument,
   ) => {
     if (!item.url || !user) {
-      Alert.alert(
+      AppAlert.alert(
         "Document Unavailable",
         "This document does not have a valid secure evidence reference.",
       );
@@ -1872,7 +1879,7 @@ This still does not automatically create a Donation Campaign.`,
     }
 
     if (!item.url.startsWith(`${SECURE_ASSISTANCE_BACKEND}/api/assistance/evidence/`)) {
-      Alert.alert(
+      AppAlert.alert(
         "Legacy Evidence Blocked",
         "This document uses an older unprotected URL. Re-submit the test request using the secured Request Assistance flow before reviewing evidence.",
       );
@@ -1930,7 +1937,7 @@ This still does not automatically create a Donation Campaign.`,
 
       await Linking.openURL(previewAccessUrl);
     } catch {
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Open",
         "The temporary private evidence link could not be opened in a new browser window.",
       );
@@ -2142,27 +2149,25 @@ This still does not automatically create a Donation Campaign.`,
                 label="Pending"
                 count={stats.pending}
                 active={filter === "pending"}
-                onPress={() => setFilter("pending")}
+                onPress={() => { setFilter("pending"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Under Review"
                 count={stats.underReview}
                 active={filter === "under_review"}
-                onPress={() =>
-                  setFilter("under_review")
-                }
+                onPress={() => { setFilter("under_review"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Verified"
                 count={stats.verified}
                 active={filter === "verified"}
-                onPress={() => setFilter("verified")}
+                onPress={() => { setFilter("verified"); setQueuePage(1); }}
               />
               <MockStatusTab
                 label="Rejected"
                 count={stats.rejected}
                 active={filter === "rejected"}
-                onPress={() => setFilter("rejected")}
+                onPress={() => { setFilter("rejected"); setQueuePage(1); }}
               />
 
               <View style={styles.mockTopTabsSpacer} />
@@ -2173,9 +2178,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "completed" &&
                     styles.mockHistoryButtonActive,
                 ]}
-                onPress={() =>
-                  setFilter("completed")
-                }
+                onPress={() => { setFilter("completed"); setQueuePage(1); }}
               >
                 <Ionicons
                   name="archive-outline"
@@ -2207,7 +2210,7 @@ This still does not automatically create a Donation Campaign.`,
                 />
                 <TextInput
                   value={search}
-                  onChangeText={setSearch}
+                  onChangeText={value => { setSearch(value); setQueuePage(1); }}
                   placeholder="Search request ID, Resident, beneficiary, barangay, or title"
                   placeholderTextColor="#94A3B8"
                   style={styles.searchInput}
@@ -2220,7 +2223,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "all" &&
                     styles.mockAllButtonActive,
                 ]}
-                onPress={() => setFilter("all")}
+                onPress={() => { setFilter("all"); setQueuePage(1); }}
               >
                 <Text
                   style={[
@@ -2286,7 +2289,7 @@ This still does not automatically create a Donation Campaign.`,
                   </Text>
                 </View>
               ) : (
-                filteredRequests.map((item) => (
+                pagedRequests.map((item) => (
                   <MockQueueRow
                     key={item.id}
                     request={item}
@@ -2296,6 +2299,7 @@ This still does not automatically create a Donation Campaign.`,
                   />
                 ))
               )}
+              <ListPagination page={activeQueuePage} total={filteredRequests.length} onChange={setQueuePage} />
             </View>
           </>
         </ScrollView>
@@ -3595,7 +3599,7 @@ function DecisionTab({
     const raw = privateAddressSearch.trim();
 
     if (raw.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Address Required",
         "Enter the Resident's Block/Lot, street, subdivision or purok, barangay, and other available address details before searching.",
       );
@@ -3624,7 +3628,7 @@ function DecisionTab({
       !privateMapSearchQuery.trim() ||
       !reviewDraft.privateAddressSnapshot.trim()
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Search Address First",
         "Search and review the Resident's declared address on the map before marking residency as verified.",
       );
@@ -3635,7 +3639,7 @@ function DecisionTab({
       !reviewDraft.residencyVerificationMethod ||
       reviewDraft.residencyVerificationMethod === "not_applicable"
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Verification Method Required",
         "Select how the LGU confirmed that the Resident is associated with this address.",
       );
@@ -4451,7 +4455,7 @@ function EmbeddedGoogleMap({
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQuery)}`,
       );
     } catch {
-      Alert.alert(
+      AppAlert.alert(
         "Map Unavailable",
         "Google Maps could not be opened in a new browser tab.",
       );

@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
@@ -20,7 +21,7 @@ export default function PublicDisasterResponse() {
   >([]);
 
   const requireLogin = () => {
-    Alert.alert(
+    AppAlert.alert(
       "Login Required",
       "Please login or create an account to submit a disaster report."
     );

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
+import AuthFeedback from "../components/auth/AuthFeedback";
 import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
@@ -41,6 +42,11 @@ export default function WebLogin() {
     "email" | "password" | null
   >(null);
   const [loading, setLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"login" | "google" | "reset" | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
+  const showError = (message: string) => setFeedback({ type: "error", message });
+  const showSuccess = (message: string) => setFeedback({ type: "success", message });
+  const clearFeedback = () => setFeedback({ type: "error", message: "" });
 
   const applySessionPersistence = async () => {
     await setPersistence(
@@ -52,12 +58,14 @@ export default function WebLogin() {
   };
   const handleLogin = async () => {
     if (loading) return;
+    clearFeedback();
     if (!email.trim() || !password) {
-      alert("Please enter your email address and password.");
+      showError("Please enter your email address and password.");
       return;
     }
     try {
       setLoading(true);
+      setPendingAction("login");
       await applySessionPersistence();
       const { profile } = await loginUser(
         email.trim().toLowerCase(),
@@ -69,16 +77,18 @@ export default function WebLogin() {
       }
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: any) {
-      alert(error?.message || "Login failed.");
+      showError(error?.message || "Unable to sign in. Please try again.");
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
   const handleGoogleLogin = async () => {
     if (loading) return;
-
+    clearFeedback();
     try {
       setLoading(true);
+      setPendingAction("google");
       await applySessionPersistence();
 
       const googleUser = await connectGoogleAccountWeb();
@@ -131,58 +141,42 @@ export default function WebLogin() {
         // Keep the original authentication error as the user-facing message.
       }
 
-      alert(error?.message || "Google sign-in failed.");
+      showError(error?.message || "Google sign-in failed. Please try again.");
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
 
   const handleForgotPassword = async () => {
     if (loading) return;
+    clearFeedback();
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      alert(
-        "Enter your email address first, then select Forgot password."
-      );
+      showError("Enter your email address first, then select Forgot password.");
       return;
     }
     try {
       setLoading(true);
+      setPendingAction("reset");
       await sendPasswordResetEmail(auth, cleanEmail);
       const isGmail = cleanEmail.endsWith("@gmail.com");
       const message = isGmail
         ? "Password reset request sent. If this Gmail account uses Email/Password sign-in, check Gmail and the Spam folder for the Firebase reset link. If this account was created with Google only, use Continue with Google instead."
         : "Password reset request sent. Check your inbox and Spam folder for the Firebase reset link. Google-only accounts should use Continue with Google.";
-      if (typeof window !== "undefined" && isGmail) {
-        const openGmail = window.confirm(
-          `${message}\n\nOpen Gmail now?`
-        );
-        if (openGmail) {
-          window.open(
-            "https://mail.google.com/mail/u/0/#inbox",
-            "_blank",
-            "noopener,noreferrer"
-          );
-        }
-      } else {
-        alert(message);
-      }
+      showSuccess(message);
     } catch (error: any) {
       const code = String(error?.code || "");
       if (code === "auth/invalid-email") {
-        alert("Please enter a valid email address.");
+        showError("Please enter a valid email address.");
       } else if (code === "auth/too-many-requests") {
-        alert(
-          "Too many reset attempts. Please wait and try again later."
-        );
+        showError("Too many reset attempts. Please wait and try again later.");
       } else {
-        alert(
-          error?.message ||
-            "Unable to send the password reset email."
-        );
+        showError(error?.message || "Unable to send the password reset email.");
       }
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
   // Shared premium shell supplies the real two-route tab switcher.
@@ -193,7 +187,7 @@ export default function WebLogin() {
         <Text style={styles.label}>Email Address</Text>
         <View style={[styles.inputBox, authCornerCut(10), focusedInput === "email" && styles.focused]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
-          <TextInput style={styles.input} value={email} onChangeText={setEmail}
+          <TextInput style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
@@ -203,7 +197,7 @@ export default function WebLogin() {
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
         <View style={[styles.inputBox, authCornerCut(10), focusedInput === "password" && styles.focused]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
-          <TextInput style={styles.input} value={password} onChangeText={setPassword}
+          <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer password"
             placeholder="Password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
@@ -230,17 +224,30 @@ export default function WebLogin() {
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
+        {!!feedback.message && (
+          <AuthFeedback
+            message={feedback.message}
+            type={feedback.type}
+            onDismiss={clearFeedback}
+          />
+        )}
         <Pressable accessibilityRole="button" onPress={() => void handleLogin()}
           disabled={loading}
           style={({ pressed }) => [styles.signIn,
             (pressed || loading) && styles.disabled]}>
           <LinearGradient colors={["#16A780", "#00573F"]} start={{x:0,y:0}} end={{x:1,y:1}}
             style={StyleSheet.absoluteFillObject} pointerEvents="none"/>
-          {loading ? <ActivityIndicator color="#FFFFFF" /> :
+          {pendingAction === "login" ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color="#FFFFFF" />
+              <Text style={styles.signInText}>Signing in...</Text>
+            </View>
+          ) : (
             <View style={styles.centerRow}>
               <Text style={styles.signInText}>Login as Resident / Volunteer</Text>
               <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
-            </View>}
+            </View>
+          )}
         </Pressable>
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
@@ -251,11 +258,17 @@ export default function WebLogin() {
           disabled={loading}
           style={[styles.outlineButton,
             (loading) && styles.disabled]}>
-          {loading ? <ActivityIndicator color="#087F66" /> :
+          {pendingAction === "google" ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color="#087F66" />
+              <Text style={styles.outlineText}>Connecting to Google...</Text>
+            </View>
+          ) : (
             <View style={styles.centerRow}>
               <GoogleBrandMark size={21} />
               <Text style={styles.outlineText}>Continue with Google</Text>
-            </View>}
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
           disabled={loading}

@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -168,9 +169,10 @@ export default function WebHome() {
     .join(" ")
     .trim();
 
+  // Use the same canonical name shown in My Profile and mobile account menu.
   const displayName =
-    composedName ||
     profile?.fullName?.trim() ||
+    composedName ||
     user?.displayName?.trim() ||
     profile?.email?.split("@")[0] ||
     user?.email?.split("@")[0] ||
@@ -429,7 +431,7 @@ export default function WebHome() {
       await setActiveUserMode(nextMode);
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Unable to switch mode",
         error?.message || "Please try again."
       );
@@ -447,13 +449,15 @@ export default function WebHome() {
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
-    if (loggingOut || !window.confirm("Are you sure you want to log out of VolunServe?")) return;
+    if (loggingOut) return;
+    const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
+    if (!confirmed) return;
     setLoggingOut(true);
     try {
       await logoutUser();
       router.replace("/login");
     } catch (error: any) {
-      Alert.alert("Log out failed", error?.message || "Please try again.");
+      AppAlert.alert("Log out failed", error?.message || "Please try again.");
     } finally {
       setLoggingOut(false);
     }

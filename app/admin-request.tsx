@@ -11,6 +11,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Scro
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import LguStaffWithdrawalPanel from "../components/auth/LguStaffWithdrawalPanel";
 import { firebaseConfig, usingFirebaseEmulators } from "../lib/firebase";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { EvidenceSlot, LGU_APPLICATION_NOTICE, LGU_ID_TYPES, LGU_STAFF_STEPS, LguIdType, lguIdRequiresBack, validLguApplication } from "../lib/lguStaffApplicationPolicy";
 
 type FormFields = {
@@ -37,6 +38,7 @@ export default function LguStaffApplication() {
   const { width } = useWindowDimensions();
   const narrow = width < 610;
   const [step, setStep] = useState(0);
+  const [barangaySearch, setBarangaySearch] = useState("");
   const [form, setForm] = useState<FormFields>({
     fullName:"", email:"", password:"", lguOffice:"", lguPosition:"",
     appointmentReference:"", barangay:"",
@@ -84,6 +86,10 @@ export default function LguStaffApplication() {
   };
   const next = () => {
     setError("");
+    if (step === 0 && isKnownDisposableEmail(form.email)) {
+      setError("Temporary or disposable email accounts cannot apply for LGU access. Use your official, permanent work email.");
+      return;
+    }
     if (!stepValid()) {
       setError(step===0
         ? "Complete all staff details, official department, barangay and a strong 12+ character password."
@@ -133,6 +139,10 @@ export default function LguStaffApplication() {
 
   const submit = async () => {
     if (busy || step!==4 || !stepValid()) return;
+    if (isKnownDisposableEmail(form.email)) {
+      setError("Temporary email providers are not accepted for LGU applications.");
+      return;
+    }
     if (!privateEvidenceIntakeEnabled) {
       setError(emulatorRequested && !usingFirebaseEmulators
         ? "Local emulator mode is supported only in a localhost web browser. Mobile test devices must never upload synthetic IDs to the production Firebase project."
@@ -165,6 +175,7 @@ export default function LguStaffApplication() {
         await setDoc(doc(candidateDb,"users",uid),{
           uid,email,fullName:form.fullName.trim().replace(/\s+/g," "),
           age:0,phoneNumber:"",role:"applicant",status:"pending_review",
+          emailVerificationRequired:true,
           residentAccess:false,volunteerAccess:false,region:"Region III – Central Luzon",
           province:"Bulacan",city:"City of San Jose del Monte",barangay:form.barangay,
           lguOffice:form.lguOffice.trim(),lguPosition:form.lguPosition.trim(),
@@ -302,8 +313,8 @@ export default function LguStaffApplication() {
                   <TouchableOpacity key={name} disabled={busy||index>step}
                     onPress={()=>{setError("");setStep(index);}}
                     style={[styles.progressDot,index===step&&styles.progressDotActive,index<step&&styles.progressDotDone]}>
-                    <Text style={[styles.progressText,index<=step&&styles.progressTextActive]}>{index+1}</Text>
-                    {!narrow&&<Text style={[styles.progressName,index<=step&&styles.progressTextActive]} numberOfLines={2}>{name}</Text>}
+                    <Text style={[styles.progressText,index===step&&styles.progressTextActive]}>{index+1}</Text>
+                    {!narrow&&<Text style={[styles.progressName,index===step&&styles.progressTextActive]} numberOfLines={2}>{name}</Text>}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -321,10 +332,24 @@ export default function LguStaffApplication() {
                   {field("appointmentReference","Appointment memo reference (not an ID number)","Official reference code only",{off:true})}
                   {field("password","Create password","12+ chars, uppercase, lowercase, digit and symbol",{secret:true})}
                   <Text style={styles.label}>Assigned SJDM barangay</Text>
-                  <ScrollView nestedScrollEnabled style={styles.barangayList}>
-                    {SJDM_BARANGAYS.map(name=>(
+                  <View style={styles.barangaySearchRow}>
+                    <Ionicons name="search-outline" size={18} color="#719488" />
+                    <TextInput
+                      accessibilityLabel="Search official SJDM barangays"
+                      placeholder="Search official barangays"
+                      placeholderTextColor="#8AA698"
+                      value={barangaySearch}
+                      onChangeText={setBarangaySearch}
+                      style={styles.barangaySearchInput}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  <ScrollView nestedScrollEnabled style={styles.barangayList} showsVerticalScrollIndicator>
+                    {SJDM_BARANGAYS.filter(name =>
+                      name.toLowerCase().includes(barangaySearch.trim().toLowerCase())
+                    ).map(name=>(
                       <TouchableOpacity key={name} accessibilityRole="radio" accessibilityState={{checked:form.barangay===name}}
-                        onPress={()=>update("barangay",name)} style={[styles.barangay,form.barangay===name&&styles.barangaySelected]}>
+                        onPress={()=>{ update("barangay",name); setBarangaySearch(""); }} style={[styles.barangay,form.barangay===name&&styles.barangaySelected]}>
                         <Text style={{color:form.barangay===name?"#FFFFFF":"#1F5747",fontSize:12}}>{name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -468,7 +493,9 @@ const styles = StyleSheet.create({
   input:{borderRadius:12,borderColor:"#D3E7DA",borderWidth:1,paddingHorizontal:13,
     minHeight:47,backgroundColor:"#FAFDFB",color:"#133C2D",fontSize:14},
   grid:{flexDirection:"row",gap:12},column:{flexDirection:"column"},
-  barangayList:{maxHeight:138,borderRadius:12,borderWidth:1,borderColor:"#D3E7DA"},
+  barangaySearchRow:{minHeight:44,flexDirection:"row",alignItems:"center",gap:9,borderWidth:1,borderColor:"#D3E7DA",borderRadius:10,paddingHorizontal:12,backgroundColor:"#FAFDFB"},
+  barangaySearchInput:{flex:1,minHeight:42,color:"#164637",fontSize:13},
+  barangayList:{maxHeight:152,borderRadius:12,borderWidth:1,borderColor:"#D3E7DA"},
   barangay:{minHeight:38,paddingHorizontal:12,justifyContent:"center"},
   barangaySelected:{backgroundColor:"#078264"},
   idChoices:{gap:8},idChoice:{borderWidth:1,borderColor:"#DBE8E0",borderRadius:11,

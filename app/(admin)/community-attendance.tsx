@@ -732,6 +732,15 @@ export default function CommunityAttendanceAdmin() {
               updatedAt: serverTimestamp(),
             });
           }
+          tx.set(doc(collection(db, "adminLogs")), {
+            actionType: next === "completed" ? "community_event_completed" : "community_event_started",
+            targetType: "community_event",
+            targetId: selected.id,
+            adminUid: user.uid,
+            adminName: user.displayName || user.email || "LGU Administrator",
+            description: next === "completed" ? "LGU completed a Community Event." : "LGU started a Community Event.",
+            createdAt: serverTimestamp(),
+          });
         }
       );
 
@@ -819,6 +828,15 @@ export default function CommunityAttendanceAdmin() {
           attendanceVerifiedAt: serverTimestamp(),
           attendanceVerifiedBy: user.uid,
           updatedAt: serverTimestamp(),
+        });
+        tx.set(doc(collection(db, "adminLogs")), {
+          actionType: "community_attendance_verified",
+          targetType: "community_event_participant",
+          targetId: person.id,
+          adminUid: user.uid,
+          adminName: user.displayName || user.email || "LGU Administrator",
+          description: "LGU verified volunteer Time In and Time Out for a Community Event.",
+          createdAt: serverTimestamp(),
         });
         return event.status === "completed";
       });

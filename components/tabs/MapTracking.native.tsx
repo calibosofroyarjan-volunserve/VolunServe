@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import polyline from "@mapbox/polyline";
 import * as Location from "expo-location";
@@ -150,11 +151,11 @@ export default function MapTracking() {
   const [boundaryUnavailable, setBoundaryUnavailable] = useState(false);
   const openVerifiedDirections = (latitude:number,longitude:number) => {
     if (!sjdmBoundary || !insideSjdmBoundary(sjdmBoundary,latitude,longitude)) {
-      Alert.alert("Outside SJDM","Map directions are available only for verified locations within the city.");
+      AppAlert.alert("Outside SJDM","Map directions are available only for verified locations within the city.");
       return;
     }
     void Linking.openURL(googleMapsFacilityDirections(latitude,longitude))
-      .catch(() => Alert.alert("Navigation unavailable",
+      .catch(() => AppAlert.alert("Navigation unavailable",
         "Could not open Google Maps directions on this device."));
   };
 
@@ -1192,7 +1193,7 @@ export default function MapTracking() {
       }
 
       if (!geocoded) {
-        Alert.alert(
+        AppAlert.alert(
           "No result found",
           `Could not find "${rawQuery}". Try a more complete place or address.`
         );
@@ -1200,7 +1201,7 @@ export default function MapTracking() {
       }
 
       if (!inCity(geocoded.latitude, geocoded.longitude)) {
-        Alert.alert("Outside San Jose del Monte",
+        AppAlert.alert("Outside San Jose del Monte",
           "VolunServe map searches and pins are restricted to locations within the city's reference boundary.");
         return;
       }
@@ -1217,7 +1218,7 @@ export default function MapTracking() {
       );
     } catch (error) {
       console.log("Search error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Search unavailable",
         "The location could not be searched right now. Please check your connection and try again."
       );
@@ -1443,7 +1444,7 @@ export default function MapTracking() {
                   event.nativeEvent.coordinate.longitude)) setCustomPin(event.nativeEvent.coordinate);
                 else {
                   setCustomPin(previous => previous ? {...previous} : sjdmSafeCenter(sjdmBoundary!));
-                  Alert.alert("Outside SJDM", "Simulation pins must stay inside San Jose del Monte.");
+                  AppAlert.alert("Outside SJDM", "Simulation pins must stay inside San Jose del Monte.");
                 }
               }}
               title="Simulation Pin"

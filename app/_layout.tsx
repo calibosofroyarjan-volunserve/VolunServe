@@ -21,6 +21,7 @@ import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { useAndroidPushNavigation } from "../lib/useAndroidPushNavigation";
+import AppDialogHost from "../components/ui/AppDialogHost";
 import {
   getUserProfile,
   homeRouteForProfile,
@@ -255,6 +256,25 @@ export default function RootLayout() {
     }
 
     /*
+     * New email/password accounts must prove ownership before accessing any
+     * protected route, including when the browser restores an old session.
+     * Legacy profiles (without this opt-in flag) preserve current access.
+     * Firestore rules independently enforce the same authorization boundary.
+     */
+    if (profile.emailVerificationRequired === true && !authUser.emailVerified) {
+      if (!isLoginRoute && !isSignupRoute && !isAdministrativeLoginRoute) {
+        void (async () => {
+          try {
+            await logoutUser();
+          } finally {
+            router.replace("/login");
+          }
+        })();
+      }
+      return;
+    }
+
+    /*
      * Rejected, suspended, or old pending accounts cannot enter
      * protected VolunServe areas.
      */
@@ -434,6 +454,7 @@ export default function RootLayout() {
         <Stack.Screen name="(superadmin)" />
         <Stack.Screen name="(lgu)" />
       </Stack>
+      <AppDialogHost />
     </GestureHandlerRootView>
   );
 }

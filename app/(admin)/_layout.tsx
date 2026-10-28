@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -14,7 +15,6 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
@@ -192,7 +192,7 @@ export default function AdminLayout() {
       } catch (
         error: any
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Sign Out Failed",
           error?.message ||
             "Unable to sign out.",

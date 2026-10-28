@@ -1,5 +1,6 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   collection,
   doc,
@@ -29,6 +30,7 @@ import {
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import MapTracking from "../../components/tabs/MapTracking";
 
 type AssignmentStatus =
   | "offered"
@@ -306,6 +308,8 @@ function StatCard({
 
 export default function VolunteerTasksWeb() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{view?: string;caseId?: string}>();
+  const showingTaskMap = routeParams.view === "tracking";
   const { width } = useWindowDimensions();
   const { loading, user, profile } = useUserSession();
 
@@ -451,7 +455,7 @@ export default function VolunteerTasksWeb() {
   }, [assignments, filter, sortDirection]);
 
   const showMessage = (title: string, message: string) => {
-    window.alert(`${title}\n\n${message}`);
+    AppAlert.alert(title, message);
   };
 
   const resetCompletion = () => {
@@ -749,15 +753,9 @@ export default function VolunteerTasksWeb() {
   };
 
   const openLiveMap = (assignment?: ResponseAssignment) => {
-    if (assignment?.caseId) {
-      router.push({
-        pathname: "/map-tracking" as any,
-        params: { caseId: assignment.caseId },
-      });
-      return;
-    }
-
-    router.push("/map-tracking" as any);
+    router.push({ pathname: "/volunteer" as any,
+      params: { view: "tracking", ...(assignment?.caseId ? {caseId: assignment.caseId} : {}) },
+    });
   };
 
   if (loading) {
@@ -775,6 +773,21 @@ export default function VolunteerTasksWeb() {
 
   if (!hasVolunteerAccess(profile) || activeModeForProfile(profile) !== "volunteer") {
     return <Redirect href="/(tabs)" />;
+  }
+
+  if (showingTaskMap) {
+    return (
+      <View style={{flex:1,minHeight:0,backgroundColor:"#F3F8F8"}}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to Volunteer Tasks"
+          onPress={() => router.replace("/volunteer" as any)}
+          style={{minHeight:52,flexDirection:"row",alignItems:"center",gap:8,
+            backgroundColor:"#FFFFFF",paddingHorizontal:20,borderBottomWidth:1,borderBottomColor:"#DDE8E6"}}>
+          <Ionicons name="arrow-back-outline" size={19} color="#087668"/>
+          <Text style={{fontSize:14,fontWeight:"800",color:"#123C37"}}>Back to Volunteer Tasks</Text>
+        </TouchableOpacity>
+        <View style={{flex:1,minHeight:0}}><MapTracking/></View>
+      </View>
+    );
   }
 
   return (

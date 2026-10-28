@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -26,6 +27,7 @@ import {
 } from "react-native";
 import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -245,7 +247,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <View style={styles.passwordInputContainer}>
         <TextInput
         style={[
@@ -328,7 +330,7 @@ const Dropdown = memo(function Dropdown({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.replace(/\s*\*$/, "")}{/\*\s*$/.test(label) ? <Text style={{ color: "#C62828", fontWeight: "800" }}> *</Text> : null}</Text>
       <Pressable ref={triggerRef} onPress={openMenu} style={[styles.ddTrigger, !enabled && styles.disabledInput]}>
         <Text style={[styles.ddValue, !value && styles.ddPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.ddChevron}>{open ? "▲" : "▼"}</Text>
@@ -391,8 +393,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later use Identity Verification, verification evidence is handled as private data and must only be used for the verification process.</Text>
           <Text style={styles.termsH2}>Consent</Text>
           <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and the Volunteer Application are separate steps after account creation.</Text>
-          <Text style={styles.termsH2}>Security</Text>
-          <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
+          <Text style={styles.termsH2}>Account Eligibility</Text>
+          <Text style={styles.termsP}>Registration is for people aged 18 or older residing in the City of San Jose del Monte, Bulacan. Use your own permanent email address; known temporary and disposable email domains are not accepted. Identity verification and volunteer authorization are separate processes.</Text>
+          <Text style={styles.termsH2}>Emergency Service Limitations</Text>
+          <Text style={styles.termsP}>Submitting a VolunServe emergency report does not automatically dispatch 911 or an LGU vehicle. Actual response depends on authorized LGU action. Maps, road routes and optional location sharing require connectivity, device permission and reliable GPS. Call 911 directly for immediate danger.</Text>
+          <Text style={styles.termsH2}>Donations and Security</Text>
+          <Text style={styles.termsP}>Payment demonstrations use PayMongo sandbox, not live transfers. Use a strong password and never share your login credentials.</Text>
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -462,7 +468,7 @@ export default function Signup() {
       try {
         const idToken = response.params?.id_token;
         if (!idToken) {
-          Alert.alert("Google Error", "No ID token returned.");
+          AppAlert.alert("Google Error", "No ID token returned.");
           return;
         }
 
@@ -481,9 +487,9 @@ export default function Signup() {
         setStep(1);
         setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0);
 
-        Alert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
+        AppAlert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
       } catch (error: any) {
-        Alert.alert("Firebase Error", getFriendlyAuthError(error));
+        AppAlert.alert("Firebase Error", getFriendlyAuthError(error));
       }
     };
     handleGoogleSuccess();
@@ -500,7 +506,8 @@ export default function Signup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
+      !isKnownDisposableEmail(formData.email);
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -524,7 +531,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -564,7 +571,7 @@ export default function Signup() {
         4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
       };
       
-      Alert.alert("Incomplete Step", stepMessages[step]);
+      AppAlert.alert("Incomplete Step", stepMessages[step]);
       return;
     }
     Keyboard.dismiss();
@@ -586,18 +593,18 @@ export default function Signup() {
     try {
       await promptAsync();
     } catch (error: any) {
-      Alert.alert("Google Error", getFriendlyAuthError(error));
+      AppAlert.alert("Google Error", getFriendlyAuthError(error));
     }
   }, [promptAsync]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
     if (!validation.step4Valid) {
-      Alert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
+      AppAlert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
       return;
     }
     if (!formData.dateOfBirth || !validation.ageValid) {
-      Alert.alert("Ineligible", "Residents must be at least 18 years old at the time of registration.");
+      AppAlert.alert("Ineligible", "Residents must be at least 18 years old at the time of registration.");
       return;
     }
     try {
@@ -620,13 +627,15 @@ export default function Signup() {
         occupationOther: formData.occupationOther || "",
       });
 
-      Alert.alert(
-        "Welcome to VolunServe",
-        "Your Basic Resident Account is ready. You can sign in and use basic safety services now. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.",
-        [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
+      AppAlert.alert(
+        "VolunServe Registration",
+        googleBound
+          ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
+          : "Account saved. Check your email for the verification link, open it, then sign in using your email and password.",
+        [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
-      Alert.alert("Registration Error", getFriendlyAuthError(e));
+      AppAlert.alert("Registration Error", getFriendlyAuthError(e));
     } finally {
       setLoadingSubmit(false);
     }
@@ -730,13 +739,12 @@ export default function Signup() {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={handleGooglePress}
-                disabled={!request || googleProfileLoaded}
-                style={[styles.googleBtn, (!request || googleProfileLoaded) && styles.googleBtnDisabled]}
-              >
-                <Text style={styles.googleBtnText}>{googleProfileLoaded ? "✓ Google Account Connected" : "Continue with Google"}</Text>
-              </TouchableOpacity>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoBoxText}>
+                  Create your account with an email address and password below.
+                  Google sign-in is not required.
+                </Text>
+              </View>
 
               {googleBound ? (
                 <View style={styles.infoBox}>
@@ -746,7 +754,7 @@ export default function Signup() {
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
               <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : "Enter a valid email format."}</ValidationText>
+              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : isKnownDisposableEmail(formData.email) ? "Temporary emails are not accepted. Use a permanent email." : "Enter a valid email format."}</ValidationText>
 
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
@@ -759,7 +767,7 @@ export default function Signup() {
 
               <SectionTitle title="Birthdate & Contact" />
               <View style={styles.field}>
-                <Text style={styles.label}>🎂 Date of Birth *</Text>
+                <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#C62828", fontWeight: "800" }}>*</Text></Text>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
                   <Text style={{ fontSize: 15, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
                     {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
@@ -781,7 +789,7 @@ export default function Signup() {
                 <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
 
-              <Text style={styles.label}>📱 Mobile Number *</Text>
+              <Text style={styles.label}>📱 Mobile Number <Text style={{ color: "#C62828", fontWeight: "800" }}>*</Text></Text>
               <View style={styles.phoneWrap}>
                 <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
                 <TextInput
@@ -845,30 +853,26 @@ export default function Signup() {
                 )}
               </View>
  
-              {googleBound ? (
+              {googleBound && (
                 <View style={styles.infoBox}>
                   <Text style={styles.infoBoxText}>
-                    ✓ Google account connected. Your Google sign-in will be used for this Basic Resident Account, so no additional password is required here.
+                    Google is connected. Create a VolunServe password as well to use this same account with either sign-in method.
                   </Text>
                 </View>
-              ) : (
-                <>
-                  <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
-                  <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
-                  <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
-
-                  <View style={styles.passwordPanel}>
-                    <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
-                    <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
-                    <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
-                  </View>
-                </>
               )}
+              <SectionTitle title="Password Security" subtitle="Create a strong password to secure this account." />
+              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
+              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
+              <View style={styles.passwordPanel}>
+                <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
+                <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.upper}>At least one uppercase letter.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.lower}>At least one lowercase letter.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.number}>At least one number.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.special}>At least one special character.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.notCommon}>Must not be a common password.</ValidationText>
+                <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
+              </View>
 
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
               <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>

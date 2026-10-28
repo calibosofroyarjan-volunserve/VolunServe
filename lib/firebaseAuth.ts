@@ -6,6 +6,9 @@ import {
   linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  reload,
+  getIdToken,
+  sendEmailVerification,
   signOut,
   updatePassword,
   User,
@@ -20,6 +23,7 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
+import { isKnownDisposableEmail } from "./registrationEmailPolicy";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -189,6 +193,8 @@ export interface UserProfile {
   rejectedReason?: string;
   identityStatus?: IdentityStatus;
   identityVerified?: boolean;
+  /** Only new email/password signups require ownership confirmation; legacy accounts are unchanged. */
+  emailVerificationRequired?: boolean;
   identitySubmittedAt?: any;
   identityVerifiedAt?: any;
   identityVerifiedBy?: string;
@@ -237,6 +243,11 @@ export const isApprovedProfile = (
   profile: UserProfile | null | undefined
 ) => {
   if (!profile) {
+    return false;
+  }
+  // Keep Firebase login, session guards, and Firestore operational-role rules
+  // consistent: a suspended LGU Admin is never an approved active account.
+  if (profile.role === "admin" && profile.adminStatus === "suspended") {
     return false;
   }
   return (
@@ -457,6 +468,19 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    // Check before creating an Auth UID; client-side blocklist is not a
+    // substitute for verified email ownership or a backend abuse service.
+    if (isKnownDisposableEmail(submittedEmail)) {
+      throw new Error("Temporary email providers are not accepted. Use a permanent email address you can verify.");
+    }
+    if (!Number.isInteger(data.age) || data.age < 18 || data.age > 120) {
+      throw new Error("VolunServe registration requires age 18 or older.");
+    }
+    if (data.province !== "Bulacan" ||
+        !["City of San Jose del Monte", "San Jose del Monte"].includes(data.city) ||
+        !data.barangay?.trim()) {
+      throw new Error("VolunServe registration is restricted to San Jose del Monte, Bulacan.");
+    }
     const usesGoogle = data.authProvider === "google";
     if (usesGoogle) {
       if (!auth.currentUser) {
@@ -593,12 +617,28 @@ export const signUpUser = async (
       identityStatus:
         "basic" as IdentityStatus,
       identityVerified: false,
+      emailVerificationRequired: !usesGoogle,
       profilePictureUrl:
         user.photoURL || "",
       createdAt:
         serverTimestamp(),
     });
     await batch.commit();
+    if (!usesGoogle && !user.emailVerified) {
+      // Firebase sends a confirmation link; the app must not call unverified
+      // email ownership proof. Delivery failures should NOT turn a successfully
+      // saved Basic account into a fake registration failure.
+      try {
+        await sendEmailVerification(user);
+      } catch (emailError) {
+        console.warn("Basic account saved but email verification could not be sent:", emailError);
+      }
+    }
+    if (!usesGoogle) {
+      // Email/password registration is NOT verified until the email link is opened.
+      // Prevent auto-entry to protected tabs through an already-authenticated signup.
+      await signOut(auth);
+    }
     return user;
   } catch (err: any) {
     const message =
@@ -633,6 +673,18 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (profile.emailVerificationRequired === true) {
+      await reload(user);
+      if (!user.emailVerified) {
+        try { await sendEmailVerification(user); } catch {
+          // The user may have recently received a link; do not hide the requirement.
+        }
+        await signOut(auth);
+        throw new Error("Please verify your email address before signing in. Check your inbox and spam folder for the Firebase confirmation link, then sign in again.");
+      }
+      // Refresh the email_verified token claim used by Firestore role gates.
+      await getIdToken(user, true);
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
@@ -646,6 +698,11 @@ export const loginUser = async (
           profile.rejectedReason
             ? `Registration rejected: ${profile.rejectedReason}`
             : "Your registration was rejected. Please contact an administrator."
+        );
+      }
+      if (profile.role === "admin" && profile.adminStatus === "suspended") {
+        throw new Error(
+          "Your administrative access is suspended. Contact your authorized Super Admin."
         );
       }
       if (status === "suspended") {

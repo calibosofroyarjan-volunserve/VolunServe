@@ -39,7 +39,9 @@ function fixture() {
     users:new Map([["Admin00001",{role:"admin",status:"approved"}],
       [residentId,{role:"resident",status:"approved",identityVerified:true}]]),
     notifications:new Map(),
+    adminActivityLogs:new Map(),
   };
+  let nextAuditId=0;
   const snapshot=(id,data)=>({id,exists:!!data,data:()=>data});
   const reference=(name,id)=>({
     name,id,async get(){return snapshot(id,tables[name].get(id));},
@@ -49,7 +51,7 @@ function fixture() {
   const query=(name,filters=[],max=Infinity)=>({
     where(field,op,value){return query(name,[...filters,[field,op,value]],max);},
     limit(n){return query(name,filters,n);},
-    doc(id){return reference(name,id);},
+    doc(id){return reference(name,id || `auto-audit-${++nextAuditId}`);},
     async get(){
       const docs=[...tables[name]].filter(([,data])=>
         filters.every(([field,op,value])=>op==="=="?
@@ -150,6 +152,13 @@ test("release review rejects legacy balance and accepts only provider-funded goa
   assert.equal(okay.statusCode,201);
   assert.equal(tables.fundReleaseDemos.get(verifiedId).status,"reviewed");
   assert.equal(tables.fundReleaseDemos.get(verifiedId).amountCents,500000);
+  const logged=[...tables.adminActivityLogs.values()];
+  assert.equal(logged.length,1,"Approved sandbox review must have one governance log");
+  assert.equal(logged[0].actionType,"fund_demo_reviewed");
+  assert.equal(logged[0].simulated,true);
+  for(const privateField of ["walletLast4","amountCents","recipientUid","method"])
+    assert.equal(Object.hasOwn(logged[0],privateField),false,
+      "Governance logs must not expose private fund beneficiary/payment data");
   const again=await invoke("POST","/api/admin/donations/fund-releases/review",
     {...body,campaignId:verifiedId});
   assert.equal(again.statusCode,409);
@@ -239,6 +248,15 @@ test("Resident owns their fictional wallet alias; Admin cannot override release 
   assert.ok(stored.simulationReference.startsWith("VS-DEMO-"));
   assert.ok(tables.notifications.has(
     "fund_demo_"+verifiedId+"_simulated_sent_resident_"+residentId));
+  const recorded=[...tables.adminActivityLogs.values()];
+  assert.deepEqual(recorded.map(x=>x.actionType), [
+    "fund_demo_reviewed", "fund_demo_authorized", "fund_demo_simulated_sent",
+  ]);
+  for(const entry of recorded) {
+    assert.equal(entry.simulated,true);
+    for(const field of ["walletLast4","amountCents","recipientUid","method"])
+      assert.equal(Object.hasOwn(entry,field),false);
+  }
 
   const replay=await invoke("POST",base+"/"+verifiedId+"/simulate",{
     method:"maya",confirmedSandbox:true,

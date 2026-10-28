@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import {
   addDoc,
   collection,
@@ -132,7 +133,7 @@ export default function AdminEvents() {
       (err) => {
         setLoading(false);
         console.log("Events snapshot error:", err);
-        Alert.alert(
+        AppAlert.alert(
           "Permission Error",
           "Missing or insufficient permissions. Check Firestore rules for volunteerEvents."
         );
@@ -196,7 +197,7 @@ export default function AdminEvents() {
   const saveEvent = async () => {
     const err = validateForm();
     if (err) {
-      Alert.alert("Invalid", err);
+      AppAlert.alert("Invalid", err);
       return;
     }
     if (!user) return;
@@ -226,14 +227,14 @@ export default function AdminEvents() {
       setModalOpen(false);
     } catch (e: any) {
       console.log("Save event error:", e);
-      Alert.alert("Error", e?.message || "Failed to save event.");
+      AppAlert.alert("Error", e?.message || "Failed to save event.");
     } finally {
       setSaving(false);
     }
   };
 
   const confirmDelete = (id: string) => {
-    Alert.alert(
+    AppAlert.alert(
       "Delete Event",
       "Are you sure you want to delete this event? This cannot be undone.",
       [
@@ -252,7 +253,7 @@ export default function AdminEvents() {
       await deleteDoc(doc(db, "volunteerEvents", id));
     } catch (e: any) {
       console.log("Delete event error:", e);
-      Alert.alert("Error", e?.message || "Failed to delete event.");
+      AppAlert.alert("Error", e?.message || "Failed to delete event.");
     }
   };
 
@@ -264,7 +265,7 @@ export default function AdminEvents() {
       });
     } catch (e: any) {
       console.log("Status update error:", e);
-      Alert.alert("Error", e?.message || "Failed to update status.");
+      AppAlert.alert("Error", e?.message || "Failed to update status.");
     }
   };
 
@@ -321,7 +322,7 @@ export default function AdminEvents() {
       (err) => {
         console.log("Participants snapshot error:", err);
         setParticipantsLoading(false);
-        Alert.alert("Error", "Failed to load participants (permissions?).");
+        AppAlert.alert("Error", "Failed to load participants (permissions?).");
       }
     );
 
@@ -334,10 +335,10 @@ export default function AdminEvents() {
         checkedInAt: serverTimestamp(),
         checkedOutAt: null,
       });
-      Alert.alert("Success", "Volunteer checked-in.");
+      AppAlert.alert("Success", "Volunteer checked-in.");
     } catch (e: any) {
       console.log("adminCheckIn error:", e);
-      Alert.alert("Error", e?.message || "Failed to check-in.");
+      AppAlert.alert("Error", e?.message || "Failed to check-in.");
     }
   };
 
@@ -346,17 +347,17 @@ export default function AdminEvents() {
       await updateDoc(doc(db, "volunteerEvents", eventId, "participants", uid), {
         checkedOutAt: serverTimestamp(),
       });
-      Alert.alert("Success", "Volunteer checked-out.");
+      AppAlert.alert("Success", "Volunteer checked-out.");
     } catch (e: any) {
       console.log("adminCheckOut error:", e);
-      Alert.alert("Error", e?.message || "Failed to check-out.");
+      AppAlert.alert("Error", e?.message || "Failed to check-out.");
     }
   };
 
   const confirmCompleteEvent = async () => {
     if (!selectedEvent?.id) return;
 
-    Alert.alert(
+    AppAlert.alert(
       "Complete Event",
       "Mark this event as COMPLETED? (Optional: if this event has caseId, we will also mark the linked disaster case as RESOLVED.)",
       [
@@ -381,11 +382,11 @@ export default function AdminEvents() {
                 });
               }
 
-              Alert.alert("Done", "Event marked as completed.");
+              AppAlert.alert("Done", "Event marked as completed.");
               closeAttendance();
             } catch (e: any) {
               console.log("complete event error:", e);
-              Alert.alert("Error", e?.message || "Failed to complete event.");
+              AppAlert.alert("Error", e?.message || "Failed to complete event.");
             }
           },
         },

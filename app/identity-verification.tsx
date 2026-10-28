@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import {
   CameraView,
@@ -321,7 +322,7 @@ export default function IdentityVerification() {
         error: any
       ) {
         if (!silent) {
-          Alert.alert(
+          AppAlert.alert(
             "Unable to Check Status",
             error?.message ||
               "Identity verification status could not be loaded.",
@@ -354,7 +355,7 @@ export default function IdentityVerification() {
       setPickingId(true);
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Camera Required", "Allow camera access to scan your physical government ID.");
+        AppAlert.alert("Camera Required", "Allow camera access to scan your physical government ID.");
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -368,7 +369,7 @@ export default function IdentityVerification() {
         setLocalMessage("");
       }
     } catch (error: any) {
-      Alert.alert("ID Camera Failed", error?.message || "Unable to scan the government ID.");
+      AppAlert.alert("ID Camera Failed", error?.message || "Unable to scan the government ID.");
     } finally {
       setPickingId(false);
     }
@@ -377,7 +378,7 @@ export default function IdentityVerification() {
   const openFaceScan =
     async () => {
       if (!idDocument) {
-        Alert.alert(
+        AppAlert.alert(
           "Government ID Required",
           "Scan a clear government ID using your camera before starting the face scan.",
         );
@@ -418,7 +419,7 @@ export default function IdentityVerification() {
         if (
           !permission.granted
         ) {
-          Alert.alert(
+          AppAlert.alert(
             "Camera Permission Required",
             "Allow camera access to complete your face scan.",
           );
@@ -429,7 +430,7 @@ export default function IdentityVerification() {
       if (
         !cameraRef.current
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Camera Not Ready",
           "Wait a moment for the camera preview to load.",
         );
@@ -467,7 +468,7 @@ export default function IdentityVerification() {
       } catch (
         error: any
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Unable to Capture Face",
           error?.message ||
             "The face scan photo could not be captured.",
@@ -485,7 +486,7 @@ export default function IdentityVerification() {
 
       if (!idDocument) {
         setStep(1);
-        Alert.alert(
+        AppAlert.alert(
           "Government ID Required",
           "Select a clear image of your government-issued ID.",
         );
@@ -494,7 +495,7 @@ export default function IdentityVerification() {
 
       if (!selfie) {
         setStep(2);
-        Alert.alert(
+        AppAlert.alert(
           "Face Scan Required",
           "Capture a clear face scan before starting AI verification.",
         );
@@ -502,7 +503,7 @@ export default function IdentityVerification() {
       }
 
       if (!consent) {
-        Alert.alert(
+        AppAlert.alert(
           "Consent Required",
           "Confirm that VolunServe may process the submitted identity images for account verification.",
         );
@@ -564,7 +565,7 @@ export default function IdentityVerification() {
       ) {
         setStep(2);
 
-        Alert.alert(
+        AppAlert.alert(
           "Verification Not Completed",
           error?.message ||
             "Identity verification could not be completed.",

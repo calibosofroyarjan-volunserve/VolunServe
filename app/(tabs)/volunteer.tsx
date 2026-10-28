@@ -1,5 +1,6 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   collection,
   doc,
@@ -33,6 +34,7 @@ import {
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import MapTracking from "../../components/tabs/MapTracking";
 
 type AssignmentStatus =
   | "offered"
@@ -245,6 +247,8 @@ const firstIncidentImage = (
 
 export default function VolunteerTasks() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{view?: string;caseId?: string}>();
+  const showingTaskMap = routeParams.view === "tracking";
 
   const {
     loading,
@@ -537,7 +541,7 @@ export default function VolunteerTasks() {
       if (
         situationSummary.trim().length < 10
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Situation Summary Required",
           "Describe the actual situation you observed on site in at least 10 characters."
         );
@@ -545,7 +549,7 @@ export default function VolunteerTasks() {
       }
 
       if (!contributionType.trim()) {
-        Alert.alert(
+        AppAlert.alert(
           "Contribution Type Required",
           "Select the type of assistance you provided."
         );
@@ -555,7 +559,7 @@ export default function VolunteerTasks() {
       if (
         contributionSummary.trim().length < 10
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Assistance Provided Required",
           "Describe the assistance you actually provided in at least 10 characters."
         );
@@ -567,7 +571,7 @@ export default function VolunteerTasks() {
         people < 0 ||
         people > 999
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "People Helped",
           "Enter a whole number from 0 to 999."
         );
@@ -578,7 +582,7 @@ export default function VolunteerTasks() {
         remainingNeeds.includes("Other") &&
         remainingNeedsNote.trim().length < 3
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Describe Other Need",
           "Add a short note describing the other remaining need."
         );
@@ -588,7 +592,7 @@ export default function VolunteerTasks() {
       if (
         remainingNeedsNote.trim().length > 1500
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Remaining Needs Note",
           "Remaining-needs notes must be 1500 characters or fewer."
         );
@@ -596,7 +600,7 @@ export default function VolunteerTasks() {
       }
 
       if (lguFollowUpRequired === null) {
-        Alert.alert(
+        AppAlert.alert(
           "LGU Follow-up Required?",
           "Select Yes or No so LGU/Admin knows whether further action is needed."
         );
@@ -606,7 +610,7 @@ export default function VolunteerTasks() {
       if (
         completionNotes.trim().length > 600
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Completion Notes",
           "Completion notes must be 600 characters or fewer."
         );
@@ -943,29 +947,29 @@ export default function VolunteerTasks() {
       );
 
       if (next === "accepted") {
-        Alert.alert(
+        AppAlert.alert(
           "Assignment Accepted",
           "Select Start Response when you begin travelling or responding."
         );
 
         setFilter("active");
       } else if (next === "declined") {
-        Alert.alert(
+        AppAlert.alert(
           "Assignment Declined",
           "Admin will see the decline and can offer the case to another qualified volunteer."
         );
       } else if (next === "responding") {
-        Alert.alert(
+        AppAlert.alert(
           "Response Started",
           "Your status is now Responding. Keep the Live Response Map available while travelling to the incident."
         );
       } else if (next === "on_site") {
-        Alert.alert(
+        AppAlert.alert(
           "Arrival Recorded",
           "Your status is now On Site. Complete the mission only after the assigned assistance is finished."
         );
       } else {
-        Alert.alert(
+        AppAlert.alert(
           "Field Report Submitted",
           "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action."
         );
@@ -981,7 +985,7 @@ export default function VolunteerTasks() {
 
       setError(message);
 
-      Alert.alert(
+      AppAlert.alert(
         "Update Failed",
         message
       );
@@ -990,25 +994,10 @@ export default function VolunteerTasks() {
     }
   };
 
-  const openLiveMap = (
-    assignment?: ResponseAssignment
-  ) => {
-    if (assignment?.caseId) {
-      router.push({
-        pathname:
-          "/map-tracking" as any,
-        params: {
-          caseId:
-            assignment.caseId,
-        },
-      });
-
-      return;
-    }
-
-    router.push(
-      "/map-tracking" as any
-    );
+  const openLiveMap = (assignment?: ResponseAssignment) => {
+    router.push({ pathname: "/volunteer" as any,
+      params: { view: "tracking", ...(assignment?.caseId ? {caseId: assignment.caseId} : {}) },
+    });
   };
 
   if (loading) {
@@ -1043,6 +1032,21 @@ export default function VolunteerTasks() {
   ) {
     return (
       <Redirect href="/(tabs)" />
+    );
+  }
+
+  if (showingTaskMap) {
+    return (
+      <View style={{flex:1,minHeight:0,backgroundColor:"#F3F8F8"}}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to Volunteer Tasks"
+          onPress={() => router.replace("/volunteer" as any)}
+          style={{minHeight:52,flexDirection:"row",alignItems:"center",gap:8,
+            backgroundColor:"#FFFFFF",paddingHorizontal:20,borderBottomWidth:1,borderBottomColor:"#DDE8E6"}}>
+          <Ionicons name="arrow-back-outline" size={19} color="#087668"/>
+          <Text style={{fontSize:14,fontWeight:"800",color:"#123C37"}}>Back to Volunteer Tasks</Text>
+        </TouchableOpacity>
+        <View style={{flex:1,minHeight:0}}><MapTracking/></View>
+      </View>
     );
   }
 

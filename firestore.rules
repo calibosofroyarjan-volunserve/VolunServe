@@ -16,11 +16,15 @@ service cloud.firestore {
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        );
+        )
+        // Legacy users are unchanged; new password accounts need confirmed
+        // Firebase email ownership to access approved-role operations.
+        && (p.get('emailVerificationRequired', false) != true
+          || request.auth.token.get('email_verified', false) == true);
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') == 'admin'
         && p.get('status', 'approved') == 'approved'
         // A suspended LGU administrator must lose operational access immediately.
@@ -28,14 +32,14 @@ service cloud.firestore {
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') == 'superadmin'
         && p.get('status', 'approved') == 'approved';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return approved()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
         && (p.get('role', '') == 'superadmin'
@@ -63,6 +67,16 @@ service cloud.firestore {
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
     }
     match /users/{uid} {
+    // Defense in depth: direct Auth SDK signups with common disposable domains
+    // cannot self-create a usable Resident or staff applicant profile.
+    // Firebase Auth UID creation itself is NOT blocked by this Firestore rule.
+    function allowedSignupEmail() {
+      return request.auth.token.get('email', '') is string
+        && !request.auth.token.get('email', '').matches(
+          '(?i)^.*@([a-z0-9-]+\\.)*(mailinator\\.com|yopmail\\.com|guerrillamail\\.com|guerrillamailblock\\.com|sharklasers\\.com|10minutemail\\.com|temp-mail\\.org|tempmail\\.com|tempmail\\.net|maildrop\\.cc|dispostable\\.com|trashmail\\.com|getnada\\.com|minuteinbox\\.com|emailondeck\\.com|throwawaymail\\.com)$'
+        );
+    }
+
 
       function hasVerifiedIdentity(data) {
         return (
@@ -120,6 +134,13 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
+        // The profile email must be the Firebase Auth email, not a user-supplied alias.
+        && request.auth.token.get('email', '') == request.resource.data.email
+        && allowedSignupEmail()
+        // Self-reported age restriction; original-ID review remains separate.
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 120
         && request.resource.data.province in [
           'Bulacan',
           'BULACAN',
@@ -164,6 +185,7 @@ service cloud.firestore {
           'status',
           'identityStatus',
           'identityVerified',
+          'emailVerificationRequired',
           'profilePictureUrl',
           'createdAt'
         ])
@@ -177,6 +199,13 @@ service cloud.firestore {
         && request.resource.data.activeMode == 'resident'
         && request.resource.data.identityStatus == 'basic'
         && request.resource.data.identityVerified == false
+        && request.resource.data.emailVerificationRequired is bool
+        // New unverified email/password accounts may not skip the login gate
+        // by creating a self-profile without the required verification marker.
+        && (
+          request.auth.token.get('email_verified', false) == true
+          || request.resource.data.emailVerificationRequired == true
+        )
         && request.resource.data.skills is list
         && request.resource.data.skills.size() == 0
         && request.resource.data.skillOther == ''
@@ -188,10 +217,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '') == request.resource.data.email
+        && allowedSignupEmail()
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
           'residentAccess','volunteerAccess','region','province','city',
-          'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
+          'barangay','lguOffice','lguPosition','appointmentReference','emailVerificationRequired','createdAt'
         ])
         && request.resource.data.keys().hasAll([
           'uid','email','fullName','role','status','residentAccess',
@@ -200,6 +230,9 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.role == 'applicant'
         && request.resource.data.status == 'pending_review'
+        // New LGU staff must prove email ownership before any approved
+        // administrative login. This field cannot be disabled by applicants.
+        && request.resource.data.emailVerificationRequired == true
         && request.resource.data.residentAccess == false
         && request.resource.data.volunteerAccess == false
         && request.resource.data.fullName is string
@@ -228,6 +261,12 @@ service cloud.firestore {
       allow list: if isAdminOrSuperAdmin();
       allow update: if signedIn()
         && request.auth.uid == uid
+        // Edits must not downgrade a previously adult account below the age policy.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
+          || (request.resource.data.age is int && request.resource.data.age >= 18
+              && request.resource.data.age <= 120)
+        )
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -698,8 +737,10 @@ service cloud.firestore {
         && request.resource.data.cityName.size() >= 3
         && request.resource.data.cityName.size() <= 120
         && request.resource.data.emergencyHotline is string
-        && request.resource.data.emergencyHotline.size() >= 3
-        && request.resource.data.emergencyHotline.size() <= 160
+        // Allow only verified public emergency lines; a client cannot bypass the preset dropdown.
+        && request.resource.data.emergencyHotline in [
+          '911', '0932-600-0119', '0955-206-7200'
+        ]
         && request.resource.data.supportEmail is string
         && request.resource.data.supportEmail.size() <= 160
         && request.resource.data.publicServiceNotice is string
@@ -713,26 +754,84 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
+      function isOfficialSjdmBarangay(value) {
+        return value is string && value in [
+          'Assumption',
+          'Bagong Buhay I',
+          'Bagong Buhay II',
+          'Bagong Buhay III',
+          'Citrus',
+          'Ciudad Real',
+          'Dulong Bayan',
+          'Fatima I',
+          'Fatima II',
+          'Fatima III',
+          'Fatima IV',
+          'Fatima V',
+          'Francisco Homes-Guijo',
+          'Francisco Homes-Mulawin',
+          'Francisco Homes-Narra',
+          'Francisco Homes-Yakal',
+          'Gaya-gaya',
+          'Graceville',
+          'Gumaoc Central',
+          'Gumaoc East',
+          'Gumaoc West',
+          'Kaybanban',
+          'Kaypian',
+          'Lawang Pari',
+          'Maharlika',
+          'Minuyan I',
+          'Minuyan II',
+          'Minuyan III',
+          'Minuyan IV',
+          'Minuyan Proper',
+          'Minuyan V',
+          'Muzon East',
+          'Muzon Proper',
+          'Muzon South',
+          'Muzon West',
+          'Paradise III',
+          'Poblacion',
+          'Poblacion I',
+          'San Isidro',
+          'San Manuel',
+          'San Martin de Porres',
+          'San Martin I',
+          'San Martin II',
+          'San Martin III',
+          'San Martin IV',
+          'San Pedro',
+          'San Rafael I',
+          'San Rafael II',
+          'San Rafael III',
+          'San Rafael IV',
+          'San Rafael V',
+          'San Roque',
+          'Santa Cruz I',
+          'Santa Cruz II',
+          'Santa Cruz III',
+          'Santa Cruz IV',
+          'Santa Cruz V',
+          'Santo Cristo',
+          'Santo Niño I',
+          'Santo Niño II',
+          'Sapang Palay',
+          'Tungkong Mangga'
+        ];
+      }
       allow read: if isAdminOrSuperAdmin()
         || (
           approved()
           && resource.data.publishAt is timestamp
           && resource.data.publishAt <= request.time
         );
+      // Approved city LGU Administrators may target an individual official
+      // SJDM barangay. Super Admin programmers are NOT announcement publishers.
       allow create: if isAdmin()
-        && profile().barangay is string
-        && profile().barangay.size() > 0
         && request.resource.data.keys().hasOnly([
-          'title',
-          'message',
-          'linkUrl',
-          'imageUrl',
-          'audience',
-          'priority',
-          'publishAt',
-          'createdBy',
-          'createdAt',
-          'updatedAt'
+          'title','message','linkUrl','imageUrl','audience','priority',
+          'publishAt','createdBy','createdAt','updatedAt'
         ])
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 3
@@ -742,21 +841,18 @@ service cloud.firestore {
         && request.resource.data.message.size() <= 2000
         && request.resource.data.linkUrl is string
         && request.resource.data.imageUrl is string
-        && request.resource.data.priority in [
-          'normal',
-          'urgent'
-        ]
+        && request.resource.data.priority in ['normal','urgent']
         && request.resource.data.publishAt is timestamp
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.audience == profile().barangay;
+        && isOfficialSjdmBarangay(request.resource.data.audience);
+      // No silent retargeting, impersonating the creator, or cross-admin edits.
       allow update: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay
+        && resource.data.createdBy == request.auth.uid
+        && isOfficialSjdmBarangay(resource.data.audience)
         && request.resource.data.audience == resource.data.audience
         && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay;
+        && resource.data.createdBy == request.auth.uid;
     }
     match /identityVerifications/{uid} {
       function userAfterReview() {
@@ -5445,7 +5541,7 @@ service cloud.firestore {
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
-          'location', 'date', 'time', 'endTime', 'capacity',
+          'location', 'date', 'time', 'endTime', 'startsAt', 'endsAt', 'capacity',
           'latitude', 'longitude', 'coordinates',
           'participantsCount', 'status', 'publicationStatus',
           'sourceProposalId', 'proposedBy', 'proposerName',
@@ -5465,6 +5561,17 @@ service cloud.firestore {
         && request.resource.data.approvedAt == request.time
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        // Timestamp fields are required by the current app. The legacy branch
+        // remains readable/joinable for records published before this update.
+        && (
+          (!('startsAt' in request.resource.data) && !('endsAt' in request.resource.data))
+          || (
+            request.resource.data.get('startsAt', null) is timestamp
+            && request.resource.data.get('endsAt', null) is timestamp
+            && request.resource.data.startsAt > request.time
+            && request.resource.data.endsAt > request.resource.data.startsAt
+          )
+        )
         && proposalAfter().status == 'approved'
         && proposalAfter().publishedEventId == eventId
         && proposalAfter().reviewedBy == request.auth.uid
@@ -5537,9 +5644,26 @@ service cloud.firestore {
           )
         );
 
+      // Server-time enrollment gate for events created with startsAt/endsAt.
+      // Existing legacy events without timestamps keep their prior eligibility.
+      function joinWindowIsOpen() {
+        return (!('startsAt' in resource.data) && !('endsAt' in resource.data))
+          || (
+            resource.data.get('startsAt', null) is timestamp
+            && resource.data.get('endsAt', null) is timestamp
+            && (
+              (resource.data.status == 'upcoming' && request.time < resource.data.startsAt)
+              || (resource.data.status == 'active'
+                && request.time >= resource.data.startsAt
+                && request.time < resource.data.endsAt)
+            )
+          );
+      }
+
       // A Volunteer can increase count only when their matching Join write
       // is part of this same Firestore transaction.
       allow update: if isVolunteer()
+        && joinWindowIsOpen()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
         && resource.data.proposedBy != request.auth.uid
@@ -5578,6 +5702,21 @@ service cloud.firestore {
         ).data;
       }
 
+      function participantJoinWindowOpen() {
+        let eventData = eventBefore();
+        return (!('startsAt' in eventData) && !('endsAt' in eventData))
+          || (
+            eventData.get('startsAt', null) is timestamp
+            && eventData.get('endsAt', null) is timestamp
+            && (
+              (eventData.status == 'upcoming' && request.time < eventData.startsAt)
+              || (eventData.status == 'active'
+                && request.time >= eventData.startsAt
+                && request.time < eventData.endsAt)
+            )
+          );
+      }
+
       // Allow a Volunteer to read only their own deterministic document,
       // including when it does not exist yet (first-time Join transaction).
       allow get: if isAdminOrSuperAdmin()
@@ -5610,6 +5749,7 @@ service cloud.firestore {
           ||
           (
             request.resource.data.status == 'joined'
+            && participantJoinWindowOpen()
             && request.resource.data.keys().hasOnly([
               'eventId', 'uid', 'fullName', 'status',
               'joinedAt', 'declinedAt', 'checkedInAt',
@@ -5686,6 +5826,7 @@ service cloud.firestore {
                 && request.resource.data.updatedAt == request.time
                 && eventBefore().publicationStatus == 'published'
                 && eventBefore().status in ['upcoming', 'active']
+                && participantJoinWindowOpen()
                 && eventBefore().proposedBy != request.auth.uid
                 && eventBefore().participantsCount is int
                 && eventAfter().participantsCount == eventBefore().participantsCount + 1

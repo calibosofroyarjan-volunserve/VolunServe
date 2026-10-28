@@ -1,3 +1,4 @@
+import { isKnownDisposableEmail } from "./registrationEmailPolicy";
 /** Central policy for LGU staff evidence intake. No applicant self-verification. */
 export const LGU_ID_TYPES = [
   { value: "ph_national_id", label: "Philippine National ID", reverse: true },
@@ -28,6 +29,7 @@ export function validLguApplication(form: {
   return form.fullName.trim().length >= 5 &&
     form.fullName.trim().length <= 160 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
+    !isKnownDisposableEmail(form.email) &&
     form.lguOffice.trim().length >= 3 && form.lguOffice.trim().length <= 160 &&
     form.lguPosition.trim().length >= 3 && form.lguPosition.trim().length <= 120 &&
     form.appointmentReference.trim().length >= 5 &&

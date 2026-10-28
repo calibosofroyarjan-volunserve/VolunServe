@@ -1,9 +1,9 @@
+import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -232,6 +232,22 @@ const owningModule = (route: string, mode: string) =>
     ? mode === "volunteer" ? "volunteer" : "disaster-response"
     : route;
 
+function requestConfirmedResidentLogout() {
+    const logOut = async () => {
+      try {
+        await logoutUser();
+        router.replace("/login");
+      } catch (error: any) {
+        AppAlert.alert("Log out failed", error?.message || "Please try again.");
+      }
+    };
+    // The same safe confirmation is used on mobile and web.
+    AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Log Out", style: "destructive", onPress: () => void logOut() },
+    ]);
+}
+
 export default function TabLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
@@ -267,30 +283,11 @@ export default function TabLayout() {
       await setActiveUserMode(mode === "volunteer" ? "resident" : "volunteer");
       router.replace("/(tabs)");
     } catch (error: any) {
-      Alert.alert("Unable to switch mode", error?.message || "Please try again.");
+      AppAlert.alert("Unable to switch mode", error?.message || "Please try again.");
     }
   };
 
-  const confirmMobileLogout = () => {
-    const logOut = async () => {
-      try {
-        await logoutUser();
-        router.replace("/login");
-      } catch (error: any) {
-        Alert.alert("Log out failed", error?.message || "Please try again.");
-      }
-    };
-    if (Platform.OS === "web") {
-      if (window.confirm("Are you sure you want to log out of VolunServe?")) {
-        void logOut();
-      }
-      return;
-    }
-    Alert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Log Out", style: "destructive", onPress: () => void logOut() },
-    ]);
-  };
+
 
   if (loading) {
     return (
@@ -408,7 +405,7 @@ export default function TabLayout() {
                 </Pressable>
               ) : null}
               <View style={styles.mobileAccountDivider} />
-              <Pressable onPress={() => {setMobileProfileOpen(false); confirmMobileLogout();}}
+              <Pressable onPress={() => {setMobileProfileOpen(false); requestConfirmedResidentLogout();}}
                 style={styles.mobileAccountAction}>
                 <Ionicons name="log-out-outline" size={18} color="#D93545" />
                 <Text style={[styles.mobileAccountActionText, { color: "#C52B3C" }]}>Log Out</Text>
@@ -504,7 +501,7 @@ function DesktopTabBar({
       await setActiveUserMode(nextMode);
       navigation.navigate("index");
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Mode Switch Failed",
         error?.message || "Unable to switch account mode."
       );
@@ -690,7 +687,7 @@ function DesktopTabBar({
             styles.desktopUtilityButton,
             pressed && styles.desktopPressed,
           ]}
-          onPress={() => void logoutUser()}
+          onPress={requestConfirmedResidentLogout}
         >
           <Ionicons
             name="log-out-outline"
@@ -734,7 +731,7 @@ function CustomTabBar({
       await setActiveUserMode(nextMode);
       navigation.navigate("index");
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Mode Switch Failed",
         error?.message || "Unable to switch account mode."
       );

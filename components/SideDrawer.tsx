@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
@@ -121,7 +122,7 @@ export default function SideDrawer({
       onClose();
       router.replace("/(tabs)" as any);
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Mode Switch Failed",
         error?.message || "Unable to switch account mode.",
       );
@@ -148,7 +149,7 @@ export default function SideDrawer({
       await logoutUser();
       router.replace("/login" as any);
     } catch (error: any) {
-      Alert.alert(
+      AppAlert.alert(
         "Sign Out Failed",
         error?.message || "Unable to sign out. Please try again.",
       );

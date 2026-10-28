@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -447,7 +448,7 @@ export default function DisasterResponse() {
         await Location.requestForegroundPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert(
+        AppAlert.alert(
           "Location Permission",
           "Allow location access so the response team can find the incident. You can also tap the map to place the incident pin manually."
         );
@@ -467,7 +468,7 @@ export default function DisasterResponse() {
     } catch (error) {
       console.log(error);
 
-      Alert.alert(
+      AppAlert.alert(
         "Location Error",
         "Could not get your current GPS location. Tap the map to place the incident pin manually."
       );
@@ -500,7 +501,7 @@ export default function DisasterResponse() {
       }
 
       if (current.length >= 5) {
-        Alert.alert(
+        AppAlert.alert(
           "Photo Limit",
           "Maximum of 5 incident photos."
         );
@@ -516,7 +517,7 @@ export default function DisasterResponse() {
     if (busy) return;
 
     if (photos.length >= 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Limit",
         "Maximum of 5 incident photos."
       );
@@ -527,7 +528,7 @@ export default function DisasterResponse() {
       await ImagePicker.requestCameraPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Camera Permission",
         "Allow camera access to take incident evidence."
       );
@@ -555,7 +556,7 @@ export default function DisasterResponse() {
     if (busy) return;
 
     if (photos.length >= 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Limit",
         "Maximum of 5 incident photos."
       );
@@ -566,7 +567,7 @@ export default function DisasterResponse() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access to attach incident evidence."
       );
@@ -597,7 +598,7 @@ export default function DisasterResponse() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Gallery Permission",
         "Allow photo library access to attach an optional incident video."
       );
@@ -786,7 +787,7 @@ export default function DisasterResponse() {
       !profile ||
       !isApprovedProfile(profile)
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Sign In Required",
         "Sign in with your VolunServe account before submitting an emergency report."
       );
@@ -803,7 +804,7 @@ export default function DisasterResponse() {
       Number(affectedPeople);
 
     if (!category) {
-      Alert.alert(
+      AppAlert.alert(
         "Incident Type Required",
         "Select the type of emergency or incident."
       );
@@ -811,7 +812,7 @@ export default function DisasterResponse() {
     }
 
     if (trimmedDescription.length < 10) {
-      Alert.alert(
+      AppAlert.alert(
         "Situation Details Required",
         "Describe what happened in at least 10 characters."
       );
@@ -822,7 +823,7 @@ export default function DisasterResponse() {
       !Number.isInteger(affected) ||
       affected < 1
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Affected People",
         "Enter a valid number of people affected."
       );
@@ -830,7 +831,7 @@ export default function DisasterResponse() {
     }
 
     if (assistanceTypes.length === 0) {
-      Alert.alert(
+      AppAlert.alert(
         "Help Needed",
         "Select at least one type of immediate help needed."
       );
@@ -841,7 +842,7 @@ export default function DisasterResponse() {
       assistanceTypes.includes("Other") &&
       otherAssistance.trim().length < 2
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Other Assistance",
         "Briefly describe the other assistance needed."
       );
@@ -849,7 +850,7 @@ export default function DisasterResponse() {
     }
 
     if (!pin) {
-      Alert.alert(
+      AppAlert.alert(
         "Incident Location Required",
         "Use GPS or tap the map to place the exact incident pin."
       );
@@ -857,7 +858,7 @@ export default function DisasterResponse() {
     }
 
     if (trimmedAddress.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Address Required",
         "Enter the exact address, barangay, or nearby landmark."
       );
@@ -865,7 +866,7 @@ export default function DisasterResponse() {
     }
 
     if (photos.length === 0) {
-      Alert.alert(
+      AppAlert.alert(
         "Photo Required",
         "At least one incident photo is required for Admin verification."
       );
@@ -873,7 +874,7 @@ export default function DisasterResponse() {
     }
 
     if (!confirmed) {
-      Alert.alert(
+      AppAlert.alert(
         "Confirmation Required",
         "Confirm that the report and attached evidence are accurate to the best of your knowledge."
       );
@@ -922,7 +923,7 @@ export default function DisasterResponse() {
       );
 
     if (contactNumber.length < 8) {
-      Alert.alert(
+      AppAlert.alert(
         "Contact Number Required",
         "Add a valid contact number in Account Settings before submitting an emergency report so Admin or responders can contact you."
       );
@@ -1012,7 +1013,7 @@ export default function DisasterResponse() {
         setBusy(false);
 
         if (block.reason === "active") {
-          Alert.alert(
+          AppAlert.alert(
             "Existing Emergency Report",
             `You already have an active ${block.category} report for this area. Continue using the existing case so the LGU does not receive a duplicate.`,
             [
@@ -1031,7 +1032,7 @@ export default function DisasterResponse() {
             ]
           );
         } else {
-          Alert.alert(
+          AppAlert.alert(
             "24-Hour Duplicate Cooldown",
             `A similar ${block.category} report in this area was recently completed. ${formatRemainingCooldown(block.remainingMs)} remains before the same incident can be submitted again. If this is a different emergency, change the incident type or confirm the correct location.`,
             [
@@ -1050,7 +1051,7 @@ export default function DisasterResponse() {
       setProgress("");
       submitLock.current = false;
       setBusy(false);
-      Alert.alert(
+      AppAlert.alert(
         "Could Not Verify Duplicate Protection",
         "VolunServe could not confirm whether a similar emergency already exists. Check your connection and try again before submitting."
       );
@@ -1283,7 +1284,7 @@ export default function DisasterResponse() {
         }
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Emergency Report Submitted",
         `${
           identityVerified
@@ -1305,7 +1306,7 @@ export default function DisasterResponse() {
           saved.data().reporterUid ===
             user.uid
         ) {
-          Alert.alert(
+          AppAlert.alert(
             "Emergency Report Submitted",
             `Your report was saved successfully.\n\nReference: ${caseId}`
           );
@@ -1329,7 +1330,7 @@ export default function DisasterResponse() {
           "photo-too-large"
         )
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Photo Too Large",
           "Each incident photo must be under 10 MB."
         );
@@ -1338,14 +1339,14 @@ export default function DisasterResponse() {
           "video-too-large"
         )
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Video Too Large",
           "The optional incident video must be under 50 MB."
         );
       } else if (
         message.includes("cloudinary")
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Evidence Upload Failed",
           "Cloudinary upload failed. Check your internet connection and the configured upload preset. Your form is retained."
         );
@@ -1357,12 +1358,12 @@ export default function DisasterResponse() {
           "unauthorized"
         )
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Submission Blocked",
           "The report was blocked by Firestore permissions. Check the deployed Firestore rules. Your form is retained."
         );
       } else {
-        Alert.alert(
+        AppAlert.alert(
           "Submission Failed",
           "Your form was kept. Check your connection and try again; the same report reference will be reused."
         );

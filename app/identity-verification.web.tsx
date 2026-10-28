@@ -1,3 +1,4 @@
+import { AppAlert } from "../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -910,7 +911,7 @@ export default function IdentityVerificationWeb() {
 
   const openFaceScan = async () => {
     if (!idDocument) {
-      Alert.alert(
+      AppAlert.alert(
         "Government ID Required",
         "Capture a clear government ID image using your camera before starting the face scan.",
       );
@@ -944,7 +945,7 @@ export default function IdentityVerificationWeb() {
 
     if (!idDocument) {
       setStep(1);
-      Alert.alert(
+      AppAlert.alert(
         "Government ID Required",
         "Select a clear image of your government-issued ID.",
       );
@@ -953,7 +954,7 @@ export default function IdentityVerificationWeb() {
 
     if (!selfie) {
       setStep(2);
-      Alert.alert(
+      AppAlert.alert(
         "Face Scan Required",
         "Complete the live face scan before starting AI verification.",
       );
@@ -961,7 +962,7 @@ export default function IdentityVerificationWeb() {
     }
 
     if (!consent) {
-      Alert.alert(
+      AppAlert.alert(
         "Consent Required",
         "Confirm that VolunServe may process the submitted identity images for account verification.",
       );

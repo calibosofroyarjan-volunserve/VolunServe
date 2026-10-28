@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import React, { useState } from "react";
 
 import {
@@ -17,9 +18,10 @@ import {
 } from "expo-router";
 
 import {
-  addDoc,
   collection,
+  doc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import {
@@ -29,6 +31,7 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 export default function CreateAnnouncement() {
   const {
@@ -39,6 +42,9 @@ export default function CreateAnnouncement() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedBarangay, setSelectedBarangay] = useState("");
+  const [barangayPickerOpen, setBarangayPickerOpen] = useState(false);
+  const [barangaySearch, setBarangaySearch] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
@@ -104,26 +110,31 @@ export default function CreateAnnouncement() {
     );
   }
 
-  const barangay =
+  const assignedBarangay =
     typeof profile?.barangay === "string"
       ? profile.barangay.trim()
       : "";
+  const barangay = selectedBarangay ||
+    (SJDM_BARANGAYS.includes(assignedBarangay) ? assignedBarangay : "");
+  const shownBarangays = SJDM_BARANGAYS.filter(item =>
+    item.toLowerCase().includes(barangaySearch.trim().toLowerCase())
+  );
 
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!barangay) {
-      Alert.alert(
-        "Barangay Required",
-        "Your Admin account does not have an assigned barangay."
+    if (!SJDM_BARANGAYS.includes(barangay)) {
+      AppAlert.alert(
+        "Select Barangay",
+        "Choose an official SJDM barangay before publishing."
       );
 
       return;
     }
 
     if (cleanTitle.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Title",
         "Please enter a clear announcement title."
       );
@@ -132,7 +143,7 @@ export default function CreateAnnouncement() {
     }
 
     if (cleanMessage.length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Message",
         "Please enter an announcement message."
       );
@@ -143,46 +154,35 @@ export default function CreateAnnouncement() {
     try {
       setSubmitting(true);
 
-      await addDoc(
-        collection(db, "announcements"),
-        {
-          title: cleanTitle,
-
-          message: cleanMessage,
-
-          /*
-           * Local Admin announcement.
-           *
-           * audience stores the Admin's
-           * assigned barangay.
-           */
-          audience: barangay,
-
-          priority: "normal",
-
-          /*
-           * Publish immediately.
-           */
-          publishAt: serverTimestamp(),
-
-          /*
-           * Optional fields retained for
-           * compatibility with Firestore rules.
-           */
-          linkUrl: "",
-          imageUrl: "",
-
-          createdBy: user.uid,
-
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
-      );
+      const batch = writeBatch(db);
+      const announcementRef = doc(collection(db, "announcements"));
+      batch.set(announcementRef, {
+        title: cleanTitle,
+        message: cleanMessage,
+        audience: barangay,
+        priority: "normal",
+        publishAt: serverTimestamp(),
+        linkUrl: "",
+        imageUrl: "",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: "announcement_published",
+        targetType: "announcement",
+        targetId: announcementRef.id,
+        adminUid: user.uid,
+        adminName: user.displayName || user.email || "LGU Administrator",
+        description: "Published an LGU announcement for an authorized SJDM barangay.",
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
 
       setTitle("");
       setMessage("");
 
-      Alert.alert(
+      AppAlert.alert(
         "Announcement Posted",
         `The announcement was published for ${barangay}.`
       );
@@ -192,7 +192,7 @@ export default function CreateAnnouncement() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Post",
         error?.message ||
           "The announcement could not be published."
@@ -216,9 +216,8 @@ export default function CreateAnnouncement() {
       </Text>
 
       <Text style={styles.subtitle}>
-        Publish an operational announcement for
-        residents and volunteers in your assigned
-        barangay.
+        Publish an official LGU announcement for one selected
+        SJDM barangay. Check the audience before publishing.
       </Text>
 
       <View style={styles.scopeCard}>
@@ -226,13 +225,52 @@ export default function CreateAnnouncement() {
           ANNOUNCEMENT AREA
         </Text>
 
-        <Text style={styles.scopeValue}>
-          {barangay || "No barangay assigned"}
-        </Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Choose the announcement barangay"
+          accessibilityState={{expanded:barangayPickerOpen}}
+          onPress={() => setBarangayPickerOpen(value => !value)}
+          style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+            backgroundColor:"#FFFFFF",borderRadius:10,borderWidth:1,borderColor:"#AFCFC4",
+            paddingHorizontal:12,minHeight:48,marginVertical:10}}>
+          <Text style={styles.scopeValue}>{barangay || "Select SJDM barangay"}</Text>
+          <Text style={{color:"#087F78",fontSize:16}}>{barangayPickerOpen ? "▲" : "▼"}</Text>
+        </TouchableOpacity>
+        {barangayPickerOpen && (
+          <View style={{backgroundColor:"#FFFFFF",borderRadius:10,
+            borderWidth:1,borderColor:"#DCE9E3",overflow:"hidden",marginBottom:10}}>
+            <TextInput
+              accessibilityLabel="Search SJDM barangays"
+              value={barangaySearch}
+              onChangeText={setBarangaySearch}
+              placeholder="Search 62 barangays..."
+              placeholderTextColor="#7C918A"
+              style={{height:46,paddingHorizontal:12,color:"#173D32",
+                borderBottomWidth:1,borderBottomColor:"#E1EAE5"}}
+            />
+            <ScrollView style={{maxHeight:220}} keyboardShouldPersistTaps="handled">
+              {shownBarangays.map(item => (
+                <TouchableOpacity key={item} accessibilityRole="button"
+                  accessibilityLabel={"Target "+item}
+                  onPress={() => {setSelectedBarangay(item);setBarangayPickerOpen(false);setBarangaySearch("");}}
+                  style={{paddingVertical:12,paddingHorizontal:13,
+                    backgroundColor:barangay===item?"#E7F5EF":"#FFFFFF",
+                    borderBottomColor:"#EEF3F0",borderBottomWidth:1}}>
+                  <Text style={{color:"#173D32",fontWeight:barangay===item?"800":"500"}}>
+                    {item}{barangay===item?"  ✓":""}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              {shownBarangays.length===0 && <Text style={{color:"#607A70",padding:12}}>
+                No matching SJDM barangay.
+              </Text>}
+            </ScrollView>
+          </View>
+        )}
 
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area.
+          Only approved LGU Admins can publish. Select one of the
+          official SJDM barangays; this message is not citywide.
         </Text>
       </View>
 
@@ -251,7 +289,7 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
-        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
+        <Text style={styles.scopeHelp}>Templates are editable. Review the selected barangay and verify the announcement before publishing.</Text>
         <Text style={styles.inputLabel}>
           TITLE
         </Text>
@@ -314,9 +352,9 @@ export default function CreateAnnouncement() {
         </Text>
 
         <Text style={styles.noteText}>
-          This page is for local operational
-          announcements only. System-wide announcements
-          are controlled by the Super Admin.
+          Approved city LGU Admin accounts can publish to one
+          selected SJDM barangay per announcement. Super Admin
+          accounts are for system oversight, not LGU publishing.
         </Text>
       </View>
     </ScrollView>

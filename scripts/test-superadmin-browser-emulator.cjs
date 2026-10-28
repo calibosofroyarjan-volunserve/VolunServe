@@ -1,0 +1,293 @@
+"use strict";
+/**
+ * Browser acceptance on exported Expo web + Auth/Firestore emulators ONLY.
+ * No production credentials, actual LGU applications, or sensitive images.
+ * A browser screenshot is evidence of emulator rendering, NOT production QA.
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const http = require("node:http");
+const assert = require("node:assert/strict");
+const { chromium } = require("@playwright/test");
+const { initializeTestEnvironment } = require("@firebase/rules-unit-testing");
+
+const projectId = "demo-volunserve";
+const base = "http://127.0.0.1:19117";
+const root = path.resolve(__dirname, "..");
+const dist = path.join(root, "dist");
+const evidenceDir = path.join(root, "evidence", "superadmin-browser");
+const mime = { ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8",
+  ".css":"text/css; charset=utf-8", ".json":"application/json", ".woff":"font/woff",
+  ".woff2":"font/woff2", ".ttf":"font/ttf", ".png":"image/png", ".jpg":"image/jpeg",
+  ".jpeg":"image/jpeg", ".svg":"image/svg+xml", ".webp":"image/webp", ".ico":"image/x-icon" };
+function staticServer() {
+  return http.createServer((req,res) => {
+    let route;
+    try { route = decodeURIComponent(new URL(req.url || "/", base).pathname); }
+    catch { res.writeHead(400).end(); return; }
+    const safe = path.resolve(dist, "."+route);
+    if (safe !== dist && !safe.startsWith(dist+path.sep)) { res.writeHead(403).end(); return; }
+    const attempts = [safe, safe+".html",path.join(safe,"index.html")];
+    let target;
+    for (const candidate of attempts) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {target=candidate;break;}
+    }
+    if (!target) {res.writeHead(404).end("Missing exported route: "+route);return;}
+    res.setHeader("Content-Type",mime[path.extname(target).toLowerCase()]||"application/octet-stream");
+    res.setHeader("Cache-Control","no-store");
+    fs.createReadStream(target).pipe(res);
+  });
+}
+const localhostOnly = (value) => /^(127\.0\.0\.1|localhost):\d+$/.test(value || "");
+if (!localhostOnly(process.env.FIRESTORE_EMULATOR_HOST) ||
+    !localhostOnly(process.env.FIREBASE_AUTH_EMULATOR_HOST) ||
+    process.env.GCLOUD_PROJECT && process.env.GCLOUD_PROJECT !== projectId ||
+    !process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS ||
+    process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS !== "true") {
+  throw Error("This browser suite requires localhost Firebase Auth/Firestore emulators and demo project.");
+}
+assert(fs.existsSync(path.join(dist,"index.html")), "Export Expo web before browser QA.");
+
+async function seedEmulator() {
+  const endpoint="http://"+process.env.FIREBASE_AUTH_EMULATOR_HOST+
+    "/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-volunserve-key";
+  const password = "EmulatorOnly!SafePass2026";
+  const email = "superadmin-browser@example.test";
+  const response = await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({email,password,returnSecureToken:true})});
+  const result = await response.json();
+  if (!response.ok || !result.localId) throw Error("Auth emulator could not create local test account: "+JSON.stringify(result));
+  const env=await initializeTestEnvironment({projectId,firestore:{
+    rules:fs.readFileSync(path.join(root,"firestore.rules"),"utf8")}});
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await db.doc("users/"+result.localId).set({
+      uid:result.localId,role:"superadmin",status:"approved",email,
+      fullName:"Emulator QA Super Admin",
+    });
+    for(let i=1;i<=10;i++) {
+      const uid="browser-staff-"+i;
+      await db.doc("users/"+uid).set({
+        uid,role:"applicant",status:"pending_review",email:"staff-"+i+"@example.test",
+        fullName:"Synthetic Staff "+i,
+        lguOffice:"Emulator City Office",lguPosition:"Test applicant only",
+        appointmentReference:"EMULATOR-ONLY-"+i,
+        createdAt:new Date(2026,9,i),
+      });
+      await db.doc("users/browser-admin-"+i).set({
+        uid:"browser-admin-"+i,role:"admin",status:"approved",adminStatus:"active",
+        fullName:"Synthetic Admin "+i,email:"admin-"+i+"@example.test",
+        barangay:"Muzon Proper",
+      });
+    }
+    // Isolated data to validate real read-only oversight; NOT production records.
+    await db.doc("disasterCases/emulator-case").set({
+      title:"Emulator Emergency Report",status:"reported",createdAt:new Date(),
+    });
+    await db.doc("assistanceRequests/emulator-assistance").set({
+      title:"Emulator Assistance Request",status:"pending",createdAt:new Date(),
+    });
+    await db.doc("communityEvents/emulator-event").set({
+      title:"Emulator Community Event",status:"upcoming",
+      publicationStatus:"published",barangay:"Muzon Proper",createdAt:new Date(),
+    });
+    await db.doc("communityEventProposals/emulator-proposal").set({
+      title:"Emulator Event Proposal",status:"pending",
+      proposerName:"Synthetic Staff 1",barangay:"Muzon Proper",createdAt:new Date(),
+    });
+    await db.doc("communityEventParticipants/emulator-participant").set({
+      fullName:"Emulator Participant",eventId:"emulator-event",uid:"browser-staff-1",
+      status:"joined",attendanceVerified:false,createdAt:new Date(),
+    });
+    await db.doc("lguAdminCredentialReviews/emulator-review").set({
+      office:"Emulator LGU Review Office",position:"Synthetic Reviewer",
+      accountEmail:"staff-1@example.test",reviewStatus:"verified",
+      verifiedBy:result.localId,verifiedAt:new Date(),identityPresenceConfirmed:true,
+      verificationMethod:"Local simulator only",
+    });
+    await db.doc("adminLogs/emulator-access-log").set({
+      adminUid:result.localId,adminName:"Emulator QA Super Admin",
+      actionType:"admin_account_created",targetType:"user",targetId:"browser-admin-1",
+      description:"Emulator audited access change",createdAt:new Date(),
+    });
+    await db.doc("adminActivityLogs/emulator-settings-log").set({
+      adminUid:result.localId,adminName:"Emulator QA Super Admin",
+      actionType:"system_settings_updated",targetType:"system_settings",targetId:"public",
+      description:"Emulator audited settings change",createdAt:new Date(),
+    });
+  });
+  return {env,email,password};
+}
+
+async function main() {
+  const {env,email,password}=await seedEmulator();
+  const server=staticServer();
+  await new Promise((resolve,reject)=>server.once("error",reject).listen(19117,"127.0.0.1",resolve));
+  let browser;
+  try {
+    fs.mkdirSync(evidenceDir,{recursive:true});
+    browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+    const context=await browser.newContext({viewport:{width:1440,height:900},deviceScaleFactor:1});
+    const page=await context.newPage();
+    const consoleErrors=[];
+    const jsExceptions=[];
+    const dialogs=[];
+    page.on("pageerror",e=>jsExceptions.push(e.message));
+    page.on("dialog",async dialog=>{dialogs.push(dialog.message());await dialog.dismiss();});
+    page.on("response",response=>{
+      if (response.status()>=500 && response.url().startsWith(base)) consoleErrors.push(response.status()+" "+response.url());
+    });
+    await page.goto(base+"/admin-login",{waitUntil:"domcontentloaded",timeout:60000});
+    await page.getByLabel("Administrative email").fill(email);
+    await page.getByLabel("Administrative password").fill(password);
+    await page.screenshot({path:path.join(evidenceDir,"admin-login-debug.png"),fullPage:false});
+    await page.getByText("Login as Admin",{exact:true}).click();
+    await page.getByText("System Overview",{exact:true}).first().waitFor({timeout:30000});
+    const overviewPageButtons=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true});
+    await overviewPageButtons.first().waitFor({timeout:15000});
+    assert((await overviewPageButtons.count())>=2,
+      "Both Overview activity tables must have independent visible page controls above their rows");
+    await page.screenshot({path:path.join(evidenceDir,"overview-pagination-above-tables.png"),fullPage:true});
+    await page.getByText("LGU Staff & Admin Accounts",{exact:true}).first().click();
+    await page.getByText("LGU Staff Applications",{exact:true}).first().waitFor({timeout:25000});
+    await page.getByText("Synthetic Staff 10",{exact:true}).first().waitFor({timeout:25000});
+    await page.getByText("Showing 1–5 of 10 records",{exact:false}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByRole("button",{name:/Review LGU credentials for/}).count(),5,
+      "Page 1 must show only five staff application accounts, with no scrolling list of 10");
+    const applicantPageOne=page.getByRole("button",{name:"Page 1 of 2"}).first();
+    const pageTwo=page.getByRole("button",{name:"Page 2 of 2"}).first();
+    await applicantPageOne.scrollIntoViewIfNeeded();
+    const firstNumberBounds=await applicantPageOne.boundingBox();
+    assert(firstNumberBounds && firstNumberBounds.width>=43 && firstNumberBounds.height>=43,
+      "Numbered pagination must provide a 44px tap target");
+    const activeColor=await applicantPageOne.evaluate(node=>getComputedStyle(node).backgroundColor);
+    assert.equal(activeColor,"rgb(8, 122, 98)","Active page should use the approved emerald color");
+    assert.equal(await applicantPageOne.getAttribute("aria-current"),"page",
+      "Current page must be announced as the active page to web assistive technology");
+    assert(await pageTwo.isVisible(),"The second numbered page button must be displayed");
+    assert(await page.getByRole("button",{name:"Previous page"}).first().isDisabled(),
+      "Previous must be disabled on page 1");
+    await page.screenshot({path:path.join(evidenceDir,"pagination-desktop-page-1.png"),fullPage:false});
+    await page.getByRole("button",{name:"Page 2 of 2"}).first().click();
+    await page.getByText("Synthetic Staff 5",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 6–10 of 10 records",{exact:false}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByRole("button",{name:/Review LGU credentials for/}).count(),5,
+      "Page 2 must show the NEXT five applications only");
+    assert.equal(await page.getByRole("button",{name:"Page 2 of 2"}).first().getAttribute("aria-current"),"page");
+    assert(await page.getByRole("button",{name:"Next page"}).first().isDisabled(),
+      "Next must be disabled on final page");
+    await page.getByRole("button",{name:"Page 2 of 2"}).first().scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidenceDir,"pagination-desktop-page-2.png"),fullPage:false});
+
+    // Separately verify the second list: approved LGU Admin accounts.
+    await page.getByText("Existing LGU Admin Accounts",{exact:true}).first().scrollIntoViewIfNeeded();
+    const adminNames=page.getByText(/^Synthetic Admin [0-9]+$/);
+    await adminNames.first().waitFor({timeout:15000});
+    assert.equal(await adminNames.count(),5,"First Admin Accounts page must show exactly five accounts");
+    const adminFirstPage=new Set(await adminNames.allTextContents());
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).click();
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1)
+      .evaluate(node => {if(node.getAttribute("aria-current")!=="page") throw Error("Admin page two is not selected");});
+    const adminSecondPage=new Set(await adminNames.allTextContents());
+    assert.equal(adminSecondPage.size,5,"Second Admin Accounts page must show exactly five accounts");
+    for(const name of adminSecondPage)
+      assert(!adminFirstPage.has(name),"Both Admin pages must contain different accounts: "+name);
+    await page.getByRole("button",{name:"Page 2 of 2"}).nth(1).scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidenceDir,"pagination-admin-accounts.png"),fullPage:false});
+    await page.screenshot({path:path.join(evidenceDir,"desktop.png"),fullPage:true});
+    await page.getByRole("textbox",{name:"Search pending LGU staff applications"})
+      .fill("Synthetic Staff 3");
+    await page.getByText("Synthetic Staff 3",{exact:true}).first().waitFor({timeout:15000});
+    await page.getByText("Showing 1–1 of 1 records",{exact:false}).first().waitFor({timeout:15000});
+    assert(await page.getByRole("button",{name:"Page 1 of 1"}).first().isVisible(),
+      "Pagination must remain visible even for one matching search result");
+    await page.getByRole("button",{name:/Review LGU credentials for Synthetic Staff 3/}).click();
+    await page.getByText("Independent staff authorization",{exact:true}).waitFor({timeout:20000});
+    await page.waitForTimeout(450); // Capture the settled review modal, not the fade transition.
+    const promote=page.getByRole("button",{name:"Promote Verified Staff"});
+    assert.equal(await promote.isDisabled(),true,"Promotion must remain disabled before credential review");
+    await page.screenshot({path:path.join(evidenceDir,"review-modal.png"),fullPage:false});
+    await page.getByRole("button",{name:"Cancel staff account action"}).click();
+    await page.waitForTimeout(500); // Let native-web modal close before changing list state.
+    const applicantSearch = page.getByRole("textbox",{name:"Search pending LGU staff applications"});
+    await applicantSearch.fill("");
+    await page.waitForTimeout(450);
+    const applicantCountLabels = await page.getByText(/Showing [0-9]+/).allTextContents();
+    console.log("Pagination search-reset state:", JSON.stringify({
+      searchValue:await applicantSearch.inputValue(),
+      counters:applicantCountLabels,
+    }));
+    await page.screenshot({path:path.join(evidenceDir,"pagination-search-reset.png"),fullPage:false});
+    await page.getByText("Showing 1–5 of 10 records",{exact:false}).first().waitFor({timeout:15000});
+    await page.setViewportSize({width:390,height:844});
+    const narrowNumber=page.getByRole("button",{name:"Page 1 of 2"}).first();
+    await narrowNumber.scrollIntoViewIfNeeded();
+    const narrowBounds=await narrowNumber.boundingBox();
+    assert(narrowBounds && narrowBounds.width>=43 && narrowBounds.height>=43,
+      "Mobile-width pagination must retain readable 44px page buttons");
+    await page.screenshot({path:path.join(evidenceDir,"pagination-narrow-web.png"),fullPage:false});
+    await page.waitForTimeout(450);
+    const overflow=await page.evaluate(()=>({
+      scroll:document.documentElement.scrollWidth,
+      client:document.documentElement.clientWidth,
+    }));
+    assert(overflow.scroll <= overflow.client+2,
+      "Narrow web layout has horizontal overflow: "+JSON.stringify(overflow));
+    await page.screenshot({path:path.join(evidenceDir,"narrow-web.png"),fullPage:true});
+    assert.equal(dialogs.length,0,"Native alert/confirm/prompt dialog must not display.");
+    assert.equal(jsExceptions.length,0,"Browser JS errors: "+jsExceptions.join("; "));
+    assert.equal(consoleErrors.length,0,"Export server errors: "+consoleErrors.join("; "));
+    // Cover the remaining three Super Admin modules in the same approved shell.
+    await page.setViewportSize({width:1440,height:900});
+    await page.getByText("System Records",{exact:true}).first().click();
+    await page.getByText("System Records (Read Only)",{exact:true}).waitFor({timeout:20000});
+    await page.getByText("Event Proposals",{exact:true}).first().click();
+    await page.getByText("Emulator Event Proposal",{exact:true}).waitFor({timeout:15000});
+    await page.getByText("Volunteer Attendance",{exact:true}).first().click();
+    await page.getByText("Emulator Participant",{exact:true}).waitFor({timeout:15000});
+    await page.getByText("LGU Credential Reviews",{exact:true}).first().click();
+    const reviewRecord=page.getByText("Emulator LGU Review Office",{exact:true}).filter({visible:true});
+    await reviewRecord.waitFor({timeout:15000});
+    const recordsPageButton=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true}).first();
+    await recordsPageButton.waitFor({timeout:15000});
+    const recordPagerRect=await recordsPageButton.boundingBox();
+    const recordCardRect=await reviewRecord.boundingBox();
+    assert(recordPagerRect && recordCardRect && recordPagerRect.y < recordCardRect.y,
+      "System Records page controls must be ABOVE record cards, not below the list");
+    await recordsPageButton.scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidenceDir,"system-records-oversight.png"),fullPage:false});
+    await page.getByText("Audit Logs",{exact:true}).first().click();
+    await page.getByText("Admin Activity & Audit Logs",{exact:true}).waitFor({timeout:15000});
+    await page.getByRole("button",{name:"Filter audit events: Access & Credentials"}).click();
+    const visibleAccessEvent=page.getByText("Admin Account Created",{exact:true})
+      .filter({visible:true}).first();
+    await visibleAccessEvent.waitFor({timeout:15000});
+    const auditPager=page.getByRole("button",{name:"Page 1 of 1"}).filter({visible:true}).first();
+    await auditPager.waitFor({timeout:15000});
+    const auditPagerRect=await auditPager.boundingBox();
+    const auditRowRect=await visibleAccessEvent.boundingBox();
+    assert(auditPagerRect && auditRowRect && auditPagerRect.y < auditRowRect.y,
+      "Audit Logs page controls must be ABOVE the audit entries, not at the end of the list");
+    await auditPager.scrollIntoViewIfNeeded();
+    assert.equal(await page.getByText("System Settings Updated",{exact:true})
+      .filter({visible:true}).count(),0,
+      "Access filter must not mix unrelated settings changes in the visible audit table");
+    await page.screenshot({path:path.join(evidenceDir,"audit-logs-filter.png"),fullPage:false});
+    await page.getByText("System Settings",{exact:true}).first().click();
+    const hotlineOptions=page.getByRole("button",{name:"Official Emergency Hotline (public) options"});
+    await hotlineOptions.waitFor({timeout:15000});
+    await hotlineOptions.click();
+    await page.getByText("0932-600-0119",{exact:true}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByText("Others — specify",{exact:true}).count(),0,
+      "Emergency hotline must not permit unverified custom numbers");
+    await page.screenshot({path:path.join(evidenceDir,"official-hotline-options.png"),fullPage:false});
+    console.log("PASS browser: five-per-page accounts, top-mounted pagination in Overview, System Records and Audit Logs, guarded promotion, responsive shell, official-only hotline");
+    await context.close();
+  } finally {
+    if(browser) await browser.close();
+    await new Promise(resolve=>server.close(resolve));
+    await env.cleanup();
+  }
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

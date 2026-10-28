@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import React from "react";
 import {
     Alert,
@@ -11,7 +12,7 @@ import {
 
 export default function PublicVolunteer() {
   const requireLogin = () => {
-    Alert.alert(
+    AppAlert.alert(
       "Login Required",
       "Please login or create an account to access volunteer features."
     );

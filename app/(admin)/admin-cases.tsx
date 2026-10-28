@@ -1,3 +1,5 @@
+import ListPagination from "../../components/ui/ListPagination";
+import { AppAlert } from "../../lib/appDialog";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
@@ -575,6 +577,8 @@ export default function AdminCases() {
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [caseSearch, setCaseSearch] = useState("");
+  const [casePage, setCasePage] = useState(1);
+  const PAGE_SIZE = 5;
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
@@ -799,7 +803,7 @@ export default function AdminCases() {
     const adminUser = getAuth().currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -810,7 +814,7 @@ export default function AdminCases() {
     ).trim();
 
     if (note.length > 1500) {
-      Alert.alert(
+      AppAlert.alert(
         "Review Note Too Long",
         "Admin review note must be 1500 characters or fewer."
       );
@@ -859,13 +863,13 @@ export default function AdminCases() {
 
       await loadLguFieldReports(report.caseId, true);
 
-      Alert.alert(
+      AppAlert.alert(
         "LGU Field Report Reviewed",
         "The official responder report is reviewed. You may now resolve the emergency if the case is fully handled, or keep it In Progress for follow-up."
       );
     } catch (error) {
       console.log("Official LGU field report review error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Review Failed",
         error instanceof Error
           ? error.message
@@ -1037,7 +1041,7 @@ export default function AdminCases() {
       },
       (error) => {
         console.log("Cases listener error:", error);
-        Alert.alert(
+        AppAlert.alert(
           "Permission Error",
           "Unable to load disaster cases. Check the deployed Firestore rules."
         );
@@ -1194,7 +1198,7 @@ export default function AdminCases() {
       },
       (error) => {
         console.log("Volunteer applications listener error:", error);
-        Alert.alert(
+        AppAlert.alert(
           "Permission Error",
           "Unable to load approved volunteer applications."
         );
@@ -1227,7 +1231,7 @@ export default function AdminCases() {
       },
       (error) => {
         console.log("Assignment listener error:", error);
-        Alert.alert(
+        AppAlert.alert(
           "Permission Error",
           "Unable to load response assignments. Check Firestore rules."
         );
@@ -1279,7 +1283,7 @@ export default function AdminCases() {
       },
       (error) => {
         console.log("Volunteer field report listener error:", error);
-        Alert.alert(
+        AppAlert.alert(
           "Permission Error",
           "Unable to load Volunteer field reports. Check the deployed Firestore rules."
         );
@@ -1348,20 +1352,27 @@ export default function AdminCases() {
     );
   }, [sortedFiltered, caseSearch]);
 
+  const casePageCount = Math.max(1, Math.ceil(visibleCases.length / PAGE_SIZE));
+  const activeCasePage = Math.min(casePage, casePageCount);
+  const pagedCases = useMemo(() =>
+    visibleCases.slice((activeCasePage - 1) * PAGE_SIZE, activeCasePage * PAGE_SIZE),
+    [visibleCases, activeCasePage]
+  );
+
   useEffect(() => {
-    if (visibleCases.length === 0) {
+    if (pagedCases.length === 0) {
       setSelectedCaseId("");
       return;
     }
 
-    if (!visibleCases.some((item) => item.id === selectedCaseId)) {
-      setSelectedCaseId(visibleCases[0].id);
+    if (!pagedCases.some((item) => item.id === selectedCaseId)) {
+      setSelectedCaseId(pagedCases[0].id);
     }
-  }, [visibleCases, selectedCaseId]);
+  }, [pagedCases, selectedCaseId]);
 
   const selectedCase =
-    visibleCases.find((item) => item.id === selectedCaseId) ||
-    visibleCases[0] ||
+    pagedCases.find((item) => item.id === selectedCaseId) ||
+    pagedCases[0] ||
     null;
 
   useEffect(() => {
@@ -1735,7 +1746,7 @@ export default function AdminCases() {
     const adminUser = auth.currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -1749,7 +1760,7 @@ export default function AdminCases() {
       incident.source === "resident_emergency_assistance" &&
       !hasImage
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Evidence Required",
         "This emergency report has no photo evidence. Request more evidence or reject it instead."
       );
@@ -1757,7 +1768,7 @@ export default function AdminCases() {
     }
 
     if (action !== "validate" && reason.length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Reason Required",
         "Enter a clear reason before requesting more evidence or rejecting the request."
       );
@@ -1866,17 +1877,17 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
-        Alert.alert(
+        AppAlert.alert(
           "Request Validated",
           "The case is now eligible for responder assignment."
         );
       } else if (action === "request_more_evidence") {
-        Alert.alert(
+        AppAlert.alert(
           "Resident Notified",
           "The resident was asked to provide more evidence."
         );
       } else {
-        Alert.alert(
+        AppAlert.alert(
           "Request Rejected",
           "The emergency report is blocked from Volunteer dispatch."
         );
@@ -1888,7 +1899,7 @@ export default function AdminCases() {
       }));
     } catch (error) {
       console.log("Verification review error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Review Failed",
         error instanceof Error
           ? error.message
@@ -1905,7 +1916,7 @@ export default function AdminCases() {
     const adminUser = auth.currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -1942,13 +1953,13 @@ export default function AdminCases() {
         });
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Severity Updated",
         `Admin severity is now ${nextSeverity.toUpperCase()}.`
       );
     } catch (error) {
       console.log("Severity update error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Update Failed",
         error instanceof Error
           ? error.message
@@ -1968,10 +1979,10 @@ export default function AdminCases() {
         updatedAt: serverTimestamp(),
       });
 
-      Alert.alert("Saved", "Admin note updated.");
+      AppAlert.alert("Saved", "Admin note updated.");
     } catch (error) {
       console.log("Save note error:", error);
-      Alert.alert("Error", "Unable to save the admin note.");
+      AppAlert.alert("Error", "Unable to save the admin note.");
     }
   };
 
@@ -1989,7 +2000,7 @@ export default function AdminCases() {
       (incident.status === "resolved" && nextStatus === "closed");
 
     if (!validTransition) {
-      Alert.alert(
+      AppAlert.alert(
         "Status Changed",
         "This action is not valid for the case's current status."
       );
@@ -2004,7 +2015,7 @@ export default function AdminCases() {
         .trim()
         .toLowerCase() === "completed_pending_admin_review"
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "LGU Field Report Review Required",
         "Review the completed official LGU field report in the Response tab before resolving this emergency."
       );
@@ -2018,7 +2029,7 @@ export default function AdminCases() {
         (item) => String(item.status) !== "completed"
       )
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Volunteer Support Still Active",
         "Finish or cancel the active Volunteer assignments before resolving the case. LGU response itself does not depend on Volunteer acceptance."
       );
@@ -2092,7 +2103,7 @@ export default function AdminCases() {
         await Promise.allSettled(cleanupTasks);
       }
 
-      Alert.alert(
+      AppAlert.alert(
         "Case Updated",
         nextStatus === "in_progress"
           ? "LGU response is now marked In Progress. Volunteer support remains optional."
@@ -2100,7 +2111,7 @@ export default function AdminCases() {
       );
     } catch (error) {
       console.log("Case status error:", error);
-      Alert.alert("Error", "Unable to update the case status.");
+      AppAlert.alert("Error", "Unable to update the case status.");
     }
   };
 
@@ -2111,7 +2122,7 @@ export default function AdminCases() {
     const adminUser = getAuth().currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -2120,7 +2131,7 @@ export default function AdminCases() {
     ).trim();
 
     if (action === "dismissed" && note.length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "Review Note Required",
         "Enter a clear reason before dismissing the field report."
       );
@@ -2128,7 +2139,7 @@ export default function AdminCases() {
     }
 
     if (note.length > 1500) {
-      Alert.alert(
+      AppAlert.alert(
         "Review Note Too Long",
         "Admin review note must be 1500 characters or fewer."
       );
@@ -2180,7 +2191,7 @@ export default function AdminCases() {
         });
       });
 
-      Alert.alert(
+      AppAlert.alert(
         action === "reviewed" ? "Field Report Reviewed" : "Field Report Dismissed",
         action === "reviewed"
           ? "The report was reviewed. LGU may now incorporate verified remaining needs into the barangay assessment."
@@ -2188,7 +2199,7 @@ export default function AdminCases() {
       );
     } catch (error) {
       console.log("Volunteer field report review error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Review Failed",
         error instanceof Error
           ? error.message
@@ -2206,7 +2217,7 @@ export default function AdminCases() {
     const adminUser = getAuth().currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -2216,7 +2227,7 @@ export default function AdminCases() {
     ).trim();
 
     if (!barangay) {
-      Alert.alert(
+      AppAlert.alert(
         "Barangay Required",
         "The emergency case must have a barangay before its needs can be consolidated."
       );
@@ -2246,7 +2257,7 @@ export default function AdminCases() {
     ];
 
     if (numericValues.some((value) => !Number.isInteger(value) || value < 0)) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Need Counts",
         "Use whole numbers only. Affected households and affected people must be at least 1."
       );
@@ -2254,7 +2265,7 @@ export default function AdminCases() {
     }
 
     if (affectedHouseholds < 2 || affectedPeople < 1) {
-      Alert.alert(
+      AppAlert.alert(
         "Community Relief Required",
         "This Volunteer field-report path is for a verified multi-household or community-level relief need. For one severe household, use this case's Relief Assessment and choose Affected Household."
       );
@@ -2267,7 +2278,7 @@ export default function AdminCases() {
       peopleNeedingClothing > affectedPeople ||
       peopleNeedingMedical > affectedPeople
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "People Count Mismatch",
         "Food, water, clothing, and medical need counts cannot exceed affected people."
       );
@@ -2278,7 +2289,7 @@ export default function AdminCases() {
       householdsNeedingShelter > affectedHouseholds ||
       householdsNeedingHygiene > affectedHouseholds
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Household Count Mismatch",
         "Shelter and hygiene household counts cannot exceed affected households."
       );
@@ -2289,7 +2300,7 @@ export default function AdminCases() {
     const adminNote = draft.adminNote.trim();
 
     if (otherNeedDescription.length > 1000 || adminNote.length > 1500) {
-      Alert.alert(
+      AppAlert.alert(
         "Text Too Long",
         "Other need details are limited to 1000 characters and Admin notes to 1500 characters."
       );
@@ -2306,7 +2317,7 @@ export default function AdminCases() {
       otherNeedDescription.length >= 3;
 
     if (!hasVerifiedNeed) {
-      Alert.alert(
+      AppAlert.alert(
         "No Remaining Need Recorded",
         "Enter at least one verified remaining need before adding this report to Community Relief."
       );
@@ -2405,13 +2416,13 @@ export default function AdminCases() {
 
       setNeedDraftReportId("");
 
-      Alert.alert(
+      AppAlert.alert(
         "Community Relief Need Recorded",
         `Verified community-level remaining needs were added for ${barangay}. Relief Operations can now include them in centralized planning and allocation.`
       );
     } catch (error) {
       console.log("Barangay needs incorporation error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Record Need",
         error instanceof Error
           ? error.message
@@ -2428,12 +2439,12 @@ export default function AdminCases() {
     const adminUser = getAuth().currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
     if (incident.verificationStatus !== "validated") {
-      Alert.alert(
+      AppAlert.alert(
         "Validated Case Required",
         "Validate the emergency report before recording an official LGU relief need."
       );
@@ -2441,7 +2452,7 @@ export default function AdminCases() {
     }
 
     if (!["in_progress", "resolved"].includes(incident.status)) {
-      Alert.alert(
+      AppAlert.alert(
         "Start LGU Response First",
         "Start the LGU response before creating a relief assessment."
       );
@@ -2456,7 +2467,7 @@ export default function AdminCases() {
       draft.reliefScope === "community" ? "community" : "household";
 
     if (barangay.length < 2 || barangay.length > 120) {
-      Alert.alert(
+      AppAlert.alert(
         "Barangay Required",
         "Enter the LGU-verified barangay for this assessment."
       );
@@ -2495,7 +2506,7 @@ export default function AdminCases() {
         (value) => !Number.isInteger(value) || value < 0
       )
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Need Counts",
         "Use whole numbers only. Affected households and affected people must be at least 1."
       );
@@ -2503,7 +2514,7 @@ export default function AdminCases() {
     }
 
     if (affectedPeople < 1) {
-      Alert.alert(
+      AppAlert.alert(
         "Assessment Required",
         "Enter at least 1 affected person based on LGU verification."
       );
@@ -2511,7 +2522,7 @@ export default function AdminCases() {
     }
 
     if (reliefScope === "household" && affectedHouseholds !== 1) {
-      Alert.alert(
+      AppAlert.alert(
         "Household Relief Scope",
         "Household relief must represent exactly 1 verified affected household."
       );
@@ -2519,7 +2530,7 @@ export default function AdminCases() {
     }
 
     if (reliefScope === "community" && affectedHouseholds < 2) {
-      Alert.alert(
+      AppAlert.alert(
         "Community Relief Scope",
         "Community relief requires at least 2 verified affected households."
       );
@@ -2532,7 +2543,7 @@ export default function AdminCases() {
       peopleNeedingClothing > affectedPeople ||
       peopleNeedingMedical > affectedPeople
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "People Count Mismatch",
         "Food, water, clothing, and medical need counts cannot exceed affected people."
       );
@@ -2543,7 +2554,7 @@ export default function AdminCases() {
       householdsNeedingShelter > affectedHouseholds ||
       householdsNeedingHygiene > affectedHouseholds
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Household Count Mismatch",
         "Shelter and hygiene household counts cannot exceed affected households."
       );
@@ -2563,7 +2574,7 @@ export default function AdminCases() {
     const adminNoteBody = draft.adminNote.trim();
 
     if (!verificationMethod) {
-      Alert.alert(
+      AppAlert.alert(
         "Verification Method Required",
         "Select how the LGU or barangay verified this relief need."
       );
@@ -2574,7 +2585,7 @@ export default function AdminCases() {
       verificationMethod === "other" &&
       verificationMethodOther.length < 3
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Verification Method Required",
         "Describe the official LGU or barangay verification method used for this assessment."
       );
@@ -2582,7 +2593,7 @@ export default function AdminCases() {
     }
 
     if (adminNoteBody.length < 5) {
-      Alert.alert(
+      AppAlert.alert(
         "LGU Verification Note Required",
         reliefScope === "household"
           ? "Briefly record what the LGU confirmed about the household's damage and remaining material need."
@@ -2601,7 +2612,7 @@ export default function AdminCases() {
       otherNeedDescription.length > 1000 ||
       adminNote.length > 1500
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Text Too Long",
         "Other need details are limited to 1000 characters and the complete LGU verification record to 1500 characters."
       );
@@ -2618,7 +2629,7 @@ export default function AdminCases() {
       otherNeedDescription.length >= 3;
 
     if (!hasVerifiedNeed) {
-      Alert.alert(
+      AppAlert.alert(
         "No Relief Need Recorded",
         "Enter at least one LGU-verified remaining material need before sending this case to Relief Operations."
       );
@@ -2726,7 +2737,7 @@ export default function AdminCases() {
 
       setDirectNeedCaseId("");
 
-      Alert.alert(
+      AppAlert.alert(
         "Relief Need Created",
         reliefScope === "household"
           ? `The verified household relief need in ${barangay} was added to Relief Operations. LGU resources should be checked before any Donation Support is requested.`
@@ -2737,7 +2748,7 @@ export default function AdminCases() {
         "LGU direct relief assessment error:",
         error
       );
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Record Need",
         error instanceof Error
           ? error.message
@@ -2755,7 +2766,7 @@ export default function AdminCases() {
     const adminUser = getAuth().currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
@@ -2764,7 +2775,7 @@ export default function AdminCases() {
     );
 
     if (verificationStatus !== "validated") {
-      Alert.alert(
+      AppAlert.alert(
         "Validate Case First",
         "The emergency report must be validated before official LGU Personnel can be assigned."
       );
@@ -2772,7 +2783,7 @@ export default function AdminCases() {
     }
 
     if (!["validated", "assigned", "in_progress"].includes(incident.status)) {
-      Alert.alert(
+      AppAlert.alert(
         "Assignment Unavailable",
         "This emergency case is not currently eligible for an LGU Personnel assignment."
       );
@@ -2780,7 +2791,7 @@ export default function AdminCases() {
     }
 
     if (incident.activeLguResponderUid) {
-      Alert.alert(
+      AppAlert.alert(
         "Official Responder Already Assigned",
         `${incident.activeLguResponderName || "An LGU responder"} is already assigned to this emergency.`
       );
@@ -2796,7 +2807,7 @@ export default function AdminCases() {
       !personnel.activeAssignmentId;
 
     if (!assignable) {
-      Alert.alert(
+      AppAlert.alert(
         "Personnel Not Available",
         "Only verified LGU Personnel who are On Duty and Available with no active emergency assignment can be assigned."
       );
@@ -2841,13 +2852,13 @@ export default function AdminCases() {
 
       await loadLguPersonnel(true);
 
-      Alert.alert(
+      AppAlert.alert(
         "LGU Personnel Assigned",
         `${personnel.fullName} is now the official LGU responder for this emergency. The personnel and resident were notified.`
       );
     } catch (error) {
       console.log("Assign LGU Personnel error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Assignment Failed",
         error instanceof Error
           ? error.message
@@ -2866,12 +2877,12 @@ export default function AdminCases() {
     const adminUser = auth.currentUser;
 
     if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
+      AppAlert.alert("Session Expired", "Please sign in again.");
       return;
     }
 
     if (volunteer.uid === incident.reporterUid) {
-      Alert.alert(
+      AppAlert.alert(
         "Assignment Blocked",
         "The resident who reported this emergency cannot be assigned as a responder to their own case."
       );
@@ -2883,7 +2894,7 @@ export default function AdminCases() {
     // Emergency Volunteer support is optional and limited to one active
     // Volunteer assignment at a time. LGU response never depends on it.
     if (activeCount >= 1) {
-      Alert.alert(
+      AppAlert.alert(
         "Volunteer Support Already Active",
         "This emergency already has an active Volunteer support assignment. Finish or cancel it before assigning another Volunteer."
       );
@@ -2892,7 +2903,7 @@ export default function AdminCases() {
 
     const eligibility = volunteerEligibilityForCase(incident, volunteer);
     if (!eligibility.eligible) {
-      Alert.alert("Volunteer Not Eligible", eligibility.reason);
+      AppAlert.alert("Volunteer Not Eligible", eligibility.reason);
       return;
     }
 
@@ -2903,7 +2914,7 @@ export default function AdminCases() {
     const matchedSkills = skillMatchCount(incident, volunteer);
 
     if (requiresSpecializedSkill && matchedSkills <= 0) {
-      Alert.alert(
+      AppAlert.alert(
         "Skill Match Required",
         `${volunteer.fullName} does not have a verified skill matching this emergency. Choose a qualified responder for ${requiredSkillList.join(", ")}.`,
       );
@@ -3216,14 +3227,14 @@ export default function AdminCases() {
         });
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Volunteer Support Offered",
         `${volunteer.fullName} received an optional Volunteer support offer. LGU remains the official primary responder, and the Volunteer appears on Resident tracking only after accepting.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);
 
-      Alert.alert(
+      AppAlert.alert(
         "Assignment Failed",
         error instanceof Error
           ? error.message
@@ -3325,13 +3336,13 @@ export default function AdminCases() {
         }
       });
 
-      Alert.alert(
+      AppAlert.alert(
         "Cancelled",
         "The volunteer assignment was cancelled and case access was removed."
       );
     } catch (error) {
       console.log("Cancel assignment error:", error);
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         error instanceof Error
           ? error.message
@@ -3420,7 +3431,7 @@ export default function AdminCases() {
               <Text style={styles.searchIcon}>⌕</Text>
               <TextInput
                 value={caseSearch}
-                onChangeText={setCaseSearch}
+                onChangeText={value => { setCaseSearch(value); setCasePage(1); }}
                 placeholder="Search case, resident, location…"
                 placeholderTextColor="#94a3b8"
                 style={styles.searchInput}
@@ -3463,7 +3474,7 @@ export default function AdminCases() {
                   <TouchableOpacity
                     key={status}
                     style={[styles.pill, active && styles.pillActive]}
-                    onPress={() => setFilterStatus(status)}
+                    onPress={() => { setFilterStatus(status); setCasePage(1); }}
                   >
                     <Text
                       style={[
@@ -3490,7 +3501,7 @@ export default function AdminCases() {
                     <TouchableOpacity
                       key={severity}
                       style={[styles.pill, active && styles.pillActive]}
-                      onPress={() => setFilterSeverity(severity)}
+                      onPress={() => { setFilterSeverity(severity); setCasePage(1); }}
                     >
                       <Text
                         style={[
@@ -3532,7 +3543,7 @@ export default function AdminCases() {
             </View>
 
             <View style={styles.caseListItems}>
-              {visibleCases.map((item) => {
+              {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
                 const thumb = firstIncidentImage(item.attachments);
 
@@ -3575,6 +3586,7 @@ export default function AdminCases() {
                 );
               })}
             </View>
+            <ListPagination page={activeCasePage} total={visibleCases.length} onChange={setCasePage} />
           </View>
 
           <View style={styles.caseDetailPane}>

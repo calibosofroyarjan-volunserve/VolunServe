@@ -16,8 +16,8 @@ const saItems = firstBetween(sa, "const navItems: NavItem[] = [", "export defaul
 const expectedSa = [
   ["System Overview","/(superadmin)"],
   ["LGU Staff & Admin Accounts","/(superadmin)/admin-accounts"],
-  ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
-  ["System Records (Read Only)","/(superadmin)/all-records"],
+  ["System Records","/(superadmin)/all-records"],
+  ["Audit Logs","/(superadmin)/admin-logs"],
   ["System Settings","/(superadmin)/system-settings"],
 ];
 for(let i=0;i<expectedSa.length;i++){
@@ -27,6 +27,34 @@ for(let i=0;i<expectedSa.length;i++){
   if(i>0)assert(saItems.indexOf('label: "'+expectedSa[i-1][0]+'"') <
     saItems.indexOf('label: "'+label+'"'),"Incorrect Super Admin menu sequence");
 }
+// The written defense contract and the actual sidebar must have the SAME order.
+const guideSa = firstBetween(guide, "## Super Admin final sidebar order", "**Single official onboarding path:");
+for (let i = 0; i < expectedSa.length; i++) {
+  const [label, route] = expectedSa[i];
+  const row = "| " + String(i + 1).padStart(2, "0") + " | " + label + " | \`" + route + "\`";
+  assert(guideSa.includes(row), "Thesis documentation is out of sync for Super Admin step " + (i + 1));
+}
+// Follow the work a reviewer actually performs: first application and
+// verification, then management of approved Admins; privacy is secondary.
+const staffFlowMarkers = [
+  '<View style={styles.accessFlow}>',
+  'LGU Staff Applications',
+  'Existing LGU Admin Accounts',
+  '<ListPagination page={safeAdminPage}',
+  '<LguStaffPrivacyRequestsPanel/>',
+];
+for (let i = 0; i < staffFlowMarkers.length; i++) {
+  const position = accounts.indexOf(staffFlowMarkers[i]);
+  assert(position >= 0, "Missing Super Admin workflow stage " + staffFlowMarkers[i]);
+  if (i > 0) {
+    assert(accounts.indexOf(staffFlowMarkers[i - 1]) < position,
+      "Incorrect staff approval/manage/privacy layout order");
+  }
+}
+assert.equal((accounts.match(/<LguStaffPrivacyRequestsPanel\s*\/>/g) || []).length, 1,
+  "Do not duplicate staff privacy handling");
+assert(guide.includes("verification flow → pending applications → existing Admin accounts"),
+  "Documentation must explain the in-module approval sequence");
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [

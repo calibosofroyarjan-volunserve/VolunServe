@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -686,7 +687,7 @@ export default function Donation() {
     if (!user || !profile || !selectedCampaign || submitting) return;
 
     if (!acceptedTypes.includes("monetary") && campaignGoal(selectedCampaign) <= 0) {
-      Alert.alert(
+      AppAlert.alert(
         "Monetary Donation Unavailable",
         "This campaign is not accepting monetary donations.",
       );
@@ -696,13 +697,13 @@ export default function Donation() {
     const numericAmount = Number(amount);
 
     if (!amount.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
-      Alert.alert("Invalid Amount", "Enter a valid donation amount greater than zero.");
+      AppAlert.alert("Invalid Amount", "Enter a valid donation amount greater than zero.");
       return;
     }
 
     const returnBaseUrl = currentDonationReturnBaseUrl();
     if (!returnBaseUrl) {
-      Alert.alert(
+      AppAlert.alert(
         "Web Checkout Required",
         "Secure PayMongo checkout is currently running in TEST MODE.",
       );
@@ -766,7 +767,7 @@ export default function Donation() {
       const message =
         problem instanceof Error ? problem.message : "Unable to start the test donation checkout.";
       setError(message);
-      Alert.alert("Checkout Failed", message);
+      AppAlert.alert("Checkout Failed", message);
     } finally {
       setSubmitting(false);
       setCheckoutProgress("");

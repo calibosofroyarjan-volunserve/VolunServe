@@ -49,4 +49,15 @@ assert(owner.includes("lguAdminCredentialReviews") &&
   owner.includes('reviewStatus: "verified"') &&
   owner.includes('role: "admin"'),
   "Verification result and role promotion must be captured before operational Admin access");
+const auth = read("lib/firebaseAuth.ts");
+const root = read("app/_layout.tsx");
+assert(apply.includes("emailVerificationRequired:true") &&
+  rules.includes("request.resource.data.emailVerificationRequired == true") &&
+  auth.includes('profile.emailVerificationRequired === true') &&
+  auth.includes('await getIdToken(user, true)'),
+  "Every new LGU applicant must verify email ownership before Admin login and server role access");
+assert(auth.includes('profile.role === "admin" && profile.adminStatus === "suspended"') &&
+  auth.includes('Your administrative access is suspended') &&
+  root.includes("!isApprovedProfile(profile)"),
+  "Suspended LGU Admin accounts must be blocked both at login and on restored sessions");
 console.log("PASS staff login tabs, email-only staff auth, pending LGU applications and verified Super Admin grant");

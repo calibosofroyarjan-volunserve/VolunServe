@@ -1,0 +1,101 @@
+name: Pavia main integration rehearsal (read only)
+on:
+  push:
+    branches:
+      - fix/pavia-final-scope-revisions-20261028
+    paths:
+      - .github/workflows/pavia-main-integration-rehearsal.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  merge-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: true
+      - name: Safely inspect merge conflicts against current main (no push)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.email "rehearsal@users.noreply.github.com"
+          git config user.name "Read-only Merge Rehearsal"
+          git fetch --no-tags origin main
+          echo "CURRENT_BRANCH_SHA=$(git rev-parse HEAD)"
+          echo "MAIN_SHA=$(git rev-parse origin/main)"
+          set +e
+          git merge --no-commit --no-ff origin/main > /tmp/rehearsal-merge.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/rehearsal-merge.log
+          git diff --name-only --diff-filter=U > /tmp/rehearsal-conflicts.txt
+          if [ "$rc" -ne 0 ]; then
+            echo "Integration conflicts detected (temporary checkout only):"
+            cat /tmp/rehearsal-conflicts.txt
+            while IFS= read -r conflict; do
+              case "$conflict" in
+                "app/(tabs)/_layout.tsx"|"components/auth/PremiumAuthShell.tsx"|"components/home/Home.web.tsx"|"scripts/test-admin-staff-login.cjs"|"scripts/test-final-admin-scope.cjs"|"scripts/test-premium-auth-portal.cjs") ;;
+                *) echo "Unexpected conflict: $conflict"; exit 1 ;;
+              esac
+              # In the throwaway runner, test protecting newest main Login/Home.
+              case "$conflict" in
+                "scripts/test-admin-staff-login.cjs"|"scripts/test-final-admin-scope.cjs")
+                  # PR #145 changes approved LGU application/governance contracts.
+                  git checkout --ours -- "$conflict" ;;
+                *)
+                  # The latest main protects premium Login and Resident Home.
+                  git checkout --theirs -- "$conflict" ;;
+              esac
+              git add -- "$conflict"
+            done < /tmp/rehearsal-conflicts.txt
+            if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+              echo "Unresolved conflicts remain"; exit 1
+            fi
+          fi
+          # Both branches introduced the same dialog-host import in different
+          # locations. Git's textual merge can duplicate it without a conflict.
+          # Resolve ONLY in the throwaway checkout and test the merged code.
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path("app/_layout.tsx")
+          source=path.read_text()
+          item='import AppDialogHost from "../components/ui/AppDialogHost";'
+          count=source.count(item)
+          if count != 2:
+              raise SystemExit(f"Expected exactly two duplicate AppDialogHost imports, got {count}; inspect merge manually")
+          source=source.replace(item,"",1)
+          path.write_text(source)
+          PY
+          git add app/_layout.tsx
+          git commit -m "TEST ONLY: merge candidate with main auth/home preference"
+          echo "Temporary merged commit: $(git rev-parse HEAD)"
+          echo "NOT PUSHED. Testing exact temporarily merged tree."
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify temporary merged client and governance contracts
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node scripts/test-pavia-pagination-email.cjs
+          npx expo export --platform web
+          echo "PASS: merged candidate compiles and preserves Login, governance and web export; no push/deploy."
+
+      - name: Upload conflict listing if needed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pavia-main-integration-conflict-report
+          path: |
+            /tmp/rehearsal-merge.log
+            /tmp/rehearsal-conflicts.txt
+          if-no-files-found: ignore
+          retention-days: 7

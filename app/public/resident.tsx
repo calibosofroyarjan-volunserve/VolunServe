@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import React, { useState } from "react";
 import {
     Alert,
@@ -20,7 +21,7 @@ export default function PublicResident() {
   const [contactNumber, setContactNumber] = useState("");
 
   const requireLogin = () => {
-    Alert.alert(
+    AppAlert.alert(
       "Login Required",
       "Please login or create an account to submit a disaster case."
     );

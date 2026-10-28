@@ -1,3 +1,4 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 
@@ -25,10 +26,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import {
-  createAdminLog,
-} from "../../lib/adminLogger";
 
 import {
   auth,
@@ -151,7 +148,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
 
           setUsersLoading(false);
 
-          Alert.alert(
+          AppAlert.alert(
             "Error",
             "Unable to load account applications."
           );
@@ -265,24 +262,6 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
   const currentPage = Math.min(page, totalPages);
   const pagedAccounts = matchingAccounts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const writeAdminLogSafely = async (
-    payload: Parameters<typeof createAdminLog>[0]
-  ) => {
-    try {
-      await createAdminLog(payload);
-    } catch (error) {
-      /*
-       * The review itself is already committed at this point.
-       * A logging failure must not mislead the Admin into repeating
-       * a successful approval/rejection.
-       */
-      console.log(
-        "admin review log error",
-        error
-      );
-    }
-  };
-
   const reviewVolunteerApplication = async (
     account: Account,
     decision: "approved" | "rejected",
@@ -291,7 +270,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     const reviewer = auth.currentUser;
 
     if (!reviewer) {
-      Alert.alert(
+      AppAlert.alert(
         "Session Error",
         "Please sign in again."
       );
@@ -302,7 +281,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       volunteerApplicationFor(account);
 
     if (application?.status !== "pending") {
-      Alert.alert(
+      AppAlert.alert(
         "Review Updated",
         "This volunteer application is no longer pending. Refresh the queue and review its latest status."
       );
@@ -310,7 +289,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     }
 
     if (decision === "approved" && !isVerifiedResidentAccount(account)) {
-      Alert.alert(
+      AppAlert.alert(
         "Verified Resident Required",
         "Volunteer access can only be approved for an active Verified Resident."
       );
@@ -321,7 +300,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       decision === "rejected" &&
       reason.trim().length < 5
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Reason required",
         "Please enter a clear rejection reason."
       );
@@ -380,26 +359,19 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         }
       );
 
-      await batch.commit();
-
-      await writeAdminLogSafely({
-        actionType:
-          `volunteer_application_${decision}`,
+      // Both the decision and its immutable audit event must commit together.
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: `volunteer_application_${decision}`,
         targetType: "user",
         targetId: account.id,
         adminUid: reviewer.uid,
-        adminName:
-          reviewer.displayName ||
-          reviewer.email ||
-          "Administrator",
-        description:
-          `${
-            account.fullName ||
-            account.email
-          } volunteer application was marked as ${decision}.`,
+        adminName: reviewer.displayName || reviewer.email || "Administrator",
+        description: `${account.fullName || account.email} volunteer application was marked as ${decision}.`,
+        createdAt: serverTimestamp(),
       });
+      await batch.commit();
 
-      Alert.alert(
+      AppAlert.alert(
         "Saved",
         decision === "approved"
           ? "Volunteer access approved. The Resident account remains active and the user may switch to Volunteer Mode."
@@ -412,7 +384,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         "The volunteer application review could not be saved. Check the latest Firestore rules and try again."
       );
@@ -429,7 +401,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
     const reviewer = auth.currentUser;
 
     if (!reviewer) {
-      Alert.alert(
+      AppAlert.alert(
         "Session Error",
         "Please sign in again."
       );
@@ -441,7 +413,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
       account.role === "admin" ||
       account.role === "superadmin"
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Action unavailable",
         "This moderation action applies only to community Resident/Volunteer accounts."
       );
@@ -465,28 +437,18 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         }
       );
 
-      await batch.commit();
-
-      await writeAdminLogSafely({
-        actionType:
-          nextStatus === "suspended"
-            ? "account_suspended"
-            : "account_reactivated",
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: nextStatus === "suspended" ? "account_suspended" : "account_reactivated",
         targetType: "user",
         targetId: account.id,
         adminUid: reviewer.uid,
-        adminName:
-          reviewer.displayName ||
-          reviewer.email ||
-          "Administrator",
-        description:
-          `${
-            account.fullName ||
-            account.email
-          } community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
+        adminName: reviewer.displayName || reviewer.email || "Administrator",
+        description: `${account.fullName || account.email} community account was ${nextStatus === "suspended" ? "suspended" : "reactivated"}.`,
+        createdAt: serverTimestamp(),
       });
+      await batch.commit();
 
-      Alert.alert(
+      AppAlert.alert(
         "Saved",
         nextStatus === "suspended"
           ? "Community account suspended."
@@ -498,7 +460,7 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Error",
         "The account status could not be updated."
       );
@@ -510,11 +472,11 @@ export default function AccountApprovals({mode = "combined"}: {mode?: WorkspaceM
   const confirmReject = async () => {
     if (!selected || savingUid) return;
     if (rejectionReason.trim().length < 5) {
-      Alert.alert("Reason required", "Please enter a clear rejection reason.");
+      AppAlert.alert("Reason required", "Please enter a clear rejection reason.");
       return;
     }
     if (!isPendingVolunteerApplication(selected)) {
-      Alert.alert("Review Updated", "This volunteer application is no longer pending.");
+      AppAlert.alert("Review Updated", "This volunteer application is no longer pending.");
       return;
     }
     const saved = await reviewVolunteerApplication(selected, "rejected", rejectionReason);

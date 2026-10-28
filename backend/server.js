@@ -44,10 +44,13 @@ function identityAttemptCount(value) {
 }
 
 function identityAttemptOutcome(decision, attempts) {
-  const requiresManualReview = decision === "manual_review" ||
+  // A face comparison never proves a government ID is genuine or that the
+  // registered name belongs to the ID holder. Only LGU independent review
+  // may grant the final verified Resident status.
+  const requiresManualReview = decision === "verified" ||
+    decision === "manual_review" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = decision === "verified" ? "verified" :
-    requiresManualReview ? "pending" : "failed";
+  const status = requiresManualReview ? "pending" : "failed";
   return { status, requiresManualReview };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
@@ -5043,10 +5046,11 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
+        const resultMessage = decision === "verified"
+          ? "AI face comparison completed. Independent LGU Admin government-ID and registered-name review is required before this account can be verified."
+          : result.requiresManualReview && decision === "failed"
           ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
           : cleanText(aiResult?.message || (
-            decision === "verified" ? "Identity verification completed successfully." :
             decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
             "The submission requires LGU/Admin manual review."
           ), 500);
@@ -5103,20 +5107,7 @@ app.post(
           },
         );
 
-        if (decision === "verified") {
-          transaction.set(userRef, {
-            identityStatus: "verified",
-            identityVerified: true,
-            identityVerificationProvider: FieldValue.delete(),
-            identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
-            identityVerificationStartedAt: FieldValue.serverTimestamp(),
-            identityVerifiedAt: FieldValue.serverTimestamp(),
-            identityVerifiedBy: "volunserve_ai",
-            identityFailureReason: FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        } else {
+        // Face-only AI decisions always remain pending for manual review.
           transaction.set(userRef, {
             identityStatus: result.status,
             identityVerified: false,
@@ -5128,7 +5119,6 @@ app.post(
               ? resultMessage : FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
-        }
         return {
           ok: true, status: result.status, verificationId, decision,
           matchScore, livenessScore, message: resultMessage,
@@ -5309,6 +5299,8 @@ app.post(
       const adminUid = request.firebaseUser.uid;
       const targetUid = cleanText(request.params?.uid || "", 200);
       const action = cleanText(request.body?.action || "", 40).toLowerCase();
+      const originalDocumentReviewed = request.body?.originalDocumentReviewed === true;
+      const registeredNameMatched = request.body?.registeredNameMatched === true;
       const notes = cleanText(request.body?.notes || "", 1000);
       const validationMethod = cleanText(
         request.body?.validationMethod || "",
@@ -5349,6 +5341,14 @@ app.post(
           400,
           "manual_validation_method_required",
           "Select the LGU validation method used before manually verifying this Resident.",
+        );
+      }
+      if (action === "verify" &&
+          (!originalDocumentReviewed || !registeredNameMatched)) {
+        throw makeHttpError(
+          400,
+          "identity_name_and_document_check_required",
+          "Review the original government ID or an independently validated official record, and confirm that the full name matches this Resident account. A mismatch must require a retry or investigation.",
         );
       }
       if (
@@ -5425,6 +5425,8 @@ app.post(
               ? validationMethod
               : "",
           manualReviewNotes: notes,
+          originalDocumentReviewed: action === "verify" ? originalDocumentReviewed : false,
+          registeredNameMatched: action === "verify" ? registeredNameMatched : false,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
           reviewedByName,
@@ -5469,6 +5471,8 @@ app.post(
             ),
             matchScore: numberOrNull(verification.matchScore),
             validationMethod,
+            originalDocumentReviewed: true,
+            registeredNameMatched: true,
             notes,
             performedBy: adminUid,
             performedByName: reviewedByName,
