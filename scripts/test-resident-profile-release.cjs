@@ -34,3 +34,15 @@ test("Profile names save to Firestore and Firebase Auth without requiring an occ
  assert.doesNotMatch(profile,/\bwindow\.(?:confirm|alert|prompt)\s*\(/);
  assert.doesNotMatch(profile,/(?<!App)Alert\.alert\s*\(/);
 });
+
+
+test("Resident Home header and account menu prefer saved Firestore fullName",()=>{
+ const home=read("components/home/Home.web.tsx");
+ const profile=read("app/(tabs)/profile.tsx");
+ const session=read("lib/useUserSession.ts");
+ assert.match(home,/const displayName =\s*profile\?\.fullName\?\.trim\(\) \|\|\s*composedName \|\|/);
+ assert.match(home,/style=\{styles\.dropdownName\}>\{displayName\}/);
+ assert.match(profile,/fullName: cleanName/);
+ assert.match(profile,/await updateUserProfile\(user\.uid, changes\)/);
+ assert.match(session,/onSnapshot\(/);
+});
