@@ -227,6 +227,7 @@ const mapDocument = `
       font-size: 21px;
     }
     .public-place-marker.uncertain-location { border-style: dashed; }
+    .public-place-marker.verified-place-marker { border-color: #19855D; }
     .public-place-marker:hover { transform: scale(1.10); }
     .vehicle-response-marker {
       width: 42px;
@@ -452,11 +453,9 @@ const mapDocument = `
 
       function makeCenterElement() {
         const element = document.createElement("div");
-        element.className = "pin center-pin";
-        const symbol = document.createElement("span");
-        symbol.textContent = "🏠";
-        element.title = "LGU-verified evacuation shelter";
-        element.appendChild(symbol);
+        element.className = "public-place-marker verified-place-marker";
+        element.textContent = "🏠";
+        element.title = "LGU-verified mapped shelter (check last verification and availability)";
         return element;
       }
 
@@ -470,22 +469,11 @@ const mapDocument = `
       }
 
       function makeLguBaseElement(item) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "lgu-base-marker";
-
-        const label = document.createElement("div");
-        label.className = "lgu-base-label";
-        label.textContent = String(item.facilityType || "LGU").replaceAll("_", " ").toUpperCase();
-
         const pin = document.createElement("div");
-        pin.className = "pin";
-        const symbol = document.createElement("span");
-        symbol.textContent = item.icon || "🏛️";
-        pin.appendChild(symbol);
-
-        wrapper.appendChild(label);
-        wrapper.appendChild(pin);
-        return wrapper;
+        pin.className = "public-place-marker verified-place-marker";
+        pin.textContent = item.icon || "🏛️";
+        pin.title = item.name || "LGU-verified facility";
+        return pin;
       }
 
       function makeUserElement(role) {
