@@ -9,6 +9,8 @@ export default function ListPagination({
   const safePage = Math.max(1, Math.min(page, pages));
   const first = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const last = Math.min(safePage * pageSize, total);
+  const firstButton = Math.max(1, Math.min(safePage - 2, pages - 4));
+  const visiblePages = Array.from({ length: Math.min(pages, 5) }, (_, index) => firstButton + index);
   return (
     <View style={styles.container}>
       <Text style={styles.caption}>Showing {first}–{last} of {total} records · {pageSize} per page</Text>
@@ -19,7 +21,14 @@ export default function ListPagination({
           onPress={() => onChange(safePage - 1)}>
           <Text style={styles.text}>Previous</Text>
         </TouchableOpacity>
-        <View style={styles.pagePill}><Text style={styles.pagePillText}>Page {safePage} of {pages}</Text></View>
+        {visiblePages.map(number => <TouchableOpacity key={number} accessibilityRole="button"
+          accessibilityLabel={`Page ${number} of ${pages}`}
+          accessibilityState={{ selected: number === safePage }}
+          onPress={() => onChange(number)}
+          style={[styles.pagePill, number === safePage && styles.pageSelected]}>
+          <Text style={[styles.pagePillText, number === safePage && styles.pageSelectedText]}>{number}</Text>
+        </TouchableOpacity>)}
+        <Text style={styles.caption}>Page {safePage} of {pages}</Text>
         <TouchableOpacity accessibilityRole="button"
           accessibilityLabel="Next page" disabled={safePage >= pages}
           style={[styles.button, safePage >= pages && styles.disabled]}
@@ -43,5 +52,7 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, fontWeight: "700", color: "#4D665F" },
   pagePill: { paddingVertical: 10, paddingHorizontal: 13, borderRadius: 10, backgroundColor: "#D8F0E5" },
   pagePillText: { color: "#0B5F4C", fontSize: 13, fontWeight: "900" },
+  pageSelected: {backgroundColor:"#087F61"},
+  pageSelectedText: {color:"#FFFFFF"},
   disabled: { opacity: 0.4 },
 });
