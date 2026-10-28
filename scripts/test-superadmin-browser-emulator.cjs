@@ -81,6 +81,41 @@ async function seedEmulator() {
         barangay:"Muzon Proper",
       });
     }
+    // Isolated data to validate real read-only oversight; NOT production records.
+    await db.doc("disasterCases/emulator-case").set({
+      title:"Emulator Emergency Report",status:"reported",createdAt:new Date(),
+    });
+    await db.doc("assistanceRequests/emulator-assistance").set({
+      title:"Emulator Assistance Request",status:"pending",createdAt:new Date(),
+    });
+    await db.doc("communityEvents/emulator-event").set({
+      title:"Emulator Community Event",status:"upcoming",
+      publicationStatus:"published",barangay:"Muzon Proper",createdAt:new Date(),
+    });
+    await db.doc("communityEventProposals/emulator-proposal").set({
+      title:"Emulator Event Proposal",status:"pending",
+      proposerName:"Synthetic Staff 1",barangay:"Muzon Proper",createdAt:new Date(),
+    });
+    await db.doc("communityEventParticipants/emulator-participant").set({
+      fullName:"Emulator Participant",eventId:"emulator-event",uid:"browser-staff-1",
+      status:"joined",attendanceVerified:false,createdAt:new Date(),
+    });
+    await db.doc("lguAdminCredentialReviews/emulator-review").set({
+      office:"Emulator LGU Review Office",position:"Synthetic Reviewer",
+      accountEmail:"staff-1@example.test",reviewStatus:"verified",
+      verifiedBy:result.localId,verifiedAt:new Date(),identityPresenceConfirmed:true,
+      verificationMethod:"Local simulator only",
+    });
+    await db.doc("adminLogs/emulator-access-log").set({
+      adminUid:result.localId,adminName:"Emulator QA Super Admin",
+      actionType:"admin_account_created",targetType:"user",targetId:"browser-admin-1",
+      description:"Emulator audited access change",createdAt:new Date(),
+    });
+    await db.doc("adminActivityLogs/emulator-settings-log").set({
+      adminUid:result.localId,adminName:"Emulator QA Super Admin",
+      actionType:"system_settings_updated",targetType:"system_settings",targetId:"public",
+      description:"Emulator audited settings change",createdAt:new Date(),
+    });
   });
   return {env,email,password};
 }
@@ -198,7 +233,33 @@ async function main() {
     assert.equal(dialogs.length,0,"Native alert/confirm/prompt dialog must not display.");
     assert.equal(jsExceptions.length,0,"Browser JS errors: "+jsExceptions.join("; "));
     assert.equal(consoleErrors.length,0,"Export server errors: "+consoleErrors.join("; "));
-    console.log("PASS browser: exact five accounts per page in both Super Admin lists, top-mounted numbered pagination, switching without infinite scrolling, accessible emerald indicators, narrow web, guarded credentials");
+    // Cover the remaining three Super Admin modules in the same approved shell.
+    await page.setViewportSize({width:1440,height:900});
+    await page.getByText("System Records",{exact:true}).first().click();
+    await page.getByText("System Records (Read Only)",{exact:true}).waitFor({timeout:20000});
+    await page.getByText("Event Proposals",{exact:true}).first().click();
+    await page.getByText("Emulator Event Proposal",{exact:true}).waitFor({timeout:15000});
+    await page.getByText("Volunteer Attendance",{exact:true}).first().click();
+    await page.getByText("Emulator Participant",{exact:true}).waitFor({timeout:15000});
+    await page.getByText("LGU Credential Reviews",{exact:true}).first().click();
+    await page.getByText("Emulator LGU Review Office",{exact:true}).waitFor({timeout:15000});
+    await page.screenshot({path:path.join(evidenceDir,"system-records-oversight.png"),fullPage:false});
+    await page.getByText("Audit Logs",{exact:true}).first().click();
+    await page.getByText("Admin Activity & Audit Logs",{exact:true}).waitFor({timeout:15000});
+    await page.getByRole("button",{name:"Filter audit events: Access & Credentials"}).click();
+    await page.getByText("Admin Account Created",{exact:true}).waitFor({timeout:15000});
+    assert.equal(await page.getByText("System Settings Updated",{exact:true}).count(),0,
+      "Access filter must not mix unrelated settings changes");
+    await page.screenshot({path:path.join(evidenceDir,"audit-logs-filter.png"),fullPage:false});
+    await page.getByText("System Settings",{exact:true}).first().click();
+    const hotlineOptions=page.getByRole("button",{name:"Official Emergency Hotline (public) options"});
+    await hotlineOptions.waitFor({timeout:15000});
+    await hotlineOptions.click();
+    await page.getByText("0932-600-0119",{exact:true}).first().waitFor({timeout:15000});
+    assert.equal(await page.getByText("Others — specify",{exact:true}).count(),0,
+      "Emergency hotline must not permit unverified custom numbers");
+    await page.screenshot({path:path.join(evidenceDir,"official-hotline-options.png"),fullPage:false});
+    console.log("PASS browser: five-per-page accounts, guarded promotion, responsive shell, read-only records, audit filters, official-only hotline");
     await context.close();
   } finally {
     if(browser) await browser.close();
