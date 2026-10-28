@@ -121,8 +121,8 @@ async function main() {
       "Numbered pagination must provide a 44px tap target");
     const activeColor=await applicantPageOne.evaluate(node=>getComputedStyle(node).backgroundColor);
     assert.equal(activeColor,"rgb(8, 122, 98)","Active page should use the approved emerald color");
-    assert.equal(await applicantPageOne.getAttribute("aria-selected"),"true",
-      "Current page must be visibly and accessibly selected");
+    assert.equal(await applicantPageOne.getAttribute("aria-current"),"page",
+      "Current page must be announced as the active page to web assistive technology");
     assert(await pageTwo.isVisible(),"The second numbered page button must be displayed");
     assert(await page.getByRole("button",{name:"Previous page"}).first().isDisabled(),
       "Previous must be disabled on page 1");
@@ -130,7 +130,7 @@ async function main() {
     await page.getByRole("button",{name:"Page 2 of 2"}).first().click();
     await page.getByText("Synthetic Staff 1",{exact:true}).first().waitFor({timeout:15000});
     await page.getByText("Showing 6–6 of 6 records",{exact:false}).first().waitFor({timeout:15000});
-    assert.equal(await page.getByRole("button",{name:"Page 2 of 2"}).first().getAttribute("aria-selected"),"true");
+    assert.equal(await page.getByRole("button",{name:"Page 2 of 2"}).first().getAttribute("aria-current"),"page");
     assert(await page.getByRole("button",{name:"Next page"}).first().isDisabled(),
       "Next must be disabled on final page");
     await page.getByRole("button",{name:"Page 2 of 2"}).first().scrollIntoViewIfNeeded();
