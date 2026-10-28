@@ -584,7 +584,10 @@ test("LGU announcements and sandbox releases create privacy-limited immutable go
     assert.ok(fund.includes(action), "Missing sandbox fund stage "+action);
   assert.match(fund,/tx\.create\(db\.collection\("adminActivityLogs"\)\.doc\(\)/);
   assert.match(fund,/simulated: true,/);
-  assert.doesNotMatch(fund,/auditStage\([\s\S]*?walletLast4:/);
+  const auditBody=fund.slice(fund.indexOf("const auditStage ="),fund.indexOf("const send ="));
+  assert.ok(auditBody.includes('adminActivityLogs'),"Missing independent audit producer");
+  assert.doesNotMatch(auditBody,/walletLast4|amountCents|recipientUid/,
+    "Governance audit must never copy recipient or payment fields");
   assert.match(fixture,/fund_demo_simulated_sent/);
   assert.match(fixture,/adminActivityLogs:new Map\(\)/);
 });
