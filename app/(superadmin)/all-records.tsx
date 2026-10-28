@@ -1436,6 +1436,7 @@ export default function AllRecords() {
             </Text>
           </View>
 
+          <ListPagination page={activePage} total={visibleRecords.length} onChange={setPage} />
           {visibleRecords.length ===
           0 ? (
             <View
@@ -1471,7 +1472,6 @@ export default function AllRecords() {
               renderRecord
             )
           )}
-          <ListPagination page={activePage} total={visibleRecords.length} onChange={setPage} />
         </>
       )}
 
