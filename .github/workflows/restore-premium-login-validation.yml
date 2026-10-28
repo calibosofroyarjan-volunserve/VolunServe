@@ -1,0 +1,33 @@
+name: Restore Premium Login UI - Source and Web Build (No Deploy)
+on:
+  push:
+    branches:
+      - hotfix/restore-premium-login-ui-20261029
+  pull_request:
+    paths:
+      - app/login.web.tsx
+      - app/login.tsx
+      - app/admin-login.tsx
+      - components/auth/**
+      - scripts/test-login-ui-release.cjs
+      - .github/workflows/restore-premium-login-validation.yml
+permissions:
+  contents: read
+jobs:
+  test-web-and-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Source regression and role guards
+        run: node --test scripts/test-login-ui-release.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export web production build without deployment
+        run: npx expo export --platform web
