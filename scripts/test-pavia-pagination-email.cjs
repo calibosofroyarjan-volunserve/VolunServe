@@ -230,25 +230,58 @@ test("Resident web and mobile logout use the branded dialog, not browser confirm
 });
 
 
-test("All application screens avoid native browser alerts, confirms and prompts",()=>{
- const dirs=["app","components","lib"];
+test("All application source avoids native browser and React Native popup calls (TypeScript AST)",()=>{
+ const dirs=["app","components","lib","hooks","contexts"].filter(dir=>fs.existsSync(path.join(root,dir)));
  const violations=[];
- const walk=(directory)=>{
-  for(const item of fs.readdirSync(path.join(root,directory),{withFileTypes:true})){
-   const relative=path.posix.join(directory,item.name);
-   if(item.isDirectory()) {walk(relative);continue;}
-   if(!/\.(tsx?|jsx?)$/.test(item.name))continue;
-   if(relative==="lib/appDialog.ts")continue; // Defines safe AppAlert.confirm, not a call.
-   const lines=read(relative).split("\n");
-   lines.forEach((line,index)=>{
-    // Report actual calls, not ordinary AppAlert.alert or comments.
-    const source=line.trim();
-    if(source.startsWith("//")||source.startsWith("*"))return;
-    if(/\b(?:window|globalThis)\s*\.\s*(?:alert|confirm|prompt)\s*\(|\b(?:Alert|globalThis\.Alert)\s*\.\s*alert\s*\(|(^|[^\w.])(?:alert|confirm|prompt)\s*\(/.test(source))
-      violations.push(relative+":"+(index+1)+" "+source.slice(0,115));
-   });
-  }
+ const forbidden=new Set(["alert","confirm","prompt"]);
+ const member=(node,sf)=>{
+   if(ts.isPropertyAccessExpression(node))
+     return {owner:node.expression.getText(sf).replace(/\s+/g,""),method:node.name.text};
+   if(ts.isElementAccessExpression(node) && node.argumentExpression && ts.isStringLiteralLike(node.argumentExpression))
+     return {owner:node.expression.getText(sf).replace(/\s+/g,""),method:node.argumentExpression.text};
+   return null;
+ };
+ const walk=directory=>{
+   for(const item of fs.readdirSync(path.join(root,directory),{withFileTypes:true})){
+     const relative=path.posix.join(directory,item.name);
+     if(item.isDirectory()) {walk(relative);continue;}
+     if(!/\.(?:tsx?|jsx?)$/.test(item.name)) continue;
+     const sf=ts.createSourceFile(relative,read(relative),ts.ScriptTarget.Latest,true,
+       /\.tsx$|\.jsx$/.test(relative)?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+     const nativeAliases=new Set(["Alert"]);
+     const rnNamespaces=new Set();
+     for(const statement of sf.statements){
+       if(!ts.isImportDeclaration(statement) || statement.moduleSpecifier.text!=="react-native")continue;
+       const binding=statement.importClause?.namedBindings;
+       if(binding && ts.isNamedImports(binding))
+         for(const spec of binding.elements)
+           if((spec.propertyName?.text || spec.name.text)==="Alert") nativeAliases.add(spec.name.text);
+       if(binding && ts.isNamespaceImport(binding))rnNamespaces.add(binding.name.text);
+     }
+     const visit=node=>{
+       if(ts.isCallExpression(node)){
+         const expr=node.expression;
+         let found=false;
+         if(ts.isIdentifier(expr) && forbidden.has(expr.text))found=true;
+         const prop=member(expr,sf);
+         if(prop){
+           const {owner,method}=prop;
+           const globalOwner=["window","globalThis","self","global","globalThis.window","globalThis.self","globalThis.global"].includes(owner);
+           const alertOwner=nativeAliases.has(owner)||owner==="globalThis.Alert"||
+             [...rnNamespaces].some(ns=>owner===ns+".Alert");
+           if((globalOwner && forbidden.has(method)) ||
+              (alertOwner && (method==="alert"||method==="prompt"))) found=true;
+         }
+         if(found){
+           const lc=sf.getLineAndCharacterOfPosition(node.getStart(sf));
+           violations.push(relative+":"+(lc.line+1)+" "+node.getText(sf).slice(0,130));
+         }
+       }
+       ts.forEachChild(node,visit);
+     };
+     visit(sf);
+   }
  };
  dirs.forEach(walk);
- assert.deepEqual(violations,[],"Native browser or OS dialog calls detected:\n"+violations.join("\n"));
+ assert.deepEqual(violations,[],"Native dialog calls detected:\n"+violations.join("\n"));
 });
