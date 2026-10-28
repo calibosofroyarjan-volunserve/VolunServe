@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - hotfix/restore-premium-login-ui-20261029
+      - feat/password-reset-modal-kohen-style-20261029
   pull_request:
     paths:
       - app/login.web.tsx
@@ -10,6 +11,7 @@ on:
       - app/admin-login.tsx
       - components/auth/**
       - scripts/test-login-ui-release.cjs
+      - scripts/test-password-reset-modal.cjs
       - .github/workflows/restore-premium-login-validation.yml
 permissions:
   contents: read
@@ -26,7 +28,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Source regression and role guards
-        run: node --test scripts/test-login-ui-release.cjs
+        run: node --test scripts/test-login-ui-release.cjs scripts/test-password-reset-modal.cjs
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Export web production build without deployment
