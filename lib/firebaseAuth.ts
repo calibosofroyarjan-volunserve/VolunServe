@@ -6,6 +6,7 @@ import {
   linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  sendEmailVerification,
   signOut,
   updatePassword,
   User,
@@ -20,6 +21,7 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
+import { isKnownDisposableEmail } from "./registrationEmailPolicy";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -457,6 +459,19 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    // Check before creating an Auth UID; client-side blocklist is not a
+    // substitute for verified email ownership or a backend abuse service.
+    if (isKnownDisposableEmail(submittedEmail)) {
+      throw new Error("Temporary email providers are not accepted. Use a permanent email address you can verify.");
+    }
+    if (!Number.isInteger(data.age) || data.age < 18 || data.age > 120) {
+      throw new Error("VolunServe registration requires age 18 or older.");
+    }
+    if (data.province !== "Bulacan" ||
+        !["City of San Jose del Monte", "San Jose del Monte"].includes(data.city) ||
+        !data.barangay?.trim()) {
+      throw new Error("VolunServe registration is restricted to San Jose del Monte, Bulacan.");
+    }
     const usesGoogle = data.authProvider === "google";
     if (usesGoogle) {
       if (!auth.currentUser) {
@@ -599,6 +614,16 @@ export const signUpUser = async (
         serverTimestamp(),
     });
     await batch.commit();
+    if (!usesGoogle && !user.emailVerified) {
+      // Firebase sends a confirmation link; the app must not call unverified
+      // email ownership proof. Delivery failures should NOT turn a successfully
+      // saved Basic account into a fake registration failure.
+      try {
+        await sendEmailVerification(user);
+      } catch (emailError) {
+        console.warn("Basic account saved but email verification could not be sent:", emailError);
+      }
+    }
     return user;
   } catch (err: any) {
     const message =
