@@ -485,7 +485,7 @@ export default function HomeScreen() {
                   cardGradient={["#FFFFFF", "#FAFBFE", "#EAEDF9"]}
                   accentColor="#5368E8"
                   badgeColor="#E8EBFF"
-                  onPress={() => router.push("/certificate")}
+                  onPress={() => router.push("/profile?tab=certificates")}
                 />
 
                 <ServiceCard

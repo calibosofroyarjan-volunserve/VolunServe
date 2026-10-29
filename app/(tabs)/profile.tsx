@@ -306,7 +306,7 @@ export default function Profile() {
     setActiveTab,
   ] =
     useState<ProfileTab>(
-      tab === "progress" ? "progress" : "info",
+      tab === "progress" ? "progress" : tab === "certificates" ? "certificates" : "info",
     );
 
   const [
@@ -544,10 +544,13 @@ export default function Profile() {
     hasVolunteerAccess(
       profile,
     );
-  // Home's View Progress shortcut opens the genuine data-backed Profile tab.
+  // Volunteer Home shortcuts open the existing data-backed Profile sections.
+  // Never show the protected volunteer sections without volunteer access.
   useEffect(() => {
     if (tab === "progress" && currentMode === "volunteer" && volunteerAccess) {
       setActiveTab("progress");
+    } else if (tab === "certificates" && volunteerAccess) {
+      setActiveTab("certificates");
     }
   }, [tab, currentMode, volunteerAccess]);
 

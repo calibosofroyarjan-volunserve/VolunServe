@@ -1,0 +1,36 @@
+name: Profile and Certificates Account Menu Navigation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/profile-certificates-account-menu-only-20261029
+  pull_request:
+    paths:
+      - "app/(tabs)/_layout.tsx"
+      - "app/(tabs)/profile.tsx"
+      - "components/home/Home.web.tsx"
+      - "components/home/Home.native.tsx"
+      - "scripts/test-profile-certificates-account-menu.cjs"
+      - "scripts/test-resident-volunteer-sidebar.cjs"
+      - ".github/workflows/profile-certificates-account-menu.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Test account-only Profile and Certificates access, no sidebar duplicates
+        run: |
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-volunteer-profile-progress-shortcut.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Expo web export without production deployment
+        run: npx expo export --platform web
