@@ -761,7 +761,6 @@ export default function Signup() {
                 </Text>
               </View>
 
-              <SectionTitle title="Email Account" subtitle="Use email/password, or Google as an optional alternative." />
               <Field
                 icon="📧"
                 label="Email Address *"
@@ -828,17 +827,19 @@ export default function Signup() {
                   </TouchableOpacity>
                 </>
               )}
-              <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
+              <View style={styles.personalDetailsHeader}>
+                <SectionTitle title="Personal Information" subtitle="Enter your name as it appears on your identification." />
+              </View>
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
               <Field
                 icon="👤"
-                label="Middle Name / Initial (Optional)"
+                label="Middle Name (Optional)"
+                placeholder="e.g. P."
                 value={formData.middleName}
                 onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z .'-]/g, ""))}
                 returnKeyType="next"
               />
-              <SectionTitle title="Birthdate & Contact" />
+              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
               <View style={styles.field}>
                 <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
@@ -935,9 +936,18 @@ export default function Signup() {
 
               ) : null}
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
-              <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
-              <CheckRow label="I agree to the compliance and data privacy statements." checked={formData.acceptTerms} onPress={() => updateField("acceptTerms", !formData.acceptTerms)} />
+
               <CheckRow label="I confirm the details I provided are final and correct." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} />
+              <View style={styles.finalTermsSection}>
+                <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}>
+                  <Text style={styles.termsOpenText}>Read Terms and Conditions & Privacy Policy</Text>
+                </TouchableOpacity>
+                <CheckRow
+                  label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
+                  checked={formData.acceptTerms}
+                  onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
+                />
+              </View>
             </View>
           )}
         </View>
@@ -1075,6 +1085,8 @@ const styles = StyleSheet.create({
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
   signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
   emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 3 },
+  personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
+  finalTermsSection: { marginTop: 16, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 
