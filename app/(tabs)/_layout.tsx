@@ -46,7 +46,6 @@ const volunteerDesktopTabs: TabDefinition[] = [
  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
  {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
- {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
 ];
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
@@ -83,8 +82,7 @@ const volunteerMobileTabs: TabDefinition[] = [
   {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
   {name:"volunteer",label:"Emergency",icon:"people-outline",activeIcon:"people"},
   {name:"community-events",label:"Events",icon:"calendar-outline",activeIcon:"calendar"},
-  {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
-];
+ ];
 
 const volunteerOnlyRoutes = new Set([
   "volunteer",
