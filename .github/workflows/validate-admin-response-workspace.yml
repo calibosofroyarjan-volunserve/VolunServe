@@ -1,0 +1,39 @@
+name: Validate LGU Admin Response Workspace
+on:
+  push:
+    branches:
+      - fix/admin-response-workspace-flow-20261029
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/validate-admin-response-workspace.yml
+      - app/(admin)/admin-cases.tsx
+      - app/(admin)/assistance-requests.tsx
+      - app/(admin)/relief-operations.tsx
+      - components/admin/AdminReviewHero.tsx
+      - scripts/test-admin-response-workspace-ux.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-response-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Regression checks for LGU Admin review flows
+        run: |
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile Expo web without deploying
+        run: npx expo export --platform web

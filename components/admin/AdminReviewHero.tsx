@@ -11,7 +11,7 @@ type Props = {
 };
 
 /**
- * Premium botanical-inspired header for LGU Admin People & Verification only.
+ * Shared botanical-inspired header for LGU Admin operational review screens.
  * Pure presentation: does not alter authentication, verification or approvals.
  */
 export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }: Props) {
