@@ -23,6 +23,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import ListPagination from "../../components/ui/ListPagination";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -416,6 +417,9 @@ export default function DonationAdministration() {
 
   const [activeView, setActiveView] = useState<AdminDonationView>("campaigns");
   const [showReviewedHistory, setShowReviewedHistory] = useState(false);
+  const [campaignPage,setCampaignPage] = useState(1);
+  const [pendingPage,setPendingPage] = useState(1);
+  const [historyPage,setHistoryPage] = useState(1);
 
   const [assessments, setAssessments] = useState<NeedAssessment[]>([]);
   const [campaigns, setCampaigns] = useState<DonationCampaign[]>([]);
@@ -748,10 +752,17 @@ export default function DonationAdministration() {
     [donations],
   );
 
+  const campaignCurrent = Math.max(1, Math.min(campaignPage, Math.max(1,Math.ceil(campaigns.length / 5))));
+  const pagedCampaigns = campaigns.slice((campaignCurrent - 1) * 5,campaignCurrent * 5);
+  const pendingCurrent = Math.max(1, Math.min(pendingPage, Math.max(1,Math.ceil(pendingDonations.length / 5))));
+  const pagedPending = pendingDonations.slice((pendingCurrent - 1) * 5,pendingCurrent * 5);
   const reviewedDonations = useMemo(
     () => reviewDonations.filter((item) => item.status !== "submitted"),
     [reviewDonations],
   );
+
+  const historyCurrent = Math.max(1, Math.min(historyPage, Math.max(1, Math.ceil(reviewedDonations.length / 5))));
+  const pagedHistory = reviewedDonations.slice((historyCurrent - 1) * 5, historyCurrent * 5);
 
   useEffect(() => {
     let cancelled = false;
@@ -2747,6 +2758,7 @@ export default function DonationAdministration() {
             </Text>
           </View>
 
+          <ListPagination page={campaignCurrent} total={campaigns.length} pageSize={5} onChange={setCampaignPage} />
           {campaigns.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="megaphone-outline" size={30} color="#94A3B8" />
@@ -2757,7 +2769,7 @@ export default function DonationAdministration() {
             </View>
           ) : (
             <View style={styles.cardList}>
-              {campaigns.map((campaign) => {
+              {pagedCampaigns.map((campaign) => {
                 const campaignDonations = donations.filter((item) => item.campaignId === campaign.id);
                 const receivedCampaignDonations = campaignDonations.filter(
                   (item) => item.status === "received",
@@ -3007,6 +3019,7 @@ export default function DonationAdministration() {
             <Text style={styles.sectionTitle}>Pending Donations</Text>
           </View>
 
+          <ListPagination page={pendingCurrent} total={pendingDonations.length} pageSize={5} onChange={setPendingPage} />
           {!dataReady ? (
             <View style={styles.emptyCard}>
               <ActivityIndicator color="#0F766E" />
@@ -3022,7 +3035,7 @@ export default function DonationAdministration() {
             </View>
           ) : (
             <View style={styles.cardList}>
-              {pendingDonations.map((donation) => (
+              {pagedPending.map((donation) => (
                 <DonationReviewCard
                   key={donation.id}
                   donation={donation}
@@ -3068,13 +3081,14 @@ export default function DonationAdministration() {
             )}
           </View>
 
+          {showReviewedHistory && <ListPagination page={historyCurrent} total={reviewedDonations.length} pageSize={5} onChange={setHistoryPage} />}
           {reviewedDonations.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No reviewed donations yet</Text>
             </View>
           ) : showReviewedHistory ? (
             <View style={styles.cardList}>
-              {reviewedDonations.map((donation) => (
+              {pagedHistory.map((donation) => (
                 <ReviewedDonationCard key={donation.id} donation={donation} />
               ))}
             </View>
