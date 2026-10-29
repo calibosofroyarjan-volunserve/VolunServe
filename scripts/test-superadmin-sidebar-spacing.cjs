@@ -21,10 +21,11 @@ test("Desktop and drawer sidebar have balanced navigation spacing", () => {
   assert(styleBody("sidebarCompact").includes("width: 280"));
   const menu = styleBody("sidebarContent");
   assert(menu.includes("flexGrow: 1"));
-  assert(menu.includes('justifyContent: "center"'));
-  assert(menu.includes("gap: 12"));
+  assert(menu.includes('justifyContent: "flex-start"'));
+  assert(menu.includes("paddingTop: 28"));
+  assert(menu.includes("gap: 11"));
   const item = styleBody("navItem");
-  assert(item.includes("minHeight: 60"));
+  assert(item.includes("minHeight: 58"));
   assert(item.includes("borderRadius: 12"));
   const icon = styleBody("navIcon");
   assert(icon.includes("width: 40") && icon.includes("height: 40"));

@@ -229,7 +229,7 @@ export default function SuperAdminLayout() {
     <View style={styles.shell}>
       {desktop ? (
         <SuperAdminSidebar
-          onNavigate={(route) => router.push(route as Href)}
+          onNavigate={(route) => {setAccountOpen(false);router.push(route as Href);}}
           onSignOut={confirmSignOut}
           fullName={fullName}
           initials={initials}
@@ -251,6 +251,7 @@ export default function SuperAdminLayout() {
               compact
               onNavigate={(route) => {
                 setDrawerOpen(false);
+                setAccountOpen(false);
                 router.push(route as Href);
               }}
               onSignOut={confirmSignOut}
@@ -278,7 +279,7 @@ export default function SuperAdminLayout() {
               <Ionicons name="home-outline" size={17} color="#246B55" />
               <Text style={styles.breadcrumbMuted}>Super Admin</Text>
               <Ionicons name="chevron-forward" size={13} color="#8BA99A"/>
-              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{activeItem?.label || "System Overview"}</Text>
+              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{pathname.endsWith("/profile") ? "View Profile" : (activeItem?.label || "System Overview")}</Text>
             </View>
           )}
 
@@ -298,17 +299,23 @@ export default function SuperAdminLayout() {
             <Ionicons name={accountOpen?"chevron-up":"chevron-down"} size={16} color="#426D5C"/>
           </TouchableOpacity>
         </View>
-        {accountOpen && <View style={styles.profileMenu}>
-          <TouchableOpacity accessibilityRole="button" style={styles.profileMenuAction}
-            onPress={()=>{setAccountOpen(false);router.push("/(superadmin)/system-settings" as Href);}}>
-            <Ionicons name="settings-outline" size={18} color="#116D54"/>
-            <Text style={styles.profileMenuText}>System Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" style={styles.profileMenuAction} onPress={confirmSignOut}>
-            <Ionicons name="log-out-outline" size={18} color="#B42318"/>
-            <Text style={[styles.profileMenuText,{color:"#B42318"}]}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>}
+        {accountOpen && (
+          <View style={styles.profileMenu} accessibilityLabel="Super Admin profile dropdown">
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View Profile"
+              style={styles.profileMenuAction}
+              onPress={() => {
+                setAccountOpen(false);
+                router.push("/(superadmin)/profile" as Href);
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={20} color="#087A62" />
+              <Text style={styles.profileMenuText}>View Profile</Text>
+              <Ionicons name="chevron-forward" size={15} color="#79978A" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.contentArea}>
           <Stack
@@ -509,14 +516,14 @@ const styles = StyleSheet.create({
   },
   sidebarContent: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
     paddingHorizontal: 4,
-    paddingTop: 14,
-    paddingBottom: 24,
-    gap: 12,
+    paddingTop: 28,
+    paddingBottom: 20,
+    gap: 11,
   },
   navItem: {
-    minHeight: 60,
+    minHeight: 58,
     paddingHorizontal: 11,
     borderRadius: 12,
     flexDirection: "row",
@@ -613,9 +620,9 @@ const styles = StyleSheet.create({
   breadcrumb:{flexDirection:"row",gap:10,alignItems:"center",minWidth:0,flexShrink:1},
   breadcrumbMuted:{fontSize:12,color:"#71877E"},
   breadcrumbCurrent:{fontSize:12,fontWeight:"900",color:"#17382E",flexShrink:1},
-  profileMenu:{position:"absolute",top:61,right:17,zIndex:10,backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#D6E5DE",padding:7,minWidth:205,shadowColor:"#13392C",shadowOpacity:.13,shadowRadius:12,elevation:6},
-  profileMenuAction:{minHeight:43,paddingHorizontal:9,flexDirection:"row",alignItems:"center",gap:10},
-  profileMenuText:{fontSize:12,fontWeight:"800",color:"#174B3E"},
+  profileMenu:{position:"absolute",top:61,right:17,zIndex:20,backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#D6E5DE",padding:8,minWidth:212,shadowColor:"#13392C",shadowOpacity:.13,shadowRadius:12,elevation:6},
+  profileMenuAction:{minHeight:46,paddingHorizontal:10,flexDirection:"row",alignItems:"center",gap:11,borderRadius:8},
+  profileMenuText:{flex:1,fontSize:12,fontWeight:"800",color:"#174B3E"},
   accountArea: {
     flexDirection: "row",
     alignItems: "center",
