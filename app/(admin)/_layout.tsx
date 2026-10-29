@@ -662,6 +662,7 @@ const styles =
       flex: 1,
       minHeight: 0,
       marginHorizontal: 10,
+      overflowY: "scroll",
       scrollbarWidth: "thin",
       scrollbarColor: "#6EA995 #10382D",
     } as any,
