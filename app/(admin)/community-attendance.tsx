@@ -495,6 +495,21 @@ export default function CommunityAttendanceAdmin() {
     );
   }, [user?.uid, allowed, selectedId]);
 
+  // Opening Event Attendance from the Admin dashboard should immediately
+  // show the actionable event detail, without an extra empty selection step.
+  // This only selects UI state; no attendance or event status is changed.
+  useEffect(() => {
+    if (!events.length) {
+      if (selectedId) setSelectedId("");
+      return;
+    }
+    if (selectedId && events.some(event => event.id === selectedId)) return;
+    const priorityEvent = events.find(event => event.status === "active") ||
+      events.find(event => event.status === "upcoming") || events[0];
+    setSelectedId(priorityEvent.id);
+    setRosterPage(1);
+  }, [events, selectedId]);
+
   const selected =
     events.find(
       (item) => item.id === selectedId
