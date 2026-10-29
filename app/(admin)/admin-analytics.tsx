@@ -22,6 +22,8 @@ import {
   View,
 } from "react-native";
 import { db } from "../../lib/firebase";
+import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
 type Role =
   | "user"
@@ -119,6 +121,10 @@ export default function AdminAnalytics() {
 
   const [participantDocs, setParticipantDocs] =
     useState<any[]>([]);
+  const [riskPage, setRiskPage] = useState(1);
+  const [pointsPage, setPointsPage] = useState(1);
+  const [achievementPage, setAchievementPage] = useState(1);
+  const [certificatePage, setCertificatePage] = useState(1);
 
   useEffect(() => {
     const run = async () => {
@@ -851,6 +857,11 @@ export default function AdminAnalytics() {
     participantDocs,
   ]);
 
+  const visibleRiskPage = Math.max(1, Math.min(riskPage, Math.max(1, Math.ceil(metrics.attendanceFollowUps.length / 5))));
+  const visiblePointsPage = Math.max(1, Math.min(pointsPage, Math.max(1, Math.ceil(metrics.topPointUsers.length / 5))));
+  const visibleAchievementPage = Math.max(1, Math.min(achievementPage, Math.max(1, Math.ceil(metrics.topAchievementUsers.length / 5))));
+  const visibleCertificatePage = Math.max(1, Math.min(certificatePage, Math.max(1, Math.ceil(metrics.recentCertificates.length / 5))));
+
   if (checkingRole) {
     return (
       <View style={styles.center}>
@@ -882,75 +893,13 @@ export default function AdminAnalytics() {
     <ScrollView
       contentContainerStyle={styles.container}
     >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>
-            Admin Analytics
-          </Text>
-
-          <Text style={styles.sub}>
-            Role: {String(role)}
-          </Text>
-        </View>
-
-        <View style={styles.headerBtns}>
-          <TouchableOpacity
-            style={styles.darkBtn}
-            onPress={() =>
-              router.push(
-                "/(admin)/command-center" as any
-              )
-            }
-          >
-            <Text style={styles.darkBtnText}>
-              Command Center
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.navRow}>
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/admin-cases" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Cases
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/admin-events" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Events
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() =>
-            router.push(
-              "/(admin)/donor-monitoring" as any
-            )
-          }
-        >
-          <Text style={styles.navText}>
-            Donations
-          </Text>
-        </TouchableOpacity>
-
-
-      </View>
+      <AdminReviewHero
+        eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS"
+        title="Analytics"
+        subtitle="Review live operational trends, volunteer attendance follow-ups, verified accomplishments, and program performance."
+        icon="analytics-outline"
+        tag="OPERATIONAL INSIGHTS"
+      />
 
       <Text style={styles.sectionHeader}>
         📊 System Overview
@@ -1026,7 +975,7 @@ export default function AdminAnalytics() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={styles.section}>\n        <ListPagination page={visibleRiskPage} total={metrics.attendanceFollowUps.length} pageSize={5} onChange={setRiskPage} />
         <Text style={styles.sectionTitle}>
           ⚠️ Attendance Completion Follow-up
         </Text>
@@ -1046,7 +995,7 @@ export default function AdminAnalytics() {
             data yet.
           </Text>
         ) : (
-          metrics.attendanceFollowUps.map(
+          metrics.attendanceFollowUps.slice((visibleRiskPage - 1) * 5, visibleRiskPage * 5).map(
             (
               volunteer: any,
               index: number
@@ -1166,7 +1115,7 @@ export default function AdminAnalytics() {
         )}
       </View>
 
-      <View style={styles.section}>
+      <View style={styles.section}>\n        <ListPagination page={visiblePointsPage} total={metrics.topPointUsers.length} pageSize={5} onChange={setPointsPage} />
         <Text style={styles.sectionTitle}>
           🏆 Top Volunteers by Points
         </Text>
@@ -1176,11 +1125,11 @@ export default function AdminAnalytics() {
             No users yet.
           </Text>
         ) : (
-          metrics.topPointUsers.map(
+          metrics.topPointUsers.slice((visiblePointsPage - 1) * 5, visiblePointsPage * 5).map(
             (item, index) => (
               <LeaderboardRow
                 key={item.id || index}
-                rank={index + 1}
+                rank={(visiblePointsPage - 1) * 5 + index + 1}
                 name={
                   item.fullName ||
                   item.name ||
@@ -1196,7 +1145,7 @@ export default function AdminAnalytics() {
         )}
       </View>
 
-      <View style={styles.section}>
+      <View style={styles.section}>\n        <ListPagination page={visibleAchievementPage} total={metrics.topAchievementUsers.length} pageSize={5} onChange={setAchievementPage} />
         <Text style={styles.sectionTitle}>
           🎖 Achievement Leaders
         </Text>
@@ -1207,7 +1156,7 @@ export default function AdminAnalytics() {
             No achievements unlocked yet.
           </Text>
         ) : (
-          metrics.topAchievementUsers.map(
+          metrics.topAchievementUsers.slice((visibleAchievementPage - 1) * 5, visibleAchievementPage * 5).map(
             (item, index) => {
               const count =
                 Array.isArray(
@@ -1219,7 +1168,7 @@ export default function AdminAnalytics() {
               return (
                 <LeaderboardRow
                   key={item.id || index}
-                  rank={index + 1}
+                  rank={(visibleAchievementPage - 1) * 5 + index + 1}
                   name={
                     item.fullName ||
                     item.name ||
@@ -1234,7 +1183,7 @@ export default function AdminAnalytics() {
         )}
       </View>
 
-      <View style={styles.section}>
+      <View style={styles.section}>\n        <ListPagination page={visibleCertificatePage} total={metrics.recentCertificates.length} pageSize={5} onChange={setCertificatePage} />
         <Text style={styles.sectionTitle}>
           📄 Recent Certificates
         </Text>
@@ -1245,7 +1194,7 @@ export default function AdminAnalytics() {
             No certificates issued yet.
           </Text>
         ) : (
-          metrics.recentCertificates.map(
+          metrics.recentCertificates.slice((visibleCertificatePage - 1) * 5, visibleCertificatePage * 5).map(
             (item, index) => (
               <View
                 key={item.id || index}
