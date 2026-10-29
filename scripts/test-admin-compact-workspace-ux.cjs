@@ -18,7 +18,7 @@ assert(dashboard.includes("total={6} pageSize={5} onChange={setPriorityPage}") &
   dashboard.includes(".slice((priorityPage - 1) * 5, priorityPage * 5).map(action"),
   "Even the priority action list must cap at five items without hiding the last item");
 for(const value of ["<DashboardPendingIdentityReviews />", "<DashboardVolunteerApprovals />",
-  "<DashboardOperationalInsights />", "pagedResidents.map", "pageSize={5}"]) {
+  "<DashboardOperationalInsights />", "<ResidentAccountsPanel />", "<DashboardRecentActivities />", "pageSize={5}"]) {
   assert(dashboard.includes(value), "Real dashboard workflows must remain reachable: " + value);
 }
 assert(!dashboard.includes("evacuation_centers") && !nav.includes('label: "Volunteer Events"') &&
