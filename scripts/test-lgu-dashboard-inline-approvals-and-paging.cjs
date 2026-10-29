@@ -33,9 +33,8 @@ assert(approval.includes('accessibilityRole="checkbox"') &&
        approval.includes('void submit("approved")') &&
        approval.includes('void submit("rejected")'),
   "LGU Admin must explicitly review and confirm before any approval/decline");
-assert(dashboard.includes("pagedCenters.map(") && dashboard.includes("pageSize={CENTER_PAGE_SIZE}") &&
-       dashboard.includes("CENTER_PAGE_SIZE = 5"),
-  "Dashboard center records require five-row pagination");
+assert(!dashboard.includes("pagedCenters.map(") && !dashboard.includes("evacuation_centers"),
+  "Command Center must not load removed Evacuation Center management records");
 
 // Separate page lists preserve their existing action/detail implementations.
 for(const [file, variable, list] of [
