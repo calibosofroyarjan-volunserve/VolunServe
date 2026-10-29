@@ -14,7 +14,7 @@ for (const path of ["app/signup.web.tsx", "app/signup.tsx"]) {
   assert(source.includes("signupDividerText") && source.includes(">OR</Text>"),
     path + ": OR separator must be prominent");
   assert(source.includes("g-logo.png"), path + ": multicolor Google icon required");
-  assert(source.includes('label="Middle Name (Optional)"'), path + ": middle name must be optional");
+  assert(source.includes('label="Middle Name / Initial (Optional)"'), path + ": middle name must be optional");
   assert(!source.includes("I do not have a middle name") && !source.includes("No Middle Name"),
     path + ": redundant middle name checkbox must be absent");
   assert(!source.includes("noMiddleName"), path + ": obsolete middle-name state must be removed");
