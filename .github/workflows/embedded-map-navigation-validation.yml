@@ -1,0 +1,37 @@
+name: Embedded Emergency and Community Map Navigation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/embedded-emergency-and-community-map-nav-20261029
+    paths:
+      - "app/(tabs)/_layout.tsx"
+      - "app/(tabs)/disaster-response.tsx"
+      - "app/(tabs)/community-events.tsx"
+      - "scripts/test-embedded-emergency-map-navigation.cjs"
+      - ".github/workflows/embedded-map-navigation-validation.yml"
+  pull_request:
+    paths:
+      - "app/(tabs)/_layout.tsx"
+      - "app/(tabs)/disaster-response.tsx"
+      - "app/(tabs)/community-events.tsx"
+      - "scripts/test-embedded-emergency-map-navigation.cjs"
+      - ".github/workflows/embedded-map-navigation-validation.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify embedded maps, no sidebar Response Map, and protected hospitals
+        run: node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Verify TypeScript
+        run: npx tsc --noEmit
+      - name: Verify Expo web export (no Firebase deployment)
+        run: npx expo export --platform web
