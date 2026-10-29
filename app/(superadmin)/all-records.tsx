@@ -215,6 +215,75 @@ const statusColor = (
   };
 };
 
+type AccountAudience = "resident" | "volunteer" | "staff" | "other";
+type SystemRecordView = {
+  id: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  source: RecordType;
+  audience?: AccountAudience;
+};
+type SystemRecordSection = {
+  id: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  views: SystemRecordView[];
+};
+
+// The original service-area navigation, backed by today's existing read-only
+// collections. No new Firestore subscriptions, writes, or permissions are added.
+const recordSections: SystemRecordSection[] = [
+  {
+    id: "residents", label: "Residents", icon: "home-outline",
+    views: [
+      { id: "residentAccounts", label: "Resident Accounts", icon: "people-outline", source: "users", audience: "resident" },
+      { id: "cases", label: "Emergency Reports", icon: "warning-outline", source: "cases" },
+      { id: "assistance", label: "Assistance Requests", icon: "medkit-outline", source: "assistance" },
+      { id: "disputes", label: "Disputes", icon: "alert-circle-outline", source: "disputes" },
+    ],
+  },
+  {
+    id: "volunteers", label: "Volunteers", icon: "hand-left-outline",
+    views: [
+      { id: "volunteerAccounts", label: "Volunteer Accounts", icon: "person-outline", source: "users", audience: "volunteer" },
+      { id: "applications", label: "Volunteer Applications", icon: "person-add-outline", source: "applications" },
+      { id: "certificates", label: "Certificates", icon: "ribbon-outline", source: "certificates" },
+    ],
+  },
+  {
+    id: "events", label: "Community Events", icon: "calendar-outline",
+    views: [
+      { id: "events", label: "Volunteer Events", icon: "calendar-outline", source: "events" },
+    ],
+  },
+  {
+    id: "operations", label: "Response & Outcomes", icon: "navigate-outline",
+    views: [
+      { id: "assignments", label: "Response Assignments", icon: "navigate-outline", source: "assignments" },
+      { id: "contributions", label: "Verified Help", icon: "checkmark-done-outline", source: "contributions" },
+    ],
+  },
+  {
+    id: "administration", label: "LGU & Other Accounts", icon: "shield-checkmark-outline",
+    views: [
+      { id: "staffAccounts", label: "LGU & Staff Accounts", icon: "people-circle-outline", source: "users", audience: "staff" },
+      { id: "otherAccounts", label: "Other Accounts", icon: "help-circle-outline", source: "users", audience: "other" },
+    ],
+  },
+];
+
+// Approved volunteer access is a capability of a resident account,
+// not necessarily a replacement for the user's stored role.
+function accountAudienceForUser(account: GenericRecord): AccountAudience {
+  const role = typeof account.role === "string" ? account.role.trim().toLowerCase() : "";
+  if (["superadmin", "super_admin", "admin", "lgu_personnel", "applicant", "lgu_staff", "staff"].includes(role)) return "staff";
+  const volunteerAccess = account.volunteerAccess === true ||
+    (account.volunteerAccess !== false && account.volunteerStatus === "approved");
+  if (volunteerAccess || (["volunteer", "verified_volunteer"].includes(role) && account.volunteerAccess !== false)) return "volunteer";
+  if (["resident", "basic_resident", "verified_resident", "basic", "verified"].includes(role) || account.residentAccess === true) return "resident";
+  return "other";
+}
+
 export default function AllRecords() {
   const [
     records,
@@ -241,6 +310,10 @@ export default function AllRecords() {
     setSearch,
   ] = useState("");
 
+
+  const [activeSectionId, setActiveSectionId] = useState("residents");
+  const [activeViewId, setActiveViewId] = useState("residentAccounts");
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
 
@@ -432,8 +505,11 @@ export default function AllRecords() {
 
   const visibleRecords =
     useMemo(() => {
-      const source =
-        records[activeTab];
+      const view = recordSections.flatMap(section => section.views).find(item => item.id === activeViewId);
+      const source = records[activeTab];
+      const scopedRecords = activeTab === "users" && view?.audience
+        ? source.filter(item => accountAudienceForUser(item) === view.audience)
+        : source;
 
       const term =
         search
@@ -441,10 +517,10 @@ export default function AllRecords() {
           .toLowerCase();
 
       if (!term) {
-        return source;
+        return scopedRecords;
       }
 
-      return source.filter(
+      return scopedRecords.filter(
         (item) => {
           const searchable =
             Object.values(
@@ -470,6 +546,7 @@ export default function AllRecords() {
     }, [
       records,
       activeTab,
+      activeViewId,
       search,
     ]);
 
@@ -477,65 +554,20 @@ export default function AllRecords() {
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedRecords = visibleRecords.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
-  const tabs: {
-    key: RecordType;
-    label: string;
-    icon: any;
-  }[] = [
-    {
-      key: "users",
-      label: "Users",
-      icon: "people-outline",
-    },
 
-    {
-      key: "applications",
-      label: "Volunteer Applications",
-      icon: "person-add-outline",
-    },
-
-    {
-      key: "cases",
-      label: "Emergency Reports",
-      icon: "warning-outline",
-    },
-
-    {
-      key: "assistance",
-      label: "Assistance Requests",
-      icon: "medkit-outline",
-    },
-    {
-      key: "assignments",
-      label: "Assignments",
-      icon: "navigate-outline",
-    },
-
-    {
-      key: "contributions",
-      label: "Verified Help",
-      icon:
-        "checkmark-done-outline",
-    },
-
-    {
-      key: "disputes",
-      label: "Disputes",
-      icon: "alert-circle-outline",
-    },
-
-    {
-      key: "events",
-      label: "Events",
-      icon: "calendar-outline",
-    },
-
-    {
-      key: "certificates",
-      label: "Certificates",
-      icon: "ribbon-outline",
-    },
-  ];
+  const activeSection = recordSections.find(section => section.id === activeSectionId) ?? recordSections[0];
+  const activeView = activeSection.views.find(view => view.id === activeViewId) ?? activeSection.views[0];
+  const showRecordView = (view: SystemRecordView) => {
+    setActiveViewId(view.id);
+    setActiveTab(view.source);
+    setSearch("");
+    setPage(1);
+  };
+  const showRecordSection = (section: SystemRecordSection) => {
+    setActiveSectionId(section.id);
+    setSectionMenuOpen(false);
+    showRecordView(section.views[0]);
+  };
 
   const renderRecord = (
     item: GenericRecord
@@ -1185,59 +1217,67 @@ export default function AllRecords() {
         />
       </View>
 
-      <View
-        style={styles.tabs}
-      >
-        {tabs.map(
-          (tab) => {
-            const selected =
-              activeTab ===
-              tab.key;
-
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tabButton,
-
-                  selected &&
-                    styles.tabButtonActive,
-                ]}
-                onPress={() => {
-                  setActiveTab(
-                    tab.key
-                  );
-
-                  setSearch("");
-                  setPage(1);
-                }}
-              >
-                <Ionicons
-                  name={
-                    tab.icon
-                  }
-                  size={17}
-                  color={
-                    selected
-                      ? "#FFFFFF"
-                      : "#475569"
-                  }
-                />
-
-                <Text
-                  style={[
-                    styles.tabText,
-
-                    selected &&
-                      styles.tabTextActive,
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-        )}
+      {/* One compact selector replaces the two stacked button bars. */}
+      <View style={styles.browseHeader}>
+        <View style={styles.browseHeaderCopy}>
+          <Text style={styles.browseEyebrow}>BROWSE RECORDS</Text>
+          <Text style={styles.browseDescription}>Select a service area to view its records</Text>
+        </View>
+        <View style={styles.sectionPickerWrap}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose record section"
+            accessibilityState={{ expanded: sectionMenuOpen }}
+            style={[styles.sectionPickerButton, sectionMenuOpen && styles.sectionPickerButtonOpen]}
+            onPress={() => setSectionMenuOpen(!sectionMenuOpen)}
+          >
+            <Ionicons name={activeSection.icon} size={17} color="#087A62" />
+            <Text numberOfLines={1} style={styles.sectionPickerLabel}>{activeSection.label}</Text>
+            <Ionicons name={sectionMenuOpen ? "chevron-up" : "chevron-down"} size={17} color="#376757" />
+          </TouchableOpacity>
+          {sectionMenuOpen ? (
+            <View style={styles.sectionPickerMenu} accessibilityLabel="Record service areas">
+              {recordSections.map(section => {
+                const selected = activeSectionId === section.id;
+                return (
+                  <TouchableOpacity
+                    key={section.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={section.label + " section"}
+                    accessibilityState={{ selected }}
+                    style={[styles.sectionPickerOption, selected && styles.sectionPickerOptionActive]}
+                    onPress={() => showRecordSection(section)}
+                  >
+                    <Ionicons name={section.icon} size={17} color={selected ? "#087A62" : "#5F796D"} />
+                    <Text style={[styles.sectionPickerOptionLabel, selected && styles.sectionPickerOptionLabelActive]}>
+                      {section.label}
+                    </Text>
+                    {selected ? <Ionicons name="checkmark" size={17} color="#087A62" /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      </View>
+      <View style={styles.recordTypeTabs} accessibilityLabel={activeSection.label + " record types"}>
+        {activeSection.views.map(view => {
+          const selected = activeViewId === view.id;
+          return (
+            <TouchableOpacity
+              key={view.id}
+              accessibilityRole="tab"
+              accessibilityLabel={view.label + " records"}
+              accessibilityState={{ selected }}
+              style={[styles.recordTypeTab, selected && styles.recordTypeTabActive]}
+              onPress={() => showRecordView(view)}
+            >
+              <Text numberOfLines={1} style={[styles.recordTypeTabLabel, selected && styles.recordTypeTabLabelActive]}>
+                {view.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View
@@ -1310,13 +1350,7 @@ export default function AllRecords() {
                 styles.sectionTitle
               }
             >
-              {
-                tabs.find(
-                  (tab) =>
-                    tab.key ===
-                    activeTab
-                )?.label
-              }
+              {activeView.label}
             </Text>
 
             <Text
@@ -1667,41 +1701,108 @@ const styles =
       fontWeight: "700",
     },
 
-    tabs: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 12,
-    },
-
-    tabButton: {
+    browseHeader: {
+      position: "relative",
+      zIndex: 20,
+      width: "100%",
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      borderRadius: 999,
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 12,
+      marginBottom: 12,
+    },
+    browseHeaderCopy: { flexGrow: 1, gap: 3 },
+    browseEyebrow: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 1,
+      color: "#1A5B47",
+    },
+    browseDescription: { fontSize: 12, color: "#71877C" },
+    sectionPickerWrap: {
+      position: "relative",
+      zIndex: 30,
+      flexBasis: 260,
+      flexGrow: 0,
+      maxWidth: "100%",
+    },
+    sectionPickerButton: {
+      minHeight: 44,
+      width: "100%",
+      borderRadius: 10,
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
-      paddingHorizontal: 13,
-      paddingVertical: 9,
+      borderColor: "#C7DCD1",
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
     },
-
-    tabButtonActive: {
-      backgroundColor:
-        "#0F766E",
-      borderColor: "#0F766E",
-    },
-
-    tabText: {
-      color: "#475569",
-      fontWeight: "800",
+    sectionPickerButtonOpen: { borderColor: "#087A62" },
+    sectionPickerLabel: {
+      flex: 1,
       fontSize: 12,
+      color: "#194F3E",
+      fontWeight: "800",
     },
-
-    tabTextActive: {
-      color: "#FFFFFF",
+    sectionPickerMenu: {
+      position: "absolute",
+      top: 48,
+      left: 0,
+      right: 0,
+      zIndex: 50,
+      elevation: 8,
+      borderRadius: 10,
+      padding: 5,
+      borderWidth: 1,
+      borderColor: "#D2E4D8",
+      backgroundColor: "#FFFFFF",
+      shadowColor: "#143F31",
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 5 },
     },
+    sectionPickerOption: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 7,
+      paddingHorizontal: 10,
+      gap: 9,
+    },
+    sectionPickerOptionActive: { backgroundColor: "#E8F6EE" },
+    sectionPickerOptionLabel: {
+      flex: 1,
+      color: "#365A4C",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    sectionPickerOptionLabelActive: { color: "#087A62", fontWeight: "900" },
+    recordTypeTabs: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: "#D5E4DC",
+      marginBottom: 18,
+    },
+    recordTypeTab: {
+      minHeight: 41,
+      justifyContent: "center",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+      paddingHorizontal: 2,
+    },
+    recordTypeTabActive: { borderBottomColor: "#087A62" },
+    recordTypeTabLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#72847B",
+    },
+    recordTypeTabLabelActive: { fontWeight: "900", color: "#087A62" },
 
     searchBar: {
       flexDirection: "row",
