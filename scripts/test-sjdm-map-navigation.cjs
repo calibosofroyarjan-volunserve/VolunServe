@@ -28,6 +28,9 @@ assert(map.includes("cityBoundaryUrl") && map.includes("Nominatim"),
   "Boundary must be obtained from a named data provider");
 assert(map.includes("cityBoundaryBounds") && map.includes("lastNavigationView"),
   "Default city camera must not expand to out-of-city resident GPS");
+assert(map.includes("cityBoundaryBounds.contains([location.longitude, location.latitude])") &&
+  map.includes("follow && (lastNavigationView || gpsInsideVerifiedCity)"),
+  "Out-of-city GPS must not override municipal camera outside responder mission mode");
 assert(map.includes('label.textContent = "CDRRMO"') && map.includes("Approximate map pin, not real-time"),
   "CDRRMO pin is explicitly informational, not impersonating a tracked response vehicle");
 assert(map.includes("isVerifiedActiveCenter") && map.includes("activeLguResponderUid"),

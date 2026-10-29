@@ -855,7 +855,11 @@ const mapDocument = `
           accuracyGeometry(location)
         );
 
-        if (follow) {
+        // A device currently outside SJDM must not pull the municipal overview
+        // away from the response city. Mission mode may follow the responder.
+        const gpsInsideVerifiedCity = !!cityBoundaryBounds &&
+          cityBoundaryBounds.contains([location.longitude, location.latitude]);
+        if (follow && (lastNavigationView || gpsInsideVerifiedCity)) {
           map.easeTo({
             center: [
               location.longitude,
