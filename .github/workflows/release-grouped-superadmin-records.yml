@@ -37,7 +37,7 @@ jobs:
           node scripts/test-signup-email-first-middle-optional.cjs
           node scripts/test-password-reset-popup.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
-          node scripts/test-live-emergency-map-rules.cjs
+          node scripts/test-clean-emergency-report-header.cjs
           node --test scripts/test-login-ui-release.cjs
           npx tsc --noEmit --pretty false
       - name: Build production Expo website and release marker
