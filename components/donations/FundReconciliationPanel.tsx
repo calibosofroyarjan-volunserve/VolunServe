@@ -7,7 +7,8 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import ListPagination from "../ui/ListPagination";
 import FundReleaseControls from "./FundReleaseControls";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
@@ -122,6 +123,7 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 1020;
+  const [campaignPage, setCampaignPage] = useState(1);
   useFonts({
     FundInterRegular: Inter_400Regular,
     FundInterMedium: Inter_500Medium,
@@ -133,6 +135,8 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
       (a, b) => Number(!!b.campaign.sourceAssistanceRequestId) -
         Number(!!a.campaign.sourceAssistanceRequestId),
     ), [campaigns, donations]);
+  const activeCampaignPage = Math.max(1, Math.min(campaignPage, Math.max(1, Math.ceil(summaries.length / 5))));
+  const pagedSummaries = summaries.slice((activeCampaignPage - 1) * 5, activeCampaignPage * 5);
   const totals = useMemo(() => summaries.reduce((acc, row) => ({
     recorded: acc.recorded + row.recorded,
     providerConfirmed: acc.providerConfirmed + row.providerConfirmed,
@@ -234,13 +238,14 @@ export default function FundReconciliationPanel({ campaigns, donations, ready, m
       </View>
       <Text style={styles.count}>{summaries.length} campaigns</Text>
     </View>
+    <ListPagination page={activeCampaignPage} total={summaries.length} pageSize={5} onChange={setCampaignPage} />
     {!ready ? <Text style={styles.empty}>Loading donation and campaign records…</Text> :
       summaries.length === 0 ? <View style={styles.emptyCard}>
         <Ionicons name="heart-outline" size={28} color="#83A598"/>
         <Text style={styles.empty}>No campaign records are available yet.</Text>
       </View> :
       <View style={styles.campaignGrid}>
-        {summaries.map(row => {
+        {pagedSummaries.map(row => {
           const percent = row.goal > 0 ? Math.min(100, row.progress / row.goal * 100) : 0;
           const goalReached = row.goal > 0 && row.progress >= row.goal - 0.01;
           return <View key={row.campaign.id} style={[styles.campaignCard, !compact && styles.campaignCardWide]}>
