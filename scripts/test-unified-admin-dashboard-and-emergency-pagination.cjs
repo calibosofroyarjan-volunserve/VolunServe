@@ -15,7 +15,7 @@ const identity = src("app/(admin)/identity-reviews.tsx");
 for (const removed of ['label: "Volunteer Events"', 'label: "Analytics"', '"/(admin)/admin-events"', '"/(admin)/admin-analytics"']) {
   assert(!nav.includes(removed), "Duplicate sidebar destination remains: " + removed);
 }
-for (const name of ['label: "Command Center"', 'label: "Community Events"', 'label: "Event Attendance"', 'label: "Certificates"', 'label: "Emergency Reports"', 'label: "User & Volunteer Approvals"']) {
+for (const name of ['label: "Command Center"', 'label: "Community Events"', 'label: "Event Attendance"', 'label: "Certificates"', 'label: "Emergency Reports"']) {
   assert(nav.includes(name), "Necessary Admin workflow destination removed: " + name);
 }
 assert(src("app/(admin)/admin-events.tsx").includes('<Redirect href="/(admin)/community-attendance" />'));
@@ -30,12 +30,17 @@ assert(dash.includes("<DashboardPendingIdentityReviews />") &&
   identityQueue.includes("pageSize={PAGE_SIZE}") &&
   identityQueue.includes("params: { uid: item.uid }"),
   "Real pending identity submissions must appear in Command Center with protected review and paging");
-assert(dash.includes("setPendingResidents(residents)") &&
-  dash.includes("pagedResidents.map") &&
-  dash.includes("total={pendingResidents.length} pageSize={5}") &&
-  dash.includes('navigate("/(admin)/account-approvals?view=residents&resident="') &&
-  dash.includes('navigate("/(admin)/identity-reviews")'),
-  "Resident pending accounts and safe review workflow must be visible within the dashboard");
+assert(dash.includes("<ResidentAccountsPanel />") &&
+  residents.includes("export function ResidentAccountsPanel()") &&
+  residents.includes("pagedAccounts.map(account") &&
+  residents.includes("total={visibleAccounts.length} pageSize={PAGE_SIZE}") &&
+  residents.includes("moderateCommunityAccount") &&
+  residents.includes('<Redirect href="/(admin)/command-center?section=residents" />'),
+  "Full authorized Resident directory and moderation must move into dashboard with existing 5-row pagination");
+assert(dash.includes("<DashboardRecentActivities />") &&
+  !dash.includes("pendingResidents") &&
+  !nav.includes('label: "User & Volunteer Approvals"'),
+  "No redundant pending-only Resident queue or duplicate Admin sidebar module");
 assert(dash.includes("<DashboardVolunteerApprovals />") &&
   approvals.includes("pageSize={PAGE_SIZE}") && approvals.includes("await batch.commit()") &&
   residents.includes("pagedAccounts") && identity.includes("pagedReviews"),
