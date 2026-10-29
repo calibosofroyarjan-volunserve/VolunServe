@@ -650,6 +650,13 @@ const mapDocument = `
             card.appendChild(credit);
           }
         }
+        if (!item.photoUrl) {
+          const unavailable = document.createElement("div");
+          unavailable.setAttribute("role", "note");
+          unavailable.style.cssText = "margin:10px 0;padding:14px 12px;border-radius:12px;background:linear-gradient(135deg,#e4f5eb,#f1f8f5);border:1px solid #cae5d7;text-align:center;color:#326d56;line-height:1.5;";
+          unavailable.textContent = "🏛️  Verified map location · Building photo not yet confirmed";
+          card.appendChild(unavailable);
+        }
         if (item.address) {
           const address = document.createElement("p");
           address.className = "place-popup-note";
