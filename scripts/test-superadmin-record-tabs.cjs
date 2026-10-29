@@ -5,60 +5,46 @@ const path = require("node:path");
 const { test } = require("node:test");
 const source = fs.readFileSync(path.resolve(__dirname, "../app/(superadmin)/all-records.tsx"), "utf8");
 
-test("System Records categories follow real onboarding, response, events, outcomes and archive flow", () => {
-  const start = source.indexOf("const tabs: {");
-  const end = source.indexOf("const renderRecord = (", start);
-  assert(start >= 0 && end > start);
-  const tabBlock = source.slice(start, end);
-  const keys = [...tabBlock.matchAll(/\{\s*key:\s*"([^"]+)",\s*label:\s*"([^"]+)"/g)];
-  assert.deepEqual(keys.map(x => x[1]), [
-    "users", "credentialReviews", "applications", "cases", "assistance",
-    "assignments", "contributions", "disputes", "eventProposals",
-    "communityEvents", "eventParticipants", "certificates", "events",
-  ]);
-  assert.equal(new Set(keys.map(x => x[1])).size, 13, "No duplicate categories");
-  assert(!keys.some(x => x[1] === "donations"), "No confidential donation transactions for Super Admin");
+test("Records are arranged under independent Residents, Volunteers, Events, Response, and LGU sections", () => {
+  const structure = source.slice(source.indexOf("const recordSections:"), source.indexOf("function accountAudienceForRole"));
+  const sectionNames = [...structure.matchAll(/id: "(residents|volunteers|events|operations|administration)", label: "([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(sectionNames, ["residents", "volunteers", "events", "operations", "administration"]);
+  const views = [...structure.matchAll(/\{ id: "([^"]+)", label: "([^"]+)", icon: "[^"]+", source: "([^"]+)"(?:, audience: "([^"]+)")? \}/g)];
+  assert.equal(views.length, 16);
+  assert.equal(new Set(views.map(m => m[1])).size, 16);
+  assert.deepEqual(views.filter(m => m[3] === "users").map(m => m[4]), ["resident", "volunteer", "staff", "other"]);
+  assert(!structure.includes('source: "donations"'), "Super Admin never includes private finance");
 });
 
-test("Prioritized summary cards use actual collection counts and no fabricated metrics", () => {
-  const start = source.indexOf("{/* Prioritize operational visibility");
-  const end = source.indexOf("<View style={styles.tabHeadingRow}>", start);
-  assert(start >= 0 && end > start);
-  const summary = source.slice(start, end);
-  const metrics = [...summary.matchAll(/<SummaryCard label="([^"]+)" value=\{records\.([A-Za-z]+)\.length\}/g)];
-  assert.deepEqual(metrics.map(m => [m[1], m[2]]), [
-    ["Emergency Reports", "cases"],
-    ["Assistance Requests", "assistance"],
-    ["Users", "users"],
-    ["Volunteer Applications", "applications"],
-    ["Verified Help", "contributions"],
-    ["Certificates", "certificates"],
-  ]);
+test("Account views filter actual role values; unknown roles remain separately visible", () => {
+  assert.match(source, /function accountAudienceForRole\(role: unknown\): AccountAudience/);
+  for(const role of ["resident","basic_resident","verified_resident","volunteer","admin","superadmin","applicant"]) {
+    assert(source.includes('"' + role + '"'), "Missing supported role: " + role);
+  }
+  assert.match(source, /return "other";/);
+  assert.match(source, /source\.filter\(item => accountAudienceForRole\(item\.role\) === activeView\.audience\)/);
+  assert.match(source, /activeTab,\s*activeViewId,\s*search/);
 });
 
-test("All 13 categories paginate five at a time with accessible controls", () => {
-  assert.match(source, /const \[categoryPage, setCategoryPage\] = useState\(1\)/);
-  assert.match(source, /const CATEGORY_PAGE_SIZE = 5/);
-  assert.match(source, /Math\.ceil\(tabs\.length \/ CATEGORY_PAGE_SIZE\)/);
-  assert.match(source, /const visibleCategoryTabs = tabs\.slice\(/);
-  assert.match(source, /visibleCategoryTabs\.map\(\(tab\) =>/);
-  assert.match(source, /accessibilityLabel="Previous category page"/);
-  assert.match(source, /accessibilityLabel="Next category page"/);
-  assert.match(source, /disabled=\{categoryPage === 1\}/);
-  assert.match(source, /disabled=\{categoryPage === categoryPageCount\}/);
-  assert.match(source, /accessibilityRole="tab"/);
-  assert.match(source, /accessibilityState=\{\{ selected \}\}/);
-  assert.match(source, /tabs:\s*\{\s*width: "100%",\s*flexDirection: "row",\s*alignItems: "center",\s*flexWrap: "wrap"/);
-  assert.doesNotMatch(source, /showsHorizontalScrollIndicator|styles\.tabsScroll/);
-});
-
-test("Category page switching selects the first visible tab and resets record search and paging", () => {
-  assert.match(source, /setCategoryPage\(safeNext\)/);
-  assert.match(source, /setActiveTab\(tabs\[\(safeNext - 1\) \* CATEGORY_PAGE_SIZE\]\.key\)/);
-  assert.match(source, /setSearch\(""\);\s*setPage\(1\)/);
-  assert.match(source, /setActiveTab\(tab\.key\);\s*setSearch\(""\);\s*setPage\(1\)/);
+test("Switching groups and child tabs resets search and 5-record pagination", () => {
+  assert.match(source, /accessibilityLabel="System Records grouped sections"/);
+  assert.match(source, /activeSection\.views\.map\(view =>/);
+  assert.match(source, /showRecordSection\(section\)/);
+  assert.match(source, /showRecordView\(view\)/);
+  assert.match(source, /setActiveSectionId\(section\.id\);\s*showRecordView\(section\.views\[0\]\)/);
+  assert.match(source, /setActiveTab\(view\.source\);\s*setSearch\("");\s*setPage\(1\)/);
   assert.match(source, /const PAGE_SIZE = 5/);
   assert.match(source, /<ListPagination page=\{activePage\} total=\{visibleRecords\.length\} onChange=\{setPage\} \/>/);
-  assert.match(source, /recordSources: Array/);
-  assert.match(source, /collectionName: "volunteerApplications"/);
+  assert.doesNotMatch(source, /CATEGORY_PAGE_SIZE|showsHorizontalScrollIndicator/);
+});
+
+test("Priority totals are actual Firestore record counts", () => {
+  const start=source.indexOf("{/* Prioritize operational visibility");
+  const end=source.indexOf("<View style={styles.tabHeadingRow}>",start);
+  const summaries=[...source.slice(start,end).matchAll(/<SummaryCard label="([^"]+)" value=\{records\.([A-Za-z]+)\.length\}/g)].map(m=>[m[1],m[2]]);
+  assert.deepEqual(summaries, [
+    ["Emergency Reports","cases"],["Assistance Requests","assistance"],
+    ["Users","users"],["Volunteer Applications","applications"],
+    ["Verified Help","contributions"],["Certificates","certificates"]
+  ]);
 });

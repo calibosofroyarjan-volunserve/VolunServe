@@ -239,6 +239,77 @@ const statusColor = (
   };
 };
 
+type AccountAudience = "resident" | "volunteer" | "staff" | "other";
+
+type SystemRecordView = {
+  id: string;
+  label: string;
+  icon: any;
+  source: RecordType;
+  audience?: AccountAudience;
+};
+
+type SystemRecordSection = {
+  id: string;
+  label: string;
+  icon: any;
+  views: SystemRecordView[];
+};
+
+// Each operational collection has one home. Account records are split by their
+// recorded roles rather than mixing residents, volunteers, and privileged staff.
+const recordSections: SystemRecordSection[] = [
+  {
+    id: "residents", label: "Residents", icon: "home-outline",
+    views: [
+      { id: "residentAccounts", label: "Resident Accounts", icon: "people-outline", source: "users", audience: "resident" },
+      { id: "cases", label: "Emergency Reports", icon: "warning-outline", source: "cases" },
+      { id: "assistance", label: "Assistance Requests", icon: "medkit-outline", source: "assistance" },
+      { id: "disputes", label: "Disputes", icon: "alert-circle-outline", source: "disputes" },
+    ],
+  },
+  {
+    id: "volunteers", label: "Volunteers", icon: "hand-left-outline",
+    views: [
+      { id: "volunteerAccounts", label: "Volunteer Accounts", icon: "person-outline", source: "users", audience: "volunteer" },
+      { id: "applications", label: "Volunteer Applications", icon: "person-add-outline", source: "applications" },
+      { id: "eventParticipants", label: "Volunteer Attendance", icon: "checkmark-circle-outline", source: "eventParticipants" },
+      { id: "certificates", label: "Certificates", icon: "ribbon-outline", source: "certificates" },
+    ],
+  },
+  {
+    id: "events", label: "Community Events", icon: "calendar-outline",
+    views: [
+      { id: "eventProposals", label: "Event Proposals", icon: "document-text-outline", source: "eventProposals" },
+      { id: "communityEvents", label: "Community Events", icon: "calendar-outline", source: "communityEvents" },
+      { id: "events", label: "Legacy Volunteer Events", icon: "time-outline", source: "events" },
+    ],
+  },
+  {
+    id: "operations", label: "Response & Outcomes", icon: "navigate-outline",
+    views: [
+      { id: "assignments", label: "Response Assignments", icon: "navigate-outline", source: "assignments" },
+      { id: "contributions", label: "Verified Help", icon: "checkmark-done-outline", source: "contributions" },
+    ],
+  },
+  {
+    id: "administration", label: "LGU & Other Accounts", icon: "shield-checkmark-outline",
+    views: [
+      { id: "staffAccounts", label: "LGU & Staff Accounts", icon: "people-circle-outline", source: "users", audience: "staff" },
+      { id: "credentialReviews", label: "LGU Credential Reviews", icon: "shield-checkmark-outline", source: "credentialReviews" },
+      { id: "otherAccounts", label: "Other Accounts", icon: "help-circle-outline", source: "users", audience: "other" },
+    ],
+  },
+];
+
+function accountAudienceForRole(role: unknown): AccountAudience {
+  const normalized = typeof role === "string" ? role.trim().toLowerCase() : "";
+  if (["superadmin", "super_admin", "admin", "lgu_personnel", "applicant", "lgu_staff", "staff"].includes(normalized)) return "staff";
+  if (["volunteer", "verified_volunteer"].includes(normalized)) return "volunteer";
+  if (["resident", "basic_resident", "verified_resident", "basic", "verified"].includes(normalized)) return "resident";
+  return "other";
+}
+
 export default function AllRecords() {
   const [
     records,
@@ -252,22 +323,16 @@ export default function AllRecords() {
     setLoading,
   ] = useState(true);
 
-  const [
-    activeTab,
-    setActiveTab,
-  ] =
-    useState<RecordType>(
-      "users"
-    );
+  const [activeSectionId, setActiveSectionId] = useState("residents");
+  const [activeViewId, setActiveViewId] = useState("residentAccounts");
+  const [activeTab, setActiveTab] = useState<RecordType>("users");
 
   const [
     search,
     setSearch,
   ] = useState("");
   const [page, setPage] = useState(1);
-  const [categoryPage, setCategoryPage] = useState(1);
   const PAGE_SIZE = 5;
-  const CATEGORY_PAGE_SIZE = 5;
 
   const [
     errors,
@@ -457,8 +522,13 @@ export default function AllRecords() {
 
   const visibleRecords =
     useMemo(() => {
-      const source =
-        records[activeTab];
+      const activeView = recordSections
+        .flatMap(section => section.views)
+        .find(view => view.id === activeViewId);
+      const source = records[activeTab];
+      const scopedRecords = activeTab === "users" && activeView?.audience
+        ? source.filter(item => accountAudienceForRole(item.role) === activeView.audience)
+        : source;
 
       const term =
         search
@@ -466,10 +536,10 @@ export default function AllRecords() {
           .toLowerCase();
 
       if (!term) {
-        return source;
+        return scopedRecords;
       }
 
-      return source.filter(
+      return scopedRecords.filter(
         (item) => {
           const searchable =
             Object.values(
@@ -495,48 +565,24 @@ export default function AllRecords() {
     }, [
       records,
       activeTab,
+      activeViewId,
       search,
     ]);
   const totalPages = Math.max(1, Math.ceil(visibleRecords.length / PAGE_SIZE));
   const activePage = Math.min(page, totalPages);
   const pagedRecords = visibleRecords.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
-  // Arrange source categories by their actual service workflow, without hiding archives.
-  const tabs: {
-    key: RecordType;
-    label: string;
-    icon: any;
-  }[] = [
-    { key: "users", label: "Users", icon: "people-outline" },
-    { key: "credentialReviews", label: "LGU Credential Reviews", icon: "shield-checkmark-outline" },
-    { key: "applications", label: "Volunteer Applications", icon: "person-add-outline" },
-    { key: "cases", label: "Emergency Reports", icon: "warning-outline" },
-    { key: "assistance", label: "Assistance Requests", icon: "medkit-outline" },
-    { key: "assignments", label: "Assignments", icon: "navigate-outline" },
-    { key: "contributions", label: "Verified Help", icon: "checkmark-done-outline" },
-    { key: "disputes", label: "Disputes", icon: "alert-circle-outline" },
-    { key: "eventProposals", label: "Event Proposals", icon: "document-text-outline" },
-    { key: "communityEvents", label: "Community Events", icon: "calendar-outline" },
-    { key: "eventParticipants", label: "Volunteer Attendance", icon: "checkmark-circle-outline" },
-    { key: "certificates", label: "Certificates", icon: "ribbon-outline" },
-    { key: "events", label: "Legacy Volunteer Events", icon: "time-outline" },
-  ];
-
-  // Category paging is independent from the existing five-record paging.
-  const categoryPageCount = Math.ceil(tabs.length / CATEGORY_PAGE_SIZE);
-  const visibleCategoryTabs = tabs.slice(
-    (categoryPage - 1) * CATEGORY_PAGE_SIZE,
-    categoryPage * CATEGORY_PAGE_SIZE
-  );
-  const firstCategoryIndex = (categoryPage - 1) * CATEGORY_PAGE_SIZE;
-  const lastCategoryIndex = Math.min(categoryPage * CATEGORY_PAGE_SIZE, tabs.length);
-  const selectCategoryPage = (next: number) => {
-    const safeNext = Math.max(1, Math.min(next, categoryPageCount));
-    if (safeNext === categoryPage) return;
-    setCategoryPage(safeNext);
-    setActiveTab(tabs[(safeNext - 1) * CATEGORY_PAGE_SIZE].key);
+  const activeSection = recordSections.find(section => section.id === activeSectionId) ?? recordSections[0];
+  const activeView = activeSection.views.find(view => view.id === activeViewId) ?? activeSection.views[0];
+  const showRecordView = (view: SystemRecordView) => {
+    setActiveViewId(view.id);
+    setActiveTab(view.source);
     setSearch("");
     setPage(1);
+  };
+  const showRecordSection = (section: SystemRecordSection) => {
+    setActiveSectionId(section.id);
+    showRecordView(section.views[0]);
   };
 
   const renderRecord = (
@@ -1208,58 +1254,55 @@ export default function AllRecords() {
 
       <View style={styles.tabHeadingRow}>
         <View style={styles.tabHeadingCopy}>
-          <Text style={styles.tabHeading}>BROWSE RECORDS</Text>
-          <Text style={styles.tabHint}>
-            Categories {firstCategoryIndex + 1}–{lastCategoryIndex} of {tabs.length}
-          </Text>
-        </View>
-        <View style={styles.categoryPager} accessibilityLabel="Browse record category pages">
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Previous category page"
-            disabled={categoryPage === 1}
-            onPress={() => selectCategoryPage(categoryPage - 1)}
-            style={[styles.categoryNavButton, categoryPage === 1 && styles.categoryNavDisabled]}
-          >
-            <Ionicons name="chevron-back" size={16} color="#225F4B" />
-            <Text style={styles.categoryNavLabel}>Previous</Text>
-          </TouchableOpacity>
-          <Text style={styles.categoryPageStatus}>{categoryPage} of {categoryPageCount}</Text>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Next category page"
-            disabled={categoryPage === categoryPageCount}
-            onPress={() => selectCategoryPage(categoryPage + 1)}
-            style={[styles.categoryNavButton, categoryPage === categoryPageCount && styles.categoryNavDisabled]}
-          >
-            <Text style={styles.categoryNavLabel}>Next</Text>
-            <Ionicons name="chevron-forward" size={16} color="#225F4B" />
-          </TouchableOpacity>
+          <Text style={styles.tabHeading}>BROWSE RECORDS BY SECTION</Text>
+          <Text style={styles.tabHint}>Select a section, then the record type inside it</Text>
         </View>
       </View>
-      <View style={styles.tabs} accessibilityLabel="System record categories in workflow order">
-        {visibleCategoryTabs.map((tab) => {
-          const selected = activeTab === tab.key;
+      <View style={styles.sectionTabs} accessibilityLabel="System Records grouped sections">
+        {recordSections.map(section => {
+          const selected = activeSectionId === section.id;
           return (
             <TouchableOpacity
-              key={tab.key}
+              key={section.id}
               accessibilityRole="tab"
-              accessibilityLabel={tab.label + " records"}
+              accessibilityLabel={section.label + " section"}
               accessibilityState={{ selected }}
-              style={[styles.tabButton, selected && styles.tabButtonActive]}
-              onPress={() => {
-                setActiveTab(tab.key);
-                setSearch("");
-                setPage(1);
-              }}
+              style={[styles.sectionTab, selected && styles.sectionTabActive]}
+              onPress={() => showRecordSection(section)}
             >
-              <Ionicons name={tab.icon} size={17} color={selected ? "#FFFFFF" : "#376757"} />
-              <Text numberOfLines={1} style={[styles.tabText, selected && styles.tabTextActive]}>
-                {tab.label}
+              <Ionicons name={section.icon} size={17} color={selected ? "#FFFFFF" : "#376757"} />
+              <Text numberOfLines={1} style={[styles.sectionTabText, selected && styles.sectionTabTextActive]}>
+                {section.label}
               </Text>
             </TouchableOpacity>
           );
         })}
+      </View>
+      <View style={styles.subSection}>
+        <View style={styles.subSectionHead}>
+          <Text style={styles.subSectionTitle}>{activeSection.label.toUpperCase()} RECORDS</Text>
+          <Text style={styles.tabHint}>{activeSection.views.length} categories</Text>
+        </View>
+        <View style={styles.tabs} accessibilityLabel={activeSection.label + " record types"}>
+          {activeSection.views.map(view => {
+            const selected = activeViewId === view.id;
+            return (
+              <TouchableOpacity
+                key={view.id}
+                accessibilityRole="tab"
+                accessibilityLabel={view.label + " records"}
+                accessibilityState={{ selected }}
+                style={[styles.tabButton, selected && styles.tabButtonActive]}
+                onPress={() => showRecordView(view)}
+              >
+                <Ionicons name={view.icon} size={16} color={selected ? "#FFFFFF" : "#376757"} />
+                <Text numberOfLines={1} style={[styles.tabText, selected && styles.tabTextActive]}>
+                  {view.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       <View
@@ -1333,11 +1376,7 @@ export default function AllRecords() {
               }
             >
               {
-                tabs.find(
-                  (tab) =>
-                    tab.key ===
-                    activeTab
-                )?.label
+                activeView.label
               }
             </Text>
 
@@ -1701,55 +1740,65 @@ const styles =
     },
 
     tabHeadingRow: {
-      width: "100%",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       flexWrap: "wrap",
-      gap: 12,
-      marginBottom: 12,
+      gap: 10,
+      marginBottom: 10,
     },
-    tabHeadingCopy: { flexDirection: "column", gap: 4 },
-    tabHeading: {
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 1,
-      color: "#1A5B47",
-    },
+    tabHeadingCopy: { gap: 4 },
+    tabHeading: { fontSize: 11, fontWeight: "900", letterSpacing: 1, color: "#1A5B47" },
     tabHint: { fontSize: 11, color: "#71877C" },
-    categoryPager: { flexDirection: "row", alignItems: "center", gap: 10 },
-    categoryNavButton: {
+    sectionTabs: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "stretch",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 11,
+    },
+    sectionTab: {
+      flexGrow: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 3,
-      minHeight: 38,
-      paddingHorizontal: 11,
+      gap: 6,
+      minHeight: 45,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: "#D3E2DA",
-      borderRadius: 9,
       backgroundColor: "#FFFFFF",
+      paddingHorizontal: 10,
     },
-    categoryNavDisabled: { opacity: 0.4 },
-    categoryNavLabel: { fontSize: 11, fontWeight: "800", color: "#225F4B" },
-    categoryPageStatus: {
-      minWidth: 48,
-      textAlign: "center",
-      fontSize: 12,
-      fontWeight: "800",
-      color: "#285C49",
-      fontVariant: ["tabular-nums"],
-    },
-    tabs: {
+    sectionTabActive: { backgroundColor: "#087A62", borderColor: "#087A62" },
+    sectionTabText: { fontSize: 12, fontWeight: "800", color: "#345D4D" },
+    sectionTabTextActive: { color: "#FFFFFF" },
+    subSection: {
       width: "100%",
+      backgroundColor: "#F0F7F3",
+      borderWidth: 1,
+      borderColor: "#DDEAE3",
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+      marginBottom: 16,
+    },
+    subSectionHead: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 11,
+    },
+    subSectionTitle: { fontSize: 11, fontWeight: "900", letterSpacing: 0.7, color: "#22634C" },
+    tabs: {
       flexDirection: "row",
       alignItems: "center",
       flexWrap: "wrap",
       gap: 8,
-      paddingBottom: 11,
-      borderBottomWidth: 1,
-      borderBottomColor: "#DBE9E1",
-      marginBottom: 16,
+      paddingBottom: 12,
     },
 
     tabButton: {
