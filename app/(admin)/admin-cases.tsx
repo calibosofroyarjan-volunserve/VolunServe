@@ -1655,12 +1655,6 @@ export default function AdminCases() {
       Boolean(volunteerBarangay) &&
       caseBarangay === volunteerBarangay;
 
-    const availabilityText = volunteer.availability.join(" ").toLowerCase();
-    const unavailable =
-      availabilityText.includes("unavailable") ||
-      availabilityText.includes("off duty") ||
-      availabilityText.includes("off-duty");
-
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1698,15 +1692,11 @@ export default function AdminCases() {
         skillMatches,
       };
     }
-    if (unavailable) {
-      return { eligible: false, reason: "Currently unavailable / off duty", skillMatches };
-    }
-
     return {
       eligible: true,
       reason: specializedSkills.length
-        ? "Qualified for this emergency"
-        : "Approved Volunteer available for support",
+        ? "Qualified Volunteer — support offer can be sent offline"
+        : "Approved Volunteer — support offer can be sent offline",
       skillMatches,
     };
   };
@@ -1714,13 +1704,9 @@ export default function AdminCases() {
   const volunteerCandidatesForCase = (incident: DisasterCase) => {
     const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
 
-    if (!caseBarangay) return [];
-
     return approvedVolunteers
       .filter((volunteer) => {
         const availabilityText = volunteer.availability.join(" ").toLowerCase();
-        const sameBarangay =
-          normalizeBarangay(volunteer.barangay) === caseBarangay;
         const isReporter =
           String(volunteer.uid || "").trim() ===
           String(incident.reporterUid || "").trim();
@@ -1738,12 +1724,14 @@ export default function AdminCases() {
         // The Resident who filed this emergency must never appear in the
         // Volunteer candidate pool, even if the same account also has
         // approved Volunteer access.
-        return !isReporter && sameBarangay && skillSearchMatch && availabilityMatch;
+        return !isReporter && skillSearchMatch && availabilityMatch;
       })
       .sort((a, b) => {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
+        // Prefer local, eligible volunteers, but show approved out-of-barangay
+        // profiles as well so admins understand why a candidate is restricted.
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
@@ -4113,25 +4101,6 @@ export default function AdminCases() {
                     <Text style={styles.locationLiveButtonText}>Open Live Map</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.locationGoogleButton}
-                    disabled={
-                      !Number.isFinite(incident.latitude) ||
-                      !Number.isFinite(incident.longitude)
-                    }
-                    onPress={() => {
-                      if (
-                        !Number.isFinite(incident.latitude) ||
-                        !Number.isFinite(incident.longitude)
-                      ) return;
-
-                      Linking.openURL(
-                        `https://www.google.com/maps/search/?api=1&query=${incident.latitude},${incident.longitude}`
-                      );
-                    }}
-                  >
-                    <Text style={styles.locationGoogleButtonText}>Google Maps ↗</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -5855,7 +5824,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Volunteers are optional and never replace the official LGU response. Only approved Volunteers from {barangayDisplay(caseBarangayValue(incident))} are shown.
+                              All approved Volunteers are listed, including offline profiles. Local qualified candidates can receive an offer after case verification; Volunteers must accept before responding.
                             </Text>
                           </View>
                         </View>
@@ -5869,7 +5838,7 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Auto-grouped from the emergency barangay and each Volunteer profile.
+                          Local Volunteers appear first; out-of-barangay profiles are visible but cannot be assigned to this case.
                         </Text>
                       </View>
 
@@ -5900,21 +5869,22 @@ export default function AdminCases() {
                           <TextInput
                             style={styles.personnelCompactFilter}
                             value={availabilityFilter}
-                            placeholder="Availability"
+                            placeholder="Filter availability (optional)"
                             placeholderTextColor="#94a3b8"
                             onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
                           />
                         </View>
                       </View>
 
-                      {!dispatchReady ? (
+                      {!dispatchReady && (
                         <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Volunteer support is not available yet</Text>
+                          <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
                           <Text style={styles.personnelCleanEmptyText}>
-                            Validate the emergency case before requesting local Volunteer support.
+                            Volunteers remain visible even when offline. Validate this emergency before sending an official support offer.
                           </Text>
                         </View>
-                      ) : volunteerCandidates.length === 0 ? (
+                      )}
+                      {volunteerCandidates.length === 0 ? (
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>
                             {caseBarangayValue(incident)
@@ -5940,11 +5910,11 @@ export default function AdminCases() {
                               !caseOpenForSupport ||
                               busyKey === key;
                             const reasonLower = eligibility.reason.toLowerCase();
-                            const availabilityLabel = reasonLower.includes("busy")
-                              ? "Busy"
-                              : reasonLower.includes("unavailable") || reasonLower.includes("off duty")
-                                ? "Unavailable"
-                                : "Available";
+                            const availabilityText = volunteer.availability.join(" ").toLowerCase();
+                            const offline = /offline|unavailable|off.?duty/.test(availabilityText);
+                            const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
+                              !eligibility.eligible ? "Restricted" :
+                              offline ? "Offline · offer allowed" : "Eligible";
 
                             return (
                               <View key={volunteer.uid} style={styles.personnelCompactRow}>
@@ -6017,7 +5987,7 @@ export default function AdminCases() {
                                       ? "Sending…"
                                       : eligibility.eligible && volunteerSupportAvailable && caseOpenForSupport
                                         ? "Offer Support"
-                                        : "Not Available"}
+                                        : "Not Eligible"}
                                   </Text>
                                 </TouchableOpacity>
                               </View>
@@ -6041,7 +6011,7 @@ export default function AdminCases() {
                           <View>
                             <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
-                              Offer support to an available Volunteer from {barangayDisplay(caseBarangayValue(incident))}.
+                              Send a support offer to an approved, qualified local Volunteer, even when offline. The Volunteer must accept to respond.
                             </Text>
                           </View>
                         </View>
@@ -6592,14 +6562,16 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#F6F8F7",
-  },
+    scrollbarWidth: "thin",
+    scrollbarColor: "#8CAA9A #F6F8F7",
+  } as any,
   container: {
     width: "100%",
     maxWidth: 1600,
     alignSelf: "center",
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 22,
   },
   center: {
     flex: 1,
@@ -7318,8 +7290,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
   personnelAssignCompact: {
-    width: 76,
-    minHeight: 27,
+    minWidth: 105,
+    minHeight: 36,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -7334,8 +7306,8 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactText: {
     color: "#ffffff",
-    fontSize: 7,
-    fontWeight: "900",
+    fontSize: 10,
+    fontWeight: "800",
   },
   personnelAssignCompactTextDisabled: {
     color: "#94a3b8",
@@ -7362,8 +7334,8 @@ const styles = StyleSheet.create({
   },
   personnelBarangayHint: {
     color: "#0f766e",
-    fontSize: 8.2,
-    fontWeight: "700",
+    fontSize: 10.5,
+    fontWeight: "600",
   },
   personnelSupportNotice: {
     marginTop: 7,
@@ -7404,8 +7376,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelCompactFilter: {
-    width: 102,
-    minHeight: 27,
+    width: 154,
+    minHeight: 36,
     borderWidth: 1,
     borderColor: "#d9e1e8",
     borderRadius: 8,
@@ -7413,7 +7385,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     color: "#0f172a",
     backgroundColor: "#ffffff",
-    fontSize: 7.8,
+    fontSize: 10.5,
   },
   personnelSupportDivider: {
     marginTop: 11,
