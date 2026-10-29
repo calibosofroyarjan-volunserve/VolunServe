@@ -1,0 +1,31 @@
+name: Super Admin Directory UI Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/superadmin-accounts-overview-table-20261029
+  pull_request:
+    paths:
+      - "app/(superadmin)/admin-accounts.tsx"
+      - "app/(superadmin)/index.tsx"
+      - "app/(superadmin)/_layout.tsx"
+      - "scripts/test-superadmin-accounts-directory.cjs"
+      - ".github/workflows/superadmin-accounts-directory-validation.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify professional Admin Accounts layout and permissions
+        run: node --test scripts/test-superadmin-accounts-directory.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export Expo web app (no deploy)
+        run: npx expo export --platform web
