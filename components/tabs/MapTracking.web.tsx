@@ -630,6 +630,29 @@ const mapDocument = `
         category.className = "place-popup-category";
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
         card.appendChild(category);
+        if (item.photoUrl && /^https:\/\//.test(item.photoUrl)) {
+          const photo = document.createElement("img");
+          photo.src = item.photoUrl;
+          photo.alt = "Actual exterior of " + item.name;
+          photo.loading = "lazy";
+          photo.decoding = "async";
+          photo.style.cssText = "display:block;width:100%;height:146px;object-fit:cover;border-radius:12px;margin:10px 0 5px;background:#e7f0ee;";
+          photo.onerror = () => { photo.remove(); };
+          card.appendChild(photo);
+          if (item.photoCredit) {
+            const credit = document.createElement("small");
+            credit.textContent = "Photo: " + item.photoCredit;
+            credit.style.cssText = "display:block;color:#64748b;font-size:10px;margin-bottom:6px;";
+            card.appendChild(credit);
+          }
+        }
+        if (item.address) {
+          const address = document.createElement("p");
+          address.className = "place-popup-note";
+          address.style.fontWeight = "600";
+          address.textContent = "📍 " + item.address;
+          card.appendChild(address);
+        }
         const note = document.createElement("p");
         note.className = "place-popup-note";
         note.textContent = item.note;
