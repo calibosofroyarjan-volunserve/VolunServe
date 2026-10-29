@@ -61,7 +61,8 @@ assert(saOverview.includes('onSnapshot(') &&
   saOverview.includes('adminUids.includes(item.actorUid)') &&
   saOverview.includes('router.push("/(superadmin)/admin-logs"') &&
   saLayout.includes('route: "/(superadmin)/admin-accounts"') &&
-  saLayout.includes('route: "/(superadmin)/system-settings"') &&
+  saLayout.includes('router.push("/(superadmin)/system-settings"') &&
+  saLayout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
   !saOverview.includes('Pending LGU Applications'),
   "Super Admin overview must show live governance activity with working navigation, without reintroducing removed LGU Staff onboarding");
 assert(adminLogin.includes("Request LGU Admin Access") &&
