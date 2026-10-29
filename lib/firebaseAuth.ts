@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   EmailAuthProvider,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
@@ -599,6 +600,10 @@ export const signUpUser = async (
         serverTimestamp(),
     });
     await batch.commit();
+    if (!usesGoogle && !user.emailVerified) {
+      await sendEmailVerification(user);
+      await signOut(auth);
+    }
     return user;
   } catch (err: any) {
     const message =
@@ -621,6 +626,10 @@ export const loginUser = async (
         password
       );
     const user = userCredential.user;
+    if (!user.emailVerified) {
+      await signOut(auth);
+      throw new Error("Please verify your email using the link sent to your inbox before signing in.");
+    }
     const profileRef =
       doc(db, "users", user.uid);
     const profileSnapshot =
