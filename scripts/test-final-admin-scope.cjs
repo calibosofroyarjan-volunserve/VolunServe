@@ -50,8 +50,9 @@ for(const entry of [
 for(const route of [
   "/(admin)/admin-cases","/(admin)/assistance-requests","/(admin)/identity-reviews",
   "/(admin)/account-approvals","/(admin)/community-events","/(admin)/community-attendance",
-  "/(admin)/donor-monitoring","/(admin)/admin-analytics"
+  "/(admin)/donor-monitoring"
 ]) assert(adminLayout.includes(route),"Missing existing operational route "+route);
+assert(!adminLayout.includes('label: "Analytics"') && !adminLayout.includes('label: "Volunteer Events"'), "Redundant Admin destinations must not return");
 assert(!saLayout.includes("Donation Management") &&
   !saRecords.includes('label: "Donations"') &&
   !saRecords.includes('label="Donations"') &&
