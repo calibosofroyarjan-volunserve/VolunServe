@@ -9,21 +9,25 @@ const rules = get("firestore.rules");
 
 // The reference dashboard is a visual pattern, never sales statistics or demo counters.
 for (const title of [
-  "Admin accounts", "Active LGU Admins", "Suspended Admins",
-  "Recent LGU Admin activity", "System & access changes",
-  "Registered accounts",
-]) assert(superView.includes(title),"Missing real Super Admin overview area: "+title);
+  "Admin Accounts", "Active LGU Admins", "Suspended Admins",
+  "Recent LGU Admin Activity", "System & Access Changes",
+  "Registered Accounts",
+]) assert(superView.toLowerCase().includes(title.toLowerCase()),"Missing real Super Admin overview area: "+title);
 assert(superView.includes('collection(db,source)') &&
   superView.includes('["adminLogs", "adminActivityLogs"]') &&
   superView.includes('adminUids.includes(item.actorUid)') &&
   superView.includes('millis(b.createdAt) - millis(a.createdAt)'),
   "Super Admin activity must use real signed-in authorized Firestore audit data ordered by recorded timestamp");
+const superLayout = get("app/(superadmin)/_layout.tsx");
 assert(superView.includes('onSnapshot(') &&
-  superView.includes('item.role === "applicant" && item.status === "pending_review"') &&
-  superView.includes('router.push("/(superadmin)/admin-accounts"') &&
-  superView.includes('router.push("/(superadmin)/admin-logs"') &&
-  superView.includes('router.push("/(superadmin)/system-settings"'),
-  "Super Admin overview must navigate to actual workflow pages");
+  superView.includes('orientation="vertical"') &&
+  superView.includes('ListPagination') &&
+  superLayout.includes('route: "/(superadmin)/admin-accounts"') &&
+  superLayout.includes('route: "/(superadmin)/system-settings"') &&
+  superView.includes('router.push("/(superadmin)/admin-logs"'),
+  "Super Admin overview must use real live records, vertical chart, pagination and existing governance routes");
+assert(!superView.includes("Pending LGU Applications"),
+  "Do not restore removed LGU Staff onboarding panels into premium overview");
 assert(!superView.includes("Market Revenue") && !superView.includes("Daily Sales"),
   "Do not copy fake Xacton commerce figures");
 for(const title of [
