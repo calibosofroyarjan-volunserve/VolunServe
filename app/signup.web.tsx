@@ -1,8 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { GoogleAuthProvider, onAuthStateChanged, type User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,7 +20,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { signUpUser } from "../lib/firebaseAuth";
-import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 type Step = 1 | 2 | 3 | 4;
@@ -419,7 +416,7 @@ export default function Signup() {
 
   const [step, setStep] = useState<Step>(1);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [googleBound, setGoogleBound] = useState(false);
+  const googleBound = false;
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -570,44 +567,6 @@ export default function Signup() {
       scrollTop();
     }
   }, [scrollTop, step]);
-
-  // Google sign-in authenticates the email, but it does not create a
-  // VolunServe resident profile. Only the final registration step does that.
-  const applyGoogleIdentity = useCallback((user: User) => {
-    const nameParts = (user.displayName || "").trim().split(/\s+/).filter(Boolean);
-    const inferredLastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
-    const inferredFirstName = nameParts.length > 1
-      ? nameParts.slice(0, -1).join(" ")
-      : nameParts[0] || "";
-    const googleEmail = (user.email || "").trim().toLowerCase();
-    setFormData((previous) => ({
-      ...previous,
-      email: googleEmail || previous.email,
-      firstName: previous.firstName || sanitizeName(inferredFirstName),
-      lastName: previous.lastName || sanitizeName(inferredLastName),
-      // Birthdate, phone, barangay and other details must come from user.
-    }));
-    setGoogleBound(true);
-  }, []);
-
-  // Resume signup after Google OAuth (including when redirected here from
-  // the login page). Do not treat an Auth-only user as a completed account.
-  useEffect(() => {
-    let active = true;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user || !user.providerData.some(
-        (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
-      )) return;
-      try {
-        const profileSnapshot = await getDoc(doc(db, "users", user.uid));
-        if (active && !profileSnapshot.exists()) applyGoogleIdentity(user);
-      } catch {
-        // The final registration step will report any actual data-access
-        // errors; do not assume that a failed read means no profile exists.
-      }
-    });
-    return () => { active = false; unsubscribe(); };
-  }, [applyGoogleIdentity]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
@@ -1101,11 +1060,7 @@ export default function Signup() {
 
                   <SectionTitle
                     title="Password Security"
-                    subtitle={
-                      googleBound
-                        ? "Create a VolunServe password so this same account can sign in with Google or email/password."
-                        : "Create a strong password to protect your account."
-                    }
+                    subtitle="Create a strong password to protect your account."
                   />
 
                   <View style={styles.formRow}>
