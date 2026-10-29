@@ -171,7 +171,7 @@ export default function SuperAdminDashboard() {
         {([
           { key:"users",label:"Registered Accounts",value:total,icon:"people" as const,detail:"Total system users" },
           { key:"active",label:"Active LGU Admins",value:staffStats.active,icon:"shield-checkmark" as const,detail:"Authorized personnel" },
-          { key:"pending",label:"Pending LGU Applications",value:staffStats.pending,icon:"document-text" as const,detail:"For review and approval" },
+          { key:"pending",label:"Admin Accounts",value:staffStats.active+staffStats.suspended,icon:"people" as const,detail:"Managed administrator records" },
           { key:"suspended",label:"Suspended Admins",value:staffStats.suspended,icon:"lock-closed" as const,detail:"Restricted access accounts" },
         ]).map(item => (
           <View key={item.key} style={[styles.metric,compact && styles.metricCompact]}>
