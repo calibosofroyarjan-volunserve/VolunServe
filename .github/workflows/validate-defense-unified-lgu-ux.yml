@@ -1,0 +1,41 @@
+name: Validate Final Defense Unified LGU Dispatch and UX
+on:
+  push:
+    branches:
+      - fix/final-defense-unified-lgu-workspace-volunteer-dispatch-20261030
+  pull_request:
+    branches: [main]
+    paths:
+      - app/(admin)/**
+      - scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+      - .github/workflows/validate-defense-unified-lgu-ux.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Audit navigation, offline volunteers, real-time map and response security
+        run: |
+          node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --pretty false
+      - name: Build Expo web (not production deploy)
+        run: npx expo export --platform web
