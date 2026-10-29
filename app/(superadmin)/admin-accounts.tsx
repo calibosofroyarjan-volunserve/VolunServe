@@ -135,8 +135,10 @@ export default function AdminAccounts() {
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
+  const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
+  const compactDirectory = viewportWidth < 930;
   const ADMIN_PAGE_SIZE = 5;
-  React.useEffect(() => { setAdminPage(1); }, [search, filter]);
+  React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter]);
 
   const [
     showAddAdmin,
@@ -958,13 +960,13 @@ export default function AdminAccounts() {
             <Text
               style={styles.title}
             >
-              LGU Staff & Admin Accounts
+              Admin Accounts
             </Text>
 
             <Text
               style={styles.subtitle}
             >
-              Review submitted LGU staff information first, verify identity and official appointment, then promote eligible staff to LGU Admin. Manage existing Admin access below.
+              Review approved LGU administrators, manage access and track changes through the audit log.
             </Text>
           </View>
 
@@ -975,50 +977,6 @@ export default function AdminAccounts() {
             {creationNotice}
           </Text>
         )}
-
-        <View style={styles.accessFlow}>
-          <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
-          <View style={styles.accessFlowSteps}>
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>01</Text><Text style={styles.stepText}>Receive staff application</Text></View>
-            <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>02</Text><Text style={styles.stepText}>Verify official LGU credentials</Text></View>
-            <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Promote to Admin & record audit</Text></View>
-          </View>
-          <Text style={styles.flowHint}>Only the pending LGU staff application queue below is the standard entry point. Verify both identity and employment independently; promote only confirmed staff. Admin accounts can be suspended or revoked after approval.</Text>
-        </View>
-        <View style={{
-          borderWidth:1,borderColor:"#D6E9DD",borderRadius:14,
-          backgroundColor:"#F5FBF7",padding:15,marginBottom:16,gap:10
-        }}>
-          <Text style={{fontSize:15,fontWeight:"900",color:"#174936"}}>
-            LGU Staff Applications · {pendingLguApplications.length} Pending
-          </Text>
-          <Text style={{fontSize:11,color:"#527464",lineHeight:17}}>
-            LGU personnel submit their information first. As programmer Super Admins, review their submitted details and independently confirm identity, LGU employment, and appointment authority. Only verified applicants can be promoted to operational Admin. No access while pending.
-          </Text>
-          {pendingLguApplications.length===0 ? (
-            <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
-          ) : pendingLguApplications.slice(0,20).map(account => (
-            <View key={account.id} style={{padding:12,backgroundColor:"#FFFFFF",
-              borderWidth:1,borderColor:"#DCEAE1",borderRadius:10,
-              flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12}}>
-              <View style={{flex:1,minWidth:180}}>
-                <Text style={{fontWeight:"800",color:"#174936"}}>{nameFor(account)}</Text>
-                <Text style={{fontSize:11,color:"#577464"}}>{account.email}</Text>
-                <Text style={{fontSize:11,color:"#577464"}}>{String((account as any).lguOffice||"Unspecified office")} · {String((account as any).lguPosition||"Unspecified position")}</Text>
-                <Text style={{fontSize:10,color:"#698679"}}>Application reference: {String((account as any).appointmentReference||"Not provided")}</Text>
-              </View>
-              <TouchableOpacity accessibilityRole="button"
-                accessibilityLabel={"Review LGU credentials for "+nameFor(account)}
-                style={{backgroundColor:"#087D60",paddingVertical:11,
-                  paddingHorizontal:14,borderRadius:9}}
-                onPress={()=>openAdminAction("promote",account)}>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Review Application</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
 
         <View
           style={
@@ -1148,7 +1106,7 @@ export default function AdminAccounts() {
               setSearch
             }
             placeholder={
-              "Search LGU Admin name, email, or barangay"
+              "Search Admin name, email, barangay or phone"
             }
             placeholderTextColor="#94A3B8"
           />
@@ -1202,350 +1160,101 @@ export default function AdminAccounts() {
           })}
         </View>
 
-        {adminAccounts.length ===
-        0 ? (
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-            <View
-              style={
-                styles.emptyIcon
-              }
-            >
-              <Ionicons
-                name="people-outline"
-                size={34}
-                color="#0F766E"
-              />
+
+        <View style={styles.directoryPanel}>
+          <View style={styles.dirHeading}>
+            <View style={{flex:1}}>
+              <Text style={styles.dirTitle}>Administrator Directory</Text>
+              <Text style={styles.dirNote}>Authorized accounts · Status and access management</Text>
             </View>
-
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              No Admin accounts
-              found
-            </Text>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              No matching LGU Admin accounts. Adjust your search or start a staff access review.
-            </Text>
+            <Text style={styles.dirTag}>{adminAccounts.length} records</Text>
           </View>
-        ) : (
-          pagedAdminAccounts.map(
-            (account) => {
-              const isSaving =
-                savingUid ===
-                account.id;
-
-              const suspended =
-                account.status ===
-                  "suspended" ||
-                account.adminStatus ===
-                  "suspended";
-
-              return (
-                <View
-                  key={
-                    account.id
-                  }
-                  style={
-                    styles.adminCard
-                  }
-                >
-                  <View
-                    style={
-                      styles.adminTop
-                    }
-                  >
-                    <View
-                      style={
-                        styles.avatar
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.avatarText
-                        }
-                      >
-                        {nameFor(
-                          account
-                        )
-                          .charAt(0)
-                          .toUpperCase()}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={{
-                        flex: 1,
-                      }}
-                    >
-                      <Text
-                        style={
-                          styles.adminName
-                        }
-                      >
-                        {nameFor(
-                          account
-                        )}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.adminEmail
-                        }
-                      >
-                        {account.email ||
-                          "-"}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusBadge,
-
-                        suspended
-                          ? styles.statusSuspended
-                          : styles.statusActive,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.statusDot,
-
-                          {
-                            backgroundColor:
-                              suspended
-                                ? "#D97706"
-                                : "#16A34A",
-                          },
-                        ]}
-                      />
-
-                      <Text
-                        style={[
-                          styles.statusBadgeText,
-
-                          {
-                            color:
-                              suspended
-                                ? "#92400E"
-                                : "#166534",
-                          },
-                        ]}
-                      >
-                        {suspended
-                          ? "SUSPENDED"
-                          : "ACTIVE"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View
-                    style={
-                      styles.detailsGrid
-                    }
-                  >
-                    <View
-                      style={
-                        styles.detailItem
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        ROLE
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        Administrator
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.detailItem
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        BARANGAY
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {account.barangay ||
-                          "Not assigned"}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.detailItem
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        PHONE
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {account.phoneNumber ||
-                          "-"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View
-                    style={
-                      styles.actions
-                    }
-                  >
-                    {suspended ? (
-                      <TouchableOpacity
-                        disabled={
-                          isSaving
-                        }
-                        style={[
-                          styles.actionButton,
-                          styles.activateButton,
-                        ]}
-                        onPress={() =>
-                          openAdminAction(
-                            "activate",
-                            account
-                          )
-                        }
-                      >
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={17}
-                          color="#FFFFFF"
-                        />
-
-                        <Text
-                          style={
-                            styles.actionButtonText
-                          }
-                        >
-                          {isSaving
-                            ? "Saving..."
-                            : "Activate"}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        disabled={
-                          isSaving
-                        }
-                        style={[
-                          styles.actionButton,
-                          styles.suspendButton,
-                        ]}
-                        onPress={() =>
-                          openAdminAction(
-                            "suspend",
-                            account
-                          )
-                        }
-                      >
-                        <Ionicons
-                          name="pause-circle-outline"
-                          size={17}
-                          color="#FFFFFF"
-                        />
-
-                        <Text
-                          style={
-                            styles.actionButtonText
-                          }
-                        >
-                          {isSaving
-                            ? "Saving..."
-                            : "Suspend"}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                      disabled={
-                        isSaving
-                      }
-                      style={[
-                        styles.actionButton,
-                        styles.revokeButton,
-                      ]}
-                      onPress={() =>
-                        openAdminAction(
-                          "revoke",
-                          account
-                        )
-                      }
-                    >
-                      <Ionicons
-                        name="shield-outline"
-                        size={17}
-                        color="#FFFFFF"
-                      />
-
-                      <Text
-                        style={
-                          styles.actionButtonText
-                        }
-                      >
-                        Remove Admin
-                      </Text>
-                    </TouchableOpacity>
+          <View style={styles.dirResults}>
+            <Text style={styles.dirNote}>{adminAccounts.length
+              ? `Showing ${(safeAdminPage-1)*ADMIN_PAGE_SIZE+1}–${Math.min(safeAdminPage*ADMIN_PAGE_SIZE,adminAccounts.length)} of ${adminAccounts.length}`
+              : "Showing 0 of 0"} records · 5 per page</Text>
+            <Text style={styles.dirNote}>Page {safeAdminPage} of {adminPageCount}</Text>
+          </View>
+          {!compactDirectory && adminAccounts.length > 0 && <View style={styles.dirColumns}>
+            {(["ADMINISTRATOR","BARANGAY","PHONE","STATUS"] as const).map((label,i)=>
+              <Text key={label} style={[styles.dirColumn,{flex:i===0?2.3:1}]}>{label}</Text>)}
+            <Text style={[styles.dirColumn,{width:100,textAlign:"right"}]}>ACTION</Text>
+          </View>}
+          {adminAccounts.length === 0 ? <View style={styles.dirEmpty}>
+            <Ionicons name="people-outline" size={28} color="#78998B"/>
+            <Text style={styles.dirTitle}>No matching Admin accounts</Text>
+            <Text style={styles.dirNote}>Change your search or filter to see accounts.</Text>
+          </View> : pagedAdminAccounts.map((account,index)=>{
+            const suspended = account.status === "suspended" || account.adminStatus === "suspended";
+            const isSaving = savingUid === account.id;
+            const expanded = expandedAdminId === account.id;
+            return <View key={account.id} style={[styles.dirRecord,index%2===1 && {backgroundColor:"#FCFDFC"}]}>
+              <View style={[styles.dirRow,compactDirectory && {flexWrap:"wrap"}]}>
+                <View style={[styles.dirPerson,!compactDirectory && {flex:2.3}]}>
+                  <View style={styles.dirAvatar}><Text style={styles.dirAvatarText}>{nameFor(account).charAt(0).toUpperCase()}</Text></View>
+                  <View style={{flex:1,minWidth:0}}>
+                    <Text style={styles.dirName} numberOfLines={1}>{nameFor(account)}</Text>
+                    <Text style={styles.dirNote} numberOfLines={1}>{account.email || "No email"}</Text>
+                    {compactDirectory && <Text style={styles.dirNote}>{account.barangay || "Barangay not assigned"}</Text>}
                   </View>
                 </View>
-              );
-            }
-          )
-        )}
-        {adminAccounts.length > 0 && (
-          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingVertical:14}}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous Admin accounts page"
-              disabled={safeAdminPage <= 1} onPress={()=>setAdminPage(Math.max(1,safeAdminPage-1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage<=1?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Previous</Text>
+                {!compactDirectory && <>
+                  <Text style={[styles.dirValue,{flex:1}]} numberOfLines={2}>{account.barangay || "Not assigned"}</Text>
+                  <Text style={[styles.dirValue,{flex:1}]} numberOfLines={1}>{account.phoneNumber || "—"}</Text>
+                </>}
+                <View style={!compactDirectory && {flex:1}}>
+                  <View style={[styles.dirStatus,{backgroundColor:suspended?"#FFF3DF":"#E0F7EA"}]}>
+                    <Ionicons name="ellipse" size={7} color={suspended?"#B8750D":"#13865F"}/>
+                    <Text style={[styles.dirStatusText,{color:suspended?"#986008":"#08704F"}]}>{suspended?"SUSPENDED":"ACTIVE"}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={(expanded?"Close ":"Manage ")+nameFor(account)}
+                  accessibilityState={{expanded}} style={styles.dirManage}
+                  onPress={()=>setExpandedAdminId(expanded?null:account.id)}>
+                  <Text style={styles.dirManageText}>{expanded?"Close":"Manage"}</Text>
+                  <Ionicons name={expanded?"chevron-up":"chevron-down"} size={14} color="#08795B"/>
+                </TouchableOpacity>
+              </View>
+              {expanded && <View style={styles.dirExpanded}>
+                <View style={{flex:1,minWidth:210}}>
+                  <Text style={styles.dirName}>Admin Access Controls</Text>
+                  <Text style={styles.dirNote}>Administrator · {account.barangay || "No barangay"} · {account.phoneNumber || "No phone"}</Text>
+                  <Text style={styles.dirNote}>Actions require confirmation and are recorded in the audit log.</Text>
+                </View>
+                <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
+                  <TouchableOpacity disabled={isSaving} style={styles.dirAction}
+                    onPress={()=>openAdminAction(suspended?"activate":"suspend",account)}>
+                    <Ionicons name={suspended?"checkmark-circle-outline":"pause-circle-outline"} size={15} color="#087C5E"/>
+                    <Text style={styles.dirActionText}>{isSaving?"Saving...":suspended?"Activate":"Suspend"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity disabled={isSaving} style={[styles.dirAction,{borderColor:"#F2D5D0"}]}
+                    onPress={()=>openAdminAction("revoke",account)}>
+                    <Ionicons name="shield-outline" size={15} color="#A84C46"/>
+                    <Text style={[styles.dirActionText,{color:"#A84C46"}]}>Remove Admin</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>}
+            </View>;
+          })}
+          {adminPageCount>1 && <View style={styles.dirPaging}>
+            <TouchableOpacity disabled={safeAdminPage<=1} accessibilityLabel="Previous Admin accounts page"
+              style={[styles.dirPage,safeAdminPage<=1 && {opacity:0.35}]}
+              onPress={()=>{setAdminPage(Math.max(1,safeAdminPage-1));setExpandedAdminId(null);}}>
+              <Text style={styles.dirPageText}>Previous</Text>
             </TouchableOpacity>
-            <Text style={{fontWeight:"700",color:"#355D50"}}>
-              Page {safeAdminPage} of {adminPageCount} · {adminAccounts.length} accounts
-            </Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next Admin accounts page"
-              disabled={safeAdminPage >= adminPageCount} onPress={()=>setAdminPage(Math.min(adminPageCount,safeAdminPage+1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage>=adminPageCount?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Next</Text>
+            {Array.from({length:adminPageCount},(_,i)=>i+1).filter(n=>adminPageCount<=7||n===1||n===adminPageCount||Math.abs(n-safeAdminPage)<=1).map(n=>
+              <TouchableOpacity key={n} accessibilityRole="button" accessibilityLabel={`Admin page ${n}`}
+                style={[styles.dirPage,{minWidth:36},n===safeAdminPage&&{backgroundColor:"#087F63",borderColor:"#087F63"}]}
+                onPress={()=>{setAdminPage(n);setExpandedAdminId(null);}}>
+                <Text style={[styles.dirPageText,n===safeAdminPage&&{color:"#FFFFFF"}]}>{n}</Text>
+              </TouchableOpacity>)}
+            <TouchableOpacity disabled={safeAdminPage>=adminPageCount} accessibilityLabel="Next Admin accounts page"
+              style={[styles.dirPage,safeAdminPage>=adminPageCount && {opacity:0.35}]}
+              onPress={()=>{setAdminPage(Math.min(adminPageCount,safeAdminPage+1));setExpandedAdminId(null);}}>
+              <Text style={styles.dirPageText}>Next</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          </View>}
+        </View>
       </ScrollView>
 
       <CreateLguAdminModal
@@ -2117,6 +1826,34 @@ export default function AdminAccounts() {
 
 const styles =
   StyleSheet.create({
+
+    directoryPanel:{backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
+    dirHeading:{flexDirection:"row",alignItems:"center",gap:12,padding:18},
+    dirTitle:{fontSize:16,fontWeight:"800",color:"#173D32"},
+    dirNote:{color:"#6A8579",fontSize:11,marginTop:3,lineHeight:17},
+    dirTag:{fontSize:11,fontWeight:"800",color:"#087859",backgroundColor:"#E9F7EF",paddingHorizontal:11,paddingVertical:8,borderRadius:9},
+    dirResults:{flexDirection:"row",justifyContent:"space-between",flexWrap:"wrap",gap:8,padding:14,borderTopWidth:1,borderColor:"#E5EEE9"},
+    dirColumns:{flexDirection:"row",gap:12,alignItems:"center",backgroundColor:"#F0F5F2",paddingHorizontal:16,paddingVertical:12,borderTopWidth:1,borderBottomWidth:1,borderColor:"#DFECE3"},
+    dirColumn:{fontSize:10,fontWeight:"800",color:"#607B6F",letterSpacing:0.5},
+    dirEmpty:{padding:36,alignItems:"center",gap:8},
+    dirRecord:{borderBottomWidth:1,borderColor:"#E6EEE8"},
+    dirRow:{paddingHorizontal:16,paddingVertical:13,flexDirection:"row",alignItems:"center",gap:12},
+    dirPerson:{flexDirection:"row",alignItems:"center",gap:10,flex:1,minWidth:0},
+    dirAvatar:{width:36,height:36,borderRadius:11,backgroundColor:"#E2F5EB",justifyContent:"center",alignItems:"center"},
+    dirAvatarText:{fontWeight:"900",fontSize:14,color:"#128362"},
+    dirName:{fontSize:12,fontWeight:"800",color:"#194534"},
+    dirValue:{fontSize:11,color:"#557163",lineHeight:18},
+    dirStatus:{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:6,borderRadius:99,paddingVertical:7,paddingHorizontal:9},
+    dirStatusText:{fontSize:10,fontWeight:"900"},
+    dirManage:{width:100,minHeight:36,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:5,borderWidth:1,borderColor:"#D1E8DC",backgroundColor:"#F4FAF6",borderRadius:9},
+    dirManageText:{fontSize:11,fontWeight:"800",color:"#08795B"},
+    dirExpanded:{padding:16,backgroundColor:"#F5FAF7",borderTopWidth:1,borderColor:"#E0ECE4",flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:14},
+    dirAction:{minHeight:39,flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:13,borderWidth:1,borderColor:"#D0E7DA",borderRadius:9,backgroundColor:"#FFFFFF"},
+    dirActionText:{color:"#087C5E",fontSize:11,fontWeight:"800"},
+    dirPaging:{flexDirection:"row",justifyContent:"flex-end",alignItems:"center",flexWrap:"wrap",padding:15,gap:7},
+    dirPage:{minHeight:36,paddingHorizontal:12,borderWidth:1,borderColor:"#D5E7DC",borderRadius:8,backgroundColor:"#FFFFFF",justifyContent:"center",alignItems:"center"},
+    dirPageText:{fontSize:11,fontWeight:"800",color:"#08785C"},
+
     credentialReview: { marginTop: 20, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 19 },
     applicantDetails: { padding: 17, marginTop: 14, marginBottom: 16, backgroundColor: "#F3F9F6", borderWidth: 1, borderColor: "#DCEBE2", borderRadius: 13 },
     reviewKicker: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4, color: "#247459" },
