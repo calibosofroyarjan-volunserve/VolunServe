@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
+import ListPagination from "../../components/ui/ListPagination";
 import {
   ActivityIndicator,
   Image,
@@ -165,6 +166,7 @@ export default function CommunityEventAdminScreen() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [filter, setFilter] = useState<Filter>("pending");
   const [search, setSearch] = useState("");
+  const [recordPage, setRecordPage] = useState(1);
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
@@ -238,6 +240,9 @@ export default function CommunityEventAdminScreen() {
           millis(b.createdAt) - millis(a.createdAt)
       );
   }, [proposals, filter, search]);
+  const proposalPages = Math.max(1, Math.ceil(visible.length / 5));
+  const activeProposalPage = Math.max(1, Math.min(recordPage, proposalPages));
+  const pagedProposals = visible.slice((activeProposalPage - 1) * 5, activeProposalPage * 5);
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
   // Read only profiles needed for visible proposal cards, not the full user directory.
@@ -586,7 +591,7 @@ export default function CommunityEventAdminScreen() {
         <TextInput
           style={styles.search}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={value => { setSearch(value); setRecordPage(1); }}
           placeholder="Search event, barangay, or Resident"
           placeholderTextColor="#93A4B1"
         />
@@ -603,7 +608,7 @@ export default function CommunityEventAdminScreen() {
           ] as Filter[]).map((item) => (
             <Pressable
               key={item}
-              onPress={() => setFilter(item)}
+              onPress={() => { setFilter(item); setRecordPage(1); }}
               style={[
                 styles.chip,
                 filter === item && styles.chipActive,
@@ -646,6 +651,7 @@ export default function CommunityEventAdminScreen() {
           </Text>
         </View>
       )}
+      <ListPagination page={activeProposalPage} total={visible.length} pageSize={5} onChange={setRecordPage} />
       {fetching ? (
         <ActivityIndicator
           color={GREEN}
@@ -665,7 +671,7 @@ export default function CommunityEventAdminScreen() {
         </View>
       ) : (
         <View style={styles.grid}>
-          {visible.map((item) => (
+          {pagedProposals.map((item) => (
             <View
               key={item.id}
               style={styles.card}
