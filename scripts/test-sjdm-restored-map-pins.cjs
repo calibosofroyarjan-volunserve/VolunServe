@@ -91,7 +91,7 @@ test("actual source images and official addresses render INSIDE a bounded, acces
   }
   const map=read("components/tabs/MapTracking.web.tsx");
   assert.match(map,/id="facility-detail-panel"/);
-  assert.match(map,/max-height:calc\(100% - 75px\)/);
+  assert.match(map,/max-height:calc\(100% - 74px\)/);
   assert.match(map,/image\.src = item\.photoUrl/);
   assert.match(map,/Listed address/);
   assert.match(map,/openFacilityDetails\(item\)/);
