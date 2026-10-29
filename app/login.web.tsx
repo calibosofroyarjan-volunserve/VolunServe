@@ -2,11 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
-  sendPasswordResetEmail,
   setPersistence,
 } from "firebase/auth";
 import { useState } from "react";
@@ -38,14 +38,14 @@ export default function WebLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [resetOpen, setResetOpen] = useState(false);
   const [focusedInput, setFocusedInput] = useState<
     "email" | "password" | null
   >(null);
   const [loading, setLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"login" | "google" | "reset" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"login" | "google" | null>(null);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
-  const showSuccess = (message: string) => setFeedback({ type: "success", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
 
   const applySessionPersistence = async () => {
@@ -148,37 +148,12 @@ export default function WebLogin() {
     }
   };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = () => {
     if (loading) return;
     clearFeedback();
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      showError("Enter your email address first, then select Forgot password.");
-      return;
-    }
-    try {
-      setLoading(true);
-      setPendingAction("reset");
-      await sendPasswordResetEmail(auth, cleanEmail);
-      const isGmail = cleanEmail.endsWith("@gmail.com");
-      const message = isGmail
-        ? "Password reset request sent. If this Gmail account uses Email/Password sign-in, check Gmail and the Spam folder for the Firebase reset link. If this account was created with Google only, use Continue with Google instead."
-        : "Password reset request sent. Check your inbox and Spam folder for the Firebase reset link. Google-only accounts should use Continue with Google.";
-      showSuccess(message);
-    } catch (error: any) {
-      const code = String(error?.code || "");
-      if (code === "auth/invalid-email") {
-        showError("Please enter a valid email address.");
-      } else if (code === "auth/too-many-requests") {
-        showError("Too many reset attempts. Please wait and try again later.");
-      } else {
-        showError(error?.message || "Unable to send the password reset email.");
-      }
-    } finally {
-      setLoading(false);
-      setPendingAction(null);
-    }
+    setResetOpen(true);
   };
+
   // Shared premium shell supplies the real two-route tab switcher.
   // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
   return (
@@ -219,7 +194,7 @@ export default function WebLogin() {
             <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
             <Text style={styles.muted}>Remember me</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+          <TouchableOpacity accessibilityRole="button" onPress={handleForgotPassword}
             disabled={loading}>
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
@@ -290,6 +265,11 @@ export default function WebLogin() {
           <Text style={styles.createLink}>Create An Account</Text>
         </TouchableOpacity>
       </PremiumAuthShell>
+      <PasswordResetDialog
+        visible={resetOpen}
+        initialEmail={email}
+        onClose={() => setResetOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
