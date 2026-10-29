@@ -8,6 +8,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, {
   useEffect,
   useMemo,
@@ -2138,24 +2139,13 @@ This still does not automatically create a Donation Campaign.`,
           showsVerticalScrollIndicator={false}
         >
           <>
-            <View style={styles.mockHeaderRow}>
-              <View style={styles.mockHeaderCopy}>
-                <Text style={styles.eyebrow}>
-                  COMMUNITY ASSISTANCE REVIEW
-                </Text>
-
-                <Text style={styles.pageTitle}>
-                  Assistance Requests
-                </Text>
-
-                <Text style={styles.pageSubtitle}>
-                  Review non-emergency Resident assistance requests.
-                  Emergency incidents stay in Emergency Cases, while
-                  barangay or multi-household distribution stays in
-                  Relief Operations.
-                </Text>
-              </View>
-            </View>
+            <AdminReviewHero
+              eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+              title="Assistance Requests"
+              subtitle="Review verified Resident requests for individual support, assess supporting evidence, and document the LGU decision. Incident emergencies belong under Emergency Reports; multi-household distribution belongs under Relief Operations."
+              icon="hand-left-outline"
+              tag="RESIDENT ASSISTANCE"
+            />
 
             <View style={styles.mockTopTabsRow}>
               <MockStatusTab
@@ -2168,9 +2158,7 @@ This still does not automatically create a Donation Campaign.`,
                 label="Under Review"
                 count={stats.underReview}
                 active={filter === "under_review"}
-                onPress={() =>
-                  setFilter("under_review")
-                }
+                onPress={() => { setFilter("under_review"); setRecordPage(1); }}
               />
               <MockStatusTab
                 label="Verified"
@@ -2193,9 +2181,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "completed" &&
                     styles.mockHistoryButtonActive,
                 ]}
-                onPress={() =>
-                  setFilter("completed")
-                }
+                onPress={() => { setFilter("completed"); setRecordPage(1); }}
               >
                 <Ionicons
                   name="archive-outline"
@@ -2240,7 +2226,7 @@ This still does not automatically create a Donation Campaign.`,
                   filter === "all" &&
                     styles.mockAllButtonActive,
                 ]}
-                onPress={() => setFilter("all")}
+                onPress={() => { setFilter("all"); setRecordPage(1); }}
               >
                 <Text
                   style={[
