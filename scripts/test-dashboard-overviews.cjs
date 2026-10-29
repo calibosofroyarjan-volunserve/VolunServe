@@ -9,7 +9,7 @@ const rules = get("firestore.rules");
 
 // The reference dashboard is a visual pattern, never sales statistics or demo counters.
 for (const title of [
-  "LGU applications", "Active LGU Admins", "Suspended Admins",
+  "Admin accounts", "Active LGU Admins", "Suspended Admins",
   "Recent LGU Admin activity", "System & access changes",
   "Registered accounts",
 ]) assert(superView.includes(title),"Missing real Super Admin overview area: "+title);
