@@ -991,9 +991,9 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Middle Name (Optional)"
+                        label="Middle Name / Initial (Optional)"
                         value={formData.middleName}
-                        onChange={(v) => updateField("middleName", sanitizeName(v))}
+                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z\\s.\'-]/g, ""))}
                         returnKeyType="next"
                       />
                     </View>
