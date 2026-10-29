@@ -15,23 +15,16 @@ assert(hero.includes('backgroundColor: "#E5F5ED"') &&
        hero.includes("title") && hero.includes("subtitle") &&
        hero.includes("eyebrow"),
   "LGU Admin pages must share the premium emerald/mint botanical visual identity");
-for (const [path, src] of [
-  ["Resident and Volunteer Accounts", accounts],
-  ["Resident Identity Reviews", identities],
-]) {
-  assert(src.includes('import AdminReviewHero from "../../components/admin/AdminReviewHero"') &&
-         src.includes("<AdminReviewHero") && src.includes("LGU OPERATIONS / PEOPLE & VERIFICATION"),
-    path + " must use the premium admin-only branded header");
-  assert(src.includes("ListPagination") &&
-         src.includes("pageSize={PAGE_SIZE}") &&
-         src.includes("onChange={setPage}") &&
-         src.includes("setPage(1)"),
-    path + " must preserve five-row pagination and filter/search resets");
-}
-assert(accounts.includes("styles.metricsRow") && accounts.includes("pendingVolunteerCount") &&
-       accounts.includes("verifiedResidentCount") && accounts.includes("accounts.length") &&
-       accounts.includes("Account Review Workspace"),
-  "Resident/Volunteer UI should retain live KPI data and separate review tabs");
+assert(identities.includes("<AdminReviewHero") && identities.includes("LGU OPERATIONS / PEOPLE & VERIFICATION") &&
+  identities.includes("pageSize={PAGE_SIZE}") && identities.includes("setPage(1)"),
+  "Secure Resident Identity Reviews must retain branded header and five-row pagination");
+assert(dashboard.includes("<ResidentAccountsPanel />") && dashboard.includes("<DashboardVolunteerApprovals />") &&
+  accounts.includes("export function ResidentAccountsPanel()") && accounts.includes("pagedAccounts.map(account") &&
+  accounts.includes("pageSize={PAGE_SIZE}") && accounts.includes("moderateCommunityAccount"),
+  "Full Resident directory and Volunteer approvals must exist in branded Command Center");
+assert(!adminNav.includes("label: \"User & Volunteer Approvals\"") &&
+  accounts.includes("<Redirect href=\"/(admin)/command-center?section=residents\" />"),
+  "Legacy standalone Account Reviews must redirect instead of duplicating controls");
 assert(accounts.includes("reviewVolunteerApplication(") &&
        accounts.includes('reviewVolunteerApplication(approvalCandidate, "approved")') &&
        accounts.includes("approveConfirmed") &&
@@ -45,9 +38,8 @@ assert(identities.includes("styles.summaryMetrics") &&
        identities.includes("styles.queueHeading") &&
        identities.includes("manualValidationMethod"),
   "Identity review must retain actual live counts and independent manual verification workflow");
-assert(dashboard.includes("<DashboardVolunteerApprovals />") &&
-       adminNav.includes('label: "User & Volunteer Approvals"'),
-  "Command Center Volunteer Approvals and existing Admin navigation must stay intact");
+assert(dashboard.includes("<DashboardVolunteerApprovals />") && adminNav.includes('label: "Command Center"'),
+  "Command Center Volunteer Approvals and secure Admin navigation must remain accessible");
 assert(signup.includes("verification link") && map.includes("MapTracking"),
   "Resident signup verification and SJDM map entrypoint must not regress");
 console.log("PASS admin-only premium Resident/Volunteer review UI, pagination and existing approval/identity workflows");
