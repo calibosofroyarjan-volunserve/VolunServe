@@ -241,7 +241,8 @@ test("web map popup is readable, actionable and never displays raw OSM technical
   assert.match(source,/makeVerifiedMapPopup\(item,true\)/);
   assert.match(source,/makeVerifiedMapPopup\(item,false\)/);
   assert.doesNotMatch(source,/View map source/);
-  assert.doesNotMatch(source,/Official information/);
+  assert.match(source,/Official information/);
+  assert.match(source,/Location source/);
   assert.match(source,/Show road route here/);
   assert.match(source,/appendInAppRouteButton\(item, links\)/);
   assert.match(source,/function showFacilityRoute/);
