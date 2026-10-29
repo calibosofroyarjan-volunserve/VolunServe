@@ -37,9 +37,9 @@ assert(overview.includes("styles.kpiGrid") && overview.includes("styles.kpiCard"
   "Use one responsive KPI card row beneath the branded masthead without duplicated stat strips");
 assert(overview.includes("styles.overviewPrimary") && overview.includes("styles.overviewSecondary"),
   "Overview priorities and service chart must remain distinct and accessible");
-assert(overview.includes("styles.managementDisclosure"),
-  "Evacuation-center management must remain available without cluttering initial view");
-for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews", "metrics.activeCenters"]) {
+assert(!overview.includes("evacuation_centers") && !overview.includes("Evacuation center management"),
+  "Removed LGU evacuation centers must not be queried or presented on Command Center");
+for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews", "metrics.openBarangayNeeds"]) {
   assert(overview.includes(binding), "Overview metric data binding missing: " + binding);
 }
 assert(overview.includes('orientation="vertical"'), "LGU Overview must use vertical columns");
