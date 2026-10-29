@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import { useRouter } from "expo-router";
+import ListPagination from "../../components/ui/ListPagination";
 
 import {
   collection,
@@ -101,6 +102,11 @@ export default function AccountApprovals() {
     selected,
     setSelected,
   ] = useState<Account | null>(null);
+  const [approvalCandidate, setApprovalCandidate] = useState<Account | null>(null);
+  const [approveConfirmed, setApproveConfirmed] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const [
     rejectionReason,
@@ -242,21 +248,22 @@ export default function AccountApprovals() {
     );
   };
 
-  const visibleAccounts =
-    useMemo(() => {
-      if (filter === "pending") {
-        return accounts.filter(
-          (item) =>
-            isPendingVolunteerApplication(item)
-        );
-      }
+  const visibleAccounts = useMemo(() => {
+    const byView = filter === "pending"
+      ? accounts.filter(item => isPendingVolunteerApplication(item))
+      : accounts;
+    const term = search.trim().toLowerCase();
+    if (!term) return byView;
+    return byView.filter(item => [
+      item.fullName, item.email, item.barangay, item.id,
+    ].some(value => String(value || "").toLowerCase().includes(term)));
+  }, [accounts, filter, volunteerApplications, search]);
 
-      return accounts;
-    }, [
-      accounts,
-      filter,
-      volunteerApplications,
-    ]);
+  const totalPages = Math.max(1, Math.ceil(visibleAccounts.length / PAGE_SIZE));
+  const activePage = Math.max(1, Math.min(page, totalPages));
+  const pagedAccounts = visibleAccounts.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  const pendingVolunteerCount = accounts.filter(item => isPendingVolunteerApplication(item)).length;
+  const verifiedResidentCount = accounts.filter(item => isVerifiedResidentAccount(item)).length;
 
   const writeAdminLogSafely = async (
     payload: Parameters<typeof createAdminLog>[0]
@@ -556,20 +563,18 @@ export default function AccountApprovals() {
 
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>
-              User & Volunteer Approvals
+              Resident Accounts & Volunteer Approvals
             </Text>
 
             <Text style={styles.subtitle}>
-              All signups are Basic Residents automatically. Review volunteer requests and manage existing Resident accounts here.
+              Resident account oversight and Volunteer applications are separate. Only identity-verified Residents may receive Volunteer access.
             </Text>
           </View>
 
           <View style={styles.countBadge}>
             <Text style={styles.countText}>
               {
-                accounts.filter(
-                  (item) => isPendingVolunteerApplication(item)
-                ).length
+                pendingVolunteerCount
               }
             </Text>
           </View>
@@ -590,9 +595,7 @@ export default function AccountApprovals() {
                 filter === value &&
                   styles.filterButtonActive,
               ]}
-              onPress={() =>
-                setFilter(value)
-              }
+              onPress={() => { setFilter(value); setSearch(""); setPage(1); }}
             >
               <Text
                 style={[
@@ -603,13 +606,28 @@ export default function AccountApprovals() {
                 ]}
               >
                 {value === "pending"
-                  ? "Pending Volunteers"
-                  : "All Residents"}
+                  ? "Volunteer Applications"
+                  : "Resident Accounts"}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
+        <View style={styles.reviewSummary}>
+          <Text style={styles.reviewSummaryText}>Pending Volunteer Reviews: {pendingVolunteerCount}  ·  Verified Residents: {verifiedResidentCount}  ·  Total accounts: {accounts.length}</Text>
+        </View>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={18} color="#64748B" />
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={value => { setSearch(value); setPage(1); }}
+            placeholder="Search name, email, barangay or account ID"
+            placeholderTextColor="#94A3B8"
+            accessibilityLabel="Search resident and volunteer accounts"
+          />
+        </View>
+        <ListPagination page={activePage} total={visibleAccounts.length} pageSize={PAGE_SIZE} onChange={setPage} />
         {visibleAccounts.length === 0 ? (
           <View style={styles.emptyCard}>
             <Ionicons
@@ -623,7 +641,7 @@ export default function AccountApprovals() {
             </Text>
           </View>
         ) : (
-          visibleAccounts.map(
+          pagedAccounts.map(
             (account) => {
               const application =
                 volunteerApplicationFor(account);
@@ -788,7 +806,7 @@ export default function AccountApprovals() {
                           (isSaving || !isVerifiedResidentAccount(account)) && { opacity: 0.55 },
                         ]}
                         onPress={() =>
-                          reviewVolunteerApplication(account, "approved")
+                          (setApprovalCandidate(account), setApproveConfirmed(false))
                         }
                       >
                         <Text
@@ -878,6 +896,61 @@ export default function AccountApprovals() {
         )}
       </ScrollView>
 
+      <Modal
+        visible={!!approvalCandidate}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!savingUid) { setApprovalCandidate(null); setApproveConfirmed(false); } }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Review Volunteer Approval</Text>
+            <Text style={styles.subtitle}>Confirm the applicant details before granting Volunteer access.</Text>
+            <View style={styles.approvalEvidence}>
+              <Text style={styles.evidenceTitle}>Applicant credentials</Text>
+              <Text style={styles.meta}>Name: {approvalCandidate?.fullName || "Not provided"}</Text>
+              <Text style={styles.meta}>Email: {approvalCandidate?.email || "Not provided"}</Text>
+              <Text style={styles.meta}>Barangay: {approvalCandidate?.barangay || "Not provided"}</Text>
+              <Text style={styles.meta}>Account status: {approvalCandidate?.status || "Unknown"}</Text>
+              <Text style={styles.meta}>Identity: {approvalCandidate?.identityVerified === true || approvalCandidate?.identityStatus === "verified" ? "Verified Resident" : "Not verified"}</Text>
+              <Text style={styles.meta}>Skills: {(approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.skills || [] : []).join(", ") || "Not provided"}</Text>
+              <Text style={styles.meta}>Availability: {(approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.availability || [] : []).join(", ") || "Not provided"}</Text>
+              <Text style={styles.meta}>Application status: {approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.status || "Missing" : "Missing"}</Text>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: approveConfirmed }}
+              style={styles.confirmCheckRow}
+              disabled={!!savingUid}
+              onPress={() => setApproveConfirmed(value => !value)}
+            >
+              <Ionicons name={approveConfirmed ? "checkbox" : "square-outline"} color="#087A62" size={24} />
+              <Text style={styles.confirmCheckText}>I reviewed this applicant's details and confirmed eligibility for Volunteer access.</Text>
+            </TouchableOpacity>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                disabled={!approveConfirmed || !!savingUid || !approvalCandidate || !isVerifiedResidentAccount(approvalCandidate) || !isPendingVolunteerApplication(approvalCandidate)}
+                style={[styles.actionButton, styles.approveButton, (!approveConfirmed || !!savingUid || !approvalCandidate || !isVerifiedResidentAccount(approvalCandidate) || !isPendingVolunteerApplication(approvalCandidate)) && styles.buttonDisabled]}
+                onPress={async () => {
+                  if (!approvalCandidate || !approveConfirmed || savingUid) return;
+                  const saved = await reviewVolunteerApplication(approvalCandidate, "approved");
+                  if (saved) { setApprovalCandidate(null); setApproveConfirmed(false); }
+                }}
+              >
+                {savingUid ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.actionText}>Confirm Approval</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.cancelButton]}
+                disabled={!!savingUid}
+                onPress={() => { setApprovalCandidate(null); setApproveConfirmed(false); }}
+              >
+                <Text style={styles.actionText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal
         visible={!!selected}
         transparent
@@ -1017,6 +1090,15 @@ const styles =
       fontSize: 17,
     },
 
+    reviewSummary: { backgroundColor: "#E9F7EF", borderWidth: 1, borderColor: "#CDE8D9", borderRadius: 11, padding: 12, marginBottom: 12 },
+    reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+    searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
+    searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: "#173D32" },
+    approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
+    evidenceTitle: { color: "#173D32", fontSize: 14, fontWeight: "900", marginBottom: 5 },
+    confirmCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
+    confirmCheckText: { flex: 1, color: "#365B4E", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+    buttonDisabled: { opacity: 0.48 },
     filterRow: {
       flexDirection: "row",
       gap: 10,
