@@ -57,6 +57,9 @@ jobs:
         run: npx expo export --platform web
       - name: Create exact-revision manifest and verify Hosting scope
         run: node scripts/verify-hosting-release.cjs
+      - name: Inspect current production Hosting revision (read-only)
+        continue-on-error: true
+        run: node scripts/check-live-hosting.cjs
       - name: Require configured Firebase service account
         shell: bash
         run: |
