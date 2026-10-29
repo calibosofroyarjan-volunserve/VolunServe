@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
@@ -786,7 +787,10 @@ export default function VolunteerTasksWeb() {
       {/* On phones, render the header as independently sized blocks.
           Keeping the button outside title row prevents RN Web flex overlap. */}
       {mobile ? (
-        <View style={styles.mobileTaskHeader}>
+        <LinearGradient colors={["#EFFBF5", "#DDF4E8", "#F8FDFA"]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.mobileTaskHeader}>
+          <View pointerEvents="none" style={styles.botanicalMobile}><Ionicons name="leaf-outline" size={105} color="rgba(13,133,94,0.13)" /></View>
           <Text style={styles.mobileTaskEyebrow}>
             VOLUNSERVE · VOLUNTEER MODE
           </Text>
@@ -810,9 +814,12 @@ export default function VolunteerTasksWeb() {
             <Text style={styles.mobileTaskMapText}>Open Live Response Map</Text>
             <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
       ) : (
-        <View style={styles.headerRow}>
+        <LinearGradient colors={["#EFFBF5", "#DFF4E9", "#F7FDF9"]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.headerRow}>
+          <View pointerEvents="none" style={styles.botanicalDesktop}><Ionicons name="leaf-outline" size={155} color="rgba(12,130,92,0.18)" /></View>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>VOLUNSERVE · VOLUNTEER MODE</Text>
             <View style={styles.titleRow}>
@@ -835,7 +842,7 @@ export default function VolunteerTasksWeb() {
             <Ionicons name="map-outline" size={18} color="#ffffff" />
             <Text style={styles.liveMapButtonText}>Open Live Response Map</Text>
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
       )}
 
       <View style={[styles.liveStrip, mobile && styles.liveStripMobile]}>
@@ -1417,7 +1424,7 @@ export default function VolunteerTasksWeb() {
 }
 
 const styles = StyleSheet.create({
-  // Mobile-only Emergency Tasks header. Desktop remains unchanged.
+  // Single premium VolunServe visual identity across desktop and mobile while preserving task and map actions.
   mobileTaskHeader: {
     width: "100%",
     flexDirection: "column",
@@ -1427,9 +1434,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     marginBottom: 14,
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#E8F8EF",
     borderWidth: 1,
-    borderColor: "#E2EBEE",
+    borderColor: "#D2E8DA",
+    overflow: "hidden",
   },
   mobileTaskEyebrow: {
     fontSize: 10,
@@ -1477,7 +1485,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#0A9C73",
+    backgroundColor: "#087D60",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1685,21 +1693,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
+  botanicalDesktop: { position: "absolute", right: 70, bottom: -23, opacity: 1, transform: [{ rotate: "-25deg" }] },
+  botanicalMobile: { position: "absolute", right: -25, top: -24, transform: [{ rotate: "20deg" }] },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 18,
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingHorizontal: 25,
+    paddingVertical: 26,
+    minHeight: 159,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#D4E8DC",
+    overflow: "hidden",
   },
   headerCopy: {
     flex: 1,
     minWidth: 0,
   },
   eyebrow: {
-    color: "#078F82",
+    color: "#11765A",
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "900",
     letterSpacing: 1.1,
     marginBottom: 7,
   },
@@ -1714,16 +1731,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#e4f7f2",
+    backgroundColor: "#D2EFDF",
   },
   title: {
     color: "#173D32",
     fontSize: 28,
     lineHeight: 33,
-    fontWeight: "700",
+    fontWeight: "900",
   },
   subtitle: {
-    color: "#6b7f93",
+    color: "#55786A",
     fontSize: 13,
     lineHeight: 19,
     marginTop: 3,
@@ -1736,7 +1753,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 17,
     borderRadius: 11,
-    backgroundColor: "#0aa16f",
+    backgroundColor: "#087D60",
   },
   liveMapButtonText: {
     color: "#ffffff",
