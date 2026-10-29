@@ -27,6 +27,11 @@ for (const [path, ...tokens] of checks) {
 }
 const attendance = read("app/(admin)/lgu-attendance.tsx");
 assert(attendance.includes("onChange={setPersonnelPage}") && attendance.includes("onChange={setHistoryPage}"), "Duty & history independently paginated");
+const eventAttendance = read("app/(admin)/community-attendance.tsx");
+assert(eventAttendance.includes('const priorityEvent = events.find(event => event.status === "active")') &&
+       eventAttendance.includes('setSelectedId(priorityEvent.id)') &&
+       eventAttendance.includes('setRosterPage(1)'),
+       "Admin Event Attendance should show an active/upcoming process immediately without changing attendance");
 const donation = read("app/(admin)/donation-list.tsx");
 for (const token of ["onChange={setCampaignPage}", "onChange={setPendingPage}", "onChange={setHistoryPage}"]) assert(donation.includes(token));
 const events = read("app/(admin)/admin-events.tsx");
