@@ -936,9 +936,12 @@ export default function Signup() {
 
               ) : null}
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
-              <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
+
               <CheckRow label="I confirm the details I provided are final and correct." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} />
               <View style={styles.finalTermsSection}>
+                <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}>
+                  <Text style={styles.termsOpenText}>Read Terms and Conditions & Privacy Policy</Text>
+                </TouchableOpacity>
                 <CheckRow
                   label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
                   checked={formData.acceptTerms}
