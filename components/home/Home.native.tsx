@@ -437,7 +437,7 @@ export default function HomeScreen() {
                   glassDelay={0}
                   identity="RESPONSE"
                   icon="people"
-                  title="Volunteer Tasks"
+                  title="Emergency Tasks"
                   description="View and respond to your assigned emergency missions."
                   iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
                   cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
@@ -471,7 +471,7 @@ export default function HomeScreen() {
                   cardGradient={["#FFFFFF", "#FFFCF8", "#F8ECD9"]}
                   accentColor="#F28C13"
                   badgeColor="#FFF0D5"
-                  onPress={() => router.push("/volunteer-impact")}
+                  onPress={() => router.push("/profile?tab=progress")}
                 />
 
                 <ServiceCard
