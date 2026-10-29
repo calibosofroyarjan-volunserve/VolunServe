@@ -93,10 +93,10 @@ test("actual source images and official addresses render INSIDE a bounded, acces
   assert.match(map,/id="facility-detail-panel"/);
   assert.match(map,/max-height:calc\(100% - 75px\)/);
   assert.match(map,/image\.src = item\.photoUrl/);
-  assert.match(map,/Official address: /);
+  assert.match(map,/Listed address/);
   assert.match(map,/openFacilityDetails\(item\)/);
   assert.doesNotMatch(map,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
-  assert.match(map,/Facility photograph temporarily unavailable/);
+  assert.match(map,/Verified photo of this exact building is not yet available/);
 });
 
 test("government references match their source addresses, pictures and accuracy levels",()=>{
@@ -108,7 +108,7 @@ test("government references match their source addresses, pictures and accuracy 
  assert.equal(cdrrmo.officialContact,"09326000119");
  assert.equal(cdrrmo.photoUrl,undefined);
  assert.equal(cdrrmo.positionQuality,"third_party_approximate");
- assert.match(cdrrmo.photoDescription,/No independently verified/);
+ assert.match(cdrrmo.photoDescription,/not independently verified/);
  assert.match(govt.address,/New Government Center/);
  assert.match(govt.photoUrl,/upload\.wikimedia\.org/);
  assert.match(govt.photoLicenseUrl,/creativecommons\.org/);
@@ -120,4 +120,26 @@ test("government references match their source addresses, pictures and accuracy 
  assert.match(script,/Photo author and CC BY-SA 4\.0 license/);
  assert.match(script,/Find named office \(approximate map pin\)/);
  assert.match(script,/item\.photoDescription/);
+});
+
+test("premium map facility panels keep real photos prominent, inaccessible images honest, and accurate map labels", () => {
+  const source = read("components/tabs/MapTracking.web.tsx");
+  const city = places.SJDM_PUBLIC_MAP_PLACE_PINS.find(place => place.kind === "government");
+  const hall = places.SJDM_PUBLIC_MAP_PLACE_PINS.find(place => place.kind === "barangay_hall");
+  const cdrrmo = places.SJDM_PUBLIC_MAP_PLACE_PINS.find(place => place.kind === "cdrrmo");
+  assert.match(city.photoUrl, /\%28Dulong_Bayan\%29_20\.jpg/);
+  assert.match(city.photoSourcePageUrl, /_20\.jpg/);
+  assert.match(city.photoLicenseUrl, /creativecommons/);
+  assert.equal(hall.photoUrl, undefined, "Never claim a different building is the Barangay Hall");
+  assert.equal(cdrrmo.photoUrl, undefined, "Never use unrelated facility imagery for the CDRRMO");
+  assert.match(source, /REAL LOCATION PHOTO/);
+  assert.match(source, /Verified photo of this exact building is not yet available/);
+  assert.match(source, /facility-photo-fallback-icon/);
+  assert.match(source, /facility-body-content/);
+  assert.match(source, /facility-meta-label/);
+  assert.match(source, /#facility-detail-panel\[hidden\]/);
+  assert.match(source, /@media\(max-width:650px\)/);
+  assert.match(source, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(source, /Hospital.*Reference only.*ER capacity is not live-verified/s);
+  assert.match(source, /item.positionQuality === "osm_feature"/);
 });

@@ -355,38 +355,121 @@ const mapDocument = `
       padding: 9px 11px;
     }
 
-    /* Scrollable, responsive in-map detail sheet replaces clipped MapLibre reference popups. */
-    #facility-detail-panel{position:absolute;top:12px;right:12px;z-index:30;box-sizing:border-box;
-      width:min(350px,calc(100% - 75px));max-height:calc(100% - 75px);overflow-y:auto;
-      background:white;border:1px solid #d3e7df;border-radius:16px;
-      box-shadow:0 12px 36px rgba(6,54,42,.22);color:#123f33;overscroll-behavior:contain}
+    /* Premium map facility cards: image-forward, fixed to the map, accessible. */
+    #facility-detail-panel {
+      position:absolute;top:14px;right:14px;z-index:30;box-sizing:border-box;
+      width:min(398px,calc(100% - 85px));max-height:calc(100% - 74px);overflow-y:auto;
+      background:#fff;border:1px solid #d9e9e1;border-radius:18px;
+      box-shadow:0 22px 56px rgba(2,46,36,.22);
+      color:#143d32;overscroll-behavior:contain;scrollbar-width:thin;
+    }
     #facility-detail-panel[hidden]{display:none!important}
-    .facility-sheet-head{display:flex;justify-content:space-between;align-items:center;gap:9px;
-      position:sticky;top:0;z-index:1;padding:9px 12px;background:#f0f8f4;
-      border-bottom:1px solid #dceae3;font-size:11px;font-weight:900;color:#0a7056}
-    #facility-detail-close{height:34px;width:34px;border-radius:8px;border:1px solid #c8dfd4;
-      color:#0b604a;background:#fff;font-size:17px;cursor:pointer}
-    #facility-detail-close:focus-visible{outline:3px solid #0a795d;outline-offset:2px}
-    #facility-detail-body{padding:12px}
-    #facility-detail-body .place-popup{max-width:none;overflow-wrap:anywhere}
-    .facility-photo{width:100%;height:154px;object-fit:cover;border-radius:10px;
-      display:block;background:#edf5f0}
-    .facility-photo-fallback{padding:12px;background:#eff6f2;border-radius:9px;
-      color:#60796e;font-size:11px}
-    .facility-photo-credit{font-size:10px;color:#587768;margin:6px 0 12px}
-    .facility-address{font-size:12px;line-height:1.5;margin:9px 0;color:#244d3f}
-    #facility-detail-body .place-popup-title{font-size:16px}
-    #facility-detail-body .place-popup-note{margin:9px 0;font-size:11px;color:#647c70}
-    #facility-detail-body .place-popup-links{display:grid;grid-template-columns:1fr;gap:7px;margin-top:12px}
+    .facility-sheet-head {
+      display:flex;justify-content:space-between;align-items:center;gap:10px;
+      position:sticky;top:0;z-index:2;padding:10px 14px;
+      background:rgba(248,253,249,.97);border-bottom:1px solid #e5eee7;
+      font-size:10px;font-weight:900;color:#077255;letter-spacing:1px;
+    }
+    #facility-detail-close {
+      height:34px;width:34px;flex-shrink:0;border-radius:10px;
+      border:1px solid #d4e7dd;background:#fff;color:#0e5b46;
+      font-size:20px;line-height:1;cursor:pointer;
+    }
+    #facility-detail-close:focus-visible,.facility-action:focus-visible{
+      outline:3px solid #0c9175;outline-offset:2px}
+    #facility-detail-body{padding:0}
+    #facility-detail-body .place-popup{max-width:none;padding:0;overflow-wrap:anywhere}
+    .facility-photo-frame{
+      position:relative;margin:12px 12px 0;background:#e1f0e9;
+      border-radius:14px;overflow:hidden;min-height:174px;
+    }
+    .facility-photo{display:block;width:100%;height:188px;object-fit:cover;
+      background:#e1f0e9}
+    .facility-photo-fallback{
+      min-height:174px;box-sizing:border-box;display:flex;align-items:center;
+      justify-content:center;flex-direction:column;gap:12px;
+      padding:18px;text-align:center;
+      background:linear-gradient(135deg,#073b31 0%,#116a55 65%,#9ad4b8 100%);
+      color:#fff;font-size:12px;font-weight:700;line-height:1.55;
+    }
+    .facility-photo-fallback-icon{
+      display:grid;place-items:center;width:54px;height:54px;border-radius:17px;
+      background:rgba(255,255,255,.15);font-size:29px;
+    }
+    .facility-photo-pill{
+      position:absolute;top:11px;left:11px;z-index:1;padding:7px 10px;
+      background:rgba(255,255,255,.95);border-radius:100px;
+      color:#07543f;font-size:10px;font-weight:900;box-shadow:0 2px 12px #0b2f2926;
+    }
+    .facility-photo-credit{
+      font-size:10px;line-height:1.5;color:#527367;
+      margin:7px 14px 4px;padding:0;
+    }
+    .facility-body-content{padding:13px 16px 17px}
+    #facility-detail-body .place-popup-title{
+      display:block;color:#083e31;font-size:20px;line-height:1.25;
+      font-weight:900;margin:4px 0 8px;letter-spacing:-.4px;
+    }
+    #facility-detail-body .place-popup-category{
+      display:inline-flex;align-items:center;background:#e5f7ec;
+      color:#077359;border-radius:99px;padding:6px 10px;
+      font-size:10px;font-weight:900;line-height:1.3;
+    }
+    .facility-meta{
+      background:#f8fbfa;border:1px solid #e1eee6;border-radius:12px;
+      padding:11px 12px;margin:14px 0 9px;
+    }
+    .facility-meta-label{
+      color:#648778;font-size:10px;font-weight:900;
+      text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;
+    }
+    .facility-address{
+      font-size:12px;line-height:1.62;margin:0;
+      color:#23493d;font-weight:650;
+    }
+    #facility-detail-body .place-popup-note{
+      margin:8px 0;color:#607a6f;font-size:11px;line-height:1.55;
+    }
+    .facility-info-details{
+      margin:12px 0 4px;border-top:1px solid #e5eee9;padding-top:10px;
+      color:#516f62;font-size:11px;line-height:1.55;
+    }
+    .facility-info-details summary{font-weight:900;color:#12634e;cursor:pointer}
+    #facility-detail-body .place-popup-links{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;margin:14px 0 10px;
+    }
     #facility-detail-body .place-popup-links a,
-    #facility-detail-body .place-popup-links button{display:flex;align-items:center;justify-content:center;
-      min-height:39px;padding:9px 10px;border:1px solid #bbdacc;border-radius:9px;
-      background:#f0faf5;color:#076b50;text-align:center;text-decoration:none;
-      box-sizing:border-box;font-size:11px;font-weight:800}
-    #facility-detail-body .place-popup-status{background:#fff7e9;border-radius:8px;
-      padding:9px;color:#8b5a16;line-height:1.5}
-    @media(max-width:560px){#facility-detail-panel{top:auto;bottom:40px;left:8px;right:8px;
-      width:auto;max-height:58%}.facility-photo{height:115px}}
+    #facility-detail-body .place-popup-links button{
+      display:flex;align-items:center;justify-content:center;min-height:43px;
+      border:1px solid #d3e6db;border-radius:11px;background:#f0f8f4;
+      color:#09674e;box-sizing:border-box;padding:9px 8px;
+      font:800 11px/1.35 Inter,system-ui,sans-serif;
+      text-align:center;text-decoration:none;cursor:pointer;
+      overflow-wrap:anywhere;transition:background .16s ease;
+    }
+    #facility-detail-body .place-popup-links a:hover,
+    #facility-detail-body .place-popup-links button:hover{background:#deefe5}
+    #facility-detail-body .place-popup-links > :first-child{
+      background:#087b60;color:white;border-color:#087b60;
+      grid-column:1/-1;font-size:12px;min-height:46px;
+    }
+    #facility-detail-body .place-popup-links > :first-child:hover{background:#066f58}
+    #facility-detail-body .place-popup-status{
+      background:#fff6e9;border:1px solid #ffe6c7;border-radius:11px;
+      margin:10px 0 0;padding:11px;font-size:11px;font-weight:700;
+      color:#805426;line-height:1.5;
+    }
+    @media(max-width:650px){
+      #facility-detail-panel{
+        top:auto;bottom:42px;left:8px;right:8px;width:auto;
+        max-height:min(66%,460px);border-radius:17px
+      }
+      .facility-photo{height:155px}
+      .facility-photo-frame,.facility-photo-fallback{min-height:155px}
+      .facility-body-content{padding:12px}
+      #facility-detail-body .place-popup-title{font-size:18px}
+    }
   </style>
 </head>
 <body>
@@ -664,12 +747,28 @@ const mapDocument = `
         card.className = "place-popup";
         if (["hospital","government","barangay_hall","cdrrmo"].includes(item.kind)) {
           const photoWrap = document.createElement("div");
+          photoWrap.className = "facility-photo-frame";
           const permittedSource = typeof item.photoUrl === "string" && (
             item.photoUrl.startsWith("https://tanglawan.ph/wp-content/uploads/2024/01/") ||
             item.photoUrl.startsWith("https://cdn-healthcare.hellohealthgroup.com/2026/04/") ||
-            item.photoUrl.startsWith("https://upload.wikimedia.org/wikipedia/commons/8/87/San_Jose_del_Monte_New_City_Hall_Center_River_Esplanade_")
+            item.photoUrl.startsWith("https://upload.wikimedia.org/wikipedia/commons/f/f3/San_Jose_del_Monte_New_City_Hall_Center_River_Esplanade_")
           );
+          const buildPhotoFallback = () => {
+            const fallback = document.createElement("div");
+            fallback.className = "facility-photo-fallback";
+            const icon = document.createElement("span");
+            icon.className = "facility-photo-fallback-icon";
+            icon.textContent = item.icon || "🏛️";
+            const text = document.createElement("span");
+            text.textContent = "Verified photo of this exact building is not yet available";
+            fallback.append(icon,text);
+            return fallback;
+          };
           if (permittedSource) {
+            const photoBadge = document.createElement("span");
+            photoBadge.className = "facility-photo-pill";
+            photoBadge.textContent = "REAL LOCATION PHOTO · ARCHIVE";
+            photoWrap.appendChild(photoBadge);
             const image = document.createElement("img");
             image.src = item.photoUrl;
             image.className = "facility-photo";
@@ -679,10 +778,7 @@ const mapDocument = `
             image.alt = (item.photoDescription || "Published facility photo") + " · historical, not live";
             image.onerror = () => {
               image.remove();
-              const fallback = document.createElement("p");
-              fallback.className = "facility-photo-fallback";
-              fallback.textContent = "Facility photograph temporarily unavailable";
-              photoWrap.prepend(fallback);
+              photoWrap.appendChild(buildPhotoFallback());
             };
             photoWrap.appendChild(image);
             const credit = document.createElement("p");
@@ -691,31 +787,41 @@ const mapDocument = `
               (item.photoCredit || "Publisher") + " · Reference image, not live";
             photoWrap.appendChild(credit);
           } else {
-            const fallback = document.createElement("p");
-            fallback.className = "facility-photo-fallback";
-            fallback.textContent = item.photoDescription || "No verified exterior photo available";
-            photoWrap.appendChild(fallback);
+            photoWrap.appendChild(buildPhotoFallback());
           }
           card.appendChild(photoWrap);
         }
+        const body = document.createElement("div");
+        body.className = "facility-body-content";
         const title = document.createElement("strong");
         title.className = "place-popup-title";
         title.textContent = item.name;
-        card.appendChild(title);
+        body.appendChild(title);
         const category = document.createElement("span");
         category.className = "place-popup-category";
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
-        card.appendChild(category);
+        body.appendChild(category);
         if (typeof item.address === "string" && item.address.length >= 10) {
+          const addressCard = document.createElement("div");
+          addressCard.className = "facility-meta";
+          const heading = document.createElement("span");
+          heading.className = "facility-meta-label";
+          heading.textContent = "📍 Listed address";
           const address = document.createElement("p");
           address.className = "facility-address";
-          address.textContent = "Official address: " + item.address;
-          card.appendChild(address);
+          address.textContent = item.address;
+          addressCard.append(heading,address);
+          body.appendChild(addressCard);
         }
+        const details = document.createElement("details");
+        details.className = "facility-info-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "Location evidence and important notes";
         const note = document.createElement("p");
         note.className = "place-popup-note";
         note.textContent = item.note;
-        card.appendChild(note);
+        details.append(summary,note);
+        body.appendChild(details);
         const links = document.createElement("div");
         links.className = "place-popup-links";
         // Only feature-sourced coordinates are routed inside the SJDM map.
@@ -773,14 +879,15 @@ const mapDocument = `
           call.textContent = "Call office";
           links.appendChild(call);
         }
-        card.appendChild(links);
+        body.appendChild(links);
         const caution = document.createElement("p");
         caution.className = "place-popup-status";
         caution.textContent = item.kind === "hospital"
           ? "Real hospital · Reference only · ER capacity is not live-verified" +
             (item.positionQuality === "third_party_approximate" ? " · In-map GPS approximate" : "")
           : "Mapped location · Current operations not verified";
-        card.appendChild(caution);
+        body.appendChild(caution);
+        card.appendChild(body);
         return card;
       }
       const facilityDetails = document.getElementById("facility-detail-panel");
