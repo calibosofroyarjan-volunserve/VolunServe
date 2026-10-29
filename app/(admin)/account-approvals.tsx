@@ -632,8 +632,6 @@ export function ResidentAccountsPanel() {
           })
         )}
       </View>
-        )}
-      </ScrollView>
 
       <Modal
         visible={!!approvalCandidate}
