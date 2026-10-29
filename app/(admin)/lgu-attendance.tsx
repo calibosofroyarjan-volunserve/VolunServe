@@ -1,4 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import { useLocalSearchParams } from "expo-router";
+import { LguPersonnelPanel } from "./lgu-members";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
@@ -88,7 +90,7 @@ const durationLabel = (
   if (minutes <= 0) return `${hours}h`;
   return `${hours}h ${minutes}m`;
 };
-export default function LguAttendanceScreen() {
+export function LguAttendancePanel() {
   const { user } = useUserSession();
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [attendanceRecords, setAttendanceRecords] =
@@ -543,3 +545,43 @@ const styles = StyleSheet.create({
   noteCard: { marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#BFDBFE", backgroundColor: "#EFF6FF", flexDirection: "row", alignItems: "flex-start", gap: 8 },
   noteText: { flex: 1, color: "#1E40AF", fontSize: 11.5, lineHeight: 17, fontWeight: "600" },
 });
+
+/** One LGU workspace for staff and duty records; separate backend contracts stay intact. */
+export default function LguOperationsWorkspace() {
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const [selected, setSelected] = useState<"attendance" | "personnel">(
+    section === "personnel" ? "personnel" : "attendance"
+  );
+  useEffect(() => {
+    if (section === "personnel" || section === "attendance") setSelected(section);
+  }, [section]);
+  return <View style={{ flex: 1, minHeight: 0, backgroundColor: "#F6F8F7" }}>
+    <View style={{
+      flexDirection: "row", alignItems: "center", paddingHorizontal: 18,
+      paddingTop: 10, paddingBottom: 6, gap: 8, backgroundColor: "#FFFFFF",
+      borderBottomWidth: 1, borderBottomColor: "#DAE6DE",
+    }}>
+      {([
+        { id: "attendance" as const, title: "Duty & Attendance", icon: "time-outline" as const },
+        { id: "personnel" as const, title: "Personnel Accounts", icon: "people-outline" as const },
+      ]).map(tab => (
+        <TouchableOpacity key={tab.id} accessibilityRole="tab"
+          accessibilityState={{ selected: selected === tab.id }}
+          onPress={() => setSelected(tab.id)}
+          style={{
+            minHeight: 41, flexDirection: "row", justifyContent: "center",
+            alignItems: "center", gap: 7, flex: 1,
+            borderRadius: 8, borderWidth: 1,
+            borderColor: selected === tab.id ? "#B5DCCD" : "#E4EAE6",
+            backgroundColor: selected === tab.id ? "#E8F5EE" : "#FFFFFF",
+          }}>
+          <Ionicons name={tab.icon} size={16} color="#176B52" />
+          <Text style={{ fontSize: 12, fontWeight: selected === tab.id ? "800" : "600", color: "#174936" }}>
+            {tab.title}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+    {selected === "attendance" ? <LguAttendancePanel /> : <LguPersonnelPanel />}
+  </View>;
+}

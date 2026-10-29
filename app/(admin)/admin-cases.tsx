@@ -1655,12 +1655,6 @@ export default function AdminCases() {
       Boolean(volunteerBarangay) &&
       caseBarangay === volunteerBarangay;
 
-    const availabilityText = volunteer.availability.join(" ").toLowerCase();
-    const unavailable =
-      availabilityText.includes("unavailable") ||
-      availabilityText.includes("off duty") ||
-      availabilityText.includes("off-duty");
-
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1698,15 +1692,11 @@ export default function AdminCases() {
         skillMatches,
       };
     }
-    if (unavailable) {
-      return { eligible: false, reason: "Currently unavailable / off duty", skillMatches };
-    }
-
     return {
       eligible: true,
       reason: specializedSkills.length
-        ? "Qualified for this emergency"
-        : "Approved Volunteer available for support",
+        ? "Qualified Volunteer — support offer can be sent offline"
+        : "Approved Volunteer — support offer can be sent offline",
       skillMatches,
     };
   };
@@ -1714,13 +1704,9 @@ export default function AdminCases() {
   const volunteerCandidatesForCase = (incident: DisasterCase) => {
     const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
 
-    if (!caseBarangay) return [];
-
     return approvedVolunteers
       .filter((volunteer) => {
         const availabilityText = volunteer.availability.join(" ").toLowerCase();
-        const sameBarangay =
-          normalizeBarangay(volunteer.barangay) === caseBarangay;
         const isReporter =
           String(volunteer.uid || "").trim() ===
           String(incident.reporterUid || "").trim();
@@ -1738,12 +1724,14 @@ export default function AdminCases() {
         // The Resident who filed this emergency must never appear in the
         // Volunteer candidate pool, even if the same account also has
         // approved Volunteer access.
-        return !isReporter && sameBarangay && skillSearchMatch && availabilityMatch;
+        return !isReporter && skillSearchMatch && availabilityMatch;
       })
       .sort((a, b) => {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
+        // Prefer local, eligible volunteers, but show approved out-of-barangay
+        // profiles as well so admins understand why a candidate is restricted.
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
@@ -3932,7 +3920,7 @@ export default function AdminCases() {
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
                     ["response", "Response"],
-                    ["personnel", "Assigned Personnel"],
+                    ["personnel", "Response Team"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -4113,25 +4101,6 @@ export default function AdminCases() {
                     <Text style={styles.locationLiveButtonText}>Open Live Map</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.locationGoogleButton}
-                    disabled={
-                      !Number.isFinite(incident.latitude) ||
-                      !Number.isFinite(incident.longitude)
-                    }
-                    onPress={() => {
-                      if (
-                        !Number.isFinite(incident.latitude) ||
-                        !Number.isFinite(incident.longitude)
-                      ) return;
-
-                      Linking.openURL(
-                        `https://www.google.com/maps/search/?api=1&query=${incident.latitude},${incident.longitude}`
-                      );
-                    }}
-                  >
-                    <Text style={styles.locationGoogleButtonText}>Google Maps ↗</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -5855,7 +5824,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Volunteers are optional and never replace the official LGU response. Only approved Volunteers from {barangayDisplay(caseBarangayValue(incident))} are shown.
+                              All approved Volunteers are listed, including offline profiles. Local qualified candidates can receive an offer after case verification; Volunteers must accept before responding.
                             </Text>
                           </View>
                         </View>
@@ -5869,7 +5838,7 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Auto-grouped from the emergency barangay and each Volunteer profile.
+                          Local Volunteers appear first; out-of-barangay profiles are visible but cannot be assigned to this case.
                         </Text>
                       </View>
 
@@ -5900,21 +5869,22 @@ export default function AdminCases() {
                           <TextInput
                             style={styles.personnelCompactFilter}
                             value={availabilityFilter}
-                            placeholder="Availability"
+                            placeholder="Filter availability (optional)"
                             placeholderTextColor="#94a3b8"
                             onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
                           />
                         </View>
                       </View>
 
-                      {!dispatchReady ? (
+                      {!dispatchReady && (
                         <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Volunteer support is not available yet</Text>
+                          <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
                           <Text style={styles.personnelCleanEmptyText}>
-                            Validate the emergency case before requesting local Volunteer support.
+                            Volunteers remain visible even when offline. Validate this emergency before sending an official support offer.
                           </Text>
                         </View>
-                      ) : volunteerCandidates.length === 0 ? (
+                      )}
+                      {volunteerCandidates.length === 0 ? (
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>
                             {caseBarangayValue(incident)
@@ -5940,11 +5910,11 @@ export default function AdminCases() {
                               !caseOpenForSupport ||
                               busyKey === key;
                             const reasonLower = eligibility.reason.toLowerCase();
-                            const availabilityLabel = reasonLower.includes("busy")
-                              ? "Busy"
-                              : reasonLower.includes("unavailable") || reasonLower.includes("off duty")
-                                ? "Unavailable"
-                                : "Available";
+                            const availabilityText = volunteer.availability.join(" ").toLowerCase();
+                            const offline = /offline|unavailable|off.?duty/.test(availabilityText);
+                            const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
+                              !eligibility.eligible ? "Restricted" :
+                              offline ? "Offline · offer allowed" : "Eligible";
 
                             return (
                               <View key={volunteer.uid} style={styles.personnelCompactRow}>
@@ -5969,7 +5939,7 @@ export default function AdminCases() {
                                 <View style={styles.personnelCompactChipRowWide}>
                                   <View
                                     style={
-                                      availabilityLabel === "Available"
+                                      availabilityLabel === "Eligible"
                                         ? styles.personnelMiniBadgeGood
                                         : availabilityLabel === "Busy"
                                           ? styles.personnelMiniBadgeBusy
@@ -5978,7 +5948,7 @@ export default function AdminCases() {
                                   >
                                     <Text
                                       style={
-                                        availabilityLabel === "Available"
+                                        availabilityLabel === "Eligible"
                                           ? styles.personnelMiniBadgeGoodText
                                           : availabilityLabel === "Busy"
                                             ? styles.personnelMiniBadgeBusyText
@@ -6017,7 +5987,7 @@ export default function AdminCases() {
                                       ? "Sending…"
                                       : eligibility.eligible && volunteerSupportAvailable && caseOpenForSupport
                                         ? "Offer Support"
-                                        : "Not Available"}
+                                        : "Not Eligible"}
                                   </Text>
                                 </TouchableOpacity>
                               </View>
@@ -6041,7 +6011,7 @@ export default function AdminCases() {
                           <View>
                             <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
-                              Offer support to an available Volunteer from {barangayDisplay(caseBarangayValue(incident))}.
+                              Send a support offer to an approved, qualified local Volunteer, even when offline. The Volunteer must accept to respond.
                             </Text>
                           </View>
                         </View>
@@ -6592,14 +6562,16 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#F6F8F7",
-  },
+    scrollbarWidth: "thin",
+    scrollbarColor: "#8CAA9A #F6F8F7",
+  } as any,
   container: {
     width: "100%",
     maxWidth: 1600,
     alignSelf: "center",
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 22,
   },
   center: {
     flex: 1,
@@ -6685,7 +6657,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
   },
@@ -6832,7 +6804,7 @@ const styles = StyleSheet.create({
   },
   overviewVerifiedText: {
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   statusTimelineRow: {
@@ -6868,7 +6840,7 @@ const styles = StyleSheet.create({
   statusTimelineTime: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 8.5,
+    fontSize: 10,
   },
   priorityRow: {
     flexDirection: "row",
@@ -6884,7 +6856,7 @@ const styles = StyleSheet.create({
   overviewLabel: {
     marginTop: 11,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -6903,7 +6875,7 @@ const styles = StyleSheet.create({
   },
   needChipText: {
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "700",
   },
   overviewDescription: {
@@ -6938,7 +6910,7 @@ const styles = StyleSheet.create({
   assignLguButtonSub: {
     marginTop: 2,
     color: "#ccfbf1",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   personnelCleanWorkspace: {
     gap: 12,
@@ -7023,7 +6995,7 @@ const styles = StyleSheet.create({
   personnelCleanSubtitle: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 8.4,
+    fontSize: 10.5,
     lineHeight: 12,
   },
   personnelCleanStatusPill: {
@@ -7037,7 +7009,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanStatusText: {
     color: "#047857",
-    fontSize: 8,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanStatusTextMuted: {
@@ -7068,7 +7040,7 @@ const styles = StyleSheet.create({
   },
   personnelAvatarCompactText: {
     color: "#1d4ed8",
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   volunteerAvatarCompact: {
@@ -7082,7 +7054,7 @@ const styles = StyleSheet.create({
   },
   volunteerAvatarCompactText: {
     color: "#6d28d9",
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCompactIdentity: {
@@ -7098,14 +7070,14 @@ const styles = StyleSheet.create({
   },
   personnelCompactName: {
     color: "#0f172a",
-    fontSize: 9.4,
+    fontSize: 10.5,
     fontWeight: "900",
     textAlign: "left",
   },
   personnelCompactMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 7.7,
+    fontSize: 10.5,
     lineHeight: 11,
     textAlign: "left",
   },
@@ -7134,7 +7106,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeGoodText: {
     color: "#087f5b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeBusy: {
@@ -7145,7 +7117,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBusyText: {
     color: "#c2410c",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeMuted: {
@@ -7156,7 +7128,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeMutedText: {
     color: "#64748b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeBlue: {
@@ -7167,7 +7139,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBlueText: {
     color: "#4338ca",
-    fontSize: 7,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelSkillPill: {
@@ -7178,7 +7150,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillText: {
     color: "#475569",
-    fontSize: 7.4,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelSkillPillBlue: {
@@ -7189,7 +7161,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillBlueText: {
     color: "#2563eb",
-    fontSize: 7.4,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelPrimaryAction: {
@@ -7204,7 +7176,7 @@ const styles = StyleSheet.create({
   },
   personnelPrimaryActionText: {
     color: "#ffffff",
-    fontSize: 7.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanEmptyRow: {
@@ -7216,13 +7188,13 @@ const styles = StyleSheet.create({
   },
   personnelCleanEmptyTitle: {
     color: "#334155",
-    fontSize: 9.8,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanEmptyText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 8.7,
+    fontSize: 10.5,
     lineHeight: 13,
   },
   personnelCountBadge: {
@@ -7233,7 +7205,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeText: {
     color: "#4338ca",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCountBadgePurple: {
@@ -7244,7 +7216,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgePurpleText: {
     color: "#7e22ce",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCountBadgeMuted: {
@@ -7257,7 +7229,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeMutedText: {
     color: "#64748b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelRefreshCompact: {
@@ -7272,7 +7244,7 @@ const styles = StyleSheet.create({
   },
   personnelRefreshCompactText: {
     color: "#0f766e",
-    fontSize: 8.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelNeedStrip: {
@@ -7286,14 +7258,14 @@ const styles = StyleSheet.create({
   },
   personnelNeedLabel: {
     color: "#94a3b8",
-    fontSize: 7,
+    fontSize: 10.5,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
   personnelNeedValue: {
     marginTop: 3,
     color: "#1e3a8a",
-    fontSize: 9.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCompactList: {
@@ -7318,8 +7290,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
   personnelAssignCompact: {
-    width: 76,
-    minHeight: 27,
+    minWidth: 105,
+    minHeight: 36,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -7334,8 +7306,8 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactText: {
     color: "#ffffff",
-    fontSize: 7,
-    fontWeight: "900",
+    fontSize: 10.5,
+    fontWeight: "800",
   },
   personnelAssignCompactTextDisabled: {
     color: "#94a3b8",
@@ -7362,8 +7334,8 @@ const styles = StyleSheet.create({
   },
   personnelBarangayHint: {
     color: "#0f766e",
-    fontSize: 8.2,
-    fontWeight: "700",
+    fontSize: 10.5,
+    fontWeight: "600",
   },
   personnelSupportNotice: {
     marginTop: 7,
@@ -7376,13 +7348,13 @@ const styles = StyleSheet.create({
   },
   personnelSupportNoticeTitle: {
     color: "#1d4ed8",
-    fontSize: 9.3,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelSupportNoticeText: {
     marginTop: 2,
     color: "#475569",
-    fontSize: 8.2,
+    fontSize: 10.5,
     lineHeight: 12,
   },
   personnelVolunteerToolbar: {
@@ -7395,7 +7367,7 @@ const styles = StyleSheet.create({
   },
   personnelListHeading: {
     color: "#0f172a",
-    fontSize: 10.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelVolunteerFilters: {
@@ -7404,8 +7376,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelCompactFilter: {
-    width: 102,
-    minHeight: 27,
+    width: 154,
+    minHeight: 36,
     borderWidth: 1,
     borderColor: "#d9e1e8",
     borderRadius: 8,
@@ -7413,7 +7385,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     color: "#0f172a",
     backgroundColor: "#ffffff",
-    fontSize: 7.8,
+    fontSize: 10.5,
   },
   personnelSupportDivider: {
     marginTop: 11,
@@ -7477,7 +7449,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideMiniStatus: {
     color: "#0f766e",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelAsideCaseTop: {
@@ -7494,13 +7466,13 @@ const styles = StyleSheet.create({
   personnelAsideLabel: {
     marginTop: 9,
     color: "#64748b",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelAsideValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -7513,7 +7485,7 @@ const styles = StyleSheet.create({
   personnelAsideMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 8.5,
+    fontSize: 10,
   },
   personnelAsideThumb: {
     width: 96,
@@ -7573,7 +7545,7 @@ const styles = StyleSheet.create({
   personnelMiniMapSub: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 8,
+    fontSize: 10,
   },
   personnelAsideActionRow: {
     marginTop: 9,
@@ -7590,7 +7562,7 @@ const styles = StyleSheet.create({
   },
   personnelAsidePrimaryButtonText: {
     color: "#ffffff",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelAsideSecondaryButton: {
@@ -7606,7 +7578,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideSecondaryButtonText: {
     color: "#2563eb",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelTimelineRow: {
@@ -7646,7 +7618,7 @@ const styles = StyleSheet.create({
   },
   personnelTimelineLabel: {
     color: "#64748b",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelTimelineLabelDone: {
@@ -7655,7 +7627,7 @@ const styles = StyleSheet.create({
   personnelTimelineTime: {
     marginTop: 2,
     color: "#94a3b8",
-    fontSize: 7.7,
+    fontSize: 10,
   },
 
   personnelWorkspace: {
@@ -7686,7 +7658,7 @@ const styles = StyleSheet.create({
   },
   personnelOverviewLabel: {
     color: "#94a3b8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
@@ -7709,7 +7681,7 @@ const styles = StyleSheet.create({
   },
   personnelVolunteerButtonText: {
     color: "#4338ca",
-    fontSize: 9.2,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelPanel: {
@@ -7740,7 +7712,7 @@ const styles = StyleSheet.create({
   },
   lguRefreshButtonText: {
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguPersonnelError: {
@@ -7753,7 +7725,7 @@ const styles = StyleSheet.create({
   },
   lguPersonnelErrorText: {
     color: "#b91c1c",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -7799,13 +7771,13 @@ const styles = StyleSheet.create({
   },
   lguTestBadgeText: {
     color: "#4338ca",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguCapabilityText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: 8.8,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguFieldRow: {
@@ -7826,13 +7798,13 @@ const styles = StyleSheet.create({
   },
   lguFieldBadgeText: {
     color: "#1d4ed8",
-    fontSize: 8.2,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.25,
   },
   lguEmployeeIdText: {
     color: "#64748b",
-    fontSize: 8.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguProfileGrid: {
@@ -7853,14 +7825,14 @@ const styles = StyleSheet.create({
   },
   lguProfileLabel: {
     color: "#94a3b8",
-    fontSize: 7.4,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
   lguProfileValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
     lineHeight: 13,
   },
@@ -7883,13 +7855,13 @@ const styles = StyleSheet.create({
   },
   lguSkillChipText: {
     color: "#0f766e",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguNoSkillsText: {
     marginTop: 5,
     color: "#94a3b8",
-    fontSize: 8.6,
+    fontSize: 10,
     fontWeight: "700",
   },
   lguActionButton: {
@@ -7914,7 +7886,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
   },
   lguActionButtonText: {
-    fontSize: 8.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguActionButtonTextReady: {
@@ -7948,7 +7920,7 @@ const styles = StyleSheet.create({
   },
   lguStatusChipText: {
     color: "#334155",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelPanelHeader: {
@@ -7977,7 +7949,7 @@ const styles = StyleSheet.create({
   },
   personnelStatusText: {
     color: "#047857",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelMemberRow: {
@@ -8010,7 +7982,7 @@ const styles = StyleSheet.create({
   personnelMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   personnelActiveBadge: {
     paddingHorizontal: 8,
@@ -8020,7 +7992,7 @@ const styles = StyleSheet.create({
   },
   personnelActiveBadgeText: {
     color: "#0f766e",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelEmpty: {
@@ -8037,7 +8009,7 @@ const styles = StyleSheet.create({
   personnelEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 15,
   },
   attendanceEmpty: {
@@ -8057,7 +8029,7 @@ const styles = StyleSheet.create({
   attendanceEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguCaseNeedBox: {
@@ -8070,7 +8042,7 @@ const styles = StyleSheet.create({
   },
   lguCaseNeedLabel: {
     color: "#2563eb",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -8084,7 +8056,7 @@ const styles = StyleSheet.create({
   lguCaseNeedHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 8.6,
+    fontSize: 10,
     lineHeight: 13,
   },
   assignedResponderCard: {
@@ -8135,7 +8107,7 @@ const styles = StyleSheet.create({
   historyTime: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   historyAssignments: {
     marginTop: 12,
@@ -8157,7 +8129,7 @@ const styles = StyleSheet.create({
   },
   historyAssignmentStatus: {
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "700",
   },
 
@@ -8269,7 +8241,7 @@ const styles = StyleSheet.create({
   },
   caseListSeverityText: {
     color: "#ffffff",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   caseListLocation: {
@@ -8286,7 +8258,7 @@ const styles = StyleSheet.create({
   },
   caseListMeta: {
     color: "#475569",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
   },
   caseListRight: {
@@ -8298,7 +8270,7 @@ const styles = StyleSheet.create({
   },
   caseListDate: {
     color: "#64748b",
-    fontSize: 8.5,
+    fontSize: 10,
     textAlign: "right",
     fontWeight: "700",
   },
@@ -8386,7 +8358,7 @@ const styles = StyleSheet.create({
   },
   caseId: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
     maxWidth: 180,
   },
@@ -8403,7 +8375,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#ffffff",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -8451,7 +8423,7 @@ const styles = StyleSheet.create({
   },
   needsLabel: {
     color: "#94a3b8",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.9,
   },
@@ -8478,7 +8450,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
   },
@@ -8609,7 +8581,7 @@ const styles = StyleSheet.create({
   reviewInfoSub: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityReviewCard: {
@@ -8624,7 +8596,7 @@ const styles = StyleSheet.create({
   severityReviewText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityChoiceRow: {
@@ -8643,7 +8615,7 @@ const styles = StyleSheet.create({
   },
   severityChoiceText: {
     color: "#475569",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
   },
   severityChoiceTextActive: {
@@ -8665,7 +8637,7 @@ const styles = StyleSheet.create({
   criticalResponseText: {
     marginTop: 4,
     color: "#9f2f25",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
 
@@ -8693,7 +8665,7 @@ const styles = StyleSheet.create({
   },
   checkText: {
     color: "#49646f",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
   evidenceGrid: {
@@ -8719,7 +8691,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingTop: 7,
     color: "#334155",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   evidenceOpen: {
@@ -8727,7 +8699,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
     color: "#078f82",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   videoList: {
@@ -8749,7 +8721,7 @@ const styles = StyleSheet.create({
   videoButtonSub: {
     marginTop: 2,
     color: "#6b7699",
-    fontSize: 9,
+    fontSize: 10,
   },
   reviewReasonInput: {
     minHeight: 72,
@@ -8818,7 +8790,7 @@ const styles = StyleSheet.create({
   rejectNoticeText: {
     marginTop: 3,
     color: "#b42318",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   dispatchLocked: {
@@ -8835,13 +8807,13 @@ const styles = StyleSheet.create({
   dispatchLockedText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   matchText: {
     marginTop: 4,
     color: "#078f82",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -9111,7 +9083,7 @@ const styles = StyleSheet.create({
   },
   lguOfficialReportEyebrow: {
     color: "#0F766E",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
@@ -9207,7 +9179,7 @@ const styles = StyleSheet.create({
   lguOfficialReportMeta: {
     marginTop: 3,
     color: "#94A3B8",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguOfficialReviewBadge: {
@@ -9226,7 +9198,7 @@ const styles = StyleSheet.create({
   },
   lguOfficialReviewBadgeText: {
     color: "#B54708",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguOfficialReviewBadgeTextDone: {
@@ -9335,7 +9307,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 220,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   lguReviewedSummary: {
@@ -9456,7 +9428,7 @@ const styles = StyleSheet.create({
   eligibleCountLabel: {
     marginTop: 1,
     color: "#166534",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -9474,7 +9446,7 @@ const styles = StyleSheet.create({
   },
   supportRequirementLabel: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -9487,7 +9459,7 @@ const styles = StyleSheet.create({
   supportBarangayHint: {
     marginTop: 4,
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -9552,7 +9524,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   eligibilityBadgeText: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.4,
   },
@@ -9712,7 +9684,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: "#b42318",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -9732,7 +9704,7 @@ const styles = StyleSheet.create({
   lguDoctrineText: {
     marginTop: 3,
     color: "#4f6b67",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
 
@@ -9854,7 +9826,7 @@ const styles = StyleSheet.create({
   },
   directAssessmentDoneText: {
     color: "#15803d",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "800",
   },
@@ -9881,7 +9853,7 @@ const styles = StyleSheet.create({
   directFormSubtitle: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   directFormBadge: {
@@ -9892,7 +9864,7 @@ const styles = StyleSheet.create({
   },
   directFormBadgeText: {
     color: "#0f766e",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
@@ -9928,7 +9900,7 @@ const styles = StyleSheet.create({
   formSelectDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   formSelectChevron: {
@@ -9985,7 +9957,7 @@ const styles = StyleSheet.create({
   formSelectOptionDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directInfoStrip: {
@@ -9998,13 +9970,13 @@ const styles = StyleSheet.create({
   },
   directInfoStripTitle: {
     color: "#0F766E",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directInfoStripText: {
     marginTop: 3,
     color: "#52706A",
-    fontSize: 8.8,
+    fontSize: 10,
     lineHeight: 13,
   },
   directGroupCard: {
@@ -10023,7 +9995,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#ffffff",
     backgroundColor: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directGroupContent: {
@@ -10059,7 +10031,7 @@ const styles = StyleSheet.create({
   reliefScopeText: {
     marginTop: 4,
     color: "#64748B",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 14,
   },
   directGroupTitle: {
@@ -10071,7 +10043,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 9,
     color: "#7b8d9d",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   directTopGrid: {
@@ -10098,13 +10070,13 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 5,
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   directFieldHelp: {
     marginTop: 4,
     color: "#94A3B8",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directLockedInput: {
@@ -10115,7 +10087,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 6,
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
@@ -10168,7 +10140,7 @@ const styles = StyleSheet.create({
   },
   directNeedChoiceText: {
     color: "#475569",
-    fontSize: 9.3,
+    fontSize: 10,
     fontWeight: "900",
   },
   directNeedChoiceTextActive: {
@@ -10185,14 +10157,14 @@ const styles = StyleSheet.create({
   },
   directSelectedNeedsTitle: {
     color: "#334155",
-    fontSize: 9.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   directSelectedNeedsHint: {
     marginTop: 2,
     marginBottom: 7,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directNeedField: {
@@ -10207,13 +10179,13 @@ const styles = StyleSheet.create({
   },
   directNeedLabel: {
     color: "#334155",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directNeedUnit: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "700",
   },
   directNeedInput: {
@@ -10252,7 +10224,7 @@ const styles = StyleSheet.create({
   },
   directReviewEyebrow: {
     color: "#078F82",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -10270,7 +10242,7 @@ const styles = StyleSheet.create({
   },
   directReviewBadgeText: {
     color: "#15803D",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directReviewStats: {
@@ -10289,7 +10261,7 @@ const styles = StyleSheet.create({
   },
   directReviewStatLabel: {
     color: "#94A3B8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -10302,7 +10274,7 @@ const styles = StyleSheet.create({
   directReviewStatValueSmall: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 9.2,
+    fontSize: 10,
     lineHeight: 13,
     fontWeight: "900",
   },
@@ -10310,7 +10282,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     marginTop: 1,
     color: "#94A3B8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -10331,12 +10303,12 @@ const styles = StyleSheet.create({
   },
   directReviewNeedPillText: {
     color: "#0F766E",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   directReviewEmpty: {
     color: "#94A3B8",
-    fontSize: 8.8,
+    fontSize: 10,
     fontStyle: "italic",
   },
   directReviewNotice: {
@@ -10350,13 +10322,13 @@ const styles = StyleSheet.create({
   },
   directReviewNoticeTitle: {
     color: "#92400E",
-    fontSize: 9.2,
+    fontSize: 10,
     fontWeight: "900",
   },
   directReviewNoticeText: {
     marginTop: 3,
     color: "#9A6700",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12.5,
   },
   directActionBar: {
@@ -10376,7 +10348,7 @@ const styles = StyleSheet.create({
   directActionHint: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   directSaveButton: {
@@ -10410,7 +10382,7 @@ const styles = StyleSheet.create({
   fieldAuthorityText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReportCard: {
@@ -10434,7 +10406,7 @@ const styles = StyleSheet.create({
   fieldReportMeta: {
     marginTop: 2,
     color: "#7b8d9d",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   fieldReportStatus: {
@@ -10448,7 +10420,7 @@ const styles = StyleSheet.create({
   fieldStatusDismissed: { backgroundColor: "#64748b" },
   fieldReportStatusText: {
     color: "#ffffff",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   fieldReportGrid: {
@@ -10489,7 +10461,7 @@ const styles = StyleSheet.create({
   remainingNeedsNote: {
     marginTop: 4,
     color: "#7a6740",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReviewInput: {
@@ -10544,7 +10516,7 @@ const styles = StyleSheet.create({
   },
   needAssessmentEyebrow: {
     color: "#078f82",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -10557,7 +10529,7 @@ const styles = StyleSheet.create({
   needAssessmentHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   needInputGrid: {
@@ -10592,7 +10564,7 @@ const styles = StyleSheet.create({
   },
   fieldFinalNoticeText: {
     color: "#15803d",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   fieldDismissedNotice: {
@@ -10603,7 +10575,7 @@ const styles = StyleSheet.create({
   },
   fieldDismissedNoticeText: {
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },

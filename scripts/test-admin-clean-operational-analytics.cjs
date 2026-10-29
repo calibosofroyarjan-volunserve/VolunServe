@@ -32,10 +32,10 @@ assert(dashboard.includes("<DashboardRecentActivities />") &&
   dashboard.includes("Priority Actions"),
   "Overview must show priority actions next to independently paginated real recent activity");
 assert(!dashboard.includes("<WorkspaceBarChart") &&
-  !dashboard.includes('overflowY: "scroll"') &&
   dashboard.includes('overflowY: "auto"') &&
-  dashboard.includes('scrollbarWidth: "none"'),
-  "Desktop workspace must avoid forced vertical scrollbar while preserving content access");
+  dashboard.includes('scrollbarWidth: "thin"') &&
+  dashboard.includes("showsVerticalScrollIndicator={true}"),
+  "Desktop dashboard must expose a visible vertical scrollbar whenever records overflow");
 for (const panel of ["<ResidentAccountsPanel />", "<DashboardVolunteerApprovals />",
   "<DashboardPendingIdentityReviews />"]) {
   assert(dashboard.includes(panel), "Existing protected account workflow removed: " + panel);
