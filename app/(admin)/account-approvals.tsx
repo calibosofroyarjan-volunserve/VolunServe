@@ -906,7 +906,7 @@ export default function AccountApprovals() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Review Volunteer Approval</Text>
             <Text style={styles.subtitle}>Confirm the applicant details before granting Volunteer access.</Text>
-            <View style={styles.approvalEvidence}>
+            <ScrollView style={styles.approvalEvidenceScroll} contentContainerStyle={styles.approvalEvidence} keyboardShouldPersistTaps="handled">
               <Text style={styles.evidenceTitle}>Applicant credentials</Text>
               <Text style={styles.meta}>Name: {approvalCandidate?.fullName || "Not provided"}</Text>
               <Text style={styles.meta}>Email: {approvalCandidate?.email || "Not provided"}</Text>
@@ -916,7 +916,7 @@ export default function AccountApprovals() {
               <Text style={styles.meta}>Skills: {(approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.skills || [] : []).join(", ") || "Not provided"}</Text>
               <Text style={styles.meta}>Availability: {(approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.availability || [] : []).join(", ") || "Not provided"}</Text>
               <Text style={styles.meta}>Application status: {approvalCandidate ? volunteerApplicationFor(approvalCandidate)?.status || "Missing" : "Missing"}</Text>
-            </View>
+            </ScrollView>
             <TouchableOpacity
               accessibilityRole="checkbox"
               accessibilityState={{ checked: approveConfirmed }}
@@ -1094,6 +1094,7 @@ const styles =
     reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
     searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
     searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: "#173D32" },
+    approvalEvidenceScroll: { maxHeight: 260, marginTop: 12 },
     approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
     evidenceTitle: { color: "#173D32", fontSize: 14, fontWeight: "900", marginBottom: 5 },
     confirmCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
@@ -1240,6 +1241,10 @@ const styles =
     },
 
     modalCard: {
+      maxWidth: 520,
+      width: "100%",
+      maxHeight: "94%",
+      alignSelf: "center",
       backgroundColor: "#FFFFFF",
       borderRadius: 10,
       padding: 18,
