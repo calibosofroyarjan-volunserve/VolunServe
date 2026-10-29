@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
+import type { DocumentScreening } from "../../lib/identityVerification";
 import {
     ActivityIndicator,
     Alert,
@@ -32,6 +34,7 @@ type IdentityReview = {
   decision?: string;
   matchScore?: number | null;
   livenessScore?: number | null;
+  documentScreening?: DocumentScreening;
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -757,6 +760,8 @@ function ReviewDetail({
           </Text>
         </View>
       </View>
+
+      <DocumentScreeningSummary screening={item.documentScreening} />
 
       <InfoLine
         label="Verification ID"

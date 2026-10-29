@@ -1,3 +1,5 @@
+import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -997,6 +999,7 @@ export default function IdentityVerificationWeb() {
         decision: result.decision,
         matchScore: result.matchScore,
         livenessScore: result.livenessScore,
+        documentScreening: result.documentScreening,
         message: result.message,
       });
 
@@ -1149,6 +1152,7 @@ export default function IdentityVerificationWeb() {
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
         matchScore={statusResult?.matchScore}
+        documentScreening={statusResult?.documentScreening}
         primaryLabel="Back to Profile"
         primaryAction={() => router.back()}
       />
@@ -1171,6 +1175,7 @@ export default function IdentityVerificationWeb() {
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
         matchScore={statusResult?.matchScore}
+        documentScreening={statusResult?.documentScreening}
         primaryLabel={
           checkingStatus ? "Checking..." : "Check Status"
         }
@@ -1982,6 +1987,7 @@ function StatusScreen({
   color,
   badge,
   matchScore,
+  documentScreening,
   idPreviewUri,
   idPreviewLabel,
   primaryLabel,
@@ -1997,6 +2003,7 @@ function StatusScreen({
   color: string;
   badge: string;
   matchScore?: number;
+  documentScreening?: DocumentScreening;
   idPreviewUri?: string | null;
   idPreviewLabel?: string;
   primaryLabel: string;
@@ -2059,6 +2066,8 @@ function StatusScreen({
             </Text>
           </View>
         ) : null}
+
+        <DocumentScreeningSummary screening={documentScreening} />
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>

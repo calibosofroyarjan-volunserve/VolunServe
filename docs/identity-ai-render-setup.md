@@ -6,6 +6,30 @@ The mobile/web face detection is local (MediaPipe in the browser). Actual ID-to-
 
 Do not lower the matching threshold or set Firestore `identityVerified=true` to make tests look successful. The Python engine currently returns **pending manual review**, even for a high match score, because ID authenticity and liveness are not verified.
 
+## Current capabilities and limitations (October 30, 2026)
+
+The **same authenticated verification pipeline** serves the Resident's Profile → **Be a Verified Resident** (web and mobile) and the LGU Admin's **Resident Identity Reviews** screen.
+
+1. Resident selects the government ID type and captures a physical ID photo and selfie.
+2. The Python MediaPipe engine compares the ID portrait with the selfie using 1-to-1 facial landmark geometry.
+3. Tesseract OCR checks whether the ID text appears consistent with the selected ID type: Philippine National ID, driver's license, passport, or another recognized government ID.
+4. Inconclusive or mismatched document text is flagged for independent review.
+5. Node stores only allowlisted assessment status, document type signals, attempt metadata and audit information. Raw OCR, ID numbers, photos, selfies and embeddings are never saved to Firestore in this flow.
+6. LGU reviewers see the **same assessment** shown to the Resident, and record an independent validation method before approving identity.
+
+**Limitations:** OCR does not prove official issuance, expiry validity or tampering resistance. A single selfie cannot prove liveness. This is *government ID type plausibility screening*, not accredited bank-grade KYC or government registry validation. The service returns authenticityVerified=false and livenessImplemented=false, and requires manual LGU verification. Do not claim automatic identity authenticity during defense.
+
+Both interfaces use the shared DocumentScreeningSummary component. LGU Personnel account creation and employment credential validation remain a separate administrative workflow.
+
+### Quick checks before production
+
+- Run: python -m unittest discover -s identity-ai -p test_document_screening.py -v
+- Run: node scripts/test-unified-identity-ai-government-id-screening.cjs
+- Run: node --check backend/server.js and npx tsc --noEmit --pretty false
+- The Python Identity AI Docker image needs Tesseract and pytesseract, both declared in its existing Dockerfile/dependencies.
+- Deploy and independently verify **Python AI** and **Node backend** on Render, not Firebase Hosting alone.
+- Confirm the private AI authentication check and use only consented synthetic or privacy-safe demo ID images.
+- Have LGU carry out actual independent document validation before recording a successful verification.
 ## 1. Deploy the Python AI service in Render
 
 1. In Render Dashboard, select **New > Web Service**; connect the same VolunServe GitHub repository.
