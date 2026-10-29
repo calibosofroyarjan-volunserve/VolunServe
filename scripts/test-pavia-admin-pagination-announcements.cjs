@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const read = path => fs.readFileSync(path, "utf8");
 const checks = [
-  ["app/(admin)/command-center.tsx", "DashboardVolunteerApprovals", "ListPagination"],
   ["app/(admin)/account-approvals.tsx", "pagedAccounts", "ListPagination"],
   ["app/(admin)/identity-reviews.tsx", "pagedReviews", "ListPagination"],
   ["app/(admin)/admin-cases.tsx", "pagedCases", "ListPagination"],
@@ -25,6 +24,12 @@ for (const [path, ...tokens] of checks) {
  assert(src.includes("pageSize={5}") || src.includes("PAGE_SIZE") || src.includes("CENTER_PAGE_SIZE"),
    path + ": list must have five record page size");
 }
+const dashboard = read("app/(admin)/command-center.tsx");
+const dashboardApprovals = read("components/admin/DashboardVolunteerApprovals.tsx");
+assert(dashboard.includes("<DashboardVolunteerApprovals />") &&
+       dashboardApprovals.includes("ListPagination") &&
+       dashboardApprovals.includes("pageSize={PAGE_SIZE}"),
+  "Command Center must retain real five-row Volunteer Approvals without the removed center list");
 const onlineDonations = read("components/donations/DonationAdminDashboard.tsx");
 assert(onlineDonations.includes("pagedAlerts.map(") &&
        onlineDonations.includes("pagedReviews.map(") &&
