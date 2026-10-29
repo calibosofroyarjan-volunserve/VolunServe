@@ -31,11 +31,17 @@ for (const path of ["app/signup.web.tsx", "app/signup.tsx"]) {
   const last = source.indexOf('label="Last Name *"',personal);
   assert(personal >= 0 && personal < first && first < middle && middle < last,
     path + ": name fields must appear First, optional Middle, Last");
+  const personalStep = source.indexOf("{step === 1");
   const finalStep = source.indexOf("{step === 4");
-  const finalTerms = source.indexOf("finalTermsSection",finalStep);
-  const confirmReview = source.indexOf('updateField("confirmReview"',finalStep);
-  assert(finalStep >= 0 && finalTerms > confirmReview && source.includes("I’ve read and agree to the Terms and Conditions and Privacy Policy."),
-    path + ": clear policy acceptance must be the last confirmation");
+  const terms = source.indexOf('label="I’ve read and agree to the Terms and Conditions and Privacy Policy."');
+  const birth = source.indexOf("Date of Birth", personalStep);
+  assert(terms > birth && terms < finalStep, path + ": Terms checkbox must be visible under Date of Birth in Step 1");
+  assert(source.includes("step1TermsBox") && source.includes("step1TermsLink"), path + ": Step 1 must offer a clear clickable policy link");
+  assert(source.includes("&& formData.acceptTerms;"), path + ": Continue must require terms acceptance");
+  assert(source.split("I’ve read and agree to the Terms and Conditions and Privacy Policy.").length - 1 === 1,
+    path + ": Terms checkbox must not be duplicated on the final Security step");
+  assert(source.indexOf('updateField("confirmReview"',finalStep) > finalStep,
+    path + ": final information review confirmation must remain in Step 4");
   assert(source.includes("personalDetailsHeader"), path + ": personal details need separate clean spacing");
   console.log("PASS signup field order, Google logo/OR, middle optional:", path);
 }
