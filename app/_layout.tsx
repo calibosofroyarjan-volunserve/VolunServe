@@ -293,6 +293,23 @@ export default function RootLayout() {
       return;
     }
 
+    // Public email/password accounts must confirm inbox ownership before
+    // entering Resident/Volunteer routes. Staff and Google OAuth are handled
+    // by their independent authentication and authorization flows.
+    const communityAccount =
+      profile.role === "resident" ||
+      profile.role === "volunteer" ||
+      profile.role === "applicant";
+    const usesPassword = authUser.providerData.some(
+      provider => provider.providerId === "password"
+    );
+    if (communityAccount && usesPassword && !authUser.emailVerified) {
+      if (!isLoginRoute && !isSignupRoute) {
+        void logoutUser().finally(() => router.replace("/login"));
+      }
+      return;
+    }
+
     const destination =
       homeRouteForProfile(profile);
 
