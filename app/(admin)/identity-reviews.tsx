@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
     ActivityIndicator,
     Alert,
@@ -383,44 +384,38 @@ export default function IdentityReviewsAdmin() {
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
-        <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={27}
-              color="#FFFFFF"
-            />
+        <AdminReviewHero
+          eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
+          title="Resident Identity Reviews"
+          subtitle="Review identity cases requiring independent LGU validation. AI-assisted checks and manual review remain separate."
+          icon="shield-checkmark-outline"
+          tag="IDENTITY PROTECTION"
+        />
+        <View style={styles.summaryMetrics}>
+          {[
+            { label: "Pending Review", value: counts.pending, icon: "time-outline" as const },
+            { label: "Verified", value: counts.verified, icon: "shield-checkmark-outline" as const },
+            { label: "Retry Required", value: counts.retry_required, icon: "refresh-circle-outline" as const },
+            { label: "Total Records", value: counts.all, icon: "people-outline" as const },
+          ].map(metric => (
+            <View key={metric.label} style={styles.summaryMetric}>
+              <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
+              <Text style={styles.summaryLabel}>{metric.label}</Text>
+              <Text style={styles.summaryValue}>{metric.value}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.queueHeading}>
+          <View style={styles.flexOne}>
+            <Text style={styles.queueTitle}>Identity Verification Queue</Text>
+            <Text style={styles.queueSubheading}>Review supporting information, select a validation method, and record the decision.</Text>
           </View>
-
-          <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>
-              ADMIN · RESIDENT VERIFICATION
-            </Text>
-            <Text style={styles.title}>Resident Identity Reviews</Text>
-            <Text style={styles.subtitle}>
-              Review AI-uncertain Resident identity cases. Automatic
-              verification remains separate from manual LGU/Admin validation.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={() => void loadReviews()}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#334155" />
-            ) : (
-              <Ionicons
-                name="refresh-outline"
-                size={19}
-                color="#334155"
-              />
-            )}
+          <TouchableOpacity style={styles.refreshButton} onPress={() => void loadReviews()} disabled={loading}
+            accessibilityRole="button" accessibilityLabel="Refresh identity verification queue">
+            {loading ? <ActivityIndicator size="small" color="#08765A" /> : <Ionicons name="refresh-outline" size={19} color="#08765A" />}
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.privacyNotice}>
           <Ionicons
             name="lock-closed-outline"
@@ -518,7 +513,7 @@ export default function IdentityReviewsAdmin() {
 
         {loading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#4F46E5" />
+            <ActivityIndicator size="large" color="#08765A" />
             <Text style={styles.centerText}>
               Loading identity reviews...
             </Text>
@@ -965,7 +960,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: "#F4F8F5",
   },
   scroll: {
     flex: 1,
@@ -1003,6 +998,18 @@ const styles = StyleSheet.create({
   flexOne: {
     flex: 1,
   },
+  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 17 },
+  summaryMetric: { flexGrow: 1, flexBasis: 175, minWidth: 150, padding: 16, backgroundColor: "#FFFFFF",
+    borderRadius: 15, borderWidth: 1, borderColor: "#D8E9E0" },
+  summaryIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: "#E2F5EA",
+    alignItems: "center", justifyContent: "center", marginBottom: 9 },
+  summaryLabel: { color: "#315A4C", fontSize: 11, fontWeight: "800" },
+  summaryValue: { color: "#123F32", fontSize: 25, fontWeight: "900", marginTop: 5 },
+  queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
+    backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
+    padding: 15, marginBottom: 13 },
+  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
+  queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1058,7 +1065,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   refreshButtonText: {
-    color: "#334155",
+    color: "#08765A",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -1102,8 +1109,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   filterButtonActive: {
-    backgroundColor: "#4F46E5",
-    borderColor: "#4F46E5",
+    backgroundColor: "#08765A",
+    borderColor: "#08765A",
   },
   filterButtonText: {
     color: "#475569",
