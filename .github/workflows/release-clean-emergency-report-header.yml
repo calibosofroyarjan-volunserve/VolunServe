@@ -1,0 +1,90 @@
+name: Clean Emergency Reports Production Release (Hosting Only)
+on:
+  push:
+    branches:
+      - release/clean-emergency-report-top-panels-20261029
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check the previous live hospital photos and original map UI
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const places = fs.readFileSync('lib/sjdmPublicMapPlaces.ts', 'utf8');
+          const ui = fs.readFileSync('components/tabs/MapTracking.web.tsx', 'utf8');
+          for(const facility of ['Healthway QualiMed Hospital', 'Skyline Hospital and Medical Center', 'Grace Medical Center', 'Dulong Bayan Barangay Hall']) {
+            assert.ok(places.includes(facility), 'Restoration missing ' + facility);
+          }
+          for(const feature of ['facility-photo-frame', 'facility-detail-panel', 'function openFacilityDetails', 'item.photoUrl']) {
+            assert.ok(ui.includes(feature), 'Missing original facility UI ' + feature);
+          }
+          console.log('PASS previous live hospital locations, photos and panel restored');
+          NODE
+          npx tsc --noEmit
+      - name: Verify top emergency panels removed and report + map remain functional
+        run: node --test scripts/test-clean-emergency-report-header.cjs
+      - name: Verify Volunteer Donations hidden and Resident donations retained
+        run: node --test scripts/test-volunteer-donations-sidebar-removal.cjs
+      - name: Confirm Profile and Certificates removed from all sidebars
+        run: node --test scripts/test-profile-certificates-account-menu.cjs
+      - name: Verify Volunteer Home progress links into Profile
+        run: node --test scripts/test-volunteer-profile-progress-shortcut.cjs
+      - name: Check Resident/Volunteer clean sidebar, profile progress and branded logout
+        run: |
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-live-dialog-hotfix.cjs
+      - name: Test professional paginated Admin directory and permissions
+        run: node --test scripts/test-superadmin-accounts-directory.cjs
+      - name: Confirm dog donation demo stays removed
+        run: node --test scripts/test-no-dog-donation-demo.cjs
+      - name: Confirm hospital routes remain intact
+        run: node --test scripts/test-hospital-inapp-road-routes.cjs
+      - name: Build static web application
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting credentials before changing production
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B (or FIREBASE_SERVICE_ACCOUNT). Web build passed but NO PRODUCTION DEPLOY was attempted."
+            exit 1
+          fi
+      - name: Publish Firebase Hosting ONLY (no Firestore or Functions)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact revision on custom domain
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Waiting for custom-domain release propagation, attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Production revision was not verified."
+          exit 1
