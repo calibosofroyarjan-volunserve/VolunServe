@@ -1261,7 +1261,7 @@ export default function Signup() {
                     style={styles.termsOpenBtn}
                     onPress={() => setTermsOpen(true)}
                   >
-                    <Text style={styles.termsOpenText}>Read Terms & Data Privacy</Text>
+                    <Text style={styles.termsOpenText}>Read Terms and Conditions & Privacy Policy</Text>
                   </TouchableOpacity>
 
                   <View style={styles.consentBox}>
