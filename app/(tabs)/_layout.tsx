@@ -33,107 +33,23 @@ type TabDefinition = {
   activeIcon: string;
 };
 
+// Clear service-first order. Removed sidebar links remain valid direct routes.
 const residentDesktopTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "disaster-response",
-    label: "Emergency Reports",
-    icon: "alert-circle-outline",
-    activeIcon: "alert-circle",
-  },
-  {
-    name: "resident",
-    label: "Request Assistance",
-    icon: "hand-left-outline",
-    activeIcon: "hand-left",
-  },
-  {
-    name: "donation",
-    label: "Donations",
-    icon: "heart-outline",
-    activeIcon: "heart",
-  },
-  {
-    name: "community-events",
-    label: "Community Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "my-cases",
-    label: "My Reports",
-    icon: "document-text-outline",
-    activeIcon: "document-text",
-  },
-  {
-    name: "profile",
-    label: "My Profile",
-    icon: "person-circle-outline",
-    activeIcon: "person-circle",
-  },
+ {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+ {name:"disaster-response",label:"Emergency Reports",icon:"alert-circle-outline",activeIcon:"alert-circle"},
+ {name:"resident",label:"Request Assistance",icon:"hand-left-outline",activeIcon:"hand-left"},
+ {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
+ {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
+ {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
-
-// Notifications remain accessible from the dashboard bell and updates card.
+// Progress belongs to Profile; notifications remain in the bell and announcements in updates.
 const volunteerDesktopTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "volunteer",
-    label: "Volunteer Tasks",
-    icon: "people-outline",
-    activeIcon: "people",
-  },
-  {
-    name: "community-events",
-    label: "Community Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "donation",
-    label: "Donations",
-    icon: "heart-outline",
-    activeIcon: "heart",
-  },
-  {
-    name: "volunteer-impact",
-    label: "My Progress",
-    icon: "ribbon-outline",
-    activeIcon: "ribbon",
-  },
-  {
-    name: "certificate",
-    label: "Certificates",
-    icon: "document-outline",
-    activeIcon: "document",
-  },
-  {
-    name: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-    activeIcon: "notifications",
-  },
-  {
-    name: "announcements",
-    label: "Announcements",
-    icon: "megaphone-outline",
-    activeIcon: "megaphone",
-  },
-  {
-    name: "profile",
-    label: "My Profile",
-    icon: "person-circle-outline",
-    activeIcon: "person-circle",
-  },
+ {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+ {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
+ {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
+ {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
+ {name:"certificate",label:"Certificates",icon:"document-outline",activeIcon:"document"},
+ {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
@@ -195,7 +111,7 @@ const volunteerMobileTabs: TabDefinition[] = [
   },
   {
     name: "volunteer",
-    label: "Tasks",
+    label: "Emergency",
     icon: "people-outline",
     activeIcon: "people",
   },
@@ -414,6 +330,9 @@ export default function TabLayout() {
               accessibilityLabel="Close navigation drawer"
             />
             <View style={styles.mobileDrawer}>
+              <View pointerEvents="none" style={styles.mobileSidebarLeafDecoration}>
+                <Ionicons name="leaf-outline" size={200} color="#60C79B" />
+              </View>
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -526,6 +445,9 @@ function DesktopTabBar({
 
   return (
     <View style={styles.desktopSidebar}>
+      <View pointerEvents="none" style={styles.sidebarLeafDecoration}>
+        <Ionicons name="leaf-outline" size={220} color="#60C79B" />
+      </View>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -1013,6 +935,8 @@ const styles = StyleSheet.create({
     color: "#078F82",
     fontWeight: "800",
   },
+  sidebarLeafDecoration: {position:"absolute",left:-73,bottom:60,opacity:0.16,transform:[{rotate:"-26deg"}]},
+  mobileSidebarLeafDecoration: {position:"absolute",left:-73,bottom:45,opacity:0.16,transform:[{rotate:"-26deg"}]},
   desktopSidebar: {
     width: 268,
     height: "100%",
