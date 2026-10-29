@@ -536,7 +536,7 @@ export default function CommandCenter() {
                 </View>
                 <TouchableOpacity style={styles.residentAction} accessibilityRole="button"
                   accessibilityLabel={`Open authorized account review for ${resident.fullName || "Resident"}`}
-                  onPress={() => navigate("/(admin)/account-approvals")}>
+                  onPress={() => navigate("/(admin)/account-approvals?view=residents&resident=" + encodeURIComponent(resident.id))}>
                   <Text style={styles.residentActionText}>Review account</Text>
                 </TouchableOpacity>
               </View>
