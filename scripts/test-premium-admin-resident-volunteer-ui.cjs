@@ -49,8 +49,8 @@ assert(identity.includes('const pagedReviews = filtered.slice(') &&
   "Keep manual verification actions and preselect first visible review");
 assert(identity.includes('Privacy-preserving manual fallback') &&
   identity.includes('does not retain or') &&
-  identity.includes('sensitive') ,
-  "Do not expose private ID photos in admin review queue");
+  identity.includes('independent LGU-approved validation method'),
+  "Private ID photos must not be retained/displayed in the LGU review queue");
 assert(dashboard.includes('<DashboardVolunteerApprovals />') &&
   nav.includes('"Resident Identity Reviews"') &&
   nav.includes('"User & Volunteer Approvals"'),
