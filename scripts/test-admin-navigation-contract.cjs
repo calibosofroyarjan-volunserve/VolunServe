@@ -18,7 +18,6 @@ const expectedSa = [
   ["Admin Accounts","/(superadmin)/admin-accounts"],
   ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
   ["System Records (Read Only)","/(superadmin)/all-records"],
-  ["System Settings","/(superadmin)/system-settings"],
 ];
 for(let i=0;i<expectedSa.length;i++){
   const [label,route]=expectedSa[i];
@@ -27,6 +26,10 @@ for(let i=0;i<expectedSa.length;i++){
   if(i>0)assert(saItems.indexOf('label: "'+expectedSa[i-1][0]+'"') <
     saItems.indexOf('label: "'+label+'"'),"Incorrect Super Admin menu sequence");
 }
+assert(!saItems.includes('label: "System Settings"') &&
+  sa.includes('accessibilityLabel="Super Admin profile dropdown"') &&
+  sa.includes('router.push("/(superadmin)/system-settings"'),
+  "System Settings must be accessible through the profile dropdown and not duplicated in sidebar");
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [
