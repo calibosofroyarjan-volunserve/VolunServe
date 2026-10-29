@@ -2727,9 +2727,12 @@ export default function AssistanceRequestScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
         >
-          <LinearGradient colors={["#EBFFF7","#D7F9E9","#94EAC9","#2BC78F"]}
+          <LinearGradient colors={["#F1FCF6","#E4F7EB","#D7F2E3","#E9F9F1"]}
             start={{x:0,y:0.15}} end={{x:1,y:0.85}}
             style={[styles.hero,styles.premiumHero,mobile&&styles.mobileHero]}>
+            <View pointerEvents="none" style={styles.premiumBotanicalLeaf}>
+              <Ionicons name="leaf-outline" size={160} color="rgba(11,123,86,0.12)" />
+            </View>
             <View style={[styles.premiumEmblem,mobile&&styles.premiumEmblemMobile]}>
               <LinearGradient colors={["#06674D","#0E9E76","#20C58D"]}
                 style={styles.premiumEmblemFace}>
@@ -9009,7 +9012,8 @@ const styles =
     },
 
 
-    premiumHero:{minHeight:188,borderRadius:20,flexDirection:"row",alignItems:"center",paddingHorizontal:23,paddingVertical:22,gap:18,borderWidth:1,borderColor:"#C4EBDC",overflow:"hidden"},
+    premiumHero:{minHeight:188,borderRadius:17,flexDirection:"row",alignItems:"center",paddingHorizontal:23,paddingVertical:22,gap:18,borderWidth:1,borderColor:"#D3E8DB",overflow:"hidden"},
+    premiumBotanicalLeaf:{position:"absolute",right:-20,bottom:-35,transform:[{rotate:"-25deg"}]},
     premiumEmblem:{width:110,height:110,borderRadius:25,transform:[{rotate:"-8deg"}],padding:6,backgroundColor:"#FFFFFF",shadowColor:"#04744E",shadowOpacity:0.19,shadowOffset:{width:0,height:6},shadowRadius:13,elevation:3},
     premiumEmblemMobile:{width:62,height:62,borderRadius:15,padding:4},
     premiumEmblemFace:{flex:1,borderRadius:19,alignItems:"center",justifyContent:"center"},
