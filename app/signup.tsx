@@ -1,10 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
-import * as AuthSession from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,11 +20,9 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
-WebBrowser.maybeCompleteAuthSession();
 
 const redirectUri = AuthSession.makeRedirectUri({
   scheme: "com.froyarjan123.volunserve",
@@ -428,8 +422,7 @@ export default function Signup() {
 
   const [step, setStep] = useState<Step>(1);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [googleBound, setGoogleBound] = useState(false);
-  const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
+  const googleBound = false;
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -464,12 +457,6 @@ export default function Signup() {
   }, []);
 
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
-    androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
-    redirectUri,
-    scopes: ["openid", "profile", "email"],
-  });
 
   const today = new Date();
   const maxDOB = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
@@ -477,38 +464,6 @@ export default function Signup() {
 
   const progressPercent = (step / 4) * 100;
 
-  useEffect(() => {
-    const handleGoogleSuccess = async () => {
-      if (response?.type !== "success") return;
-      try {
-        const idToken = response.params?.id_token;
-        if (!idToken) {
-          Alert.alert("Google Error", "No ID token returned.");
-          return;
-        }
-
-        const credential = GoogleAuthProvider.credential(idToken);
-        const userCred = await signInWithCredential(auth, credential);
-        const user = userCred.user;
-        const parsed = splitDisplayName(user.displayName || "");
-        const googleEmail = (user.email || "").trim().toLowerCase();
-
-        updateField("email", googleEmail);
-        if (parsed.firstName) updateField("firstName", sanitizeName(parsed.firstName));
-        if (parsed.lastName) updateField("lastName", sanitizeName(parsed.lastName));
-
-        setGoogleBound(true);
-        setGoogleProfileLoaded(true);
-        setStep(1);
-        setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0);
-
-        Alert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
-      } catch (error: any) {
-        Alert.alert("Firebase Error", getFriendlyAuthError(error));
-      }
-    };
-    handleGoogleSuccess();
-  }, [response, updateField]);
 
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
@@ -603,13 +558,6 @@ export default function Signup() {
     }
   }, [scrollTop, step]);
 
-  const handleGooglePress = useCallback(async () => {
-    try {
-      await promptAsync();
-    } catch (error: any) {
-      Alert.alert("Google Error", getFriendlyAuthError(error));
-    }
-  }, [promptAsync]);
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
