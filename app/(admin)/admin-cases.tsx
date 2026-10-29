@@ -579,6 +579,10 @@ export default function AdminCases() {
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [personnelPage, setPersonnelPage] = useState(1);
+  const [volunteerPage, setVolunteerPage] = useState(1);
+  const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
+  const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
@@ -1374,7 +1378,16 @@ export default function AdminCases() {
   useEffect(() => {
     setDetailTab("overview");
     setAssignmentCaseId("");
+    setPersonnelPage(1);
+    setVolunteerPage(1);
+    setActiveAssignmentPage(1);
+    setHistoryAssignmentPage(1);
   }, [selectedCaseId]);
+
+  const pageFive = <T,>(rows: T[], page: number): T[] => {
+    const safe = Math.max(1, Math.min(page, Math.max(1, Math.ceil(rows.length / 5))));
+    return rows.slice((safe - 1) * 5, safe * 5);
+  };
 
   const assignmentsForCase = (caseId: string) =>
     assignments.filter((item) => item.caseId === caseId);
@@ -3608,6 +3621,9 @@ export default function AdminCases() {
 
           const assignmentPanelOpen = assignmentCaseId === incident.id;
           const volunteerCandidates = volunteerCandidatesForCase(incident);
+          const onDutyPersonnel = lguPersonnel.filter(personnel =>
+            personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
+          );
           const eligibleVolunteerCount = volunteerCandidates.filter(
             (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible
           ).length;
@@ -5702,13 +5718,8 @@ export default function AdminCases() {
                         </View>
                       ) : (
                         <View style={styles.personnelCompactList}>
-                          {lguPersonnel
-                            .filter(
-                              (personnel) =>
-                                personnel.uid !== incident.activeLguResponderUid &&
-                                personnel.dutyStatus === "on_duty",
-                            )
-                            .map((personnel) => {
+                          <ListPagination page={Math.max(1, Math.min(personnelPage, Math.ceil(onDutyPersonnel.length / 5) || 1))} total={onDutyPersonnel.length} pageSize={5} onChange={setPersonnelPage} />
+                          {pageFive(onDutyPersonnel, personnelPage).map((personnel) => {
                               const assignable =
                                 personnel.verificationStatus === "verified" &&
                                 personnel.employmentStatus === "active" &&
@@ -5873,14 +5884,14 @@ export default function AdminCases() {
                             value={skillFilter}
                             placeholder="Search volunteers / skills"
                             placeholderTextColor="#94a3b8"
-                            onChangeText={setSkillFilter}
+                            onChangeText={value => { setSkillFilter(value); setVolunteerPage(1); }}
                           />
                           <TextInput
                             style={styles.personnelCompactFilter}
                             value={availabilityFilter}
                             placeholder="Availability"
                             placeholderTextColor="#94a3b8"
-                            onChangeText={setAvailabilityFilter}
+                            onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
                           />
                         </View>
                       </View>
@@ -5905,7 +5916,8 @@ export default function AdminCases() {
                         </View>
                       ) : (
                         <View style={styles.personnelCompactList}>
-                          {volunteerCandidates.slice(0, 20).map((volunteer) => {
+                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(volunteerCandidates.length / 5) || 1))} total={volunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                          {pageFive(volunteerCandidates, volunteerPage).map((volunteer) => {
                             const key = `${incident.id}_${volunteer.uid}`;
                             const eligibility = volunteerEligibilityForCase(incident, volunteer);
                             const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
@@ -6024,7 +6036,8 @@ export default function AdminCases() {
                         </View>
                       ) : (
                         <View style={styles.personnelCompactList}>
-                          {activeAssignments.map((assignment) => {
+                          <ListPagination page={Math.max(1, Math.min(activeAssignmentPage, Math.ceil(activeAssignments.length / 5) || 1))} total={activeAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
+                          {pageFive(activeAssignments, activeAssignmentPage).map((assignment) => {
                             const currentVolunteer = approvedVolunteers.find(
                               (item) => item.uid === assignment.volunteerId,
                             );
@@ -6106,7 +6119,8 @@ export default function AdminCases() {
                   {incidentAssignments.length > 0 && (
                     <View style={styles.historyAssignments}>
                       <Text style={styles.overviewLabel}>Volunteer support history</Text>
-                      {incidentAssignments.map((assignment) => (
+                      <ListPagination page={Math.max(1, Math.min(historyAssignmentPage, Math.ceil(incidentAssignments.length / 5) || 1))} total={incidentAssignments.length} pageSize={5} onChange={setHistoryAssignmentPage} />
+                      {pageFive(incidentAssignments, historyAssignmentPage).map((assignment) => (
                         <View key={assignment.id} style={styles.historyAssignmentRow}>
                           <Text style={styles.historyAssignmentName}>
                             {assignment.volunteerName || "Volunteer"}
