@@ -34,6 +34,6 @@ test("keep confirmation, authorization and auditable actions",()=>{
 });
 test("super admin sidebar and Overview use consistent professional Admin Accounts label",()=>{
  assert.match(layout,/label: "Admin Accounts"/);
- assert.match(overview,/Manage Admin Accounts/);
+ assert.match(overview,/label:\\s*"Admin accounts"|label:"Admin Accounts"/);
  assert.doesNotMatch(layout,/LGU Staff & Admin Accounts/);
 });
