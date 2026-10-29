@@ -1,0 +1,42 @@
+name: Validate Compact LGU Admin UX and Pagination
+on:
+  push:
+    branches:
+      - fix/admin-compact-tabs-pagination-typography-20261030
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/(admin)/**
+      - components/admin/**
+      - components/ui/ListPagination.tsx
+      - scripts/test-admin-compact-workspace-ux.cjs
+      - .github/workflows/validate-admin-compact-pagination-ux.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify paginated workspace, workflows and typography
+        run: |
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-admin-overview-ui.cjs
+          node scripts/test-dashboard-overviews.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile Expo web without deploying
+        run: npx expo export --platform web

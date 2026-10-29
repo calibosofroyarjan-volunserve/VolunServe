@@ -53,6 +53,8 @@ type DisasterCase = {
 
 type PendingResident = { id: string; fullName?: string; email?: string; barangay?: string; identityStatus?: string; status?: string; };
 
+type WorkspaceTab = "overview" | "identity" | "residents" | "volunteers" | "insights";
+
 type BarangayNeedAssessment = {
   id: string;
   barangay?: string;
@@ -102,6 +104,8 @@ export default function CommandCenter() {
   >([]);
   const [pendingResidents, setPendingResidents] = useState<PendingResident[]>([]);
   const [residentReviewPage, setResidentReviewPage] = useState(1);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("overview");
+  const [priorityPage, setPriorityPage] = useState(1);
 
   const [
     dataError,
@@ -428,7 +432,7 @@ export default function CommandCenter() {
         Platform.OS === "web" && styles.webScrollBar,
       ]}
       contentContainerStyle={styles.page}
-      showsVerticalScrollIndicator={true}
+      showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       accessibilityLabel="Admin dashboard content"
     >
@@ -510,6 +514,25 @@ export default function CommandCenter() {
         )}
 
 
+        <View style={styles.workspaceTabs} accessibilityLabel="Command Center workspace navigation">
+          {([
+            { id: "overview", label: "Overview", icon: "grid-outline" as const },
+            { id: "identity", label: "Identity Reviews", icon: "finger-print-outline" as const },
+            { id: "residents", label: "Resident Accounts", icon: "people-outline" as const },
+            { id: "volunteers", label: "Volunteer Approvals", icon: "checkmark-circle-outline" as const },
+            { id: "insights", label: "Service Analytics", icon: "stats-chart-outline" as const },
+          ] as {id: WorkspaceTab; label: string; icon: React.ComponentProps<typeof Ionicons>["name"]}[]).map(tab => (
+            <TouchableOpacity key={tab.id} accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: workspaceTab === tab.id }}
+              onPress={() => setWorkspaceTab(tab.id)}
+              style={[styles.workspaceTab, workspaceTab === tab.id && styles.workspaceTabActive]}>
+              <Ionicons name={tab.icon} size={16} color={workspaceTab === tab.id ? "#126B50" : "#708477"} />
+              <Text style={[styles.workspaceTabText, workspaceTab === tab.id && styles.workspaceTabTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {workspaceTab === "overview" && (
         <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
           <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
             <View style={styles.overviewSectionHeader}>
@@ -520,6 +543,7 @@ export default function CommandCenter() {
               <Text style={styles.sectionTitle}>Priority Actions</Text>
               <Text style={styles.overviewSectionSubtitle}>Urgent reports first; other requests follow their own approval sequence.</Text>
             </View>
+            <ListPagination page={priorityPage} total={6} pageSize={5} onChange={setPriorityPage} />
             {[
               {
                 key: "critical", label: "Emergency response",
@@ -561,7 +585,7 @@ export default function CommandCenter() {
                 icon: "checkmark-done-outline" as const, count: null,
                 route: "/(admin)/community-attendance",
               },
-            ].map(action => (
+            ].slice((priorityPage - 1) * 5, priorityPage * 5).map(action => (
               <TouchableOpacity key={action.key} accessibilityRole="button"
                 accessibilityLabel={action.label} style={styles.overviewAction}
                 activeOpacity={0.78} onPress={() => navigate(action.route)}>
@@ -591,7 +615,9 @@ export default function CommandCenter() {
             />
           </View>
         </View>
-        <DashboardPendingIdentityReviews />
+        )}
+        {workspaceTab === "identity" && <DashboardPendingIdentityReviews />}
+        {workspaceTab === "residents" && (
         <View style={styles.residentReviewPanel}>
           <View style={styles.residentReviewHeader}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -623,9 +649,10 @@ export default function CommandCenter() {
               </View>
             ))}
         </View>
-        <DashboardVolunteerApprovals />
+        )}
+        {workspaceTab === "volunteers" && <DashboardVolunteerApprovals />}
 
-        <DashboardOperationalInsights />
+        {workspaceTab === "insights" && <DashboardOperationalInsights />}
       </View>
 
     </ScrollView>
@@ -634,6 +661,14 @@ export default function CommandCenter() {
 
 const styles =
   StyleSheet.create({
+    workspaceTabs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5,
+      borderBottomWidth: 1, borderBottomColor: "#DDE8E1", marginBottom: 13 },
+    workspaceTab: { flexGrow: 1, minHeight: 43, flexDirection: "row", alignItems: "center",
+      justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
+      borderBottomWidth: 2, borderBottomColor: "transparent" },
+    workspaceTabActive: { borderBottomColor: "#167456", backgroundColor: "#EAF4ED", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+    workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" },
+    workspaceTabTextActive: { color: "#135E48", fontWeight: "800" },
     residentReviewPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E9E0", borderRadius: 14, padding: 18, marginBottom: 16 },
     residentReviewHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 },
     residentEyebrow: { fontSize: 10, letterSpacing: 1, color: "#14785A", fontWeight: "800" },
@@ -649,15 +684,15 @@ const styles =
     residentAction: { paddingHorizontal: 13, minHeight: 44, justifyContent: "center", borderRadius: 10, backgroundColor: "#E9F5EE" },
     residentActionText: { color: "#137054", fontSize: 12, fontWeight: "800" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
-    kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:24},
+    kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:10,marginBottom:12},
     kpiGridCompact: {gap:9},
     kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
-      padding:17,borderWidth:1,borderColor:"#D9E7DF"},
+      padding:12,borderWidth:1,borderColor:"#D9E7DF"},
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
     kpiCardLabel: {fontSize:11,fontWeight:"700",color:"#688073",flex:1,lineHeight:16},
-    kpiCardValue: {fontSize:29,fontWeight:"800",color:"#164535",marginTop:13,fontVariant:["tabular-nums"]},
+    kpiCardValue: {fontSize:25,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:9},
     kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
     kpiFeaturedText: {color:"#FFFFFF"},
@@ -665,8 +700,8 @@ const styles =
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
       overflow: "hidden", position: "relative", backgroundColor: "#103E33",
-      borderRadius: 16, paddingHorizontal: 30, paddingTop: 28, paddingBottom: 15,
-      marginBottom: 29, borderWidth: 1, borderColor: "#235D4E",
+      borderRadius: 12, paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14,
+      marginBottom: 13, borderWidth: 1, borderColor: "#235D4E",
     },
     heroOrbLarge: {
       position: "absolute", right: -105, top: -180, width: 375, height: 375,
@@ -679,15 +714,15 @@ const styles =
     },
     heroHeader: {
       flexDirection: "row", alignItems: "flex-start",
-      justifyContent: "space-between", gap: 22, paddingBottom: 26,
+      justifyContent: "space-between", gap: 16, paddingBottom: 8,
     },
     heroHeaderCompact: { flexDirection: "column", gap: 14, paddingBottom: 20 },
     heroCopy: { flex: 1, minWidth: 0, zIndex: 1 },
-    heroEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 },
+    heroEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 5 },
     heroEyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#AFD7A0" },
     heroEyebrowText: { color: "#A9D9C5", letterSpacing: 1.35, fontSize: 10.5, fontWeight: "700" },
-    heroTitle: { color: "#FFFFFF", fontSize: 32, lineHeight: 40, letterSpacing: -0.7, fontWeight: "700" },
-    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 7, fontSize: 13, lineHeight: 21 },
+    heroTitle: { color: "#FFFFFF", fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: "700" },
+    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 7, fontSize: 12.5, lineHeight: 18 },
     heroLocality: {
       flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 8, zIndex: 1,
     },
@@ -700,21 +735,21 @@ const styles =
     chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
     overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
-    overviewColumns: { flexDirection: "row", gap: 18, alignItems: "stretch", marginBottom: 24 },
-    overviewColumnsStack: { flexDirection: "column", gap: 18 },
-    overviewPrimary: { flex: 1.18, minWidth: 0, padding: 22, borderRadius: 14, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewColumns: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 12 },
+    overviewColumnsStack: { flexDirection: "column", gap: 10 },
+    overviewPrimary: { flex: 1.18, minWidth: 0, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
     overviewSecondary: { flex: 1, minWidth: 0, padding: 22, borderRadius: 14, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
     overviewFullWidth: { flex: 0, width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
     overviewSectionSubtitle: { color: "#6C8076", fontSize: 12.5, lineHeight: 19, marginTop: 6 },
     overviewAction: {
-      flexDirection: "row", gap: 13, alignItems: "center", paddingVertical: 15, paddingHorizontal: 2,
-      borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 73,
+      flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 8, paddingHorizontal: 2,
+      borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 49,
     },
-    overviewActionIcon: { width: 40, height: 40, borderRadius: 11, backgroundColor: "#EAF4ED", alignItems: "center", justifyContent: "center" },
+    overviewActionIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#EAF4ED", alignItems: "center", justifyContent: "center" },
     overviewActionContent: { flex: 1, minWidth: 0 },
-    overviewActionTitle: { fontSize: 13.5, fontWeight: "700", color: "#173E31" },
-    overviewActionDetail: { fontSize: 12, lineHeight: 18, color: "#708579", marginTop: 4 },
+    overviewActionTitle: { fontSize: 12.5, fontWeight: "700", color: "#173E31" },
+    overviewActionDetail: { fontSize: 11, lineHeight: 16, color: "#708579", marginTop: 2 },
     metricItemCritical: {},
     metricItemValueCritical: { color: "#EBC18B" },
     overline: {
@@ -752,9 +787,9 @@ const styles =
 
     page: {
       width: "100%",
-      paddingHorizontal: 25,
-      paddingTop: 25,
-      paddingBottom: 64,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 18,
     },
 
     content: {
