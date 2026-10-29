@@ -10,7 +10,6 @@ import {
   Inter_800ExtraBold,
 } from "@expo-google-fonts/inter";
 import DonationHeroArt from "../../components/donations/DonationHeroArt";
-import DogsCampaignDemo from "../../components/donations/DogsCampaignDemo";
 import PremiumCampaignDetails from "../../components/donations/PremiumCampaignDetails";
 import CampaignBeneficiaryWallet from "../../components/donations/CampaignBeneficiaryWallet";
 import {
@@ -993,14 +992,6 @@ export default function Donation() {
             {showCompletedCampaigns && (
               <Text style={styles.donationPastHint}>Completed campaigns are shown for transparency. Closed or fully funded campaigns cannot accept new donations.</Text>
             )}
-
-            {/* A deliberately isolated presentation sample in the actual Donations module.
-                Its sample contributions never enter Firestore or real donation counters. */}
-            {!showCompletedCampaigns &&
-              (filter === "all" || filter === "community_needs_help") &&
-              (!searchText.trim() || /dog|animal|pet|feed|welfare|support|campaign|demo/i.test(searchText.trim()))
-                ? <DogsCampaignDemo/>
-                : null}
 
             {!campaignsReady ? (
               <View style={styles.emptyCard}>
