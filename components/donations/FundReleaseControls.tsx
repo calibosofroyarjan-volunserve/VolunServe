@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { auth } from "../../lib/firebase";
 import SandboxPayoutForm from "./SandboxPayoutForm";
+import ListPagination from "../ui/ListPagination";
 import WalletBrandLogo from "./WalletBrandLogo";
 import BeneficiaryReviewCard, {type VerifiedBeneficiary} from "./BeneficiaryReviewCard";
 import type { ReconciliationCampaign } from "./FundReconciliationPanel";
@@ -61,6 +62,7 @@ export default function FundReleaseControls({campaigns,ready}:{
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
   const [selectedId,setSelectedId] = useState("");
+  const [campaignPage, setCampaignPage] = useState(1);
   const [inputAmount,setInputAmount] = useState("");
   const [reviewNote,setReviewNote] = useState("");
   const [decisionNote,setDecisionNote] = useState("");
@@ -74,6 +76,8 @@ export default function FundReleaseControls({campaigns,ready}:{
       Number(!!funding.find(x=>x.campaignId===b.id)?.ready)-
       Number(!!funding.find(x=>x.campaignId===a.id)?.ready)),
     [campaigns,funding]);
+  const activeCampaignPage = Math.max(1, Math.min(campaignPage, Math.max(1, Math.ceil(eligibleCampaigns.length / 5))));
+  const pagedCampaigns = eligibleCampaigns.slice((activeCampaignPage - 1) * 5, activeCampaignPage * 5);
   const selection = eligibleCampaigns.find(c=>c.id===selectedId) || null;
   const record = rows.find(a=>a.campaignId===selectedId) || null;
   const activeFunding = funding.find(x=>x.campaignId===selectedId) || null;
@@ -215,7 +219,8 @@ export default function FundReleaseControls({campaigns,ready}:{
     </Text>:
     <View style={ss.layout}>
       <View style={ss.list}>
-        {eligibleCampaigns.map(c=>{
+        <ListPagination page={activeCampaignPage} total={eligibleCampaigns.length} pageSize={5} onChange={setCampaignPage} />
+        {pagedCampaigns.map(c=>{
           const existing=rows.find(x=>x.campaignId===c.id);
           const check=funding.find(x=>x.campaignId===c.id);
           return <Pressable key={c.id} onPress={()=>pick(c.id)}
