@@ -42,7 +42,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "System Overview", icon: "stats-chart-outline", route: "/(superadmin)", match: "/" },
-  { label: "LGU Staff & Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
+  { label: "Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
   { label: "System Records", icon: "albums-outline", route: "/(superadmin)/all-records", match: "/all-records" },
   { label: "Audit Logs", icon: "time-outline", route: "/(superadmin)/admin-logs", match: "/admin-logs" },
 ];
