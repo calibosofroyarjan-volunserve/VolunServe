@@ -21,12 +21,15 @@ test("System Records are grouped into five distinct operational areas", () => {
 });
 
 test("Recorded account roles isolate resident, volunteer and staff user lists without hiding unknown roles", () => {
-  assertHas(source, "function accountAudienceForRole(role: unknown): AccountAudience");
+  assertHas(source, "function accountAudienceForUser(account: GenericRecord): AccountAudience");
+  assertHas(source, "account.volunteerAccess === true");
+  assertHas(source, 'account.volunteerStatus === "approved"');
+  assertHas(source, "account.residentAccess === true");
   for (const role of ["resident","basic_resident","verified_resident","volunteer","admin","superadmin","applicant"]) {
     assertHas(source, '"' + role + '"');
   }
   assertHas(source, 'return "other";');
-  assertHas(source, "source.filter(item => accountAudienceForRole(item.role) === activeView.audience)");
+  assertHas(source, "source.filter(item => accountAudienceForUser(item) === activeView.audience)");
   assertHas(source, "activeViewId,");
 });
 
@@ -65,4 +68,25 @@ test("Browse Records uses one compact dropdown plus underline tabs, never stacke
     "Remove two bulky rows and nested mint panel");
   assert(!source.includes("CATEGORY_PAGE_SIZE") && !source.includes("tabsScroll"),
     "Do not restore an unrelated category pager or horizontal scrollbar");
+});
+
+test("Resident volunteers with approved access appear under Volunteers, never in staff or ordinary residents", () => {
+  const vm = require("node:vm"), ts = require("typescript");
+  const start = source.indexOf("function accountAudienceForUser(account: GenericRecord)");
+  const end = source.indexOf("export default function AllRecords()", start);
+  assert(start >= 0 && end > start);
+  const fragment = source.slice(start,end) + "\nmodule.exports = accountAudienceForUser;";
+  const compiled = ts.transpileModule(fragment, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS }
+  }).outputText;
+  const sandbox = { module: { exports: null } };
+  vm.runInNewContext(compiled, sandbox, { timeout: 1000 });
+  const classify = sandbox.module.exports;
+  assert.equal(classify({ role: "resident", residentAccess: true, volunteerAccess: true, volunteerStatus: "approved" }), "volunteer");
+  assert.equal(classify({ role: "resident", volunteerStatus: "approved" }), "volunteer");
+  assert.equal(classify({ role: "resident", volunteerAccess: false, volunteerStatus: "approved" }), "resident");
+  assert.equal(classify({ role: "resident", residentAccess: true }), "resident");
+  assert.equal(classify({ role: "volunteer" }), "volunteer");
+  assert.equal(classify({ role: "admin", volunteerAccess: true }), "staff");
+  assert.equal(classify({ role: null }), "other");
 });

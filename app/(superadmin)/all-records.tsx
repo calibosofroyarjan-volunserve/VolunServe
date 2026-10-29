@@ -302,11 +302,23 @@ const recordSections: SystemRecordSection[] = [
   },
 ];
 
-function accountAudienceForRole(role: unknown): AccountAudience {
-  const normalized = typeof role === "string" ? role.trim().toLowerCase() : "";
-  if (["superadmin", "super_admin", "admin", "lgu_personnel", "applicant", "lgu_staff", "staff"].includes(normalized)) return "staff";
-  if (["volunteer", "verified_volunteer"].includes(normalized)) return "volunteer";
-  if (["resident", "basic_resident", "verified_resident", "basic", "verified"].includes(normalized)) return "resident";
+// Approved Volunteer Mode is a capability of the Resident account.
+// The LGU Admin grants volunteerAccess without replacing users.role.
+function accountAudienceForUser(account: GenericRecord): AccountAudience {
+  const role = typeof account.role === "string" ? account.role.trim().toLowerCase() : "";
+  if (["superadmin", "super_admin", "admin", "lgu_personnel", "applicant", "lgu_staff", "staff"].includes(role)) {
+    return "staff";
+  }
+  const grantedVolunteer = account.volunteerAccess === true ||
+    (account.volunteerAccess !== false && account.volunteerStatus === "approved");
+  if (grantedVolunteer ||
+    (["volunteer", "verified_volunteer"].includes(role) && account.volunteerAccess !== false)) {
+    return "volunteer";
+  }
+  if (["resident", "basic_resident", "verified_resident", "basic", "verified"].includes(role) ||
+      account.residentAccess === true) {
+    return "resident";
+  }
   return "other";
 }
 
@@ -528,7 +540,7 @@ export default function AllRecords() {
         .find(view => view.id === activeViewId);
       const source = records[activeTab];
       const scopedRecords = activeTab === "users" && activeView?.audience
-        ? source.filter(item => accountAudienceForRole(item.role) === activeView.audience)
+        ? source.filter(item => accountAudienceForUser(item) === activeView.audience)
         : source;
 
       const term =
