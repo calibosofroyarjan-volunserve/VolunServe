@@ -16,12 +16,12 @@ function menu(id) {
 }
 test("Resident and Volunteer sidebar menus keep only actual service modules",()=>{
  assert.deepEqual(menu("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
- assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events","donation"]);
+ assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events"]);
  for(const id of ["residentDesktopTabs","volunteerDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
    for(const duplicate of ["profile","certificate","volunteer-impact"])
      assert.ok(!menu(id).includes(duplicate),duplicate+" leaked into "+id);
  assert.deepEqual(menu("residentMobileTabs"),["index","disaster-response","resident","community-events"]);
- assert.deepEqual(menu("volunteerMobileTabs"),["index","volunteer","community-events","donation"]);
+ assert.deepEqual(menu("volunteerMobileTabs"),["index","volunteer","community-events"]);
 });
 test("Top-right account dropdown still has a Profile destination for both user modes",()=>{
  assert.match(homeWeb,/title="My Profile"/);
