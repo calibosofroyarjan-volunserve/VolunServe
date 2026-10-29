@@ -25,7 +25,7 @@ test("Resident navigation has five service modules; Profile stays in account men
 test("Volunteer navigation exposes Emergency Tasks not redundant progress or alerts",()=>{
  const menuText=menu("volunteerDesktopTabs");
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
- assert.deepEqual(found,["index","volunteer","community-events","donation"]);
+ assert.deepEqual(found,["index","volunteer","community-events"]);
  assert.match(menuText,/label:"Emergency Tasks"/);
  assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|Certificates|My Profile/);
  assert.match(web,/Emergency Tasks/);
