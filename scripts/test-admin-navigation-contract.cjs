@@ -16,9 +16,8 @@ const saItems = firstBetween(sa, "const navItems: NavItem[] = [", "export defaul
 const expectedSa = [
   ["System Overview","/(superadmin)"],
   ["LGU Staff & Admin Accounts","/(superadmin)/admin-accounts"],
-  ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
-  ["System Records (Read Only)","/(superadmin)/all-records"],
-  ["System Settings","/(superadmin)/system-settings"],
+  ["System Records","/(superadmin)/all-records"],
+  ["Audit Logs","/(superadmin)/admin-logs"],
 ];
 for(let i=0;i<expectedSa.length;i++){
   const [label,route]=expectedSa[i];
@@ -27,6 +26,13 @@ for(let i=0;i<expectedSa.length;i++){
   if(i>0)assert(saItems.indexOf('label: "'+expectedSa[i-1][0]+'"') <
     saItems.indexOf('label: "'+label+'"'),"Incorrect Super Admin menu sequence");
 }
+assert((saItems.match(/label: "/g) || []).length === 4, "Exactly four operational sidebar modules allowed");
+const accountDropdown = firstBetween(sa, "{accountOpen && (", "<View style={styles.contentArea}>");
+const actions = [...accountDropdown.matchAll(/accessibilityLabel="(View Profile|System Settings|Sign Out)"/g)].map(m=>m[1]);
+assert.deepEqual(actions, ["View Profile","System Settings","Sign Out"], "Profile dropdown retains account and settings actions");
+assert(accountDropdown.includes('router.push("/(superadmin)/system-settings" as Href)'),
+  "System Settings must be accessible in Super Admin profile dropdown");
+assert(accountDropdown.includes("onPress={confirmSignOut}"), "Sign Out must remain functional in profile dropdown");
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [

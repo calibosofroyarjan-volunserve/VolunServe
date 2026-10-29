@@ -32,7 +32,9 @@ test("Resident web and mobile sign-in keep Firebase and accessible inline error 
  }
  assert.match(web,/browserLocalPersistence/);
  assert.match(web,/browserSessionPersistence/);
- assert.match(web,/sendPasswordResetEmail/);
+ assert.match(web,/PasswordResetModal/);
+ assert.match(native,/PasswordResetModal/);
+ assert.match(read("components/auth/PasswordResetModal.tsx"),/sendPasswordResetEmail\(auth, cleanEmail\)/);
  assert.match(web,/connectGoogleAccountWeb/);
  assert.match(feedback,/accessibilityRole="alert"/);
 });
@@ -40,6 +42,7 @@ test("LGU and Super Admin preserve separate credential-only access and staff app
  const admin=read("app/admin-login.tsx");
  const root=read("app/_layout.tsx");
  assert.match(admin,/PremiumAuthShell active="admin"/);
+ assert.match(admin,/PasswordResetModal/);
  assert.match(admin,/isApprovedProfile\(profile\)/);
  assert.match(admin,/profile\.adminStatus !== "suspended"/);
  assert.match(admin,/signOut\(auth\)/);

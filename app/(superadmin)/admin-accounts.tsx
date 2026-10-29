@@ -1,3 +1,5 @@
+import ListPagination from "../../components/ui/ListPagination";
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -26,7 +28,8 @@ import {
   View,
 } from "react-native";
 
-import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguApplicantEvidencePanel from "../../components/admin/LguApplicantEvidencePanel";
+import LguStaffPrivacyRequestsPanel from "../../components/admin/LguStaffPrivacyRequestsPanel";
 
 import {
   db,
@@ -96,6 +99,7 @@ const nameFor = (
 
 export default function AdminAccounts() {
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const compact = viewportWidth < 780;
   const {
     user: sessionUser,
     profile: sessionProfile,
@@ -135,21 +139,11 @@ export default function AdminAccounts() {
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
+  const [applicantPage, setApplicantPage] = useState(1);
+  const [applicationSearch, setApplicationSearch] = useState("");
+  React.useEffect(() => { setApplicantPage(1); }, [applicationSearch]);
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); }, [search, filter]);
-
-  const [
-    showAddAdmin,
-    setShowAddAdmin,
-  ] = useState(false);
-
-  const [showCreateIndependentAdmin, setShowCreateIndependentAdmin] = useState(false);
-  const [creationNotice, setCreationNotice] = useState("");
-
-  const [
-    promoteSearch,
-    setPromoteSearch,
-  ] = useState("");
 
   const [
     actionType,
@@ -172,16 +166,22 @@ export default function AdminAccounts() {
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
+  const [evidenceReady, setEvidenceReady] = useState(false);
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
   const [identityMatched, setIdentityMatched] = useState(false);
+  // Until validated active liveness exists, require a human observation of
+  // the living applicant AND the original government-issued ID in person.
+  const [inPersonIdentityConfirmed, setInPersonIdentityConfirmed] = useState(false);
   const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
   const clearCredentialReview = () => {
     setLguOffice("");
     setLguPosition("");
     setLguReference("");
     setLguVerificationMethod("");
+    setEvidenceReady(false);
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
+    setInPersonIdentityConfirmed(false);
     setLguEmploymentConfirmed(false);
   };
   const reviewComplete =
@@ -192,7 +192,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed && evidenceReady &&
+    inPersonIdentityConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -245,7 +246,7 @@ export default function AdminAccounts() {
 
           setLoading(false);
 
-          Alert.alert(
+          AppAlert.alert(
             "Error",
             "Unable to load user accounts."
           );
@@ -323,63 +324,24 @@ export default function AdminAccounts() {
     safeAdminPage * ADMIN_PAGE_SIZE
   );
 
-  const eligibleUsers =
-    useMemo(() => {
-      const term =
-        promoteSearch
-          .trim()
-          .toLowerCase();
-
-      // Avoid showing arbitrary Resident accounts in a privileged access picker.
-      // Require an intentional exact-name/email search before selecting staff.
-      if (term.length < 3) {
-        return [];
-      }
-
-      return users
-        .filter((item) => {
-          if (
-            item.role ===
-              "admin" ||
-            item.role ===
-              "superadmin"
-          ) {
-            return false;
-          }
-
-          if (
-            item.status !==
-            "approved"
-          ) {
-            return false;
-          }
-
-          if (!term) {
-            return true;
-          }
-
-          const searchable = [
-            item.fullName,
-            item.email,
-            item.role,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          return searchable.includes(
-            term
-          );
-        })
-        .slice(0, 30);
-    }, [
-      users,
-      promoteSearch,
-    ]);
-
+  const pendingTotal = users.filter(account =>
+    account.role === "applicant" && account.status === "pending_review"
+  ).length;
+  const applicationQuery = applicationSearch.trim().toLowerCase();
   const pendingLguApplications = users
     .filter(account => account.role === "applicant" && account.status === "pending_review")
+    .filter(account => !applicationQuery || [
+      nameFor(account), account.email,
+      (account as any).lguOffice, (account as any).lguPosition,
+      (account as any).appointmentReference,
+    ].filter(Boolean).join(" ").toLowerCase().includes(applicationQuery))
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
+  const applicantPageCount = Math.max(1, Math.ceil(pendingLguApplications.length / 5));
+  const safeApplicantPage = Math.min(applicantPage, applicantPageCount);
+  const pagedLguApplications = pendingLguApplications.slice(
+    (safeApplicantPage - 1) * 5, safeApplicantPage * 5
+  );
+
 
   const totalAdmins =
     users.filter(
@@ -391,10 +353,8 @@ export default function AdminAccounts() {
     users.filter(
       (item) =>
         item.role === "admin" &&
-        item.status !==
-          "suspended" &&
-        item.adminStatus !==
-          "suspended"
+        item.status === "approved" &&
+        item.adminStatus !== "suspended"
     ).length;
 
   const suspendedAdmins =
@@ -404,7 +364,7 @@ export default function AdminAccounts() {
   const verifySuperAdmin =
     () => {
       if (!sessionUser) {
-        Alert.alert(
+        AppAlert.alert(
           "Session Error",
           "Please sign in again."
         );
@@ -416,7 +376,7 @@ export default function AdminAccounts() {
         !isSuperAdmin ||
         !sessionProfile
       ) {
-        Alert.alert(
+        AppAlert.alert(
           "Access Denied",
           "Only the active Super Admin can manage Admin accounts."
         );
@@ -611,6 +571,8 @@ export default function AdminAccounts() {
             position: lguPosition.trim(),
             credentialReference: lguReference.trim(),
             verificationMethod: lguVerificationMethod.trim(),
+            identityPresenceMethod: "in_person_original_government_id_review",
+            identityPresenceConfirmed: true,
             verifiedBy: verified.current.uid,
             verifiedAt: serverTimestamp(),
           });
@@ -855,18 +817,6 @@ export default function AdminAccounts() {
         });
         await batch.commit();
 
-        if (
-          action === "promote"
-        ) {
-          setShowAddAdmin(
-            false
-          );
-
-          setPromoteSearch(
-            ""
-          );
-        }
-
         setActionType(null);
         setActionTarget(null);
         setActionError("");
@@ -944,7 +894,7 @@ export default function AdminAccounts() {
         }
       >
         <View
-          style={styles.header}
+          style={[styles.header, compact && styles.headerCompact]}
         >
           <View
             style={{ flex: 1 }}
@@ -956,7 +906,7 @@ export default function AdminAccounts() {
             </Text>
 
             <Text
-              style={styles.title}
+              style={[styles.title, compact && styles.titleCompact]}
             >
               LGU Staff & Admin Accounts
             </Text>
@@ -970,61 +920,106 @@ export default function AdminAccounts() {
 
         </View>
 
-        {!!creationNotice && (
-          <Text accessibilityRole="alert" style={{color:"#16654B",fontWeight:"700",marginVertical:8}}>
-            {creationNotice}
-          </Text>
-        )}
-
         <View style={styles.accessFlow}>
-          <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
-          <View style={styles.accessFlowSteps}>
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>01</Text><Text style={styles.stepText}>Receive staff application</Text></View>
-            <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>02</Text><Text style={styles.stepText}>Verify official LGU credentials</Text></View>
-            <Ionicons name="chevron-forward" size={14} color="#789188" />
-            <View style={styles.accessStep}><Text style={styles.stepNumber}>03</Text><Text style={styles.stepText}>Promote to Admin & record audit</Text></View>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.headingIcon}><Ionicons name="git-network-outline" size={20} color="#087A62" /></View>
+            <View style={styles.sectionHeadingText}>
+              <Text style={styles.accessFlowTitle}>LGU STAFF VERIFICATION FLOW</Text>
+              <Text style={styles.sectionHeading}>Three-step credential verification</Text>
+            </View>
           </View>
-          <Text style={styles.flowHint}>Only the pending LGU staff application queue below is the standard entry point. Verify both identity and employment independently; promote only confirmed staff. Admin accounts can be suspended or revoked after approval.</Text>
+          <View style={[styles.accessFlowSteps, compact && styles.accessFlowStepsCompact]}>
+            {([
+              { number: "01", title: "Receive staff application", description: "Receive the staff-owned account and its submitted evidence." },
+              { number: "02", title: "Verify official LGU credentials", description: "Verify original ID, employment and appointment authority." },
+              { number: "03", title: "Promote to Admin & record audit", description: "Grant LGU Admin permissions with a recorded audit event." },
+            ] as const).map(step => (
+              <View key={step.number} style={[styles.accessStep, compact && styles.accessStepCompact]}>
+                <View style={styles.stepNumberBox}><Text style={styles.stepNumber}>{step.number}</Text></View>
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepText}>{step.title}</Text>
+                  <Text style={styles.stepDescription}>{step.description}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          <View style={styles.flowNotice}>
+            <Ionicons name="shield-checkmark-outline" size={18} color="#23765F" />
+            <Text style={styles.flowHint}>Only independently verified LGU personnel may receive Admin access. Applications remain restricted until approved. No automatic identity or government ID authenticity claims.</Text>
+          </View>
         </View>
-        <View style={{
-          borderWidth:1,borderColor:"#D6E9DD",borderRadius:14,
-          backgroundColor:"#F5FBF7",padding:15,marginBottom:16,gap:10
-        }}>
-          <Text style={{fontSize:15,fontWeight:"900",color:"#174936"}}>
-            LGU Staff Applications · {pendingLguApplications.length} Pending
-          </Text>
-          <Text style={{fontSize:11,color:"#527464",lineHeight:17}}>
-            LGU personnel submit their information first. As programmer Super Admins, review their submitted details and independently confirm identity, LGU employment, and appointment authority. Only verified applicants can be promoted to operational Admin. No access while pending.
-          </Text>
-          {pendingLguApplications.length===0 ? (
-            <Text style={{color:"#698679",fontSize:12}}>No pending staff applications.</Text>
-          ) : pendingLguApplications.slice(0,20).map(account => (
-            <View key={account.id} style={{padding:12,backgroundColor:"#FFFFFF",
-              borderWidth:1,borderColor:"#DCEAE1",borderRadius:10,
-              flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12}}>
-              <View style={{flex:1,minWidth:180}}>
-                <Text style={{fontWeight:"800",color:"#174936"}}>{nameFor(account)}</Text>
-                <Text style={{fontSize:11,color:"#577464"}}>{account.email}</Text>
-                <Text style={{fontSize:11,color:"#577464"}}>{String((account as any).lguOffice||"Unspecified office")} · {String((account as any).lguPosition||"Unspecified position")}</Text>
-                <Text style={{fontSize:10,color:"#698679"}}>Application reference: {String((account as any).appointmentReference||"Not provided")}</Text>
+
+        <View style={styles.applicationPanel}>
+          <View style={[styles.sectionTitleRow, compact && styles.sectionTitleRowCompact]}>
+            <View style={styles.sectionHeadingText}>
+              <Text style={styles.sectionEyebrow}>LGU STAFF ONBOARDING</Text>
+              <Text style={styles.sectionHeading}>LGU Staff Applications</Text>
+              <Text style={styles.sectionDescription}>Review genuine staff submissions, confirm appointment details independently and record each approval.</Text>
+            </View>
+            <View style={styles.pendingBadge}>
+              <View style={styles.pendingDot} />
+              <Text style={styles.pendingBadgeText}>{pendingTotal} pending</Text>
+            </View>
+          </View>
+          <View style={styles.applicationSearch}>
+            <Ionicons name="search-outline" size={19} color="#719187" />
+            <TextInput
+              accessibilityLabel="Search pending LGU staff applications"
+              placeholder="Search applicant, LGU office or reference"
+              placeholderTextColor="#8CA79B"
+              style={styles.applicationSearchInput}
+              value={applicationSearch}
+              onChangeText={setApplicationSearch}
+              autoCapitalize="none"
+            />
+            {!!applicationSearch && <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Clear applicant search"
+              onPress={() => setApplicationSearch("")}
+              style={styles.clearSearch}>
+              <Ionicons name="close-circle" size={19} color="#698579" />
+            </TouchableOpacity>}
+          </View>
+          <ListPagination page={safeApplicantPage} total={pendingLguApplications.length} pageSize={ADMIN_PAGE_SIZE} onChange={setApplicantPage} />
+          {pendingLguApplications.length === 0 ? (
+            <View style={styles.applicationEmpty}>
+              <Ionicons name={applicationSearch ? "search-outline" : "checkmark-done-outline"} size={27} color="#548D76" />
+              <Text style={styles.applicationEmptyTitle}>{applicationSearch ? "No matching applications" : "No pending applications"}</Text>
+              <Text style={styles.applicationEmptyText}>{applicationSearch ? "Try a different name, office or reference." : "New LGU staff applications will appear here after submission."}</Text>
+            </View>
+          ) : pagedLguApplications.map(account => (
+            <View key={account.id} style={[styles.applicationRow, compact && styles.applicationRowCompact]}>
+              <View style={styles.applicantAvatar}>
+                <Text style={styles.applicantAvatarText}>{nameFor(account).charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.applicantBody}>
+                <Text style={styles.applicantName} numberOfLines={2}>{nameFor(account)}</Text>
+                <Text style={styles.applicantEmail} selectable numberOfLines={2}>{account.email || "Email not provided"}</Text>
+                <View style={styles.applicantMetaRow}>
+                  <Ionicons name="business-outline" size={13} color="#698779" />
+                  <Text style={styles.applicantMetaText}>{String((account as any).lguOffice || "Office not provided")} · {String((account as any).lguPosition || "Position not provided")}</Text>
+                </View>
+                <Text style={styles.applicantReference}>Appointment reference: {String((account as any).appointmentReference || "Not provided")}</Text>
               </View>
               <TouchableOpacity accessibilityRole="button"
-                accessibilityLabel={"Review LGU credentials for "+nameFor(account)}
-                style={{backgroundColor:"#087D60",paddingVertical:11,
-                  paddingHorizontal:14,borderRadius:9}}
-                onPress={()=>openAdminAction("promote",account)}>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Review Application</Text>
+                accessibilityLabel={"Review LGU credentials for " + nameFor(account)}
+                style={[styles.reviewApplicationButton, compact && styles.reviewApplicationButtonCompact]}
+                onPress={() => openAdminAction("promote",account)}>
+                <Text style={styles.reviewApplicationText}>Review application</Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           ))}
+
         </View>
 
-        <View
-          style={
-            styles.statsRow
-          }
-        >
+        <View style={styles.accountSectionHeading}>
+          <Text style={styles.sectionEyebrow}>APPROVED STAFF ACCESS</Text>
+          <Text style={styles.sectionHeading}>Existing LGU Admin Accounts</Text>
+          <Text style={styles.sectionDescription}>Manage authorized Admin accounts after staff verification. Suspend, reactivate, or revoke access as required; changes are recorded in the audit log.</Text>
+        </View>
+
+        <View style={[styles.statsRow, compact && styles.statsRowCompact]}>
           <View
             style={
               styles.statCard
@@ -1035,14 +1030,14 @@ export default function AdminAccounts() {
                 styles.statIcon,
                 {
                   backgroundColor:
-                    "#E0F2FE",
+                    "#E4F5ED",
                 },
               ]}
             >
               <Ionicons
                 name="people-outline"
                 size={22}
-                color="#0284C7"
+                color="#087A62"
               />
             </View>
 
@@ -1069,14 +1064,14 @@ export default function AdminAccounts() {
                 styles.statIcon,
                 {
                   backgroundColor:
-                    "#DCFCE7",
+                    "#E1F7ED",
                 },
               ]}
             >
               <Ionicons
                 name="checkmark-circle-outline"
                 size={22}
-                color="#16A34A"
+                color="#12866A"
               />
             </View>
 
@@ -1103,14 +1098,14 @@ export default function AdminAccounts() {
                 styles.statIcon,
                 {
                   backgroundColor:
-                    "#FEF3C7",
+                    "#FFF4DD",
                 },
               ]}
             >
               <Ionicons
                 name="pause-circle-outline"
                 size={22}
-                color="#D97706"
+                color="#A66C23"
               />
             </View>
 
@@ -1202,6 +1197,7 @@ export default function AdminAccounts() {
           })}
         </View>
 
+        <ListPagination page={safeAdminPage} total={adminAccounts.length} pageSize={ADMIN_PAGE_SIZE} onChange={setAdminPage} />
         {adminAccounts.length ===
         0 ? (
           <View
@@ -1529,278 +1525,17 @@ export default function AdminAccounts() {
             }
           )
         )}
-        {adminAccounts.length > 0 && (
-          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingVertical:14}}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous Admin accounts page"
-              disabled={safeAdminPage <= 1} onPress={()=>setAdminPage(Math.max(1,safeAdminPage-1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage<=1?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Previous</Text>
-            </TouchableOpacity>
-            <Text style={{fontWeight:"700",color:"#355D50"}}>
-              Page {safeAdminPage} of {adminPageCount} · {adminAccounts.length} accounts
-            </Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next Admin accounts page"
-              disabled={safeAdminPage >= adminPageCount} onPress={()=>setAdminPage(Math.min(adminPageCount,safeAdminPage+1))}
-              style={{paddingHorizontal:16,paddingVertical:10,borderRadius:10,backgroundColor:"#E2F5ED",opacity:safeAdminPage>=adminPageCount?0.45:1}}>
-              <Text style={{fontWeight:"700",color:"#076B50"}}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
+
+        {/* Secondary privacy requests stay within this workspace, after core staff approval and access management. */}
+        <View style={styles.privacySection}>
+          <Text style={styles.sectionEyebrow}>STAFF DATA GOVERNANCE</Text>
+          <Text style={styles.sectionHeading}>Staff Privacy Requests</Text>
+          <Text style={styles.sectionDescription}>Handle staff data requests separately from credentials and Admin role approvals.</Text>
+          <LguStaffPrivacyRequestsPanel/>
+        </View>
       </ScrollView>
 
-      <CreateLguAdminModal
-        visible={showCreateIndependentAdmin}
-        onClose={() => setShowCreateIndependentAdmin(false)}
-        onCreated={(email) => {
-          setShowCreateIndependentAdmin(false);
-          setCreationNotice("Authorized LGU Admin created: " + email + ". Sign in using /admin-login.");
-        }}
-      />
-
-      <Modal
-        visible={showAddAdmin}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          setShowAddAdmin(false);
-          setPromoteSearch("");
-        }}
-      >
-        <View
-          style={
-            styles.modalBackdrop
-          }
-        >
-          <View
-            style={
-              styles.modalCard
-            }
-          >
-            <View
-              style={
-                styles.modalHeader
-              }
-            >
-              <View
-                style={{ flex: 1 }}
-              >
-                <Text
-                  style={
-                    styles.modalTitle
-                  }
-                >
-                  Select Registered Staff Account
-                </Text>
-
-                <Text
-                  style={
-                    styles.modalSubtitle
-                  }
-                >
-                  Choose a registered staff-owned account. Verify legitimate LGU employment and authorization before granting the Admin role.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={
-                  styles.closeButton
-                }
-                onPress={() => {
-                  setShowAddAdmin(
-                    false
-                  );
-
-                  setPromoteSearch(
-                    ""
-                  );
-                }}
-              >
-                <Ionicons
-                  name="close"
-                  size={22}
-                  color="#334155"
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={
-                styles.modalSearch
-              }
-            >
-              <Ionicons
-                name="search-outline"
-                size={19}
-                color="#64748B"
-              />
-
-              <TextInput
-                style={
-                  styles.searchInput
-                }
-                value={
-                  promoteSearch
-                }
-                onChangeText={
-                  setPromoteSearch
-                }
-                placeholder={
-                  "Search registered staff by name or email"
-                }
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            <ScrollView
-              style={{
-                maxHeight: 420,
-              }}
-            >
-              {eligibleUsers.length ===
-              0 ? (
-                <View
-                  style={
-                    styles.modalEmpty
-                  }
-                >
-                  <Ionicons
-                    name="person-outline"
-                    size={30}
-                    color="#94A3B8"
-                  />
-
-                  <Text
-                    style={
-                      styles.emptyText
-                    }
-                  >
-                    {promoteSearch.trim().length < 3
-                      ? "Enter at least 3 characters of the staff member's name or email."
-                      : "No matching approved account. Check the registered staff name or email."}
-                  </Text>
-                </View>
-              ) : (
-                eligibleUsers.map(
-                  (account) => {
-                    const isSaving =
-                      savingUid ===
-                      account.id;
-
-                    return (
-                      <View
-                        key={
-                          account.id
-                        }
-                        style={
-                          styles.userRow
-                        }
-                      >
-                        <View
-                          style={
-                            styles.smallAvatar
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.smallAvatarText
-                            }
-                          >
-                            {nameFor(
-                              account
-                            )
-                              .charAt(0)
-                              .toUpperCase()}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={{
-                            flex: 1,
-                          }}
-                        >
-                          <Text
-                            style={
-                              styles.userName
-                            }
-                          >
-                            {nameFor(
-                              account
-                            )}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.userMeta
-                            }
-                          >
-                            {account.email ||
-                              "-"}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.userMeta
-                            }
-                          >
-                            Current role:{" "}
-                            {account.role ||
-                              "resident"}
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          disabled={
-                            isSaving
-                          }
-                          style={
-                            styles.promoteButton
-                          }
-                          onPress={() =>
-                            openAdminAction(
-                              "promote",
-                              account
-                            )
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.promoteButtonText
-                            }
-                          >
-                            {isSaving
-                              ? "Saving..."
-                              : "Review Access"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-                )
-              )}
-            </ScrollView>
-
-            <View
-              style={
-                styles.infoBox
-              }
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={20}
-                color="#0369A1"
-              />
-
-              <Text
-                style={
-                  styles.infoText
-                }
-              >
-                Staff accounts use Firebase Authentication, while LGU eligibility must be independently verified. Do not grant Admin access to an ordinary Resident or Volunteer without legitimate staff credentials.
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal
         visible={
@@ -1819,9 +1554,9 @@ export default function AdminAccounts() {
           }
         >
           <View
-            style={[styles.confirmCard, { maxWidth: actionType === "promote" ? 880 : 500, maxHeight: viewportHeight * 0.9, padding: viewportWidth < 720 ? 16 : 26 }]}
+            style={[styles.confirmCard, { maxWidth: actionType === "promote" ? 850 : 500, maxHeight: viewportHeight * 0.92, padding: compact ? 17 : 24 }]}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator persistentScrollbar contentContainerStyle={styles.confirmScrollContent}>
             <View
               style={
                 styles.confirmIcon
@@ -1902,10 +1637,19 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
+                <View style={styles.verificationHeading}>
+                  <View style={styles.verificationHeadingIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#087A62" /></View>
+                  <View style={styles.verificationHeadingContent}>
+                    <Text style={styles.verificationTitle}>Independent staff authorization</Text>
+                    <Text style={styles.verificationSubtitle}>Human credential review · Mandatory before access is granted</Text>
+                  </View>
+                </View>
+                <LguApplicantEvidencePanel uid={actionTarget?.id || ""} onReady={setEvidenceReady} />
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
-                  Compare the applicant's information with an independently obtained official LGU source.
-                  Completing this review is required before activating any Admin account.
+                  Confirm employment, appointment and authority with the official LGU office or official records, using contact details obtained independently of the applicant.
+                  Submitted documents or ID images alone are insufficient. If official confirmation is unavailable, keep the application pending.
+                  This is a manual review, not an automated National ID authenticity, facial recognition or liveness check. Without validated active liveness, a supervised in-person examination of the original ID and applicant is mandatory for approval.
                 </Text>
                 {actionTarget?.role === "applicant" && (
                   <View style={styles.applicantDetails}>
@@ -1918,13 +1662,13 @@ export default function AdminAccounts() {
                     <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
                   </View>
                 )}
-                <View style={styles.reviewScroll}>
+                <View style={[styles.reviewScroll, !compact && styles.reviewScrollWide]}>
                   {([
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
                     { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
                     { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
                   ] as const).map((field) => (
-                    <View key={field.label} style={styles.reviewField}>
+                    <View key={field.label} style={[styles.reviewField, !compact && styles.reviewFieldWide, field.label === "Verification Reference" && styles.reviewFieldFull]}>
                       <Text style={styles.reviewLabel}>{field.label}</Text>
                       <TextInput
                         accessibilityLabel={field.label}
@@ -1938,7 +1682,7 @@ export default function AdminAccounts() {
                       />
                     </View>
                   ))}
-                  <View style={styles.reviewField}>
+                  <View style={[styles.reviewField, styles.reviewFieldFull]}>
                     <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
                     <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
                     {[
@@ -1980,6 +1724,7 @@ export default function AdminAccounts() {
                         editable={!savingUid} style={styles.reviewInput} />
                     )}
                   </View>
+                  <Text style={[styles.reviewLabel, styles.reviewChecksHeading]}>Required reviewer confirmations</Text>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: identityMatched }}
@@ -1994,6 +1739,18 @@ export default function AdminAccounts() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
+                    accessibilityState={{ checked: inPersonIdentityConfirmed }}
+                    style={styles.confirmReview}
+                    onPress={() => setInPersonIdentityConfirmed(v => !v)}
+                    disabled={!!savingUid}
+                  >
+                    <Ionicons name={inPersonIdentityConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>
+                      I personally observed this applicant in person, inspected the original government-issued ID, and compared the portrait with the applicant's face. A photo upload or video call alone does not satisfy this confirmation.
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
                     accessibilityState={{ checked: lguEmploymentConfirmed }}
                     style={styles.confirmReview}
                     onPress={() => setLguEmploymentConfirmed(v => !v)}
@@ -2001,7 +1758,7 @@ export default function AdminAccounts() {
                   >
                     <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
                     <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
+                      I independently confirmed current LGU employment, appointment and authority with the official LGU office or records, using independently obtained contact details.
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -2021,7 +1778,14 @@ export default function AdminAccounts() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
+                <View style={styles.reviewPrivacyNotice}>
+                  <Ionicons name="lock-closed-outline" color="#23765F" size={16} />
+                  <Text style={styles.reviewHint}>Review stores only the authorized reference and reviewer. No applicant passwords or ID photos are copied into approval logs.</Text>
+                </View>
+                <View style={[styles.reviewStatus, reviewComplete && styles.reviewStatusReady]}>
+                  <Ionicons name={reviewComplete ? "checkmark-circle-outline" : "information-circle-outline"} size={20} color={reviewComplete ? "#087D60" : "#987334"} />
+                  <Text style={styles.reviewStatusText}>{reviewComplete ? "All verification conditions recorded. Ready for Super Admin approval." : "Approval stays locked until all required evidence and confirmations are completed."}</Text>
+                </View>
               </View>
             ) : null}
 
@@ -2049,11 +1813,14 @@ export default function AdminAccounts() {
 
             </ScrollView>
             <View
-              style={
-                styles.confirmActions
-              }
+              style={[
+                styles.confirmActions,
+                viewportWidth < 480 && styles.confirmActionsCompact,
+              ]}
             >
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Cancel staff account action"
                 disabled={
                   !!savingUid
                 }
@@ -2075,6 +1842,8 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={actionButtonLabel(actionType)}
                 disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
                 style={[
                   styles.confirmButton,
@@ -2117,7 +1886,63 @@ export default function AdminAccounts() {
 
 const styles =
   StyleSheet.create({
-    credentialReview: { marginTop: 20, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 19 },
+    headerCompact: { padding: 17 },
+    titleCompact: { fontSize: 24, lineHeight: 29 },
+    sectionTitleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 },
+    sectionTitleRowCompact: { alignItems: "flex-start" },
+    headingIcon: { width: 39, height: 39, borderRadius: 12, backgroundColor: "#E6F5ED", justifyContent: "center", alignItems: "center" },
+    sectionHeadingText: { flex: 1, minWidth: 190 },
+    sectionEyebrow: { color: "#29785E", fontSize: 10, letterSpacing: 1.05, fontWeight: "800" },
+    sectionHeading: { color: "#173D32", fontSize: 18, fontWeight: "800", lineHeight: 24, marginTop: 2 },
+    sectionDescription: { color: "#5F796E", fontSize: 12, lineHeight: 19, marginTop: 5, maxWidth: 710 },
+    accessFlowStepsCompact: { flexDirection: "column", alignItems: "stretch" },
+    accessStepCompact: { width: "100%" },
+    stepNumberBox: { width: 33, height: 33, borderRadius: 10, backgroundColor: "#E3F4EB", alignItems: "center", justifyContent: "center" },
+    stepContent: { flex: 1, minWidth: 0 },
+    stepDescription: { marginTop: 3, fontSize: 11, lineHeight: 16, color: "#71857C" },
+    flowNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginTop: 14, padding: 12, backgroundColor: "#EFF9F3", borderRadius: 10 },
+    applicationPanel: { padding: 19, borderRadius: 15, borderWidth: 1, borderColor: "#DFEBE4", backgroundColor: "#FFFFFF", marginBottom: 18, gap: 13 },
+    accountSectionHeading: { marginTop: 3, marginBottom: 14, paddingHorizontal: 2 },
+    privacySection: { marginTop: 24, paddingTop: 21, borderTopWidth: 1, borderTopColor: "#E0EAE4", gap: 9 },
+    pendingBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 20, backgroundColor: "#FFF5DE", alignSelf: "flex-start" },
+    pendingBadgeText: { color: "#8A5E21", fontWeight: "800", fontSize: 11 },
+    pendingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#C28A2D" },
+    applicationSearch: { flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 13, minHeight: 46, borderWidth: 1, borderRadius: 11, borderColor: "#D9E7DF", backgroundColor: "#F9FCFA" },
+    applicationSearchInput: { flex: 1, minWidth: 0, color: "#173D32", minHeight: 44, fontSize: 13, ...( {outlineStyle:"none"} as any) },
+    clearSearch: { padding: 5 },
+    applicationEmpty: { padding: 24, gap: 6, alignItems: "center", backgroundColor: "#F8FBF9", borderRadius: 11, borderWidth: 1, borderColor: "#E5EFE8" },
+    applicationEmptyTitle: { fontSize: 14, fontWeight: "800", color: "#264F3D" },
+    applicationEmptyText: { fontSize: 12, lineHeight: 18, color: "#72897B", textAlign: "center" },
+    applicationRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, padding: 15, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E1EBE5", borderRadius: 12 },
+    applicationRowCompact: { alignItems: "flex-start" },
+    applicantAvatar: { height: 43, width: 43, borderRadius: 13, justifyContent: "center", alignItems: "center", backgroundColor: "#E6F5ED" },
+    applicantAvatarText: { fontSize: 17, fontWeight: "800", color: "#12735C" },
+    applicantBody: { flex: 1, minWidth: 180, gap: 4 },
+    applicantName: { fontSize: 14, lineHeight: 19, fontWeight: "800", color: "#1A4837" },
+    applicantEmail: { fontSize: 12, color: "#56766A" },
+    applicantMetaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+    applicantMetaText: { flex: 1, color: "#557465", fontSize: 11.5, lineHeight: 16 },
+    applicantReference: { color: "#7C9388", fontSize: 11, lineHeight: 16 },
+    reviewApplicationButton: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, minHeight: 42, paddingVertical: 10, paddingHorizontal: 13, borderRadius: 10, backgroundColor: "#087D60" },
+    reviewApplicationButtonCompact: { width: "100%", marginTop: 3 },
+    reviewApplicationText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+    statsRowCompact: { gap: 9 },
+
+    credentialReview: { marginTop: 18, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 18 },
+    verificationHeading: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 13 },
+    verificationHeadingIcon: { height: 41, width: 41, borderRadius: 12, backgroundColor: "#E3F5EA", alignItems: "center", justifyContent: "center" },
+    verificationHeadingContent: { flex: 1 },
+    verificationTitle: { fontSize: 16, color: "#204735", fontWeight: "800" },
+    verificationSubtitle: { fontSize: 11.5, lineHeight: 18, color: "#658074", marginTop: 3 },
+    confirmScrollContent: { paddingBottom: 13 },
+    reviewScrollWide: { flexDirection: "row", flexWrap: "wrap", columnGap: 13, alignItems: "flex-start" },
+    reviewFieldWide: { flexGrow: 1, flexBasis: "45%", minWidth: 220 },
+    reviewFieldFull: { flexBasis: "100%", width: "100%" },
+    reviewChecksHeading: { width: "100%", marginTop: 6, marginBottom: 7 },
+    reviewPrivacyNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 11, backgroundColor: "#F3F9F5", borderRadius: 11, marginTop: 9 },
+    reviewStatus: { flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: "#EADCB9", borderRadius: 10, padding: 12, marginTop: 14, backgroundColor: "#FFFBF1" },
+    reviewStatusReady: { borderColor: "#CDE8D6", backgroundColor: "#F0FBF3" },
+    reviewStatusText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "700", color: "#536F60" },
     applicantDetails: { padding: 17, marginTop: 14, marginBottom: 16, backgroundColor: "#F3F9F6", borderWidth: 1, borderColor: "#DCEBE2", borderRadius: 13 },
     reviewKicker: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4, color: "#247459" },
     reviewHelp: { color: "#556E61", fontSize: 13, lineHeight: 21, marginTop: 8, marginBottom: 12 },
@@ -2125,22 +1950,22 @@ const styles =
     reviewField: { marginBottom: 17 },
     reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 },
     reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
-    confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
+    confirmReview: { width: "100%", flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
-    reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
+    reviewHint: { flex: 1, color: "#607D6C", fontSize: 11.5, lineHeight: 17 },
     confirmDisabled: { opacity: 0.5 },
-    accessFlow: { paddingVertical: 16, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 18 },
+    accessFlow: { padding: 18, borderWidth: 1, borderRadius: 15, borderColor: "#DFEBE4", backgroundColor: "#FFFFFF", marginBottom: 18 },
     accessFlowTitle: { color: "#426658", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 11 },
-    accessFlowSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
-    accessStep: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
+    accessFlowSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 9, marginTop: 14 },
+    accessStep: { flexDirection: "row", alignItems: "flex-start", gap: 9, flex: 1, minWidth: 190, padding: 10, backgroundColor: "#FAFCFB", borderRadius: 11, borderWidth: 1, borderColor: "#E5EFE9" },
     stepNumber: { color: "#23765F", fontSize: 11, fontWeight: "800" },
-    stepText: { color: "#2B453B", fontSize: 12, fontWeight: "600", flexShrink: 1 },
-    flowHint: { color: "#667F74", fontSize: 11.5, lineHeight: 18, marginTop: 12, maxWidth: 850 },
+    stepText: { color: "#234B3C", fontSize: 12.5, fontWeight: "800" },
+    flowHint: { flex: 1, color: "#5A7969", fontSize: 11.5, lineHeight: 18 },
     container: {
       padding: 24,
       paddingBottom: 60,
       backgroundColor:
-        "#F1F5F9",
+        "#F6F9F8",
       minHeight: "100%",
     },
 
@@ -2181,20 +2006,25 @@ const styles =
       flexWrap: "wrap",
       alignItems: "flex-start",
       gap: 16,
-      marginBottom: 22,
+      marginBottom: 17,
+      padding: 23,
+      backgroundColor:"#E5F5ED",
+      borderRadius:14,
+      borderWidth:1,
+      borderColor:"#D8EBE0",
     },
 
     eyebrow: {
       fontSize: 11,
       fontWeight: "900",
-      color: "#0F766E",
+      color: "#176C52",
       letterSpacing: 1.4,
       marginBottom: 5,
     },
 
     title: {
-      fontSize: 30,
-      fontWeight: "700",
+      fontSize: 27,
+      fontWeight: "800",
       color: "#173D32",
     },
 
@@ -2232,10 +2062,10 @@ const styles =
     statCard: {
       flexGrow: 1,
       minWidth: 140,
-      backgroundColor: "transparent",
-      borderRadius: 0,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      backgroundColor: "#FFFFFF",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#E0EBE5",
       padding: 16,
     },
 
@@ -2315,9 +2145,9 @@ const styles =
     adminCard: {
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 3,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#E1EBE5",
       padding: 17,
       marginBottom: 8,
     },
@@ -2396,8 +2226,8 @@ const styles =
       minWidth: 180,
       flexGrow: 1,
       padding: 8,
-      backgroundColor: "transparent",
-      borderRadius: 0,
+      backgroundColor: "#F6FBF8",
+      borderRadius: 9,
     },
 
     detailLabel: {
@@ -2623,17 +2453,17 @@ const styles =
       alignSelf: "center",
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 10,
+      borderRadius: 17,
       padding: 24,
       borderWidth: 1,
       borderColor:
-        "#E2E8F0",
+        "#DDEBE3",
     },
 
     confirmIcon: {
-      width: 54,
-      height: 54,
-      borderRadius: 9,
+      width: 49,
+      height: 49,
+      borderRadius: 13,
       backgroundColor:
         "#F0FDFA",
       alignItems: "center",
@@ -2643,8 +2473,8 @@ const styles =
 
     confirmTitle: {
       color: "#173D32",
-      fontSize: 26,
-      fontWeight: "900",
+      fontSize: 23,
+      fontWeight: "800",
     },
 
     confirmMessage: {
@@ -2659,10 +2489,10 @@ const styles =
       padding: 13,
       borderRadius: 12,
       backgroundColor:
-        "#F8FAFC",
+        "#F4FAF6",
       borderWidth: 1,
       borderColor:
-        "#E2E8F0",
+        "#E1EBE5",
     },
 
     confirmAccountName: {
@@ -2699,10 +2529,18 @@ const styles =
     },
 
     confirmActions: {
-      marginTop: 20,
+      marginTop: 10,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderColor: "#E3ECE5",
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 10,
+    },
+
+    confirmActionsCompact: {
+      flexDirection: "column-reverse",
+      alignItems: "stretch",
     },
 
     confirmButton: {
