@@ -264,7 +264,7 @@ test("response UI never describes an unassigned case as an active LGU responder"
   assert.match(source,/No LGU responder assigned yet/);
   assert.match(source,/NOT ASSIGNED/);
   assert.match(source,/tel:911/);
-  assert.match(source,/tel:09366000119/);
+  assert.match(source,/tel:09326000119/);
   assert.doesNotMatch(source,/"LGU coordinating response"/);
 });
 
