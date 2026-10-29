@@ -4964,7 +4964,7 @@ app.get(
         maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
         attemptsRemaining: Math.max(0, MAX_IDENTITY_AI_ATTEMPTS - identityAttemptCount(verification.aiAttemptCount)),
         requiresManualReview: verification.requiresManualReview === true,
-        documentScreening: normalizeIdDocumentScreening(verification.documentScreening),
+        documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
       });
     } catch (error) {
       console.error(
@@ -5239,7 +5239,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
-    documentScreening: normalizeIdDocumentScreening(verification.documentScreening),
+    documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
