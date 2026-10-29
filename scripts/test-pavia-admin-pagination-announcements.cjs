@@ -32,6 +32,12 @@ for (const token of ["onChange={setCampaignPage}", "onChange={setPendingPage}", 
 const events = read("app/(admin)/admin-events.tsx");
 assert(events.includes("Past event dates cannot be scheduled.") && events.includes("Math.ceil(participants.length / 5)") &&
   events.includes("setParticipantPage(1)"), "Legacy event date and participant paging protected");
+const incident = read("app/(admin)/admin-cases.tsx");
+assert(incident.includes('detailTab === "map" && Platform.OS === "web"') &&
+       incident.includes('src: "/admin-live-map?caseId=" + encodeURIComponent(incident.id)') &&
+       incident.includes('title: "Embedded authorized LGU live response map for selected emergency"'),
+  "Emergency Report Map tab must embed the SAME existing authorized SJDM Live Map, scoped to the selected case");
+
 const announce = read("app/(admin)/create-announcement.tsx");
 const rules = read("firestore.rules");
 assert(announce.includes('accessibilityLabel="Choose authorized announcement barangay"') &&
