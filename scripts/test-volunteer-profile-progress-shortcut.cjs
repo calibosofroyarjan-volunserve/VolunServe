@@ -17,7 +17,7 @@ test("Volunteer Home progress shortcuts open the Profile tab on both platforms",
 });
 test("Volunteer Profile selects actual verified My Progress on deep link",()=>{
   assert.match(profile,/useLocalSearchParams<\{ edit\?: string; tab\?: string \}>/);
-  assert.match(profile,/tab === "progress" \? "progress" : "info"/);
+  assert.match(profile,/tab === "progress" \? "progress" : tab === "certificates" \? "certificates" : "info"/);
   assert.match(profile,/tab === "progress" && currentMode === "volunteer" && volunteerAccess/);
   assert.match(profile,/<VolunteerImpact embedded \/>/);
 });
