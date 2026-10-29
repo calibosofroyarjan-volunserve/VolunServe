@@ -542,7 +542,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid);
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid) && formData.acceptTerms;
     const step4Valid = formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
@@ -862,6 +862,16 @@ export default function Signup() {
                 )}
                 <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
+              <View style={styles.step1TermsBox}>
+                <CheckRow
+                  label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
+                  checked={formData.acceptTerms}
+                  onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
+                />
+                <TouchableOpacity onPress={() => setTermsOpen(true)} accessibilityRole="button">
+                  <Text style={styles.step1TermsLink}>Read Terms and Conditions & Privacy Policy</Text>
+                </TouchableOpacity>
+              </View>
 
 
             </View>
@@ -938,16 +948,7 @@ export default function Signup() {
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
 
               <CheckRow label="I confirm the details I provided are final and correct." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} />
-              <View style={styles.finalTermsSection}>
-                <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}>
-                  <Text style={styles.termsOpenText}>Read Terms and Conditions & Privacy Policy</Text>
-                </TouchableOpacity>
-                <CheckRow
-                  label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
-                  checked={formData.acceptTerms}
-                  onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
-                />
-              </View>
+
             </View>
           )}
         </View>
@@ -1086,7 +1087,8 @@ const styles = StyleSheet.create({
   signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
   emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 3 },
   personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
-  finalTermsSection: { marginTop: 16, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
+  step1TermsBox: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#F2FAF7", borderWidth: 1, borderColor: "#D7E8E0", borderRadius: 12 },
+  step1TermsLink: { color: "#006B56", fontSize: 12, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 

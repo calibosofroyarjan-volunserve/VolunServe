@@ -502,7 +502,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid);
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid) && formData.acceptTerms;
     const step4Valid = formData.acceptTerms && formData.confirmReview;
 
     return {
@@ -544,7 +544,7 @@ export default function Signup() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
 
       const stepMessages: Record<Step, string> = {
-        1: "Complete your email, password and personal details, or choose Google sign-up.",
+        1: "Complete your email, password and personal details, then agree to the Terms and Privacy Policy.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your basic profile information.",
         4: "Review your information and accept the terms and privacy consent.",
@@ -1067,6 +1067,20 @@ export default function Signup() {
                       You must be at least 18 years old to proceed.
                     </ValidationText>
                   ) : null}
+                  <View style={styles.step1TermsBox}>
+                    <CheckRow
+                      label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
+                      checked={formData.acceptTerms}
+                      onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setTermsOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Read the Terms and Conditions and Privacy Policy"
+                    >
+                      <Text style={styles.step1TermsLink}>Read Terms and Conditions & Privacy Policy</Text>
+                    </TouchableOpacity>
+                  </View>
 
 
                 </View>
@@ -1256,23 +1270,7 @@ export default function Signup() {
                       approval.
                     </Text>
                   </View>
-                  <View style={styles.finalTermsSection}>
-                  <TouchableOpacity
-                    style={styles.termsOpenBtn}
-                    onPress={() => setTermsOpen(true)}
-                  >
-                    <Text style={styles.termsOpenText}>Read Terms and Conditions & Privacy Policy</Text>
-                  </TouchableOpacity>
 
-                  <View style={styles.consentBox}>
-                    <CheckRow
-                      label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
-                      checked={formData.acceptTerms}
-                      onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
-                    />
-                  </View>
-
-                  </View>
 
                 </View>
               )}
@@ -1575,7 +1573,8 @@ const styles = StyleSheet.create({
   nameColumn: { flexGrow: 1, flexBasis: 145, minWidth: 140 },
   dateOfBirthRow: { flexDirection: "row", marginTop: 2 },
   dateOfBirthColumn: { width: "100%", maxWidth: 260 },
-  finalTermsSection: { paddingTop: 18, marginTop: 16, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
+  step1TermsBox: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#F2FAF7", borderWidth: 1, borderColor: "#D7E8E0", borderRadius: 12 },
+  step1TermsLink: { color: "#006B56", fontSize: 12, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
   googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
   googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
