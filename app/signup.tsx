@@ -4,7 +4,7 @@ import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signOut } from "firebase/auth";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -611,6 +611,16 @@ export default function Signup() {
     }
   }, [promptAsync]);
 
+  const useEmailInstead = useCallback(async () => {
+    await signOut(auth);
+    setGoogleBound(false);
+    setGoogleProfileLoaded(false);
+    setFormData(previous => ({
+      ...previous, email: "", firstName: "", lastName: "",
+      password: "", confirmPassword: "",
+    }));
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
     if (!validation.step4Valid) {
@@ -762,10 +772,19 @@ export default function Signup() {
               </TouchableOpacity>
 
               {googleBound ? (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxText}>Google account linked. Your email is locked to your connected Google account.</Text>
-                </View>
-              ) : null}
+                <>
+                  <View style={styles.infoBox}>
+                    <Text style={styles.infoBoxText}>Google email verified. Your Google account is an optional signup method.</Text>
+                  </View>
+                  <TouchableOpacity onPress={useEmailInstead} style={{ alignItems: "center", paddingVertical: 12 }}>
+                    <Text style={{ color: "#087A62", fontWeight: "800" }}>Use email and password instead</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={{ color: "#577B69", fontSize: 12, marginBottom: 10 }}>
+                  Email registration requires verification from your inbox before signing in.
+                </Text>
+              )}
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
               <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
