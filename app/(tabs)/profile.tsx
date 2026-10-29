@@ -273,7 +273,7 @@ const statusPalette = (
 
 export default function Profile() {
   const router = useRouter();
-  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const { edit, tab } = useLocalSearchParams<{ edit?: string; tab?: string }>();
 
   const {
     width,
@@ -306,7 +306,7 @@ export default function Profile() {
     setActiveTab,
   ] =
     useState<ProfileTab>(
-      "info",
+      tab === "progress" ? "progress" : "info",
     );
 
   const [
@@ -544,6 +544,13 @@ export default function Profile() {
     hasVolunteerAccess(
       profile,
     );
+  // Home's View Progress shortcut opens the genuine data-backed Profile tab.
+  useEffect(() => {
+    if (tab === "progress" && currentMode === "volunteer" && volunteerAccess) {
+      setActiveTab("progress");
+    }
+  }, [tab, currentMode, volunteerAccess]);
+
 
   useEffect(() => {
     if (
