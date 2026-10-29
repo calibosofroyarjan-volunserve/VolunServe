@@ -55,7 +55,7 @@ const analytics = source("components/admin/DashboardOperationalInsights.tsx");
 assert(app("admin-analytics").includes('<Redirect href="/(admin)/command-center" />') &&
   analytics.includes('title}>Service Analytics') && analytics.includes("ListPagination") &&
   analytics.includes("pageSize={PAGE_SIZE}") &&
-  app("command-center").includes("<DashboardOperationalInsights />"),
+  app("command-center").includes("<DashboardOperationalInsights workload={{"),
   "Dashboard must own paginated live analytics; standalone route must redirect");
 assert(app("admin-events").includes('<Redirect href="/(admin)/community-attendance" />'),
   "Retired duplicate Volunteer Events route must redirect to Event Attendance");
