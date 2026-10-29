@@ -1,0 +1,73 @@
+name: Publish Unified LGU Admin Dashboard and Pagination (Hosting Only)
+on:
+  push:
+    branches:
+      - release/unified-admin-dashboard-pagination-20261030
+    paths:
+      - .github/workflows/release-unified-admin-dashboard-pagination.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require approved main and workflow-only release delta
+        shell: bash
+        run: |
+          git merge-base --is-ancestor 426224629949d271111607bab72d7423767349e1 HEAD
+          test "$(git diff --name-only 426224629949d271111607bab72d7423767349e1 HEAD)" = ".github/workflows/release-unified-admin-dashboard-pagination.yml"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify exact Admin scope and paginated workflows before release
+        run: |
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile and stamp verified Expo Hosting artifact
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Refuse deployment without Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting service account is unavailable; production unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting only (not database, rules, Functions or backend)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact production revision and routes on volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Exact release marker not verified on custom domain."
+          exit 1
