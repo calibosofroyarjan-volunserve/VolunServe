@@ -633,6 +633,19 @@ export default function Signup() {
     }
   }, [applyGoogleIdentity, googleBound, loadingSubmit, router]);
 
+  const useEmailInstead = useCallback(async () => {
+    await signOut(auth);
+    setGoogleBound(false);
+    setFormData(previous => ({
+      ...previous,
+      email: "",
+      firstName: "",
+      lastName: "",
+      password: "",
+      confirmPassword: "",
+    }));
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
 
@@ -875,12 +888,19 @@ export default function Signup() {
                     {googleBound ? "Complete your Google registration" : "or register with email and password"}
                   </Text>
                   {googleBound ? (
-                    <View style={styles.googleConnectedNotice}>
-                      <Feather name="check-circle" size={18} color={COLORS.primary} />
-                      <Text style={styles.googleConnectedText}>
-                        Google email verified. Complete your VolunServe profile below.
-                      </Text>
-                    </View>
+                    <>
+                      <View style={styles.googleConnectedNotice}>
+                        <Feather name="check-circle" size={18} color={COLORS.primary} />
+                        <Text style={styles.googleConnectedText}>
+                          Google email verified. Complete your VolunServe profile below.
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={useEmailInstead} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: 10 }}>
+                        <Text style={{ color: "#087A62", fontWeight: "800", fontSize: 12 }}>
+                          Use email and password instead
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   ) : null}
 
                   <Field
@@ -896,6 +916,11 @@ export default function Signup() {
                     autoCapitalize="none"
                   />
 
+                  {!googleBound ? (
+                    <Text style={{ color: "#577B69", fontSize: 11.5, marginBottom: 10 }}>
+                      Email sign-up requires inbox verification before you can sign in. Gmail, Outlook and other valid email addresses work.
+                    </Text>
+                  ) : null}
                   {formData.email.length > 0 && !validation.emailValid ? (
                     <ValidationText ok={false}>Enter a valid email format.</ValidationText>
                   ) : null}
