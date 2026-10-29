@@ -16,6 +16,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
+import ListPagination from "../../components/ui/ListPagination";
 import {
   Alert,
   Image,
@@ -575,6 +576,7 @@ export default function AdminCases() {
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [caseSearch, setCaseSearch] = useState("");
+  const [recordPage, setRecordPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
@@ -1348,6 +1350,9 @@ export default function AdminCases() {
     );
   }, [sortedFiltered, caseSearch]);
 
+  const casePages = Math.max(1, Math.ceil(visibleCases.length / 5));
+  const activeCasePage = Math.max(1, Math.min(recordPage, casePages));
+  const pagedCases = visibleCases.slice((activeCasePage - 1) * 5, activeCasePage * 5);
   useEffect(() => {
     if (visibleCases.length === 0) {
       setSelectedCaseId("");
@@ -3420,7 +3425,7 @@ export default function AdminCases() {
               <Text style={styles.searchIcon}>⌕</Text>
               <TextInput
                 value={caseSearch}
-                onChangeText={setCaseSearch}
+                onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
                 placeholder="Search case, resident, location…"
                 placeholderTextColor="#94a3b8"
                 style={styles.searchInput}
@@ -3463,7 +3468,7 @@ export default function AdminCases() {
                   <TouchableOpacity
                     key={status}
                     style={[styles.pill, active && styles.pillActive]}
-                    onPress={() => setFilterStatus(status)}
+                    onPress={() => { setFilterStatus(status); setRecordPage(1); }}
                   >
                     <Text
                       style={[
@@ -3490,7 +3495,7 @@ export default function AdminCases() {
                     <TouchableOpacity
                       key={severity}
                       style={[styles.pill, active && styles.pillActive]}
-                      onPress={() => setFilterSeverity(severity)}
+                      onPress={() => { setFilterSeverity(severity); setRecordPage(1); }}
                     >
                       <Text
                         style={[
@@ -3508,6 +3513,7 @@ export default function AdminCases() {
           </View>
         </View>
 
+      <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No emergency cases found</Text>
@@ -3532,7 +3538,7 @@ export default function AdminCases() {
             </View>
 
             <View style={styles.caseListItems}>
-              {visibleCases.map((item) => {
+              {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
                 const thumb = firstIncidentImage(item.attachments);
 
