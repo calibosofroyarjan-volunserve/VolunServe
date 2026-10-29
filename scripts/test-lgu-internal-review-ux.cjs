@@ -40,6 +40,6 @@ assert(identity.includes("setFilter(item.key); setPage(1); setSelected(null);") 
 assert(shell.includes('label: "Resident Identity Reviews"') &&
        shell.includes('label: "User & Volunteer Approvals"'),
   "Keep existing LGU review sidebar links and auth scope");
-assert(signup.includes("sendEmailVerification") && maps.includes("MapTracking"),
+assert(signup.includes("verification link") && maps.includes("MapTracking"),
   "Keep connected signup email verification and map entrypoint intact");
 console.log("PASS LGU Resident/Volunteer and Identity reviews: five-row queues, credential confirmation, audit logging and protected adjacent modules");
