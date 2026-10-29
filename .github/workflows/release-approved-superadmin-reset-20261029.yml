@@ -1,0 +1,76 @@
+name: Release Approved Super Admin + Reset Popup (Hosting Only)
+on:
+  push:
+    branches:
+      - release/superadmin-and-reset-review-20261029
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify login reset and approved Super Admin scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/test-login-ui-release.cjs scripts/test-password-reset-modal.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node <<'NODE'
+          const fs=require("node:fs"), assert=require("node:assert/strict");
+          const read=p=>fs.readFileSync(p,"utf8");
+          const nav=read("app/(superadmin)/_layout.tsx");
+          const labels=["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs","System Settings"];
+          const matches=[...nav.matchAll(/label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs|System Settings)"/g)].map(m=>m[1]);
+          assert.deepEqual(matches,labels,"Super Admin's exact five-module order must remain locked");
+          for(const file of ["app/(superadmin)/index.tsx","app/(superadmin)/admin-accounts.tsx","app/(superadmin)/all-records.tsx","app/(superadmin)/admin-logs.tsx","app/(superadmin)/system-settings.tsx"])
+            assert(fs.existsSync(file),"Required Super Admin page missing: "+file);
+          const accounts=read("app/(superadmin)/admin-accounts.tsx");
+          const records=read("app/(superadmin)/all-records.tsx");
+          const audit=read("app/(superadmin)/admin-logs.tsx");
+          assert(accounts.includes("ADMIN_PAGE_SIZE = 5"),"Super Admin account paging missing");
+          assert(records.includes("const PAGE_SIZE = 5"),"Five-per-page records missing");
+          assert(audit.includes("const PAGE_SIZE = 5"),"Five-per-page audit missing");
+          assert(!/updateDoc\(|deleteDoc\(|writeBatch\(/.test(records),"Read-only governance violated");
+          const reset=read("components/auth/PasswordResetModal.tsx");
+          assert(reset.includes("Send Reset Link")&&reset.includes("sendPasswordResetEmail"));
+          console.log("PASS approved five-module Super Admin and reset popup");
+          NODE
+      - name: TypeScript build check
+        run: npx tsc --noEmit
+      - name: Export verified static web build
+        run: npx expo export --platform web
+      - name: Create exact-revision manifest and verify Hosting scope
+        run: node scripts/verify-hosting-release.cjs
+      - name: Require configured Firebase service account
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::No Firebase Hosting service account configured. No production deployment attempted."
+            exit 1
+          fi
+      - name: Publish production Hosting ONLY
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact SHA on production domain (read-only)
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
