@@ -31,6 +31,8 @@ import {
 } from "react-native";
 
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
+import ListPagination from "../../components/ui/ListPagination";
+import DashboardVolunteerApprovals from "../../components/admin/DashboardVolunteerApprovals";
 import { isVerifiedActiveCenter, mapsPlaceUrl } from "../../lib/emergencyMapTypes";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
@@ -180,6 +182,8 @@ export default function CommandCenter() {
     setDataError,
   ] = useState(false);
   const [showCenterManagement, setShowCenterManagement] = useState(false);
+  const [centerPage, setCenterPage] = useState(1);
+  const CENTER_PAGE_SIZE = 5;
   const [loadedSources,setLoadedSources] = useState({
     cases:false,centers:false,needs:false,users:false,volunteers:false,
   });
@@ -770,6 +774,10 @@ export default function CommandCenter() {
     );
   };
 
+  const centerPages = Math.max(1, Math.ceil(centers.length / CENTER_PAGE_SIZE));
+  const currentCenterPage = Math.max(1, Math.min(centerPage, centerPages));
+  const pagedCenters = centers.slice((currentCenterPage - 1) * CENTER_PAGE_SIZE, currentCenterPage * CENTER_PAGE_SIZE);
+
   const metrics =
     useMemo(() => {
       const activeCases =
@@ -1012,6 +1020,8 @@ export default function CommandCenter() {
           </View>
         )}
 
+        <DashboardVolunteerApprovals />
+
         <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
           <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
             <View style={styles.overviewSectionHeader}>
@@ -1181,6 +1191,7 @@ export default function CommandCenter() {
           </View>
         </View>
 
+        <ListPagination page={currentCenterPage} total={centers.length} pageSize={CENTER_PAGE_SIZE} onChange={setCenterPage} />
         {centers.length === 0 ? (
           <View
             style={
@@ -1213,7 +1224,7 @@ export default function CommandCenter() {
               styles.centerList
             }
           >
-            {centers.map(
+            {pagedCenters.map(
               (center) => {
                 const capacity =
                   Math.max(
