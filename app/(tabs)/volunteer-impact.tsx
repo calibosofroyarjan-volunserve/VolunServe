@@ -247,7 +247,8 @@ function StatusPill({
   );
 }
 
-export default function VolunteerImpact() {
+// When rendered under My Profile, show the same verified progress without nested scrolling.
+export default function VolunteerImpact({embedded = false}: {embedded?: boolean} = {}) {
   const router = useRouter();
   const {width} = useWindowDimensions();
   const mobile = width < 700;
@@ -446,9 +447,13 @@ export default function VolunteerImpact() {
   const emergencyAvailable = !sourceErrors.contributions;
   const errors = Object.values(sourceErrors).filter(Boolean);
 
+  const ProgressContainer: React.ComponentType<any> = embedded ? View : ScrollView;
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, mobile && styles.containerMobile]}>
-      <View style={styles.hero}>
+    <ProgressContainer
+      style={embedded ? styles.embeddedScreen : styles.screen}
+      {...(embedded ? {} : {contentContainerStyle:[styles.container,mobile && styles.containerMobile]})}
+    >
+      {!embedded && <View style={styles.hero}>
         <View style={styles.heroCopy}>
           <View style={styles.eyebrowRow}>
             <Ionicons name="ribbon-outline" size={16} color={GREEN} />
@@ -462,7 +467,7 @@ export default function VolunteerImpact() {
         <View style={styles.heroSymbol}>
           <Ionicons name="medal-outline" size={49} color={GREEN} />
         </View>
-      </View>
+      </View>}
 
       {errors.length > 0 && (
         <View style={styles.errorPanel}>
@@ -677,11 +682,12 @@ export default function VolunteerImpact() {
           Emergency response work counts only when verified through the resident-confirmation process. Certificates for emergency service follow their separate issuance workflow.
         </Text>
       </View>
-    </ScrollView>
+    </ProgressContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  embeddedScreen: {width:"100%",minWidth:0},
   screen: {flex: 1, backgroundColor: "#F6F8F7"},
   container: {width: "100%", maxWidth: 1250, alignSelf: "center", padding: 24, paddingBottom: 72},
   containerMobile: {padding: 12, paddingBottom: 44},
