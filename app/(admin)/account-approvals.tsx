@@ -805,9 +805,10 @@ export default function AccountApprovals() {
                           styles.approveButton,
                           (isSaving || !isVerifiedResidentAccount(account)) && { opacity: 0.55 },
                         ]}
-                        onPress={() =>
-                          (setApprovalCandidate(account), setApproveConfirmed(false))
-                        }
+                        onPress={() => {
+                          setApprovalCandidate(account);
+                          setApproveConfirmed(false);
+                        }}
                       >
                         <Text
                           style={
