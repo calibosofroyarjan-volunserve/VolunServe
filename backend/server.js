@@ -694,6 +694,34 @@ function normalizeAiDecision(
   }
   return "manual_review";
 }
+function normalizeIdDocumentScreening(value) {
+  // Explicit allowlist: never store OCR text, full ID numbers, names,
+  // face templates, or photos in Firestore or Admin-visible JSON.
+  const types = ["national_id", "drivers_license", "passport", "other_government_id"];
+  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive"];
+  const warnings = [
+    "selected_id_type_conflicts_with_ocr",
+    "document_type_not_recognized",
+    "multiple_document_type_signals",
+    "ocr_unavailable",
+  ];
+  const declared = String(value?.declaredIdType || "");
+  const detected = String(value?.detectedIdType || "");
+  const status = String(value?.status || "");
+  return {
+    method: "ph_government_id_ocr_keyword_screen_v1",
+    declaredIdType: types.includes(declared) ? declared : null,
+    detectedIdType: types.includes(detected) ? detected : null,
+    status: statuses.includes(status) ? status : "inconclusive",
+    authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
+    livenessVerified: false, // Still image is NOT a liveness proof.
+    manualReviewRequired: true,
+    warningCodes: Array.isArray(value?.warningCodes)
+      ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
+      : ["ocr_unavailable"],
+  };
+}
+
 function numberOrNull(
   value,
 ) {
@@ -4936,6 +4964,7 @@ app.get(
         maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
         attemptsRemaining: Math.max(0, MAX_IDENTITY_AI_ATTEMPTS - identityAttemptCount(verification.aiAttemptCount)),
         requiresManualReview: verification.requiresManualReview === true,
+        documentScreening: normalizeIdDocumentScreening(verification.documentScreening),
       });
     } catch (error) {
       console.error(
@@ -5018,7 +5047,15 @@ app.post(
       claimed = true;
 
       const aiResult = await callIdentityAiService(request);
-      const decision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
+      const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
+      const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
+      // Face comparison and keyword OCR cannot authenticate a government ID
+      // or prove liveness. Never auto-verify without both verified assurances.
+      const decision = rawDecision === "verified" &&
+          (documentScreening.authenticityVerified !== true ||
+            aiResult?.livenessImplemented !== true)
+        ? "manual_review"
+        : rawDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5074,6 +5111,7 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
+          documentScreening,
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
@@ -5097,6 +5135,7 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
+            documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
@@ -5131,7 +5170,7 @@ app.post(
         }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, message: resultMessage,
+          matchScore, livenessScore, documentScreening, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
@@ -5200,6 +5239,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
+    documentScreening: normalizeIdDocumentScreening(verification.documentScreening),
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
