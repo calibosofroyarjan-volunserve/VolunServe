@@ -1,0 +1,70 @@
+name: Publish Premium LGU People and Verification UI (Hosting Only)
+on:
+  push:
+    branches:
+      - release/admin-people-verification-premium-ui-20261029
+    paths:
+      - .github/workflows/release-admin-people-verification-ui.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  safe-ui-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Safeguard premium LGU UI, all approvals, pagination, and prior features
+        run: |
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-superadmin-grouped-records.cjs
+          node scripts/test-superadmin-settings-records-retention.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-password-reset-popup.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-clean-emergency-report-header.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --pretty false
+      - name: Build Expo production web and verify source release
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Refuse deploy without Firebase credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials missing; production unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting ONLY, not rules, Firestore data or Functions
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify expected release revision on volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Expected revision not visible; verify attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Expected LGU premium revision not confirmed on live custom domain"
+          exit 1
