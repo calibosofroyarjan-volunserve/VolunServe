@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
     match: "/",
   },
   {
-    label: "LGU Staff & Admin Accounts",
+    label: "Admin Accounts",
     icon: "people-outline",
     route: "/(superadmin)/admin-accounts",
     match: "/admin-accounts",
