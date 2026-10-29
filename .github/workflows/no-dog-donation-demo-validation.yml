@@ -1,0 +1,29 @@
+name: Resident Donation Demo Removal Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/remove-dogs-demo-donation-20261029
+  pull_request:
+    paths:
+      - "app/(tabs)/donation.tsx"
+      - "scripts/test-no-dog-donation-demo.cjs"
+      - ".github/workflows/no-dog-donation-demo-validation.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Check sample dog campaign removed and real donation flows retained
+        run: node --test scripts/test-no-dog-donation-demo.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export web without deploying
+        run: npx expo export --platform web
