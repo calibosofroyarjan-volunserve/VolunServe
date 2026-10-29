@@ -583,6 +583,8 @@ export default function AdminCases() {
   const [volunteerPage, setVolunteerPage] = useState(1);
   const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
   const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
+  const [photoPage, setPhotoPage] = useState(1);
+  const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
@@ -1387,6 +1389,8 @@ export default function AdminCases() {
     setVolunteerPage(1);
     setActiveAssignmentPage(1);
     setHistoryAssignmentPage(1);
+    setPhotoPage(1);
+    setVideoPage(1);
   }, [selectedCaseId]);
 
   const pageFive = <T,>(rows: T[], page: number): T[] => {
@@ -4334,7 +4338,8 @@ export default function AdminCases() {
 
                 {imageEvidence.length > 0 && (
                   <View style={styles.evidenceGrid}>
-                    {imageEvidence.slice(0, 5).map((attachment, index) => (
+                    <ListPagination page={Math.max(1, Math.min(photoPage, Math.ceil(imageEvidence.length / 5) || 1))} total={imageEvidence.length} pageSize={5} onChange={setPhotoPage} />
+                    {pageFive(imageEvidence, photoPage).map((attachment, index) => (
                       <TouchableOpacity
                         key={`${attachment.url || "image"}-${index}`}
                         style={styles.evidenceCard}
@@ -4365,7 +4370,8 @@ export default function AdminCases() {
 
                 {videoEvidence.length > 0 && (
                   <View style={styles.videoList}>
-                    {videoEvidence.map((attachment, index) => (
+                    <ListPagination page={Math.max(1, Math.min(videoPage, Math.ceil(videoEvidence.length / 5) || 1))} total={videoEvidence.length} pageSize={5} onChange={setVideoPage} />
+                    {pageFive(videoEvidence, videoPage).map((attachment, index) => (
                       <TouchableOpacity
                         key={`${attachment.url || "video"}-${index}`}
                         style={styles.videoButton}
