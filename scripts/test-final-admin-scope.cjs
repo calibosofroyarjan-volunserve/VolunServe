@@ -57,10 +57,13 @@ assert(!saLayout.includes("Donation Management") &&
   !saRecords.includes('label="Donations"') &&
   !saOverview.includes("Approve Donation"),
   "Super Admin UI must not provide financial operations or dummy financial data");
-assert(saOverview.includes('item.role === "applicant" && item.status === "pending_review"') &&
-  saOverview.includes('router.push("/(superadmin)/admin-accounts"') &&
-  saOverview.includes('router.push("/(superadmin)/admin-logs"'),
-  "Super Admin overview must surface actual applicant status and working navigation");
+assert(saOverview.includes('onSnapshot(') &&
+  saOverview.includes('adminUids.includes(item.actorUid)') &&
+  saOverview.includes('router.push("/(superadmin)/admin-logs"') &&
+  saLayout.includes('route: "/(superadmin)/admin-accounts"') &&
+  saLayout.includes('route: "/(superadmin)/system-settings"') &&
+  !saOverview.includes('Pending LGU Applications'),
+  "Super Admin overview must show live governance activity with working navigation, without reintroducing removed LGU Staff onboarding");
 assert(adminLogin.includes("Request LGU Admin Access") &&
   adminLogin.includes('router.push("/admin-request")') &&
   docs.includes("Fresh independent LGU review"),
