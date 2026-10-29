@@ -13,7 +13,7 @@ assert(title.includes('backgroundColor: "#E5F5ED"') &&
 assert(pager.includes("onChange") && pager.includes("pageSize"), "Shared paginated records navigation is functional");
 
 for (const name of [
-  "account-approvals", "identity-reviews", "admin-cases",
+  "identity-reviews", "admin-cases",
   "assistance-requests", "relief-operations",
   "admin-disputes", "community-events",
   "community-attendance", "lgu-attendance", "lgu-members",
@@ -23,7 +23,7 @@ for (const name of [
   assert(code.includes("AdminReviewHero") && code.includes("<AdminReviewHero"),
     name + " must use the shared premium LGU Admin workspace header");
   assert(code.includes("ListPagination") && code.includes("pageSize={5}") ||
-    (["account-approvals", "identity-reviews"].includes(name) &&
+    (["identity-reviews"].includes(name) &&
       code.includes("pageSize={PAGE_SIZE}")),
     name + " must paginate its Firestore-backed records in five-item pages");
 }
@@ -34,6 +34,13 @@ for (const name of ["create-announcement", "admin-profile"]) {
 assert(!app("admin-profile").includes("Back to overview"),
   "Account Profile must not duplicate the parent Admin sidebar navigation");
 
+const account = app("account-approvals");
+assert(account.includes("export function ResidentAccountsPanel()") &&
+  account.includes("pagedAccounts.map(account") &&
+  account.includes("pageSize={PAGE_SIZE}") &&
+  account.includes('<Redirect href="/(admin)/command-center?section=residents" />') &&
+  app("command-center").includes("<ResidentAccountsPanel />"),
+  "Resident Accounts must have one source of truth in the Command Center, not a duplicate full page");
 const relief = app("relief-operations");
 for (const segment of ["pagedNeeds", "pagedInventory", "pagedAllocations", "setNeedsPage", "setInventoryPage", "setAllocationPage"]) {
   assert(relief.includes(segment), "Relief inventory/allocations and needs must all be paginated: " + segment);
