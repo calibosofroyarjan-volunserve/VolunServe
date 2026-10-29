@@ -22,6 +22,13 @@ assert(src("app/(admin)/admin-events.tsx").includes('<Redirect href="/(admin)/co
 assert(src("app/(admin)/admin-analytics.tsx").includes('<Redirect href="/(admin)/command-center" />'));
 
 // The overview must show actual Resident AND Volunteer queues; never approve identity without full review.
+const identityQueue = src("components/admin/DashboardPendingIdentityReviews.tsx");
+assert(dash.includes("<DashboardPendingIdentityReviews />") &&
+  identityQueue.includes("/api/admin/identity/reviews") &&
+  identityQueue.includes("Authorization:") &&
+  identityQueue.includes("ListPagination") &&
+  identityQueue.includes("pageSize={PAGE_SIZE}"),
+  "Real pending identity submissions must appear in Command Center with protected review and paging");
 assert(dash.includes("setPendingResidents(residents)") &&
   dash.includes("pagedResidents.map") &&
   dash.includes("total={pendingResidents.length} pageSize={5}") &&
