@@ -12,6 +12,45 @@ export type IdentityDocumentType =
   | "passport"
   | "other_government_id";
 
+export type DocumentScreening = {
+  declaredIdType: IdentityDocumentType | null;
+  detectedIdType: IdentityDocumentType | null;
+  status: "text_consistent_unverified" | "mismatch" | "inconclusive";
+  authenticityVerified: false;
+  livenessVerified: false;
+  manualReviewRequired: true;
+  warningCodes: string[];
+};
+
+export function documentScreeningLabel(value?: DocumentScreening | null): string {
+  switch (value?.status) {
+    case "text_consistent_unverified":
+      return "ID type matches recognized text, but authenticity is not verified.";
+    case "mismatch":
+      return "Selected ID type does not match recognized document text. Review required.";
+    default:
+      return "ID type could not be confirmed automatically. Review required.";
+  }
+}
+
+function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const allowed = ["national_id", "drivers_license", "passport", "other_government_id"];
+  const type = (x: unknown) => allowed.includes(String(x)) ? x as IdentityDocumentType : null;
+  return {
+    declaredIdType: type(raw.declaredIdType),
+    detectedIdType: type(raw.detectedIdType),
+    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ?
+      raw.status : "inconclusive",
+    authenticityVerified: false,
+    livenessVerified: false,
+    manualReviewRequired: true,
+    warningCodes: Array.isArray(raw.warningCodes)
+      ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
+  };
+}
+
 export type CapturedIdentityMedia = {
   uri: string;
   name: string;
@@ -26,6 +65,7 @@ export type IdentityVerificationStatusResult = {
   decision?: string;
   matchScore?: number;
   livenessScore?: number;
+  documentScreening?: DocumentScreening;
   message?: string;
 };
 
@@ -35,6 +75,7 @@ export type IdentityVerificationResult = {
   decision?: string;
   matchScore?: number;
   livenessScore?: number;
+  documentScreening?: DocumentScreening;
   message?: string;
 };
 
@@ -353,6 +394,7 @@ export const submitIdentityVerification = async (
     livenessScore: optionalNumber(
       body?.livenessScore,
     ),
+    documentScreening: parseDocumentScreening(body?.documentScreening),
     message: body?.message
       ? String(body.message)
       : undefined,
@@ -412,6 +454,7 @@ export const getIdentityVerificationStatus =
       livenessScore: optionalNumber(
         body?.livenessScore,
       ),
+      documentScreening: parseDocumentScreening(body?.documentScreening),
       message: body?.message
         ? String(body.message)
         : undefined,
