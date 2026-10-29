@@ -1,0 +1,69 @@
+"use strict";
+const fs = require("node:fs");
+const assert = require("node:assert/strict");
+const source = p => fs.readFileSync(p, "utf8");
+const app = name => source("app/(admin)/" + name + ".tsx");
+const title = source("components/admin/AdminReviewHero.tsx");
+const pager = source("components/ui/ListPagination.tsx");
+const layout = app("_layout");
+
+assert(title.includes('backgroundColor: "#E5F5ED"') &&
+  title.includes('name="leaf-outline"') &&
+  title.includes("compact"), "Common mint/emerald header must stay responsive");
+assert(pager.includes("onChange") && pager.includes("pageSize"), "Shared paginated records navigation is functional");
+
+for (const name of [
+  "account-approvals", "identity-reviews", "admin-cases",
+  "assistance-requests", "relief-operations", "admin-analytics",
+  "admin-disputes", "admin-events", "community-events",
+  "community-attendance", "lgu-attendance", "lgu-members",
+  "admin-certificates", "community-certificates", "donation-list",
+]) {
+  const code = app(name);
+  assert(code.includes("AdminReviewHero") && code.includes("<AdminReviewHero"),
+    name + " must use the shared premium LGU Admin workspace header");
+  assert(code.includes("ListPagination") && code.includes("pageSize={5}") ||
+    (["account-approvals", "identity-reviews"].includes(name) &&
+      code.includes("pageSize={PAGE_SIZE}")),
+    name + " must paginate its Firestore-backed records in five-item pages");
+}
+for (const name of ["create-announcement", "admin-profile"]) {
+  assert(app(name).includes("<AdminReviewHero"),
+    name + " must match LGU branding even though it is a form/profile, not a list");
+}
+assert(!app("admin-profile").includes("Back to overview"),
+  "Account Profile must not duplicate the parent Admin sidebar navigation");
+
+const relief = app("relief-operations");
+for (const segment of ["pagedNeeds", "pagedInventory", "pagedAllocations", "setNeedsPage", "setInventoryPage", "setAllocationPage"]) {
+  assert(relief.includes(segment), "Relief inventory/allocations and needs must all be paginated: " + segment);
+}
+assert(relief.includes("runTransaction") && relief.includes("barangayReliefAllocations"),
+  "Relief allocation and distribution functionality must remain intact");
+const events = app("community-events");
+assert(events.includes("pagedProposals") && events.includes("pagedParticipants") &&
+  events.includes("setParticipantPage(1)") && events.includes("openProfile(participant.uid)"),
+  "Community Events must paginate both proposal and joined volunteer reviews, retaining profile access");
+const analytics = app("admin-analytics");
+for (const name of ["attendanceFollowUps", "topPointUsers", "topAchievementUsers", "recentCertificates"]) {
+  assert(analytics.includes("metrics." + name + ".slice(") &&
+    analytics.includes("total={metrics." + name + ".length} pageSize={5}"),
+    "Analytics "+name+" records must paginate five per page");
+}
+assert(!analytics.includes("style={styles.navRow}"),
+  "Analytics must not duplicate sidebar navigation");
+const donation = source("components/donations/DonationAdminDashboard.tsx");
+assert(donation.includes('mode === "admin" ? (') &&
+  donation.includes("<AdminReviewHero") &&
+  donation.includes("pagedTransactions") &&
+  donation.includes("visibleCampaigns") &&
+  donation.includes("pagedAlerts") &&
+  donation.includes("pagedReviews"),
+  "Operational Donations must preserve pagination and role-specific rendering");
+assert(layout.includes('label: "Emergency Reports"') &&
+  layout.includes('label: "Event Attendance"') &&
+  layout.includes('label: "Donation Management"'),
+  "Sidebar names must remain consistent with module headers");
+assert(app("command-center").includes("<DashboardVolunteerApprovals />"),
+  "Dashboard inline approvals must remain intact");
+console.log("PASS LGU Admin premium consistency, all main record lists, nested pagination, navigation and guarded workflows");
