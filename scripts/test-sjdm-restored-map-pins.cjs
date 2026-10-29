@@ -79,3 +79,21 @@ test("real hospitals use mapped buildings, named place IDs and publisher photo l
  assert.match(source,/ER capacity is not live-verified/);
  assert.match(source,/if \(item.positionQuality === "osm_feature"\) appendInAppRouteButton/);
 });
+
+test("actual source images and official addresses render INSIDE a bounded, accessible map panel",()=>{
+  const hospitals=places.SJDM_PUBLIC_MAP_PLACE_PINS.filter(item=>item.kind==="hospital");
+  assert.equal(hospitals.length,3);
+  for(const h of hospitals){
+    assert.match(h.address,/San Jose del Monte/);
+    assert.match(h.photoUrl,/^https:\/\/(tanglawan\.ph|cdn-healthcare\.hellohealthgroup\.com)\//);
+    assert.ok(h.photoCredit);
+  }
+  const map=read("components/tabs/MapTracking.web.tsx");
+  assert.match(map,/id="facility-detail-panel"/);
+  assert.match(map,/max-height:calc\(100% - 75px\)/);
+  assert.match(map,/image\.src = item\.photoUrl/);
+  assert.match(map,/Official address: /);
+  assert.match(map,/openFacilityDetails\(item\)/);
+  assert.doesNotMatch(map,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
+  assert.match(map,/Hospital photograph unavailable/);
+});

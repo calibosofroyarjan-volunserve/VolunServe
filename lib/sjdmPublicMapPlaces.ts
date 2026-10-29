@@ -26,6 +26,8 @@ export type SjdmPublicMapPlace = {
   /** Publisher's photograph page; images are NOT rehosted without permission. */
   actualPhotoSourceUrl?: string;
   photoCredit?: string;
+  address?: string; // published official hospital address
+  photoUrl?: string; // remote publisher image, no local rehosting
 };
 
 /** Location pin needs both a mapped physical feature and a corroborating source. */
@@ -51,7 +53,9 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     officialContact: "(044) 307-0000",
     googlePlaceId: "ChIJT85ihomvlzMRdf8B1LeV8Pg",
     actualPhotoSourceUrl: "https://tanglawan.ph/qualimed-hospital/",
-    photoCredit: "CSJDM Tourism Office / Tanglawan",
+    photoCredit: "HelloDoctor / Hello Health Group",
+    address: "Altaraza Spine Road, Barangay Tungkong Mangga, City of San Jose del Monte, Bulacan, Philippines",
+    photoUrl: "https://cdn-healthcare.hellohealthgroup.com/2026/04/1776655271_69e59ba733f460.84571040.jpg?q=75&w=3840",
     note: "Altaraza Spine Road, Tungkong Mangga. OSM hospital building footprint, not a surveyed emergency entrance. Real exterior photo linked from its publisher; no live capacity claim.",
     positionQuality: "osm_feature",
   },
@@ -67,6 +71,8 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     googlePlaceId: "ChIJi6af9ISvlzMRsHr-MhmAHAA",
     actualPhotoSourceUrl: "https://tanglawan.ph/skyline-medical-center/",
     photoCredit: "CSJDM Tourism Office / Tanglawan",
+    address: "Skyline Drive corner Quirino Highway, Barangay Tungkong Mangga, City of San Jose del Monte, Bulacan 3023",
+    photoUrl: "https://tanglawan.ph/wp-content/uploads/2024/01/A-5-scaled.jpg",
     note: "Skyline Drive corner Quirino Highway. OSM hospital footprint, not a surveyed ER door. Real exterior photo linked from its publisher; no live capacity claim.",
     positionQuality: "osm_feature",
   },
@@ -82,6 +88,8 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     googlePlaceId: "ChIJY1XOHnivlzMR8QhIpTRYVdU",
     actualPhotoSourceUrl: "https://tanglawan.ph/grace-general-hospital/",
     photoCredit: "CSJDM Tourism Office / Tanglawan",
+    address: "Lot 02 Block 01, Quirino Highway, Barangay Mulawin, Francisco Homes, City of San Jose del Monte, Bulacan, Philippines",
+    photoUrl: "https://tanglawan.ph/wp-content/uploads/2024/01/A-31-scaled.jpg",
     note: "Lot 2 Block 1 Quirino Highway Extension, Mulawin. In-map point is approximate; use named Google Maps place for real navigation. Real exterior photo linked from its publisher; no live capacity claim.",
     positionQuality: "third_party_approximate",
   },

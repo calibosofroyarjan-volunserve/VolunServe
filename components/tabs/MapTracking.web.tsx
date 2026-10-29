@@ -354,10 +354,49 @@ const mapDocument = `
       font-weight: 700;
       padding: 9px 11px;
     }
+
+    /* Scrollable, responsive in-map detail sheet replaces clipped MapLibre reference popups. */
+    #facility-detail-panel{position:absolute;top:12px;right:12px;z-index:30;box-sizing:border-box;
+      width:min(350px,calc(100% - 75px));max-height:calc(100% - 75px);overflow-y:auto;
+      background:white;border:1px solid #d3e7df;border-radius:16px;
+      box-shadow:0 12px 36px rgba(6,54,42,.22);color:#123f33;overscroll-behavior:contain}
+    #facility-detail-panel[hidden]{display:none!important}
+    .facility-sheet-head{display:flex;justify-content:space-between;align-items:center;gap:9px;
+      position:sticky;top:0;z-index:1;padding:9px 12px;background:#f0f8f4;
+      border-bottom:1px solid #dceae3;font-size:11px;font-weight:900;color:#0a7056}
+    #facility-detail-close{height:34px;width:34px;border-radius:8px;border:1px solid #c8dfd4;
+      color:#0b604a;background:#fff;font-size:17px;cursor:pointer}
+    #facility-detail-close:focus-visible{outline:3px solid #0a795d;outline-offset:2px}
+    #facility-detail-body{padding:12px}
+    #facility-detail-body .place-popup{max-width:none;overflow-wrap:anywhere}
+    .facility-photo{width:100%;height:154px;object-fit:cover;border-radius:10px;
+      display:block;background:#edf5f0}
+    .facility-photo-fallback{padding:12px;background:#eff6f2;border-radius:9px;
+      color:#60796e;font-size:11px}
+    .facility-photo-credit{font-size:10px;color:#587768;margin:6px 0 12px}
+    .facility-address{font-size:12px;line-height:1.5;margin:9px 0;color:#244d3f}
+    #facility-detail-body .place-popup-title{font-size:16px}
+    #facility-detail-body .place-popup-note{margin:9px 0;font-size:11px;color:#647c70}
+    #facility-detail-body .place-popup-links{display:grid;grid-template-columns:1fr;gap:7px;margin-top:12px}
+    #facility-detail-body .place-popup-links a,
+    #facility-detail-body .place-popup-links button{display:flex;align-items:center;justify-content:center;
+      min-height:39px;padding:9px 10px;border:1px solid #bbdacc;border-radius:9px;
+      background:#f0faf5;color:#076b50;text-align:center;text-decoration:none;
+      box-sizing:border-box;font-size:11px;font-weight:800}
+    #facility-detail-body .place-popup-status{background:#fff7e9;border-radius:8px;
+      padding:9px;color:#8b5a16;line-height:1.5}
+    @media(max-width:560px){#facility-detail-panel{top:auto;bottom:40px;left:8px;right:8px;
+      width:auto;max-height:58%}.facility-photo{height:115px}}
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <aside id="facility-detail-panel" hidden role="region" aria-label="Selected facility information">
+    <div class="facility-sheet-head"><span>FACILITY INFORMATION · REFERENCE</span>
+      <button type="button" id="facility-detail-close" aria-label="Close facility details">×</button>
+    </div>
+    <div id="facility-detail-body"></div>
+  </aside>
   <div id="notice">Loading live response map…</div>
   <section id="facility-route-status" role="status" aria-live="polite">
     <div><strong id="facility-route-title">In-app directions</strong><span id="facility-route-message"></span></div>
@@ -623,6 +662,41 @@ const mapDocument = `
       function makePublicPlacePopup(item) {
         const card = document.createElement("div");
         card.className = "place-popup";
+        if (item.kind === "hospital") {
+          const photoWrap = document.createElement("div");
+          const permittedSource = typeof item.photoUrl === "string" && (
+            item.photoUrl.startsWith("https://tanglawan.ph/wp-content/uploads/2024/01/") ||
+            item.photoUrl.startsWith("https://cdn-healthcare.hellohealthgroup.com/2026/04/")
+          );
+          if (permittedSource) {
+            const image = document.createElement("img");
+            image.src = item.photoUrl;
+            image.className = "facility-photo";
+            image.loading = "lazy";
+            image.decoding = "async";
+            image.referrerPolicy = "no-referrer";
+            image.alt = "Actual published exterior photo of " + item.name + " (not live)";
+            image.onerror = () => {
+              image.remove();
+              const fallback = document.createElement("p");
+              fallback.className = "facility-photo-fallback";
+              fallback.textContent = "Hospital photograph unavailable from original publisher";
+              photoWrap.prepend(fallback);
+            };
+            photoWrap.appendChild(image);
+            const credit = document.createElement("p");
+            credit.className = "facility-photo-credit";
+            credit.textContent = "Actual building photo · " + (item.photoCredit || "Publisher") +
+              " · Not a live camera";
+            photoWrap.appendChild(credit);
+          } else {
+            const fallback = document.createElement("p");
+            fallback.className = "facility-photo-fallback";
+            fallback.textContent = "No verified exterior photo on file";
+            photoWrap.appendChild(fallback);
+          }
+          card.appendChild(photoWrap);
+        }
         const title = document.createElement("strong");
         title.className = "place-popup-title";
         title.textContent = item.name;
@@ -631,6 +705,12 @@ const mapDocument = `
         category.className = "place-popup-category";
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
         card.appendChild(category);
+        if (typeof item.address === "string" && item.address.length >= 10) {
+          const address = document.createElement("p");
+          address.className = "facility-address";
+          address.textContent = "Official address: " + item.address;
+          card.appendChild(address);
+        }
         const note = document.createElement("p");
         note.className = "place-popup-note";
         note.textContent = item.note;
@@ -652,7 +732,7 @@ const mapDocument = `
             item.actualPhotoSourceUrl.startsWith("https://tanglawan.ph/")) {
           const photo = document.createElement("a");
           photo.href = item.actualPhotoSourceUrl;
-          photo.textContent = "View real building photo · " + (item.photoCredit || "Source");
+          photo.textContent = "Photo publisher / attribution";
           photo.target = "_blank";
           photo.rel = "noopener noreferrer";
           links.appendChild(photo);
@@ -682,6 +762,21 @@ const mapDocument = `
           : "Mapped location · Current operations not verified";
         card.appendChild(caution);
         return card;
+      }
+      const facilityDetails = document.getElementById("facility-detail-panel");
+      const facilityBody = document.getElementById("facility-detail-body");
+      function closeFacilityDetails() {
+        facilityDetails.hidden = true;
+        facilityBody.replaceChildren();
+      }
+      document.getElementById("facility-detail-close").addEventListener("click", closeFacilityDetails);
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && !facilityDetails.hidden) closeFacilityDetails();
+      });
+      function openFacilityDetails(item) {
+        facilityBody.replaceChildren(makePublicPlacePopup(item));
+        facilityDetails.hidden = false;
+        facilityDetails.scrollTop = 0;
       }
       function makeVerifiedMapPopup(item, isShelter) {
         const card = document.createElement("div");
@@ -1220,10 +1315,18 @@ const mapDocument = `
           if (!validPoint(item.latitude, item.longitude) ||
               !withinCity(item.latitude, item.longitude)) continue;
           const icon = makeSourcedPlaceElement(item);
-          const popup = new maplibregl.Popup({offset:24})
-            .setDOMContent(makePublicPlacePopup(item));
+          icon.setAttribute("role", "button");
+          icon.setAttribute("tabindex", "0");
+          icon.setAttribute("aria-label", "View details for " + item.name);
+          icon.addEventListener("click", () => openFacilityDetails(item));
+          icon.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openFacilityDetails(item);
+            }
+          });
           const marker = new maplibregl.Marker({element:icon})
-            .setLngLat([item.longitude,item.latitude]).setPopup(popup).addTo(map);
+            .setLngLat([item.longitude,item.latitude]).addTo(map);
           publicPlaceMarkers.push(marker);
           // Place reference pins must never override response camera bounds.
         }
