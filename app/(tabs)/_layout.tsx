@@ -403,6 +403,11 @@ function DesktopTabBar({
 
   const tabs =
     mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
+  const showOnboardingShortcut = mode === "resident" && (
+    (profile.identityVerified !== true &&
+      (profile.identityStatus === "basic" || profile.identityStatus === "failed")) ||
+    (!volunteerAccess && (profile.identityVerified === true || profile.identityStatus === "verified"))
+  );
 
   const switchMode = async () => {
     if (!canSwitchMode) return;
@@ -525,7 +530,7 @@ function DesktopTabBar({
         })}
       </ScrollView>
 
-      <View style={styles.desktopUtilityArea}>
+      {(showOnboardingShortcut || !!adminRoute) ? <View style={styles.desktopUtilityArea}>
         {mode === "resident" &&
           profile.identityVerified !== true &&
           (profile.identityStatus === "basic" || profile.identityStatus === "failed") ? (
@@ -541,27 +546,6 @@ function DesktopTabBar({
             <Text style={styles.desktopUtilityText}>Apply as Volunteer</Text>
           </Pressable>
         ) : null}
-        {canSwitchMode ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.desktopUtilityButton,
-              pressed && styles.desktopPressed,
-            ]}
-            onPress={() => void switchMode()}
-          >
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={18}
-              color="#E6F5F2"
-            />
-            <Text style={styles.desktopUtilityText}>
-              {mode === "volunteer"
-                ? "Switch to Resident Mode"
-                : "Switch to Volunteer Mode"}
-            </Text>
-          </Pressable>
-        ) : null}
-
         {adminRoute ? (
           <Pressable
             style={({ pressed }) => [
@@ -579,41 +563,7 @@ function DesktopTabBar({
             <Text style={styles.desktopPortalText}>{portalLabel}</Text>
           </Pressable>
         ) : null}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.desktopUtilityButton,
-            pressed && styles.desktopPressed,
-          ]}
-          onPress={() => navigate("profile")}
-        >
-          <Ionicons
-            name="settings-outline"
-            size={18}
-            color="#E6F5F2"
-          />
-          <Text style={styles.desktopUtilityText}>Account Settings</Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.desktopUtilityButton,
-            pressed && styles.desktopPressed,
-          ]}
-          onPress={requestConfirmedResidentLogout}
-        >
-          <Ionicons
-            name="log-out-outline"
-            size={18}
-            color="#DC3244"
-          />
-          <Text
-            style={[styles.desktopUtilityText, styles.desktopLogoutText]}
-          >
-            Log Out
-          </Text>
-        </Pressable>
-      </View>
+      </View> : null}
     </View>
   );
 }
