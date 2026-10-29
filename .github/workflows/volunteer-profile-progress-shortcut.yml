@@ -1,0 +1,31 @@
+name: Volunteer Home Progress Profile Shortcut Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/volunteer-home-progress-profile-link-20261029
+  pull_request:
+    paths:
+      - "components/home/Home.web.tsx"
+      - "components/home/Home.native.tsx"
+      - "app/(tabs)/profile.tsx"
+      - "scripts/test-volunteer-profile-progress-shortcut.cjs"
+      - ".github/workflows/volunteer-profile-progress-shortcut.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate Home progress shortcuts and Profile tab
+        run: node --test scripts/test-volunteer-profile-progress-shortcut.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Web export without deployment
+        run: npx expo export --platform web
