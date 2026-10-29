@@ -31,7 +31,6 @@ type FormState = {
   lastName: string;
   firstName: string;
   middleName: string;
-  noMiddleName: boolean;
   dateOfBirth: Date | null;
   phoneLocal: string;
   email: string;
@@ -432,7 +431,6 @@ export default function Signup() {
     lastName: "",
     firstName: "",
     middleName: "",
-    noMiddleName: false,
     dateOfBirth: null,
     phoneLocal: "",
     email: "",
@@ -471,7 +469,7 @@ export default function Signup() {
 
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
+    const middleNameValid = true; // Middle name or initial is optional.
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
@@ -479,7 +477,6 @@ export default function Signup() {
     const phoneValid = true;
 
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -505,7 +502,8 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid);
+    const step4Valid = formData.acceptTerms && formData.confirmReview;
 
     return {
       lastNameValid,
@@ -546,10 +544,10 @@ export default function Signup() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
 
       const stepMessages: Record<Step, string> = {
-        1: "Please complete your name, birthdate and email address.",
+        1: "Complete your email, password and personal details, or choose Google sign-up.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your basic profile information.",
-        4: "Please create a password and agree to the terms.",
+        4: "Review your information and accept the terms and privacy consent.",
       };
 
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -665,7 +663,7 @@ export default function Signup() {
       await signUpUser({
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
-        middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
+        middleName: formData.middleName.trim(),
         age: validation.ageNumber,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -865,44 +863,16 @@ export default function Signup() {
                   <View style={styles.roleInfoBox}>
                     <Text style={styles.roleInfoTitle}>Basic Account registration</Text>
                     <Text style={styles.roleInfoText}>
-                      Everyone signs up the same way. This creates a Basic Account immediately.
-                      Resident verification and Volunteer application happen later from inside the
-                      account.
+                      Create a Basic Account using email and password, or optionally use Google.
+                      Email registration requires inbox verification before sign-in.
+                      Resident verification and Volunteer application happen later.
                     </Text>
                   </View>
 
-                  {!googleBound ? (
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Continue with Google, optional signup method"
-                      disabled={loadingSubmit}
-                      onPress={handleGoogleSignup}
-                      style={[styles.googleSignupButton, loadingSubmit && { opacity: 0.65 }]}
-                      activeOpacity={0.82}
-                    >
-                      <Text style={styles.googleSignupMark}>G</Text>
-                      <Text style={styles.googleSignupLabel}>Continue with Google</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <Text style={styles.signupMethodDivider}>
-                    {googleBound ? "Complete your Google registration" : "or register with email and password"}
-                  </Text>
-                  {googleBound ? (
-                    <>
-                      <View style={styles.googleConnectedNotice}>
-                        <Feather name="check-circle" size={18} color={COLORS.primary} />
-                        <Text style={styles.googleConnectedText}>
-                          Google email verified. Complete your VolunServe profile below.
-                        </Text>
-                      </View>
-                      <TouchableOpacity onPress={useEmailInstead} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: 10 }}>
-                        <Text style={{ color: "#087A62", fontWeight: "800", fontSize: 12 }}>
-                          Use email and password instead
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : null}
-
+                  <SectionTitle
+                    title="Email Account"
+                    subtitle="Enter your email and create a secure password, or choose Google below."
+                  />
                   <Field
                     icon="✉"
                     label="Email Address *"
@@ -915,15 +885,83 @@ export default function Signup() {
                     editable={!googleBound}
                     autoCapitalize="none"
                   />
-
-                  {!googleBound ? (
-                    <Text style={{ color: "#577B69", fontSize: 11.5, marginBottom: 10 }}>
-                      Email sign-up requires inbox verification before you can sign in. Gmail, Outlook and other valid email addresses work.
-                    </Text>
-                  ) : null}
                   {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email format.</ValidationText>
+                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
                   ) : null}
+                  {!googleBound ? (
+                    <>
+                      <View style={styles.formRow}>
+                        <View style={styles.formColumn}>
+                          <Field
+                            label="Password *"
+                            value={formData.password}
+                            onChange={(v) => updateField("password", v)}
+                            secureTextEntry={!showPassword}
+                            showPassword={showPassword}
+                            onTogglePassword={() => setShowPassword((prev) => !prev)}
+                            autoCapitalize="none"
+                          />
+                        </View>
+                        <View style={styles.formColumn}>
+                          <Field
+                            label="Confirm Password *"
+                            value={formData.confirmPassword}
+                            onChange={(v) => updateField("confirmPassword", v)}
+                            secureTextEntry={!showConfirmPassword}
+                            showPassword={showConfirmPassword}
+                            onTogglePassword={() => setShowConfirmPassword((prev) => !prev)}
+                            autoCapitalize="none"
+                          />
+                        </View>
+                      </View>
+                      <Text style={styles.emailVerifyHint}>
+                        Use an email address you can access. Verify your inbox before signing in.
+                        Passwords need 8+ characters, uppercase, lowercase, a number and a symbol.
+                      </Text>
+                      <View style={styles.signupDividerRow}>
+                        <View style={styles.signupDividerLine} />
+                        <Text style={styles.signupDividerText}>OR</Text>
+                        <View style={styles.signupDividerLine} />
+                      </View>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Continue with Google, optional signup method"
+                        disabled={loadingSubmit}
+                        onPress={handleGoogleSignup}
+                        style={[styles.googleSignupButton, loadingSubmit && { opacity: 0.65 }]}
+                        activeOpacity={0.82}
+                      >
+                        <Image
+                          source={{ uri: "https://developers.google.com/identity/images/g-logo.png" }}
+                          style={styles.googleSignupLogo}
+                          resizeMode="contain"
+                        />
+                        <Text style={styles.googleSignupLabel}>Continue with Google</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.googleConnectedNotice}>
+                        <Feather name="check-circle" size={18} color={COLORS.primary} />
+                        <Text style={styles.googleConnectedText}>
+                          Google email verified. Complete your VolunServe profile; no separate password required.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={useEmailInstead}
+                        accessibilityRole="button"
+                        style={{ alignSelf: "center", paddingVertical: 10 }}
+                      >
+                        <Text style={{ color: "#087A62", fontWeight: "800", fontSize: 12 }}>
+                          Use email and password instead
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  <SectionTitle
+                    title="Personal Information"
+                    subtitle="Provide your identity details to finish setting up your Basic Account."
+                  />
 
                   <View style={styles.formRow}>
                     <View style={styles.formColumn}>
@@ -953,25 +991,10 @@ export default function Signup() {
                     <View style={styles.formColumn}>
                       <Field
                         icon="♙"
-                        label="Middle Name *"
+                        label="Middle Name / Initial (Optional)"
                         value={formData.middleName}
-                        onChange={(v) => updateField("middleName", sanitizeName(v))}
-                        editable={!formData.noMiddleName}
-                        invalid={
-                          !formData.noMiddleName &&
-                          formData.middleName.length > 0 &&
-                          !validation.middleNameValid
-                        }
+                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z .'-]/g, ""))}
                         returnKeyType="next"
-                      />
-                      <CheckRow
-                        label="I do not have a middle name"
-                        checked={formData.noMiddleName}
-                        onPress={() => {
-                          const next = !formData.noMiddleName;
-                          updateField("noMiddleName", next);
-                          if (next) updateField("middleName", "");
-                        }}
                       />
                     </View>
 
@@ -1190,40 +1213,9 @@ export default function Signup() {
 
                   {!googleBound ? (<>
                   <SectionTitle
-                    title="Password Security"
-                    subtitle={
-                      googleBound
-                        ? "Create a VolunServe password so this same account can sign in with Google or email/password."
-                        : "Create a strong password to protect your account."
-                    }
+                    title="Password Security Review"
+                    subtitle="Your password was entered in Step 1. Review the requirements."
                   />
-
-                  <View style={styles.formRow}>
-                    <View style={styles.formColumn}>
-                      <Field
-                        label="Password *"
-                        value={formData.password}
-                        onChange={(v) => updateField("password", v)}
-                        secureTextEntry={!showPassword}
-                        showPassword={showPassword}
-                        onTogglePassword={() => setShowPassword((prev) => !prev)}
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <View style={styles.formColumn}>
-                      <Field
-                        label="Confirm Password *"
-                        value={formData.confirmPassword}
-                        onChange={(v) => updateField("confirmPassword", v)}
-                        secureTextEntry={!showConfirmPassword}
-                        showPassword={showConfirmPassword}
-                        onTogglePassword={() => setShowConfirmPassword((prev) => !prev)}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  </View>
-
                   <View style={styles.passwordPanel}>
                     <Text style={styles.passwordStrength}>
                       Password Strength: {validation.passwordStrength}
@@ -1577,9 +1569,12 @@ const styles = StyleSheet.create({
   roleInfoText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
 
   googleSignupButton: { flexDirection: "row", gap: 12, minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 14, paddingHorizontal: 16 },
-  googleSignupMark: { color: "#4285F4", fontSize: 20, fontWeight: "900" },
+  googleSignupLogo: { width: 20, height: 20 },
   googleSignupLabel: { color: "#163D38", fontSize: 13, fontWeight: "800" },
-  signupMethodDivider: { color: "#67837D", textAlign: "center", marginVertical: 12, fontSize: 12 },
+  signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 16 },
+  signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
+  signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
+  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 4 },
   googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
   googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
