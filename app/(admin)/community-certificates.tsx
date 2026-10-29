@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
@@ -696,28 +697,7 @@ export default function CommunityCertificatesAdminScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>
-            VOLUNSERVE · COMMUNITY EVENTS
-          </Text>
-
-          <Text style={styles.title}>
-            Certificate Generator
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Certificate of Participation · Completed events
-            and verified attendance only
-          </Text>
-        </View>
-
-        <Ionicons
-          name="ribbon-outline"
-          size={29}
-          color={GREEN}
-        />
-      </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Community Certificates" subtitle="Review completed community events and verified attendance. This tab provides a certificate design preview, not official issuance." icon="ribbon-outline" tag="DESIGN PREVIEW" />
 
       <View style={styles.note}>
         <Ionicons
