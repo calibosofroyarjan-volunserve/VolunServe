@@ -75,7 +75,8 @@ test("real hospitals use mapped buildings, named place IDs and publisher photo l
  assert.equal(sites.find(p=>p.id==="hospital-grace-reference").positionQuality,"third_party_approximate");
  const source=read("components/tabs/MapTracking.web.tsx");
  assert.match(source,/Open named place in Google Maps/);
- assert.match(source,/View real building photo/);
+ assert.match(source,/Actual building photo/);
+ assert.match(source,/id="facility-detail-panel"/);
  assert.match(source,/ER capacity is not live-verified/);
  assert.match(source,/if \(item.positionQuality === "osm_feature"\) appendInAppRouteButton/);
 });
