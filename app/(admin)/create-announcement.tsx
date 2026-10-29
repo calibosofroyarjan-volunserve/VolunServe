@@ -40,6 +40,8 @@ export default function CreateAnnouncement() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [barangayOpen, setBarangayOpen] = useState(false);
+  const [chosenBarangay, setChosenBarangay] = useState("");
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
@@ -109,11 +111,14 @@ export default function CreateAnnouncement() {
       ? profile.barangay.trim()
       : "";
 
+  // Server security rules permit LGU Admin publishing only to the barangay
+  // assigned in their verified profile. Never show an unauthorized audience.
+  const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!barangay) {
+    if (!publishBarangay || publishBarangay !== barangay) {
       Alert.alert(
         "Barangay Required",
         "Your Admin account does not have an assigned barangay."
@@ -131,10 +136,10 @@ export default function CreateAnnouncement() {
       return;
     }
 
-    if (cleanMessage.length < 5) {
+    if (cleanMessage.length < 10) {
       Alert.alert(
         "Invalid Message",
-        "Please enter an announcement message."
+        "Write at least 10 characters so the announcement meets the official publishing rules."
       );
 
       return;
@@ -156,7 +161,7 @@ export default function CreateAnnouncement() {
            * audience stores the Admin's
            * assigned barangay.
            */
-          audience: barangay,
+          audience: publishBarangay,
 
           priority: "normal",
 
@@ -184,7 +189,7 @@ export default function CreateAnnouncement() {
 
       Alert.alert(
         "Announcement Posted",
-        `The announcement was published for ${barangay}.`
+        `The announcement was published for ${publishBarangay}.`
       );
     } catch (error: any) {
       console.error(
@@ -226,13 +231,31 @@ export default function CreateAnnouncement() {
           ANNOUNCEMENT AREA
         </Text>
 
-        <Text style={styles.scopeValue}>
-          {barangay || "No barangay assigned"}
-        </Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Choose authorized announcement barangay"
+          accessibilityState={{ expanded: barangayOpen }}
+          disabled={!barangay || submitting}
+          onPress={() => setBarangayOpen(value => !value)}
+          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+        >
+          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
+          <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
+        </TouchableOpacity>
+        {barangayOpen && barangay ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
+            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
+            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
+          >
+            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <Text style={styles.scopeHelp}>
           Ordinary Admin accounts can only publish
-          announcements for their assigned area.
+          announcements for their assigned area. Other barangays cannot be selected without additional official authorization.
         </Text>
       </View>
 
