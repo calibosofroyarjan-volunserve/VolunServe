@@ -13,9 +13,10 @@ for (const [name, file] of [["Resident and Volunteer accounts",accounts],["Resid
   assert(file.includes("pageSize={PAGE_SIZE}") && file.includes("onChange={setPage}"),name + ": numbered pages missing");
   assert(file.includes("setSearch(value); setPage(1);") || file.includes("setSearch(value); setPage(1);"),name+": search must reset page");
 }
-assert(accounts.includes("Resident Accounts & Volunteer Approvals") &&
-       accounts.includes('"Volunteer Applications"') && accounts.includes('"Resident Accounts"'),
-  "Resident and Volunteer roles need separate clear review views");
+const dashboard = read("app/(admin)/command-center.tsx");
+assert(dashboard.includes("<ResidentAccountsPanel />") && dashboard.includes("<DashboardVolunteerApprovals />") &&
+  dashboard.includes('workspaceTab === "residents"') && dashboard.includes('workspaceTab === "volunteers"'),
+  "Resident and Volunteer reviews must use separate functional tabs in Command Center");
 assert(accounts.includes("pagedAccounts.map(") && identity.includes("pagedReviews.map("),
   "Queues must only render records from the current page");
 assert(accounts.includes("visible={!!approvalCandidate}") &&
@@ -38,8 +39,9 @@ assert(identity.includes("setFilter(item.key); setPage(1); setSelected(null);") 
        identity.includes("filtered.slice("),
   "Identity review must clear stale selected review when filter changes");
 assert(shell.includes('label: "Resident Identity Reviews"') &&
-       shell.includes('label: "User & Volunteer Approvals"'),
-  "Keep existing LGU review sidebar links and auth scope");
+       shell.includes('label: "Command Center"') &&
+       !shell.includes('label: "User & Volunteer Approvals"'),
+  "Keep Identity Reviews in sidebar and Resident/Volunteer reviews in Command Center");
 assert(signup.includes("verification link") && maps.includes("MapTracking"),
   "Keep connected signup email verification and map entrypoint intact");
 console.log("PASS LGU Resident/Volunteer and Identity reviews: five-row queues, credential confirmation, audit logging and protected adjacent modules");
