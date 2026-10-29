@@ -167,6 +167,7 @@ export default function CommunityEventAdminScreen() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [participantPage, setParticipantPage] = useState(1);
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
@@ -244,6 +245,9 @@ export default function CommunityEventAdminScreen() {
   const activeProposalPage = Math.max(1, Math.min(recordPage, proposalPages));
   const pagedProposals = visible.slice((activeProposalPage - 1) * 5, activeProposalPage * 5);
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
+  const activeParticipantPage = Math.max(1, Math.min(participantPage, Math.max(1, Math.ceil(participants.length / 5))));
+  const pagedParticipants = participants.slice((activeParticipantPage - 1) * 5, activeParticipantPage * 5);
+  useEffect(() => { setParticipantPage(1); }, [selectedProposalId]);
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
   // Read only profiles needed for visible proposal cards, not the full user directory.
   useEffect(() => {
@@ -979,7 +983,8 @@ export default function CommunityEventAdminScreen() {
                       {!participantsBusy && !participantsError && participants.length === 0 && (
                         <Text style={styles.bodyText}>No joined volunteers yet.</Text>
                       )}
-                      {participants.map((participant) => (
+                      <ListPagination page={activeParticipantPage} total={participants.length} pageSize={5} onChange={setParticipantPage} />
+                      {pagedParticipants.map((participant) => (
                         <View key={participant.id} style={styles.profileRow}>
                           {renderAvatar(participant.uid, participant.fullName || "Volunteer", 42)}
                           <View style={{ flex: 1 }}>
