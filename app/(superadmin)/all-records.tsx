@@ -265,7 +265,9 @@ export default function AllRecords() {
     setSearch,
   ] = useState("");
   const [page, setPage] = useState(1);
+  const [categoryPage, setCategoryPage] = useState(1);
   const PAGE_SIZE = 5;
+  const CATEGORY_PAGE_SIZE = 5;
 
   const [
     errors,
@@ -519,6 +521,23 @@ export default function AllRecords() {
     { key: "certificates", label: "Certificates", icon: "ribbon-outline" },
     { key: "events", label: "Legacy Volunteer Events", icon: "time-outline" },
   ];
+
+  // Category paging is independent from the existing five-record paging.
+  const categoryPageCount = Math.ceil(tabs.length / CATEGORY_PAGE_SIZE);
+  const visibleCategoryTabs = tabs.slice(
+    (categoryPage - 1) * CATEGORY_PAGE_SIZE,
+    categoryPage * CATEGORY_PAGE_SIZE
+  );
+  const firstCategoryIndex = (categoryPage - 1) * CATEGORY_PAGE_SIZE;
+  const lastCategoryIndex = Math.min(categoryPage * CATEGORY_PAGE_SIZE, tabs.length);
+  const selectCategoryPage = (next: number) => {
+    const safeNext = Math.max(1, Math.min(next, categoryPageCount));
+    if (safeNext === categoryPage) return;
+    setCategoryPage(safeNext);
+    setActiveTab(tabs[(safeNext - 1) * CATEGORY_PAGE_SIZE].key);
+    setSearch("");
+    setPage(1);
+  };
 
   const renderRecord = (
     item: GenericRecord
@@ -1188,18 +1207,38 @@ export default function AllRecords() {
       </View>
 
       <View style={styles.tabHeadingRow}>
-        <Text style={styles.tabHeading}>BROWSE RECORDS</Text>
-        <Text style={styles.tabHint}>Scroll horizontally for more categories</Text>
+        <View style={styles.tabHeadingCopy}>
+          <Text style={styles.tabHeading}>BROWSE RECORDS</Text>
+          <Text style={styles.tabHint}>
+            Categories {firstCategoryIndex + 1}–{lastCategoryIndex} of {tabs.length}
+          </Text>
+        </View>
+        <View style={styles.categoryPager} accessibilityLabel="Browse record category pages">
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Previous category page"
+            disabled={categoryPage === 1}
+            onPress={() => selectCategoryPage(categoryPage - 1)}
+            style={[styles.categoryNavButton, categoryPage === 1 && styles.categoryNavDisabled]}
+          >
+            <Ionicons name="chevron-back" size={16} color="#225F4B" />
+            <Text style={styles.categoryNavLabel}>Previous</Text>
+          </TouchableOpacity>
+          <Text style={styles.categoryPageStatus}>{categoryPage} of {categoryPageCount}</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Next category page"
+            disabled={categoryPage === categoryPageCount}
+            onPress={() => selectCategoryPage(categoryPage + 1)}
+            style={[styles.categoryNavButton, categoryPage === categoryPageCount && styles.categoryNavDisabled]}
+          >
+            <Text style={styles.categoryNavLabel}>Next</Text>
+            <Ionicons name="chevron-forward" size={16} color="#225F4B" />
+          </TouchableOpacity>
+        </View>
       </View>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator
-        style={styles.tabsScroll}
-        contentContainerStyle={styles.tabs}
-        accessibilityLabel="System record categories in workflow order"
-      >
-        {tabs.map((tab) => {
+      <View style={styles.tabs} accessibilityLabel="System record categories in workflow order">
+        {visibleCategoryTabs.map((tab) => {
           const selected = activeTab === tab.key;
           return (
             <TouchableOpacity
@@ -1214,21 +1253,14 @@ export default function AllRecords() {
                 setPage(1);
               }}
             >
-              <Ionicons
-                name={tab.icon}
-                size={17}
-                color={selected ? "#FFFFFF" : "#376757"}
-              />
-              <Text
-                numberOfLines={1}
-                style={[styles.tabText, selected && styles.tabTextActive]}
-              >
+              <Ionicons name={tab.icon} size={17} color={selected ? "#FFFFFF" : "#376757"} />
+              <Text numberOfLines={1} style={[styles.tabText, selected && styles.tabTextActive]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       <View
         style={
@@ -1674,37 +1706,50 @@ const styles =
       alignItems: "center",
       justifyContent: "space-between",
       flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 9,
+      gap: 12,
+      marginBottom: 12,
     },
-
+    tabHeadingCopy: { flexDirection: "column", gap: 4 },
     tabHeading: {
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 1,
       color: "#1A5B47",
     },
-
-    tabHint: {
-      fontSize: 11,
-      color: "#71877C",
+    tabHint: { fontSize: 11, color: "#71877C" },
+    categoryPager: { flexDirection: "row", alignItems: "center", gap: 10 },
+    categoryNavButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 3,
+      minHeight: 38,
+      paddingHorizontal: 11,
+      borderWidth: 1,
+      borderColor: "#D3E2DA",
+      borderRadius: 9,
+      backgroundColor: "#FFFFFF",
     },
-
-    tabsScroll: {
+    categoryNavDisabled: { opacity: 0.4 },
+    categoryNavLabel: { fontSize: 11, fontWeight: "800", color: "#225F4B" },
+    categoryPageStatus: {
+      minWidth: 48,
+      textAlign: "center",
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#285C49",
+      fontVariant: ["tabular-nums"],
+    },
+    tabs: {
       width: "100%",
-      flexGrow: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+      paddingBottom: 11,
       borderBottomWidth: 1,
       borderBottomColor: "#DBE9E1",
       marginBottom: 16,
-    },
-
-    tabs: {
-      flexDirection: "row",
-      alignItems: "center",
-      flexWrap: "nowrap",
-      gap: 8,
-      paddingBottom: 10,
-      paddingRight: 16,
     },
 
     tabButton: {

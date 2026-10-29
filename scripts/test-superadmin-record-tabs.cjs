@@ -36,13 +36,26 @@ test("Prioritized summary cards use actual collection counts and no fabricated m
   ]);
 });
 
-test("All 13 tabs use one horizontal scroll row without wrapping, and preserve filters and pagination", () => {
-  assert.match(source, /<ScrollView\s+horizontal\s+nestedScrollEnabled\s+showsHorizontalScrollIndicator/);
-  assert.match(source, /accessibilityLabel="System record categories in workflow order"/);
+test("All 13 categories paginate five at a time with accessible controls", () => {
+  assert.match(source, /const \[categoryPage, setCategoryPage\] = useState\(1\)/);
+  assert.match(source, /const CATEGORY_PAGE_SIZE = 5/);
+  assert.match(source, /Math\.ceil\(tabs\.length \/ CATEGORY_PAGE_SIZE\)/);
+  assert.match(source, /const visibleCategoryTabs = tabs\.slice\(/);
+  assert.match(source, /visibleCategoryTabs\.map\(\(tab\) =>/);
+  assert.match(source, /accessibilityLabel="Previous category page"/);
+  assert.match(source, /accessibilityLabel="Next category page"/);
+  assert.match(source, /disabled=\{categoryPage === 1\}/);
+  assert.match(source, /disabled=\{categoryPage === categoryPageCount\}/);
   assert.match(source, /accessibilityRole="tab"/);
   assert.match(source, /accessibilityState=\{\{ selected \}\}/);
-  assert.match(source, /tabs:\s*\{\s*flexDirection: "row",\s*alignItems: "center",\s*flexWrap: "nowrap"/);
-  assert.match(source, /tabsScroll:\s*\{\s*width: "100%",/);
+  assert.match(source, /tabs:\s*\{\s*width: "100%",\s*flexDirection: "row",\s*alignItems: "center",\s*flexWrap: "wrap"/);
+  assert.doesNotMatch(source, /showsHorizontalScrollIndicator|styles\.tabsScroll/);
+});
+
+test("Category page switching selects the first visible tab and resets record search and paging", () => {
+  assert.match(source, /setCategoryPage\(safeNext\)/);
+  assert.match(source, /setActiveTab\(tabs\[\(safeNext - 1\) \* CATEGORY_PAGE_SIZE\]\.key\)/);
+  assert.match(source, /setSearch\(""\);\s*setPage\(1\)/);
   assert.match(source, /setActiveTab\(tab\.key\);\s*setSearch\(""\);\s*setPage\(1\)/);
   assert.match(source, /const PAGE_SIZE = 5/);
   assert.match(source, /<ListPagination page=\{activePage\} total=\{visibleRecords\.length\} onChange=\{setPage\} \/>/);
