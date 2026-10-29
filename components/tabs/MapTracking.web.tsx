@@ -634,7 +634,7 @@ const mapDocument = `
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
         card.appendChild(category);
         let credit = null;
-        if (item.photoUrl && /^https:\/\//.test(item.photoUrl)) {
+        if (item.photoUrl && item.photoUrl.startsWith("https://")) {
           const photo = document.createElement("img");
           photo.src = item.photoUrl;
           photo.alt = "Actual exterior of " + item.name;
@@ -672,7 +672,7 @@ const mapDocument = `
         links.className = "place-popup-links";
         appendInAppRouteButton(item, links);
         if (typeof item.officialInfoUrl === "string" &&
-            /^https:\/\//.test(item.officialInfoUrl)) {
+            item.officialInfoUrl.startsWith("https://")) {
           const source = document.createElement("a");
           source.href = item.officialInfoUrl;
           source.target = "_blank";
@@ -680,7 +680,7 @@ const mapDocument = `
           source.textContent = "Official information";
           links.appendChild(source);
         }
-        if (typeof item.sourceUrl === "string" && /^https:\/\//.test(item.sourceUrl)) {
+        if (typeof item.sourceUrl === "string" && item.sourceUrl.startsWith("https://")) {
           const mapped = document.createElement("a");
           mapped.href = item.sourceUrl;
           mapped.target = "_blank";
