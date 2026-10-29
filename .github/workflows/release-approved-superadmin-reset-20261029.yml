@@ -31,6 +31,7 @@ jobs:
           set -euo pipefail
           node --test scripts/test-login-ui-release.cjs scripts/test-password-reset-modal.cjs scripts/test-superadmin-pagination-layout.cjs scripts/test-superadmin-record-tabs.cjs scripts/test-superadmin-sidebar-spacing.cjs scripts/test-superadmin-profile-menu.cjs
           node scripts/test-sjdm-map-navigation.cjs
+          node --test scripts/test-sjdm-restored-map-pins.cjs
           node scripts/test-premium-auth-portal.cjs
           node <<'NODE'
           const fs=require("node:fs"), assert=require("node:assert/strict");

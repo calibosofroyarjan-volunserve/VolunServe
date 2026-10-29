@@ -22,17 +22,43 @@ assert(cases.includes('pathname:') && cases.includes('"/disaster-response" as an
 assert(events.includes("CommunityEventRoadMap") && events.includes("CommunityEventLiveLocation"),
   "Event venue and consent-based organizer map remain inside Community Events");
 assert(eventMap.includes("router.project-osrm.org"),"Road navigation remains an actual route, not a static image");
-assert(map.includes('id: "sjdm-city-outline"') && map.includes('id: "sjdm-city-fill"'),
-  "Draw actual sourced GeoJSON city outline; never a made-up rectangle");
-assert(map.includes("cityBoundaryUrl") && map.includes("Nominatim"),
-  "Boundary must be obtained from a named data provider");
-assert(map.includes("cityBoundaryBounds") && map.includes("lastNavigationView"),
-  "Default city camera must not expand to out-of-city resident GPS");
-assert(map.includes("cityBoundaryBounds.contains([location.longitude, location.latitude])") &&
-  map.includes("follow && (lastNavigationView || gpsInsideVerifiedCity)"),
-  "Out-of-city GPS must not override municipal camera outside responder mission mode");
-assert(map.includes('label.textContent = "CDRRMO"') && map.includes("Approximate map pin, not real-time"),
-  "CDRRMO pin is explicitly informational, not impersonating a tracked response vehicle");
-assert(map.includes("isVerifiedActiveCenter") && map.includes("activeLguResponderUid"),
-  "Shelter and responder privacy controls must remain");
-console.log("PASS SJDM map scope, sourced outline, CDRRMO informational icon and embedded emergency/event navigation");
+
+const native = read("components/tabs/MapTracking.native.tsx");
+const boundary = read("lib/sjdmMapBoundary.ts");
+const geometry = read("constants/sjdmBoundaryReference.ts");
+const places = read("lib/sjdmPublicMapPlaces.ts");
+const facilities = read("lib/lguMapFacilities.ts");
+assert(map.includes("loadSjdmBoundary") && map.includes("sjdmOutsideMask(sjdmBoundary)"),
+  "Restore actual bundled SJDM geometry and the city-only map mask");
+assert(map.includes("sjdm-exterior-blocked") && map.includes("sjdm-city-outline") &&
+  map.includes("withinCity"), "Strict city mask and polygon geofence must remain");
+assert(geometry.includes("30758251B35007836972970") &&
+  boundary.includes("insideSjdmBoundary"), "Attributed real GeoBoundaries reference required");
+assert(map.includes("SJDM_PUBLIC_MAP_PLACE_PINS") &&
+  map.includes("makePublicPlacePopup") && map.includes("payload.publicPlaces"),
+  "Restore mapped SJDM permanent public-building reference icons");
+assert(places.includes("San Jose del Monte New Government Center") &&
+  places.includes("Dulong Bayan Barangay Hall") &&
+  places.includes("CDRRMO") &&
+  places.includes("third_party_approximate"),
+  "CDRRMO must be clearly approximate and mapped government buildings referenced");
+assert(map.includes('collection(db, "lguMapFacilities")') &&
+  map.includes("verifiedLguMapFacility") &&
+  facilities.includes('data.verificationStatus !== "verified"'),
+  "Only active LGU-verified facility records may become operational markers");
+assert(map.includes("const visibleCenters = useMemo") &&
+  !map.includes("missionMode || adminMissionMode || !showCenters") &&
+  map.includes("Show road route here"),
+  "Case-view shelters must remain visible where verified; restore on-demand in-map road routing");
+assert(map.includes("navigator.geolocation.getCurrentPosition") &&
+  map.includes("routeStaysInSjdm") && map.includes("router.project-osrm.org"),
+  "No external-city routes, fabricated ETAs or non-consensual GPS routing");
+assert(map.includes("LGU_FACILITY_ICONS") &&
+  map.includes("SJDM_PUBLIC_PLACE_ICON") &&
+  map.includes("isVerifiedActiveCenter") &&
+  map.includes("activeLguResponderUid"),
+  "Distinct icon classes, active shelters and authorized responder-only GPS remain");
+assert(native.includes("SJDM_MASK_EXTERIOR") &&
+  native.includes("LGU_FACILITY_ICONS") && native.includes("lguMapFacilities"),
+  "Restore geo-fenced native categorized markers");
+console.log("PASS restored Oct28 SJDM city geofence, sourced building icons, active LGU facilities and case-view shelters");
