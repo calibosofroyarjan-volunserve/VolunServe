@@ -53,11 +53,11 @@ for(let i=0;i<expectedGroups.length;i++){
 }
 assert(lgu.includes(')?.id ?? "none"') && lgu.includes(">Command Center</Text>"),
   "Command Center must open without unnecessary expanded sidebar groups");
-assert(accounts.includes("LGU STAFF VERIFICATION FLOW") &&
-  accounts.includes("Receive staff application") &&
-  accounts.includes("Verify official LGU credentials") &&
-  accounts.includes("Promote to Admin & record audit"),
-  "Super Admin must display one linear verify-before-promote lifecycle");
+assert(!accounts.includes("LGU STAFF VERIFICATION FLOW") &&
+  !accounts.includes(">LGU Staff Applications</Text>") &&
+  accounts.includes("credentialsConfirmed") &&
+  accounts.includes("lguEmploymentConfirmed"),
+  "Visible staff onboarding stays hidden, but independent verification safeguards remain in code");
 assert(!accounts.includes('accessibilityLabel="Create independent LGU Admin account"') &&
   !accounts.includes('>Create LGU Admin</Text>') &&
   !accounts.includes('onPress={() => setShowAddAdmin(true)}'),
