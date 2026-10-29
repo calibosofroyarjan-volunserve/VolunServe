@@ -59,22 +59,20 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
   { label: "Relief Operations", icon: "cube-outline", route: "/(admin)/relief-operations" },
   { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
-  { label: "Volunteer Events", icon: "calendar-outline", route: "/(admin)/admin-events" },
   { label: "Event Attendance", icon: "checkmark-done-outline", route: "/(admin)/community-attendance" },
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
   { label: "Announcements", icon: "megaphone-outline", route: "/(admin)/create-announcement" },
   { label: "Disputes", icon: "shield-checkmark-outline", route: "/(admin)/admin-disputes" },
-  { label: "Analytics", icon: "analytics-outline", route: "/(admin)/admin-analytics" },
 ];
 
 type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
   { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "User & Volunteer Approvals", "LGU Personnel", "LGU Attendance"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
-  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Volunteer Events", "Event Attendance", "Certificates"] },
+  { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
-  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes", "Analytics"] },
+  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
