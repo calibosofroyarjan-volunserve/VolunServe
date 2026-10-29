@@ -67,7 +67,7 @@ export default function DashboardPendingIdentityReviews() {
             <Text style={styles.meta}>{item.resident?.barangay || "Barangay unlisted"} · Pending manual verification</Text>
           </View>
           <TouchableOpacity accessibilityRole="button" style={styles.action}
-            onPress={() => router.push("/(admin)/identity-reviews" as any)}>
+            onPress={() => router.push({ pathname: "/(admin)/identity-reviews", params: { uid: item.uid } } as any)}>
             <Text style={styles.actionText}>Review securely</Text>
           </TouchableOpacity>
         </View>)}
