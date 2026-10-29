@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import ListPagination from "../../components/ui/ListPagination";
 import {
   ActivityIndicator,
   ScrollView,
@@ -116,6 +117,7 @@ export default function AdminDisputesScreen() {
   const [loading, setLoading] = React.useState(true);
 
   const [filter, setFilter] = useState<FilterType>("open");
+  const [recordPage, setRecordPage] = useState(1);
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -333,6 +335,9 @@ export default function AdminDisputesScreen() {
     return disputes.filter((item) => item.status === filter);
   }, [disputes, filter]);
 
+  const disputePages = Math.max(1, Math.ceil(filteredDisputes.length / 5));
+  const activeDisputePage = Math.max(1, Math.min(recordPage, disputePages));
+  const pagedDisputes = filteredDisputes.slice((activeDisputePage - 1) * 5, activeDisputePage * 5);
   const handleDecision = async (
     dispute: ResponseDispute,
     newStatus: "resolved" | "dismissed"
@@ -485,29 +490,30 @@ export default function AdminDisputesScreen() {
           <FilterButton
             label={`Open (${counts.open})`}
             active={filter === "open"}
-            onPress={() => setFilter("open")}
+            onPress={() => { setFilter("open"); setRecordPage(1); }}
           />
 
           <FilterButton
             label={`Resolved (${counts.resolved})`}
             active={filter === "resolved"}
-            onPress={() => setFilter("resolved")}
+            onPress={() => { setFilter("resolved"); setRecordPage(1); }}
           />
 
           <FilterButton
             label={`Dismissed (${counts.dismissed})`}
             active={filter === "dismissed"}
-            onPress={() => setFilter("dismissed")}
+            onPress={() => { setFilter("dismissed"); setRecordPage(1); }}
           />
 
           <FilterButton
             label={`All (${counts.all})`}
             active={filter === "all"}
-            onPress={() => setFilter("all")}
+            onPress={() => { setFilter("all"); setRecordPage(1); }}
           />
         </View>
       </View>
 
+      <ListPagination page={activeDisputePage} total={filteredDisputes.length} pageSize={5} onChange={setRecordPage} />
       {filteredDisputes.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>
@@ -519,7 +525,7 @@ export default function AdminDisputesScreen() {
           </Text>
         </View>
       ) : (
-        filteredDisputes.map((dispute) => {
+        pagedDisputes.map((dispute) => {
           const isOpen = dispute.status === "open";
           const isProcessing = processingId === dispute.id;
 
