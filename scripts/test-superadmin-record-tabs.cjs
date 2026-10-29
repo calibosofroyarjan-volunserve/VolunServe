@@ -31,7 +31,9 @@ test("Recorded account roles isolate resident, volunteer and staff user lists wi
 });
 
 test("Switching sections and child tabs resets search and five-record paging", () => {
-  assertHas(source, 'accessibilityLabel="System Records grouped sections"');
+  assertHas(source, 'accessibilityLabel="Choose record section"');
+  assertHas(source, 'accessibilityLabel="Record service areas"');
+  assertHas(source, 'accessibilityLabel={activeSection.label + " record types"}');
   assertHas(source, "activeSection.views.map(view =>");
   assertHas(source, "showRecordSection(section)");
   assertHas(source, "showRecordView(view)");
@@ -49,4 +51,18 @@ test("Summary counters remain grounded in authorized Firestore collection counts
   for (const field of ["cases","assistance","users","applications","contributions","certificates"]) {
     assertHas(source, "value={records." + field + ".length}");
   }
+});
+
+test("Browse Records uses one compact dropdown plus underline tabs, never stacked section cards", () => {
+  assertHas(source, "const [sectionMenuOpen, setSectionMenuOpen] = useState(false);");
+  assertHas(source, "onPress={() => setSectionMenuOpen(!sectionMenuOpen)}");
+  assertHas(source, 'style={styles.sectionPickerMenu}');
+  assertHas(source, "setSectionMenuOpen(false);");
+  assertHas(source, "styles.recordTypeTabs");
+  assertHas(source, "styles.recordTypeTabActive");
+  assertHas(source, 'borderBottomColor: "#087A62"');
+  assert(!source.includes("styles.sectionTabs") && !source.includes("styles.subSection"),
+    "Remove two bulky rows and nested mint panel");
+  assert(!source.includes("CATEGORY_PAGE_SIZE") && !source.includes("tabsScroll"),
+    "Do not restore an unrelated category pager or horizontal scrollbar");
 });

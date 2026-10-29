@@ -325,6 +325,7 @@ export default function AllRecords() {
 
   const [activeSectionId, setActiveSectionId] = useState("residents");
   const [activeViewId, setActiveViewId] = useState("residentAccounts");
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<RecordType>("users");
 
   const [
@@ -582,6 +583,7 @@ export default function AllRecords() {
   };
   const showRecordSection = (section: SystemRecordSection) => {
     setActiveSectionId(section.id);
+    setSectionMenuOpen(false);
     showRecordView(section.views[0]);
   };
 
@@ -1252,57 +1254,67 @@ export default function AllRecords() {
         <SummaryCard label="Certificates" value={records.certificates.length} icon="ribbon-outline" />
       </View>
 
-      <View style={styles.tabHeadingRow}>
-        <View style={styles.tabHeadingCopy}>
-          <Text style={styles.tabHeading}>BROWSE RECORDS BY SECTION</Text>
-          <Text style={styles.tabHint}>Select a section, then the record type inside it</Text>
+      {/* One compact selector replaces the two stacked button bars. */}
+      <View style={styles.browseHeader}>
+        <View style={styles.browseHeaderCopy}>
+          <Text style={styles.browseEyebrow}>BROWSE RECORDS</Text>
+          <Text style={styles.browseDescription}>Select a service area to view its records</Text>
+        </View>
+        <View style={styles.sectionPickerWrap}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose record section"
+            accessibilityState={{ expanded: sectionMenuOpen }}
+            style={[styles.sectionPickerButton, sectionMenuOpen && styles.sectionPickerButtonOpen]}
+            onPress={() => setSectionMenuOpen(!sectionMenuOpen)}
+          >
+            <Ionicons name={activeSection.icon} size={17} color="#087A62" />
+            <Text numberOfLines={1} style={styles.sectionPickerLabel}>{activeSection.label}</Text>
+            <Ionicons name={sectionMenuOpen ? "chevron-up" : "chevron-down"} size={17} color="#376757" />
+          </TouchableOpacity>
+          {sectionMenuOpen ? (
+            <View style={styles.sectionPickerMenu} accessibilityLabel="Record service areas">
+              {recordSections.map(section => {
+                const selected = activeSectionId === section.id;
+                return (
+                  <TouchableOpacity
+                    key={section.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={section.label + " section"}
+                    accessibilityState={{ selected }}
+                    style={[styles.sectionPickerOption, selected && styles.sectionPickerOptionActive]}
+                    onPress={() => showRecordSection(section)}
+                  >
+                    <Ionicons name={section.icon} size={17} color={selected ? "#087A62" : "#5F796D"} />
+                    <Text style={[styles.sectionPickerOptionLabel, selected && styles.sectionPickerOptionLabelActive]}>
+                      {section.label}
+                    </Text>
+                    {selected ? <Ionicons name="checkmark" size={17} color="#087A62" /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
       </View>
-      <View style={styles.sectionTabs} accessibilityLabel="System Records grouped sections">
-        {recordSections.map(section => {
-          const selected = activeSectionId === section.id;
+      <View style={styles.recordTypeTabs} accessibilityLabel={activeSection.label + " record types"}>
+        {activeSection.views.map(view => {
+          const selected = activeViewId === view.id;
           return (
             <TouchableOpacity
-              key={section.id}
+              key={view.id}
               accessibilityRole="tab"
-              accessibilityLabel={section.label + " section"}
+              accessibilityLabel={view.label + " records"}
               accessibilityState={{ selected }}
-              style={[styles.sectionTab, selected && styles.sectionTabActive]}
-              onPress={() => showRecordSection(section)}
+              style={[styles.recordTypeTab, selected && styles.recordTypeTabActive]}
+              onPress={() => showRecordView(view)}
             >
-              <Ionicons name={section.icon} size={17} color={selected ? "#FFFFFF" : "#376757"} />
-              <Text numberOfLines={1} style={[styles.sectionTabText, selected && styles.sectionTabTextActive]}>
-                {section.label}
+              <Text numberOfLines={1} style={[styles.recordTypeTabLabel, selected && styles.recordTypeTabLabelActive]}>
+                {view.label}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </View>
-      <View style={styles.subSection}>
-        <View style={styles.subSectionHead}>
-          <Text style={styles.subSectionTitle}>{activeSection.label.toUpperCase()} RECORDS</Text>
-          <Text style={styles.tabHint}>{activeSection.views.length} categories</Text>
-        </View>
-        <View style={styles.tabs} accessibilityLabel={activeSection.label + " record types"}>
-          {activeSection.views.map(view => {
-            const selected = activeViewId === view.id;
-            return (
-              <TouchableOpacity
-                key={view.id}
-                accessibilityRole="tab"
-                accessibilityLabel={view.label + " records"}
-                accessibilityState={{ selected }}
-                style={[styles.tabButton, selected && styles.tabButtonActive]}
-                onPress={() => showRecordView(view)}
-              >
-                <Ionicons name={view.icon} size={16} color={selected ? "#FFFFFF" : "#376757"} />
-                <Text numberOfLines={1} style={[styles.tabText, selected && styles.tabTextActive]}>
-                  {view.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
       </View>
 
       <View
@@ -1739,96 +1751,108 @@ const styles =
       fontSize: 12,
     },
 
-    tabHeadingRow: {
+    browseHeader: {
+      position: "relative",
+      zIndex: 20,
+      width: "100%",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       flexWrap: "wrap",
-      gap: 10,
-      marginBottom: 10,
+      gap: 12,
+      marginBottom: 12,
     },
-    tabHeadingCopy: { gap: 4 },
-    tabHeading: { fontSize: 11, fontWeight: "900", letterSpacing: 1, color: "#1A5B47" },
-    tabHint: { fontSize: 11, color: "#71877C" },
-    sectionTabs: {
+    browseHeaderCopy: { flexGrow: 1, gap: 3 },
+    browseEyebrow: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 1,
+      color: "#1A5B47",
+    },
+    browseDescription: { fontSize: 12, color: "#71877C" },
+    sectionPickerWrap: {
+      position: "relative",
+      zIndex: 30,
+      flexBasis: 260,
+      flexGrow: 0,
+      maxWidth: "100%",
+    },
+    sectionPickerButton: {
+      minHeight: 44,
       width: "100%",
-      flexDirection: "row",
-      alignItems: "stretch",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 11,
-    },
-    sectionTab: {
-      flexGrow: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      minHeight: 45,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: "#D3E2DA",
+      borderColor: "#C7DCD1",
       backgroundColor: "#FFFFFF",
-      paddingHorizontal: 10,
-    },
-    sectionTabActive: { backgroundColor: "#087A62", borderColor: "#087A62" },
-    sectionTabText: { fontSize: 12, fontWeight: "800", color: "#345D4D" },
-    sectionTabTextActive: { color: "#FFFFFF" },
-    subSection: {
-      width: "100%",
-      backgroundColor: "#F0F7F3",
-      borderWidth: 1,
-      borderColor: "#DDEAE3",
-      borderRadius: 12,
       paddingHorizontal: 12,
-      paddingTop: 12,
-      marginBottom: 16,
-    },
-    subSectionHead: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 11,
+      gap: 9,
     },
-    subSectionTitle: { fontSize: 11, fontWeight: "900", letterSpacing: 0.7, color: "#22634C" },
-    tabs: {
-      flexDirection: "row",
-      alignItems: "center",
-      flexWrap: "wrap",
-      gap: 8,
-      paddingBottom: 12,
-    },
-
-    tabButton: {
-      flexDirection: "row",
-      flexShrink: 0,
-      alignItems: "center",
-      gap: 7,
-      minHeight: 42,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: "#D3E2DA",
-      backgroundColor: "#FFFFFF",
-      paddingHorizontal: 14,
-      paddingVertical: 9,
-    },
-
-    tabButtonActive: {
-      backgroundColor: "#087A62",
-      borderColor: "#087A62",
-    },
-
-    tabText: {
-      color: "#345D4D",
-      fontWeight: "800",
+    sectionPickerButtonOpen: { borderColor: "#087A62" },
+    sectionPickerLabel: {
+      flex: 1,
       fontSize: 12,
+      color: "#194F3E",
+      fontWeight: "800",
     },
-
-    tabTextActive: {
-      color: "#FFFFFF",
+    sectionPickerMenu: {
+      position: "absolute",
+      top: 48,
+      left: 0,
+      right: 0,
+      zIndex: 50,
+      elevation: 8,
+      borderRadius: 10,
+      padding: 5,
+      borderWidth: 1,
+      borderColor: "#D2E4D8",
+      backgroundColor: "#FFFFFF",
+      shadowColor: "#143F31",
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 5 },
     },
+    sectionPickerOption: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 7,
+      paddingHorizontal: 10,
+      gap: 9,
+    },
+    sectionPickerOptionActive: { backgroundColor: "#E8F6EE" },
+    sectionPickerOptionLabel: {
+      flex: 1,
+      color: "#365A4C",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    sectionPickerOptionLabelActive: { color: "#087A62", fontWeight: "900" },
+    recordTypeTabs: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: "#D5E4DC",
+      marginBottom: 18,
+    },
+    recordTypeTab: {
+      minHeight: 41,
+      justifyContent: "center",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+      paddingHorizontal: 2,
+    },
+    recordTypeTabActive: { borderBottomColor: "#087A62" },
+    recordTypeTabLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#72847B",
+    },
+    recordTypeTabLabelActive: { fontWeight: "900", color: "#087A62" },
 
     searchBar: {
       flexDirection: "row",
