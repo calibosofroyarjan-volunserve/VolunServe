@@ -499,84 +499,25 @@ export default function AllRecords() {
   const activePage = Math.min(page, totalPages);
   const pagedRecords = visibleRecords.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
+  // Arrange source categories by their actual service workflow, without hiding archives.
   const tabs: {
     key: RecordType;
     label: string;
     icon: any;
   }[] = [
-    {
-      key: "users",
-      label: "Users",
-      icon: "people-outline",
-    },
-
-    {
-      key: "applications",
-      label: "Volunteer Applications",
-      icon: "person-add-outline",
-    },
-
-    {
-      key: "cases",
-      label: "Emergency Reports",
-      icon: "warning-outline",
-    },
-
-    {
-      key: "assistance",
-      label: "Assistance Requests",
-      icon: "medkit-outline",
-    },
-    {
-      key: "assignments",
-      label: "Assignments",
-      icon: "navigate-outline",
-    },
-
-    {
-      key: "contributions",
-      label: "Verified Help",
-      icon:
-        "checkmark-done-outline",
-    },
-
-    {
-      key: "disputes",
-      label: "Disputes",
-      icon: "alert-circle-outline",
-    },
-
-    {
-      key: "communityEvents",
-      label: "Community Events",
-      icon: "calendar-outline",
-    },
-    {
-      key: "eventProposals",
-      label: "Event Proposals",
-      icon: "document-text-outline",
-    },
-    {
-      key: "eventParticipants",
-      label: "Volunteer Attendance",
-      icon: "checkmark-circle-outline",
-    },
-    {
-      key: "credentialReviews",
-      label: "LGU Credential Reviews",
-      icon: "shield-checkmark-outline",
-    },
-    {
-      key: "events",
-      label: "Legacy Volunteer Events",
-      icon: "calendar-outline",
-    },
-
-    {
-      key: "certificates",
-      label: "Certificates",
-      icon: "ribbon-outline",
-    },
+    { key: "users", label: "Users", icon: "people-outline" },
+    { key: "credentialReviews", label: "LGU Credential Reviews", icon: "shield-checkmark-outline" },
+    { key: "applications", label: "Volunteer Applications", icon: "person-add-outline" },
+    { key: "cases", label: "Emergency Reports", icon: "warning-outline" },
+    { key: "assistance", label: "Assistance Requests", icon: "medkit-outline" },
+    { key: "assignments", label: "Assignments", icon: "navigate-outline" },
+    { key: "contributions", label: "Verified Help", icon: "checkmark-done-outline" },
+    { key: "disputes", label: "Disputes", icon: "alert-circle-outline" },
+    { key: "eventProposals", label: "Event Proposals", icon: "document-text-outline" },
+    { key: "communityEvents", label: "Community Events", icon: "calendar-outline" },
+    { key: "eventParticipants", label: "Volunteer Attendance", icon: "checkmark-circle-outline" },
+    { key: "certificates", label: "Certificates", icon: "ribbon-outline" },
+    { key: "events", label: "Legacy Volunteer Events", icon: "time-outline" },
   ];
 
   const renderRecord = (
@@ -1236,110 +1177,58 @@ export default function AllRecords() {
         </Text>
       </View>
 
-      <View
-        style={
-          styles.summaryRow
-        }
-      >
-        <SummaryCard
-          label="Users"
-          value={
-            records.users.length
-          }
-          icon="people-outline"
-        />
-
-        <SummaryCard
-          label="Cases"
-          value={
-            records.cases.length
-          }
-          icon="warning-outline"
-        />
-
-        <SummaryCard
-          label="Verified Help"
-          value={
-            records
-              .contributions.length
-          }
-          icon={
-            "checkmark-done-outline"
-          }
-        />
-
-        <SummaryCard
-          label="Disputes"
-          value={
-            records.disputes.length
-          }
-          icon="alert-circle-outline"
-        />
-
-        <SummaryCard
-          label="Certificates"
-          value={
-            records
-              .certificates.length
-          }
-          icon="ribbon-outline"
-        />
+      {/* Prioritize operational visibility, then onboarding and service outcomes. */}
+      <View style={styles.summaryRow}>
+        <SummaryCard label="Emergency Reports" value={records.cases.length} icon="warning-outline" />
+        <SummaryCard label="Assistance Requests" value={records.assistance.length} icon="medkit-outline" />
+        <SummaryCard label="Users" value={records.users.length} icon="people-outline" />
+        <SummaryCard label="Volunteer Applications" value={records.applications.length} icon="person-add-outline" />
+        <SummaryCard label="Verified Help" value={records.contributions.length} icon="checkmark-done-outline" />
+        <SummaryCard label="Certificates" value={records.certificates.length} icon="ribbon-outline" />
       </View>
 
-      <View
-        style={styles.tabs}
+      <View style={styles.tabHeadingRow}>
+        <Text style={styles.tabHeading}>BROWSE RECORDS</Text>
+        <Text style={styles.tabHint}>Scroll horizontally for more categories</Text>
+      </View>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator
+        style={styles.tabsScroll}
+        contentContainerStyle={styles.tabs}
+        accessibilityLabel="System record categories in workflow order"
       >
-        {tabs.map(
-          (tab) => {
-            const selected =
-              activeTab ===
-              tab.key;
-
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tabButton,
-
-                  selected &&
-                    styles.tabButtonActive,
-                ]}
-                onPress={() => {
-                  setActiveTab(
-                    tab.key
-                  );
-
-                  setSearch("");
-                  setPage(1);
-                }}
+        {tabs.map((tab) => {
+          const selected = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label + " records"}
+              accessibilityState={{ selected }}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
+              onPress={() => {
+                setActiveTab(tab.key);
+                setSearch("");
+                setPage(1);
+              }}
+            >
+              <Ionicons
+                name={tab.icon}
+                size={17}
+                color={selected ? "#FFFFFF" : "#376757"}
+              />
+              <Text
+                numberOfLines={1}
+                style={[styles.tabText, selected && styles.tabTextActive]}
               >
-                <Ionicons
-                  name={
-                    tab.icon
-                  }
-                  size={17}
-                  color={
-                    selected
-                      ? "#FFFFFF"
-                      : "#475569"
-                  }
-                />
-
-                <Text
-                  style={[
-                    styles.tabText,
-
-                    selected &&
-                      styles.tabTextActive,
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-        )}
-      </View>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <View
         style={
@@ -1737,72 +1626,108 @@ const styles =
     summaryRow: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 10,
-      marginBottom: 18,
+      alignItems: "stretch",
+      gap: 12,
+      marginBottom: 22,
     },
 
     summaryCard: {
       flexGrow: 1,
+      flexBasis: 160,
       minWidth: 150,
-      backgroundColor: "transparent",
-      borderRadius: 0,
-      padding: 14,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      minHeight: 122,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#DDEAE3",
+      borderRadius: 12,
+      padding: 15,
+      justifyContent: "center",
     },
 
     summaryIcon: {
-      width: 39,
-      height: 39,
-      borderRadius: 11,
-      backgroundColor:
-        "#CCFBF1",
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: "#D9F7ED",
       alignItems: "center",
-      justifyContent:
-        "center",
+      justifyContent: "center",
       marginBottom: 10,
     },
 
     summaryValue: {
-      fontSize: 23,
+      fontSize: 25,
       fontWeight: "900",
       color: "#173D32",
+      fontVariant: ["tabular-nums"],
     },
 
     summaryLabel: {
-      marginTop: 2,
-      color: "#64748B",
+      marginTop: 3,
+      color: "#516E63",
       fontWeight: "700",
+      fontSize: 12,
+    },
+
+    tabHeadingRow: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 9,
+    },
+
+    tabHeading: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 1,
+      color: "#1A5B47",
+    },
+
+    tabHint: {
+      fontSize: 11,
+      color: "#71877C",
+    },
+
+    tabsScroll: {
+      width: "100%",
+      flexGrow: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: "#DBE9E1",
+      marginBottom: 16,
     },
 
     tabs: {
       flexDirection: "row",
-      flexWrap: "wrap",
+      alignItems: "center",
+      flexWrap: "nowrap",
       gap: 8,
-      marginBottom: 12,
+      paddingBottom: 10,
+      paddingRight: 16,
     },
 
     tabButton: {
       flexDirection: "row",
+      flexShrink: 0,
       alignItems: "center",
-      gap: 6,
-      borderRadius: 999,
+      gap: 7,
+      minHeight: 42,
+      borderRadius: 10,
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
-      paddingHorizontal: 13,
+      borderColor: "#D3E2DA",
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 14,
       paddingVertical: 9,
     },
 
     tabButtonActive: {
-      backgroundColor:
-        "#0F766E",
-      borderColor: "#0F766E",
+      backgroundColor: "#087A62",
+      borderColor: "#087A62",
     },
 
     tabText: {
-      color: "#475569",
+      color: "#345D4D",
       fontWeight: "800",
       fontSize: 12,
     },
