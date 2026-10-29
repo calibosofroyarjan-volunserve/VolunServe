@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ListPagination from "../../components/ui/ListPagination";
 
 import {
   collection,
@@ -240,6 +241,9 @@ export default function AllRecords() {
     setSearch,
   ] = useState("");
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
+
   const [
     errors,
     setErrors,
@@ -468,6 +472,10 @@ export default function AllRecords() {
       activeTab,
       search,
     ]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleRecords.length / PAGE_SIZE));
+  const activePage = Math.max(1, Math.min(page, totalPages));
+  const pagedRecords = visibleRecords.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   const tabs: {
     key: RecordType;
@@ -1201,6 +1209,7 @@ export default function AllRecords() {
                   );
 
                   setSearch("");
+                  setPage(1);
                 }}
               >
                 <Ionicons
@@ -1244,9 +1253,7 @@ export default function AllRecords() {
 
         <TextInput
           value={search}
-          onChangeText={
-            setSearch
-          }
+          onChangeText={(value) => { setSearch(value); setPage(1); }}
           placeholder={
             "Search current records..."
           }
@@ -1327,6 +1334,7 @@ export default function AllRecords() {
                 : "s"}
             </Text>
           </View>
+          <ListPagination page={activePage} total={visibleRecords.length} pageSize={PAGE_SIZE} onChange={setPage} />
 
           {visibleRecords.length ===
           0 ? (
@@ -1359,9 +1367,7 @@ export default function AllRecords() {
               </Text>
             </View>
           ) : (
-            visibleRecords.map(
-              renderRecord
-            )
+            pagedRecords.map(renderRecord)
           )}
         </>
       )}
