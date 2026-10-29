@@ -26,7 +26,7 @@ for (const preserved of [
   "Volunteer approvals", "Priority Actions", "AI identity reviews",
   "Open relief needs", "WorkspaceBarChart", 'orientation="vertical"',
   "setPendingUserIds", "setPendingVolunteerIds", "setNeedAssessments",
-  'collection(db,', '"disasterCases"', '"barangayNeedAssessments"',
+  'onSnapshot(', '"disasterCases"', '"barangayNeedAssessments"',
 ]) assert(dashboard.includes(preserved), "Active Admin workflow lost: " + preserved);
 assert(sidebar.includes('label: "Command Center"') &&
   !sidebar.includes('label: "Evacuation Centers"'),
