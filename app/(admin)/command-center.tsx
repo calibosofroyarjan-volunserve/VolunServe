@@ -428,7 +428,7 @@ export default function CommandCenter() {
         Platform.OS === "web" && styles.webScrollBar,
       ]}
       contentContainerStyle={styles.page}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={true}
       keyboardShouldPersistTaps="handled"
       accessibilityLabel="Admin dashboard content"
     >
@@ -726,7 +726,8 @@ const styles =
     // Separate right-side scrolling from the fixed Admin navigation.
     webScrollBar: {
       overflowY: "auto",
-      scrollbarWidth: "none",
+      scrollbarWidth: "thin",
+      scrollbarColor: "#8CAA9A #F6F8F7",
     } as any,
 
     page: {
