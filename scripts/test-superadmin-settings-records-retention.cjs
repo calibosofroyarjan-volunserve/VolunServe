@@ -7,11 +7,16 @@ const overview = fs.readFileSync("app/(superadmin)/index.tsx", "utf8");
 const admin = fs.readFileSync("app/(superadmin)/admin-accounts.tsx", "utf8");
 const reset = fs.readFileSync("components/auth/PasswordResetDialog.tsx", "utf8");
 const login = fs.readFileSync("app/admin-login.tsx", "utf8");
+const profile = fs.readFileSync("app/(superadmin)/profile.tsx", "utf8");
 assert(layout.includes('accessibilityLabel="Open Super Admin profile dropdown"') &&
   layout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
   layout.includes('router.push("/(superadmin)/system-settings"') &&
+  layout.includes('router.push("/(superadmin)/profile"') &&
+  layout.includes('accessibilityLabel="View Profile"') &&
   layout.includes('accessibilityLabel="Sign Out"'),
   "Super Admin account dropdown must open System Settings and secure Sign Out");
+assert(profile.includes("isSuperAdminProfile(profile)") && profile.includes("This profile is read-only"),
+  "Restore the approved, protected read-only Super Admin profile page");
 assert(!layout.includes('label: "System Settings"') &&
   layout.includes('label: "System Records (Read Only)"'),
   "System Settings must live under the profile menu, not be duplicated in the sidebar");
