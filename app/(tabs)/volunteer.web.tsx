@@ -795,7 +795,7 @@ export default function VolunteerTasksWeb() {
               <Ionicons name="people" size={22} color="#087F74" />
             </View>
             <View style={styles.mobileTaskTitleContainer}>
-              <Text style={styles.mobileTaskTitle}>Volunteer Tasks</Text>
+              <Text style={styles.mobileTaskTitle}>Emergency Tasks</Text>
             </View>
           </View>
           <Text style={styles.mobileTaskDescription}>
@@ -820,7 +820,7 @@ export default function VolunteerTasksWeb() {
                 <Ionicons name="people" size={24} color="#078F82" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.title}>Volunteer Tasks</Text>
+                <Text style={styles.title}>Emergency Tasks</Text>
                 <Text style={styles.subtitle}>
                   Optional Volunteer support assignments coordinated by LGU/Admin.
                 </Text>
@@ -1417,7 +1417,7 @@ export default function VolunteerTasksWeb() {
 }
 
 const styles = StyleSheet.create({
-  // Mobile-only Volunteer Tasks header. Desktop remains unchanged.
+  // Mobile-only Emergency Tasks header. Desktop remains unchanged.
   mobileTaskHeader: {
     width: "100%",
     flexDirection: "column",

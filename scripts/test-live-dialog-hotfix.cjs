@@ -12,11 +12,12 @@ test("Production app mounts branded dialog host",()=>{
  assert.match(host,/<Modal\b/);
  assert.match(host,/subscribeAppDialog/);
 });
-test("Resident mobile and desktop logout use the same non-native confirmation",()=>{
+test("Resident account dropdown retains branded logout confirmation without sidebar footer",()=>{
  const s=read("app/(tabs)/_layout.tsx");
  assert.match(s,/function requestConfirmedResidentLogout\(\)/);
  assert.match(s,/AppAlert\.alert\("Log Out"/);
- assert.match(s,/onPress=\{requestConfirmedResidentLogout\}/);
+ assert.doesNotMatch(s,/onPress=\{requestConfirmedResidentLogout\}/);
+ assert.match(s,/showOnboardingShortcut/);
  assert.match(s,/setMobileProfileOpen\(false\); requestConfirmedResidentLogout\(\)/);
  assert.doesNotMatch(s,/\bwindow\s*\.\s*(alert|confirm|prompt)\s*\(/);
  assert.doesNotMatch(s,/\bAlert\s*\.\s*alert\s*\(/);

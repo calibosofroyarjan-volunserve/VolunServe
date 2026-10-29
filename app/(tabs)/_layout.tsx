@@ -33,107 +33,23 @@ type TabDefinition = {
   activeIcon: string;
 };
 
+// Clear service-first order. Removed sidebar links remain valid direct routes.
 const residentDesktopTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "disaster-response",
-    label: "Emergency Reports",
-    icon: "alert-circle-outline",
-    activeIcon: "alert-circle",
-  },
-  {
-    name: "resident",
-    label: "Request Assistance",
-    icon: "hand-left-outline",
-    activeIcon: "hand-left",
-  },
-  {
-    name: "donation",
-    label: "Donations",
-    icon: "heart-outline",
-    activeIcon: "heart",
-  },
-  {
-    name: "community-events",
-    label: "Community Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "my-cases",
-    label: "My Reports",
-    icon: "document-text-outline",
-    activeIcon: "document-text",
-  },
-  {
-    name: "profile",
-    label: "My Profile",
-    icon: "person-circle-outline",
-    activeIcon: "person-circle",
-  },
+ {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+ {name:"disaster-response",label:"Emergency Reports",icon:"alert-circle-outline",activeIcon:"alert-circle"},
+ {name:"resident",label:"Request Assistance",icon:"hand-left-outline",activeIcon:"hand-left"},
+ {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
+ {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
+ {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
-
-// Notifications remain accessible from the dashboard bell and updates card.
+// Progress belongs to Profile; notifications remain in the bell and announcements in updates.
 const volunteerDesktopTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "volunteer",
-    label: "Volunteer Tasks",
-    icon: "people-outline",
-    activeIcon: "people",
-  },
-  {
-    name: "community-events",
-    label: "Community Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "donation",
-    label: "Donations",
-    icon: "heart-outline",
-    activeIcon: "heart",
-  },
-  {
-    name: "volunteer-impact",
-    label: "My Progress",
-    icon: "ribbon-outline",
-    activeIcon: "ribbon",
-  },
-  {
-    name: "certificate",
-    label: "Certificates",
-    icon: "document-outline",
-    activeIcon: "document",
-  },
-  {
-    name: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-    activeIcon: "notifications",
-  },
-  {
-    name: "announcements",
-    label: "Announcements",
-    icon: "megaphone-outline",
-    activeIcon: "megaphone",
-  },
-  {
-    name: "profile",
-    label: "My Profile",
-    icon: "person-circle-outline",
-    activeIcon: "person-circle",
-  },
+ {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+ {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
+ {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
+ {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
+ {name:"certificate",label:"Certificates",icon:"document-outline",activeIcon:"document"},
+ {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
@@ -195,7 +111,7 @@ const volunteerMobileTabs: TabDefinition[] = [
   },
   {
     name: "volunteer",
-    label: "Tasks",
+    label: "Emergency",
     icon: "people-outline",
     activeIcon: "people",
   },
@@ -414,6 +330,9 @@ export default function TabLayout() {
               accessibilityLabel="Close navigation drawer"
             />
             <View style={styles.mobileDrawer}>
+              <View pointerEvents="none" style={styles.mobileSidebarLeafDecoration}>
+                <Ionicons name="leaf-outline" size={200} color="#60C79B" />
+              </View>
               <View style={styles.mobileDrawerBrand}>
                 <Image
                   source={require("../../assets/images/logo.png")}
@@ -476,30 +395,17 @@ function DesktopTabBar({
 }: any & { profile: UserProfile }) {
   const mode = activeModeForProfile(profile);
   const volunteerAccess = hasVolunteerAccess(profile);
-  const residentAccess = hasResidentAccess(profile);
-  const canSwitchMode = volunteerAccess && residentAccess;
   const adminRoute = administrativeRouteForProfile(profile);
   const portalLabel =
     profile.role === "superadmin" ? "Super Admin Portal" : "Admin Portal";
 
   const tabs =
     mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
-
-  const switchMode = async () => {
-    if (!canSwitchMode) return;
-
-    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
-
-    try {
-      await setActiveUserMode(nextMode);
-      navigation.navigate("index");
-    } catch (error: any) {
-      AppAlert.alert(
-        "Mode Switch Failed",
-        error?.message || "Unable to switch account mode."
-      );
-    }
-  };
+  const showOnboardingShortcut = mode === "resident" && (
+    (profile.identityVerified !== true &&
+      (profile.identityStatus === "basic" || profile.identityStatus === "failed")) ||
+    (!volunteerAccess && (profile.identityVerified === true || profile.identityStatus === "verified"))
+  );
 
   const openAdminPortal = () => {
     if (!adminRoute) return;
@@ -526,6 +432,9 @@ function DesktopTabBar({
 
   return (
     <View style={styles.desktopSidebar}>
+      <View pointerEvents="none" style={styles.sidebarLeafDecoration}>
+        <Ionicons name="leaf-outline" size={220} color="#60C79B" />
+      </View>
       <View style={styles.desktopBrand}>
         <Image
           source={require("../../assets/images/logo.png")}
@@ -603,7 +512,7 @@ function DesktopTabBar({
         })}
       </ScrollView>
 
-      <View style={styles.desktopUtilityArea}>
+      {(showOnboardingShortcut || !!adminRoute) ? <View style={styles.desktopUtilityArea}>
         {mode === "resident" &&
           profile.identityVerified !== true &&
           (profile.identityStatus === "basic" || profile.identityStatus === "failed") ? (
@@ -619,27 +528,6 @@ function DesktopTabBar({
             <Text style={styles.desktopUtilityText}>Apply as Volunteer</Text>
           </Pressable>
         ) : null}
-        {canSwitchMode ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.desktopUtilityButton,
-              pressed && styles.desktopPressed,
-            ]}
-            onPress={() => void switchMode()}
-          >
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={18}
-              color="#E6F5F2"
-            />
-            <Text style={styles.desktopUtilityText}>
-              {mode === "volunteer"
-                ? "Switch to Resident Mode"
-                : "Switch to Volunteer Mode"}
-            </Text>
-          </Pressable>
-        ) : null}
-
         {adminRoute ? (
           <Pressable
             style={({ pressed }) => [
@@ -657,41 +545,7 @@ function DesktopTabBar({
             <Text style={styles.desktopPortalText}>{portalLabel}</Text>
           </Pressable>
         ) : null}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.desktopUtilityButton,
-            pressed && styles.desktopPressed,
-          ]}
-          onPress={() => navigate("profile")}
-        >
-          <Ionicons
-            name="settings-outline"
-            size={18}
-            color="#E6F5F2"
-          />
-          <Text style={styles.desktopUtilityText}>Account Settings</Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.desktopUtilityButton,
-            pressed && styles.desktopPressed,
-          ]}
-          onPress={requestConfirmedResidentLogout}
-        >
-          <Ionicons
-            name="log-out-outline"
-            size={18}
-            color="#DC3244"
-          />
-          <Text
-            style={[styles.desktopUtilityText, styles.desktopLogoutText]}
-          >
-            Log Out
-          </Text>
-        </Pressable>
-      </View>
+      </View> : null}
     </View>
   );
 }
@@ -1013,6 +867,8 @@ const styles = StyleSheet.create({
     color: "#078F82",
     fontWeight: "800",
   },
+  sidebarLeafDecoration: {position:"absolute",left:-73,bottom:60,opacity:0.16,transform:[{rotate:"-26deg"}]},
+  mobileSidebarLeafDecoration: {position:"absolute",left:-73,bottom:45,opacity:0.16,transform:[{rotate:"-26deg"}]},
   desktopSidebar: {
     width: 268,
     height: "100%",

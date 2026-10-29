@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import VolunteerImpact from "./volunteer-impact";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { updateProfile, User } from "firebase/auth";
@@ -44,6 +45,7 @@ import {
 type ProfileTab =
   | "info"
   | "activity"
+  | "progress"
   | "certificates";
 
 type GenericRecord = {
@@ -1072,6 +1074,9 @@ export default function Profile() {
       key: "activity",
       label: "Activity",
     },
+    ...(currentMode === "volunteer" && volunteerAccess
+      ? [{key:"progress" as const,label:"My Progress"}]
+      : []),
     ...(volunteerAccess
       ? [
           {
@@ -1653,6 +1658,10 @@ export default function Profile() {
             />
           )}
         </View>
+      )}
+
+      {activeTab === "progress" && currentMode === "volunteer" && volunteerAccess && (
+        <VolunteerImpact embedded />
       )}
 
       {activeTab ===

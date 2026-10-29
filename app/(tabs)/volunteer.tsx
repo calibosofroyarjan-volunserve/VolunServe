@@ -1067,7 +1067,7 @@ export default function VolunteerTasks() {
           </Text>
 
           <Text style={styles.title}>
-            Volunteer Tasks
+            Emergency Tasks
           </Text>
 
           <Text style={styles.subtitle}>
