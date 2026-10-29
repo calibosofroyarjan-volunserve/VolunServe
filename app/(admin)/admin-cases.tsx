@@ -3920,7 +3920,7 @@ export default function AdminCases() {
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
                     ["response", "Response"],
-                    ["personnel", "Assigned Personnel"],
+                    ["personnel", "Response Team"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
