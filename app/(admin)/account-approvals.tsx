@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useRouter } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
 import {
   collection,
@@ -549,37 +550,40 @@ export default function AccountApprovals() {
           styles.container
         }
       >
-        <View style={styles.titleRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={23}
-              color="#0F172A"
-            />
-          </TouchableOpacity>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>
-              Resident Accounts & Volunteer Approvals
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Resident account oversight and Volunteer applications are separate. Only identity-verified Residents may receive Volunteer access.
-            </Text>
+        <AdminReviewHero
+          eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
+          title="Resident & Volunteer Reviews"
+          subtitle="Manage Resident account records and review Volunteer applications in one organized workspace."
+          icon="people-outline"
+          tag="ACCOUNT GOVERNANCE"
+        />
+        <View style={styles.metricsRow}>
+          <View style={styles.metricCard}>
+            <View style={styles.metricIcon}><Ionicons name="people-outline" size={20} color="#08765A" /></View>
+            <Text style={styles.metricLabel}>Registered Accounts</Text>
+            <Text style={styles.metricValue}>{accounts.length}</Text>
+            <Text style={styles.metricCaption}>Current account directory</Text>
           </View>
-
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>
-              {
-                pendingVolunteerCount
-              }
-            </Text>
+          <View style={styles.metricCard}>
+            <View style={styles.metricIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#08765A" /></View>
+            <Text style={styles.metricLabel}>Verified Residents</Text>
+            <Text style={styles.metricValue}>{verifiedResidentCount}</Text>
+            <Text style={styles.metricCaption}>Identity-verified accounts</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <View style={styles.metricIcon}><Ionicons name="time-outline" size={20} color="#08765A" /></View>
+            <Text style={styles.metricLabel}>Volunteer Applications</Text>
+            <Text style={styles.metricValue}>{pendingVolunteerCount}</Text>
+            <Text style={styles.metricCaption}>Pending LGU review</Text>
           </View>
         </View>
-
+        <View style={styles.recordsPanel}>
+          <View style={styles.recordsHeading}>
+            <View style={styles.recordsHeadingCopy}>
+              <Text style={styles.recordsTitle}>Account Review Workspace</Text>
+              <Text style={styles.recordsDescription}>Choose Resident records or pending Volunteer applications.</Text>
+            </View>
+          </View>
         <View style={styles.filterRow}>
           {(
             [
@@ -613,6 +617,7 @@ export default function AccountApprovals() {
           ))}
         </View>
 
+        </View>
         <View style={styles.reviewSummary}>
           <Text style={styles.reviewSummaryText}>Pending Volunteer Reviews: {pendingVolunteerCount}  ·  Verified Residents: {verifiedResidentCount}  ·  Total accounts: {accounts.length}</Text>
         </View>
@@ -1028,10 +1033,24 @@ export default function AccountApprovals() {
 
 const styles =
   StyleSheet.create({
+    metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 18 },
+    metricCard: { flexGrow: 1, flexBasis: 210, minWidth: 180, backgroundColor: "#FFFFFF", borderRadius: 15,
+      borderWidth: 1, borderColor: "#DBE9E0", padding: 18 },
+    metricIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#E2F5EB",
+      alignItems: "center", justifyContent: "center", marginBottom: 12 },
+    metricLabel: { color: "#32594B", fontSize: 12, fontWeight: "800" },
+    metricValue: { color: "#124234", fontSize: 28, fontWeight: "900", marginTop: 5 },
+    metricCaption: { color: "#698576", fontSize: 11, marginTop: 3 },
+    recordsPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E7DE",
+      borderRadius: 15, padding: 16, marginBottom: 14 },
+    recordsHeading: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+    recordsHeadingCopy: { flex: 1 },
+    recordsTitle: { color: "#153E32", fontSize: 18, fontWeight: "900" },
+    recordsDescription: { color: "#6D8778", fontSize: 12, lineHeight: 19, marginTop: 5 },
     container: {
       padding: 20,
       paddingBottom: 50,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: "#F4F8F5",
     },
 
     center: {
@@ -1118,8 +1137,8 @@ const styles =
     },
 
     filterButtonActive: {
-      backgroundColor: "#0F766E",
-      borderColor: "#0F766E",
+      backgroundColor: "#08765A",
+      borderColor: "#08765A",
     },
 
     filterText: {
@@ -1146,9 +1165,9 @@ const styles =
 
     card: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 9,
-      padding: 16,
-      marginBottom: 14,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: "#E2E8F0",
     },
