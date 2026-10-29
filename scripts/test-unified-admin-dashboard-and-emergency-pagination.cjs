@@ -45,7 +45,7 @@ assert(dash.includes("<DashboardVolunteerApprovals />") &&
   approvals.includes("pageSize={PAGE_SIZE}") && approvals.includes("await batch.commit()") &&
   residents.includes("pagedAccounts") && identity.includes("pagedReviews"),
   "Volunteer approvals and protected full Resident identity reviews must be retained");
-assert(dash.includes("<DashboardOperationalInsights />") &&
+assert(dash.includes("<DashboardOperationalInsights workload={{") &&
   analytics.includes('watch("communityEvents"') &&
   analytics.includes('watch("certificates"') &&
   analytics.includes('watch("volunteerStats"') &&
