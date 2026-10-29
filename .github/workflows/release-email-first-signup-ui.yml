@@ -1,0 +1,62 @@
+name: Publish Email-First Signup UX (Hosting Only)
+on:
+  push:
+    branches:
+      - release/signup-email-first-google-logo-middle-optional-20261029
+    paths:
+      - .github/workflows/release-email-first-signup-ui.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate signup order, optional middle initial and Firebase email verification
+        run: |
+          node scripts/test-signup-email-first-middle-optional.cjs
+          npx tsc --noEmit --pretty false
+      - name: Confirm Emergency Reports regression still passes
+        run: node --test scripts/test-clean-emergency-report-header.cjs
+      - name: Export production Expo website
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service account; live Hosting unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting ONLY to live channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact revision served by volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Waiting for verified custom-domain release attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Live domain did not confirm deployed revision"
+          exit 1
