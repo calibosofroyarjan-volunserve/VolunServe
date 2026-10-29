@@ -52,8 +52,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
   { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
-  { label: "LGU Personnel", icon: "business-outline", route: "/(admin)/lgu-members" },
-  { label: "LGU Attendance", icon: "time-outline", route: "/(admin)/lgu-attendance" },
+  { label: "LGU Operations", icon: "time-outline", route: "/(admin)/lgu-attendance" },
   { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
   { label: "Relief Operations", icon: "cube-outline", route: "/(admin)/relief-operations" },
@@ -67,7 +66,7 @@ const NAV_ITEMS: NavItem[] = [
 
 type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
-  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "LGU Personnel", "LGU Attendance"] },
+  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "LGU Operations"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests", "Relief Operations"] },
   { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
@@ -385,7 +384,7 @@ export default function AdminLayout() {
         {navActive(NAV_ITEMS[0], pathname) ? <View style={styles.activeIndicator} /> : null}
       </TouchableOpacity>
       <ScrollView style={styles.sidebarScroll} contentContainerStyle={styles.sidebarContent}
-        showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled"
         accessibilityLabel="LGU Admin module groups">
         {NAV_SECTIONS.map((section) => {
           const expanded = visibleSection === section.id;
@@ -663,7 +662,9 @@ const styles =
       flex: 1,
       minHeight: 0,
       marginHorizontal: 10,
-    },
+      scrollbarWidth: "thin",
+      scrollbarColor: "#6EA995 #10382D",
+    } as any,
 
     sidebarContent: {
       paddingHorizontal: 7,
