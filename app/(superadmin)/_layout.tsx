@@ -98,7 +98,7 @@ export default function SuperAdminLayout() {
   }
 
   const desktop = Platform.OS === "web" && width >= 980;
-  const activeSection = pathname.endsWith("/system-settings") ? "System Settings" : navItems.find(item => item.match === "/" ? (pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin") : pathname.endsWith(item.match))?.label || "System Overview";
+  const activeSection = pathname.endsWith("/profile") ? "My Profile" : pathname.endsWith("/system-settings") ? "System Settings" : navItems.find(item => item.match === "/" ? (pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin") : pathname.endsWith(item.match))?.label || "System Overview";
 
   const fullName =
     String(profile.fullName || profile.email || "Super Admin").trim();
@@ -197,6 +197,19 @@ export default function SuperAdminLayout() {
 
         {accountOpen && (
           <View style={styles.profileMenu} accessibilityLabel="Super Admin profile dropdown">
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View Profile"
+              style={styles.profileMenuAction}
+              onPress={() => {
+                setAccountOpen(false);
+                router.push("/(superadmin)/profile" as Href);
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={20} color="#087A62" />
+              <Text style={styles.profileMenuText}>View Profile</Text>
+              <Ionicons name="chevron-forward" size={15} color="#79978A" />
+            </TouchableOpacity>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="System Settings"
