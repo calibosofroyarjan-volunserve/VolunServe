@@ -37,9 +37,9 @@ const reportNative = read("components/DisasterResponse.native.tsx");
 const shelterWeb = read("components/VerifiedEvacuationCenters.web.tsx");
 const shelterNative = read("components/VerifiedEvacuationCenters.native.tsx");
 const shelterHook = read("lib/useVerifiedEvacuationCenters.ts");
-assert(reportWeb.includes("<VerifiedEvacuationCenters />") &&
-  reportNative.includes("<VerifiedEvacuationCenters />"),
-  "LGU verified shelter directory must live inside Emergency Reports on both platforms");
+assert(!reportWeb.includes("<VerifiedEvacuationCenters />") &&
+  !reportNative.includes("<VerifiedEvacuationCenters />"),
+  "Resident reporting form must not display redundant evacuation center panels");
 assert(shelterHook.includes('collection(db, "evacuation_centers")') &&
   shelterHook.includes("isVerifiedActiveCenter"),
   "Only actual LGU-verified active Firestore shelters can render");
@@ -63,10 +63,9 @@ assert(mobileResponseMap.includes("vehicleInfo(incident.responseVehicleType)") &
   mobileResponseMap.includes("point.vehicle.symbol"),
   "Native responder marker must use Admin-assigned vehicle type, not a generic marker");
 const quickHelp = read("components/EmergencyResponseQuickActions.tsx");
-assert(reportWeb.includes('<EmergencyResponseQuickActions residentUid={user && isApprovedProfile(profile) ? user.uid : ""} />') &&
-  reportNative.includes("<EmergencyResponseQuickActions residentUid={user.uid} />") &&
-  reportNative.includes('<EmergencyResponseQuickActions residentUid="" />'),
-  "911 must be visible without login; authenticated Residents may also track own active cases");
+assert(!reportWeb.includes("<EmergencyResponseQuickActions") &&
+  !reportNative.includes("<EmergencyResponseQuickActions"),
+  "Resident reporting form must not display redundant 911 and latest-case top panels");
 assert(quickHelp.includes('Linking.openURL("tel:911")') &&
   quickHelp.includes("VolunServe reports are reviewed and do not automatically call or dispatch 911"),
   "911 requires explicit dialer action and cannot be misrepresented as a VolunServe dispatch");
