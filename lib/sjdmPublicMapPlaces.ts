@@ -8,7 +8,7 @@
  */
 export type SjdmPublicMapPlaceKind =
   | "government" | "cdrrmo" | "fire_station" | "police_station"
-  | "evacuation_site" | "barangay_hall";
+  | "evacuation_site" | "barangay_hall" | "hospital";
 export type SjdmPublicMapPlace = {
   id: string;
   name: string;
@@ -21,6 +21,11 @@ export type SjdmPublicMapPlace = {
   positionQuality: "osm_feature" | "third_party_approximate";
   officialInfoUrl?: string;
   officialContact?: string;
+  /** Named map POI, not a claim of survey-exact GPS. */
+  googlePlaceId?: string;
+  /** Publisher's photograph page; images are NOT rehosted without permission. */
+  actualPhotoSourceUrl?: string;
+  photoCredit?: string;
 };
 
 /** Location pin needs both a mapped physical feature and a corroborating source. */
@@ -33,6 +38,51 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
     sourceLabel: "Official city office address. Map pin is only approximate and NOT verified by the LGU.",
     note: "CDRRMO office reference in Sapang Palay Proper. Pin location is approximate; NOT a live responder, emergency dispatch point, or currently verified exact office GPS. Confirm location with CDRRMO before travel.",
+    positionQuality: "third_party_approximate",
+  },
+  {
+    id: "osm-hospital-qualimed-way-487627382",
+    name: "Healthway QualiMed Hospital — San Jose del Monte",
+    kind: "hospital",
+    latitude: 14.78823, longitude: 121.07693,
+    sourceUrl: "https://mapcarta.com/W487627382",
+    sourceLabel: "OSM mapped hospital footprint; address corroborated by hospital",
+    officialInfoUrl: "https://healthwaymedicalnetwork.com.ph/our-network/healthway-qualimed-hospital-san-jose-del-monte/",
+    officialContact: "(044) 307-0000",
+    googlePlaceId: "ChIJT85ihomvlzMRdf8B1LeV8Pg",
+    actualPhotoSourceUrl: "https://tanglawan.ph/qualimed-hospital/",
+    photoCredit: "CSJDM Tourism Office / Tanglawan",
+    note: "Altaraza Spine Road, Tungkong Mangga. OSM hospital building footprint, not a surveyed emergency entrance. Real exterior photo linked from its publisher; no live capacity claim.",
+    positionQuality: "osm_feature",
+  },
+  {
+    id: "osm-hospital-skyline-way-488704414",
+    name: "Skyline Hospital and Medical Center",
+    kind: "hospital",
+    latitude: 14.79826, longitude: 121.07055,
+    sourceUrl: "https://mapcarta.com/W488704414",
+    sourceLabel: "OSM mapped hospital footprint; address corroborated by hospital",
+    officialInfoUrl: "https://www.skylinehospital.ph/",
+    officialContact: "0977 830 3348",
+    googlePlaceId: "ChIJi6af9ISvlzMRsHr-MhmAHAA",
+    actualPhotoSourceUrl: "https://tanglawan.ph/skyline-medical-center/",
+    photoCredit: "CSJDM Tourism Office / Tanglawan",
+    note: "Skyline Drive corner Quirino Highway. OSM hospital footprint, not a surveyed ER door. Real exterior photo linked from its publisher; no live capacity claim.",
+    positionQuality: "osm_feature",
+  },
+  {
+    id: "hospital-grace-reference",
+    name: "Grace Medical Center (formerly Grace General Hospital)",
+    kind: "hospital",
+    latitude: 14.80573, longitude: 121.06816,
+    sourceUrl: "https://philippines.worldplaces.me/review/88319860-grace-general-hospital.html",
+    sourceLabel: "Third-party coordinate approximation; address corroborated by hospital",
+    officialInfoUrl: "https://gracemedicalcenter.com.ph/contact-us/",
+    officialContact: "0917 592 7789",
+    googlePlaceId: "ChIJY1XOHnivlzMR8QhIpTRYVdU",
+    actualPhotoSourceUrl: "https://tanglawan.ph/grace-general-hospital/",
+    photoCredit: "CSJDM Tourism Office / Tanglawan",
+    note: "Lot 2 Block 1 Quirino Highway Extension, Mulawin. In-map point is approximate; use named Google Maps place for real navigation. Real exterior photo linked from its publisher; no live capacity claim.",
     positionQuality: "third_party_approximate",
   },
   {
@@ -60,7 +110,7 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
 /** These icons identify a site TYPE, not an active responder or a live shelter. */
 export const SJDM_PUBLIC_PLACE_ICON: Record<SjdmPublicMapPlaceKind, string> = {
   government: "🏛️", cdrrmo: "🛟", fire_station: "🚒",
-  police_station: "🚓", evacuation_site: "🏠", barangay_hall: "🏢",
+  police_station: "🚓", evacuation_site: "🏠", barangay_hall: "🏢", hospital: "🏥",
 };
 
 /** Navigates to an exact verified coordinate in external Google Maps.

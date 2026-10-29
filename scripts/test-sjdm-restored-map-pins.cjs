@@ -29,7 +29,7 @@ test("bundled 134-point SJDM polygon is sourced and excludes outside areas",asyn
 test("mapped government/Barangay/CDRRMO reference icons are distinct from live dispatch",async()=>{
   const boundary=await city.loadSjdmBoundary();
   const pins=places.SJDM_PUBLIC_MAP_PLACE_PINS;
-  assert.equal(pins.length,3);
+  assert.equal(pins.length,6);
   for(const item of pins){
     assert.equal(city.insideSjdmBoundary(boundary,item.latitude,item.longitude),true,item.name);
     assert.ok(places.SJDM_PUBLIC_PLACE_ICON[item.kind],item.kind);
@@ -59,4 +59,23 @@ test("active case map renders public reference buildings and does not suppress v
   assert.doesNotMatch(map,/if \(missionMode \|\| adminMissionMode \|\| !showCenters\)/);
   assert.match(map,/Show road route here/);
   assert.match(map,/routeStaysInSjdm/);
+});
+
+test("real hospitals use mapped buildings, named place IDs and publisher photo links",async()=>{
+ const boundary=await city.loadSjdmBoundary();
+ const sites=places.SJDM_PUBLIC_MAP_PLACE_PINS.filter(p=>p.kind==="hospital");
+ assert.equal(sites.length,3);
+ assert.equal(places.SJDM_PUBLIC_PLACE_ICON.hospital,"🏥");
+ sites.forEach(p=>{
+  assert.equal(city.insideSjdmBoundary(boundary,p.latitude,p.longitude),true,p.name);
+  assert.ok(p.googlePlaceId.startsWith("ChIJ"));
+  assert.ok(p.actualPhotoSourceUrl.startsWith("https://tanglawan.ph/"));
+  assert.ok(p.officialInfoUrl.startsWith("https://"));
+ });
+ assert.equal(sites.find(p=>p.id==="hospital-grace-reference").positionQuality,"third_party_approximate");
+ const source=read("components/tabs/MapTracking.web.tsx");
+ assert.match(source,/Open named place in Google Maps/);
+ assert.match(source,/View real building photo/);
+ assert.match(source,/ER capacity is not live-verified/);
+ assert.match(source,/if \(item.positionQuality === "osm_feature"\) appendInAppRouteButton/);
 });

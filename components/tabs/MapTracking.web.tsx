@@ -490,6 +490,7 @@ const mapDocument = `
           fire_station: "Fire Service",
           cdrrmo: "Disaster Response Office",
           evacuation_site: "Evacuation Site",
+          hospital: "Hospital / Emergency Care",
         }[kind] || "Public facility";
       }
       // Road directions stay inside the actual MapLibre map, using OSRM road
@@ -636,7 +637,34 @@ const mapDocument = `
         card.appendChild(note);
         const links = document.createElement("div");
         links.className = "place-popup-links";
-        appendInAppRouteButton(item, links);
+        // Only feature-sourced coordinates are routed inside the SJDM map.
+        if (item.positionQuality === "osm_feature") appendInAppRouteButton(item, links);
+        if (typeof item.googlePlaceId === "string" && /^[a-zA-Z0-9_-]{10,100}$/.test(item.googlePlaceId)) {
+          const google = document.createElement("a");
+          google.href = "https://www.google.com/maps/search/?api=1&query=" +
+            encodeURIComponent(item.name) + "&query_place_id=" + encodeURIComponent(item.googlePlaceId);
+          google.textContent = "Open named place in Google Maps";
+          google.target = "_blank";
+          google.rel = "noopener noreferrer";
+          links.appendChild(google);
+        }
+        if (typeof item.actualPhotoSourceUrl === "string" &&
+            item.actualPhotoSourceUrl.startsWith("https://tanglawan.ph/")) {
+          const photo = document.createElement("a");
+          photo.href = item.actualPhotoSourceUrl;
+          photo.textContent = "View real building photo · " + (item.photoCredit || "Source");
+          photo.target = "_blank";
+          photo.rel = "noopener noreferrer";
+          links.appendChild(photo);
+        }
+        if (typeof item.officialInfoUrl === "string" && item.officialInfoUrl.startsWith("https://")) {
+          const info = document.createElement("a");
+          info.href = item.officialInfoUrl;
+          info.textContent = "Official facility details";
+          info.target = "_blank";
+          info.rel = "noopener noreferrer";
+          links.appendChild(info);
+        }
         if (typeof item.officialContact === "string" &&
           item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
           [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
@@ -648,7 +676,10 @@ const mapDocument = `
         card.appendChild(links);
         const caution = document.createElement("p");
         caution.className = "place-popup-status";
-        caution.textContent = "Mapped location · Current operations not verified";
+        caution.textContent = item.kind === "hospital"
+          ? "Real hospital · Reference only · ER capacity is not live-verified" +
+            (item.positionQuality === "third_party_approximate" ? " · In-map GPS approximate" : "")
+          : "Mapped location · Current operations not verified";
         card.appendChild(caution);
         return card;
       }
