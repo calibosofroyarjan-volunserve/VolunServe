@@ -550,7 +550,7 @@ export default function AccountApprovals() {
       >
         <AdminReviewHero
           eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
-          title="Resident & Volunteer Reviews"
+          title="Resident Accounts & Volunteer Approvals"
           subtitle="Manage Resident account records and review Volunteer applications in one organized workspace."
           icon="people-outline"
           tag="ACCOUNT GOVERNANCE"
