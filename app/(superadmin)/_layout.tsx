@@ -62,18 +62,13 @@ const navItems: NavItem[] = [
     route: "/(superadmin)/all-records",
     match: "/all-records",
   },
-  {
-    label: "System Settings",
-    icon: "settings-outline",
-    route: "/(superadmin)/system-settings",
-    match: "/system-settings",
-  },
 ];
 
 export default function SuperAdminLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const pathname = usePathname();
 
   if (loading) {
@@ -103,7 +98,7 @@ export default function SuperAdminLayout() {
   }
 
   const desktop = Platform.OS === "web" && width >= 980;
-  const activeSection = navItems.find(item => item.match === "/" ? (pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin") : pathname.endsWith(item.match))?.label || "System Overview";
+  const activeSection = pathname.endsWith("/profile") ? "My Profile" : pathname.endsWith("/system-settings") ? "System Settings" : navItems.find(item => item.match === "/" ? (pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin") : pathname.endsWith(item.match))?.label || "System Overview";
 
   const fullName =
     String(profile.fullName || profile.email || "Super Admin").trim();
@@ -120,6 +115,7 @@ export default function SuperAdminLayout() {
   const signOut = async () => {
     try {
       setDrawerOpen(false);
+      setAccountOpen(false);
       await logoutUser();
       router.replace("/admin-login" as Href);
     } catch (error: any) {
@@ -134,8 +130,7 @@ export default function SuperAdminLayout() {
     <View style={styles.shell}>
       {desktop ? (
         <SuperAdminSidebar
-          onNavigate={(route) => router.push(route as Href)}
-          onSignOut={signOut}
+          onNavigate={(route) => { setAccountOpen(false); router.push(route as Href); }}
         />
       ) : (
         <Modal
@@ -154,9 +149,9 @@ export default function SuperAdminLayout() {
               compact
               onNavigate={(route) => {
                 setDrawerOpen(false);
+                setAccountOpen(false);
                 router.push(route as Href);
               }}
-              onSignOut={signOut}
             />
           </View>
         </Modal>
@@ -181,20 +176,65 @@ export default function SuperAdminLayout() {
             </View>
           )}
 
-          <View style={styles.accountArea}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open Super Admin profile dropdown"
+            accessibilityState={{ expanded: accountOpen }}
+            activeOpacity={0.84}
+            onPress={() => setAccountOpen(value => !value)}
+            style={styles.accountArea}
+          >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
-
             <View style={styles.accountCopy}>
-              <Text style={styles.accountName} numberOfLines={1}>
-                {fullName}
-              </Text>
+              <Text style={styles.accountName} numberOfLines={1}>{fullName}</Text>
               <Text style={styles.accountRole}>Programmer · Super Admin</Text>
             </View>
-          </View>
+            <Ionicons name={accountOpen ? "chevron-up" : "chevron-down"} size={16} color="#416A5A" />
+          </TouchableOpacity>
         </View>
 
+        {accountOpen && (
+          <View style={styles.profileMenu} accessibilityLabel="Super Admin profile dropdown">
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View Profile"
+              style={styles.profileMenuAction}
+              onPress={() => {
+                setAccountOpen(false);
+                router.push("/(superadmin)/profile" as Href);
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={20} color="#087A62" />
+              <Text style={styles.profileMenuText}>View Profile</Text>
+              <Ionicons name="chevron-forward" size={15} color="#79978A" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="System Settings"
+              style={styles.profileMenuAction}
+              onPress={() => {
+                setAccountOpen(false);
+                router.push("/(superadmin)/system-settings" as Href);
+              }}
+            >
+              <Ionicons name="settings-outline" size={20} color="#087A62" />
+              <Text style={styles.profileMenuText}>System Settings</Text>
+              <Ionicons name="chevron-forward" size={15} color="#79978A" />
+            </TouchableOpacity>
+            <View style={styles.profileMenuDivider} />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Sign Out"
+              style={styles.profileMenuAction}
+              onPress={() => { setAccountOpen(false); void signOut(); }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#B42318" />
+              <Text style={styles.profileMenuSignOut}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.contentArea}>
           <Stack
             screenOptions={{
@@ -212,11 +252,9 @@ export default function SuperAdminLayout() {
 
 function SuperAdminSidebar({
   onNavigate,
-  onSignOut,
   compact = false,
 }: {
   onNavigate: (route: string) => void;
-  onSignOut: () => void;
   compact?: boolean;
 }) {
   const pathname = usePathname();
@@ -285,18 +323,7 @@ function SuperAdminSidebar({
         })}
       </ScrollView>
 
-      <View style={styles.sidebarUtility}>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          accessibilityRole="button"
-          accessibilityLabel="Log out of Super Admin account"
-          activeOpacity={0.82}
-          onPress={onSignOut}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#D03647" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+
     </View>
   );
 }
@@ -453,6 +480,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   workspace: {
+    position: "relative",
     flex: 1,
     minWidth: 0,
     backgroundColor: "#F2F9FC",
@@ -481,6 +509,18 @@ const styles = StyleSheet.create({
     borderColor: "#E3E8F0",
     backgroundColor: "#FFFFFF",
   },
+  profileMenu: {
+    position: "absolute", top: 63, right: 20, zIndex: 100,
+    width: 234, backgroundColor: "#FFFFFF", borderRadius: 13,
+    padding: 8, borderWidth: 1, borderColor: "#D8E9DF",
+    shadowColor: "#123D2F", shadowOpacity: 0.18, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 }, elevation: 15,
+  },
+  profileMenuAction: { flexDirection: "row", alignItems: "center", gap: 10,
+    minHeight: 46, paddingHorizontal: 11, borderRadius: 9 },
+  profileMenuText: { flex: 1, color: "#174B3E", fontWeight: "800", fontSize: 13 },
+  profileMenuSignOut: { flex: 1, color: "#B42318", fontWeight: "800", fontSize: 13 },
+  profileMenuDivider: { height: 1, backgroundColor: "#E5EEE9", marginVertical: 5, marginHorizontal: 8 },
   accountArea: {
     flexDirection: "row",
     alignItems: "center",
