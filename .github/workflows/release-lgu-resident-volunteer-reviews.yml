@@ -1,0 +1,69 @@
+name: Publish Safe LGU Resident and Volunteer Review Improvements (Hosting Only)
+on:
+  push:
+    branches:
+      - release/lgu-admin-resident-volunteer-reviews-20261029
+    paths:
+      - .github/workflows/release-lgu-resident-volunteer-reviews.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  validate-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check LGU review UX and preserve adjacent approved features
+        run: |
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-admin-overview-ui.cjs
+          node scripts/test-superadmin-settings-records-retention.cjs
+          node scripts/test-superadmin-grouped-records.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-password-reset-popup.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-clean-emergency-report-header.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --pretty false
+      - name: Build production Expo website
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase service account for Hosting only
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service account; production remains unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting ONLY (no Firestore rules, databases, Functions or Storage)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact custom-domain revision on volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Awaiting verified custom-domain revision attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Expected LGU review revision was not verified on production"
+          exit 1
