@@ -6657,7 +6657,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
   },
@@ -6804,7 +6804,7 @@ const styles = StyleSheet.create({
   },
   overviewVerifiedText: {
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   statusTimelineRow: {
@@ -6840,7 +6840,7 @@ const styles = StyleSheet.create({
   statusTimelineTime: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 8.5,
+    fontSize: 10,
   },
   priorityRow: {
     flexDirection: "row",
@@ -6856,7 +6856,7 @@ const styles = StyleSheet.create({
   overviewLabel: {
     marginTop: 11,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -6875,7 +6875,7 @@ const styles = StyleSheet.create({
   },
   needChipText: {
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "700",
   },
   overviewDescription: {
@@ -6910,7 +6910,7 @@ const styles = StyleSheet.create({
   assignLguButtonSub: {
     marginTop: 2,
     color: "#ccfbf1",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   personnelCleanWorkspace: {
     gap: 12,
@@ -7449,7 +7449,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideMiniStatus: {
     color: "#0f766e",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelAsideCaseTop: {
@@ -7466,13 +7466,13 @@ const styles = StyleSheet.create({
   personnelAsideLabel: {
     marginTop: 9,
     color: "#64748b",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelAsideValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -7485,7 +7485,7 @@ const styles = StyleSheet.create({
   personnelAsideMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 8.5,
+    fontSize: 10,
   },
   personnelAsideThumb: {
     width: 96,
@@ -7545,7 +7545,7 @@ const styles = StyleSheet.create({
   personnelMiniMapSub: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 8,
+    fontSize: 10,
   },
   personnelAsideActionRow: {
     marginTop: 9,
@@ -7562,7 +7562,7 @@ const styles = StyleSheet.create({
   },
   personnelAsidePrimaryButtonText: {
     color: "#ffffff",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelAsideSecondaryButton: {
@@ -7578,7 +7578,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideSecondaryButtonText: {
     color: "#2563eb",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelTimelineRow: {
@@ -7618,7 +7618,7 @@ const styles = StyleSheet.create({
   },
   personnelTimelineLabel: {
     color: "#64748b",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelTimelineLabelDone: {
@@ -7627,7 +7627,7 @@ const styles = StyleSheet.create({
   personnelTimelineTime: {
     marginTop: 2,
     color: "#94a3b8",
-    fontSize: 7.7,
+    fontSize: 10,
   },
 
   personnelWorkspace: {
@@ -7658,7 +7658,7 @@ const styles = StyleSheet.create({
   },
   personnelOverviewLabel: {
     color: "#94a3b8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
@@ -7681,7 +7681,7 @@ const styles = StyleSheet.create({
   },
   personnelVolunteerButtonText: {
     color: "#4338ca",
-    fontSize: 9.2,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelPanel: {
@@ -7712,7 +7712,7 @@ const styles = StyleSheet.create({
   },
   lguRefreshButtonText: {
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguPersonnelError: {
@@ -7725,7 +7725,7 @@ const styles = StyleSheet.create({
   },
   lguPersonnelErrorText: {
     color: "#b91c1c",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -7771,13 +7771,13 @@ const styles = StyleSheet.create({
   },
   lguTestBadgeText: {
     color: "#4338ca",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguCapabilityText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: 8.8,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguFieldRow: {
@@ -7798,13 +7798,13 @@ const styles = StyleSheet.create({
   },
   lguFieldBadgeText: {
     color: "#1d4ed8",
-    fontSize: 8.2,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.25,
   },
   lguEmployeeIdText: {
     color: "#64748b",
-    fontSize: 8.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguProfileGrid: {
@@ -7825,14 +7825,14 @@ const styles = StyleSheet.create({
   },
   lguProfileLabel: {
     color: "#94a3b8",
-    fontSize: 7.4,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
   lguProfileValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
     lineHeight: 13,
   },
@@ -7855,13 +7855,13 @@ const styles = StyleSheet.create({
   },
   lguSkillChipText: {
     color: "#0f766e",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguNoSkillsText: {
     marginTop: 5,
     color: "#94a3b8",
-    fontSize: 8.6,
+    fontSize: 10,
     fontWeight: "700",
   },
   lguActionButton: {
@@ -7886,7 +7886,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
   },
   lguActionButtonText: {
-    fontSize: 8.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguActionButtonTextReady: {
@@ -7920,7 +7920,7 @@ const styles = StyleSheet.create({
   },
   lguStatusChipText: {
     color: "#334155",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelPanelHeader: {
@@ -7949,7 +7949,7 @@ const styles = StyleSheet.create({
   },
   personnelStatusText: {
     color: "#047857",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   personnelMemberRow: {
@@ -7982,7 +7982,7 @@ const styles = StyleSheet.create({
   personnelMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   personnelActiveBadge: {
     paddingHorizontal: 8,
@@ -7992,7 +7992,7 @@ const styles = StyleSheet.create({
   },
   personnelActiveBadgeText: {
     color: "#0f766e",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelEmpty: {
@@ -8009,7 +8009,7 @@ const styles = StyleSheet.create({
   personnelEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 15,
   },
   attendanceEmpty: {
@@ -8029,7 +8029,7 @@ const styles = StyleSheet.create({
   attendanceEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguCaseNeedBox: {
@@ -8042,7 +8042,7 @@ const styles = StyleSheet.create({
   },
   lguCaseNeedLabel: {
     color: "#2563eb",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -8056,7 +8056,7 @@ const styles = StyleSheet.create({
   lguCaseNeedHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 8.6,
+    fontSize: 10,
     lineHeight: 13,
   },
   assignedResponderCard: {
@@ -8107,7 +8107,7 @@ const styles = StyleSheet.create({
   historyTime: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
   },
   historyAssignments: {
     marginTop: 12,
@@ -8129,7 +8129,7 @@ const styles = StyleSheet.create({
   },
   historyAssignmentStatus: {
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "700",
   },
 
@@ -8241,7 +8241,7 @@ const styles = StyleSheet.create({
   },
   caseListSeverityText: {
     color: "#ffffff",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   caseListLocation: {
@@ -8258,7 +8258,7 @@ const styles = StyleSheet.create({
   },
   caseListMeta: {
     color: "#475569",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
   },
   caseListRight: {
@@ -8270,7 +8270,7 @@ const styles = StyleSheet.create({
   },
   caseListDate: {
     color: "#64748b",
-    fontSize: 8.5,
+    fontSize: 10,
     textAlign: "right",
     fontWeight: "700",
   },
@@ -8358,7 +8358,7 @@ const styles = StyleSheet.create({
   },
   caseId: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
     maxWidth: 180,
   },
@@ -8375,7 +8375,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#ffffff",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -8423,7 +8423,7 @@ const styles = StyleSheet.create({
   },
   needsLabel: {
     color: "#94a3b8",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.9,
   },
@@ -8450,7 +8450,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
   },
@@ -8581,7 +8581,7 @@ const styles = StyleSheet.create({
   reviewInfoSub: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityReviewCard: {
@@ -8596,7 +8596,7 @@ const styles = StyleSheet.create({
   severityReviewText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityChoiceRow: {
@@ -8615,7 +8615,7 @@ const styles = StyleSheet.create({
   },
   severityChoiceText: {
     color: "#475569",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
   },
   severityChoiceTextActive: {
@@ -8637,7 +8637,7 @@ const styles = StyleSheet.create({
   criticalResponseText: {
     marginTop: 4,
     color: "#9f2f25",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
 
@@ -8665,7 +8665,7 @@ const styles = StyleSheet.create({
   },
   checkText: {
     color: "#49646f",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
   evidenceGrid: {
@@ -8691,7 +8691,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingTop: 7,
     color: "#334155",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   evidenceOpen: {
@@ -8699,7 +8699,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
     color: "#078f82",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   videoList: {
@@ -8721,7 +8721,7 @@ const styles = StyleSheet.create({
   videoButtonSub: {
     marginTop: 2,
     color: "#6b7699",
-    fontSize: 9,
+    fontSize: 10,
   },
   reviewReasonInput: {
     minHeight: 72,
@@ -8790,7 +8790,7 @@ const styles = StyleSheet.create({
   rejectNoticeText: {
     marginTop: 3,
     color: "#b42318",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   dispatchLocked: {
@@ -8807,13 +8807,13 @@ const styles = StyleSheet.create({
   dispatchLockedText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   matchText: {
     marginTop: 4,
     color: "#078f82",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -9083,7 +9083,7 @@ const styles = StyleSheet.create({
   },
   lguOfficialReportEyebrow: {
     color: "#0F766E",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
@@ -9179,7 +9179,7 @@ const styles = StyleSheet.create({
   lguOfficialReportMeta: {
     marginTop: 3,
     color: "#94A3B8",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguOfficialReviewBadge: {
@@ -9198,7 +9198,7 @@ const styles = StyleSheet.create({
   },
   lguOfficialReviewBadgeText: {
     color: "#B54708",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   lguOfficialReviewBadgeTextDone: {
@@ -9307,7 +9307,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 220,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   lguReviewedSummary: {
@@ -9428,7 +9428,7 @@ const styles = StyleSheet.create({
   eligibleCountLabel: {
     marginTop: 1,
     color: "#166534",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -9446,7 +9446,7 @@ const styles = StyleSheet.create({
   },
   supportRequirementLabel: {
     color: "#94a3b8",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -9459,7 +9459,7 @@ const styles = StyleSheet.create({
   supportBarangayHint: {
     marginTop: 4,
     color: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -9524,7 +9524,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   eligibilityBadgeText: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.4,
   },
@@ -9684,7 +9684,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: "#b42318",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
 
@@ -9704,7 +9704,7 @@ const styles = StyleSheet.create({
   lguDoctrineText: {
     marginTop: 3,
     color: "#4f6b67",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
 
@@ -9826,7 +9826,7 @@ const styles = StyleSheet.create({
   },
   directAssessmentDoneText: {
     color: "#15803d",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "800",
   },
@@ -9853,7 +9853,7 @@ const styles = StyleSheet.create({
   directFormSubtitle: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   directFormBadge: {
@@ -9864,7 +9864,7 @@ const styles = StyleSheet.create({
   },
   directFormBadgeText: {
     color: "#0f766e",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
@@ -9900,7 +9900,7 @@ const styles = StyleSheet.create({
   formSelectDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   formSelectChevron: {
@@ -9957,7 +9957,7 @@ const styles = StyleSheet.create({
   formSelectOptionDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directInfoStrip: {
@@ -9970,13 +9970,13 @@ const styles = StyleSheet.create({
   },
   directInfoStripTitle: {
     color: "#0F766E",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directInfoStripText: {
     marginTop: 3,
     color: "#52706A",
-    fontSize: 8.8,
+    fontSize: 10,
     lineHeight: 13,
   },
   directGroupCard: {
@@ -9995,7 +9995,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#ffffff",
     backgroundColor: "#0f766e",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directGroupContent: {
@@ -10031,7 +10031,7 @@ const styles = StyleSheet.create({
   reliefScopeText: {
     marginTop: 4,
     color: "#64748B",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 14,
   },
   directGroupTitle: {
@@ -10043,7 +10043,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 9,
     color: "#7b8d9d",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   directTopGrid: {
@@ -10070,13 +10070,13 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 5,
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   directFieldHelp: {
     marginTop: 4,
     color: "#94A3B8",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directLockedInput: {
@@ -10087,7 +10087,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 6,
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
@@ -10140,7 +10140,7 @@ const styles = StyleSheet.create({
   },
   directNeedChoiceText: {
     color: "#475569",
-    fontSize: 9.3,
+    fontSize: 10,
     fontWeight: "900",
   },
   directNeedChoiceTextActive: {
@@ -10157,14 +10157,14 @@ const styles = StyleSheet.create({
   },
   directSelectedNeedsTitle: {
     color: "#334155",
-    fontSize: 9.8,
+    fontSize: 10,
     fontWeight: "900",
   },
   directSelectedNeedsHint: {
     marginTop: 2,
     marginBottom: 7,
     color: "#64748B",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12,
   },
   directNeedField: {
@@ -10179,13 +10179,13 @@ const styles = StyleSheet.create({
   },
   directNeedLabel: {
     color: "#334155",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directNeedUnit: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "700",
   },
   directNeedInput: {
@@ -10224,7 +10224,7 @@ const styles = StyleSheet.create({
   },
   directReviewEyebrow: {
     color: "#078F82",
-    fontSize: 7.8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -10242,7 +10242,7 @@ const styles = StyleSheet.create({
   },
   directReviewBadgeText: {
     color: "#15803D",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   directReviewStats: {
@@ -10261,7 +10261,7 @@ const styles = StyleSheet.create({
   },
   directReviewStatLabel: {
     color: "#94A3B8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -10274,7 +10274,7 @@ const styles = StyleSheet.create({
   directReviewStatValueSmall: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 9.2,
+    fontSize: 10,
     lineHeight: 13,
     fontWeight: "900",
   },
@@ -10282,7 +10282,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     marginTop: 1,
     color: "#94A3B8",
-    fontSize: 7.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -10303,12 +10303,12 @@ const styles = StyleSheet.create({
   },
   directReviewNeedPillText: {
     color: "#0F766E",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   directReviewEmpty: {
     color: "#94A3B8",
-    fontSize: 8.8,
+    fontSize: 10,
     fontStyle: "italic",
   },
   directReviewNotice: {
@@ -10322,13 +10322,13 @@ const styles = StyleSheet.create({
   },
   directReviewNoticeTitle: {
     color: "#92400E",
-    fontSize: 9.2,
+    fontSize: 10,
     fontWeight: "900",
   },
   directReviewNoticeText: {
     marginTop: 3,
     color: "#9A6700",
-    fontSize: 8.5,
+    fontSize: 10,
     lineHeight: 12.5,
   },
   directActionBar: {
@@ -10348,7 +10348,7 @@ const styles = StyleSheet.create({
   directActionHint: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   directSaveButton: {
@@ -10382,7 +10382,7 @@ const styles = StyleSheet.create({
   fieldAuthorityText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReportCard: {
@@ -10406,7 +10406,7 @@ const styles = StyleSheet.create({
   fieldReportMeta: {
     marginTop: 2,
     color: "#7b8d9d",
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 13,
   },
   fieldReportStatus: {
@@ -10420,7 +10420,7 @@ const styles = StyleSheet.create({
   fieldStatusDismissed: { backgroundColor: "#64748b" },
   fieldReportStatusText: {
     color: "#ffffff",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   fieldReportGrid: {
@@ -10461,7 +10461,7 @@ const styles = StyleSheet.create({
   remainingNeedsNote: {
     marginTop: 4,
     color: "#7a6740",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReviewInput: {
@@ -10516,7 +10516,7 @@ const styles = StyleSheet.create({
   },
   needAssessmentEyebrow: {
     color: "#078f82",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -10529,7 +10529,7 @@ const styles = StyleSheet.create({
   needAssessmentHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
   },
   needInputGrid: {
@@ -10564,7 +10564,7 @@ const styles = StyleSheet.create({
   },
   fieldFinalNoticeText: {
     color: "#15803d",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
   },
   fieldDismissedNotice: {
@@ -10575,7 +10575,7 @@ const styles = StyleSheet.create({
   },
   fieldDismissedNoticeText: {
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
