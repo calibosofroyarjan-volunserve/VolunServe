@@ -40,7 +40,6 @@ const residentDesktopTabs: TabDefinition[] = [
  {name:"resident",label:"Request Assistance",icon:"hand-left-outline",activeIcon:"hand-left"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
  {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
- {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
 // Progress belongs to Profile; notifications remain in the bell and announcements in updates.
 const volunteerDesktopTabs: TabDefinition[] = [
@@ -48,8 +47,6 @@ const volunteerDesktopTabs: TabDefinition[] = [
  {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
  {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
- {name:"certificate",label:"Certificates",icon:"document-outline",activeIcon:"document"},
- {name:"profile",label:"My Profile",icon:"person-circle-outline",activeIcon:"person-circle"},
 ];
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
@@ -75,58 +72,18 @@ const volunteerModuleIdentity: Record<string, ModuleIdentity> = {
   announcements: { subtitle: "Official Community News", colors: ["#BE762F", "#E6A956"] },
 };
 
+// Profile/Certificates are account destinations, not duplicate mobile tab shortcuts.
 const residentMobileTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "disaster-response",
-    label: "Report",
-    icon: "alert-circle-outline",
-    activeIcon: "alert-circle",
-  },
-  {
-    name: "community-events",
-    label: "Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "profile",
-    label: "Profile",
-    icon: "person-outline",
-    activeIcon: "person",
-  },
+  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+  {name:"disaster-response",label:"Report",icon:"alert-circle-outline",activeIcon:"alert-circle"},
+  {name:"resident",label:"Assistance",icon:"hand-left-outline",activeIcon:"hand-left"},
+  {name:"community-events",label:"Events",icon:"calendar-outline",activeIcon:"calendar"},
 ];
-
 const volunteerMobileTabs: TabDefinition[] = [
-  {
-    name: "index",
-    label: "Home",
-    icon: "home-outline",
-    activeIcon: "home",
-  },
-  {
-    name: "volunteer",
-    label: "Emergency",
-    icon: "people-outline",
-    activeIcon: "people",
-  },
-  {
-    name: "community-events",
-    label: "Events",
-    icon: "calendar-outline",
-    activeIcon: "calendar",
-  },
-  {
-    name: "profile",
-    label: "Profile",
-    icon: "person-outline",
-    activeIcon: "person",
-  },
+  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
+  {name:"volunteer",label:"Emergency",icon:"people-outline",activeIcon:"people"},
+  {name:"community-events",label:"Events",icon:"calendar-outline",activeIcon:"calendar"},
+  {name:"donation",label:"Donations",icon:"heart-outline",activeIcon:"heart"},
 ];
 
 const volunteerOnlyRoutes = new Set([
