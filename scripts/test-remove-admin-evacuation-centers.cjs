@@ -14,11 +14,13 @@ for (const removed of [
   "Verified evacuation centers", "Evacuation capacity", "activeCenters",
   "pagedCenters", "CenterStat", "CenterInput", "saveEvacuationCenter",
   "removeEvacuationCenter", "showCenterManagement", "centerModalVisible",
-  "ListPagination", "CENTER_PAGE_SIZE",
+  "CENTER_PAGE_SIZE",
 ]) {
   assert(!dashboard.toLowerCase().includes(removed.toLowerCase()),
     "Evacuation Center dashboard UI or data dependency remains: " + removed);
 }
+assert(dashboard.includes("ListPagination") && dashboard.includes("total={pendingResidents.length} pageSize={5}"),
+  "New Resident dashboard queue must retain 5-record paging even though the center list was removed");
 assert(dashboard.includes('cases:false,needs:false,users:false,volunteers:false'),
   "Dashboard loading should not wait for removed center Firestore snapshot");
 for (const preserved of [
