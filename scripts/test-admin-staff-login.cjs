@@ -24,8 +24,8 @@ assert(apply.includes('role:"applicant",status:"pending_review"') &&
   apply.includes('residentAccess:false,volunteerAccess:false'),
   "LGU applications must have no resident, volunteer or administrative permissions");
 assert(owner.includes('role === "applicant" && account.status === "pending_review"') &&
-  owner.includes('openAdminAction("promote",account)'),
-  "Super Admin workspace must review pending applicants");
+  owner.includes('actionType === "promote"'),
+  "Super Admin must retain pending applicant eligibility and secure review logic even when staff queue is hidden");
 assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must prohibit public creation of approved Admin role");
@@ -36,8 +36,8 @@ assert(admin.includes("Request LGU Admin Access") &&
 assert(admin.includes("LGU staff applicants receive no privileges until independently verified and approved by Super Admin.") &&
   apply.includes("role:\"applicant\",status:\"pending_review\"") &&
   apply.includes("Only after successful confirmation") &&
-  owner.includes("LGU Staff Applications"),
-  "Unverified submissions remain pending and visible to programmer Super Admins");
+  owner.includes("pendingLguApplications"),
+  "Unverified submissions remain pending in the authorized data model");
 assert(owner.includes("setIdentityMatched") &&
   owner.includes("setLguEmploymentConfirmed") &&
   owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&

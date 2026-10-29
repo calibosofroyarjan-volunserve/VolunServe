@@ -15,7 +15,7 @@ const firstBetween = (text, from, to) => {
 const saItems = firstBetween(sa, "const navItems: NavItem[] = [", "export default function SuperAdminLayout");
 const expectedSa = [
   ["System Overview","/(superadmin)"],
-  ["LGU Staff & Admin Accounts","/(superadmin)/admin-accounts"],
+  ["Admin Accounts","/(superadmin)/admin-accounts"],
   ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
   ["System Records (Read Only)","/(superadmin)/all-records"],
   ["System Settings","/(superadmin)/system-settings"],
@@ -53,11 +53,11 @@ for(let i=0;i<expectedGroups.length;i++){
 }
 assert(lgu.includes(')?.id ?? "none"') && lgu.includes(">Command Center</Text>"),
   "Command Center must open without unnecessary expanded sidebar groups");
-assert(accounts.includes("LGU STAFF VERIFICATION FLOW") &&
-  accounts.includes("Receive staff application") &&
-  accounts.includes("Verify official LGU credentials") &&
-  accounts.includes("Promote to Admin & record audit"),
-  "Super Admin must display one linear verify-before-promote lifecycle");
+assert(!accounts.includes("LGU STAFF VERIFICATION FLOW") &&
+  !accounts.includes(">LGU Staff Applications</Text>") &&
+  accounts.includes("credentialsConfirmed") &&
+  accounts.includes("lguEmploymentConfirmed"),
+  "Visible staff onboarding stays hidden, but independent verification safeguards remain in code");
 assert(!accounts.includes('accessibilityLabel="Create independent LGU Admin account"') &&
   !accounts.includes('>Create LGU Admin</Text>') &&
   !accounts.includes('onPress={() => setShowAddAdmin(true)}'),

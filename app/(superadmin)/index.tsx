@@ -143,12 +143,12 @@ export default function SuperAdminDashboard() {
           <Text style={styles.eyebrow}>SYSTEM GOVERNANCE</Text>
         </View>
         <Text style={[styles.title, compact && styles.compactTitle]}>System Overview</Text>
-        <Text style={styles.subtitle}>LGU staff verification, account access, technical oversight and system audit trails. City operations remain under authorized LGU Admin personnel.</Text>
+        <Text style={styles.subtitle}>Admin account access, technical oversight and system audit trails. City operations remain under authorized LGU Admin personnel.</Text>
       </View>
 
       <View style={[styles.metricRow,compact && styles.metricRowCompact]}>
         {([
-          {key:"pending",label:"LGU applications",value:staffStats.pending,icon:"person-add-outline" as const},
+          {key:"pending",label:"Admin accounts",value:staffStats.active+staffStats.suspended,icon:"people-outline" as const},
           {key:"active",label:"Active LGU Admins",value:staffStats.active,icon:"shield-checkmark-outline" as const},
           {key:"suspended",label:"Suspended Admins",value:staffStats.suspended,icon:"lock-closed-outline" as const},
           {key:"users",label:"Registered accounts",value:total,icon:"people-outline" as const},
@@ -162,7 +162,7 @@ export default function SuperAdminDashboard() {
               {!loaded.users ? "…" : errors.users ? "—" : item.value.toLocaleString("en-PH")}
             </Text>
             <Text style={[styles.metricDetail,index===0 && styles.metricDetailFeatured]}>
-              {item.key==="pending" ? "Awaiting programmer verification" :
+              {item.key==="pending" ? "Managed Admin access" :
                item.key==="users" ? "Firestore user profiles" : "Access governance"}
             </Text>
           </View>
@@ -236,15 +236,15 @@ export default function SuperAdminDashboard() {
 
       <View style={styles.secondarySection}>
         <View style={styles.secondaryHead}>
-          <Text style={styles.sectionTitle}>LGU staff verification & account governance</Text>
+          <Text style={styles.sectionTitle}>Admin account governance</Text>
           <Text style={styles.sectionHint}>Real-time account status from Firestore</Text>
         </View>
         <View style={styles.governanceActions}>
           <TouchableOpacity accessibilityRole="button"
-            accessibilityLabel="Review LGU staff applications and Admin accounts"
+            accessibilityLabel="Manage existing LGU Admin accounts"
             onPress={() => router.push("/(superadmin)/admin-accounts" as any)}
             style={styles.governancePrimary}>
-            <Text style={styles.governancePrimaryText}>Review LGU Applications</Text>
+            <Text style={styles.governancePrimaryText}>Manage Admin Accounts</Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="button"
             accessibilityLabel="Open Super Admin security and audit logs"
