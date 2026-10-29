@@ -136,7 +136,7 @@ export default function AdminAccounts() {
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
   const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
-  const compactDirectory = viewportWidth < 930;
+  const compactDirectory = viewportWidth < 1180;
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter]);
 
@@ -1236,7 +1236,7 @@ export default function AdminAccounts() {
               </View>}
             </View>;
           })}
-          {adminPageCount>1 && <View style={styles.dirPaging}>
+          {adminPageCount>=1 && <View style={styles.dirPaging}>
             <TouchableOpacity disabled={safeAdminPage<=1} accessibilityLabel="Previous Admin accounts page"
               style={[styles.dirPage,safeAdminPage<=1 && {opacity:0.35}]}
               onPress={()=>{setAdminPage(Math.max(1,safeAdminPage-1));setExpandedAdminId(null);}}>
