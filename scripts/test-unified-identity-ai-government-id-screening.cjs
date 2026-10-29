@@ -27,6 +27,9 @@ assert(backend.includes("normalizeIdDocumentScreening") &&
   backend.includes('documentScreening.authenticityVerified !== true') &&
   backend.includes('aiResult?.livenessImplemented !== true'),
   "Node must preserve sanitized screening for the LGU and prevent unsupported automatic verification");
+assert(backend.includes("self_identity_review_forbidden") &&
+  backend.includes("targetUid === adminUid"),
+  "LGU Admin must not self-approve identity");
 assert(backend.includes('identityVerificationAttempts') &&
   backend.includes('requiresManualReview: result.requiresManualReview') &&
   backend.includes('requireOperationalAdmin'),
