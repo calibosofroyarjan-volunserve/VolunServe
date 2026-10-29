@@ -656,21 +656,21 @@ const styles = StyleSheet.create({
   journeyAction: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#226859", minHeight: 42, paddingHorizontal: 12, marginBottom: 10, borderRadius: 9 },
   journeyActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
-  mobileShell: { flex: 1, backgroundColor: "#F2F9FC" },
+  mobileShell: { flex: 1, backgroundColor: "#F5F9F6" },
   mobileHeader: {
     height: 60, flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: "#FFFFFF", paddingHorizontal: 7,
-    borderBottomWidth: 1, borderBottomColor: "#E4EDF3", zIndex: 2,
+    borderBottomWidth: 1, borderBottomColor: "#DCEAE1", zIndex: 2,
   },
   mobileMain: { flex: 1 },
   mobileHeaderButton: {
     width: 35, height: 38, alignItems: "center", justifyContent: "center",
-    borderRadius: 10, backgroundColor: "#F4F8FA",
+    borderRadius: 10, backgroundColor: "#F0F8F3",
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
-  mobileBrandName: { color: "#173D32", fontWeight: "700", fontSize: 16 },
-  mobileBrandMode: { color: "#607890", fontSize: 9, fontWeight: "800" },
+  mobileBrandName: { color: "#113E30", fontWeight: "900", fontSize: 16 },
+  mobileBrandMode: { color: "#45765E", fontSize: 9, fontWeight: "800" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
     borderRadius: 20, paddingHorizontal: 7, height: 30, backgroundColor: "#E9F8F1",
@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
   mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
   mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
   mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
-  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#123E36", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
+  mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#0B3F34", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
   mobileDrawerBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.16)" },
   mobileDrawerLogo: { width: 44, height: 44 },
   mobileDrawerBrandCopy: { flex: 1 },
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
   mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   mobileDrawerIconBadge: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
-  mobileDrawerActive: { backgroundColor: "#226859" },
+  mobileDrawerActive: { backgroundColor: "#147D61", borderWidth: 1, borderColor: "#2D9E7C" },
   mobileDrawerItemText: { flex: 1, color: "#E3F2EC", fontWeight: "600", fontSize: 13 },
   loadingScreen: {
     flex: 1,
@@ -830,9 +830,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     paddingTop: 22,
     paddingBottom: 18,
-    backgroundColor: "#123E36",
+    backgroundColor: "#0B3F34",
     borderRightWidth: 1,
-    borderRightColor: "#13695E",
+    borderRightColor: "#125844",
     shadowColor: "#183153",
     shadowOffset: { width: 5, height: 0 },
     shadowOpacity: 0.04,
@@ -857,7 +857,7 @@ const styles = StyleSheet.create({
   desktopBrandTitle: {
     color: "#FFFFFF",
     fontSize: 21,
-    fontWeight: "700",
+    fontWeight: "900",
   },
   desktopBrandSubtitle: {
     marginTop: 1,
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   desktopNavItemActive: {
-    backgroundColor: "#226859",
+    backgroundColor: "#147D61",
   },
   desktopNavIcon: {
     width: 34,
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   desktopNavIconActive: {
-    backgroundColor: "#00775F",
+    backgroundColor: "#07694F",
   },
   desktopNavText: {
     flex: 1,
@@ -1003,14 +1003,14 @@ const styles = StyleSheet.create({
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
   residentNavItem: { minHeight: 49, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 9 },
-  residentNavItemActive: { backgroundColor: "#226859" },
+  residentNavItemActive: { backgroundColor: "#147D61", borderWidth: 1, borderColor: "#219E79" },
   residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {
-    width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#064F53",
+    width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#075A4B",
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 13, color: "#E3F2EC", fontWeight: "600" },
+  residentNavTitle: { fontSize: 13, color: "#F1FAF4", fontWeight: "700" },
   residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
   desktopPressed: {
     opacity: 0.72,
