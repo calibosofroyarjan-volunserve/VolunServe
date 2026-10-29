@@ -1,0 +1,47 @@
+name: Validate Unified LGU Admin Flow and Pagination
+on:
+  push:
+    branches:
+      - fix/admin-unified-dashboard-navigation-pagination-20261030
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/(admin)/**
+      - components/admin/**
+      - scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+      - scripts/test-final-admin-scope.cjs
+      - scripts/test-admin-navigation-contract.cjs
+      - scripts/test-pavia-admin-pagination-announcements.cjs
+      - scripts/test-lgu-admin-global-ui-pagination.cjs
+      - .github/workflows/validate-unified-admin-flow-pagination.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Admin navigation, dashboard and paging regression
+        run: |
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-dashboard-overviews.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile Expo web without production release
+        run: npx expo export --platform web
