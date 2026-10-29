@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -1615,67 +1616,7 @@ export default function AdminCertificatesScreen() {
           HEADER
       ===================================================== */}
 
-      <View
-        style={
-          styles.header
-        }
-      >
-        <View
-          style={
-            styles.headerCopy
-          }
-        >
-          <Text
-            style={
-              styles.eyebrow
-            }
-          >
-            VOLUNTEER RECOGNITION
-          </Text>
-
-          <Text
-            style={
-              styles.title
-            }
-          >
-            Volunteer Certificates
-          </Text>
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            Review resident-confirmed
-            volunteer contributions and
-            issue verifiable Volunteer
-            Service Certificates.
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.adminBadge
-          }
-        >
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={17}
-            color="#08786F"
-          />
-
-          <Text
-            style={
-              styles.adminBadgeText
-            }
-          >
-            {role ===
-            "superadmin"
-              ? "SUPER ADMIN"
-              : "ADMIN"}
-          </Text>
-        </View>
-      </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Volunteer Certificates" subtitle="Review resident-confirmed volunteer service and issue verifiable emergency service certificates through the authorized LGU workflow." icon="ribbon-outline" tag="SERVICE RECOGNITION" />
 
       {/* =====================================================
           FLOW INFORMATION

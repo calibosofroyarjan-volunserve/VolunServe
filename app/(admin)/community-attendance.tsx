@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   ActivityIndicator,
   Image,
@@ -896,26 +897,7 @@ export default function CommunityAttendanceAdmin() {
         keyboardShouldPersistTaps="handled"
       >
         {/* The existing Admin navigation/sidebar is owned by the parent layout. */}
-        <View style={[styles.titleRow, phone && styles.titleRowPhone]}>
-          <View style={styles.pageIntro}>
-            <Text style={styles.eyebrow}>VOLUNSERVE  ›  COMMUNITY EVENTS  ›  ATTENDANCE</Text>
-            <Text style={styles.title}>Attendance Management</Text>
-            <Text style={styles.subtitle}>
-              Volunteers record their own Time In/Out. Admin reviews attendance, verifies service, and manages event status.
-            </Text>
-          </View>
-          {!smallHeader && (
-            <View style={styles.headerNote}>
-              <View style={styles.headerNoteIcon}>
-                <Ionicons name="calendar-outline" size={30} color={GREEN} />
-              </View>
-              <View style={{flex: 1}}>
-                <Text style={styles.headerNoteTitle}>Participation tracking</Text>
-                <Text style={styles.headerNoteBody}>Accurate attendance. Verified service.</Text>
-              </View>
-            </View>
-          )}
-        </View>
+        <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Event Attendance" subtitle="Review volunteer Time In and Time Out, verify participation, and manage attendance records for approved events." icon="checkmark-done-outline" tag="SERVICE VERIFICATION" />
 
         {!!error && (
           <View style={styles.errorBox}>

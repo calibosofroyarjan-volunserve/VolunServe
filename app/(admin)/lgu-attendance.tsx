@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
@@ -184,12 +185,8 @@ export default function LguAttendanceScreen() {
   const busy = personnel.filter((item) => ["assigned", "responding", "on_site"].includes(item.availabilityStatus)).length;
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>LGU PERSONNEL</Text>
-          <Text style={styles.title}>Attendance</Text>
-          <Text style={styles.subtitle}>Current duty and operational availability of verified LGU Personnel. Personnel control their own Time In and Time Out from the LGU responder portal.</Text>
-        </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION" title="LGU Attendance" subtitle="Monitor verified personnel duty status and availability. Responders record their own Time In and Time Out." icon="time-outline" tag="PERSONNEL DUTY RECORDS" />
+      <View style={[styles.header, { justifyContent: "flex-end" }]}>
         <TouchableOpacity style={styles.refreshButton} onPress={() => void load(true)} activeOpacity={0.84}>
           <Ionicons name="refresh-outline" size={17} color="#334155" />
           <Text style={styles.refreshText}>{refreshing ? "Refreshing..." : "Refresh"}</Text>

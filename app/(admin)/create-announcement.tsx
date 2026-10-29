@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
 
 import {
@@ -212,19 +213,7 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <Text style={styles.eyebrow}>
-        ADMIN OPERATIONS
-      </Text>
-
-      <Text style={styles.title}>
-        Local Announcement
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Publish an operational announcement for
-        residents and volunteers in your assigned
-        barangay.
-      </Text>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
         <Text style={styles.scopeLabel}>

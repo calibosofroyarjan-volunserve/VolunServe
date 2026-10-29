@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Href, Redirect, useRouter } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
@@ -99,18 +100,7 @@ export default function AdminProfile() {
     <ScrollView style={styles.screen} contentContainerStyle={[styles.page, compact && styles.pageCompact]}
       showsVerticalScrollIndicator keyboardShouldPersistTaps="handled"
       accessibilityLabel="LGU Admin profile">
-      <View style={styles.pageHeader}>
-        <View>
-          <Text style={styles.eyebrow}>LGU ADMINISTRATION</Text>
-          <Text style={styles.pageTitle}>My profile</Text>
-          <Text style={styles.subtitle}>Your account information and access details.</Text>
-        </View>
-        <TouchableOpacity accessibilityRole="button" style={styles.backButton}
-          onPress={() => router.push("/(admin)/command-center" as Href)}>
-          <Ionicons name="arrow-back-outline" size={17} color="#23765F" />
-          <Text style={styles.backText}>Back to overview</Text>
-        </TouchableOpacity>
-      </View>
+      <AdminReviewHero eyebrow="LGU ADMINISTRATION / ACCOUNT" title="My Profile" subtitle="Manage your own LGU Admin account details and review your access information." icon="person-circle-outline" tag="ACCOUNT SETTINGS" />
 
       <View style={styles.identity}>
         <View style={styles.avatar}>

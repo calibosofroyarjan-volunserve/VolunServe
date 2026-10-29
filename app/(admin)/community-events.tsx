@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   ActivityIndicator,
   Image,
@@ -167,6 +168,7 @@ export default function CommunityEventAdminScreen() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [participantPage, setParticipantPage] = useState(1);
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
@@ -244,6 +246,9 @@ export default function CommunityEventAdminScreen() {
   const activeProposalPage = Math.max(1, Math.min(recordPage, proposalPages));
   const pagedProposals = visible.slice((activeProposalPage - 1) * 5, activeProposalPage * 5);
   const selectedProposal = proposals.find((item) => item.id === selectedProposalId) || null;
+  const activeParticipantPage = Math.max(1, Math.min(participantPage, Math.max(1, Math.ceil(participants.length / 5))));
+  const pagedParticipants = participants.slice((activeParticipantPage - 1) * 5, activeParticipantPage * 5);
+  useEffect(() => { setParticipantPage(1); }, [selectedProposalId]);
   const selectedPerson = selectedPersonUid ? people[selectedPersonUid] : undefined;
   // Read only profiles needed for visible proposal cards, not the full user directory.
   useEffect(() => {
@@ -534,26 +539,7 @@ export default function CommunityEventAdminScreen() {
         compact && styles.compact,
       ]}
     >
-      <View style={styles.heading}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>
-            VOLUNSERVE • ADMIN/LGU
-          </Text>
-          <Text style={styles.title}>
-            Community Event Proposals
-          </Text>
-          <Text style={styles.subtitle}>
-            Review Resident suggestions and publish official events.
-          </Text>
-        </View>
-        <View style={styles.headingIcon}>
-          <Ionicons
-            name="calendar-outline"
-            color={GREEN}
-            size={26}
-          />
-        </View>
-      </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Community Events" subtitle="Review Resident event proposals and publish approved community activities." icon="leaf-outline" tag="EVENT APPROVALS" />
       <View style={styles.stats}>
         {([
           {
@@ -979,7 +965,8 @@ export default function CommunityEventAdminScreen() {
                       {!participantsBusy && !participantsError && participants.length === 0 && (
                         <Text style={styles.bodyText}>No joined volunteers yet.</Text>
                       )}
-                      {participants.map((participant) => (
+                      <ListPagination page={activeParticipantPage} total={participants.length} pageSize={5} onChange={setParticipantPage} />
+                      {pagedParticipants.map((participant) => (
                         <View key={participant.id} style={styles.profileRow}>
                           {renderAvatar(participant.uid, participant.fullName || "Volunteer", 42)}
                           <View style={{ flex: 1 }}>

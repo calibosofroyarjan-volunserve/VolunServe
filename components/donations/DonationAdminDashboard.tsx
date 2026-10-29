@@ -14,6 +14,7 @@ import {
 
 import { auth, db } from "../../lib/firebase";
 import ListPagination from "../ui/ListPagination";
+import AdminReviewHero from "../admin/AdminReviewHero";
 import FundReconciliationPanel from "./FundReconciliationPanel";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -672,14 +673,17 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   </View>;
 
   return <ScrollView style={s.screen} contentContainerStyle={s.content} showsVerticalScrollIndicator>
-    <View style={s.head}>
-      <View style={s.flex}>
-        <Text style={s.eyebrow}>VOLUNSERVE · LGU DONATIONS</Text>
-        <Text style={s.title}>Donations</Text>
-        <Text style={s.subtitle}>Monitor donor payments, campaigns, assistance releases, and LGU approvals.</Text>
+    {mode === "admin" ? (
+      <AdminReviewHero eyebrow="LGU OPERATIONS / DONATIONS & FUNDS" title="Donation Management" subtitle="Monitor donation campaigns, verified payments, assistance fund releases, and LGU approvals. Financial release decisions remain restricted to authorized LGU Admin staff." icon="heart-outline" tag="DONATIONS & TRANSACTIONS" />
+    ) : (
+      <View style={s.head}>
+        <View style={s.flex}>
+          <Text style={s.eyebrow}>VOLUNSERVE · SYSTEM ADMIN</Text>
+          <Text style={s.title}>Donation Oversight</Text>
+          <Text style={s.subtitle}>Review permitted system-level donation activity without operational fund release.</Text>
+        </View>
       </View>
-
-    </View>
+    )}
     {!!problem && <Text style={s.error}>{problem}</Text>}
 
     <View style={s.tabs}>

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useUserSession } from "../../lib/useUserSession";
@@ -428,12 +429,8 @@ export default function LguMembersScreen() {
   };
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>LGU PERSONNEL</Text>
-          <Text style={styles.title}>LGU Members</Text>
-          <Text style={styles.subtitle}>Verified LGU employees available to the VolunServe emergency workflow. Real staff accounts are Admin-created after employee verification; TEST accounts remain separate for development and thesis demonstration.</Text>
-        </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION" title="LGU Personnel" subtitle="Manage verified LGU responders and staff accounts. Test personnel remain clearly separated from verified operational accounts." icon="business-outline" tag="AUTHORIZED PERSONNEL" />
+      <View style={[styles.header, { justifyContent: "flex-end" }]}>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.testHeaderButton}

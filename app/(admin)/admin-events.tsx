@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   ActivityIndicator,
   Alert,
@@ -465,8 +466,8 @@ export default function AdminEvents() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Volunteer Events</Text>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Volunteer Events" subtitle="Create and manage official volunteer activities, schedules, participation, and event status." icon="calendar-outline" tag="VOLUNTEER PROGRAMS" />
+      <View style={[styles.header, { justifyContent: "flex-end" }]}>
 
         <TouchableOpacity style={styles.primaryBtn} onPress={openCreate}>
           <Text style={styles.primaryBtnText}>+ Create Event</Text>

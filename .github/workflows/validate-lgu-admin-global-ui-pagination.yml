@@ -1,0 +1,41 @@
+name: Validate LGU Admin Pagination and Premium UI Consistency
+on:
+  push:
+    branches:
+      - fix/lgu-admin-pagination-visual-audit-20261029
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/validate-lgu-admin-global-ui-pagination.yml
+      - app/(admin)/**
+      - components/admin/**
+      - components/donations/DonationAdminDashboard.tsx
+      - scripts/test-lgu-admin-global-ui-pagination.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-admin-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify all record pagination and consistent Admin UI
+        run: |
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile responsive Expo web (no deploy)
+        run: npx expo export --platform web

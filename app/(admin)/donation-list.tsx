@@ -1,3 +1,4 @@
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -1730,22 +1731,13 @@ export default function DonationAdministration() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.push(sourceBackPath as any)}
-        >
+      <AdminReviewHero eyebrow="LGU OPERATIONS / DONATIONS & FUNDS" title="Donation Management" subtitle="Review LGU-approved assistance campaigns, verified receipts, and donor transaction history. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
+      {openedFromAssistance && (
+        <TouchableOpacity style={styles.backButton} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
           <Ionicons name="arrow-back" size={18} color="#334155" />
+          <Text style={styles.subtitle}>{sourceBackLabel}</Text>
         </TouchableOpacity>
-
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.eyebrow}>ADMIN · DONATION OPERATIONS</Text>
-          <Text style={styles.title}>Donation Campaigns</Text>
-          <Text style={styles.subtitle}>
-            Manage approved donation campaigns linked to LGU-verified Assistance Requests and evidence-backed funding goals.
-          </Text>
-        </View>
-      </View>
+      )}
 
       {!!error && (
         <View style={styles.errorBox}>

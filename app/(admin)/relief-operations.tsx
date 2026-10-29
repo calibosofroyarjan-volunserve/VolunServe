@@ -466,6 +466,8 @@ export default function ReliefOperations() {
 
   const compact = width < 860;
   const [needsPage,setNeedsPage] = useState(1);
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [allocationPage, setAllocationPage] = useState(1);
 
   const [
     activeTab,
@@ -817,6 +819,10 @@ export default function ReliefOperations() {
 
   const activeNeedsPage = Math.max(1, Math.min(needsPage, Math.max(1, Math.ceil(barangaySummaries.length / 5))));
   const pagedNeeds = barangaySummaries.slice((activeNeedsPage - 1) * 5, activeNeedsPage * 5);
+  const activeInventoryPage = Math.max(1, Math.min(inventoryPage, Math.max(1, Math.ceil(inventory.length / 5))));
+  const pagedInventory = inventory.slice((activeInventoryPage - 1) * 5, activeInventoryPage * 5);
+  const activeAllocationPage = Math.max(1, Math.min(allocationPage, Math.max(1, Math.ceil(allocations.length / 5))));
+  const pagedAllocations = allocations.slice((activeAllocationPage - 1) * 5, activeAllocationPage * 5);
   const activeInventory =
     useMemo(
       () =>
@@ -3726,6 +3732,7 @@ export default function ReliefOperations() {
               </Text>
             </View>
 
+            <ListPagination page={activeInventoryPage} total={inventory.length} pageSize={5} onChange={setInventoryPage} />
             {inventory.length ===
             0 ? (
               <View
@@ -3759,7 +3766,7 @@ export default function ReliefOperations() {
                   styles.cardList
                 }
               >
-                {inventory.map(
+                {pagedInventory.map(
                   (item) => (
                     <View
                       key={item.id}
@@ -3940,6 +3947,7 @@ export default function ReliefOperations() {
               </View>
             </View>
 
+            <ListPagination page={activeAllocationPage} total={allocations.length} pageSize={5} onChange={setAllocationPage} />
             {allocations.length ===
             0 ? (
               <View
@@ -3973,7 +3981,7 @@ export default function ReliefOperations() {
                   styles.cardList
                 }
               >
-                {allocations.map(
+                {pagedAllocations.map(
                   (allocation) => {
                     const busy =
                       !!busyKey &&
