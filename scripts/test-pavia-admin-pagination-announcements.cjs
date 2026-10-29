@@ -25,6 +25,17 @@ for (const [path, ...tokens] of checks) {
  assert(src.includes("pageSize={5}") || src.includes("PAGE_SIZE") || src.includes("CENTER_PAGE_SIZE"),
    path + ": list must have five record page size");
 }
+const onlineDonations = read("components/donations/DonationAdminDashboard.tsx");
+assert(onlineDonations.includes("pagedAlerts.map(") &&
+       onlineDonations.includes("pagedReviews.map(") &&
+       onlineDonations.includes("page={currentAlertPage}") &&
+       onlineDonations.includes("page={currentReviewPage}") &&
+       onlineDonations.includes("pageSize={5}"),
+  "Real online Donation Admin Dashboard needs paginated alerts and review items");
+const certificateEntries = read("app/(admin)/community-certificates.tsx");
+assert(certificateEntries.includes("eligible.slice(") &&
+       certificateEntries.includes("onChange={setRecordPage}"),
+  "Community Event certificates participants must be paged");
 const attendance = read("app/(admin)/lgu-attendance.tsx");
 assert(attendance.includes("onChange={setPersonnelPage}") && attendance.includes("onChange={setHistoryPage}"), "Duty & history independently paginated");
 const eventAttendance = read("app/(admin)/community-attendance.tsx");
