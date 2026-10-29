@@ -1,0 +1,81 @@
+name: Publish Verified Email or Google Signup (Hosting Only)
+on:
+  push:
+    branches:
+      - release/signup-email-verification-google-optional-20261029
+    paths:
+      - .github/workflows/release-email-verification-signup.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate independent Google signup and verified email requirement
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const auth = fs.readFileSync('lib/firebaseAuth.ts', 'utf8');
+          const web = fs.readFileSync('app/signup.web.tsx', 'utf8');
+          const native = fs.readFileSync('app/signup.tsx', 'utf8');
+          const guard = fs.readFileSync('app/_layout.tsx', 'utf8');
+          for (const feature of ['sendEmailVerification(user)', 'await user.reload()', '!user.emailVerified', 'await signOut(auth)']) {
+            assert.ok(auth.includes(feature), 'Missing email verification flow: ' + feature);
+          }
+          assert.ok(!auth.includes('Google registration must also have an Email/Password credential linked'), 'Google still requires password linking');
+          assert.ok(web.includes('onPress={handleGoogleSignup}'), 'Google signup option missing on web');
+          assert.ok(web.includes('useEmailInstead') && native.includes('useEmailInstead'), 'Optional email signup switch missing');
+          for (const [name, source] of [['web',web], ['native',native]]) {
+            assert.ok(source.includes('googleBound || passwordValid'), 'Independent signup method missing in ' + name);
+            assert.ok(source.includes('Verify Your Email'), 'Email verification messaging missing in ' + name);
+            assert.ok(source.includes('#DC2626'), 'Required red asterisks missing in ' + name);
+            assert.ok(!source.includes('Mobile Number *'), 'Legacy phone field visible in ' + name);
+          }
+          assert.ok(guard.includes('usesPassword && !authUser.emailVerified'), 'Resident email verification guard missing');
+          console.log('PASS separate Google signup, inbox confirmation, red required labels, and route guard');
+          NODE
+          npx tsc --noEmit
+      - name: Expo web export and release fingerprint
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service account. NO deploy attempted."
+            exit 1
+          fi
+      - name: Publish Firebase Hosting ONLY
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify volunserve.com serves exact signup release revision
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Waiting for custom-domain propagation attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Live website did not confirm signup revision."
+          exit 1
