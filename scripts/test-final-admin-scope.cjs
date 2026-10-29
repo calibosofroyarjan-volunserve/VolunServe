@@ -41,7 +41,7 @@ assert(attendance.includes("LGU Admin-only attendance corrections/verification."
   "Only LGU Admin may perform staff attendance verification");
 for(const entry of [
   "System Overview","LGU Staff & Admin Accounts",
-  "Admin Activity & Audit Logs","System Records (Read Only)","System Settings",
+  "System Records","Audit Logs","System Settings",
 ]) assert(saLayout.includes(entry),"Missing Super Admin governance nav "+entry);
 for(const entry of [
   "Emergency & Assistance","People & Verification","Events & Volunteering",
@@ -58,7 +58,7 @@ assert(!saLayout.includes("Donation Management") &&
   !saOverview.includes("Approve Donation"),
   "Super Admin UI must not provide financial operations or dummy financial data");
 assert(saOverview.includes('item.role === "applicant" && item.status === "pending_review"') &&
-  saOverview.includes('router.push("/(superadmin)/admin-accounts"') &&
+  saLayout.includes('route: "/(superadmin)/admin-accounts"') &&
   saOverview.includes('router.push("/(superadmin)/admin-logs"'),
   "Super Admin overview must surface actual applicant status and working navigation");
 assert(adminLogin.includes("Request LGU Admin Access") &&
