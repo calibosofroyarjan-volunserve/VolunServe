@@ -27,7 +27,7 @@ assert(dashboard.includes('cases:false,needs:false,users:false,volunteers:false'
 for (const preserved of [
   "<DashboardVolunteerApprovals />", "Open emergencies", "Pending user profiles",
   "Volunteer approvals", "Priority Actions", "AI identity reviews",
-  "Open relief needs", "WorkspaceBarChart", 'orientation="vertical"',
+  "Open relief needs", "<DashboardOperationalInsights workload={{",
   "setPendingUserIds", "setPendingVolunteerIds", "setNeedAssessments",
   'onSnapshot(', '"disasterCases"', '"barangayNeedAssessments"',
 ]) assert(dashboard.includes(preserved), "Active Admin workflow lost: " + preserved);
