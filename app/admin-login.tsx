@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  sendPasswordResetEmail,
   signOut,
   setPersistence,
   browserLocalPersistence,
@@ -10,6 +9,7 @@ import {
 } from "firebase/auth";
 import React, { useState } from "react";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
+import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -41,12 +41,11 @@ export default function AdministrativeLogin() {
   const [working, setWorking] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
 
   const signIn = async () => {
     if (working) return;
     setError("");
-    setNotice("");
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
       setError("Enter your authorized administrative email and password.");
@@ -79,28 +78,10 @@ export default function AdministrativeLogin() {
     }
   };
 
-  const resetPassword = async () => {
+  const openPasswordReset = () => {
     if (working) return;
     setError("");
-    setNotice("");
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError("Enter your administrative email first to request a reset.");
-      return;
-    }
-    setWorking(true);
-    try {
-      await sendPasswordResetEmail(auth, cleanEmail);
-      setNotice("If this email has an eligible password account, a reset link has been sent. Check your inbox and spam folder.");
-    } catch (err: any) {
-      if (err?.code === "auth/invalid-email") {
-        setError("Enter a valid email address.");
-      } else {
-        setNotice("If this email has an eligible password account, check your inbox and spam folder.");
-      }
-    } finally {
-      setWorking(false);
-    }
+    setResetOpen(true);
   };
 
   return (
@@ -141,7 +122,7 @@ export default function AdministrativeLogin() {
             <Text style={styles.rememberText}>Remember me</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.forgot} accessibilityRole="button"
-            disabled={working} onPress={() => void resetPassword()}>
+            disabled={working} onPress={openPasswordReset}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
@@ -151,7 +132,6 @@ export default function AdministrativeLogin() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-        {!!notice && <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text>}
         <TouchableOpacity accessibilityRole="button"
           accessibilityLabel="Sign in to LGU administration"
           disabled={working} onPress={() => void signIn()}
@@ -176,6 +156,12 @@ export default function AdministrativeLogin() {
         </TouchableOpacity>
         <Text style={styles.footer}>LGU staff applicants receive no privileges until independently verified and approved by Super Admin.</Text>
       </PremiumAuthShell>
+      <PasswordResetDialog
+        visible={resetOpen}
+        initialEmail={email}
+        audience="admin"
+        onClose={() => setResetOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
