@@ -5914,7 +5914,7 @@ export default function AdminCases() {
                             const offline = /offline|unavailable|off.?duty/.test(availabilityText);
                             const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
                               !eligibility.eligible ? "Restricted" :
-                              offline ? "Offline · offer allowed" : "Available";
+                              offline ? "Offline · offer allowed" : "Eligible";
 
                             return (
                               <View key={volunteer.uid} style={styles.personnelCompactRow}>
@@ -5939,7 +5939,7 @@ export default function AdminCases() {
                                 <View style={styles.personnelCompactChipRowWide}>
                                   <View
                                     style={
-                                      availabilityLabel === "Available"
+                                      availabilityLabel === "Eligible"
                                         ? styles.personnelMiniBadgeGood
                                         : availabilityLabel === "Busy"
                                           ? styles.personnelMiniBadgeBusy
@@ -5948,7 +5948,7 @@ export default function AdminCases() {
                                   >
                                     <Text
                                       style={
-                                        availabilityLabel === "Available"
+                                        availabilityLabel === "Eligible"
                                           ? styles.personnelMiniBadgeGoodText
                                           : availabilityLabel === "Busy"
                                             ? styles.personnelMiniBadgeBusyText
