@@ -28,7 +28,7 @@ jobs:
       - name: Check role-safe Resident & Volunteer navigation plus protected flows
         run: |
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
-          node scripts/test-resident-volunteer-sidebar-navigation.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
           node scripts/test-signup-email-first-middle-optional.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
           node scripts/test-superadmin-premium-restoration.cjs
