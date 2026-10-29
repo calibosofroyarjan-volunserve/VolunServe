@@ -21,6 +21,9 @@ export type SjdmPublicMapPlace = {
   positionQuality: "osm_feature" | "third_party_approximate";
   officialInfoUrl?: string;
   officialContact?: string;
+  address?: string;
+  photoUrl?: string;
+  photoCredit?: string;
 };
 
 /** Location pin needs both a mapped physical feature and a corroborating source. */
@@ -34,6 +37,10 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceLabel: "Mapped government-center footprint; CSJDM confirms Dulong Bayan address",
     note: "New Government Center, Barangay Dulong Bayan. Building location only, not live LGU staff or vehicles.",
     positionQuality: "osm_feature",
+    address: "New Government Center, Barangay Dulong Bayan, City of San Jose del Monte, Bulacan",
+    photoUrl: "https://csjdm.gov.ph/wp-content/uploads/2024/07/450373210_806342808349936_546454814317942683_n.jpg",
+    photoCredit: "City Government of San Jose del Monte · 2024",
+    officialInfoUrl: "https://csjdm.gov.ph/mabighani-sa-ganda-ng-new-government-center/",
   },
   {
     id: "osm-way-1427519892",
@@ -44,6 +51,7 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceLabel: "Mapped barangay-hall building in San Jose del Monte",
     note: "Barangay Hall, Dulong Bayan. Building location, not an emergency-response dispatch or confirmed opening hours.",
     positionQuality: "osm_feature",
+    address: "Barangay Hall, Barangay Dulong Bayan, City of San Jose del Monte, Bulacan",
   },
 ];
 
