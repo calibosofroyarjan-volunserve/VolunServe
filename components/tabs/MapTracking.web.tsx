@@ -232,10 +232,13 @@ const mapDocument = `
       border-radius: 14px;
       box-shadow: 0 9px 30px rgba(14,45,36,.16);
       padding: 13px 15px;
-      max-width: 250px;
+      width: min(340px, calc(100vw - 64px));
+      max-width: min(340px, calc(100vw - 64px));
+      max-height: min(65vh, 520px);
+      overflow-y: auto;
       font-family: Inter, ui-sans-serif, system-ui, sans-serif;
     }
-    .place-popup { max-width: 250px; font-size: 12px; color: #19392D; }
+    .place-popup { width:100%; max-width:340px; font-size:12px; color:#19392D; }
     .place-popup-title { display: block; font-size: 14px; font-weight: 800; line-height: 1.35; }
     .place-popup-category { display: block; font-size: 11px; color: #4D7365; margin-top: 3px; }
     .place-popup-note { font-size: 11px; line-height: 1.5; color: #4B6359; margin: 10px 0 8px; }
@@ -630,17 +633,18 @@ const mapDocument = `
         category.className = "place-popup-category";
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
         card.appendChild(category);
+        let credit = null;
         if (item.photoUrl && /^https:\/\//.test(item.photoUrl)) {
           const photo = document.createElement("img");
           photo.src = item.photoUrl;
           photo.alt = "Actual exterior of " + item.name;
           photo.loading = "lazy";
           photo.decoding = "async";
-          photo.style.cssText = "display:block;width:100%;height:146px;object-fit:cover;border-radius:12px;margin:10px 0 5px;background:#e7f0ee;";
-          photo.onerror = () => { photo.remove(); };
+          photo.style.cssText = "display:block;width:100%;height:170px;object-fit:cover;border-radius:12px;margin:10px 0 5px;background:#e7f0ee;";
+          photo.onerror = () => { photo.remove(); if (credit) credit.remove(); };
           card.appendChild(photo);
           if (item.photoCredit) {
-            const credit = document.createElement("small");
+            credit = document.createElement("small");
             credit.textContent = "Photo: " + item.photoCredit;
             credit.style.cssText = "display:block;color:#64748b;font-size:10px;margin-bottom:6px;";
             card.appendChild(credit);
@@ -660,6 +664,23 @@ const mapDocument = `
         const links = document.createElement("div");
         links.className = "place-popup-links";
         appendInAppRouteButton(item, links);
+        if (typeof item.officialInfoUrl === "string" &&
+            /^https:\/\//.test(item.officialInfoUrl)) {
+          const source = document.createElement("a");
+          source.href = item.officialInfoUrl;
+          source.target = "_blank";
+          source.rel = "noopener noreferrer";
+          source.textContent = "Official information";
+          links.appendChild(source);
+        }
+        if (typeof item.sourceUrl === "string" && /^https:\/\//.test(item.sourceUrl)) {
+          const mapped = document.createElement("a");
+          mapped.href = item.sourceUrl;
+          mapped.target = "_blank";
+          mapped.rel = "noopener noreferrer";
+          mapped.textContent = "Location source";
+          links.appendChild(mapped);
+        }
         if (typeof item.officialContact === "string" &&
           item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
           [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
