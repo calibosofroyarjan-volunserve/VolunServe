@@ -1,3 +1,5 @@
+import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import {
   CameraView,
@@ -537,6 +539,7 @@ export default function IdentityVerification() {
             result.matchScore,
           livenessScore:
             result.livenessScore,
+          documentScreening: result.documentScreening,
           message:
             result.message,
         });
@@ -675,6 +678,7 @@ export default function IdentityVerification() {
           statusResult
             ?.matchScore
         }
+        documentScreening={statusResult?.documentScreening}
         primaryLabel="Back to Profile"
         primaryAction={() =>
           router.back()
@@ -707,6 +711,7 @@ export default function IdentityVerification() {
           statusResult
             ?.matchScore
         }
+        documentScreening={statusResult?.documentScreening}
         primaryLabel={
           checkingStatus
             ? "Checking..."
@@ -2050,6 +2055,7 @@ function StatusScreen({
   color,
   badge,
   matchScore,
+  documentScreening,
   primaryLabel,
   primaryAction,
   secondaryLabel,
@@ -2072,6 +2078,7 @@ function StatusScreen({
     string;
   matchScore?:
     number;
+  documentScreening?: DocumentScreening;
   primaryLabel:
     string;
   primaryAction:
@@ -2180,6 +2187,8 @@ function StatusScreen({
             </Text>
           </View>
         ) : null}
+
+        <DocumentScreeningSummary screening={documentScreening} />
 
         <TouchableOpacity
           style={
