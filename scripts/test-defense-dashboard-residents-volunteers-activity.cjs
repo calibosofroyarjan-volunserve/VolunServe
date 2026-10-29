@@ -20,7 +20,7 @@ assert(accounts.includes("export function ResidentAccountsPanel()") &&
   accounts.includes("pagedAccounts.map(account") &&
   accounts.includes("PAGE_SIZE = 5") &&
   accounts.includes("total={visibleAccounts.length} pageSize={PAGE_SIZE}") &&
-  accounts.includes('account.role !== "lgu_personnel"'),
+  accounts.includes('item.role !== "lgu_personnel"'),
   "Resident directory must preserve searchable five-per-page records, exclude LGU personnel");
 assert(accounts.includes('moderateCommunityAccount(account, "suspended")') &&
   accounts.includes('moderateCommunityAccount(account, "approved")') &&
