@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
+import ListPagination from "../../components/ui/ListPagination";
 import {
   ActivityIndicator,
   Image,
@@ -382,6 +383,8 @@ export default function CommunityAttendanceAdmin() {
   const [busy, setBusy] = useState("");
   const [volunteerSearch, setVolunteerSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
+  const [eventPage, setEventPage] = useState(1);
+  const [rosterPage, setRosterPage] = useState(1);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("all");
   const [profileModal, setProfileModal] = useState<ProfileSummary | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -505,6 +508,9 @@ export default function CommunityAttendanceAdmin() {
     return statusMatch && textMatch;
   });
 
+  const eventPages = Math.max(1, Math.ceil(visibleEvents.length / 5));
+  const activeEventPage = Math.max(1, Math.min(eventPage, eventPages));
+  const pagedEvents = visibleEvents.slice((activeEventPage - 1) * 5, activeEventPage * 5);
   const joined = useMemo(
     () =>
       participants.filter(
@@ -586,6 +592,10 @@ export default function CommunityAttendanceAdmin() {
     }
     return (a.fullName || "").localeCompare(b.fullName || "");
   });
+
+  const rosterPages = Math.max(1, Math.ceil(visibleVolunteers.length / 5));
+  const activeRosterPage = Math.max(1, Math.min(rosterPage, rosterPages));
+  const pagedVolunteers = visibleVolunteers.slice((activeRosterPage - 1) * 5, activeRosterPage * 5);
 
   async function openProfile(uid: string, fallbackName: string) {
     if (!uid) return;
@@ -929,7 +939,7 @@ export default function CommunityAttendanceAdmin() {
               <Ionicons name="search-outline" size={17} color="#6E8396" />
               <TextInput
                 value={eventSearch}
-                onChangeText={setEventSearch}
+                onChangeText={value => { setEventSearch(value); setEventPage(1); }}
                 placeholder="Search published events..."
                 placeholderTextColor="#8698A8"
                 style={styles.searchInput}
@@ -950,7 +960,7 @@ export default function CommunityAttendanceAdmin() {
                 return (
                   <Pressable
                     key={item}
-                    onPress={() => setEventFilter(item)}
+                    onPress={() => { setEventFilter(item); setEventPage(1); }}
                     accessibilityRole="button"
                     style={[styles.chip, eventFilter === item && styles.chipActive]}
                   >
@@ -963,6 +973,7 @@ export default function CommunityAttendanceAdmin() {
               })}
             </View>
 
+            <ListPagination page={activeEventPage} total={visibleEvents.length} pageSize={5} onChange={setEventPage} />
             {eventsLoading ? (
               <ActivityIndicator color={GREEN} style={styles.loader} />
             ) : visibleEvents.length === 0 ? (
@@ -972,7 +983,7 @@ export default function CommunityAttendanceAdmin() {
                 <Text style={styles.emptySub}>Try another search or status filter.</Text>
               </View>
             ) : (
-              visibleEvents.map((event) => (
+              pagedEvents.map((event) => (
                 <Pressable
                   key={event.id}
                   onPress={() => {
@@ -1225,7 +1236,7 @@ export default function CommunityAttendanceAdmin() {
                   <Ionicons name="search-outline" size={17} color="#6E8396" />
                   <TextInput
                     value={volunteerSearch}
-                    onChangeText={setVolunteerSearch}
+                    onChangeText={value => { setVolunteerSearch(value); setRosterPage(1); }}
                     placeholder="Search volunteers..."
                     placeholderTextColor="#8698A8"
                     style={styles.searchInput}
@@ -1254,7 +1265,7 @@ export default function CommunityAttendanceAdmin() {
               ] as [AttendanceFilter, string][]).map(([id, label]) => (
                 <Pressable
                   key={id}
-                  onPress={() => setAttendanceFilter(id)}
+                  onPress={() => { setAttendanceFilter(id); setRosterPage(1); }}
                   style={[styles.attendanceChip, attendanceFilter === id && styles.attendanceChipActive]}
                   accessibilityRole="button"
                 >
@@ -1263,6 +1274,7 @@ export default function CommunityAttendanceAdmin() {
               ))}
             </View>
 
+            <ListPagination page={activeRosterPage} total={visibleVolunteers.length} pageSize={5} onChange={setRosterPage} />
             {participantsLoading ? (
               <ActivityIndicator color={GREEN} style={styles.loader} />
             ) : joined.length === 0 ? (
@@ -1280,7 +1292,7 @@ export default function CommunityAttendanceAdmin() {
             ) : (
               phone ? (
                 <View style={styles.mobileRosterList}>
-                  {visibleVolunteers.map((person, index) => {
+                  {pagedVolunteers.map((person, index) => {
                     const state = participantStatus(person);
                     const verified = person.attendanceVerified === true;
                     const canVerify = (selected.status === "active" || selected.status === "completed") &&
@@ -1366,7 +1378,7 @@ export default function CommunityAttendanceAdmin() {
                     <Text style={[styles.tableHeadText, styles.colStatus]}>Status</Text>
                     <Text style={[styles.tableHeadText, styles.colActions]}>Actions</Text>
                   </View>
-                  {visibleVolunteers.map((person, index) => {
+                  {pagedVolunteers.map((person, index) => {
                     const verified = person.attendanceVerified === true;
                     const hasIn = !!person.checkedInAt;
                     const hasOut = !!person.checkedOutAt;

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ListPagination from "../../components/ui/ListPagination";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useUserSession } from "../../lib/useUserSession";
@@ -93,6 +94,7 @@ export default function LguMembersScreen() {
   const { user } = useUserSession();
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [search, setSearch] = useState("");
+  const [recordPage, setRecordPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -162,6 +164,9 @@ export default function LguMembersScreen() {
         .includes(term),
     );
   }, [personnel, search]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / 5));
+  const activePage = Math.max(1, Math.min(recordPage, totalPages));
+  const pagedPersonnel = filtered.slice((activePage - 1) * 5, activePage * 5);
   const stats = useMemo(() => ({
     total: personnel.length,
     onDuty: personnel.filter((item) => item.dutyStatus === "on_duty").length,
@@ -465,7 +470,7 @@ export default function LguMembersScreen() {
       <View style={styles.toolbar}>
         <View style={styles.searchBox}>
           <Ionicons name="search-outline" size={17} color="#94A3B8" />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Search name, employee ID, department..." placeholderTextColor="#94A3B8" style={styles.searchInput} />
+          <TextInput value={search} onChangeText={value => { setSearch(value); setRecordPage(1); }} placeholder="Search name, employee ID, department..." placeholderTextColor="#94A3B8" style={styles.searchInput} />
         </View>
         <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.84} onPress={() => void loadPersonnel(true)}>
           <Ionicons name="refresh-outline" size={17} color="#334155" />
@@ -473,6 +478,7 @@ export default function LguMembersScreen() {
         </TouchableOpacity>
       </View>
       {!!error && !showCreate && !showRealCreate && !showReset && <View style={styles.errorBanner}><Ionicons name="alert-circle-outline" size={18} color="#B91C1C" /><Text style={styles.errorText}>{error}</Text></View>}
+      <ListPagination page={activePage} total={filtered.length} pageSize={5} onChange={setRecordPage} />
       <View style={styles.tableCard}>
         <View style={styles.tableHeader}>
           <Text style={[styles.th, styles.colName]}>PERSONNEL</Text>
@@ -488,7 +494,7 @@ export default function LguMembersScreen() {
         ) : filtered.length === 0 ? (
           <View style={styles.emptyState}><Ionicons name="people-outline" size={28} color="#94A3B8" /><Text style={styles.emptyTitle}>No LGU Personnel found</Text><Text style={styles.emptyText}>Add a verified LGU staff account or create a clearly marked TEST account for demonstration.</Text></View>
         ) : (
-          filtered.map((item) => (
+          pagedPersonnel.map((item) => (
             <View key={item.uid} style={styles.tableRow}>
               <View style={[styles.cell, styles.colName]}>
                 <View style={styles.avatar}><Text style={styles.avatarText}>{item.fullName.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "LG"}</Text></View>

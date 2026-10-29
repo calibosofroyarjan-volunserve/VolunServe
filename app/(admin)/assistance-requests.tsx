@@ -7,6 +7,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
+import ListPagination from "../../components/ui/ListPagination";
 import React, {
   useEffect,
   useMemo,
@@ -605,6 +606,7 @@ export default function AssistanceRequestsAdmin() {
   const [filter, setFilter] =
     useState<ReviewFilter>("pending");
   const [search, setSearch] = useState("");
+  const [recordPage, setRecordPage] = useState(1);
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -953,6 +955,10 @@ export default function AssistanceRequestsAdmin() {
     filter,
     search,
   ]);
+
+  const requestPages = Math.max(1, Math.ceil(filteredRequests.length / 5));
+  const activeRequestPage = Math.max(1, Math.min(recordPage, requestPages));
+  const pagedRequests = filteredRequests.slice((activeRequestPage - 1) * 5, activeRequestPage * 5);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -2156,7 +2162,7 @@ This still does not automatically create a Donation Campaign.`,
                 label="Pending"
                 count={stats.pending}
                 active={filter === "pending"}
-                onPress={() => setFilter("pending")}
+                onPress={() => { setFilter("pending"); setRecordPage(1); }}
               />
               <MockStatusTab
                 label="Under Review"
@@ -2170,13 +2176,13 @@ This still does not automatically create a Donation Campaign.`,
                 label="Verified"
                 count={stats.verified}
                 active={filter === "verified"}
-                onPress={() => setFilter("verified")}
+                onPress={() => { setFilter("verified"); setRecordPage(1); }}
               />
               <MockStatusTab
                 label="Rejected"
                 count={stats.rejected}
                 active={filter === "rejected"}
-                onPress={() => setFilter("rejected")}
+                onPress={() => { setFilter("rejected"); setRecordPage(1); }}
               />
 
               <View style={styles.mockTopTabsSpacer} />
@@ -2221,7 +2227,7 @@ This still does not automatically create a Donation Campaign.`,
                 />
                 <TextInput
                   value={search}
-                  onChangeText={setSearch}
+                  onChangeText={value => { setSearch(value); setRecordPage(1); }}
                   placeholder="Search request ID, Resident, beneficiary, barangay, or title"
                   placeholderTextColor="#94A3B8"
                   style={styles.searchInput}
@@ -2261,6 +2267,7 @@ This still does not automatically create a Donation Campaign.`,
               </View>
             )}
 
+            <ListPagination page={activeRequestPage} total={filteredRequests.length} pageSize={5} onChange={setRecordPage} />
             <View style={styles.mockQueuePanel}>
               <View style={styles.mockQueueHeader}>
                 <View>
@@ -2300,7 +2307,7 @@ This still does not automatically create a Donation Campaign.`,
                   </Text>
                 </View>
               ) : (
-                filteredRequests.map((item) => (
+                pagedRequests.map((item) => (
                   <MockQueueRow
                     key={item.id}
                     request={item}
