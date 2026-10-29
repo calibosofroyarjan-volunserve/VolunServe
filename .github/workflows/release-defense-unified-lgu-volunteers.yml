@@ -1,0 +1,78 @@
+name: Publish Final Defense Unified LGU Workspace (Hosting Only)
+on:
+  push:
+    branches:
+      - release/defense-unified-lgu-volunteers-20261030
+    paths:
+      - .github/workflows/release-defense-unified-lgu-volunteers.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Only release approved main and workflow change
+        shell: bash
+        run: |
+          git merge-base --is-ancestor edc6cf09847778b9a1f222559352dd4b4d5bd71c HEAD
+          test "$(git diff --name-only edc6cf09847778b9a1f222559352dd4b4d5bd71c HEAD)" = ".github/workflows/release-defense-unified-lgu-volunteers.yml"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate combined LGU operations, scrollbars and offline support
+        run: |
+          node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --pretty false
+      - name: Build and stamp Expo static web
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Fail safely without Hosting secrets
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials unavailable; production unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting only (not Firestore, rules, Functions or backend)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact production revision on volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Exact expected revision is not live on the custom domain."
+          exit 1
