@@ -1,7 +1,7 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { GoogleAuthProvider, onAuthStateChanged, type User } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -21,7 +21,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { signUpUser } from "../lib/firebaseAuth";
+import { connectGoogleAccountWeb, signUpUser } from "../lib/firebaseAuth";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -505,7 +505,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
 
     return {
       lastNameValid,
@@ -546,7 +546,7 @@ export default function Signup() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
 
       const stepMessages: Record<Step, string> = {
-        1: "Please complete your personal information and contact details.",
+        1: "Please complete your name, birthdate and email address.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your basic profile information.",
         4: "Please create a password and agree to the terms.",
@@ -609,6 +609,30 @@ export default function Signup() {
     return () => { active = false; unsubscribe(); };
   }, [applyGoogleIdentity]);
 
+  const handleGoogleSignup = useCallback(async () => {
+    if (loadingSubmit || googleBound) return;
+    setLoadingSubmit(true);
+    try {
+      const googleUser = await connectGoogleAccountWeb();
+      if (!googleUser.email || !googleUser.emailVerified) {
+        await signOut(auth);
+        throw new Error("Google could not verify the email for this account.");
+      }
+      const existing = await getDoc(doc(db, "users", googleUser.uid));
+      if (existing.exists()) {
+        await signOut(auth);
+        window.alert("This Google account already has a VolunServe profile. Please sign in.");
+        router.replace("/login");
+        return;
+      }
+      applyGoogleIdentity(googleUser);
+    } catch (error: any) {
+      window.alert(error?.message || "Unable to connect Google. You can register with email and password instead.");
+    } finally {
+      setLoadingSubmit(false);
+    }
+  }, [applyGoogleIdentity, googleBound, loadingSubmit, router]);
+
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
 
@@ -645,17 +669,17 @@ export default function Signup() {
         occupationOther: formData.occupationOther || "",
       });
 
-      const successTitle = "Verify Your Email";
+      const successTitle = googleBound ? "Basic Account Created" : "Verify Your Email";
       const successMessage = googleBound
-        ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
+        ? "Your Google account is ready without a separate password. Complete Resident Identity Verification later for protected services."
         : "We sent a verification link to your email. Verify your email address before signing in, then complete Identity Verification for protected Resident services.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace("/login");
+        router.replace(googleBound ? "/(tabs)" : "/login");
       } else {
         Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace("/login") },
+          { text: "OK", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
         ]);
       }
     } catch (e: any) {
@@ -834,11 +858,27 @@ export default function Signup() {
                     </Text>
                   </View>
 
+                  {!googleBound ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Continue with Google, optional signup method"
+                      disabled={loadingSubmit}
+                      onPress={handleGoogleSignup}
+                      style={[styles.googleSignupButton, loadingSubmit && { opacity: 0.65 }]}
+                      activeOpacity={0.82}
+                    >
+                      <Text style={styles.googleSignupMark}>G</Text>
+                      <Text style={styles.googleSignupLabel}>Continue with Google</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <Text style={styles.signupMethodDivider}>
+                    {googleBound ? "Complete your Google registration" : "or register with email and password"}
+                  </Text>
                   {googleBound ? (
                     <View style={styles.googleConnectedNotice}>
                       <Feather name="check-circle" size={18} color={COLORS.primary} />
                       <Text style={styles.googleConnectedText}>
-                        Google account connected. Your email is linked; complete the details below.
+                        Google email verified. Complete your VolunServe profile below.
                       </Text>
                     </View>
                   ) : null}
@@ -1123,6 +1163,7 @@ export default function Signup() {
                     </View>
                   ) : null}
 
+                  {!googleBound ? (<>
                   <SectionTitle
                     title="Password Security"
                     subtitle={
@@ -1188,6 +1229,7 @@ export default function Signup() {
                     </View>
                   </View>
 
+                  </>) : null}
                   <TouchableOpacity
                     style={styles.termsOpenBtn}
                     onPress={() => setTermsOpen(true)}
@@ -1509,6 +1551,10 @@ const styles = StyleSheet.create({
   roleInfoTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900", marginBottom: 4 },
   roleInfoText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
 
+  googleSignupButton: { flexDirection: "row", gap: 12, minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 14, paddingHorizontal: 16 },
+  googleSignupMark: { color: "#4285F4", fontSize: 20, fontWeight: "900" },
+  googleSignupLabel: { color: "#163D38", fontSize: 13, fontWeight: "800" },
+  signupMethodDivider: { color: "#67837D", textAlign: "center", marginVertical: 12, fontSize: 12 },
   googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
   googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
