@@ -8,16 +8,17 @@ import ListPagination from "../ui/ListPagination";
 
 type EventRow = { id: string; title?: string; status?: string; date?: string; publicationStatus?: string; };
 type StatsRow = { totalHours?: number; totalEvents?: number; };
-type InsightData = { publishedEvents: EventRow[]; certificates: number | null; stats: StatsRow[] | null; };
+type UserRow = { points?: number; achievements?: unknown[]; };
+type InsightData = { publishedEvents: EventRow[]; certificates: number | null; stats: StatsRow[] | null; users: UserRow[] | null; };
 const PAGE_SIZE = 5;
 const cleanDate = (value: string | undefined) => String(value || "").slice(0, 10) || "No date";
 
 export default function DashboardOperationalInsights() {
   const router = useRouter();
   const [data, setData] = useState<InsightData>({
-    publishedEvents: [], certificates: null, stats: null,
+    publishedEvents: [], certificates: null, stats: null, users: null,
   });
-  const [loaded, setLoaded] = useState({ events: false, certificates: false, stats: false });
+  const [loaded, setLoaded] = useState({ events: false, certificates: false, stats: false, users: false });
   const [errors, setErrors] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function DashboardOperationalInsights() {
           .map(row => ({ id: row.id, title: String(row.data.title || "Community event"), status: String(row.data.status || "upcoming"), date: String(row.data.date || "") })) }))),
       watch("certificates", "certificates", records => setData(prev => ({ ...prev, certificates: records.length }))),
       watch("volunteerStats", "stats", records => setData(prev => ({ ...prev, stats: records.map(row => row.data as StatsRow) }))),
+      watch("users", "users", records => setData(prev => ({ ...prev, users: records.map(row => row.data as UserRow) }))),
     ];
     return () => cleanups.forEach(stop => stop());
   }, []);
@@ -48,11 +50,16 @@ export default function DashboardOperationalInsights() {
   const activePage = Math.max(1, Math.min(page, Math.max(1, Math.ceil(recent.length / PAGE_SIZE))));
   const visible = recent.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
   const hours = data.stats?.reduce((sum, item) => sum + Math.max(0, Number(item.totalHours || 0)), 0) ?? null;
+  const points = data.users?.reduce((sum, item) => sum + Math.max(0, Number(item.points || 0)), 0) ?? null;
+  const badges = data.users?.reduce((sum, item) => sum + (Array.isArray(item.achievements) ? item.achievements.length : 0), 0) ?? null;
   const kpis = [
     { label: "Published community events", value: loaded.events && !errors.includes("communityEvents") ? data.publishedEvents.length : null, icon: "calendar-outline" as const },
     { label: "Completed community events", value: loaded.events && !errors.includes("communityEvents") ? data.publishedEvents.filter(row => row.status === "completed").length : null, icon: "checkmark-circle-outline" as const },
+    { label: "Registered accounts", value: data.users?.length ?? null, icon: "people-outline" as const },
     { label: "Certificates issued", value: data.certificates, icon: "ribbon-outline" as const },
     { label: "Volunteer service hours", value: hours === null ? null : Number(hours.toFixed(1)), icon: "time-outline" as const },
+    { label: "Achievements unlocked", value: badges, icon: "medal-outline" as const },
+    { label: "Points earned", value: points, icon: "star-outline" as const },
   ];
   return (
     <View style={styles.root}>
