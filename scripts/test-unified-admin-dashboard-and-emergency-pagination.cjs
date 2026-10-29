@@ -27,12 +27,13 @@ assert(dash.includes("<DashboardPendingIdentityReviews />") &&
   identityQueue.includes("/api/admin/identity/reviews") &&
   identityQueue.includes("Authorization:") &&
   identityQueue.includes("ListPagination") &&
-  identityQueue.includes("pageSize={PAGE_SIZE}"),
+  identityQueue.includes("pageSize={PAGE_SIZE}") &&
+  identityQueue.includes("params: { uid: item.uid }"),
   "Real pending identity submissions must appear in Command Center with protected review and paging");
 assert(dash.includes("setPendingResidents(residents)") &&
   dash.includes("pagedResidents.map") &&
   dash.includes("total={pendingResidents.length} pageSize={5}") &&
-  dash.includes('navigate("/(admin)/account-approvals")') &&
+  dash.includes('navigate("/(admin)/account-approvals?view=residents&resident="') &&
   dash.includes('navigate("/(admin)/identity-reviews")'),
   "Resident pending accounts and safe review workflow must be visible within the dashboard");
 assert(dash.includes("<DashboardVolunteerApprovals />") &&
