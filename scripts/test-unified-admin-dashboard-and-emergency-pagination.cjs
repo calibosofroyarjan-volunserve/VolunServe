@@ -58,6 +58,10 @@ for (const name of ["personnelPage", "volunteerPage", "activeAssignmentPage", "h
     caseSrc.includes("pageSize={5}"),
     "Emergency secondary queue must have five-row pagination: " + name);
 }
+assert(caseSrc.includes("pageFive(imageEvidence, photoPage)") &&
+  caseSrc.includes("pageFive(videoEvidence, videoPage)") &&
+  caseSrc.includes("onChange={setPhotoPage}") && caseSrc.includes("onChange={setVideoPage}"),
+  "Emergency photo and video evidence must retain every item with independent 5-record pages");
 for (const name of ["onDutyPersonnel", "volunteerCandidates", "activeAssignments", "incidentAssignments"]) {
   assert(caseSrc.includes("pageFive(" + name + ", "),
     "Emergency " + name + " records must render only five at a time");
