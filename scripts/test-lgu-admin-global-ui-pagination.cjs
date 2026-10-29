@@ -60,6 +60,16 @@ assert(donation.includes('mode === "admin" ? (') &&
   donation.includes("pagedAlerts") &&
   donation.includes("pagedReviews"),
   "Operational Donations must preserve pagination and role-specific rendering");
+const reconcile = source("components/donations/FundReconciliationPanel.tsx");
+const payout = source("components/donations/FundReleaseControls.tsx");
+assert(reconcile.includes("pagedSummaries.map") &&
+  reconcile.includes("total={summaries.length} pageSize={5}") &&
+  reconcile.includes("const totals = useMemo("),
+  "Donation fund reconciliation must show five campaigns per page without changing full funding totals");
+assert(payout.includes("pagedCampaigns.map") &&
+  payout.includes("total={eligibleCampaigns.length} pageSize={5}") &&
+  payout.includes("const selection = eligibleCampaigns.find"),
+  "LGU fund release selector must paginate campaigns while retaining selected record and validations");
 assert(layout.includes('label: "Emergency Reports"') &&
   layout.includes('label: "Event Attendance"') &&
   layout.includes('label: "Donation Management"'),
