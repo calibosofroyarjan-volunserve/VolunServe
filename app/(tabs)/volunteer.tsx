@@ -1053,6 +1053,9 @@ export default function VolunteerTasks() {
       showsVerticalScrollIndicator
     >
       <View style={styles.header}>
+        <View pointerEvents="none" style={styles.headerLeaf}>
+          <Ionicons name="leaf-outline" size={115} color="rgba(13,133,94,0.13)" />
+        </View>
         <View style={styles.titleIcon}>
           <Ionicons
             name="people"
@@ -2109,6 +2112,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     marginBottom: 14,
+    minHeight: 147,
+    paddingHorizontal: 17,
+    paddingVertical: 19,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#D3E8DC",
+    backgroundColor: "#E9F8F0",
+    overflow: "hidden",
+  },
+  headerLeaf: {
+    position: "absolute", right: -19, top: -20,
+    transform: [{ rotate: "20deg" }],
   },
 
   titleIcon: {
@@ -2117,13 +2132,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#e4f7f2",
+    backgroundColor: "#D5EFE0",
   },
 
   eyebrow: {
-    color: "#078F82",
+    color: "#08765B",
     fontSize: 9,
-    fontWeight: "700",
+    fontWeight: "900",
     letterSpacing: 0.9,
   },
 
@@ -2131,12 +2146,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: "#173D32",
     fontSize: 25,
-    fontWeight: "700",
+    fontWeight: "900",
   },
 
   subtitle: {
     marginTop: 3,
-    color: "#6b7f93",
+    color: "#567D6B",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -2148,7 +2163,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     borderRadius: 12,
-    backgroundColor: "#0aa16f",
+    backgroundColor: "#087D60",
     marginBottom: 14,
   },
 
