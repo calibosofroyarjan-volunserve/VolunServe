@@ -545,7 +545,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -854,10 +854,10 @@ export default function Signup() {
               {googleBound ? (
                 <View style={styles.infoBox}>
                   <Text style={styles.infoBoxText}>
-                    ✓ Google account connected. Your Google sign-in will be used for this Basic Resident Account, so no additional password is required here.
+                    ✓ Google account connected. Create a VolunServe password below to enable email/password login to this same account.
                   </Text>
                 </View>
-              ) : (
+              ) : null}
                 <>
                   <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
                   <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
@@ -874,7 +874,6 @@ export default function Signup() {
                     <ValidationText ok={validation.passwordChecks.matches}>Passwords must match.</ValidationText>
                   </View>
                 </>
-              )}
 
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
               <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
