@@ -24,10 +24,6 @@ import { signUpUser } from "../lib/firebaseAuth";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "com.froyarjan123.volunserve",
-});
-
 type Step = 1 | 2 | 3 | 4;
 
 type FormState = {
