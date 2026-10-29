@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 
-import { useRouter } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import PeopleWorkspaceHero from "../../components/admin/PeopleWorkspaceHero";
 
@@ -70,7 +69,6 @@ const timestampValue = (
 };
 
 export default function AccountApprovals() {
-  const router = useRouter();
 
   const [
     accounts,
@@ -608,6 +606,8 @@ export default function AccountApprovals() {
           ).map((value) => (
             <TouchableOpacity
               key={value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: filter === value }}
               style={[
                 styles.filterButton,
 
@@ -616,6 +616,8 @@ export default function AccountApprovals() {
               ]}
               onPress={() => { setFilter(value); setSearch(""); setPage(1); setExpandedAccountId(null); }}
             >
+              <Ionicons name={value === "residents" ? "people-outline" : value === "pending" ? "time-outline" : "ribbon-outline"}
+                size={17} color={filter === value ? "#FFFFFF" : "#126E55"} />
               <Text
                 style={[
                   styles.filterText,
@@ -630,6 +632,9 @@ export default function AccountApprovals() {
                     ? "Active Volunteers"
                     : "Resident Accounts"}
               </Text>
+              <View style={[styles.viewCount, filter === value && styles.viewCountActive]}>
+                <Text style={[styles.viewCountText, filter === value && styles.viewCountTextActive]}>{value === "pending" ? pendingVolunteerCount : value === "volunteers" ? activeVolunteerCount : communityAccounts.length}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -1171,7 +1176,10 @@ const styles =
     },
 
     filterButton: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: 190,
+      flexDirection: "row",
+      gap: 8,
       minWidth: 150,
       padding: 13,
       borderRadius: 11,
@@ -1194,6 +1202,11 @@ const styles =
     filterTextActive: {
       color: "#FFFFFF",
     },
+    viewCount: { backgroundColor: "#E0F2E9", borderRadius: 999, minWidth: 26,
+      height: 24, paddingHorizontal: 7, alignItems: "center", justifyContent: "center" },
+    viewCountActive: { backgroundColor: "rgba(255,255,255,0.2)" },
+    viewCountText: { color: "#08755A", fontWeight: "900", fontSize: 10.5 },
+    viewCountTextActive: { color: "#FFFFFF" },
 
     emptyCard: {
       backgroundColor: "#FFFFFF",
