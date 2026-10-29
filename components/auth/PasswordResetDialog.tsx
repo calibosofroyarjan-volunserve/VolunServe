@@ -19,14 +19,15 @@ type Props = {
   visible: boolean;
   initialEmail: string;
   onClose: () => void;
+  audience?: "resident" | "admin";
 };
 
 /**
- * Shared Residents/Volunteers reset-password popup.
+ * Shared Resident/Volunteer and LGU/System Admin reset-password popup.
  * No password reset is sent until the user confirms inside this modal.
  * Keeps sensitive auth feedback out of the main login form.
  */
-export default function PasswordResetDialog({ visible, initialEmail, onClose }: Props) {
+export default function PasswordResetDialog({ visible, initialEmail, onClose, audience = "resident" }: Props) {
   const [resetEmail, setResetEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -78,20 +79,8 @@ export default function PasswordResetDialog({ visible, initialEmail, onClose }: 
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={dismiss}
-    >
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={dismiss} accessibilityLabel="Close password reset popup" />
-        <View style={styles.dialog} accessibilityViewIsModal>
+  const dialog = (
+        <View style={styles.dialog} accessibilityViewIsModal accessibilityLabel={audience === "admin" ? "Administrative password reset form" : "Resident password reset form"}>
           <View style={styles.header}>
             <View style={styles.iconCircle}>
               <Ionicons name={sent ? "checkmark-circle-outline" : "key-outline"} size={26} color="#047857" />
@@ -114,7 +103,7 @@ export default function PasswordResetDialog({ visible, initialEmail, onClose }: 
                 If this address has a VolunServe email/password account, you'll receive a password reset link. Check your inbox and Spam folder.
               </Text>
               <Text style={styles.note}>
-                Registered using Google only? Use Continue with Google on the login screen instead.
+                {audience === "admin" ? "Return to the LGU & System Admin login to sign in with your administrative credentials." : "Registered using Google only? Use Continue with Google on the login screen instead."}
               </Text>
               <TouchableOpacity accessibilityRole="button" style={styles.submit} onPress={dismiss}>
                 <Text style={styles.submitText}>Back to login</Text>
@@ -122,7 +111,7 @@ export default function PasswordResetDialog({ visible, initialEmail, onClose }: 
             </>
           ) : (
             <>
-              <Text style={styles.title}>Forgot your password?</Text>
+              <Text style={styles.title}>{audience === "admin" ? "Reset administrative password" : "Forgot your password?"}</Text>
               <Text style={styles.description}>
                 Enter your registered email address and we'll send you a secure password reset link.
               </Text>
@@ -149,7 +138,7 @@ export default function PasswordResetDialog({ visible, initialEmail, onClose }: 
               </View>
               {!!errorMessage && <Text style={styles.error} accessibilityRole="alert">{errorMessage}</Text>}
               <Text style={styles.note}>
-                For Google-only accounts, sign in using Continue with Google.
+                {audience === "admin" ? "Use your authorized LGU or System Admin email address." : "For Google-only accounts, sign in using Continue with Google."}
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -167,6 +156,32 @@ export default function PasswordResetDialog({ visible, initialEmail, onClose }: 
             </>
           )}
         </View>
+  );
+
+  // Use a viewport-fixed overlay on web rather than a nested React Native
+  // Modal. This avoids scroll container clipping and keeps the reset form
+  // visible above the shared premium authentication shell on desktop/mobile web.
+  if (Platform.OS === "web") {
+    if (!visible) return null;
+    return (
+      <View style={[styles.overlay, styles.webOverlay]} accessibilityLabel="Password reset popup overlay">
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={dismiss} accessibilityLabel="Close password reset popup" />
+        {dialog}
+      </View>
+    );
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={dismiss}
+    >
+      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={dismiss} accessibilityLabel="Close password reset popup" />
+        {dialog}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -177,6 +192,10 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: "rgba(2, 29, 23, 0.68)", justifyContent: "center",
     alignItems: "center", paddingHorizontal: 18, paddingVertical: 24,
   },
+  webOverlay: {
+    position: "fixed", top: 0, right: 0, bottom: 0, left: 0,
+    zIndex: 2147483647, width: "100%", height: "100%",
+  } as any,
   dialog: {
     backgroundColor: "#FFFFFF", borderRadius: 22, width: "100%", maxWidth: 430,
     padding: 26, borderWidth: 1, borderColor: "#CCE8DB",
