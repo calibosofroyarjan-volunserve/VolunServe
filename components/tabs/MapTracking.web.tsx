@@ -665,7 +665,7 @@ const mapDocument = `
         return true;
       }
 
-      function showFacilityRoute(latitude, longitude, name) {
+      function showFacilityRoute(latitude, longitude, name, approximate = false) {
         clearFacilityRoute();
         if (!withinCity(latitude, longitude)) {
           facilityRouteNotice("Directions unavailable", "This destination is not a validated location inside SJDM.");
@@ -685,7 +685,8 @@ const mapDocument = `
           }
           const controller = new AbortController();
           facilityRouteController = controller;
-          facilityRouteNotice("Calculating road route", "Checking OpenStreetMap road routing. No live traffic data is used.");
+          facilityRouteNotice("Calculating road route",
+            "Checking OpenStreetMap roads to " + (approximate ? "the approximate hospital map pin" : "the mapped facility") + ". No live traffic data is used.");
           try {
             const start = longitudeFrom + "," + latitudeFrom;
             const end = longitude + "," + latitude;
@@ -719,7 +720,11 @@ const mapDocument = `
             const distance = (route.distance / 1000).toFixed(1);
             const minutes = Math.max(1,Math.ceil(route.duration / 60));
             facilityRouteNotice("Road route · " + (name || "Facility"),
-              distance + " km · Approx. " + minutes + " min driving (OSRM estimate, not live traffic). Blue line follows mapped roads. Confirm conditions before travel.");
+              distance + " km · Approx. " + minutes + " min driving (OSRM estimate, not live traffic). " +
+              (approximate
+                ? "WARNING: this hospital map pin is approximate, NOT a confirmed emergency entrance. Confirm the exact hospital location before traveling. "
+                : "Route ends at the mapped facility point, not a verified ER entrance. ") +
+              "Blue line follows mapped roads. Confirm conditions before travel.");
           } catch (error) {
             if (controller.signal.aborted) return;
             facilityRouteNotice("Road route unavailable",
@@ -735,11 +740,22 @@ const mapDocument = `
       function appendInAppRouteButton(item, container) {
         if (!validPoint(item.latitude, item.longitude) ||
             !withinCity(item.latitude, item.longitude)) return;
+        const approximate = item.positionQuality === "third_party_approximate";
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = "Show road route here";
-        button.addEventListener("click", () =>
-          showFacilityRoute(Number(item.latitude),Number(item.longitude),String(item.name || "Facility")));
+        button.className = "facility-action";
+        button.textContent = approximate && item.kind === "hospital"
+          ? "Show road route to approximate pin"
+          : "Show road route here";
+        button.setAttribute("aria-label", "Display an in-app road route to " + item.name +
+          (approximate ? " (approximate map pin)" : ""));
+        button.addEventListener("click", () => {
+          // Close the detail sheet so the blue road line and directions stay visible
+          // INSIDE the same MapLibre map. Never open a new tab for hospital routing.
+          closeFacilityDetails();
+          showFacilityRoute(Number(item.latitude), Number(item.longitude),
+            String(item.name || "Facility"), approximate);
+        });
         container.appendChild(button);
       }
       function makePublicPlacePopup(item) {
@@ -824,9 +840,12 @@ const mapDocument = `
         body.appendChild(details);
         const links = document.createElement("div");
         links.className = "place-popup-links";
-        // Only feature-sourced coordinates are routed inside the SJDM map.
-        if (item.positionQuality === "osm_feature") appendInAppRouteButton(item, links);
-        if (typeof item.googlePlaceId === "string" && /^[a-zA-Z0-9_-]{10,100}$/.test(item.googlePlaceId)) {
+        // All three hospitals can request an in-app road route, including Grace
+        // whose third-party map pin is approximate (clearly disclosed).
+        // Other approximate offices keep the safer named-place lookup.
+        if (item.positionQuality === "osm_feature" || item.kind === "hospital")
+          appendInAppRouteButton(item, links);
+        if (item.kind !== "hospital" && typeof item.googlePlaceId === "string" && /^[a-zA-Z0-9_-]{10,100}$/.test(item.googlePlaceId)) {
           const google = document.createElement("a");
           google.href = "https://www.google.com/maps/search/?api=1&query=" +
             encodeURIComponent(item.name) + "&query_place_id=" + encodeURIComponent(item.googlePlaceId);
@@ -844,7 +863,7 @@ const mapDocument = `
           photo.rel = "noopener noreferrer";
           links.appendChild(photo);
         }
-        if (item.positionQuality === "third_party_approximate" &&
+        if (item.kind !== "hospital" && item.positionQuality === "third_party_approximate" &&
             typeof item.address === "string" && item.address.length >= 12) {
           const placeLink = document.createElement("a");
           placeLink.href = "https://www.google.com/maps/search/?api=1&query=" +
@@ -945,7 +964,7 @@ const mapDocument = `
         appendInAppRouteButton(item, links);
         if (isShelter) {
           const emergencyCall = document.createElement("a");
-          emergencyCall.href = "tel:09366000119";
+          emergencyCall.href = "tel:09326000119";
           emergencyCall.textContent = "Call SJDM CDRRMO";
           links.appendChild(emergencyCall);
         }

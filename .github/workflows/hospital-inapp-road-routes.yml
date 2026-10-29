@@ -1,0 +1,32 @@
+name: Hospital In-App Road Route Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/hospital-inapp-road-routes-20261029
+  pull_request:
+    paths:
+      - "components/tabs/MapTracking.web.tsx"
+      - "scripts/test-hospital-inapp-road-routes.cjs"
+      - ".github/workflows/hospital-inapp-road-routes.yml"
+permissions:
+  contents: read
+concurrency:
+  group: hospital-route-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Test hospital routes, source accuracy and unchanged photo card
+        run: node --test scripts/test-hospital-inapp-road-routes.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export web bundle without deployment
+        run: npx expo export --platform web
