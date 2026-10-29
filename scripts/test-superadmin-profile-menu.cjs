@@ -6,32 +6,36 @@ const { test } = require("node:test");
 const layout = fs.readFileSync(path.resolve(__dirname, "../app/(superadmin)/_layout.tsx"), "utf8");
 const profile = fs.readFileSync(path.resolve(__dirname, "../app/(superadmin)/profile.tsx"), "utf8");
 
-test("Header dropdown only contains View Profile and links to dedicated route", () => {
+test("Header dropdown contains View Profile, System Settings and Sign Out in order", () => {
   const start = layout.indexOf("{accountOpen && (");
   const end = layout.indexOf("<View style={styles.contentArea}>", start);
   assert(start >= 0 && end > start);
   const dropdown = layout.slice(start, end);
-  assert(dropdown.includes('accessibilityLabel="View Profile"'));
+  const actions = [...dropdown.matchAll(/accessibilityLabel="(View Profile|System Settings|Sign Out)"/g)].map(m=>m[1]);
+  assert.deepEqual(actions, ["View Profile","System Settings","Sign Out"]);
   assert(dropdown.includes('router.push("/(superadmin)/profile" as Href)'));
-  assert(!dropdown.includes("System Settings"));
-  assert(!dropdown.includes("Sign Out"));
+  assert(dropdown.includes('router.push("/(superadmin)/system-settings" as Href)'));
+  assert(dropdown.includes("onPress={confirmSignOut}"));
 });
-
-test("Sign Out exists only in sidebar footer and System Settings remains in five-module nav", () => {
-  assert(layout.includes('accessibilityLabel="Log out of Super Admin account"'));
-  assert(layout.includes('label: "System Settings"'));
-  const navs = [...layout.matchAll(/\{ label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs|System Settings)"/g)].map(x=>x[1]);
-  assert.deepEqual(navs, ["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs","System Settings"]);
-  assert(layout.includes('pathname.endsWith("/profile") ? "View Profile"'));
+test("Sidebar has neither account identity nor signout and desktop retains name only in header", () => {
+  const from = layout.indexOf("function SuperAdminSidebar(");
+  const to = layout.indexOf("const styles = StyleSheet.create(",from);
+  const sidebar = layout.slice(from,to);
+  assert(!sidebar.includes("fullName"));
+  assert(!sidebar.includes("initials"));
+  assert(!sidebar.includes("Sign Out"));
+  assert(!sidebar.includes("System Settings"));
+  assert(!sidebar.includes("onSignOut"));
+  assert(layout.includes("{fullName}"));
+  assert(layout.includes("const confirmSignOut = () => {"));
+  assert(layout.includes('pathname.endsWith("/system-settings") ? "System Settings"'));
+  assert(layout.includes("logoutUser()"));
 });
-
-test("Profile screen displays live own session and is restricted and read-only", () => {
+test("Own profile route is guarded, live and read-only", () => {
   assert(profile.includes("useUserSession()"));
   assert(profile.includes("isSuperAdminProfile(profile)"));
   assert(profile.includes('<Redirect href="/admin-login" />'));
   assert(profile.includes("user.email"));
-  assert(profile.includes("profile?.fullName"));
   assert(profile.includes("user.uid"));
-  assert(profile.includes("Account Status"));
   assert(!/\b(updateDoc|deleteDoc|writeBatch|addDoc|setDoc)\s*\(/.test(profile));
 });

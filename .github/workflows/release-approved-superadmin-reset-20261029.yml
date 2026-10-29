@@ -35,9 +35,11 @@ jobs:
           const fs=require("node:fs"), assert=require("node:assert/strict");
           const read=p=>fs.readFileSync(p,"utf8");
           const nav=read("app/(superadmin)/_layout.tsx");
-          const labels=["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs","System Settings"];
-          const matches=[...nav.matchAll(/label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs|System Settings)"/g)].map(m=>m[1]);
-          assert.deepEqual(matches,labels,"Super Admin's exact five-module order must remain locked");
+          const labels=["System Overview","LGU Staff & Admin Accounts","System Records","Audit Logs"];
+          const matches=[...nav.matchAll(/label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs)"/g)].map(m=>m[1]);
+          assert.deepEqual(matches,labels,"Super Admin's four sidebar modules must remain in order");
+          assert(nav.includes('router.push("/(superadmin)/system-settings" as Href)'),"System Settings must remain available in profile dropdown");
+          assert(nav.includes('onPress={confirmSignOut}'),"Sign Out must stay in profile dropdown");
           for(const file of ["app/(superadmin)/index.tsx","app/(superadmin)/admin-accounts.tsx","app/(superadmin)/all-records.tsx","app/(superadmin)/admin-logs.tsx","app/(superadmin)/system-settings.tsx"])
             assert(fs.existsSync(file),"Required Super Admin page missing: "+file);
           const accounts=read("app/(superadmin)/admin-accounts.tsx");
@@ -49,7 +51,7 @@ jobs:
           assert(!/updateDoc\(|deleteDoc\(|writeBatch\(/.test(records),"Read-only governance violated");
           const reset=read("components/auth/PasswordResetModal.tsx");
           assert(reset.includes("Send Reset Link")&&reset.includes("sendPasswordResetEmail"));
-          console.log("PASS approved five-module Super Admin and reset popup");
+          console.log("PASS four sidebar modules and profile dropdown actions with reset popup");
           NODE
       - name: TypeScript build check
         run: npx tsc --noEmit

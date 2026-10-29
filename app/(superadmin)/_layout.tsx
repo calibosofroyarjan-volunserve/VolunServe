@@ -45,7 +45,6 @@ const navItems: NavItem[] = [
   { label: "LGU Staff & Admin Accounts", icon: "people-outline", route: "/(superadmin)/admin-accounts", match: "/admin-accounts" },
   { label: "System Records", icon: "albums-outline", route: "/(superadmin)/all-records", match: "/all-records" },
   { label: "Audit Logs", icon: "time-outline", route: "/(superadmin)/admin-logs", match: "/admin-logs" },
-  { label: "System Settings", icon: "settings-outline", route: "/(superadmin)/system-settings", match: "/system-settings" },
 ];
 
 export default function SuperAdminLayout() {
@@ -230,9 +229,6 @@ export default function SuperAdminLayout() {
       {desktop ? (
         <SuperAdminSidebar
           onNavigate={(route) => {setAccountOpen(false);router.push(route as Href);}}
-          onSignOut={confirmSignOut}
-          fullName={fullName}
-          initials={initials}
         />
       ) : (
         <Modal
@@ -254,9 +250,6 @@ export default function SuperAdminLayout() {
                 setAccountOpen(false);
                 router.push(route as Href);
               }}
-              onSignOut={confirmSignOut}
-              fullName={fullName}
-              initials={initials}
             />
           </View>
         </Modal>
@@ -279,7 +272,7 @@ export default function SuperAdminLayout() {
               <Ionicons name="home-outline" size={17} color="#246B55" />
               <Text style={styles.breadcrumbMuted}>Super Admin</Text>
               <Ionicons name="chevron-forward" size={13} color="#8BA99A"/>
-              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{pathname.endsWith("/profile") ? "View Profile" : (activeItem?.label || "System Overview")}</Text>
+              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{pathname.endsWith("/profile") ? "View Profile" : pathname.endsWith("/system-settings") ? "System Settings" : (activeItem?.label || "System Overview")}</Text>
             </View>
           )}
 
@@ -314,6 +307,29 @@ export default function SuperAdminLayout() {
               <Text style={styles.profileMenuText}>View Profile</Text>
               <Ionicons name="chevron-forward" size={15} color="#79978A" />
             </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="System Settings"
+              style={styles.profileMenuAction}
+              onPress={() => {
+                setAccountOpen(false);
+                router.push("/(superadmin)/system-settings" as Href);
+              }}
+            >
+              <Ionicons name="settings-outline" size={19} color="#087A62" />
+              <Text style={styles.profileMenuText}>System Settings</Text>
+              <Ionicons name="chevron-forward" size={15} color="#79978A" />
+            </TouchableOpacity>
+            <View style={styles.profileMenuDivider} />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Sign Out"
+              style={styles.profileMenuAction}
+              onPress={confirmSignOut}
+            >
+              <Ionicons name="log-out-outline" size={19} color="#B42318" />
+              <Text style={styles.profileMenuSignOutText}>Sign Out</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -334,15 +350,9 @@ export default function SuperAdminLayout() {
 
 function SuperAdminSidebar({
   onNavigate,
-  onSignOut,
-  fullName,
-  initials,
   compact = false,
 }: {
   onNavigate: (route: string) => void;
-  onSignOut: () => void;
-  fullName: string;
-  initials: string;
   compact?: boolean;
 }) {
   const pathname = usePathname();
@@ -411,25 +421,7 @@ function SuperAdminSidebar({
         })}
       </ScrollView>
 
-      <View style={styles.sidebarUtility}>
-        <View style={styles.sidebarIdentity}>
-          <View style={styles.sidebarIdentityAvatar}><Text style={styles.avatarText}>{initials}</Text></View>
-          <View style={{flex:1,minWidth:0}}>
-            <Text numberOfLines={1} style={styles.sidebarIdentityName}>{fullName}</Text>
-            <Text style={styles.sidebarIdentityRole}>Super Admin</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          accessibilityRole="button"
-          accessibilityLabel="Log out of Super Admin account"
-          activeOpacity={0.82}
-          onPress={onSignOut}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#D03647" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+
     </View>
   );
 }
@@ -518,9 +510,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "flex-start",
     paddingHorizontal: 4,
-    paddingTop: 28,
-    paddingBottom: 20,
-    gap: 11,
+    paddingTop: 30,
+    paddingBottom: 22,
+    gap: 14,
   },
   navItem: {
     minHeight: 58,
@@ -566,31 +558,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#E1FFF6",
   },
   sidebarDecoration:{position:"absolute",left:-73,bottom:60,opacity:.16,transform:[{rotate:"-26deg"}]},
-  sidebarIdentity:{flexDirection:"row",alignItems:"center",gap:11,paddingBottom:14,paddingHorizontal:8},
-  sidebarIdentityAvatar:{height:38,width:38,borderRadius:19,backgroundColor:"#128B6B",alignItems:"center",justifyContent:"center"},
-  sidebarIdentityName:{fontSize:11,fontWeight:"900",color:"#FFFFFF"},
-  sidebarIdentityRole:{fontSize:10,color:"#B2E2D4",marginTop:2},
-  sidebarUtility: {
-    flexShrink: 0,
-    marginHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 19,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.18)",
-  },
-  logoutButton: {
-    minHeight: 43,
-    borderRadius: 11,
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    paddingHorizontal: 11,
-  },
-  signOutText: {
-    color: "#FFCFCF",
-    fontSize: 12,
-    fontWeight: "800",
-  },
   workspace: {
     flex: 1,
     minWidth: 0,
@@ -623,6 +590,8 @@ const styles = StyleSheet.create({
   profileMenu:{position:"absolute",top:61,right:17,zIndex:20,backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#D6E5DE",padding:8,minWidth:212,shadowColor:"#13392C",shadowOpacity:.13,shadowRadius:12,elevation:6},
   profileMenuAction:{minHeight:46,paddingHorizontal:10,flexDirection:"row",alignItems:"center",gap:11,borderRadius:8},
   profileMenuText:{flex:1,fontSize:12,fontWeight:"800",color:"#174B3E"},
+  profileMenuSignOutText:{flex:1,fontSize:12,fontWeight:"800",color:"#B42318"},
+  profileMenuDivider:{height:1,backgroundColor:"#EBF0EC",marginVertical:5,marginHorizontal:9},
   accountArea: {
     flexDirection: "row",
     alignItems: "center",
