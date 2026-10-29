@@ -14,8 +14,8 @@ assert(pager.includes("onChange") && pager.includes("pageSize"), "Shared paginat
 
 for (const name of [
   "account-approvals", "identity-reviews", "admin-cases",
-  "assistance-requests", "relief-operations", "admin-analytics",
-  "admin-disputes", "admin-events", "community-events",
+  "assistance-requests", "relief-operations",
+  "admin-disputes", "community-events",
   "community-attendance", "lgu-attendance", "lgu-members",
   "admin-certificates", "community-certificates", "donation-list",
 ]) {
@@ -44,14 +44,14 @@ const events = app("community-events");
 assert(events.includes("pagedProposals") && events.includes("pagedParticipants") &&
   events.includes("setParticipantPage(1)") && events.includes("openProfile(participant.uid)"),
   "Community Events must paginate both proposal and joined volunteer reviews, retaining profile access");
-const analytics = app("admin-analytics");
-for (const name of ["attendanceFollowUps", "topPointUsers", "topAchievementUsers", "recentCertificates"]) {
-  assert(analytics.includes("metrics." + name + ".slice(") &&
-    analytics.includes("total={metrics." + name + ".length} pageSize={5}"),
-    "Analytics "+name+" records must paginate five per page");
-}
-assert(!analytics.includes("style={styles.navRow}"),
-  "Analytics must not duplicate sidebar navigation");
+const analytics = source("components/admin/DashboardOperationalInsights.tsx");
+assert(app("admin-analytics").includes('<Redirect href="/(admin)/command-center" />') &&
+  analytics.includes('title}>Service Analytics') && analytics.includes("ListPagination") &&
+  analytics.includes("pageSize={PAGE_SIZE}") &&
+  app("command-center").includes("<DashboardOperationalInsights />"),
+  "Dashboard must own paginated live analytics; standalone route must redirect");
+assert(app("admin-events").includes('<Redirect href="/(admin)/community-attendance" />'),
+  "Retired duplicate Volunteer Events route must redirect to Event Attendance");
 const donation = source("components/donations/DonationAdminDashboard.tsx");
 assert(donation.includes('mode === "admin" ? (') &&
   donation.includes("<AdminReviewHero") &&

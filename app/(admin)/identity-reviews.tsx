@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
@@ -118,6 +119,7 @@ function reviewBucket(item: IdentityReview): ReviewFilter {
 }
 
 export default function IdentityReviewsAdmin() {
+  const params = useLocalSearchParams<{ uid?: string }>();
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
   const wide = width >= 1050;
@@ -127,6 +129,9 @@ export default function IdentityReviewsAdmin() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<ReviewFilter>("pending");
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    if (typeof params.uid === "string") { setSearch(params.uid); setPage(1); }
+  }, [params.uid]);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);

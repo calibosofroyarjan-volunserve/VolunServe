@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -71,6 +72,7 @@ const timestampValue = (
 };
 
 export default function AccountApprovals() {
+  const params = useLocalSearchParams<{ view?: string; resident?: string }>();
 
   const [
     accounts,
@@ -105,6 +107,12 @@ export default function AccountApprovals() {
   const [approveConfirmed, setApproveConfirmed] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  React.useEffect(() => {
+    if (params.view !== "residents") return;
+    setFilter("all");
+    setSearch(typeof params.resident === "string" ? params.resident : "");
+    setPage(1);
+  }, [params.view, params.resident]);
   const PAGE_SIZE = 5;
 
   const [

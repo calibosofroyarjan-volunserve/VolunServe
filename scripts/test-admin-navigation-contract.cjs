@@ -35,9 +35,9 @@ const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive")
 const expectedGroups = [
   {title:"People & Verification",items:["Resident Identity Reviews","User & Volunteer Approvals","LGU Personnel","LGU Attendance"]},
   {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests","Relief Operations"]},
-  {title:"Events & Volunteering",items:["Community Events","Volunteer Events","Event Attendance","Certificates"]},
+  {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},
-  {title:"Communication & Reports",items:["Announcements","Disputes","Analytics"]},
+  {title:"Communication & Reports",items:["Announcements","Disputes"]},
 ];
 const adminLabels = ["Command Center",...expectedGroups.flatMap(group=>group.items)];
 for (let i=0;i<adminLabels.length;i++){

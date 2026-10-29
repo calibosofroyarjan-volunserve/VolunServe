@@ -24,6 +24,9 @@ import {
 
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import DashboardVolunteerApprovals from "../../components/admin/DashboardVolunteerApprovals";
+import DashboardOperationalInsights from "../../components/admin/DashboardOperationalInsights";
+import DashboardPendingIdentityReviews from "../../components/admin/DashboardPendingIdentityReviews";
+import ListPagination from "../../components/ui/ListPagination";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -47,6 +50,8 @@ type DisasterCase = {
   severity?: Severity;
   status?: CaseStatus;
 };
+
+type PendingResident = { id: string; fullName?: string; email?: string; barangay?: string; identityStatus?: string; status?: string; };
 
 type BarangayNeedAssessment = {
   id: string;
@@ -95,6 +100,8 @@ export default function CommandCenter() {
   ] = useState<
     string[]
   >([]);
+  const [pendingResidents, setPendingResidents] = useState<PendingResident[]>([]);
+  const [residentReviewPage, setResidentReviewPage] = useState(1);
 
   const [
     dataError,
@@ -227,11 +234,12 @@ export default function CommandCenter() {
         (snapshot) => {
           // LGU staff applications belong exclusively to the programmer
           // Super Admin queue, not Resident identity/user approvals.
-          setPendingUserIds(
-            snapshot.docs
-              .filter(item => !["applicant", "admin", "superadmin", "lgu_personnel"].includes(String(item.data().role || "").toLowerCase()))
-              .map(item => item.id),
-          );
+          const residents = snapshot.docs
+            .filter(item => !["applicant", "admin", "superadmin", "lgu_personnel"].includes(String(item.data().role || "").toLowerCase()))
+            .map(item => ({ id: item.id, ...(item.data() as Omit<PendingResident, "id">) }))
+            .sort((a, b) => String(a.fullName || a.email || "").localeCompare(String(b.fullName || b.email || "")));
+          setPendingResidents(residents);
+          setPendingUserIds(residents.map(item => item.id));
           setLoadedSources(old=>({...old,users:true}));
         },
         (error) => {
@@ -293,6 +301,9 @@ export default function CommandCenter() {
 
     return unsubscribe;
   }, [isAdmin]);
+
+  const currentResidentPage = Math.max(1, Math.min(residentReviewPage, Math.max(1, Math.ceil(pendingResidents.length / 5))));
+  const pagedResidents = pendingResidents.slice((currentResidentPage - 1) * 5, currentResidentPage * 5);
 
   const metrics =
     useMemo(() => {
@@ -498,7 +509,6 @@ export default function CommandCenter() {
           </View>
         )}
 
-        <DashboardVolunteerApprovals />
 
         <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
           <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
@@ -581,7 +591,41 @@ export default function CommandCenter() {
             />
           </View>
         </View>
+        <DashboardPendingIdentityReviews />
+        <View style={styles.residentReviewPanel}>
+          <View style={styles.residentReviewHeader}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.residentEyebrow}>PEOPLE & VERIFICATION / ACTIONABLE QUEUE</Text>
+              <Text style={styles.residentTitle}>Pending Resident Accounts ({pendingResidents.length})</Text>
+              <Text style={styles.residentCaption}>Review actual pending Resident accounts from Firestore. Identity verification and approvals remain in the authorized review screens.</Text>
+            </View>
+            <TouchableOpacity accessibilityRole="button"
+              onPress={() => navigate("/(admin)/identity-reviews")}
+              style={styles.residentReviewLink}>
+              <Text style={styles.residentReviewLinkText}>Identity Reviews</Text>
+              <Ionicons name="arrow-forward" size={16} color="#08765A" />
+            </TouchableOpacity>
+          </View>
+          <ListPagination page={currentResidentPage} total={pendingResidents.length} pageSize={5} onChange={setResidentReviewPage} />
+          {!overviewReady ? <Text style={styles.residentEmpty}>Loading Resident review queue…</Text> :
+            pendingResidents.length === 0 ? <Text style={styles.residentEmpty}>No pending Resident accounts in this queue.</Text> :
+            pagedResidents.map(resident => (
+              <View key={resident.id} style={styles.residentRow}>
+                <View style={styles.residentRowCopy}>
+                  <Text style={styles.residentName}>{resident.fullName || resident.email || "Unnamed Resident"}</Text>
+                  <Text style={styles.residentMeta}>{resident.email || "No email"} · {resident.barangay || "Barangay unlisted"} · Identity: {resident.identityStatus || "not submitted"}</Text>
+                </View>
+                <TouchableOpacity style={styles.residentAction} accessibilityRole="button"
+                  accessibilityLabel={`Open authorized account review for ${resident.fullName || "Resident"}`}
+                  onPress={() => navigate("/(admin)/account-approvals?view=residents&resident=" + encodeURIComponent(resident.id))}>
+                  <Text style={styles.residentActionText}>Review account</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+        </View>
+        <DashboardVolunteerApprovals />
 
+        <DashboardOperationalInsights />
       </View>
 
     </ScrollView>
@@ -590,6 +634,20 @@ export default function CommandCenter() {
 
 const styles =
   StyleSheet.create({
+    residentReviewPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E9E0", borderRadius: 14, padding: 18, marginBottom: 16 },
+    residentReviewHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 },
+    residentEyebrow: { fontSize: 10, letterSpacing: 1, color: "#14785A", fontWeight: "800" },
+    residentTitle: { fontSize: 18, fontWeight: "800", color: "#153F32", marginTop: 6 },
+    residentCaption: { fontSize: 12, color: "#627D6D", lineHeight: 18, marginTop: 5 },
+    residentReviewLink: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+    residentReviewLinkText: { color: "#08765A", fontSize: 12, fontWeight: "800" },
+    residentEmpty: { color: "#687E73", fontSize: 12, paddingVertical: 18 },
+    residentRow: { borderTopWidth: 1, borderTopColor: "#E9F0EB", flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, paddingVertical: 12 },
+    residentRowCopy: { flex: 1, minWidth: 180 },
+    residentName: { fontSize: 13, fontWeight: "800", color: "#194B37" },
+    residentMeta: { marginTop: 4, fontSize: 11, color: "#60776A", lineHeight: 17 },
+    residentAction: { paddingHorizontal: 13, minHeight: 44, justifyContent: "center", borderRadius: 10, backgroundColor: "#E9F5EE" },
+    residentActionText: { color: "#137054", fontSize: 12, fontWeight: "800" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:24},
     kpiGridCompact: {gap:9},

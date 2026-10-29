@@ -1,5 +1,5 @@
 # VolunServe — FINAL Administrative Navigation & Workflow Contract
-Last reviewed: 2026-10-27. Source of truth for administrative sidebar names and defense use-case descriptions.
+Last reviewed: 2026-10-30. Source of truth for administrative sidebar names and defense use-case descriptions.
 
 ## Terminology — locked
 
@@ -34,12 +34,12 @@ Last reviewed: 2026-10-27. Source of truth for administrative sidebar names and 
 
 | Order | Final visible group and pages | Existing destination(s) | Ordered workflow inside group |
 | --- | --- | --- | --- |
-| Home | **Command Center** | `/(admin)/command-center` | Triage urgent emergency first, then open each pending workflow, view real verified evacuation center data and actual operational counts |
+| Home | **Command Center** | `/(admin)/command-center` | Triage urgent emergency first, then open each pending workflow, view live operational counts, pending Resident/Volunteer queues, and service analytics |
 | 01 | **People & Verification** → Resident Identity Reviews → User & Volunteer Approvals → LGU Personnel → LGU Attendance | `identity-reviews`, `account-approvals`, `lgu-members`, `lgu-attendance` | Resident identity submission → LGU review → verified status; separate volunteer application → eligibility review → approve/reject; manage city-assigned personnel/attendance separately. Never review LGU Admin applicants here |
-| 02 | **Emergency & Assistance** → Emergency Reports → Assistance Requests → Relief Operations | `admin-cases`, `assistance-requests`, `relief-operations` | Emergency report → validate GPS/evidence → priority/dispatch → authentic responder tracking → close; separate verified resident assistance request → evidence and fund-target review → authorized relief follow-through. LGU verifies evacuation centers inside Emergency Report/Response |
-| 03 | **Events & Volunteering** → Community Events → Volunteer Events → Event Attendance → Certificates | `community-events`, `admin-events`, `community-attendance`, `certificates` | Resident confirms event venue pin → proposes → LGU approves → volunteers join and perform tasks → self time-in/out → LGU attendance verifies → completion → certificate. LGU-created Volunteer Events use the existing separate event path, not duplicate approvals |
+| 02 | **Emergency & Assistance** → Emergency Reports → Assistance Requests → Relief Operations | `admin-cases`, `assistance-requests`, `relief-operations` | Emergency report → validate GPS/evidence → priority/dispatch → authentic responder tracking → close; separate verified resident assistance request → evidence and fund-target review → authorized relief follow-through. Emergency case responders and volunteer assignments have independent five-record pagination |
+| 03 | **Events & Volunteering** → Community Events → Event Attendance → Certificates | `community-events`, `community-attendance`, `certificates` | Resident confirms event venue pin → proposes → LGU approves → volunteers join and perform tasks → self time-in/out → LGU attendance verifies → completion → certificate. Legacy Volunteer Event records remain in Firestore for preservation but the duplicate management route redirects to Event Attendance |
 | 04 | **Donations & Funds** → Donation Management | `donor-monitoring` | Verified resident assistance campaign approved → provider donation → status reconciliation → LGU fund review → authorized release (sandbox release must say simulated) → resident acknowledgment → audit. No Super Admin financial action |
-| 05 | **Communication & Reports** → Announcements → Disputes → Analytics | `create-announcement`, `admin-disputes`, `admin-analytics` | Review genuine operational information → publish scoped announcement; open dispute → review evidence → record decision; view actual reports/analytics with honest data states |
+| 05 | **Communication & Reports** → Announcements → Disputes | `create-announcement`, `admin-disputes` | Review genuine operational information → publish scoped announcement; open dispute → review evidence → record decision; review actual announcement and dispute records; operational analytics display within Command Center |
 
 **Important:** These five groups are an information hierarchy, NOT a rule that emergency handling must wait for an identity or volunteer workflow to complete. Urgent emergencies come first. Within each independent module, the lifecycle is sequential and has exactly one authoritative approval owner.
 

@@ -12,7 +12,6 @@ const checks = [
   ["app/(admin)/lgu-members.tsx", "pagedPersonnel", "ListPagination"],
   ["app/(admin)/admin-disputes.tsx", "pagedDisputes", "ListPagination"],
   ["app/(admin)/lgu-attendance.tsx", "pagedDutyRows", "pagedHistoryRows"],
-  ["app/(admin)/admin-events.tsx", "pagedEvents", "pagedParticipants"],
   ["app/(admin)/donation-list.tsx", "pagedCampaigns", "pagedPending"],
   ["app/(admin)/donation-list.tsx", "pagedHistory", "ListPagination"],
   ["app/(admin)/relief-operations.tsx", "pagedNeeds", "ListPagination"],
@@ -50,9 +49,9 @@ assert(eventAttendance.includes('const priorityEvent = events.find(event => even
        "Admin Event Attendance should show an active/upcoming process immediately without changing attendance");
 const donation = read("app/(admin)/donation-list.tsx");
 for (const token of ["onChange={setCampaignPage}", "onChange={setPendingPage}", "onChange={setHistoryPage}"]) assert(donation.includes(token));
-const events = read("app/(admin)/admin-events.tsx");
-assert(events.includes("Past event dates cannot be scheduled.") && events.includes("Math.ceil(participants.length / 5)") &&
-  events.includes("setParticipantPage(1)"), "Legacy event date and participant paging protected");
+const legacyEvents = read("app/(admin)/admin-events.tsx");
+assert(legacyEvents.includes('<Redirect href="/(admin)/community-attendance" />') && eventAttendance.includes("pagedEvents.map(") && eventAttendance.includes("pagedVolunteers.map("),
+  "Retired Volunteer Events must route to functional, independently paginated Community Event Attendance");
 const incident = read("app/(admin)/admin-cases.tsx");
 assert(incident.includes('detailTab === "map" && Platform.OS === "web"') &&
        incident.includes('src: "/admin-live-map?caseId=" + encodeURIComponent(incident.id)') &&
