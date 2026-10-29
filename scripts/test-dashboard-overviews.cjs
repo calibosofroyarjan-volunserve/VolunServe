@@ -23,7 +23,7 @@ assert(superView.includes('onSnapshot(') &&
   superView.includes('orientation="vertical"') &&
   superView.includes('ListPagination') &&
   superLayout.includes('route: "/(superadmin)/admin-accounts"') &&
-  superLayout.includes('route: "/(superadmin)/system-settings"') &&
+  superLayout.includes('router.push("/(superadmin)/system-settings"') &&
   superView.includes('router.push("/(superadmin)/admin-logs"'),
   "Super Admin overview must use real live records, vertical chart, pagination and existing governance routes");
 assert(!superView.includes("Pending LGU Applications"),
