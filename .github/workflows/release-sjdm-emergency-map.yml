@@ -1,0 +1,74 @@
+name: Publish SJDM-Only Emergency Map (Hosting Only)
+on:
+  push:
+    branches:
+      - release/sjdm-map-boundary-live-20261029
+    paths:
+      - .github/workflows/release-sjdm-emergency-map.yml
+      - components/DisasterResponse.web.tsx
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify resident map uses the actual SJDM boundary
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const map = fs.readFileSync('components/DisasterResponse.web.tsx', 'utf8');
+          const boundary = fs.readFileSync('constants/sjdmBoundaryReference.ts', 'utf8');
+          const geometry = fs.readFileSync('lib/sjdmMapBoundary.ts','utf8');
+          for (const name of ['SJDM_REFERENCE_GEOMETRY', 'sjdmOutsideMask', 'sjdm-outline', 'sjdm-outside-shade', 'maxBounds:', 'isInsideSjdm']) {
+            assert.ok(map.includes(name), 'Missing SJDM map restriction ' + name);
+          }
+          assert.ok(boundary.includes('geoBoundaries-PHL-ADM3'), 'Missing attributed geographic reference');
+          assert.ok(geometry.includes('insideSjdmBoundary'), 'Missing boundary validation');
+          console.log('PASS geographic perimeter, exterior shading, camera bounds, incident restriction');
+          NODE
+          node --test scripts/test-clean-emergency-report-header.cjs
+          npx tsc --noEmit
+      - name: Export checked Expo web application
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service account. Hosting deploy NOT attempted."
+            exit 1
+          fi
+      - name: Publish Firebase Hosting ONLY (no Firestore/Functions)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify live custom domain serves this revision
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            echo "Waiting for Firebase Hosting custom-domain propagation attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Live domain does not match this release SHA."
+          exit 1
