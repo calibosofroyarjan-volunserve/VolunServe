@@ -74,6 +74,7 @@ export default function SuperAdminLayout() {
   const { loading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const pathname = usePathname();
 
   if (loading) {
     return (
@@ -102,6 +103,7 @@ export default function SuperAdminLayout() {
   }
 
   const desktop = Platform.OS === "web" && width >= 980;
+  const activeSection = navItems.find(item => item.match === "/" ? (pathname === "/" || pathname === "/(superadmin)" || pathname === "/superadmin") : pathname.endsWith(item.match))?.label || "System Overview";
 
   const fullName =
     String(profile.fullName || profile.email || "Super Admin").trim();
@@ -171,7 +173,12 @@ export default function SuperAdminLayout() {
               <Ionicons name="menu" size={24} color="#17213A" />
             </TouchableOpacity>
           ) : (
-            <View />
+            <View style={styles.breadcrumb} accessibilityLabel="Super Admin current section">
+              <Ionicons name="shield-checkmark-outline" color="#0A7D60" size={18} />
+              <Text style={styles.breadcrumbParent}>Super Admin</Text>
+              <Ionicons name="chevron-forward-outline" color="#8EA9A0" size={13} />
+              <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{activeSection}</Text>
+            </View>
           )}
 
           <View style={styles.accountArea}>
@@ -220,6 +227,9 @@ function SuperAdminSidebar({
 
   return (
     <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
+      <View pointerEvents="none" style={styles.sidebarDecoration}>
+        <Ionicons name="leaf-outline" size={180} color="#57B89C" />
+      </View>
       <TouchableOpacity
         style={styles.brand}
         accessibilityRole="button"
@@ -235,9 +245,10 @@ function SuperAdminSidebar({
         />
         <View style={styles.brandCopy}>
           <Text style={styles.brandName}>VolunServe</Text>
-          <Text style={styles.brandTagline}>SYSTEM ADMINISTRATION</Text>
+          <Text style={styles.brandTagline}>CITY OF SAN JOSE DEL MONTE</Text>
         </View>
       </TouchableOpacity>
+      <Text style={styles.sidebarTitle}>SUPER ADMIN PORTAL</Text>
       <Text style={styles.sidebarLabel}>SYSTEM GOVERNANCE</Text>
 
       <ScrollView
@@ -313,7 +324,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#123E36",
+    backgroundColor: "#083E34",
     borderRightWidth: 1,
     borderRightColor: "#DDE8E3",
   },
@@ -354,6 +365,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.65,
   },
+  sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.16 },
+  sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "900", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
   sidebarLabel: {
     flexShrink: 0,
     marginTop: 5,
@@ -387,7 +400,7 @@ const styles = StyleSheet.create({
   },
   navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
-    backgroundColor: "#226859",
+    backgroundColor: "#126E59",
   },
   navIcon: {
     width: 35,
@@ -400,7 +413,7 @@ const styles = StyleSheet.create({
   },
   navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   navIconActive: {
-    backgroundColor: "#226859",
+    backgroundColor: "#126E59",
   },
   navText: {
     flex: 1,
@@ -455,6 +468,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5EAF1",
   },
+  breadcrumb: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
+  breadcrumbParent: { color: "#537569", fontSize: 12, fontWeight: "700" },
+  breadcrumbCurrent: { color: "#124A39", fontSize: 12, fontWeight: "900", flexShrink: 1 },
   menuButton: {
     width: 42,
     height: 42,
