@@ -266,7 +266,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.endsWith("*") ? <>{label.slice(0, -1)}<Text style={{ color: "#DC2626" }}>*</Text></> : label}</Text>
       <View style={styles.passwordInputContainer}>
         <TextInput
         style={[
@@ -520,7 +520,7 @@ export default function Signup() {
     const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
-    const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
+    const phoneValid = true;
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
@@ -631,7 +631,7 @@ export default function Signup() {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         authProvider: googleBound ? "google" : "email",
-        phoneNumber: toE164FromLocal(formData.phoneLocal),
+        phoneNumber: "",
         region: formData.region,
         province: formData.province,
         city: formData.city,
@@ -644,7 +644,7 @@ export default function Signup() {
       Alert.alert(
         "Welcome to VolunServe",
         "Your Basic Resident Account is ready. You can sign in and use basic safety services now. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.",
-        [{ text: "Continue", onPress: () => router.replace("/(tabs)") }]
+        [{ text: "Continue", onPress: () => router.replace("/login") }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
@@ -780,7 +780,7 @@ export default function Signup() {
 
               <SectionTitle title="Birthdate & Contact" />
               <View style={styles.field}>
-                <Text style={styles.label}>🎂 Date of Birth *</Text>
+                <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
                   <Text style={{ fontSize: 15, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
                     {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
@@ -802,21 +802,7 @@ export default function Signup() {
                 <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
 
-              <Text style={styles.label}>📱 Mobile Number *</Text>
-              <View style={styles.phoneWrap}>
-                <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
-                <TextInput
-                  style={[styles.phoneInput, !validation.phoneValid && formData.phoneLocal.length > 0 && styles.inputInvalid]}
-                  value={formData.phoneLocal}
-                  onChangeText={(v) => updateField("phoneLocal", sanitizePhoneLocal(v.trim()))}
-                  keyboardType="phone-pad"
-                  placeholder="9123456789"
-                  placeholderTextColor={COLORS.lightText}
-                  maxLength={10}
-                  returnKeyType="next"
-                />
-              </View>
-              <ValidationText ok={validation.phoneValid}>{validation.phoneValid ? "✓ Valid Philippine mobile number" : "Enter a valid Philippine mobile number starting with 9."}</ValidationText>
+
             </View>
           )}
 
@@ -856,7 +842,6 @@ export default function Signup() {
                   👤 {formData.firstName} {formData.middleName && !formData.noMiddleName ? formData.middleName + " " : ""}{formData.lastName}
                 </Text>
                 <Text style={styles.reviewText}>📧 {formData.email}</Text>
-                <Text style={styles.reviewText}>📱 +63{formData.phoneLocal}</Text>
                 <Text style={styles.reviewText}>
                   📍 {formData.barangay}, {formData.city}, {formData.province}
                 </Text>
