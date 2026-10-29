@@ -25,6 +25,7 @@ import {
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import DashboardVolunteerApprovals from "../../components/admin/DashboardVolunteerApprovals";
 import DashboardOperationalInsights from "../../components/admin/DashboardOperationalInsights";
+import DashboardPendingIdentityReviews from "../../components/admin/DashboardPendingIdentityReviews";
 import ListPagination from "../../components/ui/ListPagination";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
@@ -509,6 +510,7 @@ export default function CommandCenter() {
         )}
 
 
+        <DashboardPendingIdentityReviews />
         <View style={styles.residentReviewPanel}>
           <View style={styles.residentReviewHeader}>
             <View style={{ flex: 1, minWidth: 0 }}>
