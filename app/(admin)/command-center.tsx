@@ -585,9 +585,6 @@ export default function CommandCenter() {
       </View>
 
     </ScrollView>
-        </View>
-      </Modal>
-    </ScrollView>
   );
 }
 
