@@ -1,0 +1,30 @@
+name: Clean Emergency Reports Top Panels Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/clean-emergency-report-top-panels-20261029
+  pull_request:
+    paths:
+      - "components/DisasterResponse.web.tsx"
+      - "components/DisasterResponse.native.tsx"
+      - "scripts/test-clean-emergency-report-header.cjs"
+      - ".github/workflows/clean-emergency-report-header.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify removed top sections and preserved report flow
+        run: node --test scripts/test-clean-emergency-report-header.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export web without deploying
+        run: npx expo export --platform web
