@@ -32,6 +32,7 @@ jobs:
       - name: Admin navigation, dashboard and paging regression
         run: |
           node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-lgu-admin-navigation-groups.cjs
           node scripts/test-final-admin-scope.cjs

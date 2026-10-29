@@ -49,7 +49,7 @@ for(const entry of [
 ]) assert(adminLayout.includes(entry),"Missing LGU operational nav "+entry);
 for(const route of [
   "/(admin)/admin-cases","/(admin)/assistance-requests","/(admin)/identity-reviews",
-  "/(admin)/account-approvals","/(admin)/community-events","/(admin)/community-attendance",
+  "/(admin)/command-center","/(admin)/community-events","/(admin)/community-attendance",
   "/(admin)/donor-monitoring"
 ]) assert(adminLayout.includes(route),"Missing existing operational route "+route);
 assert(!adminLayout.includes('label: "Analytics"') && !adminLayout.includes('label: "Volunteer Events"'), "Redundant Admin destinations must not return");

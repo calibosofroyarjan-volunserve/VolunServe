@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -71,7 +71,7 @@ const timestampValue = (
   return value?.toMillis?.() || 0;
 };
 
-export default function AccountApprovals() {
+export function ResidentAccountsPanel() {
   const params = useLocalSearchParams<{ view?: string; resident?: string }>();
 
   const [
@@ -97,7 +97,7 @@ export default function AccountApprovals() {
   const [
     filter,
     setFilter,
-  ] = useState<Filter>("pending");
+  ] = useState<Filter>("all");
 
   const [
     selected,
@@ -143,7 +143,8 @@ export default function AccountApprovals() {
                 (item) =>
                   item.role !== "admin" &&
                   item.role !== "superadmin" &&
-                  item.role !== "applicant"
+                  item.role !== "applicant" &&
+                  item.role !== "lgu_personnel"
               )
               .sort(
                 (a, b) =>
@@ -551,81 +552,14 @@ export default function AccountApprovals() {
 
   return (
     <>
-      <ScrollView
-        contentContainerStyle={
-          styles.container
-        }
-      >
-        <AdminReviewHero
-          eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
-          title="Resident Accounts & Volunteer Approvals"
-          subtitle="Manage Resident account records and review Volunteer applications in one organized workspace."
-          icon="people-outline"
-          tag="ACCOUNT GOVERNANCE"
-        />
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <View style={styles.metricIcon}><Ionicons name="people-outline" size={20} color="#08765A" /></View>
-            <Text style={styles.metricLabel}>Registered Accounts</Text>
-            <Text style={styles.metricValue}>{accounts.length}</Text>
-            <Text style={styles.metricCaption}>Current account directory</Text>
+      <View style={styles.residentWorkspace}>
+        <View style={styles.residentHeader}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.residentEyebrow}>PEOPLE & VERIFICATION / COMMUNITY RECORDS</Text>
+            <Text style={styles.residentHeading}>Resident Accounts</Text>
+            <Text style={styles.recordsDescription}>Browse registered Residents, verification level and account status. Authorized LGU moderation remains available.</Text>
           </View>
-          <View style={styles.metricCard}>
-            <View style={styles.metricIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#08765A" /></View>
-            <Text style={styles.metricLabel}>Verified Residents</Text>
-            <Text style={styles.metricValue}>{verifiedResidentCount}</Text>
-            <Text style={styles.metricCaption}>Identity-verified accounts</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <View style={styles.metricIcon}><Ionicons name="time-outline" size={20} color="#08765A" /></View>
-            <Text style={styles.metricLabel}>Volunteer Applications</Text>
-            <Text style={styles.metricValue}>{pendingVolunteerCount}</Text>
-            <Text style={styles.metricCaption}>Pending LGU review</Text>
-          </View>
-        </View>
-        <View style={styles.recordsPanel}>
-          <View style={styles.recordsHeading}>
-            <View style={styles.recordsHeadingCopy}>
-              <Text style={styles.recordsTitle}>Account Review Workspace</Text>
-              <Text style={styles.recordsDescription}>Choose Resident records or pending Volunteer applications.</Text>
-            </View>
-          </View>
-        <View style={styles.filterRow}>
-          {(
-            [
-              "pending",
-              "all",
-            ] as Filter[]
-          ).map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[
-                styles.filterButton,
-
-                filter === value &&
-                  styles.filterButtonActive,
-              ]}
-              onPress={() => { setFilter(value); setSearch(""); setPage(1); }}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-
-                  filter === value &&
-                    styles.filterTextActive,
-                ]}
-              >
-                {value === "pending"
-                  ? "Volunteer Applications"
-                  : "Resident Accounts"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        </View>
-        <View style={styles.reviewSummary}>
-          <Text style={styles.reviewSummaryText}>Pending Volunteer Reviews: {pendingVolunteerCount}  ·  Verified Residents: {verifiedResidentCount}  ·  Total accounts: {accounts.length}</Text>
+          <View style={styles.residentTotal}><Text style={styles.residentTotalText}>{accounts.length} accounts</Text></View>
         </View>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color="#64748B" />
@@ -652,261 +586,52 @@ export default function AccountApprovals() {
             </Text>
           </View>
         ) : (
-          pagedAccounts.map(
-            (account) => {
-              const application =
-                volunteerApplicationFor(account);
-
-              const isExistingResidentApplication =
-                isPendingVolunteerApplication(
-                  account
-                );
-
-              const isSaving =
-                savingUid === account.id;
-
-              return (
-                <View
-                  key={account.id}
-                  style={styles.card}
-                >
-                  <View
-                    style={styles.cardHeader}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={styles.name}
-                      >
-                        {account.fullName ||
-                          "Unnamed resident"}
-                      </Text>
-
-                      <Text
-                        style={styles.meta}
-                      >
-                        {account.email}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={styles.roleBadge}
-                    >
-                      <Text
-                        style={styles.roleText}
-                      >
-                        {account.volunteerAccess === true
-                          ? "VOLUNTEER"
-                          : isVerifiedResidentAccount(account)
-                            ? "VERIFIED RESIDENT"
-                            : "BASIC RESIDENT"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {isExistingResidentApplication ? (
-                    <>
-                      <Text style={styles.meta}>
-                        Application: Verified Resident → Volunteer
-                      </Text>
-                      {!isVerifiedResidentAccount(account) ? (
-                        <Text style={styles.reason}>
-                          Approval unavailable: this account must be an active Verified Resident. You may reject the pending request.
-                        </Text>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <Text style={styles.meta}>
-                    Barangay:{" "}
-                    {account.barangay || "-"}
-                  </Text>
-
-                  <Text style={styles.meta}>
-                    Phone:{" "}
-                    {account.phoneNumber ||
-                      "-"}
-                  </Text>
-
-                  <Text style={styles.meta}>
-                    Identity:{" "}
-                    {account.identityVerified === true ||
-                    account.identityStatus === "verified"
-                      ? "VERIFIED RESIDENT"
-                      : String(
-                          account.identityStatus ||
-                          "basic"
-                        )
-                          .replace("_", " ")
-                          .toUpperCase()}
-                  </Text>
-
-                  <Text style={styles.meta}>
-                    Volunteer Access:{" "}
-                    {account.volunteerAccess === true
-                      ? "ACTIVE"
-                      : String(
-                          account.volunteerStatus ||
-                          "not_applied"
-                        )
-                          .replace("_", " ")
-                          .toUpperCase()}
-                  </Text>
-
-                  {application ? (
-                    <>
-                      <Text
-                        style={styles.meta}
-                      >
-                        Skills:{" "}
-                        {(application?.skills ||
-                          account.skills ||
-                          []).join(", ") || "-"}
-                      </Text>
-
-                      <Text
-                        style={styles.meta}
-                      >
-                        Availability:{" "}
-                        {(application?.availability ||
-                          account.availability ||
-                          []).join(", ") || "-"}
-                      </Text>
-
-                      {application?.preferredActivity ? (
-                        <Text style={styles.meta}>
-                          Preferred Activity:{" "}
-                          {application.preferredActivity}
-                        </Text>
-                      ) : null}
-
-                      {application?.experienceTraining ? (
-                        <Text style={styles.meta}>
-                          Experience / Training:{" "}
-                          {application.experienceTraining}
-                        </Text>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <Text style={styles.statusText}>
-                    Account Status: {account.status === "approved"
-                      ? "ACTIVE"
-                      : String(account.status || "unknown")
-                          .replace(/_/g, " ")
-                          .toUpperCase()}
-                  </Text>
-
-                  {application?.rejectedReason ? (
-                    <Text
-                      style={styles.reason}
-                    >
-                      Reason:{" "}
-                      {application.rejectedReason}
+          pagedAccounts.map(account => {
+            const saving = savingUid === account.id;
+            const verified = isVerifiedResidentAccount(account);
+            return (
+              <View key={account.id} style={styles.residentItem}>
+                <View style={styles.residentProfile}>
+                  <View style={styles.residentAvatar}><Ionicons name="person-outline" color="#14745B" size={18}/></View>
+                  <View style={styles.residentDetails}>
+                    <Text style={styles.residentName}>{account.fullName || "Unnamed Resident"}</Text>
+                    <Text style={styles.residentEmail}>{account.email || "No email provided"}</Text>
+                    <Text style={styles.residentInfo}>
+                      {account.barangay || "Barangay not listed"} · {account.phoneNumber || "No phone"}
                     </Text>
-                  ) : null}
-
-                  {isExistingResidentApplication ? (
-                    <View
-                      style={styles.actionRow}
-                    >
-                      <TouchableOpacity
-                        disabled={isSaving || !isVerifiedResidentAccount(account)}
-                        style={[
-                          styles.actionButton,
-                          styles.approveButton,
-                          (isSaving || !isVerifiedResidentAccount(account)) && { opacity: 0.55 },
-                        ]}
-                        onPress={() => {
-                          setApprovalCandidate(account);
-                          setApproveConfirmed(false);
-                        }}
-                      >
-                        <Text
-                          style={
-                            styles.actionText
-                          }
-                        >
-                          {isSaving ? "Saving..." : "Approve Volunteer"}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        disabled={isSaving}
-                        style={[
-                          styles.actionButton,
-                          styles.rejectButton,
-                        ]}
-                        onPress={() =>
-                          setSelected(account)
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.actionText
-                          }
-                        >
-                          Reject Volunteer
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-
-                  {account.status ===
-                    "approved" &&
-                  !isExistingResidentApplication ? (
-                    <TouchableOpacity
-                      disabled={isSaving}
-                      style={[
-                        styles.actionButton,
-                        styles.suspendButton,
-                      ]}
-                      onPress={() =>
-                        moderateCommunityAccount(
-                          account,
-                          "suspended"
-                        )
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.actionText
-                        }
-                      >
-                        {isSaving
-                          ? "Saving..."
-                          : "Suspend Account"}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  {account.status === "suspended" ? (
-                    <TouchableOpacity
-                      disabled={isSaving}
-                      style={[
-                        styles.actionButton,
-                        styles.approveButton,
-                      ]}
-                      onPress={() =>
-                        moderateCommunityAccount(account, "approved")
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.actionText
-                        }
-                      >
-                        {isSaving
-                          ? "Saving..."
-                          : "Activate Account"}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
+                    <Text style={styles.residentInfo}>
+                      Identity: {verified ? "Verified" : String(account.identityStatus || "Basic").replace(/_/g, " ")}
+                      {"  ·  "}Volunteer: {account.volunteerAccess === true ? "Active" : "Not active"}
+                    </Text>
+                  </View>
                 </View>
-              );
-            }
-          )
+                <View style={styles.residentActions}>
+                  <View style={[styles.residentBadge, verified && styles.residentVerifiedBadge]}>
+                    <Text style={[styles.residentBadgeText, verified && styles.residentVerifiedBadgeText]}>
+                      {account.volunteerAccess === true ? "VOLUNTEER" : verified ? "VERIFIED RESIDENT" : "BASIC RESIDENT"}
+                    </Text>
+                  </View>
+                  <Text style={styles.residentState}>Status: {account.status === "approved" ? "Active" : String(account.status || "Unknown")}</Text>
+                  {account.status === "approved" && (
+                    <TouchableOpacity accessibilityRole="button" disabled={saving}
+                      style={[styles.residentModerateButton, saving && styles.buttonDisabled]}
+                      onPress={() => moderateCommunityAccount(account, "suspended")}>
+                      <Text style={styles.residentModerateText}>{saving ? "Saving…" : "Suspend"}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {account.status === "suspended" && (
+                    <TouchableOpacity accessibilityRole="button" disabled={saving}
+                      style={[styles.residentModerateButton, styles.residentReactivate, saving && styles.buttonDisabled]}
+                      onPress={() => moderateCommunityAccount(account, "approved")}>
+                      <Text style={[styles.residentModerateText, styles.residentReactivateText]}>{saving ? "Saving…" : "Reactivate"}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })
         )}
-      </ScrollView>
+      </View>
 
       <Modal
         visible={!!approvalCandidate}
@@ -1037,8 +762,37 @@ export default function AccountApprovals() {
   );
 }
 
+// Compatibility path: the approved Resident/Volunteer review workspaces now live
+// in the LGU Command Center; no duplicate standalone management page.
+export default function AccountApprovalsRoute() {
+  return <Redirect href="/(admin)/command-center?section=residents" />;
+}
+
 const styles =
   StyleSheet.create({
+    residentWorkspace: { backgroundColor: "#FFFFFF", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#D9E6DE", width: "100%" },
+    residentHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
+    residentEyebrow: { fontSize: 10, color: "#14715B", letterSpacing: 0.7, fontWeight: "700" },
+    residentHeading: { fontSize: 19, fontWeight: "800", color: "#173F33", marginTop: 4 },
+    residentTotal: { backgroundColor: "#EDF6F0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+    residentTotalText: { fontSize: 12, fontWeight: "800", color: "#166A51" },
+    residentItem: { borderTopWidth: 1, borderTopColor: "#E6EEE8", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, paddingVertical: 12 },
+    residentProfile: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 240, gap: 10 },
+    residentAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#EAF5EE", alignItems: "center", justifyContent: "center" },
+    residentDetails: { flex: 1, minWidth: 0 },
+    residentName: { fontSize: 13, fontWeight: "800", color: "#1C4938" },
+    residentEmail: { fontSize: 12, color: "#5F756A", marginTop: 2 },
+    residentInfo: { fontSize: 11, color: "#6E8277", marginTop: 3, lineHeight: 16 },
+    residentActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 8 },
+    residentBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, backgroundColor: "#EFF2FA" },
+    residentBadgeText: { color: "#4A6495", fontSize: 10, fontWeight: "700" },
+    residentVerifiedBadge: { backgroundColor: "#E5F5EB" },
+    residentVerifiedBadgeText: { color: "#166C50" },
+    residentState: { fontSize: 11, color: "#637C6D", fontWeight: "600" },
+    residentModerateButton: { minHeight: 36, minWidth: 86, borderWidth: 1, borderColor: "#E5AD55", backgroundColor: "#FFF8EC", borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+    residentModerateText: { fontSize: 11, fontWeight: "800", color: "#996012" },
+    residentReactivate: { borderColor: "#86C3A4", backgroundColor: "#EAF7F0" },
+    residentReactivateText: { color: "#166B4A" },
     metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 18 },
     metricCard: { flexGrow: 1, flexBasis: 210, minWidth: 180, backgroundColor: "#FFFFFF", borderRadius: 15,
       borderWidth: 1, borderColor: "#DBE9E0", padding: 18 },

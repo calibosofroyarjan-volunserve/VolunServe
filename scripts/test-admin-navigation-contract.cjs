@@ -33,7 +33,7 @@ assert(!saItems.includes('label: "System Settings"') &&
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [
-  {title:"People & Verification",items:["Resident Identity Reviews","User & Volunteer Approvals","LGU Personnel","LGU Attendance"]},
+  {title:"People & Verification",items:["Resident Identity Reviews","LGU Personnel","LGU Attendance"]},
   {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests","Relief Operations"]},
   {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},
