@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 
-import { useRouter } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
@@ -72,7 +71,6 @@ const timestampValue = (
 };
 
 export default function AccountApprovals() {
-  const router = useRouter();
 
   const [
     accounts,
