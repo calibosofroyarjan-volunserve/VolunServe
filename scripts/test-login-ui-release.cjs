@@ -19,7 +19,7 @@ test("Approved Sir Pavia login shell replaces old right-side form without removi
  assert.match(s,/router\.replace\("\/admin-login"\)/);
  assert.doesNotMatch(s,/auth-resident-hero\.webp|auth-admin-hero\.webp/);
 });
-test("Resident web and mobile sign-in keep Firebase and accessible inline error feedback",()=>{
+test("Resident web/mobile sign-in keep Firebase, login error feedback and modal password reset",()=>{
  const web=read("app/login.web.tsx");
  const native=read("app/login.tsx");
  const feedback=read("components/auth/AuthFeedback.tsx");
@@ -32,7 +32,16 @@ test("Resident web and mobile sign-in keep Firebase and accessible inline error 
  }
  assert.match(web,/browserLocalPersistence/);
  assert.match(web,/browserSessionPersistence/);
- assert.match(web,/sendPasswordResetEmail/);
+ const modal=read("components/auth/PasswordResetDialog.tsx");
+ assert.match(web,/PasswordResetDialog/);
+ assert.match(native,/PasswordResetDialog/);
+ assert.match(web,/setResetOpen\(true\)/);
+ assert.match(native,/setResetOpen\(true\)/);
+ assert.doesNotMatch(web,/sendPasswordResetEmail/);
+ assert.doesNotMatch(native,/sendPasswordResetEmail/);
+ assert.match(modal,/await sendPasswordResetEmail\(auth, address\)/);
+ assert.match(modal,/Check your email/);
+ assert.match(modal,/Send reset link/);
  assert.match(web,/connectGoogleAccountWeb/);
  assert.match(feedback,/accessibilityRole="alert"/);
 });
