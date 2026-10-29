@@ -520,7 +520,7 @@ export default function Signup() {
     const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
-    const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
+    const phoneValid = true;
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
@@ -545,7 +545,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -582,7 +582,7 @@ export default function Signup() {
         1: "Please complete your personal information and contact details.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your occupation information.",
-        4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
+        4: "Please create a password and agree to the terms.",
       };
       
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -630,8 +630,8 @@ export default function Signup() {
         age: validation.ageNumber,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
-        authProvider: googleBound ? "google" : "email",
-        phoneNumber: toE164FromLocal(formData.phoneLocal),
+        authProvider: "email",
+        phoneNumber: "",
         region: formData.region,
         province: formData.province,
         city: formData.city,
@@ -751,22 +751,10 @@ export default function Signup() {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={handleGooglePress}
-                disabled={!request || googleProfileLoaded}
-                style={[styles.googleBtn, (!request || googleProfileLoaded) && styles.googleBtnDisabled]}
-              >
-                <Text style={styles.googleBtnText}>{googleProfileLoaded ? "✓ Google Account Connected" : "Continue with Google"}</Text>
-              </TouchableOpacity>
 
-              {googleBound ? (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxText}>Google account linked. Your email is locked to your connected Google account.</Text>
-                </View>
-              ) : null}
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
+              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable autoCapitalize="none" />
               <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : "Enter a valid email format."}</ValidationText>
 
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
@@ -802,21 +790,7 @@ export default function Signup() {
                 <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
               </View>
 
-              <Text style={styles.label}>📱 Mobile Number *</Text>
-              <View style={styles.phoneWrap}>
-                <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
-                <TextInput
-                  style={[styles.phoneInput, !validation.phoneValid && formData.phoneLocal.length > 0 && styles.inputInvalid]}
-                  value={formData.phoneLocal}
-                  onChangeText={(v) => updateField("phoneLocal", sanitizePhoneLocal(v.trim()))}
-                  keyboardType="phone-pad"
-                  placeholder="9123456789"
-                  placeholderTextColor={COLORS.lightText}
-                  maxLength={10}
-                  returnKeyType="next"
-                />
-              </View>
-              <ValidationText ok={validation.phoneValid}>{validation.phoneValid ? "✓ Valid Philippine mobile number" : "Enter a valid Philippine mobile number starting with 9."}</ValidationText>
+
             </View>
           )}
 
@@ -856,7 +830,6 @@ export default function Signup() {
                   👤 {formData.firstName} {formData.middleName && !formData.noMiddleName ? formData.middleName + " " : ""}{formData.lastName}
                 </Text>
                 <Text style={styles.reviewText}>📧 {formData.email}</Text>
-                <Text style={styles.reviewText}>📱 +63{formData.phoneLocal}</Text>
                 <Text style={styles.reviewText}>
                   📍 {formData.barangay}, {formData.city}, {formData.province}
                 </Text>
