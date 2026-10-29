@@ -833,9 +833,9 @@ export default function Signup() {
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
               <Field
                 icon="👤"
-                label="Middle Name (Optional)"
+                label="Middle Name / Initial (Optional)"
                 value={formData.middleName}
-                onChange={(v) => updateField("middleName", sanitizeName(v))}
+                onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z\\s.\'-]/g, ""))}
                 returnKeyType="next"
               />
               <SectionTitle title="Birthdate & Contact" />
