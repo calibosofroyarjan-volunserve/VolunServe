@@ -395,8 +395,6 @@ function DesktopTabBar({
 }: any & { profile: UserProfile }) {
   const mode = activeModeForProfile(profile);
   const volunteerAccess = hasVolunteerAccess(profile);
-  const residentAccess = hasResidentAccess(profile);
-  const canSwitchMode = volunteerAccess && residentAccess;
   const adminRoute = administrativeRouteForProfile(profile);
   const portalLabel =
     profile.role === "superadmin" ? "Super Admin Portal" : "Admin Portal";
@@ -408,22 +406,6 @@ function DesktopTabBar({
       (profile.identityStatus === "basic" || profile.identityStatus === "failed")) ||
     (!volunteerAccess && (profile.identityVerified === true || profile.identityStatus === "verified"))
   );
-
-  const switchMode = async () => {
-    if (!canSwitchMode) return;
-
-    const nextMode = mode === "volunteer" ? "resident" : "volunteer";
-
-    try {
-      await setActiveUserMode(nextMode);
-      navigation.navigate("index");
-    } catch (error: any) {
-      AppAlert.alert(
-        "Mode Switch Failed",
-        error?.message || "Unable to switch account mode."
-      );
-    }
-  };
 
   const openAdminPortal = () => {
     if (!adminRoute) return;
