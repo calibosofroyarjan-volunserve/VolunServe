@@ -15,19 +15,19 @@ function menu(name) {
  assert.ok(begin>=0 && end>begin,"Menu missing: "+name);
  return layout.slice(begin,end);
 }
-test("Resident navigation has six modules in meaningful service priority",()=>{
+test("Resident navigation has five service modules; Profile stays in account menu",()=>{
  const menuText=menu("residentDesktopTabs");
- const expected=["index","disaster-response","resident","community-events","donation","profile"];
+ const expected=["index","disaster-response","resident","community-events","donation"];
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
  assert.deepEqual(found,expected);
- for(const gone of ["my-cases","notifications","announcements","map-tracking"])assert.ok(!found.includes(gone));
+ for(const gone of ["my-cases","notifications","announcements","map-tracking","profile","certificate"])assert.ok(!found.includes(gone));
 });
 test("Volunteer navigation exposes Emergency Tasks not redundant progress or alerts",()=>{
  const menuText=menu("volunteerDesktopTabs");
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
- assert.deepEqual(found,["index","volunteer","community-events","donation","certificate","profile"]);
+ assert.deepEqual(found,["index","volunteer","community-events","donation"]);
  assert.match(menuText,/label:"Emergency Tasks"/);
- assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements/);
+ assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|Certificates|My Profile/);
  assert.match(web,/Emergency Tasks/);
  assert.match(native,/Emergency Tasks/);
 });
