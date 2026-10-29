@@ -15,7 +15,7 @@ const firstBetween = (text, from, to) => {
 const saItems = firstBetween(sa, "const navItems: NavItem[] = [", "export default function SuperAdminLayout");
 const expectedSa = [
   ["System Overview","/(superadmin)"],
-  ["LGU Staff & Admin Accounts","/(superadmin)/admin-accounts"],
+  ["Admin Accounts","/(superadmin)/admin-accounts"],
   ["Admin Activity & Audit Logs","/(superadmin)/admin-logs"],
   ["System Records (Read Only)","/(superadmin)/all-records"],
   ["System Settings","/(superadmin)/system-settings"],
