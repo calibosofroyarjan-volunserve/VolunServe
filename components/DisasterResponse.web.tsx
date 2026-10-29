@@ -1120,7 +1120,7 @@ export default function WebDisasterReport() {
               Reference: <strong>{success}</strong>
             </p>
             <div className="success-actions">
-              <a href={`/map-tracking?caseId=${encodeURIComponent(success)}`}>Track response</a>
+              <a href={`/disaster-response?view=tracking&caseId=${encodeURIComponent(success)}`}>Track response</a>
               <a href="/my-cases" className="secondary-link">View My Reports</a>
             </div>
           </div>
@@ -1673,7 +1673,7 @@ export default function WebDisasterReport() {
                 <a href="/my-cases">View existing report</a>
                 {duplicateBlock.reason === "active" && (
                   <a
-                    href={`/map-tracking?caseId=${encodeURIComponent(duplicateBlock.caseId)}`}
+                    href={`/disaster-response?view=tracking&caseId=${encodeURIComponent(duplicateBlock.caseId)}`}
                     className="duplicate-track"
                   >
                     Track response

@@ -148,14 +148,16 @@ const SJDM_CENTER = {
   longitude: 121.045,
 };
 
+// Official office address: csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/
+// Pin coordinates are approximate (third-party locality reference), NEVER a live responder.
 const LGU_BASE = {
-  id: "csjdm-lgu-base",
-  name: "LGU Base / CDRRMO",
-  address:
-    "Del Monte Road, Sapang Palay Proper, San Jose del Monte, 3023 Bulacan, Philippines",
-  latitude: 14.838344,
-  longitude: 121.046243,
+  id: "csjdm-cdrrmo-office-reference",
+  name: "CDRRMO office (approximate pin · not a live responder)",
+  address: "Productivity Complex, Motorpool, Brgy. Sapang Palay Proper, San Jose del Monte, Bulacan",
+  latitude: 14.82746,
+  longitude: 121.08109,
 };
+const SJDM_BOUNDARY_GEOJSON_URL = "https://nominatim.openstreetmap.org/search?city=San%20Jose%20del%20Monte&state=Bulacan&country=Philippines&format=geojson&polygon_geojson=1&limit=1";
 
 const mapDocument = `
 <!doctype html>
@@ -324,6 +326,7 @@ const mapDocument = `
 </head>
 <body>
   <div id="map"></div>
+  <div id="city-boundary-label" style="position:absolute;z-index:5;right:12px;bottom:27px;max-width:60%;padding:7px 10px;border-radius:8px;background:#ffffffeb;color:#195b46;font:11px system-ui,sans-serif">Loading SJDM city boundary…</div>
   <div id="notice">Loading live response map…</div>
 
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
@@ -358,6 +361,54 @@ const mapDocument = `
       let userMarker = null;
       let hasFitted = false;
       let lastLocation = null;
+      let cityBoundaryBounds = null;
+      const cityBoundaryUrl = "https://nominatim.openstreetmap.org/search?city=San%20Jose%20del%20Monte&state=Bulacan&country=Philippines&format=geojson&polygon_geojson=1&limit=1";
+      const cityBoundaryAttribution = "OpenStreetMap / Nominatim · indicative administrative outline";
+      let lastNavigationView = false;
+
+      function collectBoundaryPoints(value, coordinates) {
+        if (!Array.isArray(value)) return;
+        if (value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number") {
+          if (Number.isFinite(value[0]) && Number.isFinite(value[1]) &&
+            value[0] >= 120.8 && value[0] <= 121.4 && value[1] >= 14.55 && value[1] <= 15.1) {
+            coordinates.push(value);
+          }
+          return;
+        }
+        value.forEach(item => collectBoundaryPoints(item, coordinates));
+      }
+
+      async function drawCityBoundary() {
+        try {
+          const response = await fetch(cityBoundaryUrl, { headers: { "Accept": "application/geo+json, application/json" } });
+          if (!response.ok) throw new Error("boundary service unavailable");
+          const data = await response.json();
+          const feature = data.features && data.features.find(entry =>
+            /san jose del monte/i.test(String(entry.properties?.display_name || entry.properties?.name || "")) &&
+            ["Polygon", "MultiPolygon"].includes(entry.geometry?.type)
+          );
+          if (!feature) throw new Error("SJDM municipal geometry not returned");
+          const coordinates = [];
+          collectBoundaryPoints(feature.geometry.coordinates, coordinates);
+          if (coordinates.length < 4) throw new Error("insufficient boundary points");
+          const ringBounds = new maplibregl.LngLatBounds();
+          coordinates.forEach(point => ringBounds.extend(point));
+          cityBoundaryBounds = ringBounds;
+          const geo = { type: "FeatureCollection", features: [feature] };
+          map.getSource("sjdm-city-boundary").setData(geo);
+          if (!lastNavigationView) {
+            map.setMaxBounds(ringBounds);
+            map.fitBounds(ringBounds, { padding: 40, duration: 0, maxZoom: 13 });
+            hasFitted = true;
+          }
+          document.getElementById("city-boundary-label").textContent =
+            "SJDM boundary · " + cityBoundaryAttribution;
+        } catch (err) {
+          document.getElementById("city-boundary-label").textContent =
+            "SJDM boundary temporarily unavailable · map centered on the city";
+          // Do not draw invented outlines or silently claim boundary accuracy.
+        }
+      }
 
       function validPoint(latitude, longitude) {
         return (
@@ -426,11 +477,11 @@ const mapDocument = `
 
         const label = document.createElement("div");
         label.className = "lgu-base-label";
-        label.textContent = "LGU BASE";
+        label.textContent = "CDRRMO";
 
         const pin = document.createElement("div");
         pin.className = "pin";
-        pin.innerHTML = "<span>⌂</span>";
+        pin.innerHTML = "<span>🛟</span>";
 
         wrapper.appendChild(label);
         wrapper.appendChild(pin);
@@ -816,6 +867,7 @@ const mapDocument = `
       }
 
       function render(payload) {
+        lastNavigationView = payload.navigationView === true;
         clearMarkers();
 
         const bounds = new maplibregl.LngLatBounds();
@@ -883,7 +935,7 @@ const mapDocument = `
             offset: 22,
             closeButton: false,
           }).setText(
-            [item.name || "LGU Base", item.address || ""]
+            [item.name || "CDRRMO office", item.address || "", "Office address: CSJDM official directory", "Approximate map pin, not real-time"]
               .filter(Boolean)
               .join(" · ")
           );
@@ -1032,6 +1084,7 @@ const mapDocument = `
         }
 
         if (
+          lastNavigationView &&
           lastLocation &&
           validPoint(
             lastLocation.latitude,
@@ -1045,16 +1098,15 @@ const mapDocument = `
           pointCount += 1;
         }
 
-        if (
-          (payload.fit || !hasFitted) &&
-          pointCount > 0
-        ) {
-          map.fitBounds(bounds, {
-            padding: 55,
-            maxZoom: 16,
-            duration: 600,
-          });
-
+        if (payload.fit || !hasFitted) {
+          if (!lastNavigationView && cityBoundaryBounds) {
+            // The city view cannot zoom out to a user's GPS in another city.
+            map.fitBounds(cityBoundaryBounds, { padding: 40, maxZoom: 13, duration: 500 });
+          } else if (lastNavigationView && pointCount > 0) {
+            map.fitBounds(bounds, { padding: 55, maxZoom: 16, duration: 600 });
+          } else {
+            map.easeTo({ center: [121.045, 14.813], zoom: 12.5, duration: 400 });
+          }
           hasFitted = true;
         }
       }
@@ -1078,6 +1130,23 @@ const mapDocument = `
       });
 
       map.on("load", () => {
+        map.addSource("sjdm-city-boundary", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "sjdm-city-fill",
+          type: "fill",
+          source: "sjdm-city-boundary",
+          paint: { "fill-color": "#10a37f", "fill-opacity": 0.06 },
+        });
+        map.addLayer({
+          id: "sjdm-city-outline",
+          type: "line",
+          source: "sjdm-city-boundary",
+          paint: { "line-color": "#07876b", "line-width": 4, "line-opacity": 0.95 },
+        });
+        void drawCityBoundary();
         map.addSource("response-route", {
           type: "geojson",
           data: {
