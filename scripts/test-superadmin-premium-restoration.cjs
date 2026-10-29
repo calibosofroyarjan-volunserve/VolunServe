@@ -26,10 +26,11 @@ assert(pager.includes("Showing") && pager.includes("pageSize = 5") && pager.incl
        "Restore functional five-row pagination controls");
 assert(layout.includes('label: "Admin Accounts"') &&
        layout.includes('label: "System Records (Read Only)"') &&
-       layout.includes('label: "System Settings"') &&
+       layout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
+       layout.includes('router.push("/(superadmin)/system-settings"') &&
        layout.includes("SUPER ADMIN PORTAL") &&
        layout.includes("activeSection"),
-       "Preserve approved five governance modules and premium sidebar/breadcrumb");
+       "Preserve approved governance sidebar, profile-dropdown settings, and premium breadcrumb");
 assert(directory.includes("Administrator Directory") &&
        directory.includes("const ADMIN_PAGE_SIZE = 5"),
        "Recent approved Admin Accounts layout must remain intact");
