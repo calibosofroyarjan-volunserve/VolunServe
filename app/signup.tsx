@@ -40,7 +40,6 @@ type FormState = {
   lastName: string;
   firstName: string;
   middleName: string;
-  noMiddleName: boolean;
   dateOfBirth: Date | null;
   phoneLocal: string;
   email: string;
@@ -442,7 +441,6 @@ export default function Signup() {
     lastName: "",
     firstName: "",
     middleName: "",
-    noMiddleName: false,
     dateOfBirth: null,
     phoneLocal: "",
     email: "",
@@ -517,12 +515,11 @@ export default function Signup() {
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
-    const middleNameValid = formData.noMiddleName || nameOk(formData.middleName);
+    const middleNameValid = true; // Middle name or initial is optional.
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = true;
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -545,7 +542,8 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid);
+    const step4Valid = formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -582,7 +580,7 @@ export default function Signup() {
         1: "Please complete your personal information and contact details.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your occupation information.",
-        4: googleBound ? "Please accept the terms and confirm your details." : "Please create a password and accept the terms.",
+        4: "Review your information and accept the terms and privacy consent.",
       };
       
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -636,7 +634,7 @@ export default function Signup() {
       await signUpUser({
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
-        middleName: formData.noMiddleName ? "" : formData.middleName.trim(),
+        middleName: formData.middleName.trim(),
         age: validation.ageNumber,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -763,42 +761,83 @@ export default function Signup() {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={handleGooglePress}
-                disabled={!request || googleProfileLoaded}
-                style={[styles.googleBtn, (!request || googleProfileLoaded) && styles.googleBtnDisabled]}
-              >
-                <Text style={styles.googleBtnText}>{googleProfileLoaded ? "✓ Google Account Connected" : "Continue with Google"}</Text>
-              </TouchableOpacity>
-
-              {googleBound ? (
+              <SectionTitle title="Email Account" subtitle="Use email/password, or Google as an optional alternative." />
+              <Field
+                icon="📧"
+                label="Email Address *"
+                value={formData.email}
+                onChange={(v) => updateField("email", v.trim().toLowerCase())}
+                keyboardType="email-address"
+                invalid={!validation.emailValid && formData.email.length > 0}
+                returnKeyType="next"
+                editable={!googleBound}
+                autoCapitalize="none"
+              />
+              {!googleBound ? (
+                <>
+                  <Field
+                    label="Password *"
+                    value={formData.password}
+                    onChange={(v) => updateField("password", v)}
+                    secureTextEntry={!showPassword}
+                    showPassword={showPassword}
+                    onTogglePassword={() => setShowPassword((prev) => !prev)}
+                    autoCapitalize="none"
+                  />
+                  <Field
+                    label="Confirm Password *"
+                    value={formData.confirmPassword}
+                    onChange={(v) => updateField("confirmPassword", v)}
+                    secureTextEntry={!showConfirmPassword}
+                    showPassword={showConfirmPassword}
+                    onTogglePassword={() => setShowConfirmPassword((prev) => !prev)}
+                    autoCapitalize="none"
+                  />
+                  <Text style={styles.emailVerifyHint}>
+                    Verify your email inbox before signing in. Passwords must have 8+ characters, uppercase, lowercase, a number and a symbol.
+                  </Text>
+                  <View style={styles.signupDividerRow}>
+                    <View style={styles.signupDividerLine} />
+                    <Text style={styles.signupDividerText}>OR</Text>
+                    <View style={styles.signupDividerLine} />
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleGooglePress}
+                    disabled={!request || googleProfileLoaded}
+                    style={[styles.googleBtn, (!request || googleProfileLoaded) && styles.googleBtnDisabled]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Google, optional signup method"
+                  >
+                    <Image
+                      source={{ uri: "https://developers.google.com/identity/images/g-logo.png" }}
+                      style={styles.googleBtnLogo}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.googleBtnText}>Continue with Google</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
                 <>
                   <View style={styles.infoBox}>
-                    <Text style={styles.infoBoxText}>Google email verified. Your Google account is an optional signup method.</Text>
+                    <Text style={styles.infoBoxText}>
+                      Google email verified. Complete your profile; no separate password required.
+                    </Text>
                   </View>
                   <TouchableOpacity onPress={useEmailInstead} style={{ alignItems: "center", paddingVertical: 12 }}>
                     <Text style={{ color: "#087A62", fontWeight: "800" }}>Use email and password instead</Text>
                   </TouchableOpacity>
                 </>
-              ) : (
-                <Text style={{ color: "#577B69", fontSize: 12, marginBottom: 10 }}>
-                  Email registration requires verification from your inbox before signing in.
-                </Text>
               )}
-
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : "Enter a valid email format."}</ValidationText>
-
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
               <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
-              <Field icon="👤" label="Middle Name *" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} editable={!formData.noMiddleName} invalid={!formData.noMiddleName && formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
-              <CheckRow label="No Middle Name" checked={formData.noMiddleName} onPress={() => {
-                const next = !formData.noMiddleName;
-                updateField("noMiddleName", next);
-                if (next) updateField("middleName", "");
-              }} />
-
+              <Field
+                icon="👤"
+                label="Middle Name (Optional)"
+                value={formData.middleName}
+                onChange={(v) => updateField("middleName", sanitizeName(v))}
+                returnKeyType="next"
+              />
               <SectionTitle title="Birthdate & Contact" />
               <View style={styles.field}>
                 <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
@@ -860,7 +899,7 @@ export default function Signup() {
               <SectionTitle title="Review Your Information" subtitle="Please verify all details are correct before proceeding." />
               <View style={styles.reviewBox}>
                 <Text style={styles.reviewText}>
-                  👤 {formData.firstName} {formData.middleName && !formData.noMiddleName ? formData.middleName + " " : ""}{formData.lastName}
+                  👤 {formData.firstName} {formData.middleName ? formData.middleName + " " : ""}{formData.lastName}
                 </Text>
                 <Text style={styles.reviewText}>📧 {formData.email}</Text>
                 <Text style={styles.reviewText}>
@@ -881,10 +920,7 @@ export default function Signup() {
               ) : null}
               {!googleBound ? (
                 <>
-                  <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
-                  <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
-                  <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
-
+                  <SectionTitle title="Password Security Review" subtitle="Your password was entered in Step 1." />
                   <View style={styles.passwordPanel}>
                     <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
                     <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
@@ -1031,9 +1067,14 @@ const styles = StyleSheet.create({
   sectionHeader: { fontSize: 16, fontWeight: "900", color: COLORS.text },
   sectionSubheader: { fontSize: 12.5, color: COLORS.muted, fontWeight: "600", marginTop: 4, lineHeight: 18 },
 
-  googleBtn: { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
+  googleBtn: { flexDirection: "row", gap: 12, minHeight: 48, justifyContent: "center", backgroundColor: "#fff", paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
   googleBtnDisabled: { opacity: 0.82 },
   googleBtnText: { fontWeight: "900", color: COLORS.text },
+  googleBtnLogo: { width: 20, height: 20 },
+  signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 18 },
+  signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
+  signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
+  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 3 },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
   infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
 
