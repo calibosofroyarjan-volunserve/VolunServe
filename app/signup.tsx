@@ -545,7 +545,7 @@ export default function Signup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step4Valid = passwordValid && formData.acceptTerms && formData.confirmReview;
+    const step4Valid = (googleBound || passwordValid) && formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
       firstNameValid,
@@ -582,7 +582,7 @@ export default function Signup() {
         1: "Please complete your personal information and contact details.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your occupation information.",
-        4: googleBound ? "Please agree to the terms and confirm your information." : "Please create a password and agree to the terms.",
+        4: googleBound ? "Please accept the terms and confirm your details." : "Please create a password and accept the terms.",
       };
       
       Alert.alert("Incomplete Step", stepMessages[step]);
@@ -642,9 +642,11 @@ export default function Signup() {
       });
 
       Alert.alert(
-        "Welcome to VolunServe",
-        "Your Basic Resident Account is ready. You can sign in and use basic safety services now. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.",
-        [{ text: "Continue", onPress: () => router.replace("/login") }]
+        googleBound ? "Basic Account Created" : "Verify Your Email",
+        googleBound
+          ? "Your Google account is ready. Complete Resident Identity Verification later for protected services."
+          : "We sent a verification link to your email address. Open your inbox (or Spam), verify your email, then sign in with your email and password.",
+        [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
@@ -854,10 +856,11 @@ export default function Signup() {
               {googleBound ? (
                 <View style={styles.infoBox}>
                   <Text style={styles.infoBoxText}>
-                    ✓ Google account connected. Create a VolunServe password below to enable email/password login to this same account.
+                    ✓ Google account connected. A separate VolunServe password is not required. For email/password signup, use the email option.
                   </Text>
                 </View>
               ) : null}
+              {!googleBound ? (
                 <>
                   <SectionTitle title="Password Security" subtitle="Create a strong password to protect your account." />
                   <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
@@ -875,6 +878,7 @@ export default function Signup() {
                   </View>
                 </>
 
+              ) : null}
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
               <TouchableOpacity onPress={() => setTermsOpen(true)} style={styles.termsOpenBtn}><Text style={styles.termsOpenText}>View Terms & Data Privacy</Text></TouchableOpacity>
               <CheckRow label="I agree to the compliance and data privacy statements." checked={formData.acceptTerms} onPress={() => updateField("acceptTerms", !formData.acceptTerms)} />
