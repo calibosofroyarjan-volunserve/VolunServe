@@ -6995,7 +6995,7 @@ const styles = StyleSheet.create({
   personnelCleanSubtitle: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 8.4,
+    fontSize: 10.5,
     lineHeight: 12,
   },
   personnelCleanStatusPill: {
@@ -7009,7 +7009,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanStatusText: {
     color: "#047857",
-    fontSize: 8,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanStatusTextMuted: {
@@ -7040,7 +7040,7 @@ const styles = StyleSheet.create({
   },
   personnelAvatarCompactText: {
     color: "#1d4ed8",
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   volunteerAvatarCompact: {
@@ -7054,7 +7054,7 @@ const styles = StyleSheet.create({
   },
   volunteerAvatarCompactText: {
     color: "#6d28d9",
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCompactIdentity: {
@@ -7070,14 +7070,14 @@ const styles = StyleSheet.create({
   },
   personnelCompactName: {
     color: "#0f172a",
-    fontSize: 9.4,
+    fontSize: 10.5,
     fontWeight: "900",
     textAlign: "left",
   },
   personnelCompactMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 7.7,
+    fontSize: 10.5,
     lineHeight: 11,
     textAlign: "left",
   },
@@ -7106,7 +7106,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeGoodText: {
     color: "#087f5b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeBusy: {
@@ -7117,7 +7117,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBusyText: {
     color: "#c2410c",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeMuted: {
@@ -7128,7 +7128,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeMutedText: {
     color: "#64748b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelMiniBadgeBlue: {
@@ -7139,7 +7139,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBlueText: {
     color: "#4338ca",
-    fontSize: 7,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelSkillPill: {
@@ -7150,7 +7150,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillText: {
     color: "#475569",
-    fontSize: 7.4,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelSkillPillBlue: {
@@ -7161,7 +7161,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillBlueText: {
     color: "#2563eb",
-    fontSize: 7.4,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelPrimaryAction: {
@@ -7176,7 +7176,7 @@ const styles = StyleSheet.create({
   },
   personnelPrimaryActionText: {
     color: "#ffffff",
-    fontSize: 7.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanEmptyRow: {
@@ -7188,13 +7188,13 @@ const styles = StyleSheet.create({
   },
   personnelCleanEmptyTitle: {
     color: "#334155",
-    fontSize: 9.8,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCleanEmptyText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 8.7,
+    fontSize: 10.5,
     lineHeight: 13,
   },
   personnelCountBadge: {
@@ -7205,7 +7205,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeText: {
     color: "#4338ca",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCountBadgePurple: {
@@ -7216,7 +7216,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgePurpleText: {
     color: "#7e22ce",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCountBadgeMuted: {
@@ -7229,7 +7229,7 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeMutedText: {
     color: "#64748b",
-    fontSize: 7.5,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelRefreshCompact: {
@@ -7244,7 +7244,7 @@ const styles = StyleSheet.create({
   },
   personnelRefreshCompactText: {
     color: "#0f766e",
-    fontSize: 8.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelNeedStrip: {
@@ -7258,14 +7258,14 @@ const styles = StyleSheet.create({
   },
   personnelNeedLabel: {
     color: "#94a3b8",
-    fontSize: 7,
+    fontSize: 10.5,
     fontWeight: "900",
     letterSpacing: 0.55,
   },
   personnelNeedValue: {
     marginTop: 3,
     color: "#1e3a8a",
-    fontSize: 9.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelCompactList: {
@@ -7306,7 +7306,7 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactText: {
     color: "#ffffff",
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelAssignCompactTextDisabled: {
@@ -7348,13 +7348,13 @@ const styles = StyleSheet.create({
   },
   personnelSupportNoticeTitle: {
     color: "#1d4ed8",
-    fontSize: 9.3,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelSupportNoticeText: {
     marginTop: 2,
     color: "#475569",
-    fontSize: 8.2,
+    fontSize: 10.5,
     lineHeight: 12,
   },
   personnelVolunteerToolbar: {
@@ -7367,7 +7367,7 @@ const styles = StyleSheet.create({
   },
   personnelListHeading: {
     color: "#0f172a",
-    fontSize: 10.2,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   personnelVolunteerFilters: {
