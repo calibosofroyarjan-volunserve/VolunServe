@@ -46,7 +46,7 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     address: "CDRRMO Building, Productivity Complex, Motorpool, Barangay Sapang Palay Proper, City of San Jose del Monte, Bulacan, Philippines",
     officialInfoUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
     officialContact: "09326000119",
-    photoDescription: "Actual CDRRMO building photo not independently verified. This is the official office address, not a live dispatch marker.",,
+    photoDescription: "Actual CDRRMO building photo not independently verified. This is the official office address, not a live dispatch marker.",
     positionQuality: "third_party_approximate",
   },
   {

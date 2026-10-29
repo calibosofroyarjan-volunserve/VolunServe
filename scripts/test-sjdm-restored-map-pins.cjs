@@ -140,6 +140,6 @@ test("premium map facility panels keep real photos prominent, inaccessible image
   assert.match(source, /#facility-detail-panel\[hidden\]/);
   assert.match(source, /@media\(max-width:650px\)/);
   assert.match(source, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(source, /Hospital.*Reference only.*ER capacity is not live-verified/s);
+  assert.match(source, /Real hospital.*Reference only.*ER capacity is not live-verified/s);
   assert.match(source, /item.positionQuality === "osm_feature"/);
 });
