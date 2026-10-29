@@ -1,3 +1,4 @@
+import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -91,7 +92,7 @@ const formatVerificationDate = (value: string) => {
     minute: "2-digit",
   });
 };
-export default function LguMembersScreen() {
+export function LguPersonnelPanel() {
   const { user } = useUserSession();
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [search, setSearch] = useState("");
@@ -1400,3 +1401,8 @@ const styles = StyleSheet.create({
   resetConfirmButton: { minHeight: 40, paddingHorizontal: 15, borderRadius: 9, backgroundColor: "#B45309", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   resetConfirmButtonText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
 });
+
+/** Legacy LGU Personnel URL stays valid without an extra sidebar module. */
+export default function LguPersonnelRedirect() {
+  return <Redirect href="/(admin)/lgu-attendance?section=personnel" />;
+}
