@@ -993,7 +993,7 @@ export default function Signup() {
                         icon="♙"
                         label="Middle Name / Initial (Optional)"
                         value={formData.middleName}
-                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z\\s.\'-]/g, ""))}
+                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z .'-]/g, ""))}
                         returnKeyType="next"
                       />
                     </View>
