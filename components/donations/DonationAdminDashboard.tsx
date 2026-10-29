@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { auth, db } from "../../lib/firebase";
+import ListPagination from "../ui/ListPagination";
 import FundReconciliationPanel from "./FundReconciliationPanel";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -133,6 +134,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const [alertsNotice, setAlertsNotice] = useState("");
   const [alertsSyncing, setAlertsSyncing] = useState(false);
   const [alertsFilter, setAlertsFilter] = useState<"all" | "unread" | "read">("all");
+  const [alertPage, setAlertPage] = useState(1);
+  const [reviewPage, setReviewPage] = useState(1);
   const [donor, setDonor] = useState<DonorProfile | null>(null);
   const [donorLoading, setDonorLoading] = useState(false);
 
@@ -281,6 +284,12 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
   const unreadCount = alerts.filter(a => !a.read).length;
   const visibleAlerts = alerts.filter(alert =>
     alertsFilter === "all" || (alertsFilter === "unread" ? !alert.read : !!alert.read));
+  const currentAlertPage = Math.max(1, Math.min(alertPage, Math.max(1, Math.ceil(visibleAlerts.length / 5))));
+  const pagedAlerts = visibleAlerts.slice((currentAlertPage - 1) * 5, currentAlertPage * 5);
+  const currentReviewPage = Math.max(1, Math.min(reviewPage, Math.max(1, Math.ceil(reviewItems.length / 5))));
+  const pagedReviews = showAllReviews
+    ? reviewItems.slice((currentReviewPage - 1) * 5, currentReviewPage * 5)
+    : reviewItems.slice(0, 3);
   const syncConfirmedDonationAlerts = async () => {
     if (!allowed || alertsSyncing) return;
     setAlertsSyncing(true);
@@ -735,7 +744,8 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
             </View>
             {!ready || !campaignReady ? <Text style={s.info}>Reviewing records…</Text> :
               reviewItems.length ? <>
-                {reviewItems.slice(0, showAllReviews ? reviewItems.length : 3).map(item => {
+                {showAllReviews && <ListPagination page={currentReviewPage} total={reviewItems.length} pageSize={5} onChange={setReviewPage} />}
+                {pagedReviews.map(item => {
                   const expanded = expandedReviewKey === item.key;
                   const flaggedCampaign = item.kind === "campaign"
                     ? campaigns.find(c => c.id === item.id) : null;
@@ -1195,17 +1205,18 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
               ] as const).map(([value,label,count]) =>
                 <Pressable key={value} accessibilityRole="button"
                   accessibilityState={{selected:alertsFilter === value}}
-                  onPress={() => setAlertsFilter(value)}
+                  onPress={() => { setAlertsFilter(value); setAlertPage(1); }}
                   style={[s.alertFilterButton, alertsFilter === value && s.alertFilterActive]}>
                   <Text style={[s.alertFilterText, alertsFilter === value && s.alertFilterTextActive]}>
                     {label} ({count})
                   </Text>
                 </Pressable>)}
             </View>
+            <ListPagination page={currentAlertPage} total={visibleAlerts.length} pageSize={5} onChange={setAlertPage} />
             {!alertsReady ? <View style={s.empty}>
               <ActivityIndicator color="#0B856A"/>
               <Text style={s.info}>Loading notifications…</Text>
-            </View> : visibleAlerts.length ? visibleAlerts.slice(0, 100).map(alert => <Pressable
+            </View> : visibleAlerts.length ? pagedAlerts.map(alert => <Pressable
               key={alert.id}
               style={[s.activity, selectedAlertId === alert.id && s.selectedRow]}
               accessibilityRole="button"
