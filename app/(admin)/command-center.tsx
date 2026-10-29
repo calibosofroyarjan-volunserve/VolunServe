@@ -510,40 +510,6 @@ export default function CommandCenter() {
         )}
 
 
-        <DashboardPendingIdentityReviews />
-        <View style={styles.residentReviewPanel}>
-          <View style={styles.residentReviewHeader}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.residentEyebrow}>PEOPLE & VERIFICATION / ACTIONABLE QUEUE</Text>
-              <Text style={styles.residentTitle}>Pending Resident Accounts ({pendingResidents.length})</Text>
-              <Text style={styles.residentCaption}>Review actual pending Resident accounts from Firestore. Identity verification and approvals remain in the authorized review screens.</Text>
-            </View>
-            <TouchableOpacity accessibilityRole="button"
-              onPress={() => navigate("/(admin)/identity-reviews")}
-              style={styles.residentReviewLink}>
-              <Text style={styles.residentReviewLinkText}>Identity Reviews</Text>
-              <Ionicons name="arrow-forward" size={16} color="#08765A" />
-            </TouchableOpacity>
-          </View>
-          <ListPagination page={currentResidentPage} total={pendingResidents.length} pageSize={5} onChange={setResidentReviewPage} />
-          {!overviewReady ? <Text style={styles.residentEmpty}>Loading Resident review queue…</Text> :
-            pendingResidents.length === 0 ? <Text style={styles.residentEmpty}>No pending Resident accounts in this queue.</Text> :
-            pagedResidents.map(resident => (
-              <View key={resident.id} style={styles.residentRow}>
-                <View style={styles.residentRowCopy}>
-                  <Text style={styles.residentName}>{resident.fullName || resident.email || "Unnamed Resident"}</Text>
-                  <Text style={styles.residentMeta}>{resident.email || "No email"} · {resident.barangay || "Barangay unlisted"} · Identity: {resident.identityStatus || "not submitted"}</Text>
-                </View>
-                <TouchableOpacity style={styles.residentAction} accessibilityRole="button"
-                  accessibilityLabel={`Open authorized account review for ${resident.fullName || "Resident"}`}
-                  onPress={() => navigate("/(admin)/account-approvals?view=residents&resident=" + encodeURIComponent(resident.id))}>
-                  <Text style={styles.residentActionText}>Review account</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-        </View>
-        <DashboardVolunteerApprovals />
-
         <View style={[styles.overviewColumns, width < 1220 && styles.overviewColumnsStack]}>
           <View style={[styles.overviewPrimary, width < 1220 && styles.overviewFullWidth]}>
             <View style={styles.overviewSectionHeader}>
@@ -625,6 +591,40 @@ export default function CommandCenter() {
             />
           </View>
         </View>
+        <DashboardPendingIdentityReviews />
+        <View style={styles.residentReviewPanel}>
+          <View style={styles.residentReviewHeader}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.residentEyebrow}>PEOPLE & VERIFICATION / ACTIONABLE QUEUE</Text>
+              <Text style={styles.residentTitle}>Pending Resident Accounts ({pendingResidents.length})</Text>
+              <Text style={styles.residentCaption}>Review actual pending Resident accounts from Firestore. Identity verification and approvals remain in the authorized review screens.</Text>
+            </View>
+            <TouchableOpacity accessibilityRole="button"
+              onPress={() => navigate("/(admin)/identity-reviews")}
+              style={styles.residentReviewLink}>
+              <Text style={styles.residentReviewLinkText}>Identity Reviews</Text>
+              <Ionicons name="arrow-forward" size={16} color="#08765A" />
+            </TouchableOpacity>
+          </View>
+          <ListPagination page={currentResidentPage} total={pendingResidents.length} pageSize={5} onChange={setResidentReviewPage} />
+          {!overviewReady ? <Text style={styles.residentEmpty}>Loading Resident review queue…</Text> :
+            pendingResidents.length === 0 ? <Text style={styles.residentEmpty}>No pending Resident accounts in this queue.</Text> :
+            pagedResidents.map(resident => (
+              <View key={resident.id} style={styles.residentRow}>
+                <View style={styles.residentRowCopy}>
+                  <Text style={styles.residentName}>{resident.fullName || resident.email || "Unnamed Resident"}</Text>
+                  <Text style={styles.residentMeta}>{resident.email || "No email"} · {resident.barangay || "Barangay unlisted"} · Identity: {resident.identityStatus || "not submitted"}</Text>
+                </View>
+                <TouchableOpacity style={styles.residentAction} accessibilityRole="button"
+                  accessibilityLabel={`Open authorized account review for ${resident.fullName || "Resident"}`}
+                  onPress={() => navigate("/(admin)/account-approvals?view=residents&resident=" + encodeURIComponent(resident.id))}>
+                  <Text style={styles.residentActionText}>Review account</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+        </View>
+        <DashboardVolunteerApprovals />
+
         <DashboardOperationalInsights />
       </View>
 
