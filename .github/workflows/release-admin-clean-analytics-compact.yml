@@ -1,0 +1,76 @@
+name: Publish Clean LGU Admin Analytics and Compact Workspace (Hosting Only)
+on:
+  push:
+    branches:
+      - release/admin-clean-analytics-compact-20261030
+    paths:
+      - .github/workflows/release-admin-clean-analytics-compact.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify merged code and release-workflow-only delta
+        shell: bash
+        run: |
+          git merge-base --is-ancestor ae880e18c2f770ecc847271d4b8103207ef8204e HEAD
+          test "$(git diff --name-only ae880e18c2f770ecc847271d4b8103207ef8204e HEAD)" = ".github/workflows/release-admin-clean-analytics-compact.yml"
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify no LGU gamification, five-item pages, security, navigation and Emergency workflows
+        run: |
+          node scripts/test-admin-clean-operational-analytics.cjs
+          node scripts/test-admin-overview-ui.cjs
+          node scripts/test-dashboard-overviews.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Expo production web build and release marker
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Fail safely if Firebase Hosting credentials are missing
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials missing. Production unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting only (no Firestore, Functions or backend)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify live production revision at volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Exact live production revision not verified."
+          exit 1
