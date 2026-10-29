@@ -2565,7 +2565,6 @@ export default function ReliefOperations() {
             </View>
 
             <ListPagination page={activeNeedsPage} total={barangaySummaries.length} pageSize={5} onChange={setNeedsPage} />
-            <ListPagination page={activeNeedsPage} total={barangaySummaries.length} pageSize={5} onChange={setNeedsPage} />
             {barangaySummaries.length ===
             0 ? (
               <View
@@ -3055,6 +3054,7 @@ export default function ReliefOperations() {
               </View>
             </View>
 
+            <ListPagination page={activeNeedsPage} total={barangaySummaries.length} pageSize={5} onChange={setNeedsPage} />
             {barangaySummaries.length ===
             0 ? (
               <View
