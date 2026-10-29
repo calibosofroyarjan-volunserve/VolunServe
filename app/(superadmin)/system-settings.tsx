@@ -1,19 +1,21 @@
+import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  collection,
   doc,
   serverTimestamp,
-  setDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 import React, {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,10 +23,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import {
-  createAdminLog,
-} from "../../lib/adminLogger";
 
 import { db } from "../../lib/firebase";
 
@@ -39,6 +37,13 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+
+// Verified public emergency numbers. No arbitrary hotline input is allowed.
+const OFFICIAL_EMERGENCY_HOTLINES = [
+  "911",
+  "0932-600-0119", // CSJDM CDRRMO 24-hour response
+  "0955-206-7200", // CSJDM CDRRMO 24-hour response
+];
 
 export default function SystemSettings() {
   const {
@@ -78,7 +83,15 @@ export default function SystemSettings() {
   const [saving, setSaving] =
     useState(false);
 
+  // Keep edits intact when the public Firestore settings listener refreshes.
+  const editingDraft = useRef(false);
+  const trackEdit = (setter: (value: string) => void) => (value: string) => {
+    editingDraft.current = true;
+    setter(value);
+  };
+
   useEffect(() => {
+    if (editingDraft.current) return;
     setCityName(settings.cityName);
 
     setEmergencyHotline(
@@ -112,7 +125,7 @@ export default function SystemSettings() {
 
   const saveSettings = async () => {
     if (!isSuperAdmin || !user || !profile) {
-      Alert.alert(
+      AppAlert.alert(
         "Access Denied",
         "Only the active Super Admin can update system settings."
       );
@@ -127,7 +140,7 @@ export default function SystemSettings() {
       cityName.trim().length < 3 ||
       cityName.trim().length > 120
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid city name",
         "Enter between 3 and 120 characters."
       );
@@ -135,14 +148,11 @@ export default function SystemSettings() {
       return;
     }
 
-    if (
-      !/^[+()0-9\s-]{3,40}$/.test(emergencyHotline.trim())
-    ) {
-      Alert.alert(
-        "Invalid hotline",
-        "Enter a verified official phone number (digits, spaces, +, - or parentheses only)."
+    if (!OFFICIAL_EMERGENCY_HOTLINES.includes(emergencyHotline.trim())) {
+      AppAlert.alert(
+        "Official hotline required",
+        "Choose 911 or a verified City of San Jose del Monte CDRRMO response number. Custom numbers are not allowed."
       );
-
       return;
     }
 
@@ -152,7 +162,7 @@ export default function SystemSettings() {
         supportEmail.trim()
       )
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid email",
         "Enter a valid support email or leave it blank."
       );
@@ -166,7 +176,7 @@ export default function SystemSettings() {
       publicServiceNotice.trim().length >
         500
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid public notice",
         "Enter between 10 and 500 characters."
       );
@@ -179,7 +189,7 @@ export default function SystemSettings() {
       hours < 1 ||
       hours > 720
     ) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid retention",
         "Choose a whole number from 1 to 720 hours."
       );
@@ -190,62 +200,31 @@ export default function SystemSettings() {
     setSaving(true);
 
     try {
-      await setDoc(
-        doc(
-          db,
-          "systemSettings",
-          "public"
-        ),
-        {
-          cityName:
-            cityName.trim(),
-
-          emergencyHotline:
-            emergencyHotline.trim(),
-
-          supportEmail:
-            supportEmail
-              .trim()
-              .toLowerCase(),
-
-          publicServiceNotice:
-            publicServiceNotice.trim(),
-
-          liveLocationRetentionHours:
-            hours,
-
-          updatedAt:
-            serverTimestamp(),
-
-          updatedBy:
-            user.uid,
-        }
-      );
-
-      await createAdminLog({
-        actionType:
-          "system_settings_updated",
-
-        targetType:
-          "system_settings",
-
-        targetId:
-          "public",
-
-        adminUid:
-          user.uid,
-
-        adminName:
-          profile.fullName ||
-          profile.email ||
-          "Super Administrator",
-
-        description:
-          `Updated public contact settings and set ` +
-          `live-location retention to ${hours} hour(s).`,
+      // An approved settings change must never succeed without its audit entry.
+      // Firestore commits both writes atomically or rejects both.
+      const batch = writeBatch(db);
+      batch.set(doc(db, "systemSettings", "public"), {
+        cityName: cityName.trim(),
+        emergencyHotline: emergencyHotline.trim(),
+        supportEmail: supportEmail.trim().toLowerCase(),
+        publicServiceNotice: publicServiceNotice.trim(),
+        liveLocationRetentionHours: hours,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
       });
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: "system_settings_updated",
+        targetType: "system_settings",
+        targetId: "public",
+        adminUid: user.uid,
+        adminName: profile.fullName || profile.email || "Super Administrator",
+        description: `Updated public contact settings and set live-location retention to ${hours} hour(s).`,
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
+      editingDraft.current = false;
 
-      Alert.alert(
+      AppAlert.alert(
         "Settings Saved",
         "Public contact information and live-location retention settings were updated."
       );
@@ -255,7 +234,7 @@ export default function SystemSettings() {
         error
       );
 
-      Alert.alert(
+      AppAlert.alert(
         "Unable to Save Settings",
         error?.message ||
           "Please try again."
@@ -322,7 +301,7 @@ export default function SystemSettings() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Manage system-wide public contact information and technical live-location retention controls.
+          Configure public contact details and the GPS record retention preference. These are technical settings—not LGU emergency dispatch or donation controls.
         </Text>
       </View>
 
@@ -339,7 +318,7 @@ export default function SystemSettings() {
           </Text>
 
           <Text style={styles.noticeText}>
-            This page is intentionally limited to global configuration. Admin account management remains in the separate Admin Accounts module, and operational Admin tools remain in the Admin portal.
+            Use this page in three steps: (1) verify the public contact details below, (2) select how long temporary GPS records should be retained, and (3) save. LGU account approval belongs in LGU Staff & Admin Accounts. Emergency response, assistance and donations belong to the LGU Admin portal.
           </Text>
         </View>
       </View>
@@ -360,31 +339,32 @@ export default function SystemSettings() {
             </Text>
 
             <Text style={styles.cardSubtitle}>
-              These values may be displayed to VolunServe users where public service and emergency contact information is needed.
+              Step 1 of 3 · Public-facing information. Only enter contacts confirmed by the LGU; do not use personal or sample numbers.
             </Text>
           </View>
         </View>
 
         <Field
-          label="City / Service Name"
+          label="City / Service Name (shown publicly)"
           value={cityName}
-          onChangeText={setCityName}
+          onChangeText={trackEdit(setCityName)}
           maxLength={120}
         />
 
         <PresetField
-          label="Official Emergency Hotline"
+          label="Official Emergency Hotline (public)"
           value={emergencyHotline}
-          onChangeText={setEmergencyHotline}
-          options={["911"]}
-          placeholder="Enter verified official hotline number"
-          help="Choose the national emergency hotline or Others to enter an independently verified official contact number. Do not enter generic instructions."
+          onChangeText={trackEdit(setEmergencyHotline)}
+          options={OFFICIAL_EMERGENCY_HOTLINES}
+          allowCustom={false}
+          placeholder="Select an official emergency hotline"
+          help="Verified emergency contacts only: 911 (national) or CSJDM CDRRMO 24-hour response (0932-600-0119 / 0955-206-7200). No personal or custom numbers."
         />
 
         <Field
-          label="Support Email (Optional)"
+          label="Support Email (optional — public contact)"
           value={supportEmail}
-          onChangeText={setSupportEmail}
+          onChangeText={trackEdit(setSupportEmail)}
           autoCapitalize="none"
           keyboardType="email-address"
           maxLength={160}
@@ -393,7 +373,7 @@ export default function SystemSettings() {
         <PresetField
           label="Public Service Notice"
           value={publicServiceNotice}
-          onChangeText={setPublicServiceNotice}
+          onChangeText={trackEdit(setPublicServiceNotice)}
           options={[
             "VolunServe requires internet connectivity and does not replace emergency hotlines.",
             "For immediate life-threatening emergencies, call 911. VolunServe reports require connectivity.",
@@ -420,7 +400,7 @@ export default function SystemSettings() {
             </Text>
 
             <Text style={styles.cardSubtitle}>
-              Configure the intended retention window for temporary resident and volunteer live-location records.
+              Step 2 of 3 · This is the intended storage lifetime for temporary location records. It does not change GPS accuracy, update frequency, or activate tracking.
             </Text>
           </View>
         </View>
@@ -428,15 +408,15 @@ export default function SystemSettings() {
         <PresetField
           label="Retention Period (Hours)"
           value={retentionHours}
-          onChangeText={setRetentionHours}
+          onChangeText={trackEdit(setRetentionHours)}
           options={["24", "48", "72"]}
           keyboardType="number-pad"
           maxLength={3}
-          help="Select a retention preference or Others for 1–720 hours. Changing it does not activate automatic deletion."
+          help="24 hours = 1 day, 48 hours = 2 days, 72 hours = 3 days. Choose a custom value only with an approved retention policy. Saving does not itself delete old records."
         />
 
         <Text style={styles.helper}>
-          Valid range: 1–720 hours. This setting records the approved retention period. Automatic deletion still depends on the cleanup mechanism implemented by the system.
+          Important: the value is a retention preference, NOT a working automatic cleanup switch. Old GPS records require a separately verified cleanup process.
         </Text>
       </View>
 
@@ -474,7 +454,7 @@ export default function SystemSettings() {
             />
 
             <Text style={styles.buttonText}>
-              Save System Settings
+              Step 3 · Save System Settings
             </Text>
           </>
         )}
@@ -484,15 +464,15 @@ export default function SystemSettings() {
 }
 
 function PresetField({
-  label, value, onChangeText, options, help, multiline, keyboardType, maxLength, placeholder,
+  label, value, onChangeText, options, help, multiline, keyboardType, maxLength, placeholder, allowCustom = true,
 }: {
   label: string; value: string; onChangeText: (next: string) => void; options: string[];
-  help?: string; multiline?: boolean; keyboardType?: "number-pad"; maxLength?: number; placeholder?: string;
+  help?: string; multiline?: boolean; keyboardType?: "number-pad"; maxLength?: number; placeholder?: string; allowCustom?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isOther = !options.includes(value);
-  const [customMode, setCustomMode] = useState(isOther);
-  useEffect(() => { if (!options.includes(value)) setCustomMode(true); }, [value, options]);
+  const [customMode, setCustomMode] = useState(allowCustom && isOther);
+  useEffect(() => { setCustomMode(allowCustom && !options.includes(value)); }, [value, allowCustom]);
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
@@ -500,12 +480,13 @@ function PresetField({
         accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
         style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
         <Text style={{ flex: 1, color: "#173D32" }} numberOfLines={2}>
-          {customMode ? "Others — specify" : (value || "Select an option")}
+          {!allowCustom && isOther ? "Select an approved official number" :
+            customMode ? (value ? `Custom: ${value}` : "Custom value — enter below") : (value || "Select an option")}
         </Text>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
       </TouchableOpacity>
       {expanded && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 11, marginTop: 4, overflow: "hidden" }}>
-        {[...options, "Others — specify"].map((option) =>
+        {[...options, ...(allowCustom ? ["Others — specify"] : [])].map((option) =>
           <TouchableOpacity key={option} accessibilityRole="button" onPress={() => {
             const other = option === "Others — specify";
             setCustomMode(other); setExpanded(false);
@@ -515,7 +496,7 @@ function PresetField({
             <Text style={{ color: "#173D32" }}>{option}</Text>
           </TouchableOpacity>)}
       </View>}
-      {customMode && <TextInput value={value} onChangeText={onChangeText}
+      {allowCustom && customMode && <TextInput value={value} onChangeText={onChangeText}
         placeholder={placeholder || "Specify your value"}
         accessibilityLabel={label + " custom value"}
         keyboardType={keyboardType}
@@ -589,7 +570,7 @@ const styles =
 
     container: {
       width: "100%",
-      maxWidth: 1000,
+      maxWidth: 1300,
       alignSelf: "center",
       flexGrow: 1,
       padding: 24,
@@ -600,20 +581,22 @@ const styles =
     hero: {
       padding: 21,
       borderRadius: 10,
-      backgroundColor: "#078F82",
+      backgroundColor: "#E5F5ED",
+      borderWidth: 1,
+      borderColor: "#D7EBE0",
     },
 
     title: {
       marginTop: 8,
-      color: "#FFFFFF",
-      fontSize: 26,
+      color: "#12372D",
+      fontSize: 27,
       fontWeight: "700",
     },
 
     subtitle: {
       marginTop: 5,
       maxWidth: 700,
-      color: "#E6F7F1",
+      color: "#52776A",
       lineHeight: 20,
     },
 
@@ -651,7 +634,7 @@ const styles =
       borderRadius: 17,
       backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: "#DDEAE2",
     },
 
     cardHeader: {
@@ -743,7 +726,7 @@ const styles =
       justifyContent: "center",
       flexDirection: "row",
       gap: 8,
-      backgroundColor: "#078F82",
+      backgroundColor: "#087A62",
     },
 
     buttonText: {

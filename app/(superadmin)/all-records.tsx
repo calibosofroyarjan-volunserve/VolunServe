@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ListPagination from "../../components/ui/ListPagination";
 
 import {
   collection,
@@ -34,6 +35,10 @@ type RecordType =
   | "disputes"
   | "donations"
   | "events"
+  | "communityEvents"
+  | "eventProposals"
+  | "eventParticipants"
+  | "credentialReviews"
   | "certificates";
 
 type GenericRecord = {
@@ -56,6 +61,10 @@ const emptyRecords: RecordGroup = {
   disputes: [],
   donations: [],
   events: [],
+  communityEvents: [],
+  eventProposals: [],
+  eventParticipants: [],
+  credentialReviews: [],
   certificates: [],
 };
 
@@ -95,6 +104,22 @@ const recordSources: Array<{
   {
     type: "events",
     collectionName: "volunteerEvents",
+  },
+  {
+    type: "communityEvents",
+    collectionName: "communityEvents",
+  },
+  {
+    type: "eventProposals",
+    collectionName: "communityEventProposals",
+  },
+  {
+    type: "eventParticipants",
+    collectionName: "communityEventParticipants",
+  },
+  {
+    type: "credentialReviews",
+    collectionName: "lguAdminCredentialReviews",
   },
   {
     type: "certificates",
@@ -239,6 +264,8 @@ export default function AllRecords() {
     search,
     setSearch,
   ] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const [
     errors,
@@ -468,6 +495,9 @@ export default function AllRecords() {
       activeTab,
       search,
     ]);
+  const totalPages = Math.max(1, Math.ceil(visibleRecords.length / PAGE_SIZE));
+  const activePage = Math.min(page, totalPages);
+  const pagedRecords = visibleRecords.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   const tabs: {
     key: RecordType;
@@ -517,8 +547,28 @@ export default function AllRecords() {
     },
 
     {
+      key: "communityEvents",
+      label: "Community Events",
+      icon: "calendar-outline",
+    },
+    {
+      key: "eventProposals",
+      label: "Event Proposals",
+      icon: "document-text-outline",
+    },
+    {
+      key: "eventParticipants",
+      label: "Volunteer Attendance",
+      icon: "checkmark-circle-outline",
+    },
+    {
+      key: "credentialReviews",
+      label: "LGU Credential Reviews",
+      icon: "shield-checkmark-outline",
+    },
+    {
       key: "events",
-      label: "Events",
+      label: "Legacy Volunteer Events",
       icon: "calendar-outline",
     },
 
@@ -952,11 +1002,69 @@ export default function AllRecords() {
       );
     }
 
+    if (activeTab === "eventProposals") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="document-text-outline"
+          title={firstText(item.title, "Community Event Proposal")}
+          subtitle={firstText(item.barangay, item.location)}
+          status={firstText(item.status, "pending")}
+          rows={[
+            { label: "Resident proposer", value: firstText(item.proposerName, item.proposedBy) },
+            { label: "Category", value: firstText(item.category) },
+            { label: "Scheduled date", value: firstText(item.date) },
+            { label: "Admin review note", value: firstText(item.adminNote) },
+            { label: "Proposal reference", value: item.id },
+          ]}
+        />
+      );
+    }
+
+    if (activeTab === "eventParticipants") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="checkmark-circle-outline"
+          title={firstText(item.fullName, "Volunteer Participation")}
+          subtitle={firstText(item.eventId, "Community event")}
+          status={firstText(item.status, "unknown")}
+          rows={[
+            { label: "Volunteer UID", value: firstText(item.uid) },
+            { label: "Time in", value: readableDate(item.checkedInAt) },
+            { label: "Time out", value: readableDate(item.checkedOutAt) },
+            { label: "Attendance verified", value: item.attendanceVerified === true ? "Yes" : "No" },
+            { label: "Record reference", value: item.id },
+          ]}
+        />
+      );
+    }
+
+    if (activeTab === "credentialReviews") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="shield-checkmark-outline"
+          title={firstText(item.office, "LGU Credential Review")}
+          subtitle={firstText(item.position, item.accountEmail)}
+          status={firstText(item.reviewStatus, "not reviewed")}
+          rows={[
+            { label: "LGU account", value: firstText(item.accountEmail) },
+            { label: "Verification method", value: firstText(item.verificationMethod) },
+            { label: "Identity confirmation", value: item.identityPresenceConfirmed === true ? "Confirmed in person" : "Not confirmed" },
+            { label: "Reviewed by UID", value: firstText(item.verifiedBy) },
+            { label: "Reviewed at", value: readableDate(item.verifiedAt) },
+          ]}
+        />
+      );
+    }
+
     if (
-      activeTab === "events"
+      (activeTab === "events" || activeTab === "communityEvents")
     ) {
       const status =
         firstText(
+          item.publicationStatus,
           item.status,
           "active"
         );
@@ -967,8 +1075,9 @@ export default function AllRecords() {
           icon="calendar-outline"
           title={firstText(
             item.title,
+            item.eventTitle,
             item.name,
-            "Volunteer Event"
+            "Community Event"
           )}
           subtitle={firstText(
             item.location,
@@ -1201,6 +1310,7 @@ export default function AllRecords() {
                   );
 
                   setSearch("");
+                  setPage(1);
                 }}
               >
                 <Ionicons
@@ -1244,9 +1354,7 @@ export default function AllRecords() {
 
         <TextInput
           value={search}
-          onChangeText={
-            setSearch
-          }
+          onChangeText={(value) => { setSearch(value); setPage(1); }}
           placeholder={
             "Search current records..."
           }
@@ -1328,6 +1436,7 @@ export default function AllRecords() {
             </Text>
           </View>
 
+          <ListPagination page={activePage} total={visibleRecords.length} onChange={setPage} />
           {visibleRecords.length ===
           0 ? (
             <View
@@ -1359,7 +1468,7 @@ export default function AllRecords() {
               </Text>
             </View>
           ) : (
-            visibleRecords.map(
+            pagedRecords.map(
               renderRecord
             )
           )}
@@ -1577,7 +1686,7 @@ const styles =
       padding: 24,
       paddingBottom: 60,
       backgroundColor:
-        "#F1F5F9",
+        "#F6F9F8",
       minHeight: "100%",
     },
 
@@ -1597,13 +1706,18 @@ const styles =
     },
 
     header: {
-      marginBottom: 20,
+      marginBottom: 17,
+      backgroundColor:"#E5F5ED",
+      padding:23,
+      borderWidth:1,
+      borderColor:"#D8EBE0",
+      borderRadius:14,
     },
 
     eyebrow: {
       fontSize: 11,
       fontWeight: "900",
-      color: "#0F766E",
+      color: "#176C52",
       letterSpacing: 1.3,
     },
 

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ListPagination from "../../components/ui/ListPagination";
 import { useRouter } from "expo-router";
 import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -30,6 +31,19 @@ const prettyDate = (value?: Timestamp | null) => {
 const prettyAction = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+type AuditCategory = "all" | "access" | "settings" | "operations";
+const AUDIT_FILTERS: { key: AuditCategory; label: string }[] = [
+  {key: "all", label: "All activity"},
+  {key: "access", label: "Access & Credentials"},
+  {key: "settings", label: "System Settings"},
+  {key: "operations", label: "Other Admin Activity"},
+];
+const categoryFor = (action: string): Exclude<AuditCategory,"all"> =>
+  /admin_account|credential|promot|suspend|reactivat|role|password|login|sign_in|privacy|access|revok/i.test(action)
+    ? "access" :
+  /system_settings|system_config|hotline|data_cleanup|retention|setting/i.test(action)
+    ? "settings" : "operations";
+
 /**
  * Actual administrative audit feed. Donation transactions have their own
  * donation history and must not be mislabeled as all administrative actions.
@@ -43,6 +57,9 @@ export default function AdminLogs() {
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<AuditCategory>("all");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
   const sources = ["adminLogs", "adminActivityLogs"];
 
   useEffect(() => {
@@ -89,12 +106,15 @@ export default function AdminLogs() {
   );
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return logs;
     return logs.filter((item) =>
-      [item.actionType, item.adminName, item.adminUid, item.targetType,
-        item.targetId, item.description].join(" ").toLowerCase().includes(needle),
+      (category === "all" || categoryFor(item.actionType) === category) &&
+      (!needle || [item.actionType, item.adminName, item.adminUid, item.targetType,
+        item.targetId, item.description].join(" ").toLowerCase().includes(needle)),
     );
-  }, [logs, search]);
+  }, [logs, search, category]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const activePage = Math.min(page, pageCount);
+  const pagedLogs = visible.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   if (sessionLoading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
   if (!authorized) {
@@ -125,22 +145,38 @@ export default function AdminLogs() {
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" color="#64748B" size={20} />
       <TextInput
-        style={styles.searchInput} value={search} onChangeText={setSearch}
+        style={styles.searchInput} value={search} onChangeText={value => { setSearch(value); setPage(1); }}
         placeholder="Search action, account, actor or reference"
         placeholderTextColor="#94A3B8" autoCapitalize="none"
       />
+    </View>
+    <View style={styles.filterRow}>
+      {AUDIT_FILTERS.map(item => (
+        <TouchableOpacity key={item.key} accessibilityRole="button"
+          accessibilityLabel={"Filter audit events: " + item.label}
+          accessibilityState={{selected: category === item.key}}
+          onPress={() => { setCategory(item.key); setPage(1); }}
+          style={[styles.filterChip, category === item.key && styles.filterChipSelected]}>
+          <Text style={[styles.filterLabel, category === item.key && styles.filterLabelSelected]}>
+            {item.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
     {Object.entries(errors).map(([source, message]) =>
       <View key={source} style={styles.error}>
         <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
       </View>,
     )}
+    <ListPagination page={activePage} total={visible.length} onChange={setPage} />
     {loading ? <ActivityIndicator style={{ marginTop: 25 }} /> : null}
     {!loading && visible.length === 0 ?
       <View style={styles.empty}><Ionicons name="document-text-outline" size={30} color="#73918A" />
-        <Text style={styles.emptyText}>{search ? "No matching audit events." : "No administrative audit events recorded yet."}</Text>
+        <Text style={styles.emptyText}>{Object.keys(errors).length > 0
+          ? "An audit feed is unavailable. Resolve permissions or connectivity before confirming the audit history."
+          : search || category !== "all" ? "No matching audit events." : "No administrative audit events recorded yet."}</Text>
       </View> : null}
-    {visible.map((item) =>
+    {pagedLogs.map((item) =>
       <View key={item.source + ":" + item.id} style={styles.event}>
         <View style={styles.eventHeader}>
           <Text style={styles.action}>{prettyAction(item.actionType)}</Text>
@@ -157,10 +193,10 @@ export default function AdminLogs() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F6F8F7" },
-  container: { width: "100%", maxWidth: 1180, alignSelf: "center", padding: 22, paddingBottom: 60 },
+  container: { width: "100%", maxWidth: 1300, alignSelf: "center", padding: 22, paddingBottom: 60 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
-  header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 },
+  header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 17, padding:20, borderRadius:14, backgroundColor:"#E5F5ED", borderWidth:1, borderColor:"#D8EBE0" },
   eyebrow: { fontSize: 11, fontWeight: "800", color: "#087657", letterSpacing: 1 },
   title: { fontSize: 27, fontWeight: "700", color: "#14392F", marginTop: 4 },
   subtitle: { fontSize: 12, color: "#657A80", marginTop: 4, lineHeight: 18 },
@@ -170,6 +206,12 @@ const styles = StyleSheet.create({
   summaryTitle: { color: "#183C33", fontWeight: "800", fontSize: 15 },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", paddingHorizontal: 14, borderRadius: 12, marginBottom: 14 },
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 9, minWidth: 0, color: "#173B32" },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  filterChip: { paddingHorizontal: 12, minHeight: 39, justifyContent: "center", borderRadius: 10,
+    borderWidth: 1, borderColor: "#DCEAE2", backgroundColor: "#FFFFFF" },
+  filterChipSelected: { borderColor: "#087A62", backgroundColor: "#087A62" },
+  filterLabel: { fontSize: 12, fontWeight: "700", color: "#356A58" },
+  filterLabelSelected: { color: "#FFFFFF" },
   error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
   errorText: { color: "#B91C1C", fontSize: 12 },
   empty: { padding: 35, alignItems: "center", gap: 10 },
