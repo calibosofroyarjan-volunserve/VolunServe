@@ -15,6 +15,18 @@ import {
   Inter_700Bold, Inter_800ExtraBold,
 } from "@expo-google-fonts/inter";
 
+import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
+import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/sjdmMapBoundary";
+
+const sjdmFeature: SjdmBoundary = {
+  type: "Feature",
+  properties: { city: "City of San Jose del Monte", province: "Bulacan", source: "geoBoundaries ADM3 simplified CC BY 4.0" },
+  geometry: SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"],
+};
+const sjdmMask = sjdmOutsideMask(sjdmFeature);
+const isInsideSjdm = (lat: number, lng: number) =>
+  insideSjdmBoundary(sjdmFeature, lat, lng);
+
 import { db } from "../lib/firebase";
 import { isApprovedProfile } from "../lib/firebaseAuth";
 import { useUserSession } from "../lib/useUserSession";
@@ -98,6 +110,18 @@ const mapDocument = `
   <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 
   <script>
+    const city = {"type":"Feature","properties":{"source":"geoBoundaries ADM3 simplified CC BY 4.0"},"geometry":${JSON.stringify(SJDM_REFERENCE_GEOMETRY)}};
+    const outside = ${JSON.stringify(sjdmMask)};
+    const ring = city.geometry.coordinates[0];
+    function inCity(lat, lng) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i], b = ring[j];
+        if ((a[1] > lat) !== (b[1] > lat) &&
+            lng < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+      }
+      return inside;
+    }
     const errorBox = document.getElementById('error');
 
     function showError(message) {
@@ -116,6 +140,9 @@ const mapDocument = `
           style: 'https://tiles.openfreemap.org/styles/liberty',
           center: [121.045, 14.813],
           zoom: 13,
+          maxBounds: [[121.005, 14.758], [121.178, 14.877]],
+          minZoom: 11.3,
+          maxZoom: 19,
           attributionControl: true
         });
 
@@ -126,7 +153,19 @@ const mapDocument = `
           'top-left'
         );
 
+        map.on('load', () => {
+          map.addSource('sjdm-outside', { type: 'geojson', data: outside });
+          map.addLayer({ id: 'sjdm-outside-shade', type: 'fill', source: 'sjdm-outside',
+            paint: { 'fill-color': '#334155', 'fill-opacity': 0.50 } });
+          map.addSource('sjdm-boundary', { type: 'geojson', data: city });
+          map.addLayer({ id: 'sjdm-fill', type: 'fill', source: 'sjdm-boundary',
+            paint: { 'fill-color': '#0d9488', 'fill-opacity': 0.07 } });
+          map.addLayer({ id: 'sjdm-outline', type: 'line', source: 'sjdm-boundary',
+            paint: { 'line-color': '#047857', 'line-width': 3 } });
+          map.fitBounds([[121.013, 14.767], [121.169, 14.869]], { padding: 20, duration: 0 });
+        });
         let marker = null;
+        let previousValidPin = [121.045, 14.813];
 
         function choose(lat, lng, notify) {
           if (
@@ -136,6 +175,13 @@ const mapDocument = `
             return;
           }
 
+          if (!inCity(lat, lng)) {
+            if (marker) marker.setLngLat(previousValidPin);
+            showError('Only locations inside San Jose del Monte, Bulacan can be selected.');
+            return;
+          }
+          errorBox.style.display = 'none';
+          previousValidPin = [lng, lat];
           if (!marker) {
             marker = new maplibregl.Marker({
               color: '#087f78',
@@ -480,6 +526,11 @@ export default function WebDisasterReport() {
       return;
     }
 
+    if (!isInsideSjdm(lat, lng)) {
+      setError("Only incident locations within San Jose del Monte, Bulacan are supported.");
+      return;
+    }
+    setError("");
     const selected = {
       latitude: lat,
       longitude: lng,
@@ -656,6 +707,10 @@ export default function WebDisasterReport() {
       return;
     }
 
+    if (pin && !isInsideSjdm(pin.latitude, pin.longitude)) {
+      setError("Incident location must be within San Jose del Monte, Bulacan.");
+      return;
+    }
     if (!pin) {
       setError(
         "Select the exact incident location on the map or use GPS first."
