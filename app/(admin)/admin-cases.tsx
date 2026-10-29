@@ -5914,7 +5914,7 @@ export default function AdminCases() {
                             const offline = /offline|unavailable|off.?duty/.test(availabilityText);
                             const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
                               !eligibility.eligible ? "Restricted" :
-                              offline ? "Offline · offer allowed" : "Eligible";
+                              offline ? "Offline · offer allowed" : "Available";
 
                             return (
                               <View key={volunteer.uid} style={styles.personnelCompactRow}>
