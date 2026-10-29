@@ -250,7 +250,7 @@ const Field = memo(function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label.endsWith("*") ? <>{label.slice(0, -1)}<Text style={{ color: "#DC2626" }}>*</Text></> : label}</Text>
       <View style={[styles.inputShell, focused && styles.inputFocused, !editable && styles.disabledInput, invalid && styles.inputInvalid]}>
         {icon ? <Text style={styles.inputIcon}>{icon}</Text> : null}
         <TextInput
@@ -340,7 +340,7 @@ const Dropdown = memo(function Dropdown({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label}</Text>
+      <Text style={styles.label}>{icon ? `${icon} ` : ""}{label.endsWith("*") ? <>{label.slice(0, -1)}<Text style={{ color: "#DC2626" }}>*</Text></> : label}</Text>
       <Pressable ref={triggerRef} onPress={openMenu} style={[styles.ddTrigger, !enabled && styles.disabledInput]}>
         <Text style={[styles.ddValue, !value && styles.ddPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.ddChevron}>{open ? "▲" : "▼"}</Text>
@@ -476,7 +476,7 @@ export default function Signup() {
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
-    const phoneValid = /^9\d{9}$/.test(phoneDigits);
+    const phoneValid = true;
 
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
@@ -633,7 +633,7 @@ export default function Signup() {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         authProvider: googleBound ? "google" : "email",
-        phoneNumber: toE164FromLocal(formData.phoneLocal),
+        phoneNumber: "",
 
         region: formData.region,
         province: formData.province,
@@ -645,17 +645,17 @@ export default function Signup() {
         occupationOther: formData.occupationOther || "",
       });
 
-      const successTitle = "Basic Account Created";
+      const successTitle = "Verify Your Email";
       const successMessage = googleBound
         ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
-        : "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
+        : "We sent a verification link to your email. Verify your email address before signing in, then complete Identity Verification for protected Resident services.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace("/(tabs)");
+        router.replace("/login");
       } else {
         Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace("/(tabs)") },
+          { text: "OK", onPress: () => router.replace("/login") },
         ]);
       }
     } catch (e: any) {
@@ -912,7 +912,7 @@ export default function Signup() {
 
                     <View style={styles.formColumn}>
                       <View style={styles.field}>
-                        <Text style={styles.label}>Date of Birth *</Text>
+                        <Text style={styles.label}>Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
 
                         {Platform.OS === "web" ? (
                           <View
@@ -988,38 +988,6 @@ export default function Signup() {
                     </ValidationText>
                   ) : null}
 
-                  <Text style={styles.label}>Mobile Number *</Text>
-
-                  <View style={styles.phoneWrap}>
-                    <View style={styles.phonePrefix}>
-                      <Text style={styles.flag}>PH</Text>
-                      <Text style={styles.phonePrefixText}>+63</Text>
-                    </View>
-
-                    <TextInput
-                      style={[
-                        styles.phoneInput,
-                        !validation.phoneValid &&
-                          formData.phoneLocal.length > 0 &&
-                          styles.inputInvalid,
-                      ]}
-                      value={formData.phoneLocal}
-                      onChangeText={(v) =>
-                        updateField("phoneLocal", sanitizePhoneLocal(v.trim()))
-                      }
-                      keyboardType="phone-pad"
-                      placeholder="912 345 6789"
-                      placeholderTextColor={COLORS.lightText}
-                      maxLength={10}
-                      returnKeyType="next"
-                    />
-                  </View>
-
-                  {formData.phoneLocal.length > 0 && !validation.phoneValid ? (
-                    <ValidationText ok={false}>
-                      Enter a valid Philippine mobile number starting with 9.
-                    </ValidationText>
-                  ) : null}
 
                 </View>
               )}
