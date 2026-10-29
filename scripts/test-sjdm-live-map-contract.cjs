@@ -241,7 +241,8 @@ test("web map popup is readable, actionable and never displays raw OSM technical
   assert.match(source,/makeVerifiedMapPopup\(item,true\)/);
   assert.match(source,/makeVerifiedMapPopup\(item,false\)/);
   assert.doesNotMatch(source,/View map source/);
-  assert.doesNotMatch(source,/Official information/);
+  assert.match(source,/Official information/);
+  assert.match(source,/Location source/);
   assert.match(source,/Show road route here/);
   assert.match(source,/appendInAppRouteButton\(item, links\)/);
   assert.match(source,/function showFacilityRoute/);
@@ -263,7 +264,7 @@ test("response UI never describes an unassigned case as an active LGU responder"
   assert.match(source,/No LGU responder assigned yet/);
   assert.match(source,/NOT ASSIGNED/);
   assert.match(source,/tel:911/);
-  assert.match(source,/tel:09366000119/);
+  assert.match(source,/tel:09326000119/);
   assert.doesNotMatch(source,/"LGU coordinating response"/);
 });
 

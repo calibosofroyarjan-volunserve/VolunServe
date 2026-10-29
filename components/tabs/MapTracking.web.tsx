@@ -232,10 +232,13 @@ const mapDocument = `
       border-radius: 14px;
       box-shadow: 0 9px 30px rgba(14,45,36,.16);
       padding: 13px 15px;
-      max-width: 250px;
+      width: min(340px, calc(100vw - 64px));
+      max-width: min(340px, calc(100vw - 64px));
+      max-height: min(65vh, 520px);
+      overflow-y: auto;
       font-family: Inter, ui-sans-serif, system-ui, sans-serif;
     }
-    .place-popup { max-width: 250px; font-size: 12px; color: #19392D; }
+    .place-popup { width:100%; max-width:340px; font-size:12px; color:#19392D; }
     .place-popup-title { display: block; font-size: 14px; font-weight: 800; line-height: 1.35; }
     .place-popup-category { display: block; font-size: 11px; color: #4D7365; margin-top: 3px; }
     .place-popup-note { font-size: 11px; line-height: 1.5; color: #4B6359; margin: 10px 0 8px; }
@@ -630,6 +633,37 @@ const mapDocument = `
         category.className = "place-popup-category";
         category.textContent = categoryName(item.kind) + " · San Jose del Monte";
         card.appendChild(category);
+        let credit = null;
+        if (item.photoUrl && item.photoUrl.startsWith("https://")) {
+          const photo = document.createElement("img");
+          photo.src = item.photoUrl;
+          photo.alt = "Actual exterior of " + item.name;
+          photo.loading = "lazy";
+          photo.decoding = "async";
+          photo.style.cssText = "display:block;width:100%;height:170px;object-fit:cover;border-radius:12px;margin:10px 0 5px;background:#e7f0ee;";
+          photo.onerror = () => { photo.remove(); if (credit) credit.remove(); };
+          card.appendChild(photo);
+          if (item.photoCredit) {
+            credit = document.createElement("small");
+            credit.textContent = "Photo: " + item.photoCredit;
+            credit.style.cssText = "display:block;color:#64748b;font-size:10px;margin-bottom:6px;";
+            card.appendChild(credit);
+          }
+        }
+        if (!item.photoUrl) {
+          const unavailable = document.createElement("div");
+          unavailable.setAttribute("role", "note");
+          unavailable.style.cssText = "margin:10px 0;padding:14px 12px;border-radius:12px;background:linear-gradient(135deg,#e4f5eb,#f1f8f5);border:1px solid #cae5d7;text-align:center;color:#326d56;line-height:1.5;";
+          unavailable.textContent = "🏛️  Verified map location · Building photo not yet confirmed";
+          card.appendChild(unavailable);
+        }
+        if (item.address) {
+          const address = document.createElement("p");
+          address.className = "place-popup-note";
+          address.style.fontWeight = "600";
+          address.textContent = "📍 " + item.address;
+          card.appendChild(address);
+        }
         const note = document.createElement("p");
         note.className = "place-popup-note";
         note.textContent = item.note;
@@ -637,6 +671,23 @@ const mapDocument = `
         const links = document.createElement("div");
         links.className = "place-popup-links";
         appendInAppRouteButton(item, links);
+        if (typeof item.officialInfoUrl === "string" &&
+            item.officialInfoUrl.startsWith("https://")) {
+          const source = document.createElement("a");
+          source.href = item.officialInfoUrl;
+          source.target = "_blank";
+          source.rel = "noopener noreferrer";
+          source.textContent = "Official information";
+          links.appendChild(source);
+        }
+        if (typeof item.sourceUrl === "string" && item.sourceUrl.startsWith("https://")) {
+          const mapped = document.createElement("a");
+          mapped.href = item.sourceUrl;
+          mapped.target = "_blank";
+          mapped.rel = "noopener noreferrer";
+          mapped.textContent = "Location source";
+          links.appendChild(mapped);
+        }
         if (typeof item.officialContact === "string" &&
           item.officialContact.length >= 7 && item.officialContact.length <= 21 &&
           [...item.officialContact].every(ch => "0123456789+ ()-".includes(ch))) {
@@ -692,7 +743,7 @@ const mapDocument = `
         appendInAppRouteButton(item, links);
         if (isShelter) {
           const emergencyCall = document.createElement("a");
-          emergencyCall.href = "tel:09366000119";
+          emergencyCall.href = "tel:09326000119";
           emergencyCall.textContent = "Call SJDM CDRRMO";
           links.appendChild(emergencyCall);
         }
@@ -6630,7 +6681,7 @@ export default function WebMapTracking() {
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
                     Call 911 · Emergency
                   </a>
-                  <a href="tel:09366000119" className="secondary-button"
+                  <a href="tel:09326000119" className="secondary-button"
                     style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
                     Call SJDM CDRRMO

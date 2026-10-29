@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/friday-emergency-hub-navigation-20261028
+      - fix/emergency-facility-authentic-cards-20261029
   pull_request:
     paths:
       - "app/(tabs)/**"
@@ -32,6 +33,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Verify sourced facility cards
+        run: node --test scripts/test-emergency-facility-cards.cjs
       - name: Verify emergency UI navigation and case-specific routes
         run: node --test scripts/test-friday-emergency-hub.cjs
       - name: Verify SJDM map safety and facility contracts
