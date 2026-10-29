@@ -1,0 +1,38 @@
+name: Validate Premium LGU Admin People & Verification UI
+on:
+  push:
+    branches:
+      - feat/admin-people-verification-premium-ui-20261029
+    paths:
+      - .github/workflows/validate-admin-people-verification-ui.yml
+      - app/(admin)/account-approvals.tsx
+      - app/(admin)/identity-reviews.tsx
+      - components/admin/AdminReviewHero.tsx
+      - scripts/test-admin-people-verification-premium-ui.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-visual-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify isolated Admin UI and existing approval workflows
+        run: |
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-superadmin-premium-restoration.cjs
+          node scripts/test-password-reset-popup.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Confirm Expo web compilation without deploying
+        run: npx expo export --platform web
