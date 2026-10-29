@@ -838,7 +838,7 @@ export default function WebHome() {
                         title="Certificates"
                         subtitle="View your issued volunteer certificates."
                         status="View certificates"
-                        onPress={() => router.push("/certificate")}
+                        onPress={() => router.push("/profile?tab=certificates")}
                         last
                       />
                     </>
