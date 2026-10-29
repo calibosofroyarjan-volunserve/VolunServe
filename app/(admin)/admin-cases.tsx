@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   Alert,
   Image,
@@ -3412,16 +3413,15 @@ export default function AdminCases() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
+      <AdminReviewHero
+        eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+        title="Emergency Reports"
+        subtitle="Review resident incident reports, verify evidence, coordinate authorized LGU responders, and track case resolution."
+        icon="warning-outline"
+        tag="INCIDENT RESPONSE"
+      />
       <View style={styles.pageHeader}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.eyebrow}>ADMIN · EMERGENCY OPERATIONS</Text>
-            <Text style={styles.title}>Emergency Cases</Text>
-            <Text style={styles.subtitle}>
-              Manage resident emergency reports, validate cases, coordinate LGU response, and request Volunteer support only when needed.
-            </Text>
-          </View>
-  
-          <View style={styles.headerTools}>
+        <View style={styles.headerTools}>
             <View style={styles.searchBox}>
               <Text style={styles.searchIcon}>⌕</Text>
               <TextInput
