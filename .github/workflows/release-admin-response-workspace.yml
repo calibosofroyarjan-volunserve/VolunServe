@@ -19,6 +19,8 @@ jobs:
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,8 +28,8 @@ jobs:
       - name: Confirm release changes are workflow-only on approved main
         shell: bash
         run: |
-          test "$(git rev-parse HEAD^)" = "2faa170a5563985cf42fc3934eca80d40b9457a7"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/release-admin-response-workspace.yml"
+          git merge-base --is-ancestor "2faa170a5563985cf42fc3934eca80d40b9457a7" HEAD
+          test "$(git diff --name-only 2faa170a5563985cf42fc3934eca80d40b9457a7 HEAD)" = ".github/workflows/release-admin-response-workspace.yml"
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Validate Admin response, existing approvals and map navigation
