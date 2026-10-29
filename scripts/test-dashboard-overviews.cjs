@@ -9,7 +9,7 @@ const adminView = get("app/(admin)/command-center.tsx");
 const adminLayout = get("app/(admin)/_layout.tsx");
 const rules = get("firestore.rules");
 
-// Verify the approved five-module emerald Super Admin experience, not the retired dashboard copy.
+// Verify the four operational sidebar modules and accessible profile dropdown settings.
 for (const title of [
   "Registered Accounts", "Active LGU Admins", "Pending LGU Applications",
   "Suspended Admins", "Recent LGU Admin Activity", "System & Access Changes",
@@ -21,15 +21,26 @@ const expectedNav = [
   ["LGU Staff & Admin Accounts", "/(superadmin)/admin-accounts"],
   ["System Records", "/(superadmin)/all-records"],
   ["Audit Logs", "/(superadmin)/admin-logs"],
-  ["System Settings", "/(superadmin)/system-settings"],
 ];
-const navLines = superLayout.split("\n").filter(line => /\{ label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs|System Settings)"/.test(line));
+const navLines = superLayout.split("\n").filter(line => /\{ label: "(System Overview|LGU Staff & Admin Accounts|System Records|Audit Logs)"/.test(line));
 assert.deepEqual(navLines.map(line => {
   const match = line.match(/label: "([^"]+)"[^\n]*route: "([^"]+)"/);
   assert(match, "Super Admin navigation entry missing its route");
   return [match[1], match[2]];
-}), expectedNav, "Super Admin must expose only the five approved modules in order");
+}), expectedNav, "Super Admin sidebar must show exactly four operational modules in order");
 assert(superLayout.includes("onNavigate(item.route)"), "Super Admin sidebar navigation must remain functional");
+const dropdownStart = superLayout.indexOf("{accountOpen && (");
+const dropdownEnd = superLayout.indexOf("<View style={styles.contentArea}>", dropdownStart);
+assert(dropdownStart >= 0 && dropdownEnd > dropdownStart, "Missing Super Admin account dropdown");
+const dropdown = superLayout.slice(dropdownStart, dropdownEnd);
+const actions = [...dropdown.matchAll(/accessibilityLabel="(View Profile|System Settings|Sign Out)"/g)].map(m => m[1]);
+assert.deepEqual(actions, ["View Profile", "System Settings", "Sign Out"],
+  "The profile dropdown must provide Profile, Settings and Sign Out in that order");
+assert(dropdown.includes('router.push("/(superadmin)/system-settings" as Href)'),
+  "System Settings must remain accessible outside the sidebar");
+assert(dropdown.includes("onPress={confirmSignOut}"),
+  "Sign Out must remain functional in the dropdown");
+
 
 // Real Firestore counts, audited activity and navigation (no fabricated dashboard values).
 assert(superView.includes("collection(db,source)") &&
@@ -63,4 +74,4 @@ assert(adminLayout.includes('profile?.adminStatus === "suspended"') &&
   rules.includes("p.get('adminStatus', 'active') != 'suspended'"),
   "Suspended LGU Admin must be denied in UI and Firestore");
 
-console.log("PASS: Approved five-module Super Admin, live role-specific dashboards, audited records and authorization checks");
+console.log("PASS: Four-module Super Admin sidebar and three-action profile dropdown, live role-specific dashboards, audited records and authorization checks");
