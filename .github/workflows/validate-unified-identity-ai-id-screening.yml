@@ -1,0 +1,53 @@
+name: Validate Unified Identity AI and Government ID Screening
+on:
+  push:
+    branches:
+      - feat/unified-identity-ai-government-id-screening-20261030
+  pull_request:
+    branches: [main]
+    paths:
+      - identity-ai/**
+      - backend/server.js
+      - lib/identityVerification.ts
+      - components/identity/**
+      - app/identity-verification.tsx
+      - app/identity-verification.web.tsx
+      - app/(admin)/identity-reviews.tsx
+      - scripts/test-unified-identity-ai-government-id-screening.cjs
+      - .github/workflows/validate-unified-identity-ai-id-screening.yml
+permissions:
+  contents: read
+jobs:
+  document-screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test OCR classification, privacy and false-positive cases
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py
+  full-client-and-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify Resident/LGU client, private backend and identity contracts
+        run: |
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+          node backend/test-identityAiReadiness.js
+          node --check backend/server.js
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile Expo web without deploying
+        run: npx expo export --platform web
