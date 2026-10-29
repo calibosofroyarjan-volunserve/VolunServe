@@ -21,7 +21,7 @@ import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/s
 const sjdmFeature: SjdmBoundary = {
   type: "Feature",
   properties: { city: "City of San Jose del Monte", province: "Bulacan", source: "geoBoundaries ADM3 simplified CC BY 4.0" },
-  geometry: SJDM_REFERENCE_GEOMETRY as SjdmBoundary["geometry"],
+  geometry: SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"],
 };
 const sjdmMask = sjdmOutsideMask(sjdmFeature);
 const isInsideSjdm = (lat: number, lng: number) =>
