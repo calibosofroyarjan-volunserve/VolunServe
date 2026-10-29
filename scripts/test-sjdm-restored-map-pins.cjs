@@ -75,7 +75,7 @@ test("real hospitals use mapped buildings, named place IDs and publisher photo l
  assert.equal(sites.find(p=>p.id==="hospital-grace-reference").positionQuality,"third_party_approximate");
  const source=read("components/tabs/MapTracking.web.tsx");
  assert.match(source,/Open named place in Google Maps/);
- assert.match(source,/Actual building photo/);
+ assert.match(source,/Published facility photograph/);
  assert.match(source,/id="facility-detail-panel"/);
  assert.match(source,/ER capacity is not live-verified/);
  assert.match(source,/if \(item.positionQuality === "osm_feature"\) appendInAppRouteButton/);
@@ -96,7 +96,7 @@ test("actual source images and official addresses render INSIDE a bounded, acces
   assert.match(map,/Official address: /);
   assert.match(map,/openFacilityDetails\(item\)/);
   assert.doesNotMatch(map,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
-  assert.match(map,/Hospital photograph unavailable/);
+  assert.match(map,/Facility photograph temporarily unavailable/);
 });
 
 test("government references match their source addresses, pictures and accuracy levels",()=>{
