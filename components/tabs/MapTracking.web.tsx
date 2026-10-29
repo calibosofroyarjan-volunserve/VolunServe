@@ -662,11 +662,12 @@ const mapDocument = `
       function makePublicPlacePopup(item) {
         const card = document.createElement("div");
         card.className = "place-popup";
-        if (item.kind === "hospital") {
+        if (["hospital","government","barangay_hall","cdrrmo"].includes(item.kind)) {
           const photoWrap = document.createElement("div");
           const permittedSource = typeof item.photoUrl === "string" && (
             item.photoUrl.startsWith("https://tanglawan.ph/wp-content/uploads/2024/01/") ||
-            item.photoUrl.startsWith("https://cdn-healthcare.hellohealthgroup.com/2026/04/")
+            item.photoUrl.startsWith("https://cdn-healthcare.hellohealthgroup.com/2026/04/") ||
+            item.photoUrl.startsWith("https://upload.wikimedia.org/wikipedia/commons/8/87/San_Jose_del_Monte_New_City_Hall_Center_River_Esplanade_")
           );
           if (permittedSource) {
             const image = document.createElement("img");
@@ -675,24 +676,24 @@ const mapDocument = `
             image.loading = "lazy";
             image.decoding = "async";
             image.referrerPolicy = "no-referrer";
-            image.alt = "Actual published exterior photo of " + item.name + " (not live)";
+            image.alt = (item.photoDescription || "Published facility photo") + " · historical, not live";
             image.onerror = () => {
               image.remove();
               const fallback = document.createElement("p");
               fallback.className = "facility-photo-fallback";
-              fallback.textContent = "Hospital photograph unavailable from original publisher";
+              fallback.textContent = "Facility photograph temporarily unavailable";
               photoWrap.prepend(fallback);
             };
             photoWrap.appendChild(image);
             const credit = document.createElement("p");
             credit.className = "facility-photo-credit";
-            credit.textContent = "Actual building photo · " + (item.photoCredit || "Publisher") +
-              " · Not a live camera";
+            credit.textContent = (item.photoDescription || "Published facility photograph") + " · " +
+              (item.photoCredit || "Publisher") + " · Reference image, not live";
             photoWrap.appendChild(credit);
           } else {
             const fallback = document.createElement("p");
             fallback.className = "facility-photo-fallback";
-            fallback.textContent = "No verified exterior photo on file";
+            fallback.textContent = item.photoDescription || "No verified exterior photo available";
             photoWrap.appendChild(fallback);
           }
           card.appendChild(photoWrap);
@@ -736,6 +737,25 @@ const mapDocument = `
           photo.target = "_blank";
           photo.rel = "noopener noreferrer";
           links.appendChild(photo);
+        }
+        if (item.positionQuality === "third_party_approximate" &&
+            typeof item.address === "string" && item.address.length >= 12) {
+          const placeLink = document.createElement("a");
+          placeLink.href = "https://www.google.com/maps/search/?api=1&query=" +
+            encodeURIComponent(item.name + ", " + item.address);
+          placeLink.textContent = "Find named office (approximate map pin)";
+          placeLink.target = "_blank";
+          placeLink.rel = "noopener noreferrer";
+          links.appendChild(placeLink);
+        }
+        if (typeof item.photoSourcePageUrl === "string" &&
+            item.photoSourcePageUrl.startsWith("https://commons.wikimedia.org/wiki/File:")) {
+          const attribution = document.createElement("a");
+          attribution.href = item.photoSourcePageUrl;
+          attribution.textContent = "Photo author and CC BY-SA 4.0 license";
+          attribution.rel = "noopener noreferrer";
+          attribution.target = "_blank";
+          links.appendChild(attribution);
         }
         if (typeof item.officialInfoUrl === "string" && item.officialInfoUrl.startsWith("https://")) {
           const info = document.createElement("a");

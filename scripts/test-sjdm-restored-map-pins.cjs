@@ -98,3 +98,26 @@ test("actual source images and official addresses render INSIDE a bounded, acces
   assert.doesNotMatch(map,/setDOMContent\(makePublicPlacePopup\(item\)\)/);
   assert.match(map,/Hospital photograph unavailable/);
 });
+
+test("government references match their source addresses, pictures and accuracy levels",()=>{
+ const publicPins=places.SJDM_PUBLIC_MAP_PLACE_PINS;
+ const cdrrmo=publicPins.find(x=>x.kind==="cdrrmo");
+ const govt=publicPins.find(x=>x.kind==="government");
+ const hall=publicPins.find(x=>x.kind==="barangay_hall");
+ assert.match(cdrrmo.address,/Productivity Complex, Motorpool/);
+ assert.equal(cdrrmo.officialContact,"09326000119");
+ assert.equal(cdrrmo.photoUrl,undefined);
+ assert.equal(cdrrmo.positionQuality,"third_party_approximate");
+ assert.match(cdrrmo.photoDescription,/No independently verified/);
+ assert.match(govt.address,/New Government Center/);
+ assert.match(govt.photoUrl,/upload\.wikimedia\.org/);
+ assert.match(govt.photoLicenseUrl,/creativecommons\.org/);
+ assert.equal(govt.officialContact,"(044) 9197370");
+ assert.match(hall.address,/Provincial Road, Barangay Dulong Bayan/);
+ assert.equal(hall.photoUrl,undefined);
+ const script=read("components/tabs/MapTracking.web.tsx");
+ assert.match(script,/\["hospital","government","barangay_hall","cdrrmo"\]\.includes\(item\.kind\)/);
+ assert.match(script,/Photo author and CC BY-SA 4\.0 license/);
+ assert.match(script,/Find named office \(approximate map pin\)/);
+ assert.match(script,/item\.photoDescription/);
+});

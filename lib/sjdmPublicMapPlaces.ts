@@ -26,8 +26,11 @@ export type SjdmPublicMapPlace = {
   /** Publisher's photograph page; images are NOT rehosted without permission. */
   actualPhotoSourceUrl?: string;
   photoCredit?: string;
-  address?: string; // published official hospital address
-  photoUrl?: string; // remote publisher image, no local rehosting
+  address?: string; // sourced physical facility address, never claimed live
+  photoUrl?: string; // licensed or publisher-hosted photo, not rehosted
+  photoDescription?: string; // accurately describes exact subject in photograph
+  photoSourcePageUrl?: string; // publisher and license information
+  photoLicenseUrl?: string; // e.g. Wikimedia Commons CC BY-SA 4.0
 };
 
 /** Location pin needs both a mapped physical feature and a corroborating source. */
@@ -40,6 +43,10 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
     sourceLabel: "Official city office address. Map pin is only approximate and NOT verified by the LGU.",
     note: "CDRRMO office reference in Sapang Palay Proper. Pin location is approximate; NOT a live responder, emergency dispatch point, or currently verified exact office GPS. Confirm location with CDRRMO before travel.",
+    address: "CDRRMO Building, Productivity Complex, Motorpool, Barangay Sapang Palay Proper, City of San Jose del Monte, Bulacan, Philippines",
+    officialInfoUrl: "https://csjdm.gov.ph/city-disaster-risk-reduction-and-management-office/",
+    officialContact: "09326000119",
+    photoDescription: "No independently verified reusable photograph of the actual CDRRMO building is available",
     positionQuality: "third_party_approximate",
   },
   {
@@ -101,6 +108,14 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceUrl: "https://mapcarta.com/W1126178501",
     sourceLabel: "Mapped government-center footprint; CSJDM confirms Dulong Bayan address",
     note: "New Government Center, Barangay Dulong Bayan. Building location only, not live LGU staff or vehicles.",
+    address: "New Government Center, Barangay Dulong Bayan, City of San Jose del Monte, Bulacan, Philippines",
+    officialInfoUrl: "https://csjdm.gov.ph/contact-us/",
+    officialContact: "(044) 9197370",
+    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/8/87/San_Jose_del_Monte_New_City_Hall_Center_River_Esplanade_%28Dulong_Bayan%29_09.jpg",
+    photoCredit: "SJasminum / Wikimedia Commons",
+    photoDescription: "New Government Center building photographed June 2023",
+    photoSourcePageUrl: "https://commons.wikimedia.org/wiki/File:San_Jose_del_Monte_New_City_Hall_Center_River_Esplanade_(Dulong_Bayan)_09.jpg",
+    photoLicenseUrl: "https://creativecommons.org/licenses/by-sa/4.0",
     positionQuality: "osm_feature",
   },
   {
@@ -111,6 +126,9 @@ export const SJDM_PUBLIC_MAP_PLACE_PINS: SjdmPublicMapPlace[] = [
     sourceUrl: "https://mapcarta.com/29271770",
     sourceLabel: "Mapped barangay-hall building in San Jose del Monte",
     note: "Barangay Hall, Dulong Bayan. Building location, not an emergency-response dispatch or confirmed opening hours.",
+    address: "Barangay Hall, Provincial Road, Barangay Dulong Bayan, City of San Jose del Monte, Bulacan, Philippines",
+    officialInfoUrl: "https://mapcarta.com/29271770",
+    photoDescription: "Actual Dulong Bayan Barangay Hall exterior photo not independently verified or licensed",
     positionQuality: "osm_feature",
   },
 ];
