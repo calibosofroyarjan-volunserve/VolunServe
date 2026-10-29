@@ -1360,6 +1360,11 @@ export default function AdminCases() {
   const activeCasePage = Math.max(1, Math.min(recordPage, casePages));
   const pagedCases = visibleCases.slice((activeCasePage - 1) * 5, activeCasePage * 5);
   useEffect(() => {
+    if (pagedCases.length > 0 && !pagedCases.some(item => item.id === selectedCaseId)) {
+      setSelectedCaseId(pagedCases[0].id);
+    }
+  }, [activeCasePage, pagedCases, selectedCaseId]);
+  useEffect(() => {
     if (visibleCases.length === 0) {
       setSelectedCaseId("");
       return;
