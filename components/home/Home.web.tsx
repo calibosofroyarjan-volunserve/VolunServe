@@ -780,7 +780,7 @@ export default function WebHome() {
             <Text style={styles.journeyLabel}>{volunteerMode ? "VOLUNTEER WORKFLOW" : "RESIDENT WORKFLOW"}</Text>
             <Text style={styles.journeyText}>
               {volunteerMode
-                ? "Resident login  →  Admin approval  →  Volunteer tasks  →  Service hours and certificates"
+                ? "Resident login  →  Admin approval  →  Emergency Tasks  →  My Profile progress and certificates"
                 : "Sign in  →  Identity verification  →  Resident services  →  My Reports"}
             </Text>
           </View>
@@ -796,7 +796,7 @@ export default function WebHome() {
                     : "Your recent reports, requests, and volunteer access."
                 }
                 action="View All"
-                onAction={() => router.push(volunteerMode ? "/volunteer-impact" : "/my-cases")}
+                onAction={() => router.push(volunteerMode ? "/profile?tab=progress" : "/my-cases")}
               />
 
               {loading ? (
@@ -829,7 +829,7 @@ export default function WebHome() {
                         title="Volunteer Progress"
                         subtitle="Review your verified contributions and response history."
                         status="View progress"
-                        onPress={() => router.push("/volunteer-impact")}
+                        onPress={() => router.push("/profile?tab=progress")}
                       />
                       <ActivityRow
                         icon="document-outline"
