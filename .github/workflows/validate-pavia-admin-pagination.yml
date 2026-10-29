@@ -1,0 +1,41 @@
+name: Verify Sir Pavia Admin Pagination and Announcement Scope
+on:
+  push:
+    branches:
+      - fix/pavia-admin-audit-pagination-and-workflows-20261029
+    paths:
+      - .github/workflows/validate-pavia-admin-pagination.yml
+      - app/(admin)/**
+      - scripts/test-pavia-admin-*
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Assert Admin-only pagination, scopes and prior approved features
+        run: |
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Test actual announcement writes with local Firestore emulator
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Verify production web build compiles (NO DEPLOY)
+        run: npx expo export --platform web

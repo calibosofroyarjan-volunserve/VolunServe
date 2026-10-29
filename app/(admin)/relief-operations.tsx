@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import ListPagination from "../../components/ui/ListPagination";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -463,6 +464,7 @@ export default function ReliefOperations() {
     isApprovedProfile(profile);
 
   const compact = width < 860;
+  const [needsPage,setNeedsPage] = useState(1);
 
   const [
     activeTab,
@@ -812,6 +814,8 @@ export default function ReliefOperations() {
       [openAssessments],
     );
 
+  const activeNeedsPage = Math.max(1, Math.min(needsPage, Math.max(1, Math.ceil(barangaySummaries.length / 5))));
+  const pagedNeeds = barangaySummaries.slice((activeNeedsPage - 1) * 5, activeNeedsPage * 5);
   const activeInventory =
     useMemo(
       () =>
@@ -2560,6 +2564,7 @@ export default function ReliefOperations() {
               </View>
             </View>
 
+            <ListPagination page={activeNeedsPage} total={barangaySummaries.length} pageSize={5} onChange={setNeedsPage} />
             {barangaySummaries.length ===
             0 ? (
               <View
@@ -2593,7 +2598,7 @@ export default function ReliefOperations() {
                   styles.cardList
                 }
               >
-                {barangaySummaries.map(
+                {pagedNeeds.map(
                   (summary) => {
                     const relatedActive =
                       activeAllocations.filter(
@@ -3049,6 +3054,7 @@ export default function ReliefOperations() {
               </View>
             </View>
 
+            <ListPagination page={activeNeedsPage} total={barangaySummaries.length} pageSize={5} onChange={setNeedsPage} />
             {barangaySummaries.length ===
             0 ? (
               <View
@@ -3082,7 +3088,7 @@ export default function ReliefOperations() {
                   styles.cardList
                 }
               >
-                {barangaySummaries.map(
+                {pagedNeeds.map(
                   (summary) => {
                     const relatedActive =
                       activeAllocations.filter(

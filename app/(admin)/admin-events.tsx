@@ -10,6 +10,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
+import ListPagination from "../../components/ui/ListPagination";
 import {
   ActivityIndicator,
   Alert,
@@ -73,6 +74,8 @@ export default function AdminEvents() {
 
   const [events, setEvents] = useState<VolunteerEvent[]>([]);
   const [search, setSearch] = useState("");
+  const [recordPage, setRecordPage] = useState(1);
+  const [participantPage, setParticipantPage] = useState(1);
   const [filterType, setFilterType] = useState<"" | EventType>("");
   const [filterStatus, setFilterStatus] = useState<"" | EventStatus>("");
 
@@ -157,6 +160,10 @@ export default function AdminEvents() {
     });
   }, [events, search, filterType, filterStatus]);
 
+  const activeRecordPage = Math.max(1, Math.min(recordPage, Math.max(1, Math.ceil(filtered.length / 5))));
+  const pagedEvents = filtered.slice((activeRecordPage - 1) * 5, activeRecordPage * 5);
+  const activeParticipantPage = Math.max(1, Math.min(participantPage, Math.max(1, Math.ceil(participants.length / 5))));
+  const pagedParticipants = participants.slice((activeParticipantPage - 1) * 5, activeParticipantPage * 5);
   const openCreate = () => {
     setEditingId(null);
     setForm({ ...emptyForm });
@@ -184,7 +191,10 @@ export default function AdminEvents() {
   const validateForm = () => {
     if (!form.title.trim()) return "Title is required.";
     if (!form.location.trim()) return "Location is required.";
-    if (!form.date.trim()) return "Date is required (string for now).";
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(form.date.trim())) return "Choose a valid event date (YYYY-MM-DD).";
+    const eventDay = new Date(form.date.trim() + "T23:59:59");
+    if (Number.isNaN(eventDay.getTime()) || eventDay.toISOString().slice(0, 10) !== form.date.trim()) return "Enter a real calendar date.";
+    if ((!editingId || form.status === "upcoming") && eventDay.getTime() < Date.now()) return "Past event dates cannot be scheduled.";
 
     const cap = Number(form.capacity);
     if (!Number.isFinite(cap) || cap <= 0) return "Capacity must be a valid number > 0.";
@@ -269,6 +279,7 @@ export default function AdminEvents() {
 
   
   const openAttendance = (ev: VolunteerEvent) => {
+    setParticipantPage(1);
     setSelectedEvent(ev);
     setAttendanceOpen(true);
   };
@@ -466,21 +477,21 @@ export default function AdminEvents() {
         <TextInput
           placeholder="Search title or location…"
           value={search}
-          onChangeText={setSearch}
+          onChangeText={v => { setSearch(v); setRecordPage(1); }}
           style={styles.search}
         />
 
         <View style={styles.filterRow}>
-          <FilterChip label="All Types" active={filterType === ""} onPress={() => setFilterType("")} />
-          <FilterChip label="Disaster" active={filterType === "disaster"} onPress={() => setFilterType("disaster")} />
-          <FilterChip label="Training" active={filterType === "training"} onPress={() => setFilterType("training")} />
+          <FilterChip label="All Types" active={filterType === ""} onPress={() => { setFilterType(""); setRecordPage(1); }} />
+          <FilterChip label="Disaster" active={filterType === "disaster"} onPress={() => { setFilterType("disaster"); setRecordPage(1); }} />
+          <FilterChip label="Training" active={filterType === "training"} onPress={() => { setFilterType("training"); setRecordPage(1); }} />
         </View>
 
         <View style={styles.filterRow}>
-          <FilterChip label="All Status" active={filterStatus === ""} onPress={() => setFilterStatus("")} />
-          <FilterChip label="Upcoming" active={filterStatus === "upcoming"} onPress={() => setFilterStatus("upcoming")} />
-          <FilterChip label="Active" active={filterStatus === "active"} onPress={() => setFilterStatus("active")} />
-          <FilterChip label="Completed" active={filterStatus === "completed"} onPress={() => setFilterStatus("completed")} />
+          <FilterChip label="All Status" active={filterStatus === ""} onPress={() => { setFilterStatus(""); setRecordPage(1); }} />
+          <FilterChip label="Upcoming" active={filterStatus === "upcoming"} onPress={() => { setFilterStatus("upcoming"); setRecordPage(1); }} />
+          <FilterChip label="Active" active={filterStatus === "active"} onPress={() => { setFilterStatus("active"); setRecordPage(1); }} />
+          <FilterChip label="Completed" active={filterStatus === "completed"} onPress={() => { setFilterStatus("completed"); setRecordPage(1); }} />
         </View>
       </View>
 
@@ -491,13 +502,14 @@ export default function AdminEvents() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
+          <ListPagination page={activeRecordPage} total={filtered.length} pageSize={5} onChange={setRecordPage} />
           {filtered.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No events found</Text>
               <Text style={styles.muted}>Create your first event to show on volunteer screen.</Text>
             </View>
           ) : (
-            filtered.map((ev) => (
+            pagedEvents.map((ev) => (
               <View key={ev.id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
@@ -670,13 +682,14 @@ export default function AdminEvents() {
               </View>
             ) : (
               <ScrollView>
+                <ListPagination page={activeParticipantPage} total={participants.length} pageSize={5} onChange={setParticipantPage} />
                 {participants.length === 0 ? (
                   <View style={styles.empty}>
                     <Text style={styles.emptyTitle}>No participants yet</Text>
                     <Text style={styles.muted}>Volunteers must join first.</Text>
                   </View>
                 ) : (
-                  participants.map((p) => (
+                  pagedParticipants.map((p) => (
                     <View key={p.id} style={styles.participantCard}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
                         <View style={{ flex: 1 }}>

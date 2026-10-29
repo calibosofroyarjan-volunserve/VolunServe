@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import ListPagination from "../../components/ui/ListPagination";
 import { useUserSession } from "../../lib/useUserSession";
 const BACKEND_URL = "https://volunserve.onrender.com";
 type Personnel = {
@@ -93,6 +94,8 @@ export default function LguAttendanceScreen() {
     useState<AttendanceRecord[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  const [personnelPage, setPersonnelPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -172,6 +175,10 @@ export default function LguAttendanceScreen() {
         .includes(term);
     });
   }, [attendanceRecords, search]);
+  const currentPersonnelPage = Math.max(1, Math.min(personnelPage, Math.max(1, Math.ceil(rows.length / 5))));
+  const currentHistoryPage = Math.max(1, Math.min(historyPage, Math.max(1, Math.ceil(historyRows.length / 5))));
+  const pagedDutyRows = rows.slice((currentPersonnelPage - 1) * 5, currentPersonnelPage * 5);
+  const pagedHistoryRows = historyRows.slice((currentHistoryPage - 1) * 5, currentHistoryPage * 5);
   const onDuty = personnel.filter((item) => item.dutyStatus === "on_duty").length;
   const available = personnel.filter((item) => item.availabilityStatus === "available").length;
   const busy = personnel.filter((item) => ["assigned", "responding", "on_site"].includes(item.availabilityStatus)).length;
@@ -197,16 +204,17 @@ export default function LguAttendanceScreen() {
       <View style={styles.toolbar}>
         <View style={styles.searchBox}>
           <Ionicons name="search-outline" size={17} color="#94A3B8" />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Search personnel or department..." placeholderTextColor="#94A3B8" style={styles.searchInput} />
+          <TextInput value={search} onChangeText={value => { setSearch(value); setPersonnelPage(1); setHistoryPage(1); }} placeholder="Search personnel or department..." placeholderTextColor="#94A3B8" style={styles.searchInput} />
         </View>
         <View style={styles.filters}>
           {(["all", "on_duty", "off_duty"] as Filter[]).map((value) => {
             const active = filter === value;
-            return <TouchableOpacity key={value} style={[styles.filterButton, active && styles.filterButtonActive]} onPress={() => setFilter(value)}><Text style={[styles.filterText, active && styles.filterTextActive]}>{value === "all" ? "All" : statusLabel(value)}</Text></TouchableOpacity>;
+            return <TouchableOpacity key={value} style={[styles.filterButton, active && styles.filterButtonActive]} onPress={() => { setFilter(value); setPersonnelPage(1); }}><Text style={[styles.filterText, active && styles.filterTextActive]}>{value === "all" ? "All" : statusLabel(value)}</Text></TouchableOpacity>;
           })}
         </View>
       </View>
       {!!error && <View style={styles.errorBanner}><Ionicons name="alert-circle-outline" size={18} color="#B91C1C" /><Text style={styles.errorText}>{error}</Text></View>}
+      <ListPagination page={currentPersonnelPage} total={rows.length} pageSize={5} onChange={setPersonnelPage} />
       <View style={styles.tableCard}>
         <View style={styles.tableHeader}>
           <Text style={[styles.th, styles.colName]}>PERSONNEL</Text>
@@ -222,7 +230,7 @@ export default function LguAttendanceScreen() {
           <View style={styles.emptyState}><ActivityIndicator color="#0F766E" /><Text style={styles.emptyText}>Loading attendance status...</Text></View>
         ) : rows.length === 0 ? (
           <View style={styles.emptyState}><Ionicons name="time-outline" size={28} color="#94A3B8" /><Text style={styles.emptyTitle}>No matching personnel</Text><Text style={styles.emptyText}>Duty status will appear here after LGU Personnel accounts are created and used.</Text></View>
-        ) : rows.map((item) => (
+        ) : pagedDutyRows.map((item) => (
           <View key={item.uid} style={styles.tableRow}>
             <View style={[styles.cell, styles.colName]}>
               <View style={styles.avatar}><Text style={styles.avatarText}>{item.fullName.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "LG"}</Text></View>
@@ -272,6 +280,7 @@ export default function LguAttendanceScreen() {
             </Text>
           </View>
         </View>
+        <ListPagination page={currentHistoryPage} total={historyRows.length} pageSize={5} onChange={setHistoryPage} />
         <View style={styles.historyTableCard}>
           <View style={styles.historyTableHeader}>
             <Text style={[styles.th, styles.historyColName]}>PERSONNEL</Text>
@@ -290,7 +299,7 @@ export default function LguAttendanceScreen() {
               </Text>
             </View>
           ) : (
-            historyRows.map((item) => (
+            pagedHistoryRows.map((item) => (
               <View key={item.id} style={styles.historyRow}>
                 <View style={[styles.cell, styles.historyColName]}>
                   <View style={styles.historyAvatar}>

@@ -25,6 +25,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import ListPagination from "../../components/ui/ListPagination";
 
 import {
   isApprovedProfile,
@@ -678,6 +679,8 @@ const createVolunteerSummary =
 // ============================================================
 
 export default function AdminCertificatesScreen() {
+  const [volunteerPage,setVolunteerPage] = useState(1);
+  const [certificatePage,setCertificatePage] = useState(1);
   const {
     user,
     profile,
@@ -1866,6 +1869,7 @@ export default function AdminCertificatesScreen() {
         </View>
       </View>
 
+      <ListPagination page={Math.max(1,Math.min(volunteerPage,Math.max(1,Math.ceil(volunteerSummaries.length / 5))))} total={volunteerSummaries.length} pageSize={5} onChange={setVolunteerPage} />
       {volunteerSummaries.length ===
       0 ? (
         <View
@@ -1907,7 +1911,7 @@ export default function AdminCertificatesScreen() {
           </Text>
         </View>
       ) : (
-        volunteerSummaries.map(
+        volunteerSummaries.slice((Math.max(1,Math.min(volunteerPage,Math.max(1,Math.ceil(volunteerSummaries.length / 5)))) - 1) * 5, Math.max(1,Math.min(volunteerPage,Math.max(1,Math.ceil(volunteerSummaries.length / 5)))) * 5).map(
           (
             summary,
           ) => {
@@ -2470,6 +2474,7 @@ export default function AdminCertificatesScreen() {
           </View>
         </View>
 
+        <ListPagination page={Math.max(1,Math.min(certificatePage,Math.max(1,Math.ceil(certificates.length / 5))))} total={certificates.length} pageSize={5} onChange={setCertificatePage} />
         {certificates.length ===
         0 ? (
           <View
@@ -2488,7 +2493,7 @@ export default function AdminCertificatesScreen() {
             </Text>
           </View>
         ) : (
-          certificates.map(
+          certificates.slice((Math.max(1,Math.min(certificatePage,Math.max(1,Math.ceil(certificates.length / 5)))) - 1) * 5, Math.max(1,Math.min(certificatePage,Math.max(1,Math.ceil(certificates.length / 5)))) * 5).map(
             (
               certificate,
             ) => {

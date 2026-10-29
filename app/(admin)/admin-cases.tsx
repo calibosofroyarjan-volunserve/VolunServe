@@ -21,6 +21,7 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -4109,6 +4110,21 @@ export default function AdminCases() {
                 </View>
               </View>
 
+              {detailTab === "map" && Platform.OS === "web" &&
+                Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) && (
+                <View style={{ marginTop: 12, marginBottom: 18, borderRadius: 12, overflow: "hidden", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D9E7DF" }}>
+                  <Text style={{ padding: 13, color: "#173D32", fontWeight: "800", fontSize: 13 }}>
+                    Live Response Map · This emergency report
+                  </Text>
+                  {React.createElement("iframe" as any, {
+                    title: "Embedded authorized LGU live response map for selected emergency",
+                    src: "/admin-live-map?caseId=" + encodeURIComponent(incident.id),
+                    loading: "lazy",
+                    allow: "geolocation",
+                    style: { width: "100%", height: 480, border: 0, display: "block" },
+                  })}
+                </View>
+              )}
               <View
                 style={[
                   styles.verificationPanel,

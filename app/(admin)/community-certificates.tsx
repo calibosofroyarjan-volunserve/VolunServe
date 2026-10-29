@@ -2,6 +2,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import { collection, onSnapshot } from "firebase/firestore";
+import ListPagination from "../../components/ui/ListPagination";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
@@ -525,6 +526,7 @@ export default function CommunityCertificatesAdminScreen() {
 
   const [error, setError] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
+  const [recordPage,setRecordPage] = useState(1);
 
   useEffect(() => {
     if (!authorized) {
@@ -768,12 +770,14 @@ export default function CommunityCertificatesAdminScreen() {
             Verified participants ({eligible.length})
           </Text>
 
+          <ListPagination page={Math.max(1,Math.min(recordPage, Math.max(1,Math.ceil(eligible.length / 5))))} total={eligible.length} pageSize={5} onChange={setRecordPage} />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.peopleRow}
           >
-            {eligible.map((entry) => (
+            {eligible.slice((Math.max(1,Math.min(recordPage, Math.max(1,Math.ceil(eligible.length / 5)))) - 1) * 5,
+              Math.max(1,Math.min(recordPage, Math.max(1,Math.ceil(eligible.length / 5)))) * 5).map((entry) => (
               <Pressable
                 key={entry.key}
                 style={[
