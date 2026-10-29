@@ -22,7 +22,6 @@ import {
   View,
 } from "react-native";
 
-import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import DashboardVolunteerApprovals from "../../components/admin/DashboardVolunteerApprovals";
 import DashboardOperationalInsights from "../../components/admin/DashboardOperationalInsights";
 import DashboardPendingIdentityReviews from "../../components/admin/DashboardPendingIdentityReviews";
@@ -599,28 +598,20 @@ export default function CommandCenter() {
             ))}
           </View>
           <View style={[styles.overviewSecondary, width < 1220 && styles.overviewFullWidth]}>
-            <View style={styles.chartHeadingAccent} />
-            <WorkspaceBarChart
-              title="Service workload"
-              subtitle="Current records across operational areas"
-              orientation="vertical"
-              bars={[
-                { key: "cases", label: "Open emergency cases", shortLabel: "Emergency", value: dataError ? null : metrics.activeCases, color: "#28765D" },
-                { key: "reviews", label: "Pending reviews", shortLabel: "Approvals", value: dataError ? null : metrics.pendingReviews, color: "#426D9B" },
-                { key: "needs", label: "Open relief needs", shortLabel: "Relief", value: dataError ? null : metrics.openBarangayNeeds, color: "#C18A43" },
-              ]}
-              footer="Counts from authorized Firestore records · common scale"
-            />
+            <DashboardRecentActivities />
           </View>
         </View>
-        <DashboardRecentActivities />
           </>
         )}
         {workspaceTab === "identity" && <DashboardPendingIdentityReviews />}
         {workspaceTab === "residents" && <ResidentAccountsPanel />}
         {workspaceTab === "volunteers" && <DashboardVolunteerApprovals />}
 
-        {workspaceTab === "insights" && <DashboardOperationalInsights />}
+        {workspaceTab === "insights" && <DashboardOperationalInsights workload={{
+          emergency: dataError || !overviewReady ? null : metrics.activeCases,
+          approvals: dataError || !overviewReady ? null : metrics.pendingReviews,
+          relief: dataError || !overviewReady ? null : metrics.openBarangayNeeds,
+        }} />}
       </View>
 
     </ScrollView>
@@ -630,7 +621,7 @@ export default function CommandCenter() {
 const styles =
   StyleSheet.create({
     workspaceTabs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5,
-      borderBottomWidth: 1, borderBottomColor: "#DDE8E1", marginBottom: 13 },
+      borderBottomWidth: 1, borderBottomColor: "#DDE8E1", marginBottom: 10 },
     workspaceTab: { flexGrow: 1, minHeight: 43, flexDirection: "row", alignItems: "center",
       justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
       borderBottomWidth: 2, borderBottomColor: "transparent" },
@@ -638,7 +629,7 @@ const styles =
     workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" },
     workspaceTabTextActive: { color: "#135E48", fontWeight: "800" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
-    kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:10,marginBottom:12},
+    kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
     kpiGridCompact: {gap:9},
     kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
       padding:12,borderWidth:1,borderColor:"#D9E7DF"},
@@ -647,15 +638,15 @@ const styles =
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
     kpiCardLabel: {fontSize:11,fontWeight:"700",color:"#688073",flex:1,lineHeight:16},
     kpiCardValue: {fontSize:25,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
-    kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:9},
+    kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:5},
     kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
     kpiFeaturedText: {color:"#FFFFFF"},
     kpiFeaturedHint: {color:"#C5EDDF"},
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
       overflow: "hidden", position: "relative", backgroundColor: "#103E33",
-      borderRadius: 12, paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14,
-      marginBottom: 13, borderWidth: 1, borderColor: "#235D4E",
+      borderRadius: 11, paddingHorizontal: 20, paddingTop: 13, paddingBottom: 10,
+      marginBottom: 10, borderWidth: 1, borderColor: "#235D4E",
     },
     heroOrbLarge: {
       position: "absolute", right: -105, top: -180, width: 375, height: 375,
@@ -670,13 +661,13 @@ const styles =
       flexDirection: "row", alignItems: "flex-start",
       justifyContent: "space-between", gap: 16, paddingBottom: 8,
     },
-    heroHeaderCompact: { flexDirection: "column", gap: 14, paddingBottom: 20 },
+    heroHeaderCompact: { flexDirection: "column", gap: 8, paddingBottom: 7 },
     heroCopy: { flex: 1, minWidth: 0, zIndex: 1 },
     heroEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 5 },
     heroEyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#AFD7A0" },
     heroEyebrowText: { color: "#A9D9C5", letterSpacing: 1.35, fontSize: 10.5, fontWeight: "700" },
     heroTitle: { color: "#FFFFFF", fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: "700" },
-    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 7, fontSize: 12.5, lineHeight: 18 },
+    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 4, fontSize: 12, lineHeight: 17 },
     heroLocality: {
       flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 8, zIndex: 1,
     },
@@ -689,13 +680,13 @@ const styles =
     chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
     overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
-    overviewColumns: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 12 },
+    overviewColumns: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 6 },
     overviewColumnsStack: { flexDirection: "column", gap: 10 },
-    overviewPrimary: { flex: 1.18, minWidth: 0, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
-    overviewSecondary: { flex: 1, minWidth: 0, padding: 22, borderRadius: 14, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewPrimary: { flex: 1, minWidth: 0, padding: 13, borderRadius: 11, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewSecondary: { flex: 1, minWidth: 0 },
     overviewFullWidth: { flex: 0, width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
-    overviewSectionSubtitle: { color: "#6C8076", fontSize: 12.5, lineHeight: 19, marginTop: 6 },
+    overviewSectionSubtitle: { color: "#6C8076", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
     overviewAction: {
       flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 8, paddingHorizontal: 2,
       borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 49,
@@ -734,16 +725,15 @@ const styles =
 
     // Separate right-side scrolling from the fixed Admin navigation.
     webScrollBar: {
-      overflowY: "scroll",
-      scrollbarWidth: "thin",
-      scrollbarColor: "#AFC4B7 #F6F8F7",
+      overflowY: "auto",
+      scrollbarWidth: "none",
     } as any,
 
     page: {
       width: "100%",
       paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 18,
+      paddingTop: 12,
+      paddingBottom: 10,
     },
 
     content: {
