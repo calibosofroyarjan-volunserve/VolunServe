@@ -863,16 +863,11 @@ export default function Signup() {
                   <View style={styles.roleInfoBox}>
                     <Text style={styles.roleInfoTitle}>Basic Account registration</Text>
                     <Text style={styles.roleInfoText}>
-                      Create a Basic Account using email and password, or optionally use Google.
-                      Email registration requires inbox verification before sign-in.
-                      Resident verification and Volunteer application happen later.
+                      Register with email and password, or choose Google.
+                      Verify your email before signing in. Resident verification happens later.
                     </Text>
                   </View>
 
-                  <SectionTitle
-                    title="Email Account"
-                    subtitle="Enter your email and create a secure password, or choose Google below."
-                  />
                   <Field
                     icon="✉"
                     label="Email Address *"
@@ -915,8 +910,8 @@ export default function Signup() {
                         </View>
                       </View>
                       <Text style={styles.emailVerifyHint}>
-                        Use an email address you can access. Verify your inbox before signing in.
-                        Passwords need 8+ characters, uppercase, lowercase, a number and a symbol.
+                        Use an accessible email. You'll verify it before signing in.
+                        Passwords need 8+ characters, uppercase and lowercase letters, a number and a symbol.
                       </Text>
                       <View style={styles.signupDividerRow}>
                         <View style={styles.signupDividerLine} />
@@ -958,13 +953,12 @@ export default function Signup() {
                       </TouchableOpacity>
                     </>
                   )}
-                  <SectionTitle
-                    title="Personal Information"
-                    subtitle="Provide your identity details to finish setting up your Basic Account."
-                  />
+                  <View style={styles.personalDetailsHeader}>
+                    <SectionTitle title="Personal Information" subtitle="Enter your name as it appears on your identification." />
+                  </View>
 
-                  <View style={styles.formRow}>
-                    <View style={styles.formColumn}>
+                  <View style={styles.nameRow}>
+                    <View style={styles.nameColumn}>
                       <Field
                         icon="♙"
                         label="First Name *"
@@ -974,8 +968,17 @@ export default function Signup() {
                         returnKeyType="next"
                       />
                     </View>
-
-                    <View style={styles.formColumn}>
+                    <View style={styles.nameColumn}>
+                      <Field
+                        icon="♙"
+                        label="Middle Name (Optional)"
+                        placeholder="e.g. P."
+                        value={formData.middleName}
+                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z .'-]/g, ""))}
+                        returnKeyType="next"
+                      />
+                    </View>
+                    <View style={styles.nameColumn}>
                       <Field
                         icon="♙"
                         label="Last Name *"
@@ -986,19 +989,8 @@ export default function Signup() {
                       />
                     </View>
                   </View>
-
-                  <View style={styles.formRow}>
-                    <View style={styles.formColumn}>
-                      <Field
-                        icon="♙"
-                        label="Middle Name / Initial (Optional)"
-                        value={formData.middleName}
-                        onChange={(v) => updateField("middleName", v.replace(/[^A-Za-z .'-]/g, ""))}
-                        returnKeyType="next"
-                      />
-                    </View>
-
-                    <View style={styles.formColumn}>
+                  <View style={styles.dateOfBirthRow}>
+                    <View style={styles.dateOfBirthColumn}>
                       <View style={styles.field}>
                         <Text style={styles.label}>Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
 
@@ -1247,21 +1239,6 @@ export default function Signup() {
                   </View>
 
                   </>) : null}
-                  <TouchableOpacity
-                    style={styles.termsOpenBtn}
-                    onPress={() => setTermsOpen(true)}
-                  >
-                    <Text style={styles.termsOpenText}>Read Terms & Data Privacy</Text>
-                  </TouchableOpacity>
-
-                  <View style={styles.consentBox}>
-                    <CheckRow
-                      label="I agree to the Terms of Service and Privacy Policy."
-                      checked={formData.acceptTerms}
-                      onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
-                    />
-                  </View>
-
                   <View style={styles.consentBox}>
                     <CheckRow
                       label="I confirm that the information provided is accurate."
@@ -1279,6 +1256,24 @@ export default function Signup() {
                       approval.
                     </Text>
                   </View>
+                  <View style={styles.finalTermsSection}>
+                  <TouchableOpacity
+                    style={styles.termsOpenBtn}
+                    onPress={() => setTermsOpen(true)}
+                  >
+                    <Text style={styles.termsOpenText}>Read Terms & Data Privacy</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.consentBox}>
+                    <CheckRow
+                      label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
+                      checked={formData.acceptTerms}
+                      onPress={() => updateField("acceptTerms", !formData.acceptTerms)}
+                    />
+                  </View>
+
+                  </View>
+
                 </View>
               )}
             </View>
@@ -1568,13 +1563,19 @@ const styles = StyleSheet.create({
   roleInfoTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900", marginBottom: 4 },
   roleInfoText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
 
-  googleSignupButton: { flexDirection: "row", gap: 12, minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 14, paddingHorizontal: 16 },
+  googleSignupButton: { flexDirection: "row", gap: 12, minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 0, paddingHorizontal: 16 },
   googleSignupLogo: { width: 20, height: 20 },
   googleSignupLabel: { color: "#163D38", fontSize: 13, fontWeight: "800" },
   signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 16 },
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
   signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
-  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 4 },
+  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 2 },
+  personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
+  nameRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start" },
+  nameColumn: { flexGrow: 1, flexBasis: 145, minWidth: 140 },
+  dateOfBirthRow: { flexDirection: "row", marginTop: 2 },
+  dateOfBirthColumn: { width: "100%", maxWidth: 260 },
+  finalTermsSection: { paddingTop: 18, marginTop: 16, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
   googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
