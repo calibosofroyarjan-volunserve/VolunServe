@@ -743,7 +743,7 @@ const mapDocument = `
         appendInAppRouteButton(item, links);
         if (isShelter) {
           const emergencyCall = document.createElement("a");
-          emergencyCall.href = "tel:09366000119";
+          emergencyCall.href = "tel:09326000119";
           emergencyCall.textContent = "Call SJDM CDRRMO";
           links.appendChild(emergencyCall);
         }
@@ -6681,7 +6681,7 @@ export default function WebMapTracking() {
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
                     Call 911 · Emergency
                   </a>
-                  <a href="tel:09366000119" className="secondary-button"
+                  <a href="tel:09326000119" className="secondary-button"
                     style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
                     Call SJDM CDRRMO
