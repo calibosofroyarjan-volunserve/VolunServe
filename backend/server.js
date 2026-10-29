@@ -5371,6 +5371,10 @@ app.post(
           "The Resident identity review ID is invalid.",
         );
       }
+      if (targetUid === adminUid) {
+        throw makeHttpError(403, "self_identity_review_forbidden",
+          "An LGU Admin cannot approve or reject their own identity verification.");
+      }
       if (
         action !== "verify" &&
         action !== "require_retry"
