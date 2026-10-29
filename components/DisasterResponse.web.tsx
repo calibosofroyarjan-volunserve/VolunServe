@@ -16,13 +16,14 @@ import {
 } from "@expo-google-fonts/inter";
 
 import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
-import { insideSjdmBoundary, type SjdmBoundary } from "../lib/sjdmMapBoundary";
+import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/sjdmMapBoundary";
 
 const sjdmFeature: SjdmBoundary = {
   type: "Feature",
   properties: { city: "City of San Jose del Monte", province: "Bulacan", source: "geoBoundaries ADM3 simplified CC BY 4.0" },
   geometry: SJDM_REFERENCE_GEOMETRY as SjdmBoundary["geometry"],
 };
+const sjdmMask = sjdmOutsideMask(sjdmFeature);
 const isInsideSjdm = (lat: number, lng: number) =>
   insideSjdmBoundary(sjdmFeature, lat, lng);
 
@@ -110,6 +111,7 @@ const mapDocument = `
 
   <script>
     const city = {"type":"Feature","properties":{"source":"geoBoundaries ADM3 simplified CC BY 4.0"},"geometry":${JSON.stringify(SJDM_REFERENCE_GEOMETRY)}};
+    const outside = ${JSON.stringify(sjdmMask)};
     const ring = city.geometry.coordinates[0];
     function inCity(lat, lng) {
       let inside = false;
@@ -152,6 +154,9 @@ const mapDocument = `
         );
 
         map.on('load', () => {
+          map.addSource('sjdm-outside', { type: 'geojson', data: outside });
+          map.addLayer({ id: 'sjdm-outside-shade', type: 'fill', source: 'sjdm-outside',
+            paint: { 'fill-color': '#334155', 'fill-opacity': 0.50 } });
           map.addSource('sjdm-boundary', { type: 'geojson', data: city });
           map.addLayer({ id: 'sjdm-fill', type: 'fill', source: 'sjdm-boundary',
             paint: { 'fill-color': '#0d9488', 'fill-opacity': 0.07 } });
@@ -160,6 +165,7 @@ const mapDocument = `
           map.fitBounds([[121.013, 14.767], [121.169, 14.869]], { padding: 20, duration: 0 });
         });
         let marker = null;
+        let previousValidPin = [121.045, 14.813];
 
         function choose(lat, lng, notify) {
           if (
@@ -170,10 +176,12 @@ const mapDocument = `
           }
 
           if (!inCity(lat, lng)) {
+            if (marker) marker.setLngLat(previousValidPin);
             showError('Only locations inside San Jose del Monte, Bulacan can be selected.');
             return;
           }
           errorBox.style.display = 'none';
+          previousValidPin = [lng, lat];
           if (!marker) {
             marker = new maplibregl.Marker({
               color: '#087f78',
