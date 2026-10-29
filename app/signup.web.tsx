@@ -476,7 +476,7 @@ export default function Signup() {
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
 
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
-    const phoneValid = /^9\d{9}$/.test(phoneDigits);
+    const phoneValid = true;
 
     const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
@@ -632,8 +632,8 @@ export default function Signup() {
         age: validation.ageNumber,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
-        authProvider: googleBound ? "google" : "email",
-        phoneNumber: toE164FromLocal(formData.phoneLocal),
+        authProvider: "email",
+        phoneNumber: "",
 
         region: formData.region,
         province: formData.province,
@@ -646,9 +646,7 @@ export default function Signup() {
       });
 
       const successTitle = "Basic Account Created";
-      const successMessage = googleBound
-        ? "Your Basic Account is ready. Google and email/password sign-in are linked to the same VolunServe account. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access."
-        : "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
+      const successMessage = "Your Basic Account is ready. Complete Identity Verification later to unlock protected Resident services and become eligible to apply for Volunteer access.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
@@ -834,14 +832,6 @@ export default function Signup() {
                     </Text>
                   </View>
 
-                  {googleBound ? (
-                    <View style={styles.googleConnectedNotice}>
-                      <Feather name="check-circle" size={18} color={COLORS.primary} />
-                      <Text style={styles.googleConnectedText}>
-                        Google account connected. Your email is linked; complete the details below.
-                      </Text>
-                    </View>
-                  ) : null}
 
                   <Field
                     icon="✉"
@@ -852,7 +842,7 @@ export default function Signup() {
                     keyboardType="email-address"
                     invalid={!validation.emailValid && formData.email.length > 0}
                     returnKeyType="next"
-                    editable={!googleBound}
+                    editable
                     autoCapitalize="none"
                   />
 
@@ -988,38 +978,6 @@ export default function Signup() {
                     </ValidationText>
                   ) : null}
 
-                  <Text style={styles.label}>Mobile Number *</Text>
-
-                  <View style={styles.phoneWrap}>
-                    <View style={styles.phonePrefix}>
-                      <Text style={styles.flag}>PH</Text>
-                      <Text style={styles.phonePrefixText}>+63</Text>
-                    </View>
-
-                    <TextInput
-                      style={[
-                        styles.phoneInput,
-                        !validation.phoneValid &&
-                          formData.phoneLocal.length > 0 &&
-                          styles.inputInvalid,
-                      ]}
-                      value={formData.phoneLocal}
-                      onChangeText={(v) =>
-                        updateField("phoneLocal", sanitizePhoneLocal(v.trim()))
-                      }
-                      keyboardType="phone-pad"
-                      placeholder="912 345 6789"
-                      placeholderTextColor={COLORS.lightText}
-                      maxLength={10}
-                      returnKeyType="next"
-                    />
-                  </View>
-
-                  {formData.phoneLocal.length > 0 && !validation.phoneValid ? (
-                    <ValidationText ok={false}>
-                      Enter a valid Philippine mobile number starting with 9.
-                    </ValidationText>
-                  ) : null}
 
                 </View>
               )}
@@ -1140,20 +1098,6 @@ export default function Signup() {
 
               {step === 4 && (
                 <View>
-                  {googleBound ? (
-                    <View style={styles.googleConnectedCard}>
-                      <View style={styles.googleMark}>
-                        <Text style={styles.googleMarkText}>G</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.googleConnectedTitle}>Google account connected</Text>
-                        <Text style={styles.googleConnectedEmail}>{formData.email}</Text>
-                      </View>
-                      <View style={styles.verifiedBadge}>
-                        <Text style={styles.verifiedBadgeText}>✓ Email Verified</Text>
-                      </View>
-                    </View>
-                  ) : null}
 
                   <SectionTitle
                     title="Password Security"
