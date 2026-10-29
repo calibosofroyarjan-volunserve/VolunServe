@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   EmailAuthProvider,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
@@ -495,29 +496,11 @@ export const signUpUser = async (
         "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
       );
     }
-    // Google registration must also have an Email/Password credential linked
-    // to the SAME Firebase UID. This keeps one VolunServe profile while
-    // allowing the resident to sign in either with Google or manually.
-    if (usesGoogle) {
-      const hasPasswordProvider = user.providerData.some(
-        (provider) => provider.providerId === EmailAuthProvider.PROVIDER_ID
-      );
-      if (!hasPasswordProvider) {
-        if (!data.password) {
-          throw new Error(
-            "Create a VolunServe password so this account can use both Google and email/password sign-in."
-          );
-        }
-        const emailPasswordCredential = EmailAuthProvider.credential(
-          submittedEmail,
-          data.password
-        );
-        const linkedCredential = await linkWithCredential(
-          user,
-          emailPasswordCredential
-        );
-        user = linkedCredential.user;
-      }
+    // Google OAuth is an independent registration choice. Do not require or
+    // silently attach an email/password credential to the Google identity.
+    // Password accounts are created only by the email signup path.
+    if (usesGoogle && !user.emailVerified) {
+      throw new Error("This Google account's email is not verified.");
     }
     const fullName = [
       data.lastName,
@@ -599,6 +582,15 @@ export const signUpUser = async (
         serverTimestamp(),
     });
     await batch.commit();
+    if (!usesGoogle && !user.emailVerified) {
+      // Always end an email/password registration session until the inbox
+      // verification link has been opened (including if delivery fails).
+      try {
+        await sendEmailVerification(user);
+      } finally {
+        await signOut(auth);
+      }
+    }
     return user;
   } catch (err: any) {
     const message =
@@ -621,6 +613,11 @@ export const loginUser = async (
         password
       );
     const user = userCredential.user;
+    await user.reload();
+    if (!user.emailVerified) {
+      await signOut(auth);
+      throw new Error("Please verify your email using the link sent to your inbox before signing in.");
+    }
     const profileRef =
       doc(db, "users", user.uid);
     const profileSnapshot =
