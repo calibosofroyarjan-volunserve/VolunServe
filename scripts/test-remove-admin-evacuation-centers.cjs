@@ -27,10 +27,12 @@ assert(dashboard.includes('cases:false,needs:false,users:false,volunteers:false'
 for (const preserved of [
   "<DashboardVolunteerApprovals />", "Open emergencies", "Pending user profiles",
   "Volunteer approvals", "Priority Actions", "AI identity reviews",
-  "Open relief needs", "WorkspaceBarChart", 'orientation="vertical"',
+  "<DashboardOperationalInsights workload={{",
   "setPendingUserIds", "setPendingVolunteerIds", "setNeedAssessments",
   'onSnapshot(', '"disasterCases"', '"barangayNeedAssessments"',
 ]) assert(dashboard.includes(preserved), "Active Admin workflow lost: " + preserved);
+assert(read("components/admin/DashboardOperationalInsights.tsx").includes("Open relief needs"),
+  "Open relief needs must remain in the Service Analytics workload chart");
 assert(sidebar.includes('label: "Command Center"') &&
   !sidebar.includes('label: "Evacuation Centers"'),
   "Sidebar should retain the Admin Command Center without an Evacuation Centers module");

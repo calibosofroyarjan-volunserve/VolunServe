@@ -42,9 +42,10 @@ assert(!overview.includes("evacuation_centers") && !overview.includes("Evacuatio
 for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews", "metrics.openBarangayNeeds"]) {
   assert(overview.includes(binding), "Overview metric data binding missing: " + binding);
 }
-assert(overview.includes('orientation="vertical"'), "LGU Overview must use vertical columns");
-assert(overview.includes("dataError ? null : metrics.activeCases"),
-  "Graph must use real count state with unavailable values clearly distinguished");
+const insights = read("components/admin/DashboardOperationalInsights.tsx");
+assert(insights.includes('orientation="vertical"') && insights.includes("<WorkspaceBarChart") &&
+  overview.includes("emergency: dataError || !overviewReady ? null : metrics.activeCases"),
+  "LGU Analytics must own real workload bar chart with honest unavailable states");
 assert(chart.includes('orientation = "horizontal"'), "Other workspaces must retain legacy horizontal graph by default");
 assert(superOverview.includes("<WorkspaceBarChart"), "Super Admin graph must remain intact");
 console.log("PASS: colored vertical Admin chart and secure, reachable Admin Profile");
