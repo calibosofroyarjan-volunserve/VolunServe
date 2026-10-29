@@ -8,20 +8,20 @@ import ListPagination from "../ui/ListPagination";
 
 type EventRow = { id: string; title?: string; status?: string; date?: string; publicationStatus?: string; };
 type StatsRow = { totalHours?: number; totalEvents?: number; };
-type InsightData = { publishedEvents: EventRow[]; legacyEvents: EventRow[]; certificates: number | null; stats: StatsRow[] | null; };
+type InsightData = { publishedEvents: EventRow[]; certificates: number | null; stats: StatsRow[] | null; };
 const PAGE_SIZE = 5;
 const cleanDate = (value: string | undefined) => String(value || "").slice(0, 10) || "No date";
 
 export default function DashboardOperationalInsights() {
   const router = useRouter();
   const [data, setData] = useState<InsightData>({
-    publishedEvents: [], legacyEvents: [], certificates: null, stats: null,
+    publishedEvents: [], certificates: null, stats: null,
   });
-  const [loaded, setLoaded] = useState({ events: false, archived: false, certificates: false, stats: false });
+  const [loaded, setLoaded] = useState({ events: false, certificates: false, stats: false });
   const [errors, setErrors] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   useEffect(() => {
-    const watch = <T,>(path: string, key: keyof typeof loaded,
+    const watch = (path: string, key: keyof typeof loaded,
       update: (records: { id: string; data: Record<string, unknown> }[]) => void) =>
       onSnapshot(collection(db, path), snapshot => {
         update(snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })));
@@ -37,9 +37,6 @@ export default function DashboardOperationalInsights() {
         setData(prev => ({ ...prev, publishedEvents: records
           .filter(row => row.data.publicationStatus === "published")
           .map(row => ({ id: row.id, title: String(row.data.title || "Community event"), status: String(row.data.status || "upcoming"), date: String(row.data.date || "") })) }))),
-      // Legacy Volunteer Events stay in Firestore for records preservation, but not in a duplicate Admin module.
-      watch("volunteerEvents", "archived", records =>
-        setData(prev => ({ ...prev, legacyEvents: records.map(row => ({ id: row.id, title: String(row.data.title || "Legacy event"), status: String(row.data.status || "upcoming"), date: String(row.data.date || "") })) }))),
       watch("certificates", "certificates", records => setData(prev => ({ ...prev, certificates: records.length }))),
       watch("volunteerStats", "stats", records => setData(prev => ({ ...prev, stats: records.map(row => row.data as StatsRow) }))),
     ];
@@ -91,7 +88,6 @@ export default function DashboardOperationalInsights() {
             </View>
           </View>)}
         {errors.length > 0 && <Text style={styles.notice}>Some analytics sources are unavailable; missing totals show —, not zero.</Text>}
-        {data.legacyEvents.length > 0 && <Text style={styles.notice}>{data.legacyEvents.length} historical Volunteer Event record(s) remain archived in Firestore. The separate management screen is retired; Community Events and Event Attendance are the current workflows.</Text>}
       </View>
     </View>
   );
