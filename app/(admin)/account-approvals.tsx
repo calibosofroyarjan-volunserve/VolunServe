@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useRouter } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
+import PeopleWorkspaceHero from "../../components/admin/PeopleWorkspaceHero";
 
 import {
   collection,
@@ -46,9 +47,7 @@ type Account =
     id: string;
   };
 
-type Filter =
-  | "pending"
-  | "all";
+type Filter = "residents" | "pending" | "volunteers";
 
 type VolunteerApplication = {
   uid?: string;
@@ -106,6 +105,7 @@ export default function AccountApprovals() {
   const [approveConfirmed, setApproveConfirmed] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const PAGE_SIZE = 5;
 
   const [
@@ -248,22 +248,32 @@ export default function AccountApprovals() {
     );
   };
 
+  // Residents and Volunteers share one community account; LGU and programmer
+  // accounts must NEVER appear in this operational community directory.
+  const communityAccounts = useMemo(() => accounts.filter(account =>
+    !["admin", "superadmin", "applicant", "lgu_personnel"].includes(
+      String(account.role || "").toLowerCase()
+    )
+  ), [accounts]);
   const visibleAccounts = useMemo(() => {
     const byView = filter === "pending"
-      ? accounts.filter(item => isPendingVolunteerApplication(item))
-      : accounts;
+      ? communityAccounts.filter(item => isPendingVolunteerApplication(item))
+      : filter === "volunteers"
+        ? communityAccounts.filter(item => item.volunteerAccess === true)
+        : communityAccounts;
     const term = search.trim().toLowerCase();
     if (!term) return byView;
     return byView.filter(item => [
       item.fullName, item.email, item.barangay, item.id,
     ].some(value => String(value || "").toLowerCase().includes(term)));
-  }, [accounts, filter, volunteerApplications, search]);
+  }, [communityAccounts, filter, volunteerApplications, search]);
 
   const totalPages = Math.max(1, Math.ceil(visibleAccounts.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedAccounts = visibleAccounts.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
-  const pendingVolunteerCount = accounts.filter(item => isPendingVolunteerApplication(item)).length;
-  const verifiedResidentCount = accounts.filter(item => isVerifiedResidentAccount(item)).length;
+  const pendingVolunteerCount = communityAccounts.filter(item => isPendingVolunteerApplication(item)).length;
+  const verifiedResidentCount = communityAccounts.filter(item => isVerifiedResidentAccount(item)).length;
+  const activeVolunteerCount = communityAccounts.filter(item => item.volunteerAccess === true).length;
 
   const writeAdminLogSafely = async (
     payload: Parameters<typeof createAdminLog>[0]
@@ -549,42 +559,51 @@ export default function AccountApprovals() {
           styles.container
         }
       >
-        <View style={styles.titleRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={23}
-              color="#0F172A"
-            />
-          </TouchableOpacity>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>
-              Resident Accounts & Volunteer Approvals
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Resident account oversight and Volunteer applications are separate. Only identity-verified Residents may receive Volunteer access.
-            </Text>
+        <PeopleWorkspaceHero
+          section="LGU · People & Verification"
+          title="Residents & Volunteers"
+          description="A single organized LGU workspace for community accounts, identity status, and volunteer access decisions."
+          icon="people-outline"
+          metrics={[
+            { label: "Resident Accounts", value: communityAccounts.length, icon: "people-outline", help: "Community profiles" },
+            { label: "Verified Residents", value: verifiedResidentCount, icon: "shield-checkmark-outline", help: "Identity verified" },
+            { label: "Pending Volunteers", value: pendingVolunteerCount, icon: "time-outline", help: "Awaiting LGU review" },
+            { label: "Active Volunteers", value: activeVolunteerCount, icon: "ribbon-outline", help: "Approved volunteer access" },
+          ]}
+        />
+        <View style={styles.flowCard}>
+          <Text style={styles.flowEyebrow}>ACCOUNT JOURNEY</Text>
+          <View style={styles.flowSteps}>
+            {[
+              { number: "01", label: "Resident account" },
+              { number: "02", label: "Identity verification" },
+              { number: "03", label: "Volunteer application" },
+              { number: "04", label: "LGU decision" },
+            ].map((step, index) => (
+              <React.Fragment key={step.number}>
+                {index > 0 && <Ionicons name="chevron-forward" size={14} color="#85A998" />}
+                <View style={styles.flowStep}>
+                  <Text style={styles.flowNumber}>{step.number}</Text>
+                  <Text style={styles.flowText}>{step.label}</Text>
+                </View>
+              </React.Fragment>
+            ))}
           </View>
-
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>
-              {
-                pendingVolunteerCount
-              }
-            </Text>
-          </View>
+          <Text style={styles.flowNote}>Residents keep their original account when Volunteer access is approved.</Text>
         </View>
+        <View style={styles.workspacePanel}>
+          <View style={styles.workspaceHeading}>
+            <Text style={styles.workspaceEyebrow}>ACCOUNT MANAGEMENT</Text>
+            <Text style={styles.workspaceTitle}>Community directory & approvals</Text>
+            <Text style={styles.workspaceSubtitle}>Use the views below to find a Resident, verify volunteer eligibility, or manage an active community account.</Text>
+          </View>
 
         <View style={styles.filterRow}>
           {(
             [
+              "residents",
               "pending",
-              "all",
+              "volunteers",
             ] as Filter[]
           ).map((value) => (
             <TouchableOpacity
@@ -595,7 +614,7 @@ export default function AccountApprovals() {
                 filter === value &&
                   styles.filterButtonActive,
               ]}
-              onPress={() => { setFilter(value); setSearch(""); setPage(1); }}
+              onPress={() => { setFilter(value); setSearch(""); setPage(1); setExpandedAccountId(null); }}
             >
               <Text
                 style={[
@@ -607,15 +626,14 @@ export default function AccountApprovals() {
               >
                 {value === "pending"
                   ? "Volunteer Applications"
-                  : "Resident Accounts"}
+                  : value === "volunteers"
+                    ? "Active Volunteers"
+                    : "Resident Accounts"}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.reviewSummary}>
-          <Text style={styles.reviewSummaryText}>Pending Volunteer Reviews: {pendingVolunteerCount}  ·  Verified Residents: {verifiedResidentCount}  ·  Total accounts: {accounts.length}</Text>
-        </View>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color="#64748B" />
           <TextInput
@@ -637,7 +655,7 @@ export default function AccountApprovals() {
             />
 
             <Text style={styles.emptyTitle}>
-              No volunteer applications or resident accounts in this view
+              No matching community accounts in this view
             </Text>
           </View>
         ) : (
@@ -662,6 +680,7 @@ export default function AccountApprovals() {
                   <View
                     style={styles.cardHeader}
                   >
+                    <View style={styles.accountAvatar}><Ionicons name={account.volunteerAccess ? "ribbon-outline" : "person-outline"} size={21} color="#08765D" /></View>
                     <View style={{ flex: 1 }}>
                       <Text
                         style={styles.name}
@@ -692,6 +711,21 @@ export default function AccountApprovals() {
                     </View>
                   </View>
 
+                  <View style={styles.accountQuickLine}>
+                    <Ionicons name="location-outline" size={14} color="#6A8A7A" />
+                    <Text style={styles.quickText}>{account.barangay || "Barangay not provided"}</Text>
+                    <Text style={styles.quickDot}>·</Text>
+                    <Text style={styles.quickText}>{isVerifiedResidentAccount(account) ? "Identity verified" : "Identity review not complete"}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.detailsToggle} accessibilityRole="button"
+                    accessibilityState={{ expanded: expandedAccountId === account.id }}
+                    accessibilityLabel={`View account details for ${account.fullName || "resident"}`}
+                    onPress={() => setExpandedAccountId(expandedAccountId === account.id ? null : account.id)}
+                  >
+                    <Ionicons name={expandedAccountId === account.id ? "chevron-up" : "chevron-down"} size={16} color="#0A775D" />
+                    <Text style={styles.detailsToggleText}>{expandedAccountId === account.id ? "Hide details" : "View profile & application details"}</Text>
+                  </TouchableOpacity>
+                  {expandedAccountId === account.id && <View style={styles.detailsArea}>
                   {isExistingResidentApplication ? (
                     <>
                       <Text style={styles.meta}>
@@ -794,6 +828,7 @@ export default function AccountApprovals() {
                     </Text>
                   ) : null}
 
+                  </View>}
                   {isExistingResidentApplication ? (
                     <View
                       style={styles.actionRow}
@@ -895,6 +930,7 @@ export default function AccountApprovals() {
             }
           )
         )}
+        </View>
       </ScrollView>
 
       <Modal
@@ -1028,9 +1064,35 @@ export default function AccountApprovals() {
 
 const styles =
   StyleSheet.create({
+    workspacePanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DEEAE2", borderRadius: 17, padding: 18 },
+    workspaceHeading: { marginBottom: 15, borderBottomWidth: 1, borderBottomColor: "#E7EFE9", paddingBottom: 15 },
+    workspaceEyebrow: { fontSize: 10, color: "#178266", letterSpacing: 1.2, fontWeight: "900" },
+    workspaceTitle: { fontSize: 20, color: "#153F31", fontWeight: "900", marginTop: 4 },
+    workspaceSubtitle: { fontSize: 12, color: "#72887B", marginTop: 5, lineHeight: 18 },
+    flowCard: { padding: 17, borderRadius: 15, borderWidth: 1, borderColor: "#DDECE2", backgroundColor: "#F6FBF8", marginBottom: 18 },
+    flowEyebrow: { color: "#177A5E", fontSize: 10, fontWeight: "900", letterSpacing: 1.1, marginBottom: 10 },
+    flowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 9, alignItems: "center" },
+    flowStep: { flexDirection: "row", gap: 7, paddingVertical: 8, paddingHorizontal: 10,
+      backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEBE2", borderRadius: 9, alignItems: "center" },
+    flowNumber: { color: "#0B7C5F", fontSize: 10, fontWeight: "900" },
+    flowText: { color: "#345749", fontSize: 11, fontWeight: "800" },
+    flowNote: { color: "#788F82", fontSize: 10.5, marginTop: 10 },
+    accountAvatar: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 12,
+      backgroundColor: "#E1F6EB", borderWidth: 1, borderColor: "#CEEDDD", marginRight: 11 },
+    accountQuickLine: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 8 },
+    quickText: { color: "#698275", fontSize: 11 },
+    quickDot: { color: "#A6B9AE", fontWeight: "800" },
+    detailsToggle: { flexDirection: "row", gap: 7, alignItems: "center", paddingVertical: 9, marginTop: 6,
+      alignSelf: "flex-start" },
+    detailsToggleText: { fontSize: 11.5, fontWeight: "800", color: "#0A775D" },
+    detailsArea: { backgroundColor: "#F7FBF8", borderColor: "#E1ECE4", borderWidth: 1,
+      borderRadius: 10, padding: 13, marginTop: 2 },
     container: {
-      padding: 20,
+      padding: 23,
       paddingBottom: 50,
+      maxWidth: 1460,
+      width: "100%",
+      alignSelf: "center",
       backgroundColor: "#F6F8F7",
     },
 
@@ -1104,22 +1166,24 @@ const styles =
     filterRow: {
       flexDirection: "row",
       gap: 10,
+      flexWrap: "wrap",
       marginBottom: 16,
     },
 
     filterButton: {
       flex: 1,
-      padding: 11,
-      borderRadius: 12,
-      backgroundColor: "#FFFFFF",
+      minWidth: 150,
+      padding: 13,
+      borderRadius: 11,
+      backgroundColor: "#F9FCFA",
       alignItems: "center",
       borderWidth: 1,
-      borderColor: "#CBD5E1",
+      borderColor: "#DAE8DD",
     },
 
     filterButtonActive: {
-      backgroundColor: "#0F766E",
-      borderColor: "#0F766E",
+      backgroundColor: "#086D55",
+      borderColor: "#086D55",
     },
 
     filterText: {
@@ -1146,11 +1210,11 @@ const styles =
 
     card: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 9,
-      padding: 16,
-      marginBottom: 14,
+      borderRadius: 13,
+      padding: 17,
+      marginBottom: 10,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: "#E3EDE6",
     },
 
     cardHeader: {
@@ -1171,14 +1235,14 @@ const styles =
     },
 
     roleBadge: {
-      backgroundColor: "#DBEAFE",
+      backgroundColor: "#E0F4E9",
       borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 6,
     },
 
     roleText: {
-      color: "#1D4ED8",
+      color: "#08755A",
       fontSize: 10,
       fontWeight: "900",
     },
@@ -1199,7 +1263,8 @@ const styles =
     actionRow: {
       flexDirection: "row",
       gap: 10,
-      marginTop: 12,
+      flexWrap: "wrap",
+      marginTop: 8,
     },
 
     actionButton: {
