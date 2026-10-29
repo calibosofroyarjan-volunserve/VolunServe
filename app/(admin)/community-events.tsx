@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   ActivityIndicator,
   Image,
@@ -538,26 +539,7 @@ export default function CommunityEventAdminScreen() {
         compact && styles.compact,
       ]}
     >
-      <View style={styles.heading}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>
-            VOLUNSERVE • ADMIN/LGU
-          </Text>
-          <Text style={styles.title}>
-            Community Event Proposals
-          </Text>
-          <Text style={styles.subtitle}>
-            Review Resident suggestions and publish official events.
-          </Text>
-        </View>
-        <View style={styles.headingIcon}>
-          <Ionicons
-            name="calendar-outline"
-            color={GREEN}
-            size={26}
-          />
-        </View>
-      </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / EVENTS & VOLUNTEERING" title="Community Events" subtitle="Review Resident event proposals and publish approved community activities." icon="leaf-outline" tag="EVENT APPROVALS" />
       <View style={styles.stats}>
         {([
           {
