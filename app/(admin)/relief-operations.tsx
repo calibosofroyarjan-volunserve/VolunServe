@@ -28,6 +28,7 @@ import {
 
 import { db } from "../../lib/firebase";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -2291,58 +2292,13 @@ export default function ReliefOperations() {
         }
         showsVerticalScrollIndicator
       >
-        <View
-          style={
-            styles.header
-          }
-        >
-          <TouchableOpacity
-            style={
-              styles.backButton
-            }
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Ionicons
-              name="arrow-back"
-              size={19}
-              color="#334155"
-            />
-          </TouchableOpacity>
-
-          <View
-            style={{
-              flex: 1,
-            }}
-          >
-            <Text
-              style={
-                styles.eyebrow
-              }
-            >
-              ADMIN · LGU RELIEF OPERATIONS
-            </Text>
-
-            <Text
-              style={
-                styles.title
-              }
-            >
-              Relief Operations
-            </Text>
-
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              Manage verified household and community relief needs, LGU stock, and distribution.
-            </Text>
-          </View>
-
-
-        </View>
+        <AdminReviewHero
+          eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+          title="Relief Operations"
+          subtitle="Review verified household and community relief needs, check LGU inventory, allocate supplies, and document distribution."
+          icon="cube-outline"
+          tag="RESOURCE DISTRIBUTION"
+        />
 
         <TouchableOpacity
           style={
