@@ -1,0 +1,38 @@
+name: Validate Premium Resident and Volunteer LGU Workspace
+on:
+  push:
+    branches:
+      - feat/admin-resident-volunteer-premium-workspace-20261029
+    paths:
+      - .github/workflows/validate-premium-people-workspace.yml
+      - app/(admin)/account-approvals.tsx
+      - app/(admin)/identity-reviews.tsx
+      - components/admin/PeopleWorkspaceHero.tsx
+      - scripts/test-premium-admin-resident-volunteer-ui.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Assert clean UI, existing workflows and adjacent protected modules
+        run: |
+          node scripts/test-premium-admin-resident-volunteer-ui.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-superadmin-premium-restoration.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Build production Expo Web (do NOT deploy)
+        run: npx expo export --platform web

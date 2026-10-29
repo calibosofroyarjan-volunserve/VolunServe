@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import PeopleWorkspaceHero from "../../components/admin/PeopleWorkspaceHero";
 import {
     ActivityIndicator,
     Alert,
@@ -249,6 +250,20 @@ export default function IdentityReviewsAdmin() {
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
+  // Choose the first visible case on every page, keeping the detail panel useful
+  // immediately while leaving all decisions explicitly with the authorized LGU Admin.
+  React.useEffect(() => {
+    if (pagedReviews.length === 0) {
+      if (selected) setSelected(null);
+      return;
+    }
+    if (selected && pagedReviews.some(item => item.uid === selected.uid)) return;
+    const first = pagedReviews[0];
+    setSelected(first);
+    setValidationMethod(first.manualValidationMethod || "");
+    setNotes(first.manualReviewNotes || "");
+  }, [pagedReviews, selected?.uid]);
+
   const openReview = (item: IdentityReview) => {
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
@@ -347,7 +362,7 @@ export default function IdentityReviewsAdmin() {
   if (sessionLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+        <ActivityIndicator size="large" color="#08745D" />
         <Text style={styles.centerText}>
           Checking administrator access...
         </Text>
@@ -383,43 +398,18 @@ export default function IdentityReviewsAdmin() {
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
-        <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={27}
-              color="#FFFFFF"
-            />
-          </View>
-
-          <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>
-              ADMIN · RESIDENT VERIFICATION
-            </Text>
-            <Text style={styles.title}>Resident Identity Reviews</Text>
-            <Text style={styles.subtitle}>
-              Review AI-uncertain Resident identity cases. Automatic
-              verification remains separate from manual LGU/Admin validation.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={() => void loadReviews()}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#334155" />
-            ) : (
-              <Ionicons
-                name="refresh-outline"
-                size={19}
-                color="#334155"
-              />
-            )}
-            <Text style={styles.refreshButtonText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
+        <PeopleWorkspaceHero
+          section="LGU · Resident Verification"
+          title="Resident Identity Reviews"
+          icon="shield-checkmark-outline"
+          description="Review cases that require additional LGU validation. Automated identity checks and manual LGU review stay independent."
+          metrics={[
+            { label: "Pending Review", value: counts.pending, icon: "time-outline", help: "Manual checks needed" },
+            { label: "Verified Reviews", value: counts.verified, icon: "checkmark-circle-outline", help: "Validated outcomes" },
+            { label: "Retry Required", value: counts.retry_required, icon: "refresh-circle-outline", help: "Needs a new attempt" },
+            { label: "Total Reviews", value: counts.all, icon: "document-text-outline", help: "Recorded cases" },
+          ]}
+        />
 
         <View style={styles.privacyNotice}>
           <Ionicons
@@ -440,7 +430,21 @@ export default function IdentityReviewsAdmin() {
           </View>
         </View>
 
-        <View style={styles.filterRow}>
+        <View style={styles.reviewWorkspace}>
+          <View style={styles.workspaceTop}>
+            <View style={styles.flexOne}>
+              <Text style={styles.workspaceEyebrow}>RESIDENT VERIFICATION</Text>
+              <Text style={styles.workspaceTitle}>Identity review queue</Text>
+              <Text style={styles.workspaceSubtitle}>Choose a record to inspect the LGU verification workflow. Sensitive ID images remain protected.</Text>
+            </View>
+            <TouchableOpacity style={styles.refreshButton} onPress={() => void loadReviews()} disabled={loading}
+              accessibilityRole="button" accessibilityLabel="Refresh identity reviews">
+              {loading ? <ActivityIndicator size="small" color="#0B7259" /> :
+                <Ionicons name="refresh-outline" size={19} color="#0B7259" />}
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.filterRow}>
           {[
             { key: "pending" as const, label: "Pending", count: counts.pending },
             { key: "verified" as const, label: "Verified", count: counts.verified },
@@ -518,7 +522,7 @@ export default function IdentityReviewsAdmin() {
 
         {loading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#4F46E5" />
+            <ActivityIndicator size="large" color="#08745D" />
             <Text style={styles.centerText}>
               Loading identity reviews...
             </Text>
@@ -642,6 +646,7 @@ export default function IdentityReviewsAdmin() {
             </View>
           </View>
         )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -704,7 +709,7 @@ function ReviewDetail({
           <Ionicons
             name="person-outline"
             size={24}
-            color="#4F46E5"
+            color="#08745D"
           />
         </View>
 
@@ -935,7 +940,7 @@ function SectionTitle({
 }) {
   return (
     <View style={styles.sectionTitleRow}>
-      <Ionicons name={icon} size={19} color="#4F46E5" />
+      <Ionicons name={icon} size={19} color="#08745D" />
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
@@ -977,6 +982,13 @@ const styles = StyleSheet.create({
     scrollbarWidth: "auto",
     scrollbarColor: "#8CA3B2 #F2F9FC",
   } as any,
+  reviewWorkspace: { backgroundColor: "#FFFFFF", borderColor: "#DEEAE2", borderWidth: 1, borderRadius: 16,
+    padding: 18, marginTop: 2 },
+  workspaceTop: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 17,
+    paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: "#E8F0EA" },
+  workspaceEyebrow: { fontSize: 10, fontWeight: "900", letterSpacing: 1.1, color: "#148263" },
+  workspaceTitle: { marginTop: 4, fontSize: 19, color: "#173D32", fontWeight: "900" },
+  workspaceSubtitle: { marginTop: 4, color: "#759084", fontSize: 11.5, lineHeight: 18 },
   page: {
     width: "100%",
     maxWidth: 1450,
@@ -1102,8 +1114,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   filterButtonActive: {
-    backgroundColor: "#4F46E5",
-    borderColor: "#4F46E5",
+    backgroundColor: "#08745D",
+    borderColor: "#08745D",
   },
   filterButtonText: {
     color: "#475569",
@@ -1210,15 +1222,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   queueCard: {
-    padding: 14,
-    borderRadius: 8,
+    padding: 15,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
   },
   queueCardActive: {
-    borderColor: "#818CF8",
-    backgroundColor: "#EEF2FF",
+    borderColor: "#43AC84",
+    backgroundColor: "#EFF9F2",
   },
   queueTop: {
     flexDirection: "row",
@@ -1231,10 +1243,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E0E7FF",
+    backgroundColor: "#E0F5E9",
   },
   avatarText: {
-    color: "#4338CA",
+    color: "#08654E",
     fontSize: 13,
     fontWeight: "900",
   },
@@ -1283,7 +1295,7 @@ const styles = StyleSheet.create({
   },
   detailPanel: {
     padding: 18,
-    borderRadius: 9,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -1313,7 +1325,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFF9F2",
   },
   detailTitle: {
     color: "#173D32",
@@ -1384,7 +1396,7 @@ const styles = StyleSheet.create({
   },
   scoreCardDecision: {
     marginTop: 3,
-    color: "#4F46E5",
+    color: "#08745D",
     fontSize: 12,
     fontWeight: "900",
   },
@@ -1427,7 +1439,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   methodButtonActive: {
-    borderColor: "#5EEAD4",
+    borderColor: "#75D3B0",
     backgroundColor: "#ECFDF5",
   },
   methodButtonText: {
