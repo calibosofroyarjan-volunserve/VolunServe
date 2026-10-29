@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --test scripts/test-login-ui-release.cjs scripts/test-password-reset-modal.cjs
+          node --test scripts/test-login-ui-release.cjs scripts/test-password-reset-modal.cjs scripts/test-superadmin-pagination-layout.cjs
           node scripts/test-premium-auth-portal.cjs
           node <<'NODE'
           const fs=require("node:fs"), assert=require("node:assert/strict");
