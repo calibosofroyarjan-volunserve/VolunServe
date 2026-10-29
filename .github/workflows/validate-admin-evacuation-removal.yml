@@ -1,0 +1,40 @@
+name: Validate LGU Admin Evacuation Center Removal
+on:
+  push:
+    branches:
+      - fix/remove-admin-evacuation-centers-20261029
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/(admin)/command-center.tsx
+      - scripts/test-remove-admin-evacuation-centers.cjs
+      - scripts/test-admin-overview-ui.cjs
+      - scripts/test-dashboard-overviews.cjs
+      - scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+      - .github/workflows/validate-admin-evacuation-removal.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify clean Command Center and regression contracts
+        run: |
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-admin-overview-ui.cjs
+          node scripts/test-dashboard-overviews.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile Expo web without deploying
+        run: npx expo export --platform web
