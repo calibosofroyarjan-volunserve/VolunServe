@@ -1,0 +1,33 @@
+name: Resident Volunteer Sidebar Scope Validation (No Deploy)
+on:
+  push:
+    branches:
+      - fix/resident-volunteer-clean-sidebar-20261029
+  pull_request:
+    paths:
+      - "app/(tabs)/_layout.tsx"
+      - "app/(tabs)/profile.tsx"
+      - "app/(tabs)/volunteer-impact.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "app/(tabs)/volunteer.web.tsx"
+      - "scripts/test-resident-volunteer-sidebar.cjs"
+      - ".github/workflows/resident-volunteer-sidebar-validation.yml"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Resident and Volunteer sidebar scope and progress regression
+        run: node --test scripts/test-resident-volunteer-sidebar.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Export web bundle (no deployment)
+        run: npx expo export --platform web
