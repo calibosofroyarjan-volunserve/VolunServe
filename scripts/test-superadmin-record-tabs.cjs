@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.resolve(__dirname, "../app/(superadmin)/all-
 
 test("Records are arranged under independent Residents, Volunteers, Events, Response, and LGU sections", () => {
   const structure = source.slice(source.indexOf("const recordSections:"), source.indexOf("function accountAudienceForRole"));
-  const sectionNames = [...structure.matchAll(/id: "(residents|volunteers|events|operations|administration)", label: "([^"]+)"/g)].map(m => m[1]);
+  const sectionNames = [...structure.matchAll(/^    id: "(residents|volunteers|events|operations|administration)", label: "([^"]+)"/gm)].map(m => m[1]);
   assert.deepEqual(sectionNames, ["residents", "volunteers", "events", "operations", "administration"]);
   const views = [...structure.matchAll(/\{ id: "([^"]+)", label: "([^"]+)", icon: "[^"]+", source: "([^"]+)"(?:, audience: "([^"]+)")? \}/g)];
   assert.equal(views.length, 16);
