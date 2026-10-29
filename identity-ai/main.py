@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from io import BytesIO
 import cv2
 import mediapipe as mp
+import pytesseract
+from document_screening import assess_document_text, document_ocr_unavailable
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -871,6 +873,25 @@ def failed_attempt_result(
     }
 
 
+def screen_government_id(*, declared_type, id_document_bytes):
+    """OCR checks ID *type plausibility* only; it cannot authenticate issuance.
+
+    No OCR text, names, ID numbers, or face data are returned or persisted.
+    Every result requires an independent LGU document-authenticity review.
+    """
+    try:
+        image = decode_image(id_document_bytes, "Government ID image")
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # PSM 11 tolerates the irregular positions of labels on photographed cards.
+        extracted = pytesseract.image_to_string(gray, config="--psm 11")
+        return assess_document_text(declared_type, extracted)
+    except Exception:
+        # OCR depends on local Tesseract assets and camera image quality.
+        # Fail closed: no automatic rejection or claims of genuine IDs.
+        logging.warning("Government ID keyword screening unavailable")
+        return document_ocr_unavailable(declared_type)
+
+
 def run_face_verification(
     *,
     uid,
@@ -1071,6 +1092,8 @@ def health():
         "faceMatchThreshold":
             get_match_threshold(),
         "livenessImplemented": False,
+        "idDocumentScreeningImplemented": True,
+        "idDocumentAuthenticityVerified": False,
         "time": datetime.now(
             timezone.utc
         ).isoformat(),
@@ -1092,7 +1115,8 @@ def capabilities():
         "features": {
             "governmentIdOcr": {
                 "planned": True,
-                "active": False,
+                "active": True,
+                "method": "ocr_keyword_screen_not_document_authentication",
             },
             "idFaceDetection": {
                 "planned": False,
@@ -1225,11 +1249,18 @@ async def verify_identity(
             ),
         )
     try:
+        # Both the profile's Be a Verified Resident flow and the LGU review
+        # queue use this one protected endpoint; no separate visual-only AI.
         result = await asyncio.to_thread(
             run_face_verification,
             uid=uid,
             id_document_bytes=id_document_bytes,
             selfie_bytes=selfie_bytes,
+        )
+        document_screening = await asyncio.to_thread(
+            screen_government_id,
+            declared_type=id_type,
+            id_document_bytes=id_document_bytes,
         )
     except HTTPException:
         raise
@@ -1248,4 +1279,5 @@ async def verify_identity(
     return {
         **result,
         "idType": id_type,
+        "documentScreening": document_screening,
     }
