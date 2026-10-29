@@ -1,0 +1,77 @@
+name: Publish Final Defense LGU Dashboard (Hosting Only)
+on:
+  push:
+    branches:
+      - release/defense-dashboard-resident-volunteer-activity-20261030
+    paths:
+      - .github/workflows/release-defense-dashboard-residents-volunteers-activity.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate exact approved main commit and workflow-only delta
+        shell: bash
+        run: |
+          git merge-base --is-ancestor 02882dc431e95171ec7edfdaa226e9c1288bde85 HEAD
+          test "$(git diff --name-only 02882dc431e95171ec7edfdaa226e9c1288bde85 HEAD)" = ".github/workflows/release-defense-dashboard-residents-volunteers-activity.yml"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check Resident and Volunteer review, activity, navigation and security
+        run: |
+          node scripts/test-defense-dashboard-residents-volunteers-activity.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-lgu-dashboard-inline-approvals-and-paging.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-remove-admin-evacuation-centers.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Compile and stamp exact Expo Hosting revision
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::No Firebase Hosting credentials; production unchanged."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting only (not Firestore, Functions or backend)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact live revision on custom domain
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Expected production revision not verified."
+          exit 1
