@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   ActivityIndicator,
   ScrollView,
@@ -410,20 +411,7 @@ export default function AdminDisputesScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>
-          VOLUNSERVE ADMIN REVIEW
-        </Text>
-
-        <Text style={styles.title}>
-          Response Disputes
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Review resident reports where a completed volunteer response was
-          marked as Not Helped.
-        </Text>
-      </View>
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Disputes" subtitle="Review resident Not Helped reports, verify response evidence, and document fair LGU decisions." icon="shield-checkmark-outline" tag="RESPONSE REVIEW" />
 
       <View style={styles.noticeCard}>
         <View style={styles.noticeIcon}>
