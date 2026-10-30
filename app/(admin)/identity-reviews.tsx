@@ -75,15 +75,6 @@ const VALIDATION_METHODS = [
   },
 ];
 
-function scoreText(value?: number | null) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${Math.max(0, Math.min(100, normalized)).toFixed(1)}%`;
-}
-
 function formatDate(value?: string) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -590,9 +581,9 @@ export default function IdentityReviewsAdmin() {
                     </View>
 
                     <View style={styles.scoreRow}>
-                      <Text style={styles.scoreLabel}>AI face score</Text>
+                      <Text style={styles.scoreLabel}>Government ID check</Text>
                       <Text style={styles.scoreValue}>
-                        {scoreText(item.matchScore)}
+                        {item.documentScreening?.detectedIdType ? "Screened — review required" : "Manual review required"}
                       </Text>
                     </View>
 
@@ -747,18 +738,16 @@ function ReviewDetail({
 
       <View style={styles.scoreCard}>
         <View>
-          <Text style={styles.scoreCardLabel}>Face match score</Text>
-          <Text style={styles.scoreCardValue}>
-            {scoreText(item.matchScore)}
-          </Text>
-        </View>
-
-        <View>
-          <Text style={styles.scoreCardLabel}>AI decision</Text>
+          <Text style={styles.scoreCardLabel}>Document and identity review</Text>
           <Text style={styles.scoreCardDecision}>
-            {item.aiDecision || "Not available"}
+            {item.documentScreening?.detectedIdType
+              ? "ID type screened; independent identity verification required"
+              : "ID evidence needs independent review"}
           </Text>
         </View>
+        <Text style={styles.scoreCardLabel}>
+          AI screening is preliminary. Approve only after checking identity through an approved LGU validation method.
+        </Text>
       </View>
 
       <DocumentScreeningSummary screening={item.documentScreening} />
