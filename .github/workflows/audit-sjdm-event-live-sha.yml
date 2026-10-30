@@ -1,0 +1,31 @@
+name: Read-only Live Hosting SHA for SJDM Event Map
+on:
+  push:
+    branches:
+      - audit/sjdm-events-live-revision-20261030
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect exact live fingerprint - no deploy
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            const response=await fetch('https://volunserve.com/volunserve-release.json',
+              {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            if(!response.ok) throw Error('Live manifest unavailable: '+response.status);
+            const release=await response.json();
+            if(release.app!=='VolunServe'||release.firebaseProject!=='volunserve-3aa5b'||
+              !/^[0-9a-f]{40}$/.test(release.revision)) throw Error('Unrecognized release manifest');
+            console.log('AUDITED_LIVE_SHA='+release.revision);
+          })().catch(error=>{console.error(error.message);process.exit(1)});
+          NODE
