@@ -1,0 +1,35 @@
+name: Validate Volunteer Invitation Accept/Reject (No Deploy)
+on:
+  push:
+    branches:
+      - feat/emergency-invite-accept-decline-20261030
+  pull_request:
+    branches:
+      - release/emergency-volunteer-isolated-20261030
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Invitation response and unchanged Admin safety tests
+        run: |
+          node scripts/test-volunteer-invitation-acceptance.cjs
+          node scripts/test-isolated-emergency-volunteer-release.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+      - name: TypeScript full project validation
+        run: npx tsc --noEmit
+      - name: Build Expo static web without deployment
+        run: npx expo export --platform web
+      - name: Bundle native Android JavaScript without APK or deployment
+        run: npx expo export --platform android
