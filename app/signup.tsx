@@ -777,6 +777,11 @@ export default function Signup() {
                 editable={!googleBound}
                 autoCapitalize="none"
               />
+              {isKnownDisposableEmail(formData.email) ? (
+                <Text style={[styles.emailVerifyHint, { color: "#B42318" }]}>
+                  Temporary email addresses are not allowed. Use a permanent email.
+                </Text>
+              ) : null}
               {!googleBound ? (
                 <>
                   <Field
