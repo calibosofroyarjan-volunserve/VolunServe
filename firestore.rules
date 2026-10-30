@@ -4201,13 +4201,15 @@ service cloud.firestore {
           && incomingVolunteerProfile().volunteerStatus == 'approved'
           && hasVerifiedIdentity(incomingVolunteerProfile());
       }
+      // Read access belongs to an approved capability + document ownership,
+      // not the user's active UI mode (which can change between sessions).
       allow read: if isAdminOrSuperAdmin()
         || (
-          isVolunteer()
+          hasVolunteerAccess()
           && resource.data.volunteerId == request.auth.uid
         )
         || (
-          isResident()
+          hasResidentAccess()
           && assignmentCase().reporterUid == request.auth.uid
         );
       allow create: if isAdmin()

@@ -337,10 +337,15 @@ export default function VolunteerTasks() {
           problem
         );
 
+        // Never show stale counts beside a failed Firestore listener.
+        setAssignments([]);
+        setCasesById({});
         setAssignmentsReady(true);
 
         setError(
-          "Unable to load your emergency assignments. Check your connection and Firestore permissions."
+          problem.code === "permission-denied"
+            ? "Your emergency assignments could not be read. Confirm that your Volunteer account is approved and the latest Firestore rules are deployed."
+            : "Unable to load your emergency assignments. Check your internet connection and try again."
         );
       }
     );

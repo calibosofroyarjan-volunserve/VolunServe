@@ -1,0 +1,39 @@
+name: Validate Admin Authority and Volunteer Assignments
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/adminAccess.js
+      - backend/server.js
+      - lib/firebaseAuth.ts
+      - firestore.rules
+      - app/(tabs)/volunteer.tsx
+      - scripts/test-admin-volunteer-authorization.cjs
+      - scripts/test-admin-volunteer-firestore.cjs
+      - .github/workflows/validate-admin-volunteer-authority.yml
+permissions:
+  contents: read
+jobs:
+  authorization-and-firestore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Test Admin authorization and backend syntax
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --check backend/server.js
+          npx tsc --noEmit --pretty false
+      - name: Firestore emulator security tests (no production data)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Build Expo web without deploying
+        run: npx expo export --platform web
