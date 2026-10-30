@@ -1,0 +1,104 @@
+name: Safe Firestore Rules-Only Release (Admin Volunteer Access)
+on:
+  push:
+    branches: [chore/safe-firestore-rules-only-deploy-20261030]
+    paths: [.github/workflows/release-firestore-rules-only-safe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  validate-and-optionally-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PINNED_SOURCE_SHA: c37653ab28e4388ff4060835ad135ed5bd87715b
+      EXPECTED_RULES_BLOB: bb1634f5fad4716b4861050489536d81a007ac88
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check exact published rules source and prohibit concurrent main module changes
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const ownerRepo=process.env.GITHUB_REPOSITORY;
+          const workflow='.github/workflows/release-firestore-rules-only-safe.yml';
+          const api=async path=>{
+            const r=await fetch('https://api.github.com/repos/'+ownerRepo+'/'+path,{
+              headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}
+            });
+            if(!r.ok)throw Error(path+' API status '+r.status);
+            return r.json();
+          };
+          (async()=>{
+            const file=await api('contents/firestore.rules?ref=main');
+            assert.equal(file.sha,process.env.EXPECTED_RULES_BLOB,
+              'main firestore.rules changed; STOP. Review current rules instead of overwriting.');
+            const diff=await api('compare/'+process.env.PINNED_SOURCE_SHA+'...main');
+            assert.equal(diff.status,'ahead','main has diverged or pinned source is not an ancestor');
+            assert.equal(diff.files.length,1,'unexpected files changed on main; STOP.');
+            assert.equal(diff.files[0].filename,workflow,
+              'Non-workflow files changed since rules validation; STOP.');
+            console.log('PASS: main changed only by this deployment workflow. No Super Admin, Admin, Resident, Auth, or Maps files touched.');
+            console.log('PASS: main Firestore source blob exactly matches tested rules version.');
+          })().catch(e=>{console.error(e.message);process.exit(1);});
+          NODE
+      - name: Get tested source without broken legacy Git submodule
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${PINNED_SOURCE_SHA}" \
+            -o /tmp/volunserve-verified-source.tar.gz
+          tar -xzf /tmp/volunserve-verified-source.tar.gz --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f firestore.rules
+          test -f scripts/test-admin-volunteer-firestore.cjs
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Verify exact Admin role and Volunteer ownership boundaries
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Identify Firebase service account without exposing any secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase deployment service account secret is missing."
+            exit 1
+          fi
+          node <<'NODE'
+          const fs=require('fs');
+          const config=JSON.parse(process.env.FIREBASE_SA);
+          if(config.type!=='service_account'||config.project_id!=='volunserve-3aa5b'){
+            throw Error('Wrong Firebase project service-account credentials: STOP');
+          }
+          console.log('Firebase deployment service account (for IAM): '+config.client_email);
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/firebase-sa.json',process.env.FIREBASE_SA,{mode:0o600});
+          NODE
+      - name: Deploy Firestore Security Rules ONLY, never other Firebase services
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        shell: bash
+        run: |
+          # Recheck that the main rules blob is still exactly the tested source.
+          CURRENT_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)"
+          test "$CURRENT_BLOB" = "$EXPECTED_RULES_BLOB" || {
+            echo "::error::Main Firestore rules changed; refusing to deploy old rules."
+            exit 1
+          }
+          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+          echo 'Firestore rules deployed. Hosting, Auth, Firestore data, Functions, Storage and Maps unchanged.'
