@@ -560,6 +560,22 @@ export default function VolunteerTasksWeb() {
         }
 
         const caseId = String(current.caseId || assignment.caseId || "").trim();
+        const lockRef = doc(db, "responderLocks", user.uid);
+        const lockSnapshot =
+          ["accepted", "responding", "on_site", "completed"].includes(next)
+            ? await transaction.get(lockRef)
+            : null;
+        if (next === "accepted") {
+          if (assignments.some(item =>
+            item.id !== assignment.id &&
+            ["accepted", "responding", "on_site"].includes(String(item.status))
+          )) {
+            throw new Error("Complete your current emergency response before accepting a new invitation.");
+          }
+          if (lockSnapshot?.exists()) {
+            throw new Error("You already have an active emergency response. Finish it before accepting this invitation.");
+          }
+        }
         let reporterUid = "";
         let caseData: Record<string, any> | null = null;
 
@@ -572,6 +588,15 @@ export default function VolunteerTasksWeb() {
             caseData = caseSnapshot.data();
             reporterUid = String(caseData?.reporterUid || "").trim();
           }
+        }
+
+        if (next === "accepted" && (
+          !caseData ||
+          !["validated", "assigned", "in_progress"].includes(String(caseData.status)) ||
+          String(caseData.verificationStatus || "validated") !== "validated" ||
+          String(caseData.reporterUid || "") === user.uid
+        )) {
+          throw new Error("This emergency must be validated and cannot be your own report.");
         }
 
         if (next === "completed") {
@@ -613,6 +638,32 @@ export default function VolunteerTasksWeb() {
         }
 
         transaction.update(assignmentRef, patch);
+        if (next === "accepted") {
+          // A Volunteer can receive multiple offers but only one active
+          // response. The shared lock is created atomically with acceptance.
+          transaction.set(lockRef, {
+            responderUid: user.uid,
+            assignmentId: assignment.id,
+            caseId,
+            status: "accepted",
+            updatedAt: serverTimestamp(),
+          });
+        } else if (
+          (next === "responding" || next === "on_site") &&
+          lockSnapshot?.exists() &&
+          lockSnapshot.data()?.assignmentId === assignment.id
+        ) {
+          transaction.update(lockRef, {
+            status: next,
+            updatedAt: serverTimestamp(),
+          });
+        } else if (
+          next === "completed" &&
+          lockSnapshot?.exists() &&
+          lockSnapshot.data()?.assignmentId === assignment.id
+        ) {
+          transaction.delete(lockRef);
+        }
 
         if (next === "completed" && caseId && caseData) {
           const volunteerName =
@@ -711,14 +762,14 @@ export default function VolunteerTasksWeb() {
 
       if (next === "accepted") {
         showMessage(
-          "Assignment accepted",
-          "The assignment is accepted. Select Start Response when you begin travelling or responding.",
+          "Invitation accepted",
+          "Your emergency invitation is accepted. Select Start Response when you begin travelling or responding.",
         );
         setFilter("active");
       } else if (next === "declined") {
         showMessage(
-          "Assignment declined",
-          "Admin will see the decline and can offer the case to another qualified volunteer.",
+          "Invitation declined",
+          "LGU Admin will see your declined invitation and can invite another Volunteer.",
         );
       } else if (next === "responding") {
         showMessage(
@@ -1070,7 +1121,7 @@ export default function VolunteerTasksWeb() {
                           <Ionicons name="checkmark" size={20} color="#ffffff" />
                         )}
                         <Text style={styles.acceptButtonText}>
-                          {busy ? "Updating…" : "Accept Assignment"}
+                          {busy ? "Updating…" : "Accept Invite"}
                         </Text>
                       </TouchableOpacity>
 
@@ -1081,7 +1132,7 @@ export default function VolunteerTasksWeb() {
                         activeOpacity={0.85}
                       >
                         <Ionicons name="close" size={20} color="#123047" />
-                        <Text style={styles.declineButtonText}>Decline</Text>
+                        <Text style={styles.declineButtonText}>Reject Invite</Text>
                       </TouchableOpacity>
                     </>
                   )}
