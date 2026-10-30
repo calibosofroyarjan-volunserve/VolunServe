@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import VolunteerInvitationInbox from "../../components/volunteer/VolunteerInvitationInbox";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -1174,6 +1175,8 @@ export default function VolunteerTasks() {
           );
         })}
       </ScrollView>
+
+      <VolunteerInvitationInbox />
 
       {!!error && (
         <View style={styles.errorBox}>
