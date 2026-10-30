@@ -1,0 +1,7 @@
+{
+  "releaseSha": "c37653ab28e4388ff4060835ad135ed5bd87715b",
+  "status": "success",
+  "workflowRunId": "40996127306",
+  "completedAt": "2026-10-30T03:16:01.395Z",
+  "scope": "Web Hosting only; production Firestore rules require separate IAM-authorized deployment"
+}
