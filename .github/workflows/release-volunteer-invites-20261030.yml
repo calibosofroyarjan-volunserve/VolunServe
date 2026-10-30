@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: volunserve-volunteer-invitation-release-20261030
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   test-and-release:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || github.head_ref == 'fix/real-volunteer-invitation-accept-decline-20261030')
