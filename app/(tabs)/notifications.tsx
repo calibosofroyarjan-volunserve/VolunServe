@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -37,6 +38,7 @@ const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> =
 };
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const [uid, setUid] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,6 +187,17 @@ export default function NotificationsScreen() {
               </View>
               <Text style={styles.category}>{categoryOf(item)} • {timestamp(item.createdAt) ? new Date(timestamp(item.createdAt)).toLocaleString() : "Just now"}</Text>
               <Text style={styles.message}>{item.message || "You have a new update."}</Text>
+              {item.userId === uid && item.type === "response_assignment" && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Volunteer emergency invitation to accept or reject"
+                  style={styles.readButton}
+                  onPress={() => router.push("/volunteer" as any)}
+                >
+                  <Text style={styles.readText}>Open Invitation · Accept / Reject</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#087D60"/>
+                </TouchableOpacity>
+              )}
               {!item.read && <TouchableOpacity disabled={updating} accessibilityRole="button"
                 style={styles.readButton} onPress={() => void markAsRead([item.id])}>
                 <Text style={styles.readText}>Mark as read</Text><Ionicons name="checkmark" size={15} color="#087D60"/>
