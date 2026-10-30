@@ -1,5 +1,6 @@
 
 import { useFonts } from "expo-font";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import AppDialogHost from "../components/ui/AppDialogHost";
 import {
   Stack,
@@ -187,6 +188,12 @@ export default function RootLayout() {
       if (!isLoginRoute && !isSignupRoute && !isAdministrativeLoginRoute) {
         router.replace("/login");
       }
+      return;
+    }
+
+    // Reject restored sessions registered with a known temporary email.
+    if (isKnownDisposableEmail(authUser.email || "")) {
+      void logoutUser().finally(() => router.replace("/login"));
       return;
     }
 
