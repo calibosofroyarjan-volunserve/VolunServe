@@ -16,6 +16,13 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(actual["detectedIdType"], "drivers_license")
         self.assertEqual(actual["status"], "text_consistent_unverified")
 
+    def test_ocr_apostrophe_split_in_drivers_license(self):
+        # Tesseract often separates DRIVER'S into DRIVER S.
+        for text in ("DRIVER'S LICENSE", "DRIVER S LICENSE", "DRIVERS LICENSE"):
+            with self.subTest(text=text):
+                actual = assess_document_text("drivers_license", text)
+                self.assertEqual(actual["status"], "text_consistent_unverified")
+
     def test_passport(self):
         actual = assess_document_text("passport", "REPUBLIC OF THE PHILIPPINES PASAPORTE / PASSPORT")
         self.assertEqual(actual["detectedIdType"], "passport")
