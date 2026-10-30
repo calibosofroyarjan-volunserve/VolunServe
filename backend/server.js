@@ -10,6 +10,12 @@ const {
 } = require("./firebaseAdmin");
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const {
+  getProfileRole,
+  isApprovedAccount,
+  isOperationalAdminProfile,
+  isAdminOrSuperAdminProfile,
+} = require("./adminAccess");
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
   // Production and Firebase Hosting previews of the VolunServe web app.
@@ -957,28 +963,6 @@ function detectAssistanceImage(
   }
   return null;
 }
-function getProfileRole(
-  profile,
-) {
-  return cleanText(
-    profile?.primaryRole ||
-      profile?.role ||
-      "",
-    40,
-  ).toLowerCase();
-}
-function isApprovedAccount(
-  profile,
-) {
-  return (
-    cleanText(
-      profile?.status ||
-        "",
-      40,
-    ).toLowerCase() ===
-    "approved"
-  );
-}
 function isVerifiedResidentProfile(
   profile,
 ) {
@@ -997,18 +981,6 @@ function isVerifiedResidentProfile(
           ?.identityStatus,
       ) === "verified"
     )
-  );
-}
-function isOperationalAdminProfile(
-  profile,
-) {
-  return (
-    isApprovedAccount(
-      profile,
-    ) &&
-    getProfileRole(
-      profile,
-    ) === "admin"
   );
 }
 async function loadUserProfile(
@@ -1144,10 +1116,6 @@ async function requireOperationalAdmin(
           ),
       });
   }
-}
-function isAdminOrSuperAdminProfile(profile) {
-  if (!isApprovedAccount(profile)) return false;
-  return ["admin", "superadmin"].includes(getProfileRole(profile));
 }
 function isVerifiedLguPersonnelProfile(profile) {
   return (
