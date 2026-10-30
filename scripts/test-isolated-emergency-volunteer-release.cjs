@@ -24,7 +24,7 @@ const required = [
   ["Multiple invitations permitted", "Multiple invitations are allowed"],
   ["Suspended accounts blocked", '"suspended"'],
   ["Revoked Volunteer blocked", '"revoked"'],
-  ["Volunteer must accept", "they can Accept or Decline"],
+  ["Volunteer must accept", "They can Accept or Decline"],
   ["Embedded emergency map preserved", 'detailTab === "map"'],
   ["Case details retained", "setSelectedCaseId(item.id)"],
   ["Evidence retained", "pageFive(imageEvidence, photoPage)"],
