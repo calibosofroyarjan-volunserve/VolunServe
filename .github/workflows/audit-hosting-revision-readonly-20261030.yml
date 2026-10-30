@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - audit/hosting-revision-readonly-20261030
+  pull_request:
+    branches:
+      - main
 permissions:
   contents: read
 jobs:
