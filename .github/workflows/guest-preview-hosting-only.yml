@@ -1,0 +1,118 @@
+name: Safely Publish Guest Workspace Preview (Hosting Only)
+on:
+  push:
+    branches:
+      - release/guest-preview-hosting-only-20261030
+    paths:
+      - .github/workflows/guest-preview-hosting-only.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      EXPECTED_MAIN_SHA: 3d247e1048afe96b5f93ec35cb28a810985b2050
+      EXPECTED_LIVE_SHA: c37653ab28e4388ff4060835ad135ed5bd87715b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Confirm latest main and protect current production deployment
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          (async () => {
+            const repository = 'calibosofroyarjan-volunserve/VolunServe';
+            const main = await fetch('https://api.github.com/repos/' + repository + '/branches/main', {
+              headers: { accept: 'application/vnd.github+json' },
+              signal: AbortSignal.timeout(15000)
+            });
+            assert(main.ok, 'Unable to verify latest main; aborting deployment');
+            const mainHead = (await main.json()).commit.sha;
+            assert.equal(mainHead, process.env.EXPECTED_MAIN_SHA,
+              'Main advanced since Guest branch review; abort rather than overwrite newer code');
+            const manifestResponse = await fetch('https://volunserve.com/volunserve-release.json?check=' + Date.now(), {
+              headers: { 'cache-control': 'no-cache', accept: 'application/json' },
+              signal: AbortSignal.timeout(15000)
+            });
+            assert(manifestResponse.ok, 'Live revision unavailable; aborting deployment');
+            const live = await manifestResponse.json();
+            assert.equal(live.app, 'VolunServe', 'Unexpected production release');
+            assert.equal(live.firebaseProject, 'volunserve-3aa5b', 'Unexpected Firebase project');
+            assert.equal(live.revision, process.env.EXPECTED_LIVE_SHA,
+              'Production has a newer or different release; do not overwrite it');
+            console.log('SAFE: latest main is ' + mainHead);
+            console.log('SAFE: live Hosting is the reviewed parent revision ' + live.revision);
+          })().catch(error => {
+            console.error('STOP DEPLOYMENT:', error.message);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify guest boundaries, existing navigation and TypeScript
+        run: |
+          node scripts/test-guest-readonly-preview.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          npx tsc --noEmit --pretty false
+
+      - name: Build Expo static website (no backend or database changes)
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const hasPreview = fs.existsSync('dist/public/preview.html') ||
+            fs.existsSync('dist/public/preview/index.html');
+          assert(hasPreview, 'Missing Guest Preview route: /public/preview');
+          console.log('PASS: exported /public/preview route exists');
+          NODE
+
+      - name: Block publishing without the configured Hosting credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Hosting credentials missing; nothing published."
+            exit 1
+          fi
+
+      - name: Deploy Firebase Hosting ONLY (no Functions, Firestore, Storage or Render)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+
+      - name: Verify exact Guest Preview release on volunserve.com
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "Confirmed Guest preview release is live"
+              exit 0
+            fi
+            echo "Waiting for custom domain propagation ($attempt)"
+            sleep 10
+          done
+          echo "::error::Deployment verification did not confirm exact release SHA."
+          exit 1
