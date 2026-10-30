@@ -1,0 +1,72 @@
+name: Publish Admin Volunteer Web Hotfix (Hosting Only)
+on:
+  push:
+    branches: [release/admin-volunteer-firestore-hosting-20261030]
+    paths:
+      - .github/workflows/publish-admin-volunteer-web-20261030.yml
+permissions:
+  contents: write
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      RELEASE_SHA: c37653ab28e4388ff4060835ad135ed5bd87715b
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Fetch pinned main commit (avoid legacy broken gitlink)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${RELEASE_SHA}" \
+            -o /tmp/source.tar.gz
+          tar -xzf /tmp/source.tar.gz --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -s package-lock.json
+          test -f app/'(tabs)'/volunteer.tsx
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Confirm Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::No Firebase Hosting credentials"; exit 1; fi
+      - run: npm ci --no-audit --no-fund
+      - name: Test and compile web changes
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web
+          GITHUB_SHA="$RELEASE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Deploy Hosting ONLY, leave Firestore rules and data unchanged
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact production revision
+        run: VOLUNSERVE_EXPECTED_SHA="$RELEASE_SHA" node scripts/check-live-hosting.cjs
+      - name: Save web-only outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_STATUS: ${{ job.status }}
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          fs.writeFileSync('/tmp/receipt.json',JSON.stringify({
+            releaseSha:process.env.RELEASE_SHA,status:process.env.PUBLISH_STATUS,
+            workflowRunId:process.env.GITHUB_RUN_ID,completedAt:new Date().toISOString(),
+            scope:'Web Hosting only; production Firestore rules require separate IAM-authorized deployment'
+          },null,2)+'\n');
+          NODE
+          gh api --method PUT \
+            "repos/${GITHUB_REPOSITORY}/contents/deployment-receipts/admin-volunteer-web-20261030.json" \
+            -f message="ci: record Admin Volunteer Hosting-only outcome" \
+            -f branch="release/admin-volunteer-firestore-hosting-20261030" \
+            -f content="$(base64 -w0 /tmp/receipt.json)"
