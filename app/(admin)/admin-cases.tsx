@@ -2424,7 +2424,7 @@ export default function AdminCases() {
 
       Alert.alert(
         "Community Relief Need Recorded",
-        `Verified community-level remaining needs were added for ${barangay}. Relief Operations can now include them in centralized planning and allocation.`
+        `Verified community-level remaining needs were recorded for ${barangay}. Review any separate financial assistance through the approved Assistance Requests workflow.`
       );
     } catch (error) {
       console.log("Barangay needs incorporation error:", error);
@@ -2637,7 +2637,7 @@ export default function AdminCases() {
     if (!hasVerifiedNeed) {
       Alert.alert(
         "No Relief Need Recorded",
-        "Enter at least one LGU-verified remaining material need before sending this case to Relief Operations."
+        "Enter at least one LGU-verified remaining material need to save this assessment."
       );
       return;
     }
@@ -2746,8 +2746,8 @@ export default function AdminCases() {
       Alert.alert(
         "Relief Need Created",
         reliefScope === "household"
-          ? `The verified household relief need in ${barangay} was added to Relief Operations. LGU resources should be checked before any Donation Support is requested.`
-          : `The verified community relief need for ${barangay} was added to Relief Operations. LGU resources should be checked before any Donation Support is requested.`
+          ? `The verified household relief need in ${barangay} was recorded. Review any separate financial support through the approved Assistance Requests workflow.`
+          : `The verified community relief need for ${barangay} was recorded. Review any separate financial support through the approved Assistance Requests workflow.`
       );
     } catch (error) {
       console.log(
@@ -4936,7 +4936,7 @@ export default function AdminCases() {
                     {directAssessmentExists ? (
                       <View style={styles.directAssessmentDone}>
                         <Text style={styles.directAssessmentDoneText}>
-                          ✓ A verified relief need already exists for this case. Open Relief Operations to check LGU stock, verify beneficiaries, allocate resources, and request Donation Support only if a shortage remains.
+                          ✓ A verified relief assessment is already recorded for this case. Any separate financial support must be reviewed through Assistance Requests and its eligibility safeguards.
                         </Text>
                       </View>
                     ) : (
