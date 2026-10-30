@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, Text, TextInput, View } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import {
+  SJDM_EVENT_BOUNDARY,
+  SJDM_EVENT_BOUNDS,
+  SJDM_EVENT_OUTSIDE_MASK,
+  validSjdmEventPin,
+} from "../lib/sjdmEventPinBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -11,8 +17,17 @@ type Props = {
   longitude: number | null;
   onChange: (lat: number | null, lng: number | null) => void;
 };
-const CENTER: Venue = {latitude:14.8139,longitude:121.0453};
-const valid = (a: number,b: number) => Number.isFinite(a)&&Number.isFinite(b)&&a>=14.65&&a<=15.0&&b>=120.88&&b<=121.30;
+const CENTER: Venue = {latitude:14.813,longitude:121.045};
+const valid = validSjdmEventPin;
+const toNativeRing = (ring: ReadonlyArray<ReadonlyArray<number>>) =>
+  ring.map(([longitude,latitude])=>({latitude,longitude}));
+const borderRings = SJDM_EVENT_BOUNDARY.geometry.type === "Polygon"
+  ? SJDM_EVENT_BOUNDARY.geometry.coordinates as number[][][]
+  : (SJDM_EVENT_BOUNDARY.geometry.coordinates as number[][][][])[0];
+const mapCenter: Venue = {
+  latitude: (SJDM_EVENT_BOUNDS.north + SJDM_EVENT_BOUNDS.south)/2,
+  longitude: (SJDM_EVENT_BOUNDS.east + SJDM_EVENT_BOUNDS.west)/2,
+};
 const tidy = (latitude: number,longitude: number): Venue => ({
   latitude:Number(latitude.toFixed(6)),longitude:Number(longitude.toFixed(6)),
 });
@@ -21,6 +36,13 @@ const equal = (a: Venue|null,b: Venue|null) => !!a&&!!b&&a.latitude===b.latitude
 export default function CommunityEventPinPicker({latitude,longitude,barangay="",venue="",onChange}:Props) {
   const saved:Venue|null = latitude!==null&&longitude!==null&&valid(latitude,longitude)?tidy(latitude,longitude):null;
   const [draft,setDraft] = useState<Venue|null>(saved);
+  useEffect(()=>{
+    if(latitude!==null&&longitude!==null&&!valid(latitude,longitude)){
+      onChange(null,null);
+      setDraft(null);
+      setNotice("The previous pin was outside SJDM. Select a pin inside the city border.");
+    }
+  },[latitude,longitude]);
   const lastValidPinRef=useRef<Venue|null>(draft);
   lastValidPinRef.current=draft;
   const [notice,setNotice] = useState("");
@@ -30,7 +52,7 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
     const timer=setTimeout(()=>{
       void lookUpEventVenue(barangay,venue,controller.signal).then(result=>{
         if(controller.signal.aborted)return;
-        if(result.status==="found"){
+        if(result.status==="found"&&valid(result.point.latitude,result.point.longitude)){
           setDraft(result.point);
           setNotice("Suggested venue pin found. Verify it on the map and confirm.");
         }else setNotice("Exact venue was not found automatically. Tap the correct venue on the map.");
@@ -44,7 +66,7 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
   const confirmed = equal(saved,draft);
 
   const pick = (a:number,b:number) => {
-    if(!valid(a,b)){setNotice("Pumili ng meeting point within the SJDM area.");return false;}
+    if(!valid(a,b)){setNotice("Outside SJDM border. Select a pin inside the green city boundary.");return false;}
     const point=tidy(a,b);
     setDraft(point);
     lastValidPinRef.current=point;
@@ -73,12 +95,35 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
   return <View style={{marginTop:16,padding:13,borderRadius:12,borderWidth:1,borderColor:"#CFE4DF",backgroundColor:"#F7FBFA"}}>
     <Text style={{fontWeight:"800",color:"#143F42",fontSize:14}}>Event Location & GPS Meeting Point *</Text>
     <Text style={{color:"#526C76",fontSize:12,marginVertical:9}}>
-      Select your event venue above, tap or drag its exact pin, then confirm the meeting point. Admin will review it before Volunteers see the route.
+      The map is limited to the SJDM city border. Choose the venue inside the green outline and confirm its pin; Admin reviews it before Volunteer directions.
     </Text>
     <MapView ref={mapRef} provider={Platform.OS==="android"?PROVIDER_GOOGLE:undefined}
       style={{height:270,width:"100%",borderRadius:10}}
-      initialRegion={{...selected,latitudeDelta:0.055,longitudeDelta:0.055}}
+      initialRegion={{
+        ...mapCenter,
+        latitudeDelta: (SJDM_EVENT_BOUNDS.north-SJDM_EVENT_BOUNDS.south)*1.25,
+        longitudeDelta: (SJDM_EVENT_BOUNDS.east-SJDM_EVENT_BOUNDS.west)*1.25,
+      }}
+      onMapReady={()=>{
+        mapRef.current?.setMapBoundaries(
+          {latitude:SJDM_EVENT_BOUNDS.north,longitude:SJDM_EVENT_BOUNDS.east},
+          {latitude:SJDM_EVENT_BOUNDS.south,longitude:SJDM_EVENT_BOUNDS.west},
+        );
+      }}
       onPress={event=>pick(event.nativeEvent.coordinate.latitude,event.nativeEvent.coordinate.longitude)}>
+      <Polygon
+        coordinates={toNativeRing(SJDM_EVENT_OUTSIDE_MASK.geometry.coordinates[0])}
+        holes={SJDM_EVENT_OUTSIDE_MASK.geometry.coordinates.slice(1).map(toNativeRing)}
+        fillColor="rgba(231,239,233,0.92)"
+        strokeColor="rgba(231,239,233,0)"
+      />
+      {borderRings?.[0]&&<Polygon
+        coordinates={toNativeRing(borderRings[0])}
+        holes={borderRings.slice(1).map(toNativeRing)}
+        fillColor="rgba(4,120,87,0.04)"
+        strokeColor="#047857"
+        strokeWidth={3}
+      />}
       {draft?<Marker draggable coordinate={draft}
         onDragEnd={event=>{
           const next=event.nativeEvent.coordinate;
@@ -113,6 +158,6 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
       <Text style={{color:"#FFFFFF",fontWeight:"800"}}>{confirmed?"Location Confirmed ✓":"Confirm Event Pin"}</Text>
     </Pressable>
     {!!notice&&<Text accessibilityRole="alert" style={{fontSize:12,color:"#486A73",marginTop:9}}>{notice}</Text>}
-    <Text style={{fontSize:10,color:"#7A9196",marginTop:10}}>Only the confirmed event venue is shared. Live device GPS is not published. Google Maps navigation opens for Volunteers after Admin approval.</Text>
+    <Text style={{fontSize:10,color:"#7A9196",marginTop:10}}>SJDM boundary: geoBoundaries simplified reference (not a legal survey). Only the confirmed in-city meeting point is shared. Live GPS is not published.</Text>
   </View>;
 }

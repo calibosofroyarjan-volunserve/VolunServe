@@ -3,14 +3,14 @@
  * A geocoder result is only a suggestion; LGU approval and explicit pin
  * confirmation are still required. Never guess coordinates from barangay alone.
  */
+import { SJDM_EVENT_BOUNDS, validSjdmEventPin } from "./sjdmEventPinBoundary";
+
 export type EventVenuePoint = { latitude: number; longitude: number };
 export type EventVenueResult =
   | { status: "found"; point: EventVenuePoint; label: string }
   | { status: "ambiguous" | "not-found" | "unavailable"; point?: never; label?: never };
 
-const insideSJDM = (lat: number, lng: number) =>
-  Number.isFinite(lat) && Number.isFinite(lng) &&
-  lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+const insideSJDM = validSjdmEventPin;
 
 const genericVenue = /^(barangay hall|covered court|multi-purpose hall|community center|public plaza|school grounds)$/i;
 
@@ -24,7 +24,8 @@ export async function lookUpEventVenue(
   const query = [place, area, "San Jose del Monte", "Bulacan", "Philippines"].join(", ");
   const url = "https://nominatim.openstreetmap.org/search?" +
     new URLSearchParams({ q: query, format: "jsonv2", limit: "5", addressdetails: "1",
-      viewbox: "120.88,15.00,121.30,14.65", bounded: "1" }).toString();
+      viewbox: [SJDM_EVENT_BOUNDS.west, SJDM_EVENT_BOUNDS.north,
+        SJDM_EVENT_BOUNDS.east, SJDM_EVENT_BOUNDS.south].join(","), bounded: "1" }).toString();
   try {
     const response = await fetch(url, { signal, headers: { Accept: "application/json" } });
     if (!response.ok) return { status: "unavailable" };
