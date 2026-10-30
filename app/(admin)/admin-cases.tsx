@@ -2868,6 +2868,8 @@ export default function AdminCases() {
       return;
     }
 
+    // Multiple invitations are allowed for a validated case; an invite is
+    // never automatic acceptance or an order to respond.
     const eligibility = volunteerEligibilityForCase(incident, volunteer);
     if (!eligibility.eligible) {
       Alert.alert("Volunteer Not Eligible", eligibility.reason);
