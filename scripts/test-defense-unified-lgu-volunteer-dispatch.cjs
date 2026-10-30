@@ -64,7 +64,7 @@ assert(!cases.includes("hasCurrentSkillMatch") &&
   !cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("!volunteerSupportAvailable") &&
   cases.includes("!caseOpenForSupport") &&
-  cases.includes("Skill mismatch — LGU must review safe support duties"),
+  cases.includes("Check suitability: this Volunteer has no matching listed skill."),
   "Show approved cross-barangay and skill-mismatched candidates, warn LGU, and retain case validation");
 assert(!cases.includes("On-Duty LGU Personnel") &&
   !cases.includes('>LGU Primary Responder</Text>') &&
