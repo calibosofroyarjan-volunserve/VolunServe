@@ -20,7 +20,6 @@ jobs:
     env:
       PINNED_SOURCE_SHA: c37653ab28e4388ff4060835ad135ed5bd87715b
       EXPECTED_RULES_BLOB: bb1634f5fad4716b4861050489536d81a007ac88
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check exact published rules source and prohibit concurrent main module changes
@@ -76,6 +75,9 @@ jobs:
           node --test scripts/test-admin-volunteer-authorization.cjs
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
       - name: Identify Firebase service account without exposing any secret
+        if: github.event_name != 'pull_request'
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
         shell: bash
         run: |
           if [ -z "$FIREBASE_SA" ]; then
