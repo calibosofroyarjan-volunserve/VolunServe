@@ -1,0 +1,7 @@
+{
+  "releaseSha": "c37653ab28e4388ff4060835ad135ed5bd87715b",
+  "status": "failure",
+  "workflowRunId": "40995746149",
+  "completedAt": "2026-10-30T03:11:56.053Z",
+  "note": "Success requires emulator authorization, Firestore rules deployment, Firebase Hosting and exact live SHA checks. Authenticated admin accounts still require authorized in-person acceptance tests."
+}
