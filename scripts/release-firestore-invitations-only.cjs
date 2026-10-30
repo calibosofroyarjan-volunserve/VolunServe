@@ -72,17 +72,40 @@ async function main() {
   const currentRuleset = await api(
     "https://firebaserules.googleapis.com/v1/"+current.rulesetName,token);
   const liveSource = extractSource(currentRuleset);
-  must(liveSource.trimEnd() === baseline.trimEnd(),
-    "Active production Firestore rules differ from baseline: NO DEPLOYMENT. " +
-    "sha256 active=" + sha256(liveSource).slice(0,12) +
-    " expected="+sha256(baseline).slice(0,12));
-  console.log("PASS: active production rules source exactly matches reviewed Git baseline.");
+  // The project has newer LIVE rules than GitHub. Preserve those byte-for-byte,
+  // adding ONLY the reviewed new invitation match block from our local diff.
+  const anchor = "    match /responseAssignments/{assignmentId} {";
+  const additionStart = "    // An invitation is a consent/availability request only, never a dispatch.";
+  const pos = candidate.indexOf(additionStart);
+  const anchorPos = candidate.indexOf(anchor, pos);
+  must(pos >= 0 && anchorPos > pos && candidate.indexOf(anchor) === anchorPos,
+    "Invitation addition must occur only before responseAssignments. STOP.");
+  const addition = candidate.slice(pos, anchorPos);
+  must(candidate.replace(addition, "").trimEnd() === baseline.trimEnd(),
+    "Local rules changed beyond a single invitation match. STOP.");
+  must(liveSource.includes("function isAdmin()") &&
+      liveSource.includes("function hasVolunteerAccess()"),
+    "Live rules missing expected authorization helpers. STOP.");
+  must(!liveSource.includes("match /volunteerInvitations/") &&
+      liveSource.indexOf(anchor) >= 0 &&
+      liveSource.indexOf(anchor) === liveSource.lastIndexOf(anchor),
+    "Live rules already define invitations or target match is ambiguous. STOP.");
+  const mergedSource = liveSource.replace(anchor, addition + anchor);
+  must(mergedSource.replace(addition,"") === liveSource,
+    "Existing live Rules source was modified beyond invitation addition. STOP.");
+  console.log("PASS: production rules differ from Git baseline, but ALL existing live text " +
+    "is preserved exactly; only the new invitation match is appended.");
+  console.log("Unmodified production source fingerprint: " + sha256(liveSource).slice(0,12));
   const newRuleset = await api(root+"/rulesets",token,{
     method:"POST",
-    body:JSON.stringify({source:{files:[{name:"firestore.rules",content:candidate}]}}),
+    body:JSON.stringify({source:{files:[{name:"firestore.rules",content:mergedSource}]}}),
   });
   must(/^projects\/volunserve-3aa5b\/rulesets\/[a-zA-Z0-9-]+$/.test(newRuleset.name||""),
     "No valid new Firebase Ruleset returned. No release update.");
+  // Fail closed if another actor updated production rules during this attempt.
+  const latestBeforePatch = await api(releasePath, token);
+  must(latestBeforePatch.rulesetName === current.rulesetName,
+    "Production rules changed concurrently. Do not overwrite.");
   const updated = await api(releasePath,token,{
     method:"PATCH",
     body:JSON.stringify({
@@ -94,8 +117,8 @@ async function main() {
   const verified = await api(releasePath,token);
   must(verified.rulesetName === newRuleset.name, "Firebase active rules release could not be verified.");
   const activeNewRules = await api("https://firebaserules.googleapis.com/v1/"+newRuleset.name,token);
-  must(extractSource(activeNewRules).trimEnd() === candidate.trimEnd(),
-    "Firebase active Ruleset does not match exact tested source.");
+  must(extractSource(activeNewRules).trimEnd() === mergedSource.trimEnd(),
+    "Firebase active Ruleset does not match exact live-plus-invitation overlay.");
   console.log("PASS: existing cloud.firestore release updated and exact new ruleset verified. " +
     "No Firestore records, Functions, Hosting or other Firebase service changed in this step.");
 }
