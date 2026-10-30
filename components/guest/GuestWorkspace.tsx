@@ -375,7 +375,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
     </Pressable>
   </View>;
   return <View style={styles.root}>
-    {!narrow ? sideBar : null}
+    {!narrow ? <View style={{ width: 272, height: "100%" }}>{sideBar}</View> : null}
     <View style={styles.main}>
       <View style={styles.top}>
         {narrow ? <Pressable accessibilityRole="button" accessibilityLabel="Open navigation" onPress={() => setDrawerOpen(true)} style={styles.topIcon}><Ionicons name="menu" size={23} color={P.ink} /></Pressable> : <View style={{flex:1}} />}
