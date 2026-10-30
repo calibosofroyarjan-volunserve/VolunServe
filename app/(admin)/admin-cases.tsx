@@ -1679,25 +1679,21 @@ export default function AdminCases() {
 
     return approvedVolunteers
       .filter((volunteer) => {
-        const availabilityText = volunteer.availability.join(" ").toLowerCase();
         const isReporter =
           String(volunteer.uid || "").trim() ===
           String(incident.reporterUid || "").trim();
 
+        const search = skillFilter.trim().toLowerCase();
         const skillSearchMatch =
-          !skillFilter.trim() ||
-          volunteer.skills.some((skill) =>
-            skill.toLowerCase().includes(skillFilter.trim().toLowerCase())
-          );
-
-        const availabilityMatch =
-          !availabilityFilter.trim() ||
-          availabilityText.includes(availabilityFilter.trim().toLowerCase());
+          !search ||
+          volunteer.fullName.toLowerCase().includes(search) ||
+          volunteer.barangay.toLowerCase().includes(search) ||
+          volunteer.skills.some((skill) => skill.toLowerCase().includes(search));
 
         // The Resident who filed this emergency must never appear in the
         // Volunteer candidate pool, even if the same account also has
         // approved Volunteer access.
-        return !isReporter && skillSearchMatch && availabilityMatch;
+        return !isReporter && skillSearchMatch;
       })
       .sort((a, b) => {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
@@ -3448,7 +3444,11 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
-          <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
+          <View style={[
+            styles.caseListPane,
+            !compact && detailTab === "personnel" && styles.caseListPaneAssignments,
+            compact && styles.caseListPaneCompact,
+          ]}>
             <View style={styles.caseListHeader}>
               <View>
                 <Text style={styles.caseListTitle}>All Emergency Cases</Text>
@@ -5430,7 +5430,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Optional Volunteer Support</Text>
+                              <Text style={styles.personnelCleanTitle}>Volunteer Assignment Center</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5469,23 +5469,16 @@ export default function AdminCases() {
 
                       <View style={styles.personnelVolunteerToolbar}>
                         <Text style={styles.personnelListHeading}>
-                          All Approved Volunteers
+                          Approved Volunteers · {volunteerCandidates.length}
                         </Text>
 
                         <View style={styles.personnelVolunteerFilters}>
                           <TextInput
                             style={styles.personnelCompactFilter}
                             value={skillFilter}
-                            placeholder="Search volunteers / skills"
+                            placeholder="Search volunteer by name or skill"
                             placeholderTextColor="#94a3b8"
-                            onChangeText={value => { setSkillFilter(value); setVolunteerPage(1); }}
-                          />
-                          <TextInput
-                            style={styles.personnelCompactFilter}
-                            value={availabilityFilter}
-                            placeholder="Filter availability (optional)"
-                            placeholderTextColor="#94a3b8"
-                            onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
+                            onChangeText={(value) => { setSkillFilter(value); setVolunteerPage(1); }}
                           />
                         </View>
                       </View>
@@ -5529,82 +5522,70 @@ export default function AdminCases() {
                               offline ? "Offline · offer allowed" : "Eligible";
 
                             return (
-                              <View key={volunteer.uid} style={styles.personnelCompactRow}>
-                                <View style={styles.volunteerAvatarCompact}>
-                                  <Text style={styles.volunteerAvatarCompactText}>
-                                    {volunteer.fullName
-                                      .split(" ")
-                                      .filter(Boolean)
-                                      .slice(0, 2)
-                                      .map((part) => part[0]?.toUpperCase())
-                                      .join("") || "V"}
-                                  </Text>
-                                </View>
-
-                                <View style={styles.personnelCompactIdentity}>
-                                  <Text style={styles.personnelCompactName}>{volunteer.fullName}</Text>
-                                  <Text style={styles.personnelCompactMeta}>
-                                    {barangayDisplay(volunteer.barangay)}
-                                  </Text>
-                                  {eligibility.eligible && eligibility.reason.startsWith("Skill review needed") && (
-                                    <Text style={styles.personnelCompactMeta}>Skill mismatch — LGU must review safe support duties</Text>
-                                  )}
-                                </View>
-
-                                <View style={styles.personnelCompactChipRowWide}>
-                                  <View
-                                    style={
-                                      availabilityLabel === "Eligible"
-                                        ? styles.personnelMiniBadgeGood
-                                        : availabilityLabel === "Busy"
-                                          ? styles.personnelMiniBadgeBusy
-                                          : styles.personnelMiniBadgeMuted
-                                    }
-                                  >
-                                    <Text
-                                      style={
-                                        availabilityLabel === "Eligible"
-                                          ? styles.personnelMiniBadgeGoodText
-                                          : availabilityLabel === "Busy"
-                                            ? styles.personnelMiniBadgeBusyText
-                                            : styles.personnelMiniBadgeMutedText
-                                      }
-                                    >
-                                      {availabilityLabel}
+                              <View key={volunteer.uid} style={styles.volunteerRosterCard}>
+                                <View style={styles.volunteerRosterTop}>
+                                  <View style={styles.volunteerAvatarCompact}>
+                                    <Text style={styles.volunteerAvatarCompactText}>
+                                      {volunteer.fullName
+                                        .split(" ")
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map((part) => part[0]?.toUpperCase())
+                                        .join("") || "V"}
                                     </Text>
                                   </View>
-
-                                  {volunteer.skills.slice(0, 2).map((skill) => (
-                                    <View
-                                      key={`${volunteer.uid}_${skill}`}
-                                      style={styles.personnelSkillPillBlue}
-                                    >
+                                  <View style={styles.volunteerRosterIdentity}>
+                                    <Text style={styles.volunteerRosterName}>{volunteer.fullName}</Text>
+                                    <Text style={styles.volunteerRosterMeta}>
+                                      {barangayDisplay(volunteer.barangay)} · Approved Volunteer
+                                    </Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Offer emergency support to ${volunteer.fullName}`}
+                                    disabled={disabled}
+                                    style={[
+                                      styles.volunteerRosterAction,
+                                      disabled && styles.personnelAssignCompactDisabled,
+                                    ]}
+                                    onPress={() => assignVolunteerToCase(incident, volunteer)}
+                                  >
+                                    <Text style={[
+                                      styles.volunteerRosterActionText,
+                                      disabled && styles.personnelAssignCompactTextDisabled,
+                                    ]}>
+                                      {busyKey === key
+                                        ? "Sending…"
+                                        : !eligibility.eligible
+                                          ? "Unavailable"
+                                          : !caseOpenForSupport
+                                            ? "Validate case first"
+                                            : !volunteerSupportAvailable
+                                              ? "Support already active"
+                                              : "Offer Support"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                                <View style={styles.volunteerRosterTags}>
+                                  <View style={offline ? styles.personnelMiniBadgeMuted : styles.personnelMiniBadgeGood}>
+                                    <Text style={offline ? styles.personnelMiniBadgeMutedText : styles.personnelMiniBadgeGoodText}>
+                                      {offline ? "Offline · can receive offer" : "Approved · can receive offer"}
+                                    </Text>
+                                  </View>
+                                  {volunteer.skills.slice(0, 3).map((skill) => (
+                                    <View key={`${volunteer.uid}_${skill}`} style={styles.personnelSkillPillBlue}>
                                       <Text style={styles.personnelSkillPillBlueText}>{skill}</Text>
                                     </View>
                                   ))}
                                 </View>
-
-                                <TouchableOpacity
-                                  disabled={disabled}
-                                  style={[
-                                    styles.personnelAssignCompact,
-                                    disabled && styles.personnelAssignCompactDisabled,
-                                  ]}
-                                  onPress={() => assignVolunteerToCase(incident, volunteer)}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.personnelAssignCompactText,
-                                      disabled && styles.personnelAssignCompactTextDisabled,
-                                    ]}
-                                  >
-                                    {busyKey === key
-                                      ? "Sending…"
-                                      : eligibility.eligible && volunteerSupportAvailable && caseOpenForSupport
-                                        ? "Offer Support"
-                                        : "Not Eligible"}
+                                {eligibility.eligible && eligibility.reason.startsWith("Skill review needed") && (
+                                  <Text style={styles.volunteerRosterWarning}>
+                                    Check suitability: this Volunteer has no matching listed skill. Assign only safe support duties.
                                   </Text>
-                                </TouchableOpacity>
+                                )}
+                                {!eligibility.eligible && (
+                                  <Text style={styles.volunteerRosterWarning}>{eligibility.reason}</Text>
+                                )}
                               </View>
                             );
                           })}
@@ -6554,7 +6535,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanCard: {
     width: "100%",
-    padding: 8,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 10,
@@ -6604,14 +6585,14 @@ const styles = StyleSheet.create({
   },
   personnelCleanTitle: {
     color: "#0f172a",
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: "900",
   },
   personnelCleanSubtitle: {
-    marginTop: 2,
+    marginTop: 6,
     color: "#64748b",
-    fontSize: 10.5,
-    lineHeight: 12,
+    fontSize: 12,
+    lineHeight: 19,
   },
   personnelCleanStatusPill: {
     paddingHorizontal: 10,
@@ -6884,13 +6865,72 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   personnelCompactList: {
-    marginTop: 7,
+    marginTop: 12,
     width: "100%",
     borderWidth: 1,
-    borderColor: "#edf1f5",
-    borderRadius: 8,
+    borderColor: "#dde8e3",
+    borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#ffffff",
+  },
+  volunteerRosterCard: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2ebe8",
+    backgroundColor: "#ffffff",
+    gap: 10,
+  },
+  volunteerRosterTop: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  volunteerRosterIdentity: {
+    flex: 1,
+    minWidth: 165,
+  },
+  volunteerRosterName: {
+    color: "#12372c",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  volunteerRosterMeta: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  volunteerRosterAction: {
+    minWidth: 130,
+    minHeight: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#087e70",
+  },
+  volunteerRosterActionText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  volunteerRosterTags: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  volunteerRosterWarning: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#92400e",
   },
   personnelCompactRow: {
     width: "100%",
@@ -6928,7 +6968,7 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
   },
   personnelBarangayStrip: {
-    marginTop: 7,
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -6949,7 +6989,8 @@ const styles = StyleSheet.create({
   },
   personnelBarangayHint: {
     color: "#0f766e",
-    fontSize: 10.5,
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: "600",
   },
   personnelSupportNotice: {
@@ -6973,7 +7014,7 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   personnelVolunteerToolbar: {
-    marginTop: 7,
+    marginTop: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -6982,7 +7023,7 @@ const styles = StyleSheet.create({
   },
   personnelListHeading: {
     color: "#0f172a",
-    fontSize: 10.5,
+    fontSize: 13,
     fontWeight: "900",
   },
   personnelVolunteerFilters: {
@@ -6991,8 +7032,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelCompactFilter: {
-    width: 154,
-    minHeight: 36,
+    width: 265,
+    minHeight: 42,
     borderWidth: 1,
     borderColor: "#d9e1e8",
     borderRadius: 8,
@@ -7764,6 +7805,9 @@ const styles = StyleSheet.create({
     borderColor: "#dfe7ee",
     borderRadius: 14,
     overflow: "hidden",
+  },
+  caseListPaneAssignments: {
+    width: 305,
   },
   caseListPaneCompact: {
     width: "100%",
