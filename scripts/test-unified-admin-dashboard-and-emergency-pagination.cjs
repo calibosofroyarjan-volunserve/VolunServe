@@ -56,9 +56,9 @@ assert(dash.includes("<DashboardOperationalInsights workload={{") &&
 // The existing GPS, response and assignment decision code cannot be removed.
 assert(caseSrc.includes("pagedCases") && caseSrc.includes("pageSize={5}") &&
   caseSrc.includes("caseSearch") && caseSrc.includes("detailTab === \"map\"") &&
-  caseSrc.includes("assignLguPersonnelToCase") && caseSrc.includes("cancelAssignment"),
+  caseSrc.includes("assignVolunteerToCase") && caseSrc.includes("cancelAssignment"),
   "Original Emergency Reports queue, GPS and authorized response actions must remain");
-for (const name of ["personnelPage", "volunteerPage", "activeAssignmentPage", "historyAssignmentPage"]) {
+for (const name of ["volunteerPage", "activeAssignmentPage", "historyAssignmentPage"]) {
   assert(caseSrc.includes("set" + name[0].toUpperCase() + name.slice(1)) &&
     caseSrc.includes("pageSize={5}"),
     "Emergency secondary queue must have five-row pagination: " + name);
@@ -67,10 +67,14 @@ assert(caseSrc.includes("pageFive(imageEvidence, photoPage)") &&
   caseSrc.includes("pageFive(videoEvidence, videoPage)") &&
   caseSrc.includes("onChange={setPhotoPage}") && caseSrc.includes("onChange={setVideoPage}"),
   "Emergency photo and video evidence must retain every item with independent 5-record pages");
-for (const name of ["onDutyPersonnel", "volunteerCandidates", "activeAssignments", "incidentAssignments"]) {
+for (const name of ["volunteerCandidates", "activeAssignments", "incidentAssignments"]) {
   assert(caseSrc.includes("pageFive(" + name + ", "),
     "Emergency " + name + " records must render only five at a time");
 }
+assert(!caseSrc.includes("On-Duty LGU Personnel") &&
+  !caseSrc.includes(">LGU Primary Responder</Text>") &&
+  caseSrc.includes('["personnel", "Volunteer Assignments"]'),
+  "Emergency response assignments must show Volunteer roster, not the removed LGU personnel controls");
 assert(attendance.includes("pagedEvents.map") &&
   attendance.includes("pagedVolunteers.map") &&
   attendance.includes("page={activeEventPage}") &&
