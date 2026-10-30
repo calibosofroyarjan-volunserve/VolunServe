@@ -51,7 +51,7 @@ export default function VolunteerInvitationInbox() {
     });
   }, [user?.uid, permitted]);
 
-  const shown = useMemo(() => invitations
+  const shown = useMemo(() => [...invitations]
     .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0))
     .slice(0, 5), [invitations]);
 
