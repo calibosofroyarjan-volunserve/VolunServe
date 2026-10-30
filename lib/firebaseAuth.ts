@@ -254,7 +254,8 @@ export const isAdminProfile = (
 ) => {
   return (
     isApprovedProfile(profile) &&
-    profile?.role === "admin"
+    profile?.role === "admin" &&
+    profile?.adminStatus !== "suspended"
   );
 };
 
@@ -384,7 +385,7 @@ export const administrativeRouteForProfile = (
   if (profile.role === "superadmin") {
     return "/(superadmin)" as const;
   }
-  if (profile.role === "admin") {
+  if (isAdminProfile(profile)) {
     return "/(admin)/command-center" as const;
   }
   return null;
