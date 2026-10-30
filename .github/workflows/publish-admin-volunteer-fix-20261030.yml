@@ -1,0 +1,100 @@
+name: Publish Verified Admin and Volunteer Access Fix
+on:
+  push:
+    branches: [release/admin-volunteer-firestore-hosting-20261030]
+    paths:
+      - .github/workflows/publish-admin-volunteer-fix-20261030.yml
+permissions:
+  contents: write
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verified-security-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_SHA: c37653ab28e4388ff4060835ad135ed5bd87715b
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Fetch exact merged source (avoid legacy broken Git submodule)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${RELEASE_SHA}" \
+            --output /tmp/volunserve-secure-source.tar.gz
+          tar -xzf /tmp/volunserve-secure-source.tar.gz --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -s package-lock.json
+          test -f firestore.rules
+          test -f backend/adminAccess.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Check credentials before any live deployment
+        shell: bash
+        run: |
+          test "$RELEASE_SHA" = 'c37653ab28e4388ff4060835ad135ed5bd87715b'
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase service account; no production deployment attempted."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-firebase-service-account.json"
+          node -e "const c=require(process.env.RUNNER_TEMP+'/volunserve-firebase-service-account.json');if(c.type!=='service_account'||c.project_id!=='volunserve-3aa5b')process.exit(1)"
+      - name: Install reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Admin authorization, backend and TypeScript
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --check backend/server.js
+          npx tsc --noEmit --pretty false
+      - name: Verify Firestore rule authorization in isolated emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Build exact web release
+        run: |
+          npx expo export --platform web
+          GITHUB_SHA="$RELEASE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Deploy only reviewed Firestore security rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-firebase-service-account.json
+        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+      - name: Deploy updated Firebase Hosting website
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm deployed SHA and website public routes
+        run: VOLUNSERVE_EXPECTED_SHA="$RELEASE_SHA" node scripts/check-live-hosting.cjs
+      - name: Persist auditable production release result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          fs.writeFileSync('/tmp/admin-volunteer-release.json',JSON.stringify({
+            releaseSha:process.env.RELEASE_SHA,
+            status:process.env.RELEASE_STATUS,
+            workflowRunId:process.env.GITHUB_RUN_ID,
+            completedAt:new Date().toISOString(),
+            note:'Success requires emulator authorization, Firestore rules deployment, Firebase Hosting and exact live SHA checks. Authenticated admin accounts still require authorized in-person acceptance tests.'
+          },null,2)+'\n');
+          NODE
+          gh api --method PUT \
+            "repos/${GITHUB_REPOSITORY}/contents/deployment-receipts/admin-volunteer-access-20261030.json" \
+            -f message="ci: record validated Admin and Volunteer release" \
+            -f branch="release/admin-volunteer-firestore-hosting-20261030" \
+            -f content="$(base64 -w0 /tmp/admin-volunteer-release.json)"
