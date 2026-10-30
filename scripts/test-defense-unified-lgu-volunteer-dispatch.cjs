@@ -53,18 +53,23 @@ assert(cases.includes("return !isReporter && skillSearchMatch && availabilityMat
   "All approved Volunteers must be visible and offline status must not prohibit offers");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
   cases.includes("responderLockSnapshot.exists()") &&
-  cases.includes("hasCurrentSkillMatch") &&
-  cases.includes("currentVerification !== \"validated\"") &&
+  cases.includes('currentVerification !== "validated"') &&
   cases.includes('status: "offered"') &&
   cases.includes('read: false') &&
-  cases.includes('volunteer.uid === incident.reporterUid'),
-  "Keep atomic, validated, skill/lock-checked assignment with queued Volunteer notifications");
-assert(cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
+  cases.includes('volunteer.uid === incident.reporterUid') &&
+  cases.includes('doc(collection(db, "notifications"))'),
+  "Keep atomic, validated, conflict-checked offers and a fresh notification for every offer/re-offer");
+assert(!cases.includes("hasCurrentSkillMatch") &&
+  !cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("!volunteerSupportAvailable") &&
-  cases.includes("!caseOpenForSupport"),
-  "Maintain local eligibility and case verification; do not promise unrestricted dispatch");
-assert(cases.includes("pageFive(onDutyPersonnel") &&
+  cases.includes("!caseOpenForSupport") &&
+  cases.includes("Skill mismatch — LGU must review safe support duties"),
+  "Show approved cross-barangay and skill-mismatched candidates, warn LGU, and retain case validation");
+assert(!cases.includes("On-Duty LGU Personnel") &&
+  !cases.includes('>LGU Primary Responder</Text>') &&
+  cases.includes('["personnel", "Volunteer Assignments"]') &&
+  cases.includes("pageFive(volunteerCandidates") &&
   cases.includes("pageFive(activeAssignments") &&
   cases.includes("pageFive(videoEvidence"),
-  "Preserve secondary Emergency pagination");
+  "Remove LGU personnel assignment UI while preserving paginated Volunteer and evidence records");
 console.log("PASS unified LGU sidebar & duty page, visible scrollbars, secure live map, offline Volunteer offers and all Emergency records");
