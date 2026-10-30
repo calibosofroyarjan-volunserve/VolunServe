@@ -1,0 +1,108 @@
+name: Release SJDM Community Events Border Only - Safe Hosting
+on:
+  push:
+    branches:
+      - fix/community-events-sjdm-city-border-only-20261030
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  safe-hosting-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      ORIGINAL_LIVE_SHA: 4060b50903fa9bbdbd4fab9d25f6bdda9b280e7f
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify exact unchanged live revision and map-only diff - fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE_SHA="$(node - <<'NODE'
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json',
+              {signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
+            if(!r.ok)throw Error('Live fingerprint cannot be read; no publish');
+            const manifest=await r.json();
+            if(manifest.app!=='VolunServe'||manifest.firebaseProject!=='volunserve-3aa5b'||
+              !/^[0-9a-f]{40}$/.test(manifest.revision))throw Error('Unrecognized live fingerprint');
+            console.log(manifest.revision);
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+          )"
+          echo "Audited live fingerprint: $LIVE_SHA"
+          if [ "$LIVE_SHA" != "$ORIGINAL_LIVE_SHA" ]; then
+            echo "::error::Live revision changed while editing; no deployment."
+            exit 1
+          fi
+          git cat-file -e "${LIVE_SHA}^{commit}"
+          git diff --name-only "$LIVE_SHA" HEAD > /tmp/sjdm-event-release-files.txt
+          echo "Exactly changed files:"
+          cat /tmp/sjdm-event-release-files.txt
+          while IFS= read -r file; do
+            case "$file" in
+              'app/(tabs)/community-events.tsx'|\
+              'components/CommunityEventPinPicker.web.tsx'|\
+              'components/CommunityEventPinPicker.native.tsx'|\
+              'components/InteractiveEventPinMap.web.tsx'|\
+              'lib/eventVenueLookup.ts'|\
+              'lib/sjdmEventPinBoundary.ts'|\
+              'scripts/test-community-event-sjdm-border.cjs'|\
+              '.github/workflows/validate-sjdm-community-event-map-20261030.yml'|\
+              '.github/workflows/release-sjdm-community-event-map-hosting-only-20261030.yml')
+                ;;
+              *)
+                echo "::error::Unrelated module changed: $file. STOP before deployment."
+                exit 1
+                ;;
+            esac
+          done < /tmp/sjdm-event-release-files.txt
+          grep -Fxq 'components/InteractiveEventPinMap.web.tsx' /tmp/sjdm-event-release-files.txt
+          grep -Fxq 'app/(tabs)/community-events.tsx' /tmp/sjdm-event-release-files.txt
+          echo "PASS: exact production baseline, only event meeting-point map scoped files."
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify SJDM polygon city-only behavior
+        run: node scripts/test-community-event-sjdm-border.cjs
+      - name: TypeScript verify all modules
+        run: npx tsc --noEmit
+      - name: Build Expo web from original live version plus scoped map edits
+        run: npx expo export --platform web
+      - name: Verify static assets and revision fingerprint
+        run: node scripts/verify-hosting-release.cjs
+      - name: Reconfirm production has not changed and Hosting credentials exist
+        shell: bash
+        run: |
+          test -n "$FIREBASE_SA" || { echo "::error::Hosting credentials unavailable"; exit 1; }
+          node - <<'NODE'
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json',
+              {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error('Cannot safely check live Hosting');
+            const m=await r.json();
+            if(m.revision!==process.env.ORIGINAL_LIVE_SHA)
+              throw Error('Other deploy changed live while building. Abort without publishing.');
+            console.log('PASS: current live is still the exact original source');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Publish Firebase Hosting ONLY - no Firestore, Functions or Render
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact live web revision and public routes
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
