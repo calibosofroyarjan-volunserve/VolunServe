@@ -1,0 +1,70 @@
+name: Publish Verified Identity Web Release to Firebase Hosting
+on:
+  push:
+    branches:
+      - release/identity-hosting-publish-20261030
+    paths:
+      - .github/workflows/publish-identity-hosting-20261030.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      RELEASE_SHA: f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require configured Firebase service account before changing Hosting
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials unavailable; nothing deployed."
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate identity workflow, backend and TypeScript
+        run: |
+          python3 -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+          node backend/test-identityAiReadiness.js
+          node --check backend/server.js
+          npx tsc --noEmit --pretty false
+      - name: Export verified production website
+        run: npx expo export --platform web
+      - name: Verify static Hosting files and stamp immutable release SHA
+        run: |
+          node scripts/verify-hosting-release.cjs
+          node -e "const f=require('fs'); const r=JSON.parse(f.readFileSync('dist/volunserve-release.json','utf8')); if(r.revision!==process.env.RELEASE_SHA)process.exit(1);"
+      - name: Publish Firebase Hosting live channel ONLY
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm correct release is visible on custom domain
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$RELEASE_SHA" node scripts/check-live-hosting.cjs; then
+              echo "Release validated on volunserve.com: $RELEASE_SHA"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::Hosting deploy may have completed, but domain revision has NOT been confirmed."
+          exit 1
