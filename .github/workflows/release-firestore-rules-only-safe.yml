@@ -39,10 +39,10 @@ jobs:
             assert.equal(file.sha,process.env.EXPECTED_RULES_BLOB,
               'main firestore.rules changed; STOP. Review current rules instead of overwriting.');
             const diff=await api('compare/'+process.env.PINNED_SOURCE_SHA+'...main');
-            assert.equal(diff.status,'ahead','main has diverged or pinned source is not an ancestor');
-            assert.equal(diff.files.length,1,'unexpected files changed on main; STOP.');
-            assert.equal(diff.files[0].filename,workflow,
-              'Non-workflow files changed since rules validation; STOP.');
+            const mainUnchanged=diff.status==='identical'&&diff.files.length===0;
+            const workflowOnly=diff.status==='ahead'&&diff.files.length===1&&diff.files[0].filename===workflow;
+            assert.ok(mainUnchanged||workflowOnly,
+              'Main has changed beyond the deployment workflow; STOP. Do not overwrite newer rules or modules.');
             console.log('PASS: main changed only by this deployment workflow. No Super Admin, Admin, Resident, Auth, or Maps files touched.');
             console.log('PASS: main Firestore source blob exactly matches tested rules version.');
           })().catch(e=>{console.error(e.message);process.exit(1);});
