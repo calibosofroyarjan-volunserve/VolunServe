@@ -125,19 +125,6 @@ const ID_TYPES: Array<{
   },
 ];
 
-function scoreLabel(value?: number) {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value)
-  ) {
-    return "Not available";
-  }
-
-  const normalized = value <= 1 ? value * 100 : value;
-
-  return `${Math.max(0, Math.min(100, normalized)).toFixed(1)}%`;
-}
-
 function scanCopy(scanState: ScanState) {
   switch (scanState) {
     case "loading":
@@ -1151,7 +1138,6 @@ export default function IdentityVerificationWeb() {
         badge="Verified"
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        matchScore={statusResult?.matchScore}
         documentScreening={statusResult?.documentScreening}
         primaryLabel="Back to Profile"
         primaryAction={() => router.back()}
@@ -1174,7 +1160,6 @@ export default function IdentityVerificationWeb() {
         badge="Pending"
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        matchScore={statusResult?.matchScore}
         documentScreening={statusResult?.documentScreening}
         primaryLabel={
           checkingStatus ? "Checking..." : "Check Status"
@@ -1986,7 +1971,6 @@ function StatusScreen({
   background,
   color,
   badge,
-  matchScore,
   documentScreening,
   idPreviewUri,
   idPreviewLabel,
@@ -2002,7 +1986,6 @@ function StatusScreen({
   background: string;
   color: string;
   badge: string;
-  matchScore?: number;
   documentScreening?: DocumentScreening;
   idPreviewUri?: string | null;
   idPreviewLabel?: string;
@@ -2056,18 +2039,7 @@ function StatusScreen({
           {message}
         </Text>
 
-        {typeof matchScore === "number" ? (
-          <View style={styles.matchScoreCard}>
-            <Text style={styles.matchScoreLabel}>
-              AI face match score
-            </Text>
-            <Text style={styles.matchScoreValue}>
-              {scoreLabel(matchScore)}
-            </Text>
-          </View>
-        ) : null}
-
-        <DocumentScreeningSummary screening={documentScreening} />
+                <DocumentScreeningSummary screening={documentScreening} />
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>
@@ -2925,27 +2897,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 19,
     textAlign: "center",
-  },
-  matchScoreCard: {
-    minWidth: 220,
-    marginTop: 16,
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  matchScoreLabel: {
-    color: "#64748B",
-    fontSize: 9.5,
-    fontWeight: "800",
-  },
-  matchScoreValue: {
-    marginTop: 3,
-    color: COLORS.navy,
-    fontSize: 19,
-    fontWeight: "900",
   },
   primaryButton: {
     minWidth: 210,

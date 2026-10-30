@@ -882,9 +882,24 @@ def screen_government_id(*, declared_type, id_document_bytes):
     try:
         image = decode_image(id_document_bytes, "Government ID image")
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # PSM 11 tolerates the irregular positions of labels on photographed cards.
+        # Bound processing size while sharpening smaller photographed labels.
+        longest = max(gray.shape[:2])
+        if longest < 1500:
+            factor = min(1.6, 2100.0 / float(longest))
+            gray = cv2.resize(
+                gray, None, fx=factor, fy=factor,
+                interpolation=cv2.INTER_CUBIC,
+            )
+        # Complement sparse-card OCR with an adaptive-contrast OCR pass.
+        # No resulting text is logged, retained, or sent back to clients.
+        contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+        processed = cv2.adaptiveThreshold(
+            contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 31, 11,
+        )
         extracted = pytesseract.image_to_string(gray, config="--psm 11")
-        return assess_document_text(declared_type, extracted)
+        enhanced = pytesseract.image_to_string(processed, config="--psm 6")
+        return assess_document_text(declared_type, extracted + "\n" + enhanced)
     except Exception:
         # OCR depends on local Tesseract assets and camera image quality.
         # Fail closed: no automatic rejection or claims of genuine IDs.

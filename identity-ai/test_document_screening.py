@@ -16,6 +16,13 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(actual["detectedIdType"], "drivers_license")
         self.assertEqual(actual["status"], "text_consistent_unverified")
 
+    def test_ocr_apostrophe_split_in_drivers_license(self):
+        # Tesseract often separates DRIVER'S into DRIVER S.
+        for text in ("DRIVER'S LICENSE", "DRIVER S LICENSE", "DRIVERS LICENSE"):
+            with self.subTest(text=text):
+                actual = assess_document_text("drivers_license", text)
+                self.assertEqual(actual["status"], "text_consistent_unverified")
+
     def test_passport(self):
         actual = assess_document_text("passport", "REPUBLIC OF THE PHILIPPINES PASAPORTE / PASSPORT")
         self.assertEqual(actual["detectedIdType"], "passport")
@@ -50,6 +57,52 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         for private in ("Jane", "1997", "1234", "9012"):
             self.assertNotIn(private, serialized)
         self.assertFalse(actual["livenessVerified"])
+
+    def test_philid_paper_and_digital_variants(self):
+        samples = (
+            "REPUBLIKA NG PILIPINAS PAMBANSANG PAGKAKAKILANLAN",
+            "NATIONAL ID CARD APelyido Juan",
+            "NATIONAL ID IN PAPER FIRST NAME DATE OF BIRTH",
+            "Digital National ID first name last name",
+            "ePhilID Republic of the Philippines",
+        )
+        for sample in samples:
+            with self.subTest(sample=sample):
+                outcome = assess_document_text("national_id", sample)
+                self.assertEqual(outcome["detectedIdType"], "national_id")
+                self.assertEqual(outcome["status"], "text_consistent_unverified")
+                self.assertFalse(outcome["authenticityVerified"])
+                self.assertTrue(outcome["manualReviewRequired"])
+
+    def test_philsys_brand_alone_does_not_establish_card_type(self):
+        for sample in (
+            "PhilSys",
+            "Philippine Identification System information campaign",
+            "National ID system registration center",
+            "Republic of the Philippines ID for everyone",
+        ):
+            with self.subTest(sample=sample):
+                outcome = assess_document_text("national_id", sample)
+                self.assertIsNone(outcome["detectedIdType"])
+                self.assertEqual(outcome["status"], "inconclusive")
+
+    def test_weak_brand_plus_multiple_card_fields(self):
+        sample = "PhilSys APELYIDO DELA CRUZ MGA PANGALAN ANA PETSA NG KAPANGANAKAN 1990"
+        actual = assess_document_text("national_id", sample)
+        self.assertEqual(actual["detectedIdType"], "national_id")
+        self.assertEqual(actual["status"], "text_consistent_unverified")
+        self.assertNotIn("ANA", repr(actual))
+        self.assertNotIn("1990", repr(actual))
+
+    def test_wrong_declared_id_not_approved_by_national_id_text(self):
+        result = assess_document_text("drivers_license", "NATIONAL ID IN PAPER GIVEN NAMES TEST")
+        self.assertEqual(result["status"], "mismatch")
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_combined_id_documents_need_manual_review(self):
+        result = assess_document_text("national_id", "PhilID with PASSPORT")
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("multiple_document_type_signals", result["warningCodes"])
 
     def test_ocr_outage_never_grants_verification(self):
         actual = document_ocr_unavailable("national_id")

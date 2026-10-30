@@ -51,4 +51,17 @@ assert(lgu.includes('<DocumentScreeningSummary screening={item.documentScreening
 assert(summary.includes("authenticity") && !summary.includes("ID image") &&
   summary.includes("Independent LGU verification is required."),
   "Shared display must avoid false issuance claims or exposed ID scans");
+assert(document.includes("NATIONAL ID IN PAPER") &&
+  document.includes("DIGITAL NATIONAL ID") &&
+  document.includes("corroborated >= 2"),
+  "National ID OCR must recognize paper/digital wording and reject weak single-keyword evidence");
+assert(engine.includes("cv2.adaptiveThreshold") && engine.includes('config="--psm 11"') && engine.includes('config="--psm 6"'),
+  "Photographed IDs must get complementary, bounded OCR preprocessing passes");
+for (const page of [web, native, lgu]) {
+  assert(!page.includes("AI face match score") && !page.includes("Face match score"),
+    "Resident and LGU UI must not show numerical AI face match scores");
+}
+assert(summary.includes("National ID text recognized") &&
+  summary.includes("Pending LGU validation"),
+  "Shared result must show the detected document type, not pretend an ID is authenticated");
 console.log("PASS unified Resident/LGU ID-document assessment, face comparison, safe metadata and manual review");
