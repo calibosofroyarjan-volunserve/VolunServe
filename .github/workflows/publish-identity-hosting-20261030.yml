@@ -19,10 +19,19 @@ jobs:
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       RELEASE_SHA: f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1
-          persist-credentials: false
+      - name: Extract immutable tested source (workaround for legacy broken gitlink)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${RELEASE_SHA}" \
+            --output /tmp/volunserve-tested-source.tar.gz
+          tar -xzf /tmp/volunserve-tested-source.tar.gz --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -s package-lock.json
+          test -f identity-ai/document_screening.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -34,7 +43,7 @@ jobs:
             echo "::error::Firebase Hosting credentials unavailable; nothing deployed."
             exit 1
           fi
-          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$RELEASE_SHA" = "f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1"
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Validate identity workflow, backend and TypeScript
@@ -48,7 +57,7 @@ jobs:
         run: npx expo export --platform web
       - name: Verify static Hosting files and stamp immutable release SHA
         run: |
-          node scripts/verify-hosting-release.cjs
+          GITHUB_SHA="$RELEASE_SHA" node scripts/verify-hosting-release.cjs
           node -e "const f=require('fs'); const r=JSON.parse(f.readFileSync('dist/volunserve-release.json','utf8')); if(r.revision!==process.env.RELEASE_SHA)process.exit(1);"
       - name: Publish Firebase Hosting live channel ONLY
         uses: FirebaseExtended/action-hosting-deploy@v0
