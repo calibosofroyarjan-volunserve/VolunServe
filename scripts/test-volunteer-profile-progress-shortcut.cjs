@@ -27,5 +27,6 @@ test("Emergency Tasks label is consistent with sidebar and volunteer Home",()=>{
  assert.match(sidebar,/label:"Emergency Tasks"/);
  assert.match(quickStart,/title: "Emergency Tasks"/);
  assert.match(native,/<QuickStartActions/);
- assert.match(web,/Emergency Tasks/);
+ assert.match(web,/<QuickStartActions/);
+ assert.match(quickStart,/title: "Emergency Tasks"/);
 });
