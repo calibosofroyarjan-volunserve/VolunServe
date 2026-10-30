@@ -5478,9 +5478,7 @@ export default function AdminCases() {
                               incident.status,
                             );
                             const disabled =
-                              !eligibility.eligible ||
-                              !caseOpenForSupport ||
-                              Boolean(busyKey);
+                              !eligibility.eligible || Boolean(busyKey);
                             const reasonLower = eligibility.reason.toLowerCase();
                             const availabilityText = volunteer.availability.join(" ").toLowerCase();
                             const offline = /offline|unavailable|off.?duty/.test(availabilityText);
@@ -5515,7 +5513,13 @@ export default function AdminCases() {
                                       styles.volunteerRosterAction,
                                       disabled && styles.personnelAssignCompactDisabled,
                                     ]}
-                                    onPress={() => assignVolunteerToCase(incident, volunteer)}
+                                    onPress={() => {
+                                      if (!caseOpenForSupport) {
+                                        setDetailTab("response");
+                                        return;
+                                      }
+                                      void assignVolunteerToCase(incident, volunteer);
+                                    }}
                                   >
                                     <Text style={[
                                       styles.volunteerRosterActionText,
@@ -5526,7 +5530,7 @@ export default function AdminCases() {
                                         : !eligibility.eligible
                                           ? "Unavailable"
                                           : !caseOpenForSupport
-                                            ? "Validate case first"
+                                            ? "Review & Validate"
                                             : "Send Invite"}
                                     </Text>
                                   </TouchableOpacity>
@@ -5546,6 +5550,11 @@ export default function AdminCases() {
                                 {eligibility.eligible && eligibility.reason.startsWith("Skill review needed") && (
                                   <Text style={styles.volunteerRosterWarning}>
                                     Check suitability: this Volunteer has no matching listed skill. Assign only safe support duties.
+                                  </Text>
+                                )}
+                                {eligibility.eligible && eligibility.reason.startsWith("Invitation allowed") && (
+                                  <Text style={styles.volunteerRosterWarning}>
+                                    Already responding elsewhere. Invite is allowed; accepting another response requires finishing the current one.
                                   </Text>
                                 )}
                                 {!eligibility.eligible && (
