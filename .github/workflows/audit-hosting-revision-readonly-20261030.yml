@@ -1,0 +1,19 @@
+name: Audit Live Hosting Revision - Read Only (2026-10-30)
+on:
+  push:
+    branches:
+      - audit/hosting-revision-readonly-20261030
+permissions:
+  contents: read
+jobs:
+  inspect-live:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only live hosting route and revision audit
+        run: node scripts/check-live-hosting.cjs
