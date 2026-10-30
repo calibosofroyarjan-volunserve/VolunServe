@@ -399,7 +399,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.push("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
       </View> : null}
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} key={role + ":" + module}>
-        {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule role={role} module={module} narrow={narrow} />}
+        {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
         <View style={styles.bottomBar}><Text style={styles.bottomText}>GUEST PREVIEW · Sample screens only. No account permissions or production data.</Text>
           <Pressable onPress={() => router.push("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
       </ScrollView>
