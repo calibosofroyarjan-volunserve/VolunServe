@@ -1627,12 +1627,13 @@ export default function AdminCases() {
       .trim()
       .toLowerCase();
 
-    const blockedSystemRole = role === "admin" || role === "superadmin";
+    const blockedSystemRole = ["admin", "superadmin", "lgu_personnel", "applicant"].includes(role);
     const explicitlyBlockedAccount =
       accountStatus === "rejected" ||
       accountStatus === "suspended" ||
       accountStatus === "disabled" ||
-      accountStatus === "deactivated";
+      accountStatus === "deactivated" ||
+      ["rejected", "revoked"].includes(String(volunteer.volunteerStatus || "").toLowerCase());
     const explicitlyRejectedIdentity =
       identityStatus === "rejected" || identityStatus === "failed";
 
@@ -1702,11 +1703,15 @@ export default function AdminCases() {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
-        // Prefer local, eligible volunteers, but show approved out-of-barangay
-        // profiles as well so admins understand why a candidate is restricted.
+        // Preserve every approved profile: prioritize assignable Volunteers,
+        // then same-barangay proximity and skill matches (never hard gates).
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
+        const caseArea = normalizeBarangay(caseBarangayValue(incident));
+        const aLocal = normalizeBarangay(a.barangay) === caseArea;
+        const bLocal = normalizeBarangay(b.barangay) === caseArea;
+        if (aLocal !== bLocal) return aLocal ? -1 : 1;
 
         if (eligibilityA.skillMatches !== eligibilityB.skillMatches) {
           return eligibilityB.skillMatches - eligibilityA.skillMatches;
