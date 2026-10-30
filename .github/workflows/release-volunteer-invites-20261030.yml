@@ -67,6 +67,7 @@ jobs:
               'components/volunteer/VolunteerInvitationInbox.tsx'|\
               'firestore.rules'|\
               'scripts/test-volunteer-invitation-flow.cjs'|\
+              'scripts/release-firestore-invitations-only.cjs'|\
               '.github/workflows/release-volunteer-invites-20261030.yml') ;;
               *) echo "::error::Unrelated file differs from live: $file"; exit 1 ;;
             esac
@@ -106,9 +107,10 @@ jobs:
           fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-sa.json', process.env.FIREBASE_SA, {mode:0o600});
           NODE
       - name: Publish new invitation Firestore rules ONLY
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-sa.json
-        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+        # Firebase Rules REST PATCH is required for the existing named
+        # cloud.firestore Release; never create a duplicate release (HTTP 409).
+        # Exact active rules must match pinned old source or script aborts.
+        run: node scripts/release-firestore-invitations-only.cjs
       - name: Verify live baseline remains unchanged before Hosting release
         run: |
           node - <<'NODE'
