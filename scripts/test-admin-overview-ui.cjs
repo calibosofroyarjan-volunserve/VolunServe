@@ -39,7 +39,7 @@ assert(overview.includes("styles.overviewPrimary") && overview.includes("styles.
   "Overview priorities and service chart must remain distinct and accessible");
 assert(!overview.includes("evacuation_centers") && !overview.includes("Evacuation center management"),
   "Removed LGU evacuation centers must not be queried or presented on Command Center");
-for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews", "metrics.openBarangayNeeds"]) {
+for (const binding of ["metrics.activeCases", "metrics.criticalOpen", "metrics.pendingReviews"]) {
   assert(overview.includes(binding), "Overview metric data binding missing: " + binding);
 }
 const insights = read("components/admin/DashboardOperationalInsights.tsx");

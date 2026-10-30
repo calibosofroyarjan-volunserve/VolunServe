@@ -10,7 +10,7 @@ import WorkspaceBarChart from "../ui/WorkspaceBarChart";
 type EventRow = { id: string; title?: string; status?: string; date?: string; publicationStatus?: string; };
 type StatsRow = { totalHours?: number; totalEvents?: number };
 type InsightData = { publishedEvents: EventRow[]; certificates: number | null; stats: StatsRow[] | null };
-type Workload = { emergency: number | null; approvals: number | null; relief: number | null };
+type Workload = { emergency: number | null; approvals: number | null };
 const PAGE_SIZE = 5;
 const cleanDate = (value: string | undefined) => String(value || "").slice(0, 10) || "Date not recorded";
 
@@ -62,7 +62,6 @@ export default function DashboardOperationalInsights({ workload }: { workload?: 
   const bars = [
     { key: "cases", label: "Open emergency cases", shortLabel: "Emergency", value: workload?.emergency ?? null, color: "#28765D" },
     { key: "reviews", label: "Pending reviews", shortLabel: "Approvals", value: workload?.approvals ?? null, color: "#426D9B" },
-    { key: "needs", label: "Open relief needs", shortLabel: "Relief", value: workload?.relief ?? null, color: "#C18A43" },
   ];
   return (
     <View style={styles.root}>

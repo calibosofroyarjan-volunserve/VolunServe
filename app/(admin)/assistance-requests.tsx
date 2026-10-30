@@ -2142,7 +2142,7 @@ This still does not automatically create a Donation Campaign.`,
             <AdminReviewHero
               eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
               title="Assistance Requests"
-              subtitle="Review verified Resident requests for individual support, assess supporting evidence, and document the LGU decision. Incident emergencies belong under Emergency Reports; multi-household distribution belongs under Relief Operations."
+              subtitle="Review verified Resident requests for individual support, assess supporting evidence, and document the LGU decision. Incident emergencies belong under Emergency Reports; separate approved financial support is handled through Donations & Funds."
               icon="hand-left-outline"
               tag="RESIDENT ASSISTANCE"
             />

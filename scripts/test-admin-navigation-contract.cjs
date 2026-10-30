@@ -34,7 +34,7 @@ const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type Nav
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [
   {title:"People & Verification",items:["Resident Identity Reviews","LGU Operations"]},
-  {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests","Relief Operations"]},
+  {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests"]},
   {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},
   {title:"Communication & Reports",items:["Announcements","Disputes"]},

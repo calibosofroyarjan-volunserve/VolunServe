@@ -14,9 +14,9 @@ for (const t of ["overview", "identity", "residents", "volunteers", "insights"])
 }
 assert(dashboard.includes('accessibilityRole="tab"') && dashboard.includes('accessibilityState={{ selected: workspaceTab === tab.id }}'),
   "Active workspace tab must be keyboard/screen reader accessible");
-assert(dashboard.includes("total={6} pageSize={5} onChange={setPriorityPage}") &&
+assert(dashboard.includes("total={5} pageSize={5} onChange={setPriorityPage}") &&
   dashboard.includes(".slice((priorityPage - 1) * 5, priorityPage * 5).map(action"),
-  "Even the priority action list must cap at five items without hiding the last item");
+  "Even the priority action list must cap at five items after removing the out-of-scope Relief module");
 for(const value of ["<DashboardPendingIdentityReviews />", "<DashboardVolunteerApprovals />",
   "<DashboardOperationalInsights workload={{", "<ResidentAccountsPanel />", "<DashboardRecentActivities />", "pageSize={5}"]) {
   assert(dashboard.includes(value), "Real dashboard workflows must remain reachable: " + value);

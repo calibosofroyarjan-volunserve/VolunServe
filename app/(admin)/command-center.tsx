@@ -54,12 +54,6 @@ type DisasterCase = {
 
 type WorkspaceTab = "overview" | "identity" | "residents" | "volunteers" | "insights";
 
-type BarangayNeedAssessment = {
-  id: string;
-  barangay?: string;
-  status?: string;
-};
-
 export default function CommandCenter() {
   const router =
     useRouter();
@@ -80,13 +74,6 @@ export default function CommandCenter() {
     setCases,
   ] = useState<
     DisasterCase[]
-  >([]);
-
-  const [
-    needAssessments,
-    setNeedAssessments,
-  ] = useState<
-    BarangayNeedAssessment[]
   >([]);
 
   const [
@@ -114,7 +101,7 @@ export default function CommandCenter() {
     setDataError,
   ] = useState(false);
   const [loadedSources,setLoadedSources] = useState({
-    cases:false,needs:false,users:false,volunteers:false,
+    cases:false,users:false,volunteers:false,
   });
   const overviewReady = Object.values(loadedSources).every(Boolean);
 
@@ -171,45 +158,6 @@ export default function CommandCenter() {
           setDataError(
             true,
           );
-        },
-      );
-
-    return unsubscribe;
-  }, [isAdmin]);
-
-  useEffect(() => {
-    if (!isAdmin) {
-      return;
-    }
-
-    const unsubscribe =
-      onSnapshot(
-        collection(
-          db,
-          "barangayNeedAssessments",
-        ),
-        (snapshot) => {
-          const rows =
-            snapshot.docs.map(
-              (item) => ({
-                id: item.id,
-                ...(item.data() as Omit<
-                  BarangayNeedAssessment,
-                  "id"
-                >),
-              }),
-            );
-
-          setNeedAssessments(rows);
-          setLoadedSources(old=>({...old,needs:true}));
-        },
-        (error) => {
-          console.log(
-            "Command center barangay needs error:",
-            error,
-          );
-
-          setDataError(true);
         },
       );
 
@@ -344,31 +292,15 @@ export default function CommandCenter() {
       // Count actionable review tasks; one person may have multiple independent tasks.
       const pendingReviews = pendingUserIds.length + pendingVolunteerIds.length;
 
-      const openBarangayNeeds =
-        needAssessments.filter(
-          (item) =>
-            ![
-              "fulfilled",
-              "closed",
-            ].includes(
-              String(
-                item.status ||
-                  "verified",
-              ).toLowerCase(),
-            ),
-        ).length;
-
       return {
         activeCases,
         criticalOpen,
         pendingReviews,
-        openBarangayNeeds,
       };
     }, [
       cases,
       pendingUserIds,
       pendingVolunteerIds,
-      needAssessments,
     ]);
 
   if (loading) {
@@ -540,7 +472,7 @@ export default function CommandCenter() {
               <Text style={styles.sectionTitle}>Priority Actions</Text>
               <Text style={styles.overviewSectionSubtitle}>Urgent reports first; other requests follow their own approval sequence.</Text>
             </View>
-            <ListPagination page={priorityPage} total={6} pageSize={5} onChange={setPriorityPage} />
+            <ListPagination page={priorityPage} total={5} pageSize={5} onChange={setPriorityPage} />
             {[
               {
                 key: "critical", label: "Emergency response",
@@ -568,13 +500,6 @@ export default function CommandCenter() {
                   pendingVolunteerIds.length + " volunteer application(s) awaiting review",
                 icon: "people-outline" as const, count: pendingVolunteerIds.length,
                 route: "/(admin)/command-center?section=volunteers",
-              },
-              {
-                key: "relief", label: "Relief operations",
-                detail: dataError ? "Live status unavailable" : !overviewReady ? "Loading current workload…" :
-                  `${metrics.openBarangayNeeds} open barangay relief need${metrics.openBarangayNeeds === 1 ? "" : "s"}`,
-                icon: "cube-outline" as const, count: metrics.openBarangayNeeds,
-                route: "/(admin)/relief-operations",
               },
               {
                 key: "attendance", label: "Community event attendance",
@@ -610,7 +535,6 @@ export default function CommandCenter() {
         {workspaceTab === "insights" && <DashboardOperationalInsights workload={{
           emergency: dataError || !overviewReady ? null : metrics.activeCases,
           approvals: dataError || !overviewReady ? null : metrics.pendingReviews,
-          relief: dataError || !overviewReady ? null : metrics.openBarangayNeeds,
         }} />}
       </View>
 

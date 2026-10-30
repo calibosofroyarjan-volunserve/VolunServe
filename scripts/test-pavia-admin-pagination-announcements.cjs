@@ -14,7 +14,6 @@ const checks = [
   ["app/(admin)/lgu-attendance.tsx", "pagedDutyRows", "pagedHistoryRows"],
   ["app/(admin)/donation-list.tsx", "pagedCampaigns", "pagedPending"],
   ["app/(admin)/donation-list.tsx", "pagedHistory", "ListPagination"],
-  ["app/(admin)/relief-operations.tsx", "pagedNeeds", "ListPagination"],
   ["app/(admin)/admin-certificates.tsx", "volunteerSummaries.slice(", "certificates.slice("],
 ];
 for (const [path, ...tokens] of checks) {
@@ -24,6 +23,9 @@ for (const [path, ...tokens] of checks) {
    path + ": list must have five record page size");
 }
 const dashboard = read("app/(admin)/command-center.tsx");
+const removedReliefRoute = read("app/(admin)/relief-operations.tsx");
+assert(removedReliefRoute.includes('<Redirect href="/(admin)/command-center" />'),
+  "Out-of-scope Relief Operations must redirect rather than expose an unsupported paginated screen");
 const dashboardApprovals = read("components/admin/DashboardVolunteerApprovals.tsx");
 assert(dashboard.includes("<DashboardVolunteerApprovals />") &&
        dashboardApprovals.includes("ListPagination") &&

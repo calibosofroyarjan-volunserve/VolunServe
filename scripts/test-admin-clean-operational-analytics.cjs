@@ -25,7 +25,7 @@ assert(analytics.includes('watch("communityEvents"') &&
 assert(analytics.includes("<WorkspaceBarChart") && analytics.includes('orientation="vertical"') &&
   dashboard.includes("<DashboardOperationalInsights workload={{") &&
   dashboard.includes("metrics.activeCases") && dashboard.includes("metrics.pendingReviews") &&
-  dashboard.includes("metrics.openBarangayNeeds"),
+  !analytics.includes("Open relief needs"),
   "Move real workload comparison to Analytics without inventing results");
 assert(dashboard.includes("<DashboardRecentActivities />") &&
   activities.includes("visible.map(item =>") &&

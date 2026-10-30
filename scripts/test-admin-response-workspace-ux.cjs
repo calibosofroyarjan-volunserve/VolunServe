@@ -5,14 +5,12 @@ const read = path => fs.readFileSync(path, "utf8");
 
 const emergency = read("app/(admin)/admin-cases.tsx");
 const assistance = read("app/(admin)/assistance-requests.tsx");
-const relief = read("app/(admin)/relief-operations.tsx");
 const nav = read("app/(admin)/_layout.tsx");
 const hero = read("components/admin/AdminReviewHero.tsx");
 
 for (const [title, source, label] of [
   ["Emergency Reports", emergency, "Emergency Reports"],
   ["Assistance Requests", assistance, "Assistance Requests"],
-  ["Relief Operations", relief, "Relief Operations"],
 ]) {
   assert(source.includes('import AdminReviewHero from "../../components/admin/AdminReviewHero"'), title + " must use the shared LGU Admin component");
   assert(source.includes("<AdminReviewHero") && source.includes('title="' + label + '"'),
@@ -43,11 +41,7 @@ assert(assistance.includes("saveVerificationDraft") &&
   assistance.includes("renderDecisionRail") &&
   assistance.includes("openDocument"),
   "Private Admin evidence review and assisted-decision actions must remain intact");
-assert(relief.includes("runTransaction") &&
-  relief.includes("How it works") &&
-  relief.includes("barangayNeedAssessments") &&
-  relief.includes("barangayReliefAllocations"),
-  "LGU inventory allocation/distribution workflow must remain intact");
-assert(!relief.includes("router.back()"),
-  "Redundant back button should not be displayed within the Admin sidebar shell");
-console.log("PASS: LGU Admin Emergency & Assistance headers, filter pagination, and operational flows");
+assert(!nav.includes('label: "Relief Operations"'), "Retired standalone Relief Operations must not appear in Admin navigation");
+assert(read("app/(admin)/relief-operations.tsx").includes('<Redirect href="/(admin)/command-center" />'),
+  "Old Relief Operations URLs must redirect to the approved Command Center");
+console.log("PASS: LGU Admin Emergency & Assistance headers, filter pagination, and retired Relief Operations route");

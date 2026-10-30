@@ -44,7 +44,6 @@ Existing routes stay intact and are grouped into one clear workspace:
 - **Emergency & Assistance**
   - `/(admin)/admin-cases`: triage resident emergency reports, assess evidence/locations, dispatch authorized responders and track authentic GPS events only.
   - `/(admin)/assistance-requests`: review resident aid requests/evidence, approve or deny appropriately; keep distinct from emergency incidents.
-  - `/(admin)/relief-operations`: dispatch/log assistance and resource follow-through. Read actual case/task status.
 - **People & Verification**
   - `/(admin)/identity-reviews`: resident AI-assisted verification with human decision gates where required; identity validation is not LGU employment validation.
   - `/(admin)/account-approvals`: approve or deny volunteer applications using defined qualifications.
