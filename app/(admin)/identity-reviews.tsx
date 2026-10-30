@@ -583,7 +583,11 @@ export default function IdentityReviewsAdmin() {
                     <View style={styles.scoreRow}>
                       <Text style={styles.scoreLabel}>Government ID check</Text>
                       <Text style={styles.scoreValue}>
-                        {item.documentScreening?.detectedIdType ? "Screened — review required" : "Manual review required"}
+                        {item.documentScreening?.status === "text_consistent_unverified"
+                          ? "ID type recognized — unverified"
+                          : item.documentScreening?.status === "mismatch"
+                            ? "Selected ID type mismatch"
+                            : "Recognition inconclusive"}
                       </Text>
                     </View>
 
@@ -740,9 +744,11 @@ function ReviewDetail({
         <View>
           <Text style={styles.scoreCardLabel}>Document and identity review</Text>
           <Text style={styles.scoreCardDecision}>
-            {item.documentScreening?.detectedIdType
-              ? "ID type screened; independent identity verification required"
-              : "ID evidence needs independent review"}
+            {item.documentScreening?.status === "text_consistent_unverified"
+              ? "Document text is consistent with the selected ID type; not authenticated"
+              : item.documentScreening?.status === "mismatch"
+                ? "Selected ID type conflicts with recognized document text"
+                : "Document type is inconclusive; verify using an independent LGU method"}
           </Text>
         </View>
         <Text style={styles.scoreCardLabel}>
