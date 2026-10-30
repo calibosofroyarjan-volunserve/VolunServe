@@ -77,7 +77,7 @@ def _document_signals(text: str) -> set[str]:
     if _national_id_signal(t):
         found.add("national_id")
     if any(_contains(t, term) for term in (
-        "DRIVERS LICENSE", "DRIVER LICENSE",
+        "DRIVERS LICENSE", "DRIVER S LICENSE", "DRIVER LICENSE",
     )) or (_contains(t, "LAND TRANSPORTATION OFFICE") and _contains(t, "LICENSE")):
         found.add("drivers_license")
     if any(_contains(t, term) for term in ("PASAPORTE", "PASSPORT")):
