@@ -33,6 +33,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../lib/firebase";
+import QuickStartActions from "./QuickStartActions";
 import { activeModeForProfile, hasVolunteerAccess, setActiveUserMode } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -392,234 +393,20 @@ export default function HomeScreen() {
               </View>
             </Animated.View>
 
-            <View style={styles.journeyBar} accessibilityLabel="VolunServe account workflow">
-              <Text style={styles.journeyLabel}>{volunteerMode ? "VOLUNTEER JOURNEY" : "RESIDENT JOURNEY"}</Text>
-              <Text style={styles.journeyText}>
-                {volunteerMode
-                  ? "Resident login  →  Admin approval  →  Volunteer tasks  →  Service hours and certificates"
-                  : "Sign in  →  Verify identity  →  Community services  →  Track your reports"}
-              </Text>
-            </View>
-            {/* =================================================
-                MAIN SERVICES HEADER
-            ================================================= */}
-
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionLabel}>
-                  MAIN SERVICES
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionDescription
-                  }
-                >
-                  Choose the service you need
-                </Text>
-              </View>
-
-              <View style={styles.serviceCount}>
-                <Text
-                  style={
-                    styles.serviceCountText
-                  }
-                >
-                  {volunteerMode ? "6 Services" : "7 Services"}
-                </Text>
-              </View>
-            </View>
-
-            {volunteerMode ? (
-              <>
-                <ServiceCard
-                  delay={300}
-                  glassDelay={0}
-                  identity="RESPONSE"
-                  icon="people"
-                  title="Emergency Tasks"
-                  description="View and respond to your assigned emergency missions."
-                  iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
-                  cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
-                  accentColor="#0BA861"
-                  badgeColor="#DCF8E9"
-                  onPress={() => router.push("/volunteer")}
-                />
-
-                <ServiceCard
-                  delay={390}
-                  glassDelay={700}
-                  identity="MONITORING"
-                  icon="map"
-                  title="Live Response Map"
-                  description="Track assigned incidents, response zones, and your location."
-                  iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
-                  cardGradient={["#FFFFFF", "#F8FBFE", "#E4F1F9"]}
-                  accentColor="#218FDB"
-                  badgeColor="#DDF2FF"
-                  onPress={() => router.push("/map-tracking")}
-                />
-
-                <ServiceCard
-                  delay={480}
-                  glassDelay={1400}
-                  identity="PROGRESS"
-                  icon="ribbon"
-                  title="My Progress"
-                  description="Review your verified contributions and response progress."
-                  iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
-                  cardGradient={["#FFFFFF", "#FFFCF8", "#F8ECD9"]}
-                  accentColor="#F28C13"
-                  badgeColor="#FFF0D5"
-                  onPress={() => router.push("/profile?tab=progress")}
-                />
-
-                <ServiceCard
-                  delay={570}
-                  glassDelay={2100}
-                  identity="RECOGNITION"
-                  icon="document-text"
-                  title="Certificates"
-                  description="View your issued and verifiable volunteer certificates."
-                  iconGradient={["#8DA2FB", "#6177F2", "#4657D9"]}
-                  cardGradient={["#FFFFFF", "#FAFBFE", "#EAEDF9"]}
-                  accentColor="#5368E8"
-                  badgeColor="#E8EBFF"
-                  onPress={() => router.push("/profile?tab=certificates")}
-                />
-
-                <ServiceCard
-                  delay={630}
-                  glassDelay={2400}
-                  identity="COMMUNITY"
-                  icon="calendar"
-                  title="Community Events"
-                  description="Join LGU-approved events, record attendance and serve your community."
-                  iconGradient={["#49D1A5", "#16A17B", "#047B63"]}
-                  cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
-                  accentColor="#16876B"
-                  badgeColor="#D8F2E5"
-                  onPress={() => router.push("/(tabs)/community-events" as Href)}
-                />
-
-                <ServiceCard
-                  delay={660}
-                  glassDelay={2800}
-                  identity="SUPPORT"
-                  icon="heart"
-                  title="Donations"
-                  description="Access the existing donation feature and relief support records."
-                  iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
-                  cardGradient={["#FFFFFF", "#FFFAFA", "#F8E7E9"]}
-                  accentColor="#EF4855"
-                  badgeColor="#FFE6E9"
-                  onPress={() => router.push("/donation")}
-                />
-              </>
-            ) : (
-              <>
-                <ServiceCard
-                  delay={300}
-                  glassDelay={0}
-                  identity="EMERGENCY"
-                  icon="warning"
-                  title="Emergency Reports"
-                  description="Report hazards and emergencies in your area."
-                  iconGradient={["#FF7882", "#FF3E4D", "#E92338"]}
-                  cardGradient={["#FFFFFF", "#FFFAFA", "#F9E5E9"]}
-                  accentColor="#EF3340"
-                  badgeColor="#FFE3E7"
-                  onPress={() => router.push("/disaster-response")}
-                />
-
-                <ServiceCard
-                  delay={390}
-                  glassDelay={700}
-                  identity="ASSISTANCE"
-                  icon="hand-left"
-                  title="Request Assistance"
-                  description="Request help for you or someone in need."
-                  iconGradient={["#FFC25B", "#FF9C1F", "#F47A00"]}
-                  cardGradient={["#FFFFFF", "#FFFCF8", "#F8ECD9"]}
-                  accentColor="#F28C13"
-                  badgeColor="#FFF0D5"
-                  onPress={() => router.push("/resident")}
-                />
-
-                <ServiceCard
-                  delay={480}
-                  glassDelay={1400}
-                  identity="COMMUNITY"
-                  icon="people"
-                  title={hasVolunteerAccess(profile) ? "Volunteer Access" : "Apply as Volunteer"}
-                  description={
-                    hasVolunteerAccess(profile)
-                      ? "Your volunteer access is approved. Switch to Volunteer Mode when needed."
-                      : "Apply for volunteer access using your existing resident account."
-                  }
-                  iconGradient={["#48DA92", "#14BA6E", "#038F56"]}
-                  cardGradient={["#FFFFFF", "#F7FCFA", "#E4F5ED"]}
-                  accentColor="#0BA861"
-                  badgeColor="#DCF8E9"
-                  onPress={() => void openVolunteerAccess()}
-                />
-
-                <ServiceCard
-                  delay={570}
-                  glassDelay={2100}
-                  identity="MONITORING"
-                  icon="map"
-                  title="Live Map"
-                  description="View incidents and response zones in real-time."
-                  iconGradient={["#62BBFA", "#2795E5", "#0873C5"]}
-                  cardGradient={["#FFFFFF", "#F8FBFE", "#E4F1F9"]}
-                  accentColor="#218FDB"
-                  badgeColor="#DDF2FF"
-                  onPress={() => router.push("/map-tracking")}
-                />
-
-                <ServiceCard
-                  delay={630}
-                  glassDelay={2400}
-                  identity="TRACKING"
-                  icon="document-text"
-                  title="My Reports"
-                  description="Follow your emergency reports and assistance request status."
-                  iconGradient={["#60B5EC", "#288AC3", "#13689E"]}
-                  cardGradient={["#FFFFFF", "#F2F9FF", "#D6E9F5"]}
-                  accentColor="#267FAC"
-                  badgeColor="#E1F1FA"
-                  onPress={() => router.push("/my-cases")}
-                />
-                <ServiceCard
-                  delay={640}
-                  glassDelay={2550}
-                  identity="COMMUNITY"
-                  icon="calendar"
-                  title="Community Events"
-                  description="Explore published events and propose community activities."
-                  iconGradient={["#49D1A5", "#16A17B", "#047B63"]}
-                  cardGradient={["#FFFFFF", "#F1FAF6", "#D4EDE1"]}
-                  accentColor="#16876B"
-                  badgeColor="#D8F2E5"
-                  onPress={() => router.push("/(tabs)/community-events" as Href)}
-                />
-
-                <ServiceCard
-                  delay={660}
-                  glassDelay={2800}
-                  identity="SUPPORT"
-                  icon="heart"
-                  title="Make a Donation"
-                  description="Support relief efforts and community programs."
-                  iconGradient={["#FF7D86", "#FF4656", "#EB2639"]}
-                  cardGradient={["#FFFFFF", "#FFFAFA", "#F8E7E9"]}
-                  accentColor="#EF4855"
-                  badgeColor="#FFE6E9"
-                  onPress={() => router.push("/donation")}
-                />
-              </>
-            )}
+            <QuickStartActions
+              mode={volunteerMode ? "volunteer" : "resident"}
+              volunteerApproved={hasVolunteerAccess(profile)}
+              onNavigate={(route) => router.push(route as Href)}
+              onVolunteerAccess={() => {
+                if (!hasVolunteerAccess(profile) &&
+                    profile?.identityVerified !== true &&
+                    profile?.identityStatus !== "verified") {
+                  router.push("/identity-verification" as Href);
+                  return;
+                }
+                return openVolunteerAccess();
+              }}
+            />
 
             <View style={styles.bottomSpace} />
           </View>
