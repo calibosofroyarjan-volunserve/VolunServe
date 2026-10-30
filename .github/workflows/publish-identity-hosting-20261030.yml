@@ -6,7 +6,7 @@ on:
     paths:
       - .github/workflows/publish-identity-hosting-20261030.yml
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: volunserve-production-hosting-release
   cancel-in-progress: false
@@ -68,3 +68,28 @@ jobs:
           done
           echo "::error::Hosting deploy may have completed, but domain revision has NOT been confirmed."
           exit 1
+
+      - name: Record auditable deployment outcome back to release branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const result = {
+            app: 'VolunServe',
+            releaseSha: process.env.RELEASE_SHA,
+            jobStatus: process.env.PUBLISH_JOB_STATUS,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            completedAt: new Date().toISOString(),
+            note: 'Hosting SHA and public route checks are required for a successful job. Authenticated Resident/LGU identity tests require authorized test users.'
+          };
+          fs.writeFileSync('/tmp/identity-hosting-receipt.json', JSON.stringify(result,null,2)+'\n');
+          NODE
+          gh api --method PUT \
+            "repos/${GITHUB_REPOSITORY}/contents/deployment-receipts/identity-hosting-20261030.json" \
+            -f message="ci: record Hosting publish result for identity release" \
+            -f branch="release/identity-hosting-publish-20261030" \
+            -f content="$(base64 -w0 /tmp/identity-hosting-receipt.json)"
