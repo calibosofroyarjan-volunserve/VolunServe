@@ -6,6 +6,7 @@ const admin = read("app/(admin)/admin-cases.tsx");
 const web = read("app/(tabs)/volunteer.web.tsx");
 const native = read("app/(tabs)/volunteer.tsx");
 const rules = read("firestore.rules");
+const notifications = read("app/(tabs)/notifications.tsx");
 
 for (const [label, sample] of [
   ["approved roster", "approvedApplications"],
@@ -40,6 +41,10 @@ for (const [kind, source] of [["web", web], ["native", native]]) {
     assert(source.includes(token), kind + " invitation contract lost: " + label);
   }
 }
+assert(notifications.includes('item.type === "response_assignment"') &&
+  notifications.includes("Open Invitation · Accept / Reject") &&
+  notifications.includes('router.push("/volunteer" as any)'),
+  "Push/in-app invitation must open Volunteer Accept/Reject screen");
 assert(rules.includes("match /responseAssignments/{assignmentId}") &&
   rules.includes("match /responderLocks/{uid}") &&
   rules.includes("lockAssignmentAfter().status == 'accepted'") &&
