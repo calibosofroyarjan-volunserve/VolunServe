@@ -19,7 +19,7 @@ type Props = {
 };
 const CENTER: Venue = {latitude:14.813,longitude:121.045};
 const valid = validSjdmEventPin;
-const toNativeRing = (ring: ReadonlyArray<readonly [number,number]>) =>
+const toNativeRing = (ring: ReadonlyArray<ReadonlyArray<number>>) =>
   ring.map(([longitude,latitude])=>({latitude,longitude}));
 const borderRings = SJDM_EVENT_BOUNDARY.geometry.type === "Polygon"
   ? SJDM_EVENT_BOUNDARY.geometry.coordinates as number[][][]
