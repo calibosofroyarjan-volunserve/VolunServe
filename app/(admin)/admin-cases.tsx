@@ -920,11 +920,6 @@ export default function AdminCases() {
   const isAuthorized = role === "admin";
 
   useEffect(() => {
-    if (!isAuthorized || detailTab !== "personnel") return;
-    void loadLguPersonnel();
-  }, [isAuthorized, detailTab]);
-
-  useEffect(() => {
     if (
       !isAuthorized ||
       detailTab !== "response" ||
@@ -1646,14 +1641,9 @@ export default function AdminCases() {
       (skill) => !String(skill).toLowerCase().includes("general volunteer")
     );
     const skillMatches = skillMatchCount(incident, volunteer);
-    const skillMatched = specializedSkills.length === 0 || skillMatches > 0;
+    const skillReviewNeeded = specializedSkills.length > 0 && skillMatches === 0;
 
     const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
-    const volunteerBarangay = normalizeBarangay(volunteer.barangay);
-    const sameBarangay =
-      Boolean(caseBarangay) &&
-      Boolean(volunteerBarangay) &&
-      caseBarangay === volunteerBarangay;
 
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
@@ -1667,35 +1657,17 @@ export default function AdminCases() {
     if (!caseBarangay) {
       return { eligible: false, reason: "Emergency case barangay is missing", skillMatches };
     }
-    if (!volunteerBarangay) {
-      return { eligible: false, reason: "Volunteer profile has no barangay", skillMatches };
-    }
-    if (!sameBarangay) {
-      return {
-        eligible: false,
-        reason: `Volunteer belongs to ${volunteer.barangay || "another barangay"}`,
-        skillMatches,
-      };
-    }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
     }
     if (busyOnAnotherCase) {
       return { eligible: false, reason: "Busy on another active emergency", skillMatches };
     }
-    if (!skillMatched) {
-      return {
-        eligible: false,
-        reason: specializedSkills.length
-          ? `Needs matching skill: ${specializedSkills.join(", ")}`
-          : "Required skill does not match",
-        skillMatches,
-      };
-    }
+    // Skill suitability is reviewed by LGU. No automatic dispatch occurs.
     return {
       eligible: true,
-      reason: specializedSkills.length
-        ? "Qualified Volunteer — support offer can be sent offline"
+      reason: skillReviewNeeded
+        ? "Skill review needed — LGU must confirm safe support duties"
         : "Approved Volunteer — support offer can be sent offline",
       skillMatches,
     };
@@ -2913,20 +2885,6 @@ export default function AdminCases() {
       return;
     }
 
-    const requiredSkillList = (incident.requiredSkills || []).filter(Boolean);
-    const requiresSpecializedSkill = requiredSkillList.some(
-      (skill) => !String(skill).toLowerCase().includes("general volunteer"),
-    );
-    const matchedSkills = skillMatchCount(incident, volunteer);
-
-    if (requiresSpecializedSkill && matchedSkills <= 0) {
-      Alert.alert(
-        "Skill Match Required",
-        `${volunteer.fullName} does not have a verified skill matching this emergency. Choose a qualified responder for ${requiredSkillList.join(", ")}.`,
-      );
-      return;
-    }
-
     const busyId = `${incident.id}_${volunteer.uid}`;
     setBusyKey(busyId);
 
@@ -2939,16 +2897,9 @@ export default function AdminCases() {
         "responseAssignments",
         `${incident.id}_${volunteer.uid}`
       );
-      const notificationRef = doc(
-        db,
-        "notifications",
-        `response_${incident.id}_${volunteer.uid}`
-      );
-      const residentNotificationRef = doc(
-        db,
-        "notifications",
-        `resident_assignment_${incident.id}_${volunteer.uid}`
-      );
+      // Each offer creates a new notification for Android push, including re-offers.
+      const notificationRef = doc(collection(db, "notifications"));
+      const residentNotificationRef = doc(collection(db, "notifications"));
       const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
       await runTransaction(db, async (transaction) => {
@@ -2985,31 +2936,9 @@ export default function AdminCases() {
         const currentCaseBarangay = normalizeBarangay(
           currentCaseBarangayRaw
         );
-        const currentVolunteerBarangay = normalizeBarangay(
-          currentVolunteer.barangay ||
-            currentVolunteer.addressBarangay ||
-            ""
-        );
-
         if (!currentCaseBarangay) {
           throw new Error(
             "This emergency case has no barangay. Add or verify the case barangay before requesting local Volunteer support."
-          );
-        }
-
-        if (!currentVolunteerBarangay) {
-          throw new Error(
-            "This Volunteer profile has no barangay. Update the Volunteer profile before assigning local emergency support."
-          );
-        }
-
-        if (currentVolunteerBarangay !== currentCaseBarangay) {
-          throw new Error(
-            `${volunteer.fullName} is registered in ${
-              volunteer.barangay || "another barangay"
-            } and cannot be assigned to this ${
-              currentCaseBarangayRaw || "case"
-            } emergency.`
           );
         }
 
@@ -3080,31 +3009,6 @@ export default function AdminCases() {
         const currentRequiredSkills = normalizeStringArray(
           currentCase.requiredSkills,
         );
-        const currentVolunteerSkills = Array.from(
-          new Set([
-            ...normalizeStringArray(currentVolunteer.skills),
-            ...normalizeStringArray(currentVolunteer.volunteerSkills),
-            ...normalizeStringArray(volunteer.skills),
-          ]),
-        );
-        const specializedSkills = currentRequiredSkills.filter(
-          (skill) => !skill.toLowerCase().includes("general volunteer"),
-        );
-        const hasCurrentSkillMatch = specializedSkills.length === 0 ||
-          specializedSkills.some((needed) =>
-            currentVolunteerSkills.some((skill) => {
-              const a = skill.toLowerCase();
-              const b = needed.toLowerCase();
-              return a === b || a.includes(b) || b.includes(a);
-            }),
-          );
-
-        if (!hasCurrentSkillMatch) {
-          throw new Error(
-            "Assignment blocked because this responder does not match the verified skills required by the emergency.",
-          );
-        }
-
         const currentVerification = String(
           currentCase.verificationStatus ||
             (currentCase.status === "validated" ||
@@ -3203,7 +3107,7 @@ export default function AdminCases() {
           title: `${severityLabel} emergency assignment`,
           message: `You were assigned to ${
             currentCase.title || incident.title || "an emergency case"
-          }. Required skills: ${currentRequiredSkills.join(", ") || "General response"}. Open Volunteer Tasks to accept or decline.`,
+          }. Required skills: ${currentRequiredSkills.join(", ") || "General response"}. Open Emergency Task to accept or decline.`,
           read: false,
           createdAt: serverTimestamp(),
         });
@@ -3235,7 +3139,7 @@ export default function AdminCases() {
 
       Alert.alert(
         "Volunteer Support Offered",
-        `${volunteer.fullName} received an optional Volunteer support offer. LGU remains the official primary responder, and the Volunteer appears on Resident tracking only after accepting.`
+        `${volunteer.fullName} received an optional Volunteer support offer. An in-app notice was created; Android push requires a registered device and enabled notifications. The Volunteer must accept before responding.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);
@@ -3920,7 +3824,7 @@ export default function AdminCases() {
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
                     ["response", "Response"],
-                    ["personnel", "Response Team"],
+                    ["personnel", "Volunteer Assignments"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -4457,7 +4361,7 @@ export default function AdminCases() {
                         LGU Response Control
                       </Text>
                       <Text style={styles.responseControlSubtitle}>
-                        Assign the official LGU response first. Request Volunteer support only when additional qualified help is needed.
+                        Review approved Volunteers and send support offers even while they are offline. Volunteers must accept before responding.
                       </Text>
                     </View>
 
@@ -4483,29 +4387,6 @@ export default function AdminCases() {
                   </View>
 
                   <View style={styles.responseActionGrid}>
-                    <TouchableOpacity
-                      disabled={lguFieldReviewPending}
-                      style={[
-                        styles.assignLguButton,
-                        lguFieldReviewPending && styles.disabledButton,
-                      ]}
-                      onPress={() => setDetailTab("personnel")}
-                    >
-                      <Text style={styles.assignLguButtonIcon}>♙</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.assignLguButtonTitle}>
-                          {lguFieldReviewPending
-                            ? "Review LGU Report First"
-                            : "Assign LGU Personnel"}
-                        </Text>
-                        <Text style={styles.assignLguButtonSub}>
-                          {lguFieldReviewPending
-                            ? "Official field response completed and is awaiting Admin review"
-                            : "View official responder / attendance status"}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
                     <TouchableOpacity
                       style={[
                         styles.supportButton,
@@ -5539,278 +5420,6 @@ export default function AdminCases() {
                     <View style={styles.personnelCleanCard}>
                       <View style={styles.personnelCleanHeader}>
                         <View style={styles.personnelCleanHeaderLeft}>
-                          <View style={styles.personnelSectionIconBlue}>
-                            <Text style={styles.personnelSectionIconText}>♙</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>
-                            <Text style={styles.personnelCleanSubtitle}>
-                              Official LGU responders are the main response for this emergency case.
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.personnelCleanStatusPill,
-                            !incident.activeLguResponderUid && styles.personnelCleanStatusPillMuted,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.personnelCleanStatusText,
-                              !incident.activeLguResponderUid && styles.personnelCleanStatusTextMuted,
-                            ]}
-                          >
-                            {incident.activeLguResponderUid ? "ASSIGNED" : "NOT ASSIGNED"}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {incident.activeLguResponderUid ? (
-                        <View style={styles.primaryResponderCompactRow}>
-                          <View style={styles.personnelAvatarCompact}>
-                            <Text style={styles.personnelAvatarCompactText}>
-                              {(incident.activeLguResponderName || "LGU")
-                                .split(" ")
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .map((part) => part[0]?.toUpperCase())
-                                .join("") || "LG"}
-                            </Text>
-                          </View>
-
-                          <View style={styles.personnelCompactIdentity}>
-                            <View style={styles.personnelCompactNameRow}>
-                              <Text style={styles.personnelCompactName}>
-                                {incident.activeLguResponderName || "LGU Responder"}
-                              </Text>
-                              {activeLguProfile?.isTestAccount && (
-                                <View style={styles.personnelMiniBadgeBlue}>
-                                  <Text style={styles.personnelMiniBadgeBlueText}>TEST</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <Text style={styles.personnelCompactMeta}>
-                              {[activeLguProfile?.department, activeLguProfile?.position]
-                                .filter(Boolean)
-                                .join(" · ") || "Official LGU responder"}
-                            </Text>
-
-                            <View style={styles.personnelCompactChipRow}>
-                              <View style={styles.personnelMiniBadgeGood}>
-                                <Text style={styles.personnelMiniBadgeGoodText}>
-                                  {labelOfStatus(activeLguProfile?.dutyStatus || "on_duty")}
-                                </Text>
-                              </View>
-                              <View style={styles.personnelMiniBadgeGood}>
-                                <Text style={styles.personnelMiniBadgeGoodText}>
-                                  {activeLguTrackingLabel}
-                                </Text>
-                              </View>
-                              {(activeLguProfile?.capabilities || []).slice(0, 2).map((capability) => (
-                                <View
-                                  key={`primary_${activeLguProfile?.uid || "lgu"}_${capability}`}
-                                  style={styles.personnelSkillPill}
-                                >
-                                  <Text style={styles.personnelSkillPillText}>{capability}</Text>
-                                </View>
-                              ))}
-                            </View>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.personnelPrimaryAction}
-                            onPress={() =>
-                              router.push(
-                                `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any
-                              )
-                            }
-                          >
-                            <Text style={styles.personnelPrimaryActionText}>View Live Map ↗</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>No official LGU responder assigned</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Assign one verified LGU personnel who is currently On Duty and Available.
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.personnelCleanTitleRow}>
-                            <Text style={styles.personnelCleanTitle}>On-Duty LGU Personnel</Text>
-                            <View style={styles.personnelCountBadge}>
-                              <Text style={styles.personnelCountBadgeText}>
-                                {lguPersonnel.filter(
-                                  (personnel) =>
-                                    personnel.uid !== incident.activeLguResponderUid &&
-                                    personnel.dutyStatus === "on_duty" &&
-                                    personnel.availabilityStatus === "available" &&
-                                    !personnel.activeCaseId &&
-                                    !personnel.activeAssignmentId,
-                                ).length} available
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={styles.personnelCleanSubtitle}>
-                            Only verified personnel who are On Duty and Available can be assigned as the official responder.
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.personnelRefreshCompact}
-                          disabled={lguPersonnelLoading}
-                          onPress={() => void loadLguPersonnel()}
-                        >
-                          <Text style={styles.personnelRefreshCompactText}>
-                            {lguPersonnelLoading ? "Loading…" : "Refresh"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {!!lguPersonnelError && (
-                        <View style={styles.lguPersonnelError}>
-                          <Text style={styles.lguPersonnelErrorText}>{lguPersonnelError}</Text>
-                        </View>
-                      )}
-
-                      {lguPersonnelLoading && lguPersonnel.length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Loading LGU Personnel…</Text>
-                        </View>
-                      ) : lguPersonnel.filter(
-                          (personnel) =>
-                            personnel.uid !== incident.activeLguResponderUid &&
-                            personnel.dutyStatus === "on_duty",
-                        ).length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>No other On-Duty LGU personnel</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Personnel will appear here after Time In.
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(personnelPage, Math.ceil(onDutyPersonnel.length / 5) || 1))} total={onDutyPersonnel.length} pageSize={5} onChange={setPersonnelPage} />
-                          {pageFive(onDutyPersonnel, personnelPage).map((personnel) => {
-                              const assignable =
-                                personnel.verificationStatus === "verified" &&
-                                personnel.employmentStatus === "active" &&
-                                personnel.dutyStatus === "on_duty" &&
-                                personnel.availabilityStatus === "available" &&
-                                !personnel.activeCaseId &&
-                                !personnel.activeAssignmentId;
-
-                              const caseReady =
-                                verificationStatus === "validated" &&
-                                ["validated", "assigned", "in_progress"].includes(incident.status);
-                              const busyId = `${incident.id}_${personnel.uid}`;
-                              const disabled =
-                                Boolean(incident.activeLguResponderUid) ||
-                                !assignable ||
-                                !caseReady ||
-                                busyKey === busyId;
-
-                              let actionLabel = "Assign";
-                              if (busyKey === busyId) actionLabel = "Assigning…";
-                              else if (incident.activeLguResponderUid) actionLabel = "Case Assigned";
-                              else if (!assignable) actionLabel = "Not Available";
-                              else if (!caseReady) actionLabel = "Case Not Ready";
-
-                              return (
-                                <View key={personnel.uid} style={styles.personnelCompactRow}>
-                                  <View style={styles.personnelAvatarCompact}>
-                                    <Text style={styles.personnelAvatarCompactText}>
-                                      {personnel.fullName
-                                        .split(" ")
-                                        .filter(Boolean)
-                                        .slice(0, 2)
-                                        .map((part) => part[0]?.toUpperCase())
-                                        .join("") || "LG"}
-                                    </Text>
-                                  </View>
-
-                                  <View style={styles.personnelCompactIdentity}>
-                                    <View style={styles.personnelCompactNameRow}>
-                                      <Text style={styles.personnelCompactName}>{personnel.fullName}</Text>
-                                      {personnel.isTestAccount && (
-                                        <View style={styles.personnelMiniBadgeBlue}>
-                                          <Text style={styles.personnelMiniBadgeBlueText}>TEST</Text>
-                                        </View>
-                                      )}
-                                    </View>
-                                    <Text style={styles.personnelCompactMeta}>
-                                      {[personnel.department, personnel.position]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    </Text>
-                                  </View>
-
-                                  <View style={styles.personnelCompactChipRowWide}>
-                                    <View style={styles.personnelMiniBadgeGood}>
-                                      <Text style={styles.personnelMiniBadgeGoodText}>On Duty</Text>
-                                    </View>
-                                    <View
-                                      style={
-                                        personnel.availabilityStatus === "available"
-                                          ? styles.personnelMiniBadgeGood
-                                          : styles.personnelMiniBadgeMuted
-                                      }
-                                    >
-                                      <Text
-                                        style={
-                                          personnel.availabilityStatus === "available"
-                                            ? styles.personnelMiniBadgeGoodText
-                                            : styles.personnelMiniBadgeMutedText
-                                        }
-                                      >
-                                        {labelOfStatus(personnel.availabilityStatus || "unavailable")}
-                                      </Text>
-                                    </View>
-                                    {(personnel.capabilities || []).slice(0, 2).map((capability) => (
-                                      <View
-                                        key={`${personnel.uid}_${capability}`}
-                                        style={styles.personnelSkillPill}
-                                      >
-                                        <Text style={styles.personnelSkillPillText}>{capability}</Text>
-                                      </View>
-                                    ))}
-                                  </View>
-
-                                  <TouchableOpacity
-                                    disabled={disabled}
-                                    style={[
-                                      styles.personnelAssignCompact,
-                                      disabled && styles.personnelAssignCompactDisabled,
-                                    ]}
-                                    onPress={() => void assignLguPersonnelToCase(incident, personnel)}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.personnelAssignCompactText,
-                                        disabled && styles.personnelAssignCompactTextDisabled,
-                                      ]}
-                                    >
-                                      {actionLabel}
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                              );
-                            })}
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={styles.personnelCleanHeaderLeft}>
                           <View style={styles.personnelSectionIconPurple}>
                             <Text style={styles.personnelSectionIconText}>♧</Text>
                           </View>
@@ -5824,7 +5433,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              All approved Volunteers are listed, including offline profiles. Local qualified candidates can receive an offer after case verification; Volunteers must accept before responding.
+                              All approved Volunteers are listed, including offline and out-of-barangay profiles. LGU must review suitability; Volunteers accept before responding.
                             </Text>
                           </View>
                         </View>
@@ -5838,7 +5447,7 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Local Volunteers appear first; out-of-barangay profiles are visible but cannot be assigned to this case.
+                          Local Volunteers appear first; approved Volunteers from other barangays can also receive offers. Review travel distance and skills first.
                         </Text>
                       </View>
 
@@ -5855,7 +5464,7 @@ export default function AdminCases() {
 
                       <View style={styles.personnelVolunteerToolbar}>
                         <Text style={styles.personnelListHeading}>
-                          Suggested Volunteers ({barangayDisplay(caseBarangayValue(incident))})
+                          All Approved Volunteers
                         </Text>
 
                         <View style={styles.personnelVolunteerFilters}>
@@ -5887,9 +5496,7 @@ export default function AdminCases() {
                       {volunteerCandidates.length === 0 ? (
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>
-                            {caseBarangayValue(incident)
-                              ? `No approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
-                              : "Emergency barangay is missing"}
+                            {"No approved Volunteers match the current filters"}
                           </Text>
                           <Text style={styles.personnelCleanEmptyText}>
                             The Resident who filed this emergency is excluded automatically from this pool.
@@ -5934,6 +5541,9 @@ export default function AdminCases() {
                                   <Text style={styles.personnelCompactMeta}>
                                     {barangayDisplay(volunteer.barangay)}
                                   </Text>
+                                  {eligibility.eligible && eligibility.reason.startsWith("Skill review needed") && (
+                                    <Text style={styles.personnelCompactMeta}>Skill mismatch — LGU must review safe support duties</Text>
+                                  )}
                                 </View>
 
                                 <View style={styles.personnelCompactChipRowWide}>
@@ -6011,7 +5621,7 @@ export default function AdminCases() {
                           <View>
                             <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
-                              Send a support offer to an approved, qualified local Volunteer, even when offline. The Volunteer must accept to respond.
+                              Send an offer to an approved Volunteer, even offline. Android push requires a registered device; the Volunteer must accept to respond.
                             </Text>
                           </View>
                         </View>
