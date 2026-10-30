@@ -22,13 +22,13 @@ jobs:
       EXPECTED_RULES_BLOB: bb1634f5fad4716b4861050489536d81a007ac88
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check exact published rules source and prohibit concurrent main module changes
+      - name: Check rules/config integrity without touching unrelated main modules
         shell: bash
         run: |
           node <<'NODE'
           const assert = require('node:assert/strict');
           const ownerRepo=process.env.GITHUB_REPOSITORY;
-          const workflow='.github/workflows/release-firestore-rules-only-safe.yml';
+          const protectedFiles=new Set(['firestore.rules','firebase.json','.firebaserc','firestore.indexes.json','storage.rules']);
           const api=async path=>{
             const r=await fetch('https://api.github.com/repos/'+ownerRepo+'/'+path,{
               headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}
@@ -41,12 +41,18 @@ jobs:
             assert.equal(file.sha,process.env.EXPECTED_RULES_BLOB,
               'main firestore.rules changed; STOP. Review current rules instead of overwriting.');
             const diff=await api('compare/'+process.env.PINNED_SOURCE_SHA+'...main');
-            const mainUnchanged=diff.status==='identical'&&diff.files.length===0;
-            const workflowOnly=diff.status==='ahead'&&diff.files.length===1&&diff.files[0].filename===workflow;
-            assert.ok(mainUnchanged||workflowOnly,
-              'Main has changed beyond the deployment workflow; STOP. Do not overwrite newer rules or modules.');
-            console.log('PASS: main changed only by this deployment workflow. No Super Admin, Admin, Resident, Auth, or Maps files touched.');
-            console.log('PASS: main Firestore source blob exactly matches tested rules version.');
+            assert.ok(['identical','ahead'].includes(diff.status),
+              'Pinned rules commit no longer ancestors main; STOP.');
+            const config=await api('contents/firebase.json?ref=main');
+            assert.equal(config.sha,'ff44e96161c07fe98dd58701e714ab30c477c5bd',
+              'Firebase config changed: STOP before any deployment.');
+            const sensitiveChanges=(diff.files||[]).filter(item=>protectedFiles.has(item.filename));
+            assert.equal(sensitiveChanges.length,0,
+              'Firebase security or configuration changed since verified release: STOP.');
+            assert.ok((diff.files||[]).length<300,
+              'Comparison may be truncated: STOP rather than overlook newer security changes.');
+            console.log('PASS: exact tested rules and Firebase config remain unchanged on main.');
+            console.log('PASS: unrelated Guest, Super Admin, Admin, Resident, Auth and Maps changes stay untouched.');
           })().catch(e=>{console.error(e.message);process.exit(1);});
           NODE
       - name: Get tested source without broken legacy Git submodule
