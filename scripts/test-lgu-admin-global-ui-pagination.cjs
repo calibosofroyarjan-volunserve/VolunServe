@@ -14,7 +14,7 @@ assert(pager.includes("onChange") && pager.includes("pageSize"), "Shared paginat
 
 for (const name of [
   "identity-reviews", "admin-cases",
-  "assistance-requests", "relief-operations",
+  "assistance-requests",
   "admin-disputes", "community-events",
   "community-attendance", "lgu-attendance", "lgu-members",
   "admin-certificates", "community-certificates", "donation-list",
@@ -41,12 +41,8 @@ assert(account.includes("export function ResidentAccountsPanel()") &&
   account.includes('<Redirect href="/(admin)/command-center?section=residents" />') &&
   app("command-center").includes("<ResidentAccountsPanel />"),
   "Resident Accounts must have one source of truth in the Command Center, not a duplicate full page");
-const relief = app("relief-operations");
-for (const segment of ["pagedNeeds", "pagedInventory", "pagedAllocations", "setNeedsPage", "setInventoryPage", "setAllocationPage"]) {
-  assert(relief.includes(segment), "Relief inventory/allocations and needs must all be paginated: " + segment);
-}
-assert(relief.includes("runTransaction") && relief.includes("barangayReliefAllocations"),
-  "Relief allocation and distribution functionality must remain intact");
+assert(app("relief-operations").includes('<Redirect href="/(admin)/command-center" />'),
+  "Retired Relief Operations URL must redirect without rendering the removed module");
 const events = app("community-events");
 assert(events.includes("pagedProposals") && events.includes("pagedParticipants") &&
   events.includes("setParticipantPage(1)") && events.includes("openProfile(participant.uid)"),
