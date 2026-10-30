@@ -30,6 +30,13 @@ Both interfaces use the shared DocumentScreeningSummary component. LGU Personnel
 - Deploy and independently verify **Python AI** and **Node backend** on Render, not Firebase Hosting alone.
 - Confirm the private AI authentication check and use only consented synthetic or privacy-safe demo ID images.
 - Have LGU carry out actual independent document validation before recording a successful verification.
+
+### National ID text recognition update (PR #191)
+
+The detector now handles legacy **PhilID/ePhilID** headings and PSA's **National ID Card**, **National ID in Paper** and **Digital National ID** terminology. It requires multiple demographic field-label hints when only a generic PhilSys/National ID reference is present, to reduce brochure/announcement false positives. Tesseract makes two bounded passes over the captured document (sparse and contrast-enhanced layouts). A text classification means **format seems consistent**, not that the physical ID is original or that the subject is the registered holder.
+
+Resident web/mobile and LGU screens show **recognized / mismatch / inconclusive**, never a percentage face score. The backend retains sanitized metadata and internal metrics only; scanned document images, selfies, OCR names and ID numbers are **not** available in the current Admin queue. A future side-by-side human comparison requires an explicitly authorized, access-controlled, time-limited evidence workflow and documented consent and deletion policy; it is **not implemented in this PR**. Never claim the Admin reviewed the submitted ID portrait if the Admin did not actually see it.
+
 ## 1. Deploy the Python AI service in Render
 
 1. In Render Dashboard, select **New > Web Service**; connect the same VolunServe GitHub repository.
@@ -68,7 +75,7 @@ Open the newest Firebase preview URL. Sign in with a **Basic Resident** test acc
 - `identity_ai_unreachable`: AI Render service down/incorrect URL/timed out.
 - `identity_ai_not_ready`: AI service responds but does not report ready, or has no internal key.
 - `401` from AI: Internal keys may not match.
-- `pending` and a face match score: AI performed comparison but manual Admin review is still required; this is **not** automatic identity verification.
+- `pending` and a document recognition status: OCR/face screening has been attempted, but an LGU decision is required. **No numerical face matching score is shown in the Resident or LGU review UI.**
 - `failed`: Poor ID/face quality or comparison failure; read the returned message and respect the configured attempt limit.
 - `verified`: Only when supported verification criteria are genuinely met; do not fabricate it for demonstrations.
 
