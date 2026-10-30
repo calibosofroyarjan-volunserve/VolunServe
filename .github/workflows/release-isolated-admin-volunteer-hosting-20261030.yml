@@ -1,0 +1,112 @@
+name: Release Isolated Admin Volunteer UI (Hosting Only, Safe Gate)
+on:
+  push:
+    branches:
+      - fix/admin-emergency-volunteer-offline-offers-20261030
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-web-only-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Block deployment if live revision is missing or other modules differ
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE_SHA="$(node - <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { "accept": "application/json", "cache-control": "no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot inspect current production revision");
+            const info = await response.json();
+            if (info.app !== "VolunServe" || info.firebaseProject !== "volunserve-3aa5b" ||
+                !/^[0-9a-f]{40}$/.test(info.revision)) throw Error("Invalid production revision");
+            process.stdout.write(info.revision + "\n");
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
+          )"
+          echo "Current live revision: $LIVE_SHA"
+          git cat-file -e "${LIVE_SHA}^{commit}" || {
+            echo "::error::Live SHA not available in Git history. No deployment."
+            exit 1
+          }
+          git diff --name-only "$LIVE_SHA" HEAD > /tmp/release-changes.txt
+          echo "Files differing from current live release:"
+          cat /tmp/release-changes.txt
+          while IFS= read -r path; do
+            case "$path" in
+              'app/(admin)/admin-cases.tsx'|\
+              'scripts/test-defense-unified-lgu-volunteer-dispatch.cjs'|\
+              'scripts/test-admin-compact-workspace-ux.cjs'|\
+              'scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs'|\
+              '.github/workflows/release-isolated-admin-volunteer-hosting-20261030.yml')
+                ;;
+              *)
+                echo "::error::Unrelated production module changed: $path. ABORTING with no publish."
+                exit 1
+                ;;
+            esac
+          done < /tmp/release-changes.txt
+          grep -Fxq 'app/(admin)/admin-cases.tsx' /tmp/release-changes.txt || {
+            echo "::error::No Emergency Reports change to publish."
+            exit 1
+          }
+          echo "PASS: approved Emergency Reports UI and test/workflow files only."
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Admin response, pagination, permissions and remaining modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-final-admin-scope.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: TypeScript compile
+        run: npx tsc --noEmit
+      - name: Export static Expo web only
+        run: npx expo export --platform web
+      - name: Verify route assets and release SHA fingerprint
+        run: node scripts/verify-hosting-release.cjs
+      - name: Require Hosting-only credentials before release
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Hosting-only service account not configured; no deployment."
+            exit 1
+          fi
+      - name: Deploy ONLY Firebase Hosting live channel
+        if: github.event_name == 'push'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify live Hosting matches this exact branch commit
+        if: github.event_name == 'push'
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
