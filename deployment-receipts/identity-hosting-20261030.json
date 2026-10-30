@@ -1,0 +1,8 @@
+{
+  "app": "VolunServe",
+  "releaseSha": "f3e2a46cbf766ed8ff8516b6eadbc8b219b611b1",
+  "jobStatus": "failure",
+  "workflowRunId": "40984058734",
+  "completedAt": "2026-10-30T01:08:53.974Z",
+  "note": "Hosting SHA and public route checks are required for a successful job. Authenticated Resident/LGU identity tests require authorized test users."
+}
