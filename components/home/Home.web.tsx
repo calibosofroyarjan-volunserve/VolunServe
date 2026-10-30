@@ -25,6 +25,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import QuickStartActions from "./QuickStartActions";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -674,6 +675,15 @@ export default function WebHome() {
             ) : null}
 
             </View>
+          <QuickStartActions
+            mode={volunteerMode ? "volunteer" : "resident"}
+            volunteerApproved={hasVolunteerAccess(profile)}
+            onNavigate={(route) => router.push(route as any)}
+            onVolunteerAccess={() => hasVolunteerAccess(profile)
+              ? handleModeSwitch()
+              : router.push(profileVerified ? "/volunteer-application" : "/identity-verification")}
+          />
+
           <ImageBackground
             source={require("../../assets/images/sjdm-aerial.png")}
             resizeMode="cover"
@@ -775,15 +785,6 @@ export default function WebHome() {
           </ImageBackground>
           </>
           )}
-
-          <View style={[styles.journeyBar, narrow && styles.journeyBarCompact]}>
-            <Text style={styles.journeyLabel}>{volunteerMode ? "VOLUNTEER WORKFLOW" : "RESIDENT WORKFLOW"}</Text>
-            <Text style={styles.journeyText}>
-              {volunteerMode
-                ? "Resident login  →  Admin approval  →  Emergency Tasks  →  My Profile progress and certificates"
-                : "Sign in  →  Identity verification  →  Resident services  →  My Reports"}
-            </Text>
-          </View>
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
             <View style={[styles.panel, narrow && styles.mobilePanel]}>

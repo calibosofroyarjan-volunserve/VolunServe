@@ -1,0 +1,29 @@
+name: Validate Simple Home Flow - No Deploy
+on:
+  push:
+    branches: [feat/simplify-home-three-actions-20261030]
+  pull_request:
+    paths:
+      - components/home/**
+      - scripts/test-simple-home-flow-20261030.cjs
+      - .github/workflows/validate-simple-home-flow-20261030.yml
+permissions:
+  contents: read
+jobs:
+  validate-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Home flow regression tests
+        run: node --test scripts/test-simple-home-flow-20261030.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Export web with no hosting deployment
+        run: npx expo export --platform web
