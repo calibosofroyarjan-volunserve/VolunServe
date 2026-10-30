@@ -1,0 +1,29 @@
+name: Validate Scoped SJDM Community Events Map - No Deploy
+on:
+  push:
+    branches:
+      - fix/community-events-sjdm-city-border-only-20261030
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: SJDM geometry, web/Android map, and proposal contract
+        run: node scripts/test-community-event-sjdm-border.cjs
+      - name: TypeScript check for all modules
+        run: npx tsc --noEmit
+      - name: Export static website without deploying
+        run: npx expo export --platform web
+      - name: Verify production hosting assets without deploying
+        run: node scripts/verify-hosting-release.cjs
