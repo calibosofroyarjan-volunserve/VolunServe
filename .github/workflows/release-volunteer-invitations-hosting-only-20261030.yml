@@ -1,0 +1,101 @@
+name: Release Volunteer Invite Accept Reject - Hosting Only
+on:
+  push:
+    branches:
+      - feat/emergency-invite-accept-decline-20261030
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-web-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Abort unless exact production baseline and approved files match
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE="$(node - <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { accept: "application/json", "cache-control": "no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot inspect live version");
+            const info = await response.json();
+            if (info.app !== "VolunServe" ||
+                info.firebaseProject !== "volunserve-3aa5b" ||
+                !/^[a-f0-9]{40}$/.test(info.revision)) throw Error("Invalid live manifest");
+            console.log(info.revision);
+          })().catch(e => { console.error(e.message); process.exit(1); });
+          NODE
+          )"
+          echo "Observed live revision: $LIVE"
+          if [ "$LIVE" != "3506ca848bd4f69ac9366d7b9afacfc1678603a3" ]; then
+            echo "::error::Production changed since audit; no deployment."
+            exit 1
+          fi
+          git cat-file -e "${LIVE}^{commit}"
+          git diff --name-only "$LIVE" HEAD > /tmp/invite-release-files.txt
+          cat /tmp/invite-release-files.txt
+          while IFS= read -r file; do
+            case "$file" in
+              'app/(admin)/admin-cases.tsx'|\
+              'app/(tabs)/volunteer.tsx'|\
+              'app/(tabs)/volunteer.web.tsx'|\
+              'app/(tabs)/notifications.tsx'|\
+              'scripts/test-isolated-emergency-volunteer-release.cjs'|\
+              'scripts/test-volunteer-invitation-acceptance.cjs'|\
+              '.github/workflows/validate-volunteer-invite-accept-20261030.yml'|\
+              '.github/workflows/release-volunteer-invitations-hosting-only-20261030.yml')
+                ;;
+              *)
+                echo "::error::Unrelated source differs from existing production: $file. No publish."
+                exit 1
+                ;;
+            esac
+          done < /tmp/invite-release-files.txt
+          grep -Fxq 'app/(admin)/admin-cases.tsx' /tmp/invite-release-files.txt
+          grep -Fxq 'app/(tabs)/volunteer.web.tsx' /tmp/invite-release-files.txt
+          echo "PASS: isolated emergency Volunteer invitations only"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify invitation acceptance and other protected modules
+        run: |
+          node scripts/test-volunteer-invitation-acceptance.cjs
+          node scripts/test-isolated-emergency-volunteer-release.cjs
+      - name: TypeScript safety check
+        run: npx tsc --noEmit
+      - name: Build Expo web, no backend changes
+        run: npx expo export --platform web
+      - name: Verify generated Hosting scope
+        run: node scripts/verify-hosting-release.cjs
+      - name: Require restricted Firebase Hosting credentials
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting secret absent; no deploy."
+            exit 1
+          fi
+      - name: Deploy Firebase Hosting ONLY
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact public production revision
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
