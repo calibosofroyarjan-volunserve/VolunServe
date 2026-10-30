@@ -153,28 +153,6 @@ async function mediaFromCameraUri(
   };
 }
 
-function scoreLabel(value?: number) {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value)
-  ) {
-    return "Not available";
-  }
-
-  const normalized =
-    value <= 1
-      ? value * 100
-      : value;
-
-  return `${Math.max(
-    0,
-    Math.min(
-      100,
-      normalized,
-    ),
-  ).toFixed(1)}%`;
-}
-
 export default function IdentityVerification() {
   const router = useRouter();
 
@@ -674,10 +652,6 @@ export default function IdentityVerification() {
           COLORS.success
         }
         badge="Verified"
-        matchScore={
-          statusResult
-            ?.matchScore
-        }
         documentScreening={statusResult?.documentScreening}
         primaryLabel="Back to Profile"
         primaryAction={() =>
@@ -707,10 +681,6 @@ export default function IdentityVerification() {
           COLORS.warning
         }
         badge="Pending"
-        matchScore={
-          statusResult
-            ?.matchScore
-        }
         documentScreening={statusResult?.documentScreening}
         primaryLabel={
           checkingStatus
@@ -2054,7 +2024,6 @@ function StatusScreen({
   background,
   color,
   badge,
-  matchScore,
   documentScreening,
   primaryLabel,
   primaryAction,
@@ -2076,8 +2045,6 @@ function StatusScreen({
     string;
   badge:
     string;
-  matchScore?:
-    number;
   documentScreening?: DocumentScreening;
   primaryLabel:
     string;
@@ -2162,33 +2129,7 @@ function StatusScreen({
           {message}
         </Text>
 
-        {typeof matchScore ===
-        "number" ? (
-          <View
-            style={
-              styles.matchScoreCard
-            }
-          >
-            <Text
-              style={
-                styles.matchScoreLabel
-              }
-            >
-              AI face match score
-            </Text>
-            <Text
-              style={
-                styles.matchScoreValue
-              }
-            >
-              {scoreLabel(
-                matchScore,
-              )}
-            </Text>
-          </View>
-        ) : null}
-
-        <DocumentScreeningSummary screening={documentScreening} />
+                <DocumentScreeningSummary screening={documentScreening} />
 
         <TouchableOpacity
           style={
@@ -3672,45 +3613,6 @@ const styles =
         19,
       textAlign:
         "center",
-    },
-
-    matchScoreCard: {
-      minWidth:
-        220,
-      marginTop:
-        16,
-      alignItems:
-        "center",
-      padding:
-        12,
-      borderRadius:
-        12,
-      backgroundColor:
-        "#F8FAFC",
-      borderWidth:
-        1,
-      borderColor:
-        COLORS.border,
-    },
-
-    matchScoreLabel: {
-      color:
-        "#64748B",
-      fontSize:
-        9.5,
-      fontWeight:
-        "800",
-    },
-
-    matchScoreValue: {
-      marginTop:
-        3,
-      color:
-        COLORS.navy,
-      fontSize:
-        19,
-      fontWeight:
-        "900",
     },
 
     primaryButton: {
