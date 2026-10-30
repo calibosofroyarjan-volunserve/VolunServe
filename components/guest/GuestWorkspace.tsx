@@ -317,7 +317,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
     (allowed.some(item => item.key === requested) || ["profile", "progress", "certificates", "updates"].includes(requested))
     ? requested : "home";
   const { width } = useWindowDimensions();
-  const narrow = width < 860;
+  const narrow = width < 1040;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   if (landing) {
