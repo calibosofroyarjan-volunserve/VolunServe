@@ -46,11 +46,12 @@ assert(cases.includes("approvedApplications") &&
   cases.includes('String(data.status || "").toLowerCase() === "approved"') &&
   cases.includes("visibleApprovedVolunteers"),
   "Candidate pool must only be sourced from approved applications");
-assert(cases.includes("return !isReporter && skillSearchMatch && availabilityMatch;") &&
+assert(cases.includes("return !isReporter && skillSearchMatch;") &&
   !cases.includes('reason: "Currently unavailable / off duty"') &&
-  cases.includes("offline ? \"Offline · offer allowed\"") &&
-  cases.includes('pageFive(volunteerCandidates, volunteerPage)'),
-  "All approved Volunteers must be visible and offline status must not prohibit offers");
+  cases.includes("Offline · can receive offer") &&
+  cases.includes("volunteer.fullName.toLowerCase().includes(search)") &&
+  cases.includes("pageFive(volunteerCandidates, volunteerPage)"),
+  "Approved Volunteers must remain searchable and eligible offline without availability filtering");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
   cases.includes("responderLockSnapshot.exists()") &&
   cases.includes('currentVerification !== "validated"') &&
