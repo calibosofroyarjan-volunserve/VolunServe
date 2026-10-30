@@ -21,6 +21,15 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
+import { isKnownDisposableEmail } from "./registrationEmailPolicy";
+
+export const TEMP_EMAIL_BLOCK_MESSAGE = "Temporary email addresses are not allowed. Use a permanent email address.";
+
+export function assertAcceptedEmail(email: string | null | undefined): void {
+  if (!email || isKnownDisposableEmail(email)) {
+    throw new Error(email ? TEMP_EMAIL_BLOCK_MESSAGE : "A valid email address is required.");
+  }
+}
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -29,6 +38,12 @@ export const connectGoogleAccountWeb = async () => {
       prompt: "select_account",
     });
     const result = await signInWithPopup(auth, provider);
+    try {
+      assertAcceptedEmail(result.user.email);
+    } catch (error) {
+      await signOut(auth);
+      throw error;
+    }
     return result.user;
   } catch (err: any) {
     if (err?.code === "auth/popup-closed-by-user") {
@@ -66,6 +81,7 @@ export const setVolunServePasswordForCurrentGoogleUser = async (
     }
 
     const email = user.email?.trim().toLowerCase();
+    assertAcceptedEmail(email);
 
     if (!email) {
       throw new Error(
@@ -459,6 +475,8 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    // Check before creating a Firebase Auth account for both providers.
+    assertAcceptedEmail(submittedEmail);
     const usesGoogle = data.authProvider === "google";
     if (usesGoogle) {
       if (!auth.currentUser) {
@@ -476,6 +494,7 @@ export const signUpUser = async (
           "The connected Google account does not match the email in the registration form."
         );
       }
+      assertAcceptedEmail(auth.currentUser.email);
       user = auth.currentUser;
     } else {
       if (auth.currentUser) {
@@ -607,6 +626,7 @@ export const loginUser = async (
   password: string
 ) => {
   try {
+    assertAcceptedEmail(email);
     const userCredential =
       await signInWithEmailAndPassword(
         auth,
@@ -615,6 +635,10 @@ export const loginUser = async (
       );
     const user = userCredential.user;
     await user.reload();
+    if (isKnownDisposableEmail(user.email || "")) {
+      await signOut(auth);
+      throw new Error(TEMP_EMAIL_BLOCK_MESSAGE);
+    }
     if (!user.emailVerified) {
       await signOut(auth);
       throw new Error("Please verify your email using the link sent to your inbox before signing in.");

@@ -1,5 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { useRouter } from "expo-router";
 import { GoogleAuthProvider, onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -476,7 +477,7 @@ export default function Signup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = true;
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) && !isKnownDisposableEmail(formData.email);
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -593,6 +594,10 @@ export default function Signup() {
   useEffect(() => {
     let active = true;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user && isKnownDisposableEmail(user.email || "")) {
+        await signOut(auth);
+        return;
+      }
       if (!user || !user.providerData.some(
         (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
       )) return;
@@ -881,7 +886,7 @@ export default function Signup() {
                     autoCapitalize="none"
                   />
                   {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                    <ValidationText ok={false}>{isKnownDisposableEmail(formData.email) ? "Temporary email addresses are not allowed. Use a permanent email." : "Enter a valid email address."}</ValidationText>
                   ) : null}
                   {!googleBound ? (
                     <>

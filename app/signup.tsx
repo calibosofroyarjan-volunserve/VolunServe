@@ -1,5 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
@@ -488,6 +489,10 @@ export default function Signup() {
         const credential = GoogleAuthProvider.credential(idToken);
         const userCred = await signInWithCredential(auth, credential);
         const user = userCred.user;
+        if (isKnownDisposableEmail(user.email || "")) {
+          await signOut(auth);
+          throw new Error("Temporary email addresses are not allowed. Use a permanent email.");
+        }
         const parsed = splitDisplayName(user.displayName || "");
         const googleEmail = (user.email || "").trim().toLowerCase();
 
@@ -519,7 +524,7 @@ export default function Signup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = true;
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) && !isKnownDisposableEmail(formData.email);
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&

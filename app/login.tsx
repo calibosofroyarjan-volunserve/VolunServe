@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
@@ -195,6 +196,10 @@ export default function Login() {
           credential
         );
 
+      if (isKnownDisposableEmail(userCredential.user.email || "")) {
+        await firebaseSignOut(auth);
+        throw new Error("Temporary email addresses are not allowed. Use a permanent email.");
+      }
       await routeSignedInProfile(
         userCredential.user.uid
       );
