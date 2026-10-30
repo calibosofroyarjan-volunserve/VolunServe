@@ -1,0 +1,137 @@
+name: Safe Volunteer Invitation Accept/Decline Release (Rules and Hosting Only)
+on:
+  push:
+    branches: [fix/real-volunteer-invitation-accept-decline-20261030]
+  pull_request:
+    branches: [baseline/live-hosting-20261030]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-volunteer-invitation-release-20261030
+  cancel-in-progress: true
+jobs:
+  test-and-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || github.head_ref == 'fix/real-volunteer-invitation-accept-decline-20261030')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      BASE_SHA: 3506ca848bd4f69ac9366d7b9afacfc1678603a3
+      BASE_RULES_BLOB: bb1634f5fad4716b4861050489536d81a007ac88
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Gate exactly scoped source and unchanged production baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LIVE_SHA="$(node - <<'NODE'
+          (async () => {
+            const r = await fetch('https://volunserve.com/volunserve-release.json', {
+              signal: AbortSignal.timeout(15000),
+              headers: {accept: 'application/json', 'cache-control': 'no-cache'}
+            });
+            if (!r.ok) throw Error('Cannot inspect live revision');
+            const v = await r.json();
+            if (v.app !== 'VolunServe' || v.firebaseProject !== 'volunserve-3aa5b' ||
+                !/^[0-9a-f]{40}$/.test(v.revision)) throw Error('Invalid live revision');
+            console.log(v.revision);
+          })().catch(e => { console.error(e.message); process.exit(1); });
+          NODE
+          )"
+          echo "Live SHA: $LIVE_SHA"
+          if [ "$LIVE_SHA" != "$BASE_SHA" ]; then
+            echo "::error::Live website changed since this patch was prepared. No release."
+            exit 1
+          fi
+          git diff --name-only "$BASE_SHA" HEAD > /tmp/invitation-release-files.txt
+          cat /tmp/invitation-release-files.txt
+          while IFS= read -r file; do
+            case "$file" in
+              'app/(admin)/admin-cases.tsx'|\
+              'app/(tabs)/volunteer.tsx'|\
+              'app/(tabs)/volunteer.web.tsx'|\
+              'components/volunteer/VolunteerInvitationInbox.tsx'|\
+              'firestore.rules'|\
+              'scripts/test-volunteer-invitation-flow.cjs'|\
+              'scripts/release-firestore-invitations-only.cjs'|\
+              '.github/workflows/release-volunteer-invites-20261030.yml') ;;
+              *) echo "::error::Unrelated file differs from live: $file"; exit 1 ;;
+            esac
+          done < /tmp/invitation-release-files.txt
+          grep -Fxq 'firestore.rules' /tmp/invitation-release-files.txt
+          grep -Fxq 'app/(admin)/admin-cases.tsx' /tmp/invitation-release-files.txt
+          CURRENT_RULES_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)"
+          if [ "$CURRENT_RULES_BLOB" != "$BASE_RULES_BLOB" ]; then
+            echo "::error::Main Firestore Rules changed. Stop rather than overwrite newer rules."
+            exit 1
+          fi
+          echo 'PASS: same live UI baseline and original main Firestore rules.'
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript validation for Admin, web and Android
+        run: npx tsc --noEmit
+      - name: Firebase emulator rules - pending case invites, accept/decline and access denial
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-invitations "node scripts/test-volunteer-invitation-flow.cjs"
+      - name: Export static web without publishing
+        run: npx expo export --platform web
+      - name: Check hosting routes and release marker
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/verify-hosting-release.cjs
+      - name: Require restricted Firebase service account
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase credential missing; nothing deployed."
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const sa = JSON.parse(process.env.FIREBASE_SA);
+          if (sa.type !== 'service_account' || sa.project_id !== 'volunserve-3aa5b') {
+            throw Error('Wrong Firebase project credential');
+          }
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-sa.json', process.env.FIREBASE_SA, {mode:0o600});
+          NODE
+      - name: Publish new invitation Firestore rules ONLY
+        # Firebase Rules REST PATCH is required for the existing named
+        # cloud.firestore Release; never create a duplicate release (HTTP 409).
+        # Exact active rules must match pinned old source or script aborts.
+        run: node scripts/release-firestore-invitations-only.cjs
+      - name: Verify live baseline remains unchanged before Hosting release
+        run: |
+          node - <<'NODE'
+          (async () => {
+            const r = await fetch('https://volunserve.com/volunserve-release.json',
+              {signal:AbortSignal.timeout(15000),headers:{'cache-control':'no-cache'}});
+            if (!r.ok) throw Error('Cannot inspect live Hosting');
+            const data = await r.json();
+            if (data.revision !== process.env.BASE_SHA) {
+              throw Error('Live Hosting changed since testing; do not deploy');
+            }
+            console.log('PASS live Hosting baseline unchanged');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Publish ONLY Firebase Hosting live channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact release SHA on live website
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/check-live-hosting.cjs

@@ -4072,6 +4072,75 @@ service cloud.firestore {
         );
       allow update, delete: if false;
     }
+    // An invitation is a consent/availability request only, never a dispatch.
+    // No case status, responder lock, or live responder GPS is changed here.
+    match /volunteerInvitations/{invitationId} {
+      function selectedVolunteer() {
+        return get(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        ).data;
+      }
+      function selectedCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+      allow read: if isAdmin()
+        || (hasVolunteerAccess() && resource.data.volunteerId == request.auth.uid);
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
+          'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
+          'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.caseId is string
+        && request.resource.data.caseId.size() > 0
+        && request.resource.data.volunteerId is string
+        && request.resource.data.volunteerId.size() > 0
+        && invitationId == request.resource.data.caseId + '_' + request.resource.data.volunteerId
+        && request.resource.data.caseTitle is string
+        && request.resource.data.caseTitle.size() >= 1
+        && request.resource.data.caseTitle.size() <= 200
+        && request.resource.data.volunteerName is string
+        && request.resource.data.volunteerName.size() >= 1
+        && request.resource.data.volunteerName.size() <= 160
+        && request.resource.data.status == 'invited'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && exists(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        )
+        && exists(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        )
+        && selectedCase().reporterUid != request.resource.data.volunteerId
+        && !(selectedCase().status in ['resolved', 'closed'])
+        && selectedCase().get('verificationStatus', 'pending_verification') != 'rejected'
+        && selectedVolunteer().get('status', '') == 'approved'
+        && selectedVolunteer().get('volunteerAccess', false) == true
+        && selectedVolunteer().get('volunteerStatus', '') == 'approved'
+        && !(selectedVolunteer().get('role', '') in [
+          'admin', 'superadmin', 'lgu_personnel', 'applicant'
+        ]);
+      allow update: if request.resource.data
+          .diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (
+          (isAdmin()
+            && resource.data.status == 'declined'
+            && request.resource.data.status == 'invited')
+          || (hasVolunteerAccess()
+            && resource.data.volunteerId == request.auth.uid
+            && resource.data.status == 'invited'
+            && request.resource.data.status in ['accepted', 'declined'])
+        );
+      allow delete: if false;
+    }
+
     match /responseAssignments/{assignmentId} {
 
       function hasVerifiedIdentity(data) {

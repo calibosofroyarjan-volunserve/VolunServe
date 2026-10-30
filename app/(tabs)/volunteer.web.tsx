@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import VolunteerInvitationInbox from "../../components/volunteer/VolunteerInvitationInbox";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -887,6 +888,8 @@ export default function VolunteerTasksWeb() {
           tone="neutral"
         />
       </View>
+
+      <VolunteerInvitationInbox />
 
       <View style={[styles.toolbar, compact && styles.toolbarCompact, mobile && styles.toolbarMobile]}>
         <View style={[styles.filters, mobile && styles.filtersMobile]}>
