@@ -8,6 +8,7 @@ const layout=read("app/(tabs)/_layout.tsx");
 const profile=read("app/(tabs)/profile.tsx");
 const homeWeb=read("components/home/Home.web.tsx");
 const homeNative=read("components/home/Home.native.tsx");
+const quickStart=read("components/home/QuickStartActions.tsx");
 function menu(id) {
  const begin=layout.indexOf("const "+id+": TabDefinition[] = [");
  const end=layout.indexOf("];",begin);
@@ -39,7 +40,8 @@ test("Profile retains secure progress and certificate data",()=>{
 });
 test("Home Certificates shortcuts go to Profile Certificates on both web and mobile",()=>{
  for(const source of [homeWeb,homeNative]) {
-   assert.match(source,/router\.push\("\/profile\?tab=certificates"\)/);
+   assert.match(source,/<QuickStartActions/);
+   assert.match(quickStart,/route: "\/profile\?tab=certificates"/);
    assert.doesNotMatch(source,/router\.push\("\/certificate"\)/);
  }
  assert.match(profile,/tab === "certificates" \? "certificates" : "info"/);

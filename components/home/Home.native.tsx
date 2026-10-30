@@ -316,6 +316,21 @@ export default function HomeScreen() {
                 WELCOME CARD
             ================================================= */}
 
+            <QuickStartActions
+              mode={volunteerMode ? "volunteer" : "resident"}
+              volunteerApproved={hasVolunteerAccess(profile)}
+              onNavigate={(route) => router.push(route as Href)}
+              onVolunteerAccess={() => {
+                if (!hasVolunteerAccess(profile) &&
+                    profile?.identityVerified !== true &&
+                    profile?.identityStatus !== "verified") {
+                  router.push("/identity-verification" as Href);
+                  return;
+                }
+                return openVolunteerAccess();
+              }}
+            />
+
             <Animated.View
               style={[
                 styles.welcomeCard,
@@ -392,21 +407,6 @@ export default function HomeScreen() {
                 </View>
               </View>
             </Animated.View>
-
-            <QuickStartActions
-              mode={volunteerMode ? "volunteer" : "resident"}
-              volunteerApproved={hasVolunteerAccess(profile)}
-              onNavigate={(route) => router.push(route as Href)}
-              onVolunteerAccess={() => {
-                if (!hasVolunteerAccess(profile) &&
-                    profile?.identityVerified !== true &&
-                    profile?.identityStatus !== "verified") {
-                  router.push("/identity-verification" as Href);
-                  return;
-                }
-                return openVolunteerAccess();
-              }}
-            />
 
             <View style={styles.bottomSpace} />
           </View>

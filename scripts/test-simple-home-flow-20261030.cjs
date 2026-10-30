@@ -24,6 +24,7 @@ test("both platform home screens use the same task-first component", () => {
     assert.ok(s.includes("<QuickStartActions"));
     assert.ok(!s.includes("<ServiceCard\n"), "Legacy native cards must not remain mounted");
     assert.ok(!s.includes("<View style={[styles.journeyBar"), "Old journey ribbon must be hidden");
+    assert.ok(s.indexOf("<QuickStartActions") < s.indexOf("styles.welcomeCard") || !s.includes("styles.welcomeCard"), "Primary actions must appear before the large mobile welcome banner");
   }
 });
 test("accessibility and emergency safety context are visible", () => {

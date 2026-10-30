@@ -675,6 +675,15 @@ export default function WebHome() {
             ) : null}
 
             </View>
+          <QuickStartActions
+            mode={volunteerMode ? "volunteer" : "resident"}
+            volunteerApproved={hasVolunteerAccess(profile)}
+            onNavigate={(route) => router.push(route as any)}
+            onVolunteerAccess={() => hasVolunteerAccess(profile)
+              ? handleModeSwitch()
+              : router.push(profileVerified ? "/volunteer-application" : "/identity-verification")}
+          />
+
           <ImageBackground
             source={require("../../assets/images/sjdm-aerial.png")}
             resizeMode="cover"
@@ -776,15 +785,6 @@ export default function WebHome() {
           </ImageBackground>
           </>
           )}
-
-          <QuickStartActions
-            mode={volunteerMode ? "volunteer" : "resident"}
-            volunteerApproved={hasVolunteerAccess(profile)}
-            onNavigate={(route) => router.push(route as any)}
-            onVolunteerAccess={() => hasVolunteerAccess(profile)
-              ? handleModeSwitch()
-              : router.push(profileVerified ? "/volunteer-application" : "/identity-verification")}
-          />
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
             <View style={[styles.panel, narrow && styles.mobilePanel]}>
