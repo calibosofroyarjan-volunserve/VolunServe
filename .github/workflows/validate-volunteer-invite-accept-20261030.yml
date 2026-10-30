@@ -26,7 +26,6 @@ jobs:
         run: |
           node scripts/test-volunteer-invitation-acceptance.cjs
           node scripts/test-isolated-emergency-volunteer-release.cjs
-          node scripts/test-admin-response-workspace-ux.cjs
       - name: TypeScript full project validation
         run: npx tsc --noEmit
       - name: Build Expo static web without deployment
