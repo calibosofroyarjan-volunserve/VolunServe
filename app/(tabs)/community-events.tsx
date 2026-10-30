@@ -35,6 +35,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { validSjdmEventPin } from "../../lib/sjdmEventPinBoundary";
 import {
   activeModeForProfile,
   hasResidentAccess,
@@ -1314,6 +1315,10 @@ export default function CommunityEventsScreen() {
     }
     if (form.latitude === null || form.longitude === null) {
       setNotice("Set the exact GPS meeting point by tapping the map or using the venue's GPS.");
+      return;
+    }
+    if (!validSjdmEventPin(form.latitude, form.longitude)) {
+      setNotice("The meeting point must be inside the San Jose del Monte city border. Select and confirm a new pin inside SJDM.");
       return;
     }
 
