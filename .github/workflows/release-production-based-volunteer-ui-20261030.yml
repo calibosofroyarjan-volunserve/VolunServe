@@ -1,0 +1,104 @@
+name: Isolated Live-Based Volunteer Emergency UI (Hosting Only)
+on:
+  push:
+    branches:
+      - release/emergency-volunteer-isolated-20261030
+  pull_request:
+    branches:
+      - baseline/live-hosting-20261030
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guard-verify-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fail closed unless live Hosting remains at audited revision and diff is isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE_SHA="$(node - <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { accept: "application/json", "cache-control": "no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot read live revision; no deploy");
+            const data = await response.json();
+            if (data.app !== "VolunServe" ||
+                data.firebaseProject !== "volunserve-3aa5b" ||
+                !/^[0-9a-f]{40}$/.test(data.revision)) {
+              throw Error("Invalid live revision; no deploy");
+            }
+            console.log(data.revision);
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
+          )"
+          echo "Production release at audit: $LIVE_SHA"
+          if [ "$LIVE_SHA" != "236d743b3c68149dbc34d0a49672bc4ed02d3be3" ]; then
+            echo "::error::Production release changed after audit. STOP. No deployment."
+            exit 1
+          fi
+          git cat-file -e "${LIVE_SHA}^{commit}"
+          git diff --name-only "$LIVE_SHA" HEAD > /tmp/emergency-ui-release-files.txt
+          echo "Files in isolated release:"
+          cat /tmp/emergency-ui-release-files.txt
+          while IFS= read -r file; do
+            case "$file" in
+              'app/(admin)/admin-cases.tsx'|\
+              'app/(admin)/_layout.tsx'|\
+              'app/(admin)/relief-operations.tsx'|\
+              'scripts/test-isolated-emergency-volunteer-release.cjs'|\
+              '.github/workflows/release-production-based-volunteer-ui-20261030.yml')
+                ;;
+              *)
+                echo "::error::Unrelated file modified: $file. No Hosting deploy."
+                exit 1
+                ;;
+            esac
+          done < /tmp/emergency-ui-release-files.txt
+          grep -Fxq 'app/(admin)/admin-cases.tsx' /tmp/emergency-ui-release-files.txt
+          echo "PASS isolated production-based release scope"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify emergency assignments, approvals, safety and retired route
+        run: node scripts/test-isolated-emergency-volunteer-release.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Export Expo static web only
+        run: npx expo export --platform web
+      - name: Verify website assets, routes and exact SHA
+        run: node scripts/verify-hosting-release.cjs
+      - name: Require restricted Hosting-only service account
+        if: github.event_name == 'push'
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::No restricted Hosting service account; do not deploy."
+            exit 1
+          fi
+      - name: Publish ONLY Firebase Hosting
+        if: github.event_name == 'push'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify public Hosting now serves exact commit
+        if: github.event_name == 'push'
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
