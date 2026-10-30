@@ -1661,15 +1661,15 @@ export default function AdminCases() {
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
     }
-    if (busyOnAnotherCase) {
-      return { eligible: false, reason: "Busy on another active emergency", skillMatches };
-    }
+
     // Skill suitability is reviewed by LGU. No automatic dispatch occurs.
     return {
       eligible: true,
-      reason: skillReviewNeeded
-        ? "Skill review needed — LGU must confirm safe support duties"
-        : "Approved Volunteer — support offer can be sent offline",
+      reason: busyOnAnotherCase
+        ? "Invitation allowed — finish your current response before accepting"
+        : skillReviewNeeded
+          ? "Skill review needed — LGU must confirm safe support duties"
+          : "Approved Volunteer — invitation can be sent offline",
       skillMatches,
     };
   };
@@ -2868,18 +2868,6 @@ export default function AdminCases() {
       return;
     }
 
-    const activeCount = activeAssignmentsForCase(incident.id).length;
-
-    // Emergency Volunteer support is optional and limited to one active
-    // Volunteer assignment at a time. LGU response never depends on it.
-    if (activeCount >= 1) {
-      Alert.alert(
-        "Volunteer Support Already Active",
-        "This emergency already has an active Volunteer support assignment. Finish or cancel it before assigning another Volunteer."
-      );
-      return;
-    }
-
     const eligibility = volunteerEligibilityForCase(incident, volunteer);
     if (!eligibility.eligible) {
       Alert.alert("Volunteer Not Eligible", eligibility.reason);
@@ -2940,15 +2928,6 @@ export default function AdminCases() {
         if (!currentCaseBarangay) {
           throw new Error(
             "This emergency case has no barangay. Add or verify the case barangay before requesting local Volunteer support."
-          );
-        }
-
-        if (responderLockSnapshot.exists()) {
-          const lock: any = responderLockSnapshot.data();
-          throw new Error(
-            `${volunteer.fullName} is already active on another emergency response (${String(
-              lock.caseId || "active case",
-            )}). Choose another available qualified responder.`,
           );
         }
 
@@ -3105,8 +3084,8 @@ export default function AdminCases() {
           caseId: incident.id,
           assignmentId: assignmentRef.id,
           severity: currentCase.severity || "low",
-          title: `${severityLabel} emergency assignment`,
-          message: `You were assigned to ${
+          title: `${severityLabel} emergency invitation`,
+          message: `LGU invited you to consider ${
             currentCase.title || incident.title || "an emergency case"
           }. Required skills: ${currentRequiredSkills.join(", ") || "General response"}. Open Emergency Task to accept or decline.`,
           read: false,
@@ -3139,8 +3118,8 @@ export default function AdminCases() {
       });
 
       Alert.alert(
-        "Volunteer Support Offered",
-        `${volunteer.fullName} received an optional Volunteer support offer. An in-app notice was created; Android push requires a registered device and enabled notifications. The Volunteer must accept before responding.`
+        "Invitation Sent",
+        `${volunteer.fullName} can now Accept or Decline this invitation under Emergency Tasks. Android push requires a registered device and enabled notifications.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);
@@ -3521,7 +3500,7 @@ export default function AdminCases() {
           const lguFieldReviewPending =
             officialLguResponseStatus ===
             "completed_pending_admin_review";
-          const volunteerSupportAvailable = activeAssignments.length === 0;
+          const volunteerSupportAvailable = true; // Invitations are not active responses.
           const photoUrl = firstIncidentImage(incident.attachments);
           const note = notes[incident.id] ?? incident.adminNote ?? "";
 
@@ -3829,7 +3808,7 @@ export default function AdminCases() {
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
                     ["response", "Response"],
-                    ["personnel", "Volunteer Assignments"],
+                    ["personnel", "Volunteer Invitations"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -5430,7 +5409,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Volunteer Assignment Center</Text>
+                              <Text style={styles.personnelCleanTitle}>Volunteer Invitations</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5438,7 +5417,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              All approved Volunteers are listed, including offline and out-of-barangay profiles. LGU must review suitability; Volunteers accept before responding.
+                              LGU may invite approved Volunteers even if offline or busy. They can Accept or Decline; an active responder must finish their current case before accepting another.
                             </Text>
                           </View>
                         </View>
@@ -5455,17 +5434,6 @@ export default function AdminCases() {
                           Local Volunteers appear first; approved Volunteers from other barangays can also receive offers. Review travel distance and skills first.
                         </Text>
                       </View>
-
-                      {!volunteerSupportAvailable && (
-                        <View style={styles.personnelSupportNotice}>
-                          <Text style={styles.personnelSupportNoticeTitle}>
-                            One Volunteer support assignment is already active
-                          </Text>
-                          <Text style={styles.personnelSupportNoticeText}>
-                            Finish or cancel it before offering support to another Volunteer. LGU response continues independently.
-                          </Text>
-                        </View>
-                      )}
 
                       <View style={styles.personnelVolunteerToolbar}>
                         <Text style={styles.personnelListHeading}>
@@ -5485,9 +5453,9 @@ export default function AdminCases() {
 
                       {!dispatchReady && (
                         <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
+                          <Text style={styles.personnelCleanEmptyTitle}>Validate this emergency before sending invitations</Text>
                           <Text style={styles.personnelCleanEmptyText}>
-                            Volunteers remain visible even when offline. Validate this emergency before sending an official support offer.
+                            LGU must validate the report in Response first. Offline Volunteers remain listed and can receive invitations after validation.
                           </Text>
                         </View>
                       )}
@@ -5511,9 +5479,8 @@ export default function AdminCases() {
                             );
                             const disabled =
                               !eligibility.eligible ||
-                              !volunteerSupportAvailable ||
                               !caseOpenForSupport ||
-                              busyKey === key;
+                              Boolean(busyKey);
                             const reasonLower = eligibility.reason.toLowerCase();
                             const availabilityText = volunteer.availability.join(" ").toLowerCase();
                             const offline = /offline|unavailable|off.?duty/.test(availabilityText);
@@ -5542,7 +5509,7 @@ export default function AdminCases() {
                                   </View>
                                   <TouchableOpacity
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Offer emergency support to ${volunteer.fullName}`}
+                                    accessibilityLabel={`Invite ${volunteer.fullName} to this emergency`}
                                     disabled={disabled}
                                     style={[
                                       styles.volunteerRosterAction,
@@ -5560,9 +5527,7 @@ export default function AdminCases() {
                                           ? "Unavailable"
                                           : !caseOpenForSupport
                                             ? "Validate case first"
-                                            : !volunteerSupportAvailable
-                                              ? "Support already active"
-                                              : "Offer Support"}
+                                            : "Send Invite"}
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
@@ -5607,7 +5572,7 @@ export default function AdminCases() {
                           <View>
                             <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
-                              Send an offer to an approved Volunteer, even offline. Android push requires a registered device; the Volunteer must accept to respond.
+                              Send an invite to an approved Volunteer even while offline. Accept or Decline will appear under Emergency Tasks.
                             </Text>
                           </View>
                         </View>
