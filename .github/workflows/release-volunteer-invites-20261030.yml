@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   test-and-release:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || github.head_ref == 'fix/real-volunteer-invitation-accept-decline-20261030')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           submodules: false
       - uses: actions/setup-node@v4
@@ -86,9 +87,10 @@ jobs:
       - name: Export static web without publishing
         run: npx expo export --platform web
       - name: Check hosting routes and release marker
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/verify-hosting-release.cjs
       - name: Require restricted Firebase service account
-        if: github.event_name == 'push'
         shell: bash
         run: |
           if [ -z "$FIREBASE_SA" ]; then
@@ -104,12 +106,10 @@ jobs:
           fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-sa.json', process.env.FIREBASE_SA, {mode:0o600});
           NODE
       - name: Publish new invitation Firestore rules ONLY
-        if: github.event_name == 'push'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-sa.json
         run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
       - name: Verify live baseline remains unchanged before Hosting release
-        if: github.event_name == 'push'
         run: |
           node - <<'NODE'
           (async () => {
@@ -124,14 +124,12 @@ jobs:
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
       - name: Publish ONLY Firebase Hosting live channel
-        if: github.event_name == 'push'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ env.FIREBASE_SA }}
           projectId: volunserve-3aa5b
           channelId: live
       - name: Verify exact release SHA on live website
-        if: github.event_name == 'push'
         env:
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/check-live-hosting.cjs
