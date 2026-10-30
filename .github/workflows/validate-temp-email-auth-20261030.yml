@@ -1,0 +1,36 @@
+name: Validate Temporary Email Auth Guards (No Deploy)
+on:
+  push:
+    branches: [fix/isolated-temp-email-auth-20261030]
+  pull_request:
+    paths:
+      - app/_layout.tsx
+      - app/admin-request.tsx
+      - app/login.tsx
+      - app/signup.tsx
+      - app/signup.web.tsx
+      - lib/firebaseAuth.ts
+      - lib/registrationEmailPolicy.ts
+      - lib/disposableEmailDomains.generated.ts
+      - scripts/test-temp-email-auth-guards.cjs
+      - .github/workflows/validate-temp-email-auth-20261030.yml
+permissions:
+  contents: read
+jobs:
+  validate-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Disposable email policy and path regression tests
+        run: node --test scripts/test-temp-email-auth-guards.cjs
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+      - name: Web build without deployment
+        run: npx expo export --platform web
