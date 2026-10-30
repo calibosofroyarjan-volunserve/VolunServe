@@ -92,7 +92,7 @@ export default function VolunteerInvitationInbox() {
             <View style={styles.content}>
               <Text style={styles.caseTitle}>{item.caseTitle || "Emergency invitation"}</Text>
               <Text style={styles.meta}>Case {item.caseId} · {item.status === "invited" ? "Awaiting response" :
-                item.status === "accepted" ? "Accepted invitation" : "Declined invitation"}</Text>
+                item.status === "accepted" ? "Accepted invitation" : "Rejected invitation"}</Text>
             </View>
             {item.status === "invited" ? (
               <View style={styles.actions}>
@@ -107,16 +107,16 @@ export default function VolunteerInvitationInbox() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel={`Decline invitation for ${item.caseTitle}`}
+                  accessibilityLabel={`Reject invitation for ${item.caseTitle}`}
                   disabled={busyId === item.id}
                   style={[styles.action, styles.decline]}
                   onPress={() => respond(item, "declined")}
                 >
-                  <Text style={styles.declineText}>Decline</Text>
+                  <Text style={styles.declineText}>Reject</Text>
                 </TouchableOpacity>
               </View>
             ) : <Text style={item.status === "accepted" ? styles.statusAccepted : styles.statusDeclined}>
-              {item.status === "accepted" ? "Accepted" : "Declined"}
+              {item.status === "accepted" ? "Accepted" : "Rejected"}
             </Text>}
           </View>
         ))}
