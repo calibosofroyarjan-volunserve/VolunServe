@@ -670,6 +670,23 @@ export default function VolunteerTasks() {
                 ""
             ).trim();
 
+          const lockRef = doc(db, "responderLocks", user.uid);
+          const lockSnapshot =
+            ["accepted", "responding", "on_site", "completed"].includes(next)
+              ? await transaction.get(lockRef)
+              : null;
+          if (next === "accepted") {
+            if (assignments.some(item =>
+              item.id !== assignment.id &&
+              ["accepted", "responding", "on_site"].includes(String(item.status))
+            )) {
+              throw new Error("Complete your current emergency response before accepting a new invitation.");
+            }
+            if (lockSnapshot?.exists()) {
+              throw new Error("You already have an active emergency response. Finish it before accepting another invitation.");
+            }
+          }
+
           let reporterUid = "";
           let caseData:
             Record<string, any> | null =
@@ -698,6 +715,15 @@ export default function VolunteerTasks() {
                     ""
                 ).trim();
             }
+          }
+
+          if (next === "accepted" && (
+            !caseData ||
+            !["validated", "assigned", "in_progress"].includes(String(caseData.status)) ||
+            String(caseData.verificationStatus || "validated") !== "validated" ||
+            String(caseData.reporterUid || "") === user.uid
+          )) {
+            throw new Error("This emergency must be validated and cannot be your own report.");
           }
 
           if (next === "completed") {
@@ -767,6 +793,30 @@ export default function VolunteerTasks() {
             assignmentRef,
             patch
           );
+          if (next === "accepted") {
+            transaction.set(lockRef, {
+              responderUid: user.uid,
+              assignmentId: assignment.id,
+              caseId,
+              status: "accepted",
+              updatedAt: serverTimestamp(),
+            });
+          } else if (
+            (next === "responding" || next === "on_site") &&
+            lockSnapshot?.exists() &&
+            lockSnapshot.data()?.assignmentId === assignment.id
+          ) {
+            transaction.update(lockRef, {
+              status: next,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (
+            next === "completed" &&
+            lockSnapshot?.exists() &&
+            lockSnapshot.data()?.assignmentId === assignment.id
+          ) {
+            transaction.delete(lockRef);
+          }
 
           if (
             next === "completed" &&
@@ -949,15 +999,15 @@ export default function VolunteerTasks() {
 
       if (next === "accepted") {
         Alert.alert(
-          "Assignment Accepted",
+          "Invitation Accepted",
           "Select Start Response when you begin travelling or responding."
         );
 
         setFilter("active");
       } else if (next === "declined") {
         Alert.alert(
-          "Assignment Declined",
-          "Admin will see the decline and can offer the case to another qualified volunteer."
+          "Invitation Declined",
+          "LGU Admin will see the decline and may invite another Volunteer."
         );
       } else if (next === "responding") {
         Alert.alert(
@@ -1457,7 +1507,7 @@ export default function VolunteerTasks() {
                                 styles.primaryButtonText
                               }
                             >
-                              Accept
+                              Accept Invite
                             </Text>
                           </>
                         )}
@@ -1488,7 +1538,7 @@ export default function VolunteerTasks() {
                             styles.secondaryButtonText
                           }
                         >
-                          Decline
+                          Reject Invite
                         </Text>
                       </TouchableOpacity>
                     </View>
