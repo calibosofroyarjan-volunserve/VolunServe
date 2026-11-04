@@ -29,6 +29,7 @@ import {
 } from "react-native";
 
 import { auth } from "../lib/firebase";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
   getUserProfile,
@@ -72,6 +73,11 @@ export default function Login() {
   });
 
   const routeSignedInProfile = async (uid: string) => {
+    const emailError = getRegistrationEmailError(auth.currentUser?.email || "");
+    if (emailError || !auth.currentUser?.emailVerified) {
+      await firebaseSignOut(auth);
+      throw new Error(emailError || "Please verify your Google email before continuing.");
+    }
     let profile;
 
     try {
