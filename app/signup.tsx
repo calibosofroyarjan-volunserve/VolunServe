@@ -761,7 +761,15 @@ export default function Signup() {
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
               <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && (formData.email.length > 0 || showStepErrors)} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid ? "Valid email format. Check your inbox for the verification link after registration." : getRegistrationEmailError(formData.email)}</ValidationText>
+              {(formData.email.length > 0 || showStepErrors) ? (
+                <ValidationText ok={validation.emailValid}>{validation.emailValid
+                  ? googleBound ? "Verified Google email. You may also use your VolunServe password." : "Valid format. Verify your email using the link sent after registration."
+                  : getRegistrationEmailError(formData.email)}</ValidationText>
+              ) : (
+                <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
+                  Use a permanent email address you can verify. Temporary emails are blocked.
+                </Text>
+              )}
 
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors)} returnKeyType="next" />
               {!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors) ? <ValidationText ok={false}>Last name must contain at least 2 letters.</ValidationText> : null}
@@ -802,7 +810,7 @@ export default function Signup() {
               <View style={styles.phoneWrap}>
                 <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
                 <TextInput
-                  style={[styles.phoneInput, !validation.phoneValid && formData.phoneLocal.length > 0 && styles.inputInvalid]}
+                  style={[styles.phoneInput, !validation.phoneValid && (formData.phoneLocal.length > 0 || showStepErrors) && styles.inputInvalid]}
                   value={formData.phoneLocal}
                   onChangeText={(v) => updateField("phoneLocal", sanitizePhoneLocal(v.trim()))}
                   keyboardType="phone-pad"
@@ -870,8 +878,8 @@ export default function Signup() {
                 </View>
               )}
               <SectionTitle title="Password Security" subtitle="Create a strong password to secure this account." />
-              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
-              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
+              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} invalid={(formData.password.length > 0 || showStepErrors) && (!validation.passwordChecks.minLength || !validation.passwordChecks.upper || !validation.passwordChecks.lower || !validation.passwordChecks.number || !validation.passwordChecks.special || !validation.passwordChecks.notCommon)} autoCapitalize="none" />
+              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} invalid={(formData.confirmPassword.length > 0 || showStepErrors) && !validation.passwordChecks.matches} autoCapitalize="none" />
               <View style={styles.passwordPanel}>
                 <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
                 <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
