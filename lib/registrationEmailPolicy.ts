@@ -47,7 +47,7 @@ export function getRegistrationEmailError(email: string): string | null {
   const parts = value.split("@");
   const local = parts[0] || "";
   const domain = parts[1] || "";
-  const domainFormat = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/;
+  const domainFormat = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
   if (
     value.length > 254 ||
     parts.length !== 2 ||
