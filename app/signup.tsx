@@ -5,7 +5,7 @@ import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signOut } from "firebase/auth";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,7 +27,7 @@ import {
 } from "react-native";
 import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
-import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -412,6 +412,7 @@ export default function Signup() {
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [step, setStep] = useState<Step>(1);
+  const [showStepErrors, setShowStepErrors] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
   const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
@@ -475,6 +476,11 @@ export default function Signup() {
         const credential = GoogleAuthProvider.credential(idToken);
         const userCred = await signInWithCredential(auth, credential);
         const user = userCred.user;
+        const emailError = getRegistrationEmailError(user.email || "");
+        if (emailError || !user.emailVerified) {
+          await signOut(auth);
+          throw new Error(emailError || "Please verify your Google email before continuing.");
+        }
         const parsed = splitDisplayName(user.displayName || "");
         const googleEmail = (user.email || "").trim().toLowerCase();
 
@@ -498,7 +504,6 @@ export default function Signup() {
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
@@ -506,8 +511,7 @@ export default function Signup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
-      !isKnownDisposableEmail(formData.email);
+    const emailValid = getRegistrationEmailError(formData.email) === null;
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -562,6 +566,7 @@ export default function Signup() {
 
   const goNext = useCallback(() => {
     if (!isStepValid(step)) {
+      setShowStepErrors(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       
       const stepMessages: Record<Step, string> = {
@@ -577,6 +582,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step < 4) {
       setStep((prev) => (prev + 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [googleBound, isStepValid, scrollTop, step]);
@@ -585,6 +591,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step > 1) {
       setStep((prev) => (prev - 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [scrollTop, step]);
@@ -753,11 +760,13 @@ export default function Signup() {
               ) : null}
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : isKnownDisposableEmail(formData.email) ? "Temporary emails are not accepted. Use a permanent email." : "Enter a valid email format."}</ValidationText>
+              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && (formData.email.length > 0 || showStepErrors)} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
+              <ValidationText ok={validation.emailValid}>{validation.emailValid ? "Valid email format. Check your inbox for the verification link after registration." : getRegistrationEmailError(formData.email)}</ValidationText>
 
-              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
-              <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
+              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors)} returnKeyType="next" />
+              {!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors) ? <ValidationText ok={false}>Last name must contain at least 2 letters.</ValidationText> : null}
+              <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors)} returnKeyType="next" />
+              {!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors) ? <ValidationText ok={false}>First name must contain at least 2 letters.</ValidationText> : null}
               <Field icon="👤" label="Middle Name *" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} editable={!formData.noMiddleName} invalid={!formData.noMiddleName && formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
               <CheckRow label="No Middle Name" checked={formData.noMiddleName} onPress={() => {
                 const next = !formData.noMiddleName;
