@@ -23,8 +23,8 @@ import {
 import {doc, getDoc} from "firebase/firestore";
 import React, {useEffect, useMemo, useState} from "react";
 import {
-  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text,
-  TextInput, View, useWindowDimensions,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text,
+  TextInput, TouchableOpacity, View, useWindowDimensions,
 } from "react-native";
 import {SJDM_BARANGAYS} from "../../constants/sjdmBarangays";
 import {OCCUPATION_OPTIONS, SPECIALIZATIONS} from "../../constants/occupationOptions";
@@ -38,6 +38,23 @@ import {REGISTRATION_EMAIL_CONFLICT_MESSAGE} from "../../lib/authUserMessages";
 
 type Step = 1 | 2 | 3 | 4;
 const STEP_LABELS = ["Email", "Verify", "Personal", "Address & Profile"] as const;
+const PHOTO_SLIDES = [
+  {
+    image: require("../../assets/images/slide1.jpg"),
+    title: "Join. Help. Rebuild.",
+    body: "Be part of a stronger, safer, and more prepared city through volunteerism and community action.",
+  },
+  {
+    image: require("../../assets/images/slide2.jpg"),
+    title: "Respond Together.",
+    body: "Connect residents, volunteers, and local responders when communities need help most.",
+  },
+  {
+    image: require("../../assets/images/slide3.jpg"),
+    title: "Stronger Communities.",
+    body: "Support verified local programs and help San Jose del Monte recover and rebuild.",
+  },
+];
 const DARK = "#064e3b";
 const GREEN = "#047857";
 const RED = "#b91c1c";
@@ -134,6 +151,7 @@ export default function EmailFirstSignup() {
   const router = useRouter();
   const {width} = useWindowDimensions();
   const [step, setStep] = useState<Step>(1);
+  const [slideIndex, setSlideIndex] = useState(0);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -409,55 +427,164 @@ export default function EmailFirstSignup() {
       });
       setCompletedProfile(true);
       router.replace("/(tabs)");
-    } catch (e) { setError(safeAuthError(e)); }
-    finally { setBusy(false); }
-  }
+    } catch  return (
+    <KeyboardAvoidingView style={styles.legacyScreen} behavior={undefined}>
+      <View style={styles.legacyDesktopShell}>
+        {width >= 900 ? (
+          <View style={styles.legacyPhotoPanel}>
+            <Image
+              source={PHOTO_SLIDES[slideIndex].image}
+              style={styles.legacyPhotoImage}
+              resizeMode="cover"
+            />
+            <View style={styles.legacyPhotoOverlay} />
 
-  const checkButton = (label: string, onPress: () => void, alt = false) => (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={busy}
-      style={[styles.button, alt && styles.altButton, busy && styles.dim]}
-    >
-      {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
-        <Text style={[styles.buttonText, alt && styles.altText]}>{label}</Text>}
-    </Pressable>
-  );
+            <View style={styles.legacyPhotoTop}>
+              <View style={styles.legacyBrandRow}>
+                <Image
+                  source={require("../../assets/images/logo.png")}
+                  style={styles.legacyLogo}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text style={styles.legacyBrandTitle}>VolunServe</Text>
+                  <Text style={styles.legacyBrandSub}>City Disaster Response Platform</Text>
+                </View>
+              </View>
 
-  if (checking) return (
-    <View style={[styles.screen, styles.center]}>
-      <ActivityIndicator color={GREEN} size="large"/>
-      <Text style={styles.subtitle}>Checking your registration...</Text>
-    </View>
-  );
+              <View style={styles.legacySecureBadge}>
+                <Text style={styles.legacySecureBadgeText}>🔒 Secure community registration</Text>
+              </View>
+            </View>
 
-  return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[styles.container, width >= 950 && styles.desktop]}
-      keyboardShouldPersistTaps="handled"
-    >
-      {width >= 950 && (
-        <View style={styles.side}>
-          <Text style={styles.brand}>VolunServe</Text>
-          <Text style={styles.brandSub}>San Jose del Monte, Bulacan</Text>
-          <Text style={styles.sideTitle}>Join. Help. Rebuild.</Text>
-          <Text style={styles.sideCopy}>
-            Secure account registration for a safer community.
-            Verify your email first, then complete the details for your Basic Resident Account.
-          </Text>
-          <View style={styles.sideNote}>
-            <Text style={styles.sideNoteText}>
-              Your personal details are only submitted after confirming your email.
-            </Text>
-          </View>
-        </View>
-      )}
-      <View style={styles.card}>
-        {width < 950 && <Text style={styles.mobileBrand}>VolunServe</Text>}
-        <Text style={styles.title}>Create Basic Resident Account</Text>
-        <Text style={styles.subtitle}>Easy, secure registration — four short steps.</Text>
+            <View style={styles.legacyPhotoControls}>
+              <TouchableOpacity
+                style={styles.legacyPhotoArrow}
+                onPress={() =>
+                  setSlideIndex((slideIndex + PHOTO_SLIDES.length - 1) % PHOTO_SLIDES.length)
+                }
+              >
+                <Text style={styles.legacyPhotoArrowText}>‹</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legacyPhotoArrow}
+                onPress={() => setSlideIndex((slideIndex + 1) % PHOTO_SLIDES.length)}
+              >
+                <Text style={styles.legacyPhotoArrowText}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.legacyPhotoCopy}>
+              <View style={styles.legacyPhotoAccentLine} />
+              <Text style={styles.legacyPhotoTitle}>{PHOTO_SLIDES[slideIndex].title}</Text>
+              <Text style={styles.legacyPhotoBody}>{PHOTO_SLIDES[slideIndex].body}</Text>
+
+              <View style={styles.legacyPhotoFooter}>
+                <View style={styles.legacyDots}>
+                  {PHOTO_SLIDES.map((_, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setSlideIndex(index)}
+                      style={[styles.legacyDot, index === slideIndex ? styles.legacyDotOn : styles.legacyDotOff]}
+                    />
+                  ))}
+                </View>
+
+                <Text style={styles.legacyPhotoLocation}>
+                  📍  Stronger Communities{`\n`}     Brighter Tomorrows
+                </Text>
+              </View>
+            </View>
+          </View
+        ) : null}
+        <ScrollView
+          style={styles.legacyFormScroll}
+          contentContainerStyle={[
+            styles.legacyContent,
+            width < 900 && styles.legacyContentMobile,
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {width < 900 && (
+            <View style={styles.legacyMobileBrand}>
+              <Image
+                source={require("../../assets/images/logo.png")}
+                style={styles.legacyMobileLogo}
+                resizeMode="contain"
+              />
+              <Text style={styles.legacyMobileBrandText}>VolunServe</Text>
+            </View>
+          )}
+          <View style={styles.legacyMainCard}>
+            <View style={styles.legacySignupHeading}>
+              <Text style={styles.legacySignupTitle}>
+                {step === 1 ? "Email & Password" :
+              step === 2 ? "Verify Your Email" :
+              step === 3 ? "Personal Details" : "Address & Profile"}
+              </Text>
+              <Text style={styles.legacySignupSubtitle}>
+                {step === 1
+                ? "Verify your email first before completing your Basic Resident profile."
+                : step === 2
+                  ? "Open your verification link to continue registration."
+                  : step === 3
+                    ? "Tell us about yourself."
+                    : "Confirm your San Jose del Monte address and profile."}
+              </Text>
+            </View>
+            <View style={styles.legacySelectedRoleBanner}>
+              <View style={styles.legacySelectedRoleCopy}>
+                <Text style={styles.legacySelectedRoleLabel}>ACCOUNT LEVEL</Text>
+                <Text style={styles.legacySelectedRoleName}>Basic Account</Text>
+              </View>
+              <View style={styles.legacyRoleChoiceBadge}>
+                <Text style={styles.legacyRoleChoiceBadgeText}>No approval required</Text>
+              </View>
+            </View>
+            <View style={styles.legacyStepperCard}>
+              <View style={styles.legacyStepRow}>
+                {STEP_LABELS.map((label, index) => {
+                  const n = index + 1;
+                  return (
+                    <View key={label} style={styles.legacyStepItem}>
+                      <View style={styles.legacyStepNode}>
+                        <View style={[
+                          styles.legacyStepCircle,
+                          step >= n && styles.legacyStepCircleActive,
+                        ]}>
+                          <Text style={[
+                            styles.legacyStepCircleText,
+                            step >= n && styles.legacyStepCircleTextActive,
+                          ]}>{step > n ? "✓" : n}</Text>
+                        </View>
+                        <Text style={[
+                          styles.legacyStepLabel,
+                          step === n && styles.legacyStepLabelActive,
+                        ]}>{label}</Text>
+                      </View>
+                      {n < 4 && (
+                        <View style={[
+                          styles.legacyStepLine,
+                          step > n && styles.legacyStepLineActive,
+                        ]}/>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+            {step === 1 && !completedProfile && (
+              <View style={styles.legacyInfoBox}>
+                <Text style={styles.legacyInfoTitle}>Basic Account registration</Text>
+                <Text style={styles.legacyInfoText}>
+                  Enter an accessible email and a VolunServe password.
+                  We'll send a verification link before collecting your personal details.
+                </Text>
+              </View>
+            )}
+
+es.subtitle}>Easy, secure registration — four short steps.</Text>
         <View style={styles.steps}>
           {STEP_LABELS.map((label, index) => (
             <View key={label} style={styles.stepItem}>
@@ -730,13 +857,99 @@ export default function EmailFirstSignup() {
             )}
           </>
         )}
-        <Text style={styles.footer}>VolunServe • Secure community registration • SJDM, Bulacan</Text>
+            <Text style={styles.footer}>
+              VolunServe • Secure community registration • SJDM, Bulacan
+            </Text>
+          </View>
+        </ScrollView>
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#eef4f7" },
+  legacyDesktopShell: { flex: 1, flexDirection: "row", minHeight: 0 },
+  legacyPhotoPanel: { position: "relative", width: "46%", minWidth: 520, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#115e59" },
+  legacyPhotoImage: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  legacyPhotoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2, 55, 61, 0.52)" },
+  legacyPhotoTop: { paddingHorizontal: 48, paddingTop: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(4,74,78,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
+  legacySecureBadgeText: { color: "#fff", fontSize: 12, lineHeight: 16, fontWeight: "800" },
+  legacyPhotoControls: { position: "absolute", top: "48%", left: 28, right: 28, flexDirection: "row", justifyContent: "space-between" },
+  legacyPhotoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(3,35,42,0.5)", alignItems: "center", justifyContent: "center" },
+  legacyPhotoArrowText: { color: "#fff", fontSize: 38, lineHeight: 40, fontWeight: "300" },
+  legacyPhotoCopy: { paddingHorizontal: 48, paddingBottom: 46 },
+  legacyPhotoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#2dd4bf", marginBottom: 30 },
+  legacyPhotoTitle: { color: "#fff", fontSize: 50, lineHeight: 57, fontWeight: "900", marginBottom: 17 },
+  legacyPhotoBody: { color: "#f0fdfa", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
+  legacyPhotoFooter: { marginTop: 38, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  legacyPhotoLocation: { color: "#d7f7f3", fontSize: 12, fontWeight: "700" },
+  legacyBrandRow: { flexDirection: "row", alignItems: "center" },
+  legacyLogo: { width: 62, height: 62, marginRight: 12, backgroundColor: "#fff", borderRadius: 18 },
+  legacyBrandTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
+  legacyBrandSub: { color: "#e6fffb", fontSize: 13, fontWeight: "500", marginTop: 2 },
+  legacyDots: { flexDirection: "row", alignItems: "center", gap: 8 },
+  legacyDot: { width: 9, height: 9, borderRadius: 99 },
+  legacyDotOn: { width: 28, backgroundColor: "#2dd4bf" },
+  legacyDotOff: { backgroundColor: "rgba(255,255,255,0.6)" },
+  legacyFormScroll: { flex: 1, backgroundColor: "#eef7fb" },
+  legacyContent: { width: "100%", maxWidth: 610, alignSelf: "center", justifyContent: "flex-start", minHeight: "100%", paddingHorizontal: 0, paddingTop: 54, paddingBottom: 54 },
+  legacyContentMobile: { maxWidth: 610, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 30 },
+  legacyMobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  legacyMobileLogo: { width: 38, height: 38, borderRadius: 10, marginRight: 9 },
+  legacyMobileBrandText: { color: "#115e59", fontSize: 20, fontWeight: "900" },
+  legacyMainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
+  legacySignupHeading: { alignItems: "center", marginBottom: 22 },
+  legacySignupTitle: { color: "#0f172a", fontSize: 31, lineHeight: 37, fontWeight: "900", textAlign: "center" },
+  legacySignupSubtitle: { color: "#64748b", fontSize: 15, marginTop: 4, fontWeight: "500", textAlign: "center", lineHeight: 21 },
+  legacySelectedRoleBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#cde5e1",
+    backgroundColor: "#f0fdfa",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 18,
+  },
+  legacySelectedRoleCopy: { minWidth: 0 },
+  legacySelectedRoleLabel: { color: "#64748b", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  legacySelectedRoleName: { color: "#115e59", fontSize: 14, fontWeight: "900", marginTop: 2 },
+  legacyRoleChoiceBadge: {
+    marginTop: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#e0f2fe",
+  },
+  legacyRoleChoiceBadgeText: { color: "#334155", fontSize: 10.5, fontWeight: "900" },
+  legacyStepperCard: {
+    backgroundColor: "transparent",
+    paddingHorizontal: 4,
+    paddingVertical: 0,
+    marginBottom: 28,
+  },
+  legacyStepRow: { flexDirection: "row", alignItems: "flex-start" },
+  legacyStepItem: { flex: 1, flexDirection: "row", alignItems: "flex-start" },
+  legacyStepNode: { width: 70, alignItems: "center" },
+  legacyStepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
+  legacyStepCircleActive: { backgroundColor: "#0f766e" },
+  legacyStepCircleText: { color: "#64748b", fontSize: 12, fontWeight: "900" },
+  legacyStepCircleTextActive: { color: "#fff" },
+  legacyStepLabel: { color: "#334155", fontSize: 11.5, fontWeight: "700", marginTop: 7 },
+  legacyStepLabelActive: { color: "#115e59", fontWeight: "900" },
+  legacyStepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
+  legacyStepLineActive: { backgroundColor: "#0f766e" },
+  legacyInfoBox: {
+    backgroundColor: "#eff6ff", borderRadius: 10, borderWidth: 1,
+    borderColor: "#bfdbfe", padding: 12, marginBottom: 18,
+  },
+  legacyInfoTitle: {color: "#0f172a", fontSize: 13, fontWeight: "800", marginBottom: 5},
+  legacyInfoText: {color: "#475569", fontSize: 12, lineHeight: 18},
+
   screen: {flex: 1, backgroundColor: "#ecfdf5"},
   center: {justifyContent: "center", alignItems: "center", gap: 14},
   container: {flexGrow: 1, padding: 18, alignItems: "center", justifyContent: "center"},
@@ -763,8 +976,8 @@ const styles = StyleSheet.create({
   sectionTitle: {fontSize: 20, fontWeight: "800", color: DARK, marginBottom: 8},
   helper: {fontSize: 13, color: "#475569", lineHeight: 20, marginBottom: 16},
   field: {marginBottom: 16},
-  label: {fontSize: 13, fontWeight: "800", color: "#0f172a", marginBottom: 7},
-  input: {height: 48, borderRadius: 10, borderWidth: 1, borderColor: "#cbd5e1", paddingHorizontal: 14, color: "#0f172a", backgroundColor: "#fff", fontSize: 15},
+  label: {fontSize: 12.5, fontWeight: "800", color: "#0f172a", marginBottom: 7},
+  input: {height: 46, borderRadius: 8, borderWidth: 1, borderColor: "#cfdbe3", paddingHorizontal: 13, color: "#0f172a", backgroundColor: "#fff", fontSize: 14},
   inputError: {borderColor: RED, borderWidth: 1.5},
   disabled: {backgroundColor: "#f1f5f9"},
   readonly: {padding: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, backgroundColor: "#f8fafc", marginBottom: 15, color: "#334155"},
