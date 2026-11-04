@@ -36,6 +36,7 @@ import {
   homeRouteForProfile,
   isApprovedProfile,
   loginUser,
+  resendResidentVerificationEmail,
 } from "../lib/firebaseAuth";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -52,6 +53,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [attemptedLogin, setAttemptedLogin] = useState(false);
+  const emailError = getRegistrationEmailError(email);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
   const showSuccess = (message: string) => setFeedback({ type: "success", message });
@@ -125,8 +128,13 @@ export default function Login() {
   const handleLogin = async () => {
     const cleanEmail = email.trim();
 
-    if (!cleanEmail || !password) {
-      showError("Please enter your email address and password.");
+    setAttemptedLogin(true);
+    if (emailError) {
+      showError(emailError);
+      return;
+    }
+    if (!password) {
+      showError("Enter your VolunServe password (not your Gmail password).");
       return;
     }
 
@@ -171,8 +179,9 @@ export default function Login() {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanEmail) {
-      showError("Enter your email address first, then select Forgot password.");
+    if (emailError) {
+      setAttemptedLogin(true);
+      showError(emailError);
       return;
     }
 
@@ -249,13 +258,32 @@ export default function Login() {
     }
   };
 
+  const handleResendVerification = async () => {
+    if (loading || googleLoading) return;
+    clearFeedback();
+    setAttemptedLogin(true);
+    if (emailError) return showError(emailError);
+    if (!password) return showError("Enter your VolunServe password to resend the verification email.");
+    try {
+      setLoading(true);
+      const outcome = await resendResidentVerificationEmail(email, password);
+      showSuccess(outcome === "verified"
+        ? "Your email is verified. Sign in with your VolunServe password."
+        : "Verification link sent. Check Inbox and Spam, then open the link before signing in.");
+    } catch (error: any) {
+      showError(error?.message || "Unable to resend verification. Check your credentials.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Shared premium shell supplies the real two-route tab switcher.
   // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PremiumAuthShell active="resident">
         <Text style={styles.label}>Email Address</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused, (attemptedLogin || email.length > 0) && emailError && styles.inputInvalid]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer email address"
@@ -264,8 +292,9 @@ export default function Login() {
             textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
             returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
         </View>
+        {(attemptedLogin || email.length > 0) && emailError ? <Text style={styles.errorHint}>{emailError}</Text> : null}
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused, attemptedLogin && !password && styles.inputInvalid]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
           <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer password"
@@ -281,6 +310,7 @@ export default function Login() {
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
+        {attemptedLogin && !password ? <Text style={styles.errorHint}>VolunServe password required. Never enter your Gmail password.</Text> : null}
         <View style={styles.options}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: rememberMe }}
@@ -294,6 +324,10 @@ export default function Login() {
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity accessibilityRole="button" onPress={() => void handleResendVerification()}
+          disabled={loading || googleLoading} style={{ alignSelf: "flex-start", marginTop: 4, marginBottom: 5, minHeight: 30 }}>
+          <Text style={styles.forgot}>{loading ? "Sending verification..." : "Resend verification email"}</Text>
+        </TouchableOpacity>
         {!!feedback.message && (
           <AuthFeedback
             message={feedback.message}
@@ -371,6 +405,8 @@ const styles = StyleSheet.create({
     borderRadius:13,borderWidth:1,marginBottom:2},
   input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
+  inputInvalid: {borderColor:"#DC2626",borderWidth:2,backgroundColor:"#FFF7F7"},
+  errorHint: {color:"#B42318",fontSize:12,fontWeight:"700",marginBottom:6},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
