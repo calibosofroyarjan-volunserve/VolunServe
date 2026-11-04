@@ -9,12 +9,12 @@ export function isRegistrationEmailConflict(error: unknown): boolean {
   const code = String(value?.code || "");
   const message = String(value?.message || "");
   return code === "auth/email-already-in-use" ||
-    /^(Email already registered\.|This email address is already registered\.|This account already has a VolunServe profile\.)$/i.test(message) ||
+    /^(Email already registered\.|This email address is already registered\.|This account already has a VolunServe profile\b)/i.test(message) ||
     /^(An account may already exist for this address\.)/i.test(message);
 }
 
 export const REGISTRATION_EMAIL_CONFLICT_MESSAGE =
-  "This email may already have a VolunServe account. Sign in instead, or use Forgot Password if you cannot access it.";
+  "This email address is already registered with VolunServe. Please sign in or use Forgot Password to regain access.";
 
 /**
  * User-facing authentication copy. Never render raw SDK/provider error text.
