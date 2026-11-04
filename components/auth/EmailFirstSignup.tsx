@@ -8,6 +8,7 @@
  */
 import {Picker} from "@react-native-picker/picker";
 import {Feather} from "@expo/vector-icons";
+import GoogleBrandMark from "./GoogleBrandMark";
 import {useRouter} from "expo-router";
 import {
   createUserWithEmailAndPassword,
@@ -277,7 +278,9 @@ export default function EmailFirstSignup() {
     setError("");
     setMessage("");
     if (emailErr) return;
-    if (passwordErr) return;
+    // Existing accounts may have older passwords; only new credentials
+    // must pass the current complexity policy.
+    if (resumeMode ? !password.trim() : !!passwordErr) return;
     if (!resumeMode && password !== confirmPassword) return;
     if (!resumeMode && !consent) return;
     if (busy) return;
@@ -475,7 +478,12 @@ export default function EmailFirstSignup() {
       style={[styles.button, alt && styles.altButton, busy && styles.dim]}
     >
       {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
-        <Text style={[styles.buttonText, alt && styles.altText]}>{label}</Text>}
+        label === "Continue with Google" ? (
+          <View style={styles.googleButtonContent}>
+            <GoogleBrandMark size={21} />
+            <Text style={[styles.buttonText, alt && styles.altText]}>{label}</Text>
+          </View>
+        ) : <Text style={[styles.buttonText, alt && styles.altText]}>{label}</Text>}
     </Pressable>
   );
 
@@ -637,8 +645,9 @@ export default function EmailFirstSignup() {
               <View style={styles.legacyInfoBox}>
                 <Text style={styles.legacyInfoTitle}>Basic Account registration</Text>
                 <Text style={styles.legacyInfoText}>
-                  Enter an accessible email and a VolunServe password.
-                  We'll send a verification link before collecting your personal details.
+                  {resumeMode
+                    ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
+                    : "Enter an accessible email and a VolunServe password. We'll send a verification link before collecting your personal details."}
                 </Text>
               </View>
             )}
@@ -662,7 +671,9 @@ export default function EmailFirstSignup() {
               <View>
                 <Text style={styles.sectionTitle}>Step 1 — Email & Password</Text>
                 <Text style={styles.helper}>
-                  Use an email you can open now. Verification is required before entering personal details.
+                  {resumeMode
+                    ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
+                    : "Use an email you can open now. Verification is required before entering personal details."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
@@ -674,8 +685,10 @@ export default function EmailFirstSignup() {
                 <Field
                   label={resumeMode ? "Your VolunServe Password *" : "Create VolunServe Password *"}
                   value={password} onChange={setPassword} secret
-                  placeholder="At least 8 characters"
-                  error={(showErrors || password.length > 0) && !resumeMode ? passwordErr : null}
+                  placeholder={resumeMode ? "Enter your existing VolunServe password" : "At least 8 characters"}
+                  error={resumeMode
+                    ? showErrors && !password.trim() ? "Enter the VolunServe password you created earlier." : null
+                    : (showErrors || password.length > 0) ? passwordErr : null}
                 />
                 {!resumeMode && (
                   <>
@@ -1040,6 +1053,7 @@ const styles = StyleSheet.create({
   altButton: {backgroundColor: "#fff", borderColor: GREEN, borderWidth: 1.5},
   buttonText: {color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center"},
   altText: {color: GREEN},
+  googleButtonContent: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10},
   dim: {opacity: 0.6},
   inlineButton: {paddingVertical: 11, alignItems: "center"},
   link: {fontSize: 13, color: GREEN, fontWeight: "800"},
