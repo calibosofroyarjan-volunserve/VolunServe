@@ -25,7 +25,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { auth } from "../lib/firebase";
+import { auth, usingFirebaseStaging } from "../lib/firebase";
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { signUpUser } from "../lib/firebaseAuth";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import {
@@ -406,6 +407,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 }
 
 export default function Signup() {
+  // Roll out email-first verification to the isolated Spark staging build.
+  // Production retains the existing signup until verified in staging.
+  return usingFirebaseStaging ? <EmailFirstSignup /> : <LegacySignup />;
+}
+
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
