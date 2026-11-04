@@ -139,7 +139,7 @@ function Field({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>
-        {label.replace(/\\s*\\*$/, "")}
+        {(label.endsWith("*") ? label.slice(0, -1).trimEnd() : label)}
         {label.endsWith("*") && <Text style={{color: "#C62828"}}> *</Text>}
       </Text>
       <View style={[
