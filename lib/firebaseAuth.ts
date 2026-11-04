@@ -121,9 +121,16 @@ async function attachVolunServePassword(user: User, password: string): Promise<U
   if (payload.localId !== user.uid) {
     throw new Error("Password linking returned a different account. Do not proceed; contact support.");
   }
-  await reload(user);
-  await getIdToken(user, true);
-  return auth.currentUser || user;
+  // Complete a real Email+Password sign-in as a post-link validation.
+  // This also refreshes Firebase SDK credentials after the REST operation.
+  const confirmed = await signInWithEmailAndPassword(auth, email, password);
+  if (confirmed.user.uid !== user.uid) {
+    await signOut(auth);
+    throw new Error("Account mismatch after password linking. Contact support.");
+  }
+  await reload(confirmed.user);
+  await getIdToken(confirmed.user, true);
+  return confirmed.user;
 }
 
 const verifyRegistrationEmailDomain = httpsCallable(
