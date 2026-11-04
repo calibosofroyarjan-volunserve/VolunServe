@@ -1422,6 +1422,22 @@ export default function Profile() {
               }
             />
 
+            {/* Existing Google-only accounts can securely add an email/password
+                credential to their same Firebase UID without signing up again. */}
+            {user?.providerData.some((provider) => provider.providerId === "google.com") ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Manage VolunServe email and password sign-in"
+                onPress={() => router.push("/account-security" as any)}
+                style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingVertical: 10, marginTop: 4 }}
+              >
+                <Ionicons name="key-outline" size={17} color="#087A5D" />
+                <Text style={{ color: "#087A5D", fontWeight: "700", fontSize: 13, marginLeft: 8 }}>
+                  Manage Email &amp; Password
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             <InfoRow
               label="Phone Number"
               value={
