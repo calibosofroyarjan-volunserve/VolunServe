@@ -28,6 +28,7 @@ import {
 import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
+import { getLoginErrorMessage } from "../lib/authUserMessages";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -184,13 +185,7 @@ function formatDOB(d: Date) {
 }
 
 function getFriendlyAuthError(error: any) {
-  const code = error?.code || "";
-  if (code === "auth/email-already-in-use") return "This email address is already registered.";
-  if (code === "auth/invalid-email") return "The email address format is invalid.";
-  if (code === "auth/weak-password") return "Your password is too weak.";
-  if (code === "auth/network-request-failed") return "Network error. Please check your internet connection and try again.";
-  if (code === "auth/account-exists-with-different-credential") return "An account already exists with this email using a different sign-in method.";
-  return error?.message || "Something went wrong. Please try again.";
+  return getLoginErrorMessage(error);
 }
 
 function splitDisplayName(displayName: string) {
