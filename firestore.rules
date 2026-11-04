@@ -692,7 +692,10 @@ service cloud.firestore {
         )
         );
       }
+      // A new document has no existing resource.data to diff. Do not
+      // evaluate update-only predicates while a create is being denied.
       allow update: if signedIn()
+        && resource != null
         && (
           (request.auth.uid == uid && userSelfUpdate())
           || (request.auth.uid != uid
