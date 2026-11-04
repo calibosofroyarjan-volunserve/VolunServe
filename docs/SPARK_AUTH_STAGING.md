@@ -12,6 +12,53 @@
 4. Staging project → Authentication → Settings → Authorized domains: ensure the actual staging Hosting hostname is authorized for Google popup/redirect. Do not add arbitrary third-party domains.
 5. Keep authentication templates and approved sender settings for staging emails separate; don't share test-only verification links or actual passwords.
 
+## Early email verification rollout (Nov 4)
+
+The isolated **staging** build now enables the four-step `EmailFirstSignup`
+component in `app/signup.web.tsx` and `app/signup.tsx` when
+`EXPO_PUBLIC_FIREBASE_TARGET=staging`. Production retains the old signup UI
+until E2E checks pass.
+
+1. **Step 1 Email & Password:** validate the address and a VolunServe password,
+   accept the Terms/Privacy Notice, then create an **Auth-only** Firebase UID
+   and immediately call `sendEmailVerification`. Do **not** create a Firestore
+   profile yet.
+2. **Step 2 Verify Email:** user opens the Firebase link in Inbox or Spam and
+   returns to press Check Verification. `reload(user)` and
+   `getIdToken(user,true)` are required to refresh the `email_verified` claim.
+   Resend button is available; respect Firebase rate limiting.
+3. **Step 3 Personal Details:** only accessible with verified email; name,
+   18+ date of birth, and PH mobile number.
+4. **Step 4 Address & Profile:** SJDM barangay, occupation, required fields,
+   and confirmation. Call `signUpUser({authProvider: "verified_email", ...})`
+   to save `users/{uid}` under **the same** verified Firebase Auth UID.
+   Never create a second Auth account at this step.
+
+If the browser closes after Step 1, Firebase Auth persists its session.
+If on another device, use **Resume Registration** with the same VolunServe
+email/password. Auth-only users must never reach a protected Dashboard.
+
+The staging `firestore.auth-staging.rules` now requires
+`request.auth.token.email_verified == true` before profile creation.
+This applies to the staging test environment only; do **not** deploy these
+auth-only rules to the real VolunServe production project.
+
+### Required local checks before deploying again
+
+```powershell
+node scripts/testSignupValidation.cjs
+npx tsc --noEmit --pretty false
+npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/testEmailFirstStagingRules.cjs"
+```
+
+Test a fresh staging Gmail with incorrect password / already-registered email,
+unverified check status, resend, refresh-and-resume, verify link, profile
+completion, attempted Dashboard access before completion, and safe post-verify
+login. Test Google sign-in independently; it may be linked to the same UID.
+
+**Do not interpret a delivered verification email as a guaranteed permanent
+mailbox.** Spark cannot guarantee coverage of all disposable providers.
+
 ## Build safely (Windows PowerShell)
 
 Run inside the **separate auth testing folder**; do not overwrite local changes in the primary VolunServe folder.
@@ -52,7 +99,7 @@ Do NOT deploy these draft rules to production until sign-in, legacy resident and
 
 ## Test in STAGING
 
-- Registered email/password user → verify real email → log in → Basic Resident dashboard.
+- Start with email and password → verify real email BEFORE entering personal information → finish Basic Resident profile → enter dashboard.
 - The same email submitted for a second account → clear duplicate-account handling.
 - Known disposable domains → red UI validation, denied Firestore Resident profile creation.
 - Unverified account → blocked from protected role actions.
