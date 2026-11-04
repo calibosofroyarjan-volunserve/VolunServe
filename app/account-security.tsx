@@ -145,8 +145,8 @@ export default function AccountSecurity() {
 
         <Text style={styles.title}>Account Security</Text>
         <Text style={styles.subtitle}>
-          Set one VolunServe password for manual Email + Password sign-in. Your
-          Google sign-in will continue to work on the same Firebase account.
+          Create a NEW VolunServe password (not your Gmail password) for manual sign-in. Your
+          Google sign-in will continue to work with the same Firebase account.
         </Text>
 
         <View style={styles.accountBox}>
