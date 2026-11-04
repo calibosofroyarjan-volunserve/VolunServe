@@ -36,7 +36,12 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
-import {REGISTRATION_EMAIL_CONFLICT_MESSAGE} from "../../lib/authUserMessages";
+import {
+  REGISTRATION_EMAIL_CONFLICT_MESSAGE,
+  EMAIL_VERIFICATION_INSTRUCTIONS,
+  EMAIL_VERIFICATION_PENDING_MESSAGE,
+  EMAIL_VERIFICATION_REQUESTED_MESSAGE,
+} from "../../lib/authUserMessages";
 
 type Step = 1 | 2 | 3 | 4;
 const STEP_LABELS = ["Email", "Verify", "Personal", "Address & Profile"] as const;
@@ -324,9 +329,9 @@ export default function EmailFirstSignup() {
         setConfirmPassword("");
         try {
           await sendEmailVerification(credential.user);
-          setMessage("Verification link sent. Check your inbox and Spam folder.");
+          setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
         } catch {
-          setError("Account created, but the verification email could not be sent. Choose Resend Email below.");
+          setError("Account created, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
         }
       }
     } catch (e) {
@@ -377,7 +382,7 @@ export default function EmailFirstSignup() {
       if (!user) throw new Error("Your session expired. Choose Resume Registration.");
       await reload(user);
       if (!user.emailVerified) {
-        setError("Email is not verified yet. Open the link in your inbox, then press Check Verification again.");
+        setError(EMAIL_VERIFICATION_PENDING_MESSAGE);
         return;
       }
       await getIdToken(user, true);
@@ -402,7 +407,7 @@ export default function EmailFirstSignup() {
         return;
       }
       await sendEmailVerification(user);
-      setMessage("Another verification email was sent. Check Inbox and Spam.");
+      setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
   }
@@ -752,8 +757,8 @@ export default function EmailFirstSignup() {
                   <Text style={styles.highlightText}>{signedInUser?.email || email}</Text>
                 </View>
                 <Text style={styles.helper}>
-                  Check your Inbox and Spam folder. When you finish verifying,
-                  return to this page and choose Check Verification.
+                  {EMAIL_VERIFICATION_INSTRUCTIONS} Check your Inbox and Spam folder.
+                  After clicking the verification link, return here and choose Check Verification.
                 </Text>
                 {checkButton("I've Verified — Check Status", () => {void checkVerified();})}
                 {checkButton("Resend Verification Email", () => {void resend();}, true)}
@@ -761,8 +766,9 @@ export default function EmailFirstSignup() {
                   <Text style={styles.link}>Use a different email / Start over</Text>
                 </Pressable>
                 <Text style={styles.tiny}>
-                  The account may exist while verification is pending, but it cannot
-                  access the Resident Dashboard or create a Basic Resident profile.
+                  If the address was mistyped or the inbox cannot receive mail,
+                  select "Use a different email / Start over." Until verified,
+                  this account cannot access the Resident Dashboard or create a Basic Resident profile.
                 </Text>
               </View>
             )}
