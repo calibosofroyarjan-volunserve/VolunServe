@@ -530,11 +530,18 @@ function friendlyAuthError(err: any) {
 }
 
 function friendlyFirestoreError(err: any) {
-  const code = err?.code;
-  if (code === "permission-denied") {
-    return "Firestore permission denied. Check Firestore Rules.";
+  // Users should never see database/provider internals in registration errors.
+  if (err?.code === "permission-denied") {
+    return "We could not complete registration. Please check your details or contact VolunServe support.";
   }
-  return err?.message || "Firestore error.";
+  if (err?.code === "unavailable" || err?.code === "deadline-exceeded") {
+    return "The registration service is temporarily unavailable. Please try again later.";
+  }
+  const message = String(err?.message || "");
+  if (message && !/firebase|firestore|auth\/|functions\/|permission-denied|\[.*\]/i.test(message)) {
+    return message;
+  }
+  return "Unable to complete registration. Please try again.";
 }
 
 export const signUpUser = async (
