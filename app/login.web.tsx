@@ -77,7 +77,12 @@ export default function WebLogin() {
       }
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
+      const message = error?.message || "Unable to sign in. Please try again.";
+      showError(
+        message.includes("Invalid email or password") || message.includes("Incorrect password")
+          ? message + " If you originally signed up using Google, choose Continue with Google, then open My Profile > Manage Email & Password to create a separate VolunServe password."
+          : message
+      );
     } finally {
       setLoading(false);
       setPendingAction(null);
