@@ -611,6 +611,22 @@ export default function Signup() {
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
+    // Recheck ALL stages on submission. A form must never create a user
+    // from stale state or after an email/account validation change.
+    if (emailAlreadyUsed || !validation.step1Valid || !validation.step2Valid || !validation.step3Valid) {
+      const firstInvalidStep = emailAlreadyUsed || !validation.step1Valid
+        ? 1 : !validation.step2Valid ? 2 : 3;
+      setStep(firstInvalidStep as Step);
+      setShowStepErrors(true);
+      scrollTop();
+      AppAlert.alert(
+        "Complete Your Registration",
+        emailAlreadyUsed
+          ? REGISTRATION_EMAIL_CONFLICT_MESSAGE
+          : "Please correct the highlighted required fields before creating an account."
+      );
+      return;
+    }
     if (!validation.step4Valid) {
       setShowStepErrors(true);
       AppAlert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
@@ -661,7 +677,7 @@ export default function Signup() {
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, googleBound, loadingSubmit, router, validation, scrollTop]);
+  }, [formData, googleBound, loadingSubmit, router, validation, scrollTop, emailAlreadyUsed]);
 
   const currentMeta = STEP_META[step];
 
@@ -935,7 +951,7 @@ export default function Signup() {
           ) : <View style={{ flex: 1 }} />}
 
           {step < 4 ? (
-            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, !isStepValid(step) && styles.disabledBtn]} onPress={goNext} disabled={!isStepValid(step)}>
+            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, loadingSubmit && styles.disabledBtn]} onPress={goNext} disabled={loadingSubmit}>
               <Text style={styles.primaryText}>Next</Text>
             </TouchableOpacity>
           ) : (
