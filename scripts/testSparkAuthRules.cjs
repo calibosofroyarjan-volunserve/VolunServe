@@ -85,6 +85,16 @@ async function run() {
   );
 
   await denied(
+    "Resident cannot promote their own role to Admin",
+    valid.doc("users/resident-valid").update({role: "admin"})
+  );
+
+  await denied(
+    "Resident cannot disable the email verification requirement",
+    valid.doc("users/resident-valid").update({emailVerificationRequired: false})
+  );
+
+  await denied(
     "Unverified Resident cannot read protected volunteer events",
     valid.doc("volunteerEvents/secret-event").get()
   );
@@ -169,7 +179,7 @@ async function run() {
     legacyAdmin.doc("volunteerEvents/event-1").get()
   );
 
-  console.log("\n" + passed + "/10 authentication security rules checks passed.");
+  console.log("\n" + passed + "/12 authentication security rules checks passed.");
   console.log(
     "These tests cover known blocked domains only. They do not prove every " +
     "temporary mail provider is blocked or that the live app works."
