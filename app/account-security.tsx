@@ -59,6 +59,7 @@ export default function AccountSecurity() {
     /[A-Z]/.test(newPassword) &&
     /[a-z]/.test(newPassword) &&
     /\d/.test(newPassword) &&
+    /[^A-Za-z0-9]/.test(newPassword) &&
     newPassword === confirmPassword;
 
   const savePassword = async () => {
@@ -73,7 +74,7 @@ export default function AccountSecurity() {
 
     if (!validPassword) {
       setErrorMessage(
-        "Use at least 8 characters with uppercase, lowercase, and a number, then make sure both passwords match."
+        "Use at least 8 characters with uppercase, lowercase, a number, and a special character. Both passwords must match."
       );
       return;
     }
@@ -258,6 +259,7 @@ export default function AccountSecurity() {
           <Text style={styles.rule}>• At least one uppercase letter</Text>
           <Text style={styles.rule}>• At least one lowercase letter</Text>
           <Text style={styles.rule}>• At least one number</Text>
+          <Text style={styles.rule}>• At least one special character</Text>
         </View>
 
         {errorMessage ? (
