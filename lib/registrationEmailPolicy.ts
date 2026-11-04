@@ -41,8 +41,35 @@ export function isKnownDisposableEmail(email: string): boolean {
 export function getRegistrationEmailError(email: string): string | null {
   const value = String(email || "").trim().toLowerCase();
   if (!value) return "Email address is required. Enter an email you can verify.";
-  if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) {
-    return "Enter a valid email address, for example name@gmail.com.";
+  // Validate complete domain labels instead of accepting malformed names
+  // such as name@gmail..com or name@-gmail.com. Valid country-code TLDs
+  // (including .co) remain allowed for independent providers.
+  const parts = value.split("@");
+  const local = parts[0] || "";
+  const domain = parts[1] || "";
+  const domainFormat = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/;
+  if (
+    value.length > 254 ||
+    parts.length !== 2 ||
+    local.length > 64 ||
+    !/^[a-z0-9.!#$%&'*+\/?^_`{|}~-]+$/i.test(local) ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..") ||
+    !domainFormat.test(domain)
+  ) {
+    return "Enter a complete, valid email address, for example name@gmail.com.";
+  }
+
+  // These are common typos for the Gmail provider, not invalid TLDs in
+  // general. gmail.co is a syntactically valid domain, but it is almost
+  // always a typo for gmail.com in the VolunServe registration flow.
+  const gmailTypos = new Set([
+    "gmail.co", "gmail.cm", "gmail.con", "gmail.comm", "gmail.om",
+    "gmai.com", "gmial.com", "gamil.com", "gmaill.com",
+  ]);
+  if (gmailTypos.has(domain)) {
+    return "Check your email domain. Did you mean @gmail.com? Please correct it to continue.";
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
