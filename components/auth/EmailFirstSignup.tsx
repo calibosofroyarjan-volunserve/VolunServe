@@ -11,6 +11,8 @@ import {useRouter} from "expo-router";
 import {
   createUserWithEmailAndPassword,
   getIdToken,
+  GoogleAuthProvider,
+  signInWithPopup,
   onAuthStateChanged,
   reload,
   sendEmailVerification,
@@ -21,7 +23,7 @@ import {
 import {doc, getDoc} from "firebase/firestore";
 import React, {useEffect, useMemo, useState} from "react";
 import {
-  ActivityIndicator, Pressable, ScrollView, StyleSheet, Text,
+  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text,
   TextInput, View, useWindowDimensions,
 } from "react-native";
 import {SJDM_BARANGAYS} from "../../constants/sjdmBarangays";
@@ -32,9 +34,7 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
-import {
-  getLoginErrorMessage, REGISTRATION_EMAIL_CONFLICT_MESSAGE,
-} from "../../lib/authUserMessages";
+import {REGISTRATION_EMAIL_CONFLICT_MESSAGE} from "../../lib/authUserMessages";
 
 type Step = 1 | 2 | 3 | 4;
 const STEP_LABELS = ["Email", "Verify", "Personal", "Address & Profile"] as const;
@@ -120,7 +120,7 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor="#94a3b8"
         secureTextEntry={!!secret}
-        autoCapitalize={keyboardType === "email-address" ? "none" : "sentences"}
+        autoCapitalize={secret || keyboardType === "email-address" ? "none" : "words"}
         autoCorrect={false}
         keyboardType={keyboardType}
         editable={!disabled}
@@ -280,6 +280,39 @@ export default function EmailFirstSignup() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function continueWithGoogle() {
+    if (Platform.OS !== "web") {
+      // The native login screen owns its Expo Google AuthSession flow.
+      router.push("/login");
+      return;
+    }
+    if (busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const result = await signInWithPopup(auth, new GoogleAuthProvider());
+      if (!result.user.emailVerified) {
+        throw new Error("The connected Google account has not verified its email.");
+      }
+      const snapshot = await getDoc(doc(db, "users", result.user.uid));
+      if (snapshot.exists()) {
+        setCompletedProfile(true);
+        return;
+      }
+      setSignedInUser(result.user);
+      setEmail((result.user.email || "").toLowerCase());
+      const hasPassword = result.user.providerData.some(p => p.providerId === "password");
+      if (hasPassword) {
+        await getIdToken(result.user, true);
+        setStep(3);
+        setMessage("Google email verified. Complete your resident details.");
+      } else {
+        setStep(1);
+        setMessage("Google email verified. Create a VolunServe password to use both sign-in methods.");
+      }
+    } catch (e) {setError(safeAuthError(e));}
+    finally {setBusy(false);}
   }
 
   async function checkVerified() {
@@ -505,6 +538,12 @@ export default function EmailFirstSignup() {
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Create Account & Verify Email",
                   () => {void startEmail();}
+                )}
+                {!signedInUser && !resumeMode && (
+                  <>
+                    <Text style={styles.orText}>OR</Text>
+                    {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
+                  </>
                 )}
                 {!googleOnly && (
                   <Pressable style={styles.inlineButton} onPress={() => {
@@ -741,6 +780,7 @@ const styles = StyleSheet.create({
   dim: {opacity: 0.6},
   inlineButton: {paddingVertical: 11, alignItems: "center"},
   link: {fontSize: 13, color: GREEN, fontWeight: "800"},
+  orText: {textAlign: "center", color: "#64748b", marginTop: 16, fontSize: 12, fontWeight: "800"},
   check: {flexDirection: "row", alignItems: "flex-start", gap: 8, marginVertical: 9},
   checkBox: {fontSize: 20, color: GREEN},
   checkText: {flex: 1, color: "#475569", fontSize: 13, lineHeight: 20},
