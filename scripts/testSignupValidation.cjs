@@ -127,4 +127,31 @@ assert.equal(messages.isRegistrationEmailConflict({code: "auth/invalid-email"}),
 checks++;
 assert.match(messages.REGISTRATION_EMAIL_CONFLICT_MESSAGE, /already registered/);
 checks++;
+
+// Mailbox existence cannot be determined by address syntax or an SDK send
+// request. Step 2 must require possession of the verification link.
+for (const copy of [
+  messages.EMAIL_VERIFICATION_REQUESTED_MESSAGE,
+  messages.EMAIL_VERIFICATION_INSTRUCTIONS,
+  messages.EMAIL_VERIFICATION_PENDING_MESSAGE,
+]) {
+  assert.equal(typeof copy, "string");
+  assert.ok(copy.length > 45, "Verification message needs actionable instructions");
+  assert.doesNotMatch(copy, /(?:email|mailbox|address) (?:does not|doesn't|definitely) exist/i);
+  checks++;
+}
+assert.match(messages.EMAIL_VERIFICATION_PENDING_MESSAGE, /verified|verification/i);
+checks++;
+assert.match(messages.EMAIL_VERIFICATION_PENDING_MESSAGE, /different email/i);
+checks++;
+const stagingSignup = fs.readFileSync("components/auth/EmailFirstSignup.tsx", "utf8");
+assert.match(stagingSignup, /EMAIL_VERIFICATION_PENDING_MESSAGE/);
+checks++;
+assert.match(stagingSignup, /await reload\(user\)/);
+checks++;
+assert.match(stagingSignup, /if \(!user\.emailVerified\)/);
+checks++;
+assert.match(stagingSignup, /sendEmailVerification\(credential\.user\)/);
+checks++;
+
 console.log("PASS: " + checks + " email validation and duplicate-account message tests.");
