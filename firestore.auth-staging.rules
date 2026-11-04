@@ -21,7 +21,10 @@ service cloud.firestore {
       // Protected dashboard features remain denied by the catch-all rule.
       allow get: if owns(uid);
       allow list: if false;
+      // Email-first flow: an Auth-only unverified user has no profile.
+      // Firebase's refreshed ID token is required before creating one.
       allow create: if owns(uid)
+        && request.auth.token.email_verified == true
         && allowedEmail()
         && request.resource.data.keys().hasAll([
           'uid', 'email', 'role', 'requestedRole', 'primaryRole',
