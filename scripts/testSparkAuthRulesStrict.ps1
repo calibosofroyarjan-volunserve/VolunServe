@@ -29,7 +29,7 @@ if ($testExit -ne 0) {
 if ($fullLog -match "(?i)maximum of 1000 expressions to evaluate has been reached") {
   throw "BLOCK RELEASE: Firestore Rules exceeded the 1,000-expression evaluation limit, even though deny-assertions may say PASS. See $logPath"
 }
-if ($fullLog -notmatch "12/12 authentication security rules checks passed") {
-  throw "BLOCK RELEASE: Missing 12/12 positive-and-negative test confirmation. See $logPath"
+if ($fullLog -notmatch "14/14 authentication security rules checks passed") {
+  throw "BLOCK RELEASE: Missing 14/14 positive-and-negative test confirmation. See $logPath"
 }
-Write-Host "Release gate passed: 12 tests, no expression-limit diagnostics." -ForegroundColor Green
+Write-Host "Release gate passed: 14 tests, no expression-limit diagnostics." -ForegroundColor Green
