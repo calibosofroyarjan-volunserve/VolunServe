@@ -33,3 +33,19 @@ export function isKnownDisposableEmail(email: string): boolean {
   }
   return false;
 }
+
+/** Return a clear, user-facing registration error, or null when acceptable.
+ * Known-domain filtering is a client UX check; Firebase security rules and
+ * trusted server enforcement are separate protections.
+ */
+export function getRegistrationEmailError(email: string): string | null {
+  const value = String(email || "").trim().toLowerCase();
+  if (!value) return "Email address is required. Enter an email you can verify.";
+  if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) {
+    return "Enter a valid email address, for example name@gmail.com.";
+  }
+  if (isKnownDisposableEmail(value)) {
+    return "Temporary email addresses are not accepted. Use a permanent email address.";
+  }
+  return null;
+}
