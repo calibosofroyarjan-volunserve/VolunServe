@@ -23,7 +23,7 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
-import { getRegistrationEmailError, isKnownDisposableEmail } from "./registrationEmailPolicy";
+import { getRegistrationEmailError } from "./registrationEmailPolicy";
 
 export const connectGoogleAccountWeb = async () => {
   try {
