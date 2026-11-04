@@ -29,6 +29,12 @@ if ($testExit -ne 0) {
 if ($fullLog -match "(?i)maximum of 1000 expressions to evaluate has been reached") {
   throw "BLOCK RELEASE: Firestore Rules exceeded the 1,000-expression evaluation limit, even though deny-assertions may say PASS. See $logPath"
 }
+# A denied operation is only a valid negative test when its predicate
+# resolves cleanly to false, not when a missing field/document causes an
+# evaluation error. Permission-denied logs themselves remain expected.
+if ($fullLog -match "(?i)evaluation error at L[0-9]+") {
+  throw "BLOCK RELEASE: A rules expression produced an evaluation error. The denial may be accidental. See $logPath"
+}
 if ($fullLog -notmatch "14/14 authentication security rules checks passed") {
   throw "BLOCK RELEASE: Missing 14/14 positive-and-negative test confirmation. See $logPath"
 }
