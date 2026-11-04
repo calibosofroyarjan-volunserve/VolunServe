@@ -26,6 +26,12 @@ jobs:
         run: npm ci
       - name: Check email validation and collision UX
         run: node scripts/testSignupValidation.cjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify staged email-before-profile Firestore rules (emulator only)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/testEmailFirstStagingRules.cjs"
       - name: TypeScript typecheck
         run: npx tsc --noEmit --pretty false
       - name: Expo staging web export (no deployment, no credentials)
