@@ -12,6 +12,39 @@
 4. Staging project → Authentication → Settings → Authorized domains: ensure the actual staging Hosting hostname is authorized for Google popup/redirect. Do not add arbitrary third-party domains.
 5. Keep authentication templates and approved sender settings for staging emails separate; don't share test-only verification links or actual passwords.
 
+## Provider-neutral Signup validation (Nov 5)
+
+The signup screens now accept valid **Gmail, Yahoo, Outlook, Hotmail, iCloud,
+Proton, school/work and other private domains**. Validation is **not a Gmail
+allowlist**. The shared policy in `lib/registrationEmailPolicy.ts` checks:
+
+- Required email, exactly one `@`, local-part length/syntax, complete legal
+  DNS labels (no double dots, leading/trailing hyphens) and TLD length.
+- **44 exact common provider-domain typos** across Gmail, Yahoo, Outlook,
+  Hotmail, iCloud and Proton with red, provider-specific "Did you mean"
+  feedback. Examples: `yahoo.co` -> `yahoo.com`, `outlook.co` ->
+  `outlook.com`, `hotmail.con` -> `hotmail.com`.
+- Known disposable domains, including subdomains, using the maintained list.
+  There is no claim of universal temporary-email detection.
+- Allows legitimate `.co` private domains, `yahoo.co.uk`, `yahoo.com.ph`,
+  `@deped.gov.ph`, and other correctly formatted addresses. **Syntax does
+  not confirm email delivery or ownership:** Firebase email verification
+  remains mandatory before a Basic Resident profile can be created.
+
+The same 44 typo domains are denied by `firestore.auth-staging.rules` and
+the *production draft* `firestore.rules`. The production rules are **not
+deployed** and the `volunserve.com` website remains unchanged.
+
+Tests:
+```powershell
+node scripts/testSignupValidation.cjs
+npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/testEmailFirstStagingRules.cjs"
+npx tsc --noEmit --pretty false
+```
+The unit tests check provider typos, valid major/independent/regional domains,
+disposable domains, duplicate-account error mapping, and exact policy-to-rules
+parity. The emulator suite contains 16 Firestore security assertions.
+
 ## Early email verification rollout (Nov 4)
 
 The isolated **staging** build now enables the four-step `EmailFirstSignup`
