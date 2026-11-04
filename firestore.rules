@@ -342,7 +342,7 @@ service cloud.firestore {
             'SAN JOSE DEL MONTE'
           ]
         ))
-          || (&& request.resource.data
+          || (request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
@@ -370,7 +370,7 @@ service cloud.firestore {
         && request.resource.data.identityFailureReason == ''
         && identitySubmissionAfter().uid == uid
         && identitySubmissionAfter().status == 'pending')
-          || (&& request.resource.data
+          || (request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
@@ -389,7 +389,7 @@ service cloud.firestore {
         && request.resource.data.activeMode == 'resident'
         && volunteerApplicationAfter().uid == uid
         && volunteerApplicationAfter().status == 'pending')
-          || (&& request.resource.data
+          || (request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
