@@ -69,7 +69,7 @@ export default function WebLogin() {
       return;
     }
     if (!password) {
-      showError("Enter the VolunServe password created during registration—not your Gmail password.");
+      showError("Enter the VolunServe password created during registration—not your email provider password.");
       return;
     }
     try {
@@ -190,7 +190,7 @@ export default function WebLogin() {
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
-        {attemptedLogin && !password ? <Text style={styles.errorHint}>VolunServe password is required. Do not enter your Gmail password.</Text> : null}
+        {attemptedLogin && !password ? <Text style={styles.errorHint}>VolunServe password is required. Do not enter your email provider password.</Text> : null}
         <View style={styles.options}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: rememberMe }}
