@@ -295,7 +295,7 @@ export interface SignupData {
   age: number;
   email: string;
   password: string;
-  authProvider?: "email" | "google";
+  authProvider?: "email" | "google" | "verified_email";
   phoneNumber: string;
   region: string;
   province: string;
@@ -555,11 +555,12 @@ export const signUpUser = async (
     const emailError = getRegistrationEmailError(submittedEmail);
     if (emailError) throw new Error(emailError);
     if (
-      data.password.length < 8 ||
+      data.authProvider !== "verified_email" &&
+      (data.password.length < 8 ||
       !/[A-Z]/.test(data.password) ||
       !/[a-z]/.test(data.password) ||
       !/\d/.test(data.password) ||
-      !/[^A-Za-z0-9]/.test(data.password)
+      !/[^A-Za-z0-9]/.test(data.password))
     ) {
       throw new Error("Password must contain 8+ characters, uppercase, lowercase, a number and a special character.");
     }
@@ -572,7 +573,8 @@ export const signUpUser = async (
       throw new Error("VolunServe registration is restricted to San Jose del Monte, Bulacan.");
     }
     const usesGoogle = data.authProvider === "google";
-    if (usesGoogle) {
+    const usesVerifiedEmail = data.authProvider === "verified_email";
+    if (usesGoogle || usesVerifiedEmail) {
       if (!auth.currentUser) {
         throw new Error(
           "Your Google registration session expired. Connect your Google account again."
@@ -589,10 +591,14 @@ export const signUpUser = async (
         );
       }
       user = auth.currentUser;
-      // Google OAuth validates ownership of its verified email, but it must
-      // satisfy the same verification requirement as manual registration.
+      // Verify current user with Firebase itself; never trust a client
+      // submitted emailVerified flag. Refresh the token for Rules checks.
+      await reload(user);
       if (!user.emailVerified) {
-        throw new Error("Please verify your Google email before completing registration.");
+        throw new Error("Please verify your email before completing registration.");
+      }
+      if (usesVerifiedEmail && !hasPasswordSignInProvider(user)) {
+        throw new Error("Link a VolunServe password to this verified email before completing registration.");
       }
       await getIdToken(user, true);
     } else {
@@ -718,7 +724,7 @@ export const signUpUser = async (
         serverTimestamp(),
     });
     await batch.commit();
-    if (!usesGoogle && !user.emailVerified) {
+    if (!usesGoogle && !usesVerifiedEmail && !user.emailVerified) {
       // Firebase sends a confirmation link; the app must not call unverified
       // email ownership proof. Delivery failures should NOT turn a successfully
       // saved Basic account into a fake registration failure.
@@ -728,8 +734,8 @@ export const signUpUser = async (
         console.warn("Basic account saved but email verification could not be sent:", emailError);
       }
     }
-    if (!usesGoogle) {
-      // Email/password registration is NOT verified until the email link is opened.
+    if (!usesGoogle && !usesVerifiedEmail) {
+      // Legacy email/password registration is NOT verified until the email link is opened.
       // Prevent auto-entry to protected tabs through an already-authenticated signup.
       await signOut(auth);
     }
