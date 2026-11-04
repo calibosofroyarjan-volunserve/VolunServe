@@ -653,7 +653,7 @@ export default function Signup() {
       const successTitle = "Basic Account Created";
       const successMessage = googleBound
         ? "Your account is ready. Google and email/password sign-in are linked. Your account starts in Resident Mode."
-        : "Your Basic Resident account is saved. Check your inbox and Spam for a verification link, then sign in. If no email arrives, use Resend verification email on Login with your VolunServe password.";
+        : "Your Basic Resident account is saved. Check your inbox and Spam for a verification link, then sign in. If the email does not arrive, check the Spam folder or contact VolunServe support.";
 
       AppAlert.alert(successTitle, successMessage, [
         { text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
