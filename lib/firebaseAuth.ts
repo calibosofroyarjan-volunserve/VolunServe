@@ -1,6 +1,5 @@
 import {
   createUserWithEmailAndPassword,
-  deleteUser,
   EmailAuthProvider,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
@@ -21,8 +20,7 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { auth, db, firebaseConfig, functions, usingFirebaseEmulators } from "./firebase";
+import { auth, db, firebaseConfig, usingFirebaseEmulators } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
 import { getRegistrationEmailError } from "./registrationEmailPolicy";
@@ -132,10 +130,6 @@ async function attachVolunServePassword(user: User, password: string): Promise<U
   await getIdToken(confirmed.user, true);
   return confirmed.user;
 }
-
-const verifyRegistrationEmailDomain = httpsCallable(
-  functions, "verifyRegistrationEmailDomain"
-);
 
 export const setVolunServePasswordForCurrentGoogleUser = async (
   password: string
@@ -548,7 +542,6 @@ export const signUpUser = async (
 ) => {
   try {
     let user: User;
-    let newlyCreatedPasswordUser: User | null = null;
     const submittedEmail = data.email.trim().toLowerCase();
     // Check before creating an Auth UID; client-side blocklist is not a
     // substitute for verified email ownership or a backend abuse service.
@@ -606,7 +599,6 @@ export const signUpUser = async (
           data.password
         );
       user = userCredential.user;
-      newlyCreatedPasswordUser = user;
     }
     const uid = user.uid;
     const profileRef = doc(db, "users", uid);
@@ -616,25 +608,11 @@ export const signUpUser = async (
         "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
       );
     }
-    // A client-side temp-mail check is never sufficient: the Cloud Function
-    // checks the canonical Firebase Auth email against a maintained server
-    // denylist, then creates an immutable emailTrust/{uid} record. Without
-    // that record Firestore Rules reject creation of a new Resident profile.
-    try {
-      await verifyRegistrationEmailDomain({});
-    } catch (error: any) {
-      // Only delete the UID created in THIS invocation. Never delete an
-      // existing Google account while linking its VolunServe credentials.
-      if (newlyCreatedPasswordUser) {
-        await deleteUser(newlyCreatedPasswordUser).catch(() => undefined);
-      }
-      if (error?.code === "functions/permission-denied") {
-        throw new Error(error?.message || "Temporary email addresses are not accepted.");
-      }
-      throw new Error(
-        "Secure email registration checks are unavailable. Your account has not been activated. Please try again later."
-      );
-    }
+    // Firebase Spark has no deployable callable Functions. The client checks
+    // the maintained disposable-email list before Auth account creation,
+    // while Firestore Rules separately refuse known disposable domains and
+    // enforce verified-email access to Resident/Volunteer operations.
+    // Neither check can guarantee blocking EVERY future throwaway provider.
     // Google registration must also have an Email/Password credential linked
     // to the SAME Firebase UID. This keeps one VolunServe profile while
     // allowing the resident to sign in either with Google or manually.
