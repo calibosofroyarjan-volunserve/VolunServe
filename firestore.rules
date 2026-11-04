@@ -10,6 +10,15 @@ service cloud.firestore {
       ).data;
     }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
+    // New Resident accounts require a trusted server-issued domain decision.
+    function trustedEmail(uid, email) {
+      let path = /databases/$(database)/documents/emailTrust/$(uid);
+      return exists(path)
+        && get(path).data.get('approved', false) == true
+        && get(path).data.get('policyVersion', 0) == 1
+        && get(path).data.get('email', '') == email
+        && get(path).data.get('uid', '') == uid;
+    }
     function approved() {
       let p = signedIn() ? profile() : {};
       return signedIn()
@@ -20,7 +29,9 @@ service cloud.firestore {
         // Legacy users are unchanged; new password accounts need confirmed
         // Firebase email ownership to access approved-role operations.
         && (p.get('emailVerificationRequired', false) != true
-          || request.auth.token.get('email_verified', false) == true);
+          || request.auth.token.get('email_verified', false) == true)
+        && (p.get('emailPolicyVersion', 0) != 1
+          || trustedEmail(request.auth.uid, request.auth.token.get('email', '')));
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
@@ -65,6 +76,9 @@ service cloud.firestore {
     function isResident() {
       let p = signedIn() ? profile() : {};
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
+    }
+    match /emailTrust/{uid} {
+      allow read, write: if false;
     }
     match /users/{uid} {
     // Defense in depth: direct Auth SDK signups with common disposable domains
@@ -186,6 +200,7 @@ service cloud.firestore {
           'identityStatus',
           'identityVerified',
           'emailVerificationRequired',
+          'emailPolicyVersion',
           'profilePictureUrl',
           'createdAt'
         ])
@@ -202,6 +217,8 @@ service cloud.firestore {
         // Every newly registered Resident (Google or email/password) must
         // have the verified-email gate. No client may opt out.
         && request.resource.data.emailVerificationRequired == true
+        && request.resource.data.emailPolicyVersion == 1
+        && trustedEmail(uid, request.auth.token.get('email', ''))
         && request.resource.data.skills is list
         && request.resource.data.skills.size() == 0
         && request.resource.data.skillOther == ''
