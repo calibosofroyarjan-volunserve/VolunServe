@@ -58,18 +58,45 @@ export function getRegistrationEmailError(email: string): string | null {
     local.includes("..") ||
     !domainFormat.test(domain)
   ) {
-    return "Enter a complete, valid email address, for example name@gmail.com.";
+    return "Enter a complete, valid email address, for example name@example.com.";
   }
 
-  // These are common typos for the Gmail provider, not invalid TLDs in
-  // general. gmail.co is a syntactically valid domain, but it is almost
-  // always a typo for gmail.com in the VolunServe registration flow.
-  const gmailTypos = new Set([
-    "gmail.co", "gmail.cm", "gmail.con", "gmail.comm", "gmail.om",
-    "gmai.com", "gmial.com", "gamil.com", "gmaill.com",
-  ]);
-  if (gmailTypos.has(domain)) {
-    return "Check your email domain. Did you mean @gmail.com? Please correct it to continue.";
+  // Popular provider typos: exact DOMAIN matches only. Never deny an
+  // unrelated, legitimate .co domain or an international provider domain
+  // such as yahoo.co.uk. This list is intentionally conservative.
+  const knownProviderTypos: Record<string, string> = {
+    // Gmail
+    "gmail.co": "gmail.com", "gmail.cm": "gmail.com",
+    "gmail.con": "gmail.com", "gmail.comm": "gmail.com",
+    "gmail.om": "gmail.com", "gmai.com": "gmail.com",
+    "gmial.com": "gmail.com", "gamil.com": "gmail.com",
+    "gmaill.com": "gmail.com", "gmail.cmo": "gmail.com",
+    // Yahoo
+    "yahoo.co": "yahoo.com", "yahoo.cm": "yahoo.com",
+    "yahoo.con": "yahoo.com", "yahoo.comm": "yahoo.com",
+    "yahoo.om": "yahoo.com", "yaho.com": "yahoo.com",
+    "yhoo.com": "yahoo.com", "yhaoo.com": "yahoo.com",
+    "yahho.com": "yahoo.com", "yahoo.cmo": "yahoo.com",
+    // Outlook
+    "outlook.co": "outlook.com", "outlook.cm": "outlook.com",
+    "outlook.con": "outlook.com", "outlook.comm": "outlook.com",
+    "outlook.om": "outlook.com", "outlok.com": "outlook.com",
+    "outllook.com": "outlook.com", "outloook.com": "outlook.com",
+    "outlook.cmo": "outlook.com",
+    // Hotmail / Microsoft
+    "hotmail.co": "hotmail.com", "hotmail.cm": "hotmail.com",
+    "hotmail.con": "hotmail.com", "hotmail.comm": "hotmail.com",
+    "hotmai.com": "hotmail.com", "hotmial.com": "hotmail.com",
+    "hotmal.com": "hotmail.com", "hotmail.cmo": "hotmail.com",
+    // iCloud and Proton
+    "icloud.co": "icloud.com", "icloud.con": "icloud.com",
+    "iclod.com": "icloud.com", "icoud.com": "icloud.com",
+    "protonmail.co": "protonmail.com", "protonmail.con": "protonmail.com",
+    "protonmai.com": "protonmail.com",
+  };
+  const suggestedProvider = knownProviderTypos[domain];
+  if (suggestedProvider) {
+    return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
