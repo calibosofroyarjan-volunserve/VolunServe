@@ -23,7 +23,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { signUpUser } from "../lib/firebaseAuth";
-import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -424,6 +424,7 @@ export default function Signup() {
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [step, setStep] = useState<Step>(1);
+  const [showStepErrors, setShowStepErrors] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -472,7 +473,6 @@ export default function Signup() {
   );
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
 
     const lastNameValid = nameOk(formData.lastName);
@@ -484,8 +484,7 @@ export default function Signup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = /^9\d{9}$/.test(phoneDigits);
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
-      !isKnownDisposableEmail(formData.email);
+    const emailValid = getRegistrationEmailError(formData.email) === null;
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -550,6 +549,7 @@ export default function Signup() {
 
   const goNext = useCallback(() => {
     if (!isStepValid(step)) {
+      setShowStepErrors(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
 
       const stepMessages: Record<Step, string> = {
@@ -566,6 +566,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step < 4) {
       setStep((prev) => (prev + 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [googleBound, isStepValid, scrollTop, step]);
@@ -574,6 +575,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step > 1) {
       setStep((prev) => (prev - 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [scrollTop, step]);
@@ -848,17 +850,19 @@ export default function Signup() {
                     value={formData.email}
                     onChange={(v) => updateField("email", v.trim().toLowerCase())}
                     keyboardType="email-address"
-                    invalid={!validation.emailValid && formData.email.length > 0}
+                    invalid={!validation.emailValid && (formData.email.length > 0 || showStepErrors)}
                     returnKeyType="next"
                     editable={!googleBound}
                     autoCapitalize="none"
                   />
 
-                  {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>{isKnownDisposableEmail(formData.email)
-                      ? "Temporary email addresses are not accepted. Use a permanent email."
-                      : "Enter a valid email format."}</ValidationText>
-                  ) : null}
+                  {(formData.email.length > 0 || showStepErrors) && !validation.emailValid ? (
+                    <ValidationText ok={false}>{getRegistrationEmailError(formData.email)}</ValidationText>
+                  ) : (
+                    <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 10 }}>
+                      A verification link is required for email/password signup. Google sign-in must use a verified Google email.
+                    </Text>
+                  )}
 
                   <View style={styles.formRow}>
                     <View style={styles.formColumn}>
@@ -867,9 +871,12 @@ export default function Signup() {
                         label="First Name *"
                         value={formData.firstName}
                         onChange={(v) => updateField("firstName", sanitizeName(v))}
-                        invalid={!validation.firstNameValid && formData.firstName.length > 0}
+                        invalid={!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors)}
                         returnKeyType="next"
                       />
+                      {!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors) ? (
+                        <ValidationText ok={false}>First name must contain at least 2 letters.</ValidationText>
+                      ) : null}
                     </View>
 
                     <View style={styles.formColumn}>
@@ -878,9 +885,12 @@ export default function Signup() {
                         label="Last Name *"
                         value={formData.lastName}
                         onChange={(v) => updateField("lastName", sanitizeName(v))}
-                        invalid={!validation.lastNameValid && formData.lastName.length > 0}
+                        invalid={!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors)}
                         returnKeyType="next"
                       />
+                      {!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors) ? (
+                        <ValidationText ok={false}>Last name must contain at least 2 letters.</ValidationText>
+                      ) : null}
                     </View>
                   </View>
 
