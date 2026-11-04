@@ -29,7 +29,8 @@ import {
   isRegistrationEmailConflict,
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
 } from "../lib/authUserMessages";
-import { auth, db } from "../lib/firebase";
+import { auth, db, usingFirebaseStaging } from "../lib/firebase";
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
 type Step = 1 | 2 | 3 | 4;
@@ -418,6 +419,12 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 }
 
 export default function Signup() {
+  // Roll out email-first verification to the isolated Spark staging build.
+  // Production retains the existing signup until verified in staging.
+  return usingFirebaseStaging ? <EmailFirstSignup /> : <LegacySignup />;
+}
+
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
