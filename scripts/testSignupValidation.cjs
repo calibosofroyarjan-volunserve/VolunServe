@@ -93,6 +93,30 @@ for (const [email, expected] of bad) {
   assert.match(String(policy.getRegistrationEmailError(email)), expected, "Expected rejected email: " + email);
   checks++;
 }
+// Every provider typo supported by the client must also be blocked by
+// Firestore profile creation to prevent a direct SDK bypass.
+const stagingRules = fs.readFileSync("firestore.auth-staging.rules", "utf8");
+const draftProductionRules = fs.readFileSync("firestore.rules", "utf8");
+const providerTypos = Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS);
+assert.ok(providerTypos.length >= 40, "Provider typo table unexpectedly shrank");
+for (const [incorrect, correct] of providerTypos) {
+  assert.match(
+    String(policy.getRegistrationEmailError("user@" + incorrect)),
+    new RegExp("Did you mean @" + correct.replace(/\./g, "\\.") + "\\?"),
+    "Missing provider-specific red error for " + incorrect,
+  );
+  checks++;
+  const escaped = incorrect.replace(/\./g, "\\\\.");
+  for (const [target, rules] of [
+    ["staging", stagingRules], ["production draft", draftProductionRules],
+  ]) {
+    assert.ok(
+      rules.includes(escaped + "|") || rules.includes(escaped + ")"),
+      "Frontend/backend drift: " + incorrect + " not found in " + target + " Firestore rules",
+    );
+    checks++;
+  }
+}
 assert.equal(messages.isRegistrationEmailConflict({code: "auth/email-already-in-use"}), true);
 checks++;
 assert.equal(messages.isRegistrationEmailConflict({
