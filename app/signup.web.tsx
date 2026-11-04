@@ -992,9 +992,9 @@ export default function Signup() {
                     />
                   )}
 
-                  {formData.dateOfBirth && !validation.ageValid ? (
+                  {!validation.ageValid && (formData.dateOfBirth !== null || showStepErrors) ? (
                     <ValidationText ok={false}>
-                      You must be at least 18 years old to proceed.
+                      {formData.dateOfBirth ? "You must be at least 18 years old to proceed." : "Select your date of birth. You must be at least 18 years old."}
                     </ValidationText>
                   ) : null}
 
@@ -1010,7 +1010,7 @@ export default function Signup() {
                       style={[
                         styles.phoneInput,
                         !validation.phoneValid &&
-                          formData.phoneLocal.length > 0 &&
+                          (formData.phoneLocal.length > 0 || showStepErrors) &&
                           styles.inputInvalid,
                       ]}
                       value={formData.phoneLocal}
@@ -1025,9 +1025,9 @@ export default function Signup() {
                     />
                   </View>
 
-                  {formData.phoneLocal.length > 0 && !validation.phoneValid ? (
+                  {(formData.phoneLocal.length > 0 || showStepErrors) && !validation.phoneValid ? (
                     <ValidationText ok={false}>
-                      Enter a valid Philippine mobile number starting with 9.
+                      Enter a 10-digit Philippine mobile number beginning with 9 (after +63).
                     </ValidationText>
                   ) : null}
 
@@ -1183,6 +1183,14 @@ export default function Signup() {
                         secureTextEntry={!showPassword}
                         showPassword={showPassword}
                         onTogglePassword={() => setShowPassword((prev) => !prev)}
+                        invalid={(formData.password.length > 0 || showStepErrors) && (
+                          !validation.passwordChecks.minLength ||
+                          !validation.passwordChecks.upper ||
+                          !validation.passwordChecks.lower ||
+                          !validation.passwordChecks.number ||
+                          !validation.passwordChecks.special ||
+                          !validation.passwordChecks.notCommon
+                        )}
                         autoCapitalize="none"
                       />
                     </View>
@@ -1195,6 +1203,7 @@ export default function Signup() {
                         secureTextEntry={!showConfirmPassword}
                         showPassword={showConfirmPassword}
                         onTogglePassword={() => setShowConfirmPassword((prev) => !prev)}
+                        invalid={(formData.confirmPassword.length > 0 || showStepErrors) && !validation.passwordChecks.matches}
                         autoCapitalize="none"
                       />
                     </View>
