@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Dedicated Spark STAGING rules: validate the Auth signup flow only.
+    // NEVER deploy this simplified file to the real VolunServe project.
+    function owns(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function allowedEmail() {
+      return request.auth.token.email is string
+        && !request.auth.token.email.matches(
+          '(?i)^.*@([a-z0-9-]+\\.)*(mailinator\\.com|yopmail\\.com|guerrillamail\\.com|10minutemail\\.com|temp-mail\\.org|tempmail\\.com|maildrop\\.cc|trashmail\\.com|getnada\\.com|minuteinbox\\.com|emailondeck\\.com|throwawaymail\\.com)$'
+        );
+    }
+    match /users/{uid} {
+      // The signup/login UI may inspect its own unverified profile.
+      // Protected dashboard features remain denied by the catch-all rule.
+      allow get: if owns(uid);
+      allow list: if false;
+      allow create: if owns(uid)
+        && allowedEmail()
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'role', 'requestedRole', 'primaryRole',
+          'residentAccess', 'volunteerAccess', 'volunteerStatus',
+          'activeMode', 'status', 'identityStatus', 'identityVerified',
+          'emailVerificationRequired', 'emailPolicyVersion',
+          'age', 'firstName', 'lastName', 'city', 'province'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && request.resource.data.role == 'resident'
+        && request.resource.data.requestedRole == 'resident'
+        && request.resource.data.primaryRole == 'resident'
+        && request.resource.data.residentAccess == true
+        && request.resource.data.volunteerAccess == false
+        && request.resource.data.volunteerStatus == 'not_applied'
+        && request.resource.data.activeMode == 'resident'
+        && request.resource.data.status == 'approved'
+        && request.resource.data.identityStatus == 'basic'
+        && request.resource.data.identityVerified == false
+        && request.resource.data.emailVerificationRequired == true
+        && request.resource.data.emailPolicyVersion == 1
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.province == 'Bulacan'
+        && request.resource.data.city in [
+          'City of San Jose del Monte', 'San Jose del Monte'
+        ];
+      // Permit only harmless self-profile changes; never role or email flags.
+      allow update: if owns(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fullName', 'firstName', 'lastName', 'middleName',
+          'phoneNumber', 'profilePictureUrl'
+        ]);
+      allow delete: if false;
+    }
+    // This staging project is for authentication verification only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
