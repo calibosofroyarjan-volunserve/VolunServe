@@ -7,6 +7,7 @@
  * passes and this workflow is deliberately promoted.
  */
 import {Picker} from "@react-native-picker/picker";
+import {Feather} from "@expo/vector-icons";
 import {useRouter} from "expo-router";
 import {
   createUserWithEmailAndPassword,
@@ -126,22 +127,54 @@ function Field({
   label, value, onChange, placeholder, error, secret,
   keyboardType = "default", disabled,
 }: FieldProps) {
+  const [focused, setFocused] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const low = label.toLowerCase();
+  const icon = low.includes("email") ? "mail"
+    : low.includes("password") ? "lock"
+    : low.includes("phone") || low.includes("mobile") ? "phone"
+    : low.includes("birth") ? "calendar"
+    : low.includes("name") ? "user"
+    : "edit-3";
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        style={[styles.input, !!error && styles.inputError, disabled && styles.disabled]}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
-        secureTextEntry={!!secret}
-        autoCapitalize={secret || keyboardType === "email-address" ? "none" : "words"}
-        autoCorrect={false}
-        keyboardType={keyboardType}
-        editable={!disabled}
-      />
+      <Text style={styles.label}>
+        {label.replace(/\\s*\\*$/, "")}
+        {label.endsWith("*") && <Text style={{color: "#C62828"}}> *</Text>}
+      </Text>
+      <View style={[
+        styles.legacyInputShell,
+        focused && styles.legacyInputFocused,
+        !!error && styles.legacyInputInvalid,
+        disabled && styles.legacyDisabledInput,
+      ]}>
+        <Feather name={icon as any} size={17} color="#64748b"/>
+        <TextInput
+          accessibilityLabel={label}
+          style={[styles.legacyInputControl, styles.inputText]}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor="#94a3b8"
+          secureTextEntry={!!secret && !revealed}
+          autoCapitalize={secret || keyboardType === "email-address" ? "none" : "words"}
+          autoCorrect={false}
+          keyboardType={keyboardType}
+          editable={!disabled}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {!!secret && (
+          <TouchableOpacity
+            style={styles.legacyPasswordEyeButton}
+            onPress={() => setRevealed(x => !x)}
+            accessibilityLabel={revealed ? "Hide password" : "Show password"}
+            accessibilityRole="button"
+          >
+            <Feather name={revealed ? "eye-off" : "eye"} size={20} color="#64748b"/>
+          </TouchableOpacity>
+        )}
+      </View>
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -868,6 +901,15 @@ es.subtitle}>Easy, secure registration — four short steps.</Text>
 }
 
 const styles = StyleSheet.create({
+  legacyInputShell: { height: 46, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingLeft: 13 },
+  legacyInputFocused: { borderColor: "#0f766e", backgroundColor: "#fff" },
+  legacyInputInvalid: { borderColor: "#dc2626" },
+  legacyDisabledInput: { backgroundColor: "#f1f5f9", opacity: 0.85 },
+  legacyInputControl: { flex: 1, height: 44, borderWidth: 0, backgroundColor: "transparent", paddingLeft: 9 },
+  legacyInputIcon: { color: "#64748b", fontSize: 16, width: 25, textAlign: "center" },
+  legacyPasswordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  inputText: {color: "#0f172a", fontSize: 14, paddingVertical: 0},
+
   legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#eef4f7" },
   legacyDesktopShell: { flex: 1, flexDirection: "row", minHeight: 0 },
   legacyPhotoPanel: { position: "relative", width: "46%", minWidth: 520, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#115e59" },
