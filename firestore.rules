@@ -141,7 +141,9 @@ service cloud.firestore {
       // Distinct Resident and staff-applicant creation routes are routed
       // by role before evaluating their full checks. The original conditions
       // inside each route remain unchanged.
-      allow create: if signedIn()
+      // Evaluate user profile create branches only for document creations.
+      allow create: if request.method == 'create'
+        && signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
         && (
@@ -694,7 +696,9 @@ service cloud.firestore {
       }
       // A new document has no existing resource.data to diff. Do not
       // evaluate update-only predicates while a create is being denied.
-      allow update: if signedIn()
+      // Avoid evaluating update-only predicates on a new set() creation.
+      allow update: if request.method == 'update'
+        && signedIn()
         && resource != null
         && (
           (request.auth.uid == uid && userSelfUpdate())
