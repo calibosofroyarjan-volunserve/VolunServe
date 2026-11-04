@@ -577,7 +577,7 @@ export const signUpUser = async (
     if (usesGoogle || usesVerifiedEmail) {
       if (!auth.currentUser) {
         throw new Error(
-          "Your Google registration session expired. Connect your Google account again."
+          "Your verified registration session expired. Return to Signup and resume securely."
         );
       }
       const authenticatedEmail =
@@ -587,7 +587,7 @@ export const signUpUser = async (
         authenticatedEmail !== submittedEmail
       ) {
         throw new Error(
-          "The connected Google account does not match the email in the registration form."
+          "The signed-in email does not match the registration email. Please resume with the correct account."
         );
       }
       user = auth.currentUser;
