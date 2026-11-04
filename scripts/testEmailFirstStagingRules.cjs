@@ -70,6 +70,32 @@ function profile(uid, email, overrides = {}) {
     pass++;
     console.log("PASS: Verified mistyped Gmail cannot create profile");
 
+    const knownProviderTypos = [
+      ["yahoo-typo", "test@yahoo.co"],
+      ["outlook-typo", "test@outlook.co"],
+      ["hotmail-typo", "test@hotmail.con"],
+      ["icloud-typo", "test@icloud.co"],
+    ];
+    for (const [uid, email] of knownProviderTypos) {
+      await assertFails(make(uid, email, true)
+        .doc("users/" + uid).set(profile(uid, email)));
+      pass++;
+    }
+    console.log("PASS: Known Yahoo, Outlook, Hotmail and iCloud typos blocked in Firestore");
+
+    const validProviders = [
+      ["yahoo-user", "resident@yahoo.com"],
+      ["outlook-user", "resident@outlook.com"],
+      ["yahoo-uk-user", "resident@yahoo.co.uk"],
+      ["legitimate-co", "resident@legitimate.co"],
+    ];
+    for (const [uid, email] of validProviders) {
+      await assertSucceeds(make(uid, email, true)
+        .doc("users/" + uid).set(profile(uid, email)));
+      pass++;
+    }
+    console.log("PASS: Verified Yahoo, Outlook, Yahoo regional and independent .co domains accepted");
+
     await assertFails(make("other", "other@gmail.com", true)
       .doc("users/new-resident").update({firstName: "Hacker"}));
     pass++;
@@ -80,7 +106,7 @@ function profile(uid, email, overrides = {}) {
     pass++;
     console.log("PASS: Verified owner can safely edit profile");
 
-    console.log(pass + "/8 email-first staging rules checks passed.");
+    console.log(pass + "/16 email-first staging rules checks passed.");
   } finally {
     await env.cleanup();
   }
