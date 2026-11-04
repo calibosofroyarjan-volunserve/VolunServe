@@ -329,15 +329,6 @@ service cloud.firestore {
         );
       allow update: if signedIn()
         && request.auth.uid == uid
-        && approved()
-        && (
-          !('identityStatus' in resource.data)
-          || resource.data.identityStatus in [
-            'basic',
-            'failed',
-            'retry_required'
-          ]
-        )
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -349,6 +340,15 @@ service cloud.firestore {
             'identityVerifiedBy',
             'identityFailureReason'
           ])
+        && approved()
+        && (
+          !('identityStatus' in resource.data)
+          || resource.data.identityStatus in [
+            'basic',
+            'failed',
+            'retry_required'
+          ]
+        )
         && request.resource.data.identityStatus == 'pending'
         && request.resource.data.identityVerified == false
         && request.resource.data.identitySubmittedAt is timestamp
@@ -359,6 +359,12 @@ service cloud.firestore {
         && identitySubmissionAfter().status == 'pending';
       allow update: if signedIn()
         && request.auth.uid == uid
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'volunteerStatus'
+          ])
         && approved()
         && hasVerifiedIdentity(resource.data)
         && resource.data.residentAccess == true
@@ -367,12 +373,6 @@ service cloud.firestore {
           'not_applied',
           'rejected'
         ]
-        && request.resource.data
-          .diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'volunteerStatus'
-          ])
         && request.resource.data.volunteerAccess == false
         && request.resource.data.volunteerStatus == 'pending'
         && request.resource.data.activeMode == 'resident'
@@ -380,13 +380,13 @@ service cloud.firestore {
         && volunteerApplicationAfter().status == 'pending';
       allow update: if signedIn()
         && request.auth.uid == uid
-        && approved()
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
             'activeMode'
           ])
+        && approved()
         && request.resource.data.activeMode in [
           'resident',
           'volunteer'
@@ -401,8 +401,7 @@ service cloud.firestore {
             && hasVolunteerAccess()
           )
         );
-      allow update: if isAdmin()
-        && resource.data.role in [
+      allow update: if resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -417,6 +416,7 @@ service cloud.firestore {
             'identityVerifiedBy',
             'identityFailureReason'
           ])
+        && isAdmin()
         && request.resource.data.identityVerifiedBy == request.auth.uid
         && (
           (
@@ -439,8 +439,7 @@ service cloud.firestore {
             && identitySubmissionAfter().reviewedBy == request.auth.uid
           )
         );
-      allow update: if isAdmin()
-        && resource.data.role in [
+      allow update: if resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -463,6 +462,7 @@ service cloud.firestore {
             'volunteerReviewedAt',
             'volunteerReviewedBy'
           ])
+        && isAdmin()
         && request.resource.data.residentAccess == true
         && request.resource.data.activeMode == 'resident'
         && request.resource.data.volunteerReviewedAt is timestamp
@@ -484,8 +484,7 @@ service cloud.firestore {
         )
         && volunteerApplicationAfter().status
           == request.resource.data.volunteerStatus;
-      allow update: if isAdmin()
-        && resource.data.role in [
+      allow update: if resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -498,6 +497,7 @@ service cloud.firestore {
             'reviewedBy',
             'rejectedReason'
           ])
+        && isAdmin()
         && request.resource.data.status in [
           'approved',
           'suspended'
@@ -505,9 +505,10 @@ service cloud.firestore {
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.rejectedReason is string;
-      allow update: if isSuperAdmin()
+      allow update: if signedIn()
         && request.auth.uid != uid
         && resource.data.role != 'superadmin'
+        && isSuperAdmin()
         && (
           (
             resource.data.role == 'applicant'
@@ -600,8 +601,7 @@ service cloud.firestore {
               ])
           )
         );
-      allow update: if isAdmin()
-        && resource.data.role == 'applicant'
+      allow update: if resource.data.role == 'applicant'
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -620,6 +620,7 @@ service cloud.firestore {
             'volunteerReviewedAt',
             'volunteerReviewedBy'
           ])
+        && isAdmin()
         && request.resource.data.role in [
           'applicant',
           'resident',
