@@ -634,7 +634,7 @@ export default function Signup() {
         "VolunServe Registration",
         googleBound
           ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
-          : "Account saved. Check Inbox and Spam for the verification link before login. If it does not arrive, use Resend verification email on Login with your VolunServe password.",
+          : "Account saved. Check Inbox and Spam for the verification link before login. If it does not arrive, check Spam or contact VolunServe support.",
         [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
