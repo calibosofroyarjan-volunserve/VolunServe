@@ -622,6 +622,7 @@ export default function Signup() {
     if (loadingSubmit) return;
 
     if (!validation.step4Valid) {
+      setShowStepErrors(true);
       AppAlert.alert("Incomplete", "Please satisfy all security and consent requirements.");
       return;
     }
