@@ -28,8 +28,12 @@ service cloud.firestore {
         )
         // Legacy users are unchanged; new password accounts need confirmed
         // Firebase email ownership to access approved-role operations.
-        && (p.get('emailVerificationRequired', false) != true
-          || request.auth.token.get('email_verified', false) == true)
+        // All Resident/Volunteer profiles (including legacy records) must
+        // prove email ownership; no opt-out by omitting a Firestore flag.
+        && ((p.get('role', '') in ['resident', 'volunteer'])
+          ? request.auth.token.get('email_verified', false) == true
+          : (p.get('emailVerificationRequired', false) != true
+            || request.auth.token.get('email_verified', false) == true))
         && (p.get('emailPolicyVersion', 0) != 1
           || trustedEmail(request.auth.uid, request.auth.token.get('email', '')));
     }
