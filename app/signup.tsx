@@ -28,7 +28,11 @@ import {
 import { auth } from "../lib/firebase";
 import { signUpUser } from "../lib/firebaseAuth";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
-import { getLoginErrorMessage } from "../lib/authUserMessages";
+import {
+  getLoginErrorMessage,
+  isRegistrationEmailConflict,
+  REGISTRATION_EMAIL_CONFLICT_MESSAGE,
+} from "../lib/authUserMessages";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -408,6 +412,7 @@ export default function Signup() {
 
   const [step, setStep] = useState<Step>(1);
   const [showStepErrors, setShowStepErrors] = useState(false);
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | null>(null);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
   const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
@@ -441,8 +446,13 @@ export default function Signup() {
   });
 
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
+    if (field === "email") setExistingAccountEmail(null);
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  const emailAlreadyUsed =
+    existingAccountEmail !== null &&
+    existingAccountEmail === formData.email.trim().toLowerCase();
 
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -551,11 +561,11 @@ export default function Signup() {
   }, [formData, googleBound, specializationOptions.length]);
 
   const isStepValid = useCallback((s: Step) => {
-    if (s === 1) return validation.step1Valid;
+    if (s === 1) return validation.step1Valid && !emailAlreadyUsed;
     if (s === 2) return validation.step2Valid;
     if (s === 3) return validation.step3Valid;
     return validation.step4Valid;
-  }, [validation]);
+  }, [validation, emailAlreadyUsed]);
 
   const scrollTop = useCallback(() => setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0), []);
 
@@ -638,11 +648,20 @@ export default function Signup() {
         [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
-      AppAlert.alert("Registration Error", getFriendlyAuthError(e));
+      if (isRegistrationEmailConflict(e)) {
+        // Report a confirmed collision, not an unreliable public existence lookup.
+        setExistingAccountEmail(formData.email.trim().toLowerCase());
+        setStep(1);
+        setShowStepErrors(true);
+        scrollTop();
+        AppAlert.alert("Account May Already Exist", REGISTRATION_EMAIL_CONFLICT_MESSAGE);
+      } else {
+        AppAlert.alert("Registration Error", getFriendlyAuthError(e));
+      }
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, googleBound, loadingSubmit, router, validation]);
+  }, [formData, googleBound, loadingSubmit, router, validation, scrollTop]);
 
   const currentMeta = STEP_META[step];
 
@@ -756,14 +775,27 @@ export default function Signup() {
               ) : null}
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && (formData.email.length > 0 || showStepErrors)} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              {(formData.email.length > 0 || showStepErrors) ? (
+              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={emailAlreadyUsed || (!validation.emailValid && (formData.email.length > 0 || showStepErrors))} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
+              {emailAlreadyUsed ? (
+                <View>
+                  <ValidationText ok={false}>{REGISTRATION_EMAIL_CONFLICT_MESSAGE}</ValidationText>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => router.push("/login")}
+                    style={{ alignSelf: "flex-start", paddingVertical: 8 }}
+                  >
+                    <Text style={{ color: COLORS.danger, fontWeight: "800", fontSize: 13 }}>
+                      Go to Sign In / Forgot Password
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (formData.email.length > 0 || showStepErrors) ? (
                 <ValidationText ok={validation.emailValid}>{validation.emailValid
-                  ? googleBound ? "Verified Google email. You may also use your VolunServe password." : "Valid format. Verify your email using the link sent after registration."
+                  ? googleBound ? "Verified Google email. You may also use your VolunServe password." : "Valid format only. Account availability is checked during registration."
                   : getRegistrationEmailError(formData.email)}</ValidationText>
               ) : (
                 <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
-                  Use a permanent email address you can verify. Temporary emails are blocked.
+                  Use a permanent email address you can verify. Temporary emails are blocked. If you already have an account, sign in.
                 </Text>
               )}
 
