@@ -71,7 +71,10 @@ export function useUserSession(): SessionState {
 
             // Signups cannot bypass email ownership confirmation through a
             // persisted Firebase session or direct navigation to /tabs.
-            if (profileData?.emailVerificationRequired === true &&
+            if (profileData &&
+                (profileData.emailVerificationRequired === true ||
+                  profileData.role === "resident" ||
+                  profileData.role === "volunteer") &&
                 !user.emailVerified) {
               setState({ loading: false, user: null, profile: null });
               void signOut(auth).catch(() => undefined);

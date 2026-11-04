@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import ForgotPasswordModal from "../components/auth/ForgotPasswordModal";
+import { getLoginErrorMessage } from "../lib/authUserMessages";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
@@ -9,7 +11,6 @@ import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
-  sendPasswordResetEmail,
   signInWithCredential,
   setPersistence,
   browserLocalPersistence,
@@ -28,7 +29,8 @@ import {
   View,
 } from "react-native";
 
-import { auth } from "../lib/firebase";
+import { auth, usingFirebaseEmulators } from "../lib/firebase";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
   getUserProfile,
@@ -50,10 +52,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [attemptedLogin, setAttemptedLogin] = useState(false);
+  const emailError = getRegistrationEmailError(email);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
-  const showSuccess = (message: string) => setFeedback({ type: "success", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
@@ -72,6 +76,11 @@ export default function Login() {
   });
 
   const routeSignedInProfile = async (uid: string) => {
+    const emailError = getRegistrationEmailError(auth.currentUser?.email || "");
+    if (emailError || !auth.currentUser?.emailVerified) {
+      await firebaseSignOut(auth);
+      throw new Error(emailError || "Please verify your Google email before continuing.");
+    }
     let profile;
 
     try {
@@ -119,8 +128,13 @@ export default function Login() {
   const handleLogin = async () => {
     const cleanEmail = email.trim();
 
-    if (!cleanEmail || !password) {
-      showError("Please enter your email address and password.");
+    setAttemptedLogin(true);
+    if (emailError) {
+      showError(emailError);
+      return;
+    }
+    if (!password) {
+      showError("Enter your VolunServe password (not your email provider password).");
       return;
     }
 
@@ -147,44 +161,7 @@ export default function Login() {
 
       router.replace(destination as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (loading || googleLoading) {
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail) {
-      showError("Enter your email address first, then select Forgot password.");
-      return;
-    }
-
-    try {
-      clearFeedback();
-      setLoading(true);
-
-      await sendPasswordResetEmail(
-        auth,
-        cleanEmail
-      );
-
-      showSuccess("If this account uses email and password, check your inbox and spam folder for the reset link.");
-    } catch (error: any) {
-      const code = String(error?.code || "");
-
-      if (code === "auth/invalid-email") {
-        showError("Please enter a valid email address.");
-      } else if (code === "auth/too-many-requests") {
-        showError("Too many reset attempts. Please wait and try again later.");
-      } else {
-        showError(error?.message || "Unable to send the password reset email.");
-      }
+      showError(getLoginErrorMessage(error, usingFirebaseEmulators));
     } finally {
       setLoading(false);
     }
@@ -232,7 +209,7 @@ export default function Login() {
     } catch (error: any) {
       await firebaseSignOut(auth).catch(() => undefined);
 
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      showError(getLoginErrorMessage(error, usingFirebaseEmulators));
     } finally {
       setGoogleLoading(false);
     }
@@ -244,7 +221,7 @@ export default function Login() {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PremiumAuthShell active="resident">
         <Text style={styles.label}>Email Address</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused, (attemptedLogin || email.length > 0) && emailError && styles.inputInvalid]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer email address"
@@ -253,8 +230,9 @@ export default function Login() {
             textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
             returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
         </View>
+        {(attemptedLogin || email.length > 0) && emailError ? <Text style={styles.errorHint}>{emailError}</Text> : null}
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused, attemptedLogin && !password && styles.inputInvalid]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
           <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer password"
@@ -270,6 +248,7 @@ export default function Login() {
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
+        {attemptedLogin && !password ? <Text style={styles.errorHint}>VolunServe password required. Never enter your email provider password.</Text> : null}
         <View style={styles.options}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: rememberMe }}
@@ -278,7 +257,7 @@ export default function Login() {
             <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
             <Text style={styles.muted}>Remember me</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+          <TouchableOpacity accessibilityRole="button" onPress={() => setForgotPasswordOpen(true)}
             disabled={loading || googleLoading}>
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
@@ -347,6 +326,11 @@ export default function Login() {
           <Text style={styles.createLink}>Create An Account</Text>
         </TouchableOpacity>
       </PremiumAuthShell>
+      <ForgotPasswordModal
+        visible={forgotPasswordOpen}
+        initialEmail={email}
+        onClose={() => setForgotPasswordOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -360,6 +344,8 @@ const styles = StyleSheet.create({
     borderRadius:13,borderWidth:1,marginBottom:2},
   input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
+  inputInvalid: {borderColor:"#DC2626",borderWidth:2,backgroundColor:"#FFF7F7"},
+  errorHint: {color:"#B42318",fontSize:12,fontWeight:"700",marginBottom:6},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},

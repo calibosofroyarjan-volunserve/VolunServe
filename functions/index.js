@@ -2818,3 +2818,6 @@ exports.notifyLguOnResidentIdentityPending = onDocumentUpdated(
           "verification process.");
     },
 );
+
+// Trusted email-domain check for new Resident registrations.
+Object.assign(exports, require("./emailRegistrationTrust"));

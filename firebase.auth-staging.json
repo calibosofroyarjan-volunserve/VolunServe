@@ -1,0 +1,39 @@
+{
+  "firestore": {
+    "rules": "firestore.auth-staging.rules"
+  },
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "**/Ionicons*.ttf",
+        "destination": "/fonts/Ionicons.ttf"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/signup",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/login",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
+  }
+}

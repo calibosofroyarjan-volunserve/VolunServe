@@ -5,7 +5,7 @@ import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signOut } from "firebase/auth";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,9 +25,15 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { auth } from "../lib/firebase";
+import { auth, usingFirebaseStaging } from "../lib/firebase";
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { signUpUser } from "../lib/firebaseAuth";
-import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
+import {
+  getLoginErrorMessage,
+  isRegistrationEmailConflict,
+  REGISTRATION_EMAIL_CONFLICT_MESSAGE,
+} from "../lib/authUserMessages";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { OCCUPATION_OPTIONS, SPECIALIZATIONS } from "../constants/occupationOptions";
 
@@ -184,13 +190,7 @@ function formatDOB(d: Date) {
 }
 
 function getFriendlyAuthError(error: any) {
-  const code = error?.code || "";
-  if (code === "auth/email-already-in-use") return "This email address is already registered.";
-  if (code === "auth/invalid-email") return "The email address format is invalid.";
-  if (code === "auth/weak-password") return "Your password is too weak.";
-  if (code === "auth/network-request-failed") return "Network error. Please check your internet connection and try again.";
-  if (code === "auth/account-exists-with-different-credential") return "An account already exists with this email using a different sign-in method.";
-  return error?.message || "Something went wrong. Please try again.";
+  return getLoginErrorMessage(error);
 }
 
 function splitDisplayName(displayName: string) {
@@ -407,11 +407,19 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 }
 
 export default function Signup() {
+  // Roll out email-first verification to the isolated Spark staging build.
+  // Production retains the existing signup until verified in staging.
+  return usingFirebaseStaging ? <EmailFirstSignup /> : <LegacySignup />;
+}
+
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [step, setStep] = useState<Step>(1);
+  const [showStepErrors, setShowStepErrors] = useState(false);
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | null>(null);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
   const [googleProfileLoaded, setGoogleProfileLoaded] = useState(false);
@@ -445,8 +453,13 @@ export default function Signup() {
   });
 
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
+    if (field === "email") setExistingAccountEmail(null);
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  const emailAlreadyUsed =
+    existingAccountEmail !== null &&
+    existingAccountEmail === formData.email.trim().toLowerCase();
 
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -475,6 +488,11 @@ export default function Signup() {
         const credential = GoogleAuthProvider.credential(idToken);
         const userCred = await signInWithCredential(auth, credential);
         const user = userCred.user;
+        const emailError = getRegistrationEmailError(user.email || "");
+        if (emailError || !user.emailVerified) {
+          await signOut(auth);
+          throw new Error(emailError || "Please verify your Google email before continuing.");
+        }
         const parsed = splitDisplayName(user.displayName || "");
         const googleEmail = (user.email || "").trim().toLowerCase();
 
@@ -498,7 +516,6 @@ export default function Signup() {
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
@@ -506,8 +523,7 @@ export default function Signup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = /^9\d{9}$/.test(formData.phoneLocal);
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase()) &&
-      !isKnownDisposableEmail(formData.email);
+    const emailValid = getRegistrationEmailError(formData.email) === null;
     const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid;
     const step2Valid =
       !!formData.region &&
@@ -552,16 +568,17 @@ export default function Signup() {
   }, [formData, googleBound, specializationOptions.length]);
 
   const isStepValid = useCallback((s: Step) => {
-    if (s === 1) return validation.step1Valid;
+    if (s === 1) return validation.step1Valid && !emailAlreadyUsed;
     if (s === 2) return validation.step2Valid;
     if (s === 3) return validation.step3Valid;
     return validation.step4Valid;
-  }, [validation]);
+  }, [validation, emailAlreadyUsed]);
 
   const scrollTop = useCallback(() => setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 0), []);
 
   const goNext = useCallback(() => {
     if (!isStepValid(step)) {
+      setShowStepErrors(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       
       const stepMessages: Record<Step, string> = {
@@ -577,6 +594,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step < 4) {
       setStep((prev) => (prev + 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [googleBound, isStepValid, scrollTop, step]);
@@ -585,6 +603,7 @@ export default function Signup() {
     Keyboard.dismiss();
     if (step > 1) {
       setStep((prev) => (prev - 1) as Step);
+      setShowStepErrors(false);
       scrollTop();
     }
   }, [scrollTop, step]);
@@ -599,7 +618,24 @@ export default function Signup() {
 
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
+    // Recheck ALL stages on submission. A form must never create a user
+    // from stale state or after an email/account validation change.
+    if (emailAlreadyUsed || !validation.step1Valid || !validation.step2Valid || !validation.step3Valid) {
+      const firstInvalidStep = emailAlreadyUsed || !validation.step1Valid
+        ? 1 : !validation.step2Valid ? 2 : 3;
+      setStep(firstInvalidStep as Step);
+      setShowStepErrors(true);
+      scrollTop();
+      AppAlert.alert(
+        "Complete Your Registration",
+        emailAlreadyUsed
+          ? REGISTRATION_EMAIL_CONFLICT_MESSAGE
+          : "Please correct the highlighted required fields before creating an account."
+      );
+      return;
+    }
     if (!validation.step4Valid) {
+      setShowStepErrors(true);
       AppAlert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
       return;
     }
@@ -631,15 +667,24 @@ export default function Signup() {
         "VolunServe Registration",
         googleBound
           ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
-          : "Account saved. Check your email for the verification link, open it, then sign in using your email and password.",
+          : "Account saved. Check Inbox and Spam for the verification link before login. If it does not arrive, check Spam or contact VolunServe support.",
         [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
-      AppAlert.alert("Registration Error", getFriendlyAuthError(e));
+      if (isRegistrationEmailConflict(e)) {
+        // Report a confirmed collision, not an unreliable public existence lookup.
+        setExistingAccountEmail(formData.email.trim().toLowerCase());
+        setStep(1);
+        setShowStepErrors(true);
+        scrollTop();
+        AppAlert.alert("Account May Already Exist", REGISTRATION_EMAIL_CONFLICT_MESSAGE);
+      } else {
+        AppAlert.alert("Registration Error", getFriendlyAuthError(e));
+      }
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, googleBound, loadingSubmit, router, validation]);
+  }, [formData, googleBound, loadingSubmit, router, validation, scrollTop, emailAlreadyUsed]);
 
   const currentMeta = STEP_META[step];
 
@@ -753,11 +798,34 @@ export default function Signup() {
               ) : null}
 
               <SectionTitle title="Personal Information" subtitle="Use accurate details for your Basic Resident profile." />
-              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={!validation.emailValid && formData.email.length > 0} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
-              <ValidationText ok={validation.emailValid}>{validation.emailValid && formData.email.length > 0 ? "✓ Valid email address" : googleBound ? "Email is linked to your connected Google account." : isKnownDisposableEmail(formData.email) ? "Temporary emails are not accepted. Use a permanent email." : "Enter a valid email format."}</ValidationText>
+              <Field icon="📧" label="Email Address *" value={formData.email} onChange={(v) => updateField("email", v.trim().toLowerCase())} keyboardType="email-address" invalid={emailAlreadyUsed || (!validation.emailValid && (formData.email.length > 0 || showStepErrors))} returnKeyType="next" editable={!googleBound} autoCapitalize="none" />
+              {emailAlreadyUsed ? (
+                <View>
+                  <ValidationText ok={false}>{REGISTRATION_EMAIL_CONFLICT_MESSAGE}</ValidationText>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => router.push("/login")}
+                    style={{ alignSelf: "flex-start", paddingVertical: 8 }}
+                  >
+                    <Text style={{ color: COLORS.danger, fontWeight: "800", fontSize: 13 }}>
+                      Go to Sign In / Forgot Password
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (formData.email.length > 0 || showStepErrors) ? (
+                <ValidationText ok={validation.emailValid}>{validation.emailValid
+                  ? googleBound ? "Verified Google email. You may also use your VolunServe password." : "Valid format only. Account availability is checked during registration."
+                  : getRegistrationEmailError(formData.email)}</ValidationText>
+              ) : (
+                <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
+                  Use a permanent email address you can verify. Temporary emails are blocked. If you already have an account, sign in.
+                </Text>
+              )}
 
-              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
-              <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && formData.firstName.length > 0} returnKeyType="next" />
+              <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors)} returnKeyType="next" />
+              {!validation.lastNameValid && (formData.lastName.length > 0 || showStepErrors) ? <ValidationText ok={false}>Last name must contain at least 2 letters.</ValidationText> : null}
+              <Field icon="👤" label="First Name *" value={formData.firstName} onChange={(v) => updateField("firstName", sanitizeName(v))} invalid={!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors)} returnKeyType="next" />
+              {!validation.firstNameValid && (formData.firstName.length > 0 || showStepErrors) ? <ValidationText ok={false}>First name must contain at least 2 letters.</ValidationText> : null}
               <Field icon="👤" label="Middle Name *" value={formData.middleName} onChange={(v) => updateField("middleName", sanitizeName(v))} editable={!formData.noMiddleName} invalid={!formData.noMiddleName && formData.middleName.length > 0 && !validation.middleNameValid} returnKeyType="next" />
               <CheckRow label="No Middle Name" checked={formData.noMiddleName} onPress={() => {
                 const next = !formData.noMiddleName;
@@ -793,7 +861,7 @@ export default function Signup() {
               <View style={styles.phoneWrap}>
                 <View style={styles.phonePrefix}><Text style={styles.flag}>🇵🇭</Text><Text style={styles.phonePrefixText}>+63</Text></View>
                 <TextInput
-                  style={[styles.phoneInput, !validation.phoneValid && formData.phoneLocal.length > 0 && styles.inputInvalid]}
+                  style={[styles.phoneInput, !validation.phoneValid && (formData.phoneLocal.length > 0 || showStepErrors) && styles.inputInvalid]}
                   value={formData.phoneLocal}
                   onChangeText={(v) => updateField("phoneLocal", sanitizePhoneLocal(v.trim()))}
                   keyboardType="phone-pad"
@@ -860,9 +928,9 @@ export default function Signup() {
                   </Text>
                 </View>
               )}
-              <SectionTitle title="Password Security" subtitle="Create a strong password to secure this account." />
-              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} autoCapitalize="none" />
-              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} autoCapitalize="none" />
+              <SectionTitle title="Password Security" subtitle="Create a separate VolunServe password—not your email provider password. Never share it." />
+              <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} invalid={(formData.password.length > 0 || showStepErrors) && (!validation.passwordChecks.minLength || !validation.passwordChecks.upper || !validation.passwordChecks.lower || !validation.passwordChecks.number || !validation.passwordChecks.special || !validation.passwordChecks.notCommon)} autoCapitalize="none" />
+              <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} invalid={(formData.confirmPassword.length > 0 || showStepErrors) && !validation.passwordChecks.matches} autoCapitalize="none" />
               <View style={styles.passwordPanel}>
                 <Text style={styles.passwordStrength}>Password Strength: {validation.passwordStrength}</Text>
                 <ValidationText ok={validation.passwordChecks.minLength}>Minimum 8 characters.</ValidationText>
@@ -890,7 +958,7 @@ export default function Signup() {
           ) : <View style={{ flex: 1 }} />}
 
           {step < 4 ? (
-            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, !isStepValid(step) && styles.disabledBtn]} onPress={goNext} disabled={!isStepValid(step)}>
+            <TouchableOpacity style={[styles.navBtn, styles.primaryBtn, loadingSubmit && styles.disabledBtn]} onPress={goNext} disabled={loadingSubmit}>
               <Text style={styles.primaryText}>Next</Text>
             </TouchableOpacity>
           ) : (

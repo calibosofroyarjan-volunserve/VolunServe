@@ -1,0 +1,41 @@
+name: Email-first Auth Staging (No Deploy)
+
+on:
+  push:
+    branches:
+      - fix/email-verification-validation-20261104
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signup-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check email validation and collision UX
+        run: node scripts/testSignupValidation.cjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify staged email-before-profile Firestore rules (emulator only)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/testEmailFirstStagingRules.cjs"
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --pretty false
+      - name: Expo staging web export (no deployment, no credentials)
+        env:
+          EXPO_PUBLIC_FIREBASE_TARGET: staging
+          EXPO_PUBLIC_USE_FIREBASE_EMULATORS: "false"
+        run: npx expo export --platform web

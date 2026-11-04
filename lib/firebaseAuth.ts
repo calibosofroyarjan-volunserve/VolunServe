@@ -20,10 +20,10 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth, db, firebaseConfig, usingFirebaseEmulators, usingFirebaseStaging } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
-import { isKnownDisposableEmail } from "./registrationEmailPolicy";
+import { getRegistrationEmailError } from "./registrationEmailPolicy";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -32,6 +32,11 @@ export const connectGoogleAccountWeb = async () => {
       prompt: "select_account",
     });
     const result = await signInWithPopup(auth, provider);
+    const emailError = getRegistrationEmailError(result.user.email || "");
+    if (emailError || !result.user.emailVerified) {
+      await signOut(auth);
+      throw new Error(emailError || "Please verify your Google email before continuing.");
+    }
     return result.user;
   } catch (err: any) {
     if (err?.code === "auth/popup-closed-by-user") {
@@ -55,6 +60,76 @@ export const hasPasswordSignInProvider = (
     )
   );
 };
+
+/**
+ * Firebase Email Enumeration Protection disallows SDK linkWithCredential
+ * with EmailAuthCredential. Identity Toolkit accounts:signUp with the
+ * CURRENT USER'S verified ID token is the documented replacement.
+ * Never request or store a user's actual Gmail/Google password.
+ *
+ * The emulator retains the normal SDK path for offline auth tests.
+ */
+async function attachVolunServePassword(user: User, password: string): Promise<User> {
+  const email = user.email?.trim().toLowerCase();
+  if (!email || !user.emailVerified) {
+    throw new Error("Your Google email must be verified before setting a VolunServe password.");
+  }
+  const emailError = getRegistrationEmailError(email);
+  if (emailError) throw new Error(emailError);
+  if (hasPasswordSignInProvider(user)) {
+    throw new Error("This account already has an Email + Password sign-in. Use Change Password instead.");
+  }
+
+  if (usingFirebaseEmulators) {
+    const credential = EmailAuthProvider.credential(email, password);
+    const linked = await linkWithCredential(user, credential);
+    await reload(linked.user);
+    return auth.currentUser || linked.user;
+  }
+
+  const idToken = await getIdToken(user, true);
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseConfig.apiKey)}`,
+    {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        idToken,
+        email,
+        password,
+        returnSecureToken: true,
+      }),
+    }
+  );
+  const payload: any = await response.json();
+  if (!response.ok) {
+    const apiCode = String(payload?.error?.message || "");
+    if (apiCode.includes("EMAIL_EXISTS")) {
+      throw new Error("That email already has a separate login. Do not create another account; contact VolunServe support.");
+    }
+    if (apiCode.includes("INVALID_ID_TOKEN") || apiCode.includes("CREDENTIAL_TOO_OLD_LOGIN_AGAIN")) {
+      throw new Error("Your Google session expired. Sign in with Google again and retry.");
+    }
+    if (apiCode.includes("WEAK_PASSWORD")) {
+      throw new Error("Choose a stronger VolunServe password.");
+    }
+    throw new Error("Unable to link your VolunServe password securely. Please retry after signing in with Google.");
+  }
+  // Never accept a result that would split the profile into a second Firebase UID.
+  if (payload.localId !== user.uid) {
+    throw new Error("Password linking returned a different account. Do not proceed; contact support.");
+  }
+  // Complete a real Email+Password sign-in as a post-link validation.
+  // This also refreshes Firebase SDK credentials after the REST operation.
+  const confirmed = await signInWithEmailAndPassword(auth, email, password);
+  if (confirmed.user.uid !== user.uid) {
+    await signOut(auth);
+    throw new Error("Account mismatch after password linking. Contact support.");
+  }
+  await reload(confirmed.user);
+  await getIdToken(confirmed.user, true);
+  return confirmed.user;
+}
 
 export const setVolunServePasswordForCurrentGoogleUser = async (
   password: string
@@ -86,10 +161,14 @@ export const setVolunServePasswordForCurrentGoogleUser = async (
       );
     }
 
-    if (!password || password.length < 8) {
-      throw new Error(
-        "Create a VolunServe password with at least 8 characters."
-      );
+    if (
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/\d/.test(password) ||
+      !/[^A-Za-z0-9]/.test(password)
+    ) {
+      throw new Error("Use at least 8 characters including uppercase, lowercase, a number and a special character.");
     }
 
     if (hasPasswordSignInProvider(user)) {
@@ -98,11 +177,7 @@ export const setVolunServePasswordForCurrentGoogleUser = async (
       return auth.currentUser || user;
     }
 
-    const credential = EmailAuthProvider.credential(email, password);
-    const linkedCredential = await linkWithCredential(user, credential);
-    await linkedCredential.user.reload();
-
-    return auth.currentUser || linkedCredential.user;
+    return attachVolunServePassword(user, password);
   } catch (err: any) {
     const message = err?.code?.startsWith("auth/")
       ? friendlyAuthError(err)
@@ -220,7 +295,7 @@ export interface SignupData {
   age: number;
   email: string;
   password: string;
-  authProvider?: "email" | "google";
+  authProvider?: "email" | "google" | "verified_email";
   phoneNumber: string;
   region: string;
   province: string;
@@ -455,23 +530,39 @@ function friendlyAuthError(err: any) {
 }
 
 function friendlyFirestoreError(err: any) {
-  const code = err?.code;
-  if (code === "permission-denied") {
-    return "Firestore permission denied. Check Firestore Rules.";
+  // Users should never see database/provider internals in registration errors.
+  if (err?.code === "permission-denied") {
+    return "We could not complete registration. Please check your details or contact VolunServe support.";
   }
-  return err?.message || "Firestore error.";
+  if (err?.code === "unavailable" || err?.code === "deadline-exceeded") {
+    return "The registration service is temporarily unavailable. Please try again later.";
+  }
+  const message = String(err?.message || "");
+  if (message && !/firebase|firestore|auth\/|functions\/|permission-denied|\[.*\]/i.test(message)) {
+    return message;
+  }
+  return "Unable to complete registration. Please try again.";
 }
 
 export const signUpUser = async (
   data: SignupData
 ) => {
   try {
-    let user;
+    let user: User;
     const submittedEmail = data.email.trim().toLowerCase();
     // Check before creating an Auth UID; client-side blocklist is not a
     // substitute for verified email ownership or a backend abuse service.
-    if (isKnownDisposableEmail(submittedEmail)) {
-      throw new Error("Temporary email providers are not accepted. Use a permanent email address you can verify.");
+    const emailError = getRegistrationEmailError(submittedEmail);
+    if (emailError) throw new Error(emailError);
+    if (
+      data.authProvider !== "verified_email" &&
+      (data.password.length < 8 ||
+      !/[A-Z]/.test(data.password) ||
+      !/[a-z]/.test(data.password) ||
+      !/\d/.test(data.password) ||
+      !/[^A-Za-z0-9]/.test(data.password))
+    ) {
+      throw new Error("Password must contain 8+ characters, uppercase, lowercase, a number and a special character.");
     }
     if (!Number.isInteger(data.age) || data.age < 18 || data.age > 120) {
       throw new Error("VolunServe registration requires age 18 or older.");
@@ -482,10 +573,11 @@ export const signUpUser = async (
       throw new Error("VolunServe registration is restricted to San Jose del Monte, Bulacan.");
     }
     const usesGoogle = data.authProvider === "google";
-    if (usesGoogle) {
+    const usesVerifiedEmail = data.authProvider === "verified_email";
+    if (usesGoogle || usesVerifiedEmail) {
       if (!auth.currentUser) {
         throw new Error(
-          "Your Google registration session expired. Connect your Google account again."
+          "Your verified registration session expired. Return to Signup and resume securely."
         );
       }
       const authenticatedEmail =
@@ -495,10 +587,20 @@ export const signUpUser = async (
         authenticatedEmail !== submittedEmail
       ) {
         throw new Error(
-          "The connected Google account does not match the email in the registration form."
+          "The signed-in email does not match the registration email. Please resume with the correct account."
         );
       }
       user = auth.currentUser;
+      // Verify current user with Firebase itself; never trust a client
+      // submitted emailVerified flag. Refresh the token for Rules checks.
+      await reload(user);
+      if (!user.emailVerified) {
+        throw new Error("Please verify your email before completing registration.");
+      }
+      if (usesVerifiedEmail && !hasPasswordSignInProvider(user)) {
+        throw new Error("Link a VolunServe password to this verified email before completing registration.");
+      }
+      await getIdToken(user, true);
     } else {
       if (auth.currentUser) {
         await signOut(auth);
@@ -519,6 +621,11 @@ export const signUpUser = async (
         "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
       );
     }
+    // Firebase Spark has no deployable callable Functions. The client checks
+    // the maintained disposable-email list before Auth account creation,
+    // while Firestore Rules separately refuse known disposable domains and
+    // enforce verified-email access to Resident/Volunteer operations.
+    // Neither check can guarantee blocking EVERY future throwaway provider.
     // Google registration must also have an Email/Password credential linked
     // to the SAME Firebase UID. This keeps one VolunServe profile while
     // allowing the resident to sign in either with Google or manually.
@@ -532,15 +639,7 @@ export const signUpUser = async (
             "Create a VolunServe password so this account can use both Google and email/password sign-in."
           );
         }
-        const emailPasswordCredential = EmailAuthProvider.credential(
-          submittedEmail,
-          data.password
-        );
-        const linkedCredential = await linkWithCredential(
-          user,
-          emailPasswordCredential
-        );
-        user = linkedCredential.user;
+        user = await attachVolunServePassword(user, data.password);
       }
     }
     const fullName = [
@@ -617,14 +716,15 @@ export const signUpUser = async (
       identityStatus:
         "basic" as IdentityStatus,
       identityVerified: false,
-      emailVerificationRequired: !usesGoogle,
+      emailVerificationRequired: true,
+      emailPolicyVersion: 1,
       profilePictureUrl:
         user.photoURL || "",
       createdAt:
         serverTimestamp(),
     });
     await batch.commit();
-    if (!usesGoogle && !user.emailVerified) {
+    if (!usesGoogle && !usesVerifiedEmail && !user.emailVerified) {
       // Firebase sends a confirmation link; the app must not call unverified
       // email ownership proof. Delivery failures should NOT turn a successfully
       // saved Basic account into a fake registration failure.
@@ -634,8 +734,8 @@ export const signUpUser = async (
         console.warn("Basic account saved but email verification could not be sent:", emailError);
       }
     }
-    if (!usesGoogle) {
-      // Email/password registration is NOT verified until the email link is opened.
+    if (!usesGoogle && !usesVerifiedEmail) {
+      // Legacy email/password registration is NOT verified until the email link is opened.
       // Prevent auto-entry to protected tabs through an already-authenticated signup.
       await signOut(auth);
     }
@@ -646,6 +746,39 @@ export const signUpUser = async (
         ? friendlyAuthError(err)
         : friendlyFirestoreError(err);
     throw new Error(message);
+  }
+};
+
+/** Resend verified-email proof only after the account's own password is supplied. */
+export const resendResidentVerificationEmail = async (
+  submittedEmail: string, password: string
+): Promise<"sent" | "verified"> => {
+  const email = submittedEmail.trim().toLowerCase();
+  const emailError = getRegistrationEmailError(email);
+  if (emailError) throw new Error(emailError);
+  if (!password) throw new Error("Enter your VolunServe password to resend verification.");
+  const credential = await signInWithEmailAndPassword(auth, email, password)
+    .catch((error: any) => { throw new Error(friendlyAuthError(error)); });
+  try {
+    await reload(credential.user);
+    if (credential.user.emailVerified) return "verified";
+    const docSnap = await getDoc(doc(db, "users", credential.user.uid));
+    if (!docSnap.exists()) {
+      throw new Error("No completed VolunServe profile was found. Finish registration first.");
+    }
+    const profile = docSnap.data() as UserProfile;
+    if (profile.role !== "resident" && profile.role !== "volunteer") {
+      throw new Error("Staff accounts must contact their administrative account manager.");
+    }
+    await sendEmailVerification(credential.user);
+    return "sent";
+  } catch (error: any) {
+    if (error?.code === "auth/too-many-requests") {
+      throw new Error("Too many verification requests. Check inbox/spam and retry later.");
+    }
+    throw error;
+  } finally {
+    await signOut(auth).catch(() => undefined);
   }
 };
 
@@ -661,6 +794,11 @@ export const loginUser = async (
         password
       );
     const user = userCredential.user;
+    const emailError = getRegistrationEmailError(user.email || email);
+    if (emailError) {
+      await signOut(auth);
+      throw new Error(emailError);
+    }
     const profileRef =
       doc(db, "users", user.uid);
     const profileSnapshot =
@@ -668,19 +806,25 @@ export const loginUser = async (
     if (!profileSnapshot.exists()) {
       await signOut(auth);
       throw new Error(
-        "No VolunServe profile was found for this account. Please register first."
+        usingFirebaseStaging
+          ? "Registration is not finished. Open Create Account and choose Resume Registration with this email and your VolunServe password."
+          : "No VolunServe profile was found for this account. Please register first."
       );
     }
     const profile =
       profileSnapshot.data() as UserProfile;
-    if (profile.emailVerificationRequired === true) {
+    if (
+      profile.emailVerificationRequired === true ||
+      profile.role === "resident" ||
+      profile.role === "volunteer"
+    ) {
       await reload(user);
       if (!user.emailVerified) {
         try { await sendEmailVerification(user); } catch {
           // The user may have recently received a link; do not hide the requirement.
         }
         await signOut(auth);
-        throw new Error("Please verify your email address before signing in. Check your inbox and spam folder for the Firebase confirmation link, then sign in again.");
+        throw new Error("Please verify your email address before signing in. Check your inbox and Spam folder for the verification link, then sign in again.");
       }
       // Refresh the email_verified token claim used by Firestore role gates.
       await getIdToken(user, true);
