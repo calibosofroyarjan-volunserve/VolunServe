@@ -751,6 +751,39 @@ export const signUpUser = async (
   }
 };
 
+/** Resend verified-email proof only after the account's own password is supplied. */
+export const resendResidentVerificationEmail = async (
+  submittedEmail: string, password: string
+): Promise<"sent" | "verified"> => {
+  const email = submittedEmail.trim().toLowerCase();
+  const emailError = getRegistrationEmailError(email);
+  if (emailError) throw new Error(emailError);
+  if (!password) throw new Error("Enter your VolunServe password to resend verification.");
+  const credential = await signInWithEmailAndPassword(auth, email, password)
+    .catch((error: any) => { throw new Error(friendlyAuthError(error)); });
+  try {
+    await reload(credential.user);
+    if (credential.user.emailVerified) return "verified";
+    const docSnap = await getDoc(doc(db, "users", credential.user.uid));
+    if (!docSnap.exists()) {
+      throw new Error("No completed VolunServe profile was found. Finish registration first.");
+    }
+    const profile = docSnap.data() as UserProfile;
+    if (profile.role !== "resident" && profile.role !== "volunteer") {
+      throw new Error("Staff accounts must contact their administrative account manager.");
+    }
+    await sendEmailVerification(credential.user);
+    return "sent";
+  } catch (error: any) {
+    if (error?.code === "auth/too-many-requests") {
+      throw new Error("Too many verification requests. Check inbox/spam and retry later.");
+    }
+    throw error;
+  } finally {
+    await signOut(auth).catch(() => undefined);
+  }
+};
+
 export const loginUser = async (
   email: string,
   password: string
