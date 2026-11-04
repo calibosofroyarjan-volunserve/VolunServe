@@ -179,7 +179,40 @@ async function run() {
     legacyAdmin.doc("volunteerEvents/event-1").get()
   );
 
-  console.log("\n" + passed + "/12 authentication security rules checks passed.");
+  // Positive regressions: the guarded Admin and Super Admin paths must
+  // remain operational, not merely deny unauthorized Residents.
+  const admin = testEnv.authenticatedContext("legacy-admin", {
+    email: "admin@sjdm.gov.ph", email_verified: false,
+  }).firestore();
+  await allowed(
+    "Existing LGU Admin can suspend a Resident with review metadata",
+    admin.doc("users/resident-valid").update({
+      status: "suspended",
+      reviewedAt: new Date(),
+      reviewedBy: "legacy-admin",
+      rejectedReason: "Security review required",
+    })
+  );
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc("users/root-admin").set({
+      uid: "root-admin", role: "superadmin", status: "approved",
+    });
+  });
+  const superAdmin = testEnv.authenticatedContext("root-admin", {
+    email: "system-admin@sjdm.gov.ph", email_verified: true,
+  }).firestore();
+  await allowed(
+    "Existing Super Admin can suspend an LGU Admin",
+    superAdmin.doc("users/legacy-admin").update({
+      status: "suspended",
+      adminStatus: "suspended",
+      adminUpdatedBy: "root-admin",
+      adminUpdatedAt: new Date(),
+    })
+  );
+
+  console.log("\n" + passed + "/14 authentication security rules checks passed.");
   console.log(
     "These tests cover known blocked domains only. They do not prove every " +
     "temporary mail provider is blocked or that the live app works."
