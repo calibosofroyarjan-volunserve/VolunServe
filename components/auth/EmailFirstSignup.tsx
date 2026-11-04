@@ -673,12 +673,12 @@ export default function EmailFirstSignup() {
                 <Text style={styles.helper}>
                   {resumeMode
                     ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Use an email you can open now. Verification is required before entering personal details."}
+                    : "Use any accessible email (Yahoo, Outlook, Gmail, school or work). You must verify it before entering personal details."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
-                  placeholder="you@gmail.com" keyboardType="email-address"
+                  placeholder="name@example.com" keyboardType="email-address"
                   disabled={!emailCanEdit}
                   error={(showErrors || email.length > 0) ? emailErr : null}
                 />
