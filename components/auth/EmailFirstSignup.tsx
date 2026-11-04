@@ -460,7 +460,33 @@ export default function EmailFirstSignup() {
       });
       setCompletedProfile(true);
       router.replace("/(tabs)");
-    } catch  return (
+    } catch (e) {
+      setError(safeAuthError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const checkButton = (label: string, onPress: () => void, alt = false) => (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={busy}
+      style={[styles.button, alt && styles.altButton, busy && styles.dim]}
+    >
+      {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
+        <Text style={[styles.buttonText, alt && styles.altText]}>{label}</Text>}
+    </Pressable>
+  );
+
+  if (checking) return (
+    <View style={[styles.screen, styles.center]}>
+      <ActivityIndicator color={GREEN} size="large"/>
+      <Text style={styles.subtitle}>Checking your registration...</Text>
+    </View>
+  );
+
+  return (
     <KeyboardAvoidingView style={styles.legacyScreen} behavior={undefined}>
       <View style={styles.legacyDesktopShell}>
         {width >= 900 ? (
@@ -616,24 +642,6 @@ export default function EmailFirstSignup() {
                 </Text>
               </View>
             )}
-
-es.subtitle}>Easy, secure registration — four short steps.</Text>
-        <View style={styles.steps}>
-          {STEP_LABELS.map((label, index) => (
-            <View key={label} style={styles.stepItem}>
-              <View style={[
-                styles.stepNum, step >= index + 1 && styles.stepNumActive,
-              ]}>
-                <Text style={[
-                  styles.stepNumText, step >= index + 1 && styles.stepNumTextActive,
-                ]}>{step > index + 1 ? "✓" : index + 1}</Text>
-              </View>
-              <Text style={[
-                styles.stepName, step === index + 1 && styles.stepNameActive,
-              ]}>{label}</Text>
-            </View>
-          ))}
-        </View>
 
         {!!error && <View style={styles.errorBox}>
           <Text style={styles.errorBoxText}>{error}</Text>
