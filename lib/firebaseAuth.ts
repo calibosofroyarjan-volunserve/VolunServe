@@ -20,7 +20,7 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db, firebaseConfig, usingFirebaseEmulators } from "./firebase";
+import { auth, db, firebaseConfig, usingFirebaseEmulators, usingFirebaseStaging } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
 import { getRegistrationEmailError } from "./registrationEmailPolicy";
@@ -806,7 +806,9 @@ export const loginUser = async (
     if (!profileSnapshot.exists()) {
       await signOut(auth);
       throw new Error(
-        "Registration is not finished. Open Create Account and choose Resume Registration with this email and your VolunServe password."
+        usingFirebaseStaging
+          ? "Registration is not finished. Open Create Account and choose Resume Registration with this email and your VolunServe password."
+          : "No VolunServe profile was found for this account. Please register first."
       );
     }
     const profile =
