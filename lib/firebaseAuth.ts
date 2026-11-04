@@ -23,7 +23,7 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
-import { isKnownDisposableEmail } from "./registrationEmailPolicy";
+import { getRegistrationEmailError, isKnownDisposableEmail } from "./registrationEmailPolicy";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -32,6 +32,11 @@ export const connectGoogleAccountWeb = async () => {
       prompt: "select_account",
     });
     const result = await signInWithPopup(auth, provider);
+    const emailError = getRegistrationEmailError(result.user.email || "");
+    if (emailError || !result.user.emailVerified) {
+      await signOut(auth);
+      throw new Error(emailError || "Please verify your Google email before continuing.");
+    }
     return result.user;
   } catch (err: any) {
     if (err?.code === "auth/popup-closed-by-user") {
@@ -470,8 +475,16 @@ export const signUpUser = async (
     const submittedEmail = data.email.trim().toLowerCase();
     // Check before creating an Auth UID; client-side blocklist is not a
     // substitute for verified email ownership or a backend abuse service.
-    if (isKnownDisposableEmail(submittedEmail)) {
-      throw new Error("Temporary email providers are not accepted. Use a permanent email address you can verify.");
+    const emailError = getRegistrationEmailError(submittedEmail);
+    if (emailError) throw new Error(emailError);
+    if (
+      data.password.length < 8 ||
+      !/[A-Z]/.test(data.password) ||
+      !/[a-z]/.test(data.password) ||
+      !/\d/.test(data.password) ||
+      !/[^A-Za-z0-9]/.test(data.password)
+    ) {
+      throw new Error("Password must contain 8+ characters, uppercase, lowercase, a number and a special character.");
     }
     if (!Number.isInteger(data.age) || data.age < 18 || data.age > 120) {
       throw new Error("VolunServe registration requires age 18 or older.");
@@ -499,6 +512,12 @@ export const signUpUser = async (
         );
       }
       user = auth.currentUser;
+      // Google OAuth validates ownership of its verified email, but it must
+      // satisfy the same verification requirement as manual registration.
+      if (!user.emailVerified) {
+        throw new Error("Please verify your Google email before completing registration.");
+      }
+      await getIdToken(user, true);
     } else {
       if (auth.currentUser) {
         await signOut(auth);
@@ -617,7 +636,7 @@ export const signUpUser = async (
       identityStatus:
         "basic" as IdentityStatus,
       identityVerified: false,
-      emailVerificationRequired: !usesGoogle,
+      emailVerificationRequired: true,
       profilePictureUrl:
         user.photoURL || "",
       createdAt:
@@ -661,6 +680,11 @@ export const loginUser = async (
         password
       );
     const user = userCredential.user;
+    const emailError = getRegistrationEmailError(user.email || email);
+    if (emailError) {
+      await signOut(auth);
+      throw new Error(emailError);
+    }
     const profileRef =
       doc(db, "users", user.uid);
     const profileSnapshot =
