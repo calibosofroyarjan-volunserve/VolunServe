@@ -62,10 +62,10 @@ const PHOTO_SLIDES = [
     body: "Support verified local programs and help San Jose del Monte recover and rebuild.",
   },
 ];
-const DARK = "#064e3b";
-const GREEN = "#047857";
+const DARK = "#111111";
+const GREEN = "#111111";
 const RED = "#b91c1c";
-const PALE = "#f0fdf4";
+const PALE = "#f5f5f5";
 
 function passwordError(value: string): string | null {
   if (!value) return "Create your VolunServe password.";
@@ -125,16 +125,21 @@ type FieldProps = {
   onChange: (v: string) => void;
   placeholder?: string;
   error?: string | null;
+  // Submit displays required-field feedback; blur also reveals untouched empty fields.
+  showError?: boolean;
+  hint?: string;
   secret?: boolean;
   keyboardType?: "default" | "email-address" | "phone-pad";
   disabled?: boolean;
 };
 function Field({
-  label, value, onChange, placeholder, error, secret,
+  label, value, onChange, placeholder, error, showError = false, hint, secret,
   keyboardType = "default", disabled,
 }: FieldProps) {
   const [focused, setFocused] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const visibleError = !!error && (showError || touched || value.length > 0);
   const low = label.toLowerCase();
   const icon = low.includes("email") ? "mail"
     : low.includes("password") ? "lock"
@@ -151,7 +156,7 @@ function Field({
       <View style={[
         styles.legacyInputShell,
         focused && styles.legacyInputFocused,
-        !!error && styles.legacyInputInvalid,
+        visibleError && styles.legacyInputInvalid,
         disabled && styles.legacyDisabledInput,
       ]}>
         <Feather name={icon as any} size={17} color="#64748b"/>
@@ -168,7 +173,7 @@ function Field({
           keyboardType={keyboardType}
           editable={!disabled}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => { setFocused(false); setTouched(true); }}
         />
         {!!secret && (
           <TouchableOpacity
@@ -181,7 +186,8 @@ function Field({
           </TouchableOpacity>
         )}
       </View>
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {visibleError && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+      {!visibleError && !!hint && <Text style={styles.fieldHint}>{hint}</Text>}
     </View>
   );
 }
@@ -685,15 +691,20 @@ export default function EmailFirstSignup() {
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
                   placeholder="name@example.com" keyboardType="email-address"
                   disabled={!emailCanEdit}
-                  error={(showErrors || email.length > 0) ? emailErr : null}
+                  error={emailErr}
+                  showError={showErrors}
+                  hint={email.trim() && !emailErr
+                    ? "Email format accepted. You must open the verification link to confirm access to this inbox."
+                    : undefined}
                 />
                 <Field
                   label={resumeMode ? "Your VolunServe Password *" : "Create VolunServe Password *"}
                   value={password} onChange={setPassword} secret
                   placeholder={resumeMode ? "Enter your existing VolunServe password" : "At least 8 characters"}
                   error={resumeMode
-                    ? showErrors && !password.trim() ? "Enter the VolunServe password you created earlier." : null
-                    : (showErrors || password.length > 0) ? passwordErr : null}
+                    ? !password.trim() ? "Enter the VolunServe password you created earlier." : null
+                    : passwordErr}
+                  showError={showErrors}
                 />
                 {!resumeMode && (
                   <>
@@ -701,9 +712,10 @@ export default function EmailFirstSignup() {
                       label="Confirm Password *" value={confirmPassword}
                       onChange={setConfirmPassword} secret
                       placeholder="Type the same password again"
-                      error={(showErrors || confirmPassword.length > 0) &&
-                        confirmPassword !== password
-                        ? "Passwords must match." : null}
+                      error={!confirmPassword.trim()
+                        ? "Confirm your password."
+                        : confirmPassword !== password ? "Passwords must match." : null}
+                      showError={showErrors}
                     />
                     <Pressable
                       onPress={() => setConsent(v => !v)}
@@ -929,7 +941,7 @@ export default function EmailFirstSignup() {
 
 const styles = StyleSheet.create({
   legacyInputShell: { height: 46, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingLeft: 13 },
-  legacyInputFocused: { borderColor: "#0f766e", backgroundColor: "#fff" },
+  legacyInputFocused: { borderColor: "#111111", backgroundColor: "#fff" },
   legacyInputInvalid: { borderColor: "#dc2626" },
   legacyDisabledInput: { backgroundColor: "#f1f5f9", opacity: 0.85 },
   legacyInputControl: { flex: 1, height: 44, borderWidth: 0, backgroundColor: "transparent", paddingLeft: 9 },
@@ -937,37 +949,37 @@ const styles = StyleSheet.create({
   legacyPasswordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   inputText: {color: "#0f172a", fontSize: 14, paddingVertical: 0},
 
-  legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#eef4f7" },
+  legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#f8fafc" },
   legacyDesktopShell: { flex: 1, flexDirection: "row", minHeight: 0 },
-  legacyPhotoPanel: { position: "relative", width: "46%", minWidth: 520, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#115e59" },
+  legacyPhotoPanel: { position: "relative", width: "46%", minWidth: 520, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#111111" },
   legacyPhotoImage: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
-  legacyPhotoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2, 55, 61, 0.52)" },
+  legacyPhotoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0, 0, 0, 0.55)" },
   legacyPhotoTop: { paddingHorizontal: 48, paddingTop: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(4,74,78,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
+  legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(0,0,0,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
   legacySecureBadgeText: { color: "#fff", fontSize: 12, lineHeight: 16, fontWeight: "800" },
   legacyPhotoControls: { position: "absolute", top: "48%", left: 28, right: 28, flexDirection: "row", justifyContent: "space-between" },
-  legacyPhotoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(3,35,42,0.5)", alignItems: "center", justifyContent: "center" },
+  legacyPhotoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
   legacyPhotoArrowText: { color: "#fff", fontSize: 38, lineHeight: 40, fontWeight: "300" },
   legacyPhotoCopy: { paddingHorizontal: 48, paddingBottom: 46 },
-  legacyPhotoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#2dd4bf", marginBottom: 30 },
+  legacyPhotoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#ffffff", marginBottom: 30 },
   legacyPhotoTitle: { color: "#fff", fontSize: 50, lineHeight: 57, fontWeight: "900", marginBottom: 17 },
-  legacyPhotoBody: { color: "#f0fdfa", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
+  legacyPhotoBody: { color: "#f5f5f5", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
   legacyPhotoFooter: { marginTop: 38, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  legacyPhotoLocation: { color: "#d7f7f3", fontSize: 12, fontWeight: "700" },
+  legacyPhotoLocation: { color: "#d1d5db", fontSize: 12, fontWeight: "700" },
   legacyBrandRow: { flexDirection: "row", alignItems: "center" },
   legacyLogo: { width: 62, height: 62, marginRight: 12, backgroundColor: "#fff", borderRadius: 18 },
   legacyBrandTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
-  legacyBrandSub: { color: "#e6fffb", fontSize: 13, fontWeight: "500", marginTop: 2 },
+  legacyBrandSub: { color: "#e5e7eb", fontSize: 13, fontWeight: "500", marginTop: 2 },
   legacyDots: { flexDirection: "row", alignItems: "center", gap: 8 },
   legacyDot: { width: 9, height: 9, borderRadius: 99 },
-  legacyDotOn: { width: 28, backgroundColor: "#2dd4bf" },
+  legacyDotOn: { width: 28, backgroundColor: "#ffffff" },
   legacyDotOff: { backgroundColor: "rgba(255,255,255,0.6)" },
-  legacyFormScroll: { flex: 1, backgroundColor: "#eef7fb" },
+  legacyFormScroll: { flex: 1, backgroundColor: "#f8fafc" },
   legacyContent: { width: "100%", maxWidth: 610, alignSelf: "center", justifyContent: "flex-start", minHeight: "100%", paddingHorizontal: 0, paddingTop: 54, paddingBottom: 54 },
   legacyContentMobile: { maxWidth: 610, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 30 },
   legacyMobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 18 },
   legacyMobileLogo: { width: 38, height: 38, borderRadius: 10, marginRight: 9 },
-  legacyMobileBrandText: { color: "#115e59", fontSize: 20, fontWeight: "900" },
+  legacyMobileBrandText: { color: "#111111", fontSize: 20, fontWeight: "900" },
   legacyMainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
   legacySignupHeading: { alignItems: "center", marginBottom: 22 },
   legacySignupTitle: { color: "#0f172a", fontSize: 31, lineHeight: 37, fontWeight: "900", textAlign: "center" },
@@ -977,8 +989,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#cde5e1",
-    backgroundColor: "#f0fdfa",
+    borderColor: "#d1d5db",
+    backgroundColor: "#f5f5f5",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -986,13 +998,13 @@ const styles = StyleSheet.create({
   },
   legacySelectedRoleCopy: { minWidth: 0 },
   legacySelectedRoleLabel: { color: "#64748b", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
-  legacySelectedRoleName: { color: "#115e59", fontSize: 14, fontWeight: "900", marginTop: 2 },
+  legacySelectedRoleName: { color: "#111111", fontSize: 14, fontWeight: "900", marginTop: 2 },
   legacyRoleChoiceBadge: {
     marginTop: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#e0f2fe",
+    backgroundColor: "#f3f4f6",
   },
   legacyRoleChoiceBadgeText: { color: "#334155", fontSize: 10.5, fontWeight: "900" },
   legacyStepperCard: {
@@ -1004,31 +1016,31 @@ const styles = StyleSheet.create({
   legacyStepRow: { flexDirection: "row", alignItems: "flex-start" },
   legacyStepItem: { flex: 1, flexDirection: "row", alignItems: "flex-start" },
   legacyStepNode: { width: 70, alignItems: "center" },
-  legacyStepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
-  legacyStepCircleActive: { backgroundColor: "#0f766e" },
+  legacyStepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e5e7eb", justifyContent: "center", alignItems: "center" },
+  legacyStepCircleActive: { backgroundColor: "#111111" },
   legacyStepCircleText: { color: "#64748b", fontSize: 12, fontWeight: "900" },
   legacyStepCircleTextActive: { color: "#fff" },
   legacyStepLabel: { color: "#334155", fontSize: 11.5, fontWeight: "700", marginTop: 7 },
-  legacyStepLabelActive: { color: "#115e59", fontWeight: "900" },
-  legacyStepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
-  legacyStepLineActive: { backgroundColor: "#0f766e" },
+  legacyStepLabelActive: { color: "#111111", fontWeight: "900" },
+  legacyStepLine: { flex: 1, height: 2, backgroundColor: "#d1d5db", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
+  legacyStepLineActive: { backgroundColor: "#111111" },
   legacyInfoBox: {
-    backgroundColor: "#eff6ff", borderRadius: 10, borderWidth: 1,
-    borderColor: "#bfdbfe", padding: 12, marginBottom: 18,
+    backgroundColor: "#f3f4f6", borderRadius: 10, borderWidth: 1,
+    borderColor: "#d1d5db", padding: 12, marginBottom: 18,
   },
   legacyInfoTitle: {color: "#0f172a", fontSize: 13, fontWeight: "800", marginBottom: 5},
   legacyInfoText: {color: "#475569", fontSize: 12, lineHeight: 18},
 
-  screen: {flex: 1, backgroundColor: "#ecfdf5"},
+  screen: {flex: 1, backgroundColor: "#f5f5f5"},
   center: {justifyContent: "center", alignItems: "center", gap: 14},
   container: {flexGrow: 1, padding: 18, alignItems: "center", justifyContent: "center"},
   desktop: {flexDirection: "row", padding: 28, alignItems: "stretch"},
   side: {flex: 1, backgroundColor: DARK, borderRadius: 18, padding: 34, justifyContent: "center", maxWidth: 640},
   brand: {fontSize: 30, fontWeight: "900", color: "#fff"},
-  brandSub: {fontSize: 14, fontWeight: "600", color: "#a7f3d0", marginTop: 5},
+  brandSub: {fontSize: 14, fontWeight: "600", color: "#d1d5db", marginTop: 5},
   sideTitle: {fontSize: 38, lineHeight: 44, fontWeight: "900", color: "#fff", marginTop: 56},
-  sideCopy: {fontSize: 17, lineHeight: 25, color: "#d1fae5", marginTop: 18},
-  sideNote: {borderRadius: 12, backgroundColor: "#065f46", padding: 18, marginTop: 28},
+  sideCopy: {fontSize: 17, lineHeight: 25, color: "#e5e7eb", marginTop: 18},
+  sideNote: {borderRadius: 12, backgroundColor: "#27272a", padding: 18, marginTop: 28},
   sideNoteText: {color: "#fff", lineHeight: 22},
   card: {width: "100%", maxWidth: 620, backgroundColor: "#fff", borderRadius: 18, padding: 26, alignSelf: "center", marginVertical: 12},
   mobileBrand: {fontSize: 22, color: GREEN, fontWeight: "900", marginBottom: 15},
@@ -1051,9 +1063,10 @@ const styles = StyleSheet.create({
   disabled: {backgroundColor: "#f1f5f9"},
   readonly: {padding: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, backgroundColor: "#f8fafc", marginBottom: 15, color: "#334155"},
   error: {fontSize: 12, color: RED, fontWeight: "700", marginTop: 5, marginBottom: 6},
+  fieldHint: {fontSize: 12, color: "#52525b", lineHeight: 18, marginTop: 5},
   errorBox: {padding: 13, borderRadius: 9, backgroundColor: "#fef2f2", borderColor: "#fecaca", borderWidth: 1, marginBottom: 16},
   errorBoxText: {fontSize: 13, color: RED, lineHeight: 19},
-  successBox: {padding: 13, borderRadius: 9, backgroundColor: PALE, borderColor: "#86efac", borderWidth: 1, marginBottom: 16},
+  successBox: {padding: 13, borderRadius: 9, backgroundColor: PALE, borderColor: "#d1d5db", borderWidth: 1, marginBottom: 16},
   successText: {fontSize: 13, color: DARK, lineHeight: 19},
   button: {minHeight: 49, borderRadius: 10, backgroundColor: GREEN, marginTop: 13, alignItems: "center", justifyContent: "center", paddingHorizontal: 14},
   altButton: {backgroundColor: "#fff", borderColor: GREEN, borderWidth: 1.5},
@@ -1067,7 +1080,7 @@ const styles = StyleSheet.create({
   check: {flexDirection: "row", alignItems: "flex-start", gap: 8, marginVertical: 9},
   checkBox: {fontSize: 20, color: GREEN},
   checkText: {flex: 1, color: "#475569", fontSize: 13, lineHeight: 20},
-  highlight: {borderRadius: 10, backgroundColor: "#f0fdf4", padding: 14, marginBottom: 15},
+  highlight: {borderRadius: 10, backgroundColor: "#f5f5f5", padding: 14, marginBottom: 15},
   highlightText: {color: DARK, fontSize: 15, fontWeight: "800"},
   tiny: {fontSize: 11, color: "#64748b", lineHeight: 18, marginTop: 15},
   pickerBox: {borderRadius: 10, borderWidth: 1, borderColor: "#cbd5e1", marginBottom: 13, overflow: "hidden"},
