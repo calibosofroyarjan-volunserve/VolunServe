@@ -639,7 +639,7 @@ export default function Signup() {
         "VolunServe Registration",
         googleBound
           ? "Your Basic Resident account is ready. Your Google and VolunServe password credentials are linked."
-          : "Account saved. Check your email for the verification link, open it, then sign in using your email and password.",
+          : "Account saved. Check Inbox and Spam for the verification link before login. If it does not arrive, use Resend verification email on Login with your VolunServe password.",
         [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
       );
     } catch (e: any) {
@@ -878,7 +878,7 @@ export default function Signup() {
                   </Text>
                 </View>
               )}
-              <SectionTitle title="Password Security" subtitle="Create a strong password to secure this account." />
+              <SectionTitle title="Password Security" subtitle="Create a separate VolunServe password—not your Gmail password. Never share it." />
               <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} invalid={(formData.password.length > 0 || showStepErrors) && (!validation.passwordChecks.minLength || !validation.passwordChecks.upper || !validation.passwordChecks.lower || !validation.passwordChecks.number || !validation.passwordChecks.special || !validation.passwordChecks.notCommon)} autoCapitalize="none" />
               <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} invalid={(formData.confirmPassword.length > 0 || showStepErrors) && !validation.passwordChecks.matches} autoCapitalize="none" />
               <View style={styles.passwordPanel}>
