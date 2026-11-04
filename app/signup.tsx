@@ -928,7 +928,7 @@ function LegacySignup() {
                   </Text>
                 </View>
               )}
-              <SectionTitle title="Password Security" subtitle="Create a separate VolunServe password—not your Gmail password. Never share it." />
+              <SectionTitle title="Password Security" subtitle="Create a separate VolunServe password—not your email provider password. Never share it." />
               <Field label="Password *" value={formData.password} onChange={(v) => updateField("password", v)} secureTextEntry={!showPassword} showPassword={showPassword} onTogglePassword={() => setShowPassword((prev) => !prev)} invalid={(formData.password.length > 0 || showStepErrors) && (!validation.passwordChecks.minLength || !validation.passwordChecks.upper || !validation.passwordChecks.lower || !validation.passwordChecks.number || !validation.passwordChecks.special || !validation.passwordChecks.notCommon)} autoCapitalize="none" />
               <Field label="Confirm Password *" value={formData.confirmPassword} onChange={(v) => updateField("confirmPassword", v)} secureTextEntry={!showConfirmPassword} showPassword={showConfirmPassword} onTogglePassword={() => setShowConfirmPassword((prev) => !prev)} invalid={(formData.confirmPassword.length > 0 || showStepErrors) && !validation.passwordChecks.matches} autoCapitalize="none" />
               <View style={styles.passwordPanel}>
