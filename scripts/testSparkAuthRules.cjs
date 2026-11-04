@@ -79,6 +79,11 @@ async function run() {
     )
   );
 
+  await allowed(
+    "Normal Resident can update own basic profile name",
+    valid.doc("users/resident-valid").update({firstName: "Updated"})
+  );
+
   await denied(
     "Unverified Resident cannot read protected volunteer events",
     valid.doc("volunteerEvents/secret-event").get()
@@ -164,7 +169,7 @@ async function run() {
     legacyAdmin.doc("volunteerEvents/event-1").get()
   );
 
-  console.log("\n" + passed + "/9 authentication security rules checks passed.");
+  console.log("\n" + passed + "/10 authentication security rules checks passed.");
   console.log(
     "These tests cover known blocked domains only. They do not prove every " +
     "temporary mail provider is blocked or that the live app works."
