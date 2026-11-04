@@ -831,7 +831,7 @@ export const loginUser = async (
           // The user may have recently received a link; do not hide the requirement.
         }
         await signOut(auth);
-        throw new Error("Please verify your email address before signing in. Check your inbox and spam folder for the Firebase confirmation link, then sign in again.");
+        throw new Error("Please verify your email address before signing in. Check your inbox and Spam folder for the verification link, then sign in again.");
       }
       // Refresh the email_verified token claim used by Firestore role gates.
       await getIdToken(user, true);
