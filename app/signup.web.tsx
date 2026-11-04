@@ -658,7 +658,7 @@ export default function Signup() {
       const successTitle = "Basic Account Created";
       const successMessage = googleBound
         ? "Your account is ready. Google and email/password sign-in are linked. Your account starts in Resident Mode."
-        : "Your Basic Resident account has been saved. We sent an email verification link. Open it before signing in, then use your email and password.";
+        : "Your Basic Resident account is saved. Check your inbox and Spam for a verification link, then sign in. If no email arrives, use Resend verification email on Login with your VolunServe password.";
 
       AppAlert.alert(successTitle, successMessage, [
         { text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
@@ -1170,8 +1170,8 @@ export default function Signup() {
                     title="Password Security"
                     subtitle={
                       googleBound
-                        ? "Create a VolunServe password so this same account can sign in with Google or email/password."
-                        : "Create a strong password to protect your account."
+                        ? "Create a separate VolunServe password (NOT your Gmail password) to sign in manually or with Google."
+                        : "Create a new VolunServe password. Never use or share your Gmail password."
                     }
                   />
 
