@@ -607,6 +607,7 @@ export default function Signup() {
   const handleSubmit = useCallback(async () => {
     if (loadingSubmit) return;
     if (!validation.step4Valid) {
+      setShowStepErrors(true);
       AppAlert.alert("Incomplete", "Please satisfy all security and compliance requirements.");
       return;
     }
