@@ -806,7 +806,7 @@ export const loginUser = async (
     if (!profileSnapshot.exists()) {
       await signOut(auth);
       throw new Error(
-        "No VolunServe profile was found for this account. Please register first."
+        "Registration is not finished. Open Create Account and choose Resume Registration with this email and your VolunServe password."
       );
     }
     const profile =
