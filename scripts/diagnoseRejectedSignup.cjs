@@ -102,9 +102,16 @@ async function run() {
       await assertFails(ref.set(profile(test.uid, test.profileEmail, test.changes)));
 
       // Authorized bypass read is diagnostic only, never a write.
-      const exists = await env.withSecurityRulesDisabled(async (context) =>
-        (await context.firestore().doc("users/" + test.uid).get()).exists
-      );
+      // withSecurityRulesDisabled returns Promise<void>, not the callback
+      // result; capture the snapshot's existence inside its callback.
+      let exists = null;
+      await env.withSecurityRulesDisabled(async (context) => {
+        const snapshot = await context.firestore().doc("users/" + test.uid).get();
+        exists = snapshot.exists;
+      });
+      if (typeof exists !== "boolean") {
+        throw new Error("Diagnostic could not read profile existence");
+      }
       if (exists) {
         throw new Error(
           "SECURITY FAILURE: denied " + test.label + " wrote a profile!"
@@ -122,9 +129,14 @@ async function run() {
     }).firestore();
     console.log("PROBE START allowed-normal-resident");
     await assertSucceeds(client.doc("users/" + uid).set(profile(uid, email)));
-    const exists = await env.withSecurityRulesDisabled(async (context) =>
-      (await context.firestore().doc("users/" + uid).get()).exists
-    );
+    let exists = null;
+    await env.withSecurityRulesDisabled(async (context) => {
+      const snapshot = await context.firestore().doc("users/" + uid).get();
+      exists = snapshot.exists;
+    });
+    if (typeof exists !== "boolean") {
+      throw new Error("Diagnostic could not read valid profile existence");
+    }
     if (!exists) throw new Error("Valid profile was not created");
     console.log("PROBE PASS allowed-normal-resident: created and present");
     console.log("DIAGNOSTIC COMPLETE: " + inspected +
