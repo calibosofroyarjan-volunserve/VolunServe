@@ -82,11 +82,9 @@ service cloud.firestore {
         && !request.auth.token.get('email', '').matches(
           '(?i)^.*@([a-z0-9-]+\\.)*(mailinator\\.com|yopmail\\.com|guerrillamail\\.com|guerrillamailblock\\.com|sharklasers\\.com|10minutemail\\.com|temp-mail\\.org|tempmail\\.com|tempmail\\.net|maildrop\\.cc|dispostable\\.com|trashmail\\.com|getnada\\.com|minuteinbox\\.com|emailondeck\\.com|throwawaymail\\.com)$'
         )
-        // Also reject common mistyped Gmail provider domains. Other .co
-        // providers are allowed; .co itself is a legitimate country-code TLD.
+        // Reject common mistyped Gmail domains. Other .co addresses remain valid.
         && !request.auth.token.get('email', '').matches(
-          '(?i)^.*@(gmail\\.co|gmail\\.cm|gmail\\.con|gmail\\.comm|gmail\\.om|gmai\\.com|gmial\\.com|gamil\\.com|gmaill\\.com)
-    }
+          '(?i)^.*@(gmail\\.co|gmail\\.cm|gmail\\.con|gmail\\.comm|gmail\\.om|gmai\\.com|gmial\\.com|gamil\\.com|gmaill\\.com)$'
         );
     }
 
