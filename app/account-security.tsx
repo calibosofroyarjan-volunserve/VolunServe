@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { auth } from "../lib/firebase";
+import { getLoginErrorMessage } from "../lib/authUserMessages";
 import {
   hasPasswordSignInProvider,
   logoutUser,
@@ -98,7 +99,7 @@ export default function AccountSecurity() {
       );
     } catch (error: any) {
       setErrorMessage(
-        error?.message || "Unable to save your VolunServe password."
+        getLoginErrorMessage(error)
       );
     } finally {
       setSaving(false);
