@@ -2,6 +2,7 @@
 import { useFonts } from "expo-font";
 import {
   Stack,
+  useRootNavigationState,
   useRouter,
   useSegments,
 } from "expo-router";
@@ -39,6 +40,7 @@ const ioniconsFont = require(
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const rootNavigationState = useRootNavigationState();
   const [fontsLoaded, fontError] = useFonts({
     Ionicons: ioniconsFont,
     ionicons: ioniconsFont,
@@ -125,6 +127,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (
+      !rootNavigationState?.key ||
       (!fontsLoaded && !fontError) ||
       !authChecked ||
       profileLoading
@@ -412,34 +415,20 @@ export default function RootLayout() {
     fontsLoaded,
     profile,
     profileLoading,
+    rootNavigationState?.key,
     router,
     segments,
   ]);
 
   useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
-  if (
+  // The root Stack must mount immediately; use an overlay while checking auth.
+  // Otherwise an Android cold-start redirect may run before Router is ready.
+  const isStartupLoading =
     (!fontsLoaded && !fontError) ||
     !authChecked ||
     profileLoading ||
-    guardLoading
-  ) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color="#078C83"
-        />
-        <Text style={styles.loadingText}>
-          {!authChecked ||
-          profileLoading ||
-          guardLoading
-            ? "Checking your account..."
-            : "Loading VolunServe..."}
-        </Text>
-      </View>
-    );
-  }
+    guardLoading;
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -460,6 +449,16 @@ export default function RootLayout() {
         <Stack.Screen name="(lgu)" />
       </Stack>
       <AppDialogHost />
+      {isStartupLoading ? (
+        <View style={[styles.loadingScreen, StyleSheet.absoluteFillObject]}>
+          <ActivityIndicator size="large" color="#078C83" />
+          <Text style={styles.loadingText}>
+            {!authChecked || profileLoading || guardLoading
+              ? "Checking your account..."
+              : "Loading VolunServe..."}
+          </Text>
+        </View>
+      ) : null}
     </GestureHandlerRootView>
   );
 }
