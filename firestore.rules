@@ -10,15 +10,9 @@ service cloud.firestore {
       ).data;
     }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
-    // New Resident accounts require a trusted server-issued domain decision.
-    function trustedEmail(uid, email) {
-      let path = /databases/$(database)/documents/emailTrust/$(uid);
-      return exists(path)
-        && get(path).data.get('approved', false) == true
-        && get(path).data.get('policyVersion', 0) == 1
-        && get(path).data.get('email', '') == email
-        && get(path).data.get('uid', '') == uid;
-    }
+    // Firebase Spark compatible: no Cloud Functions or server-issued
+    // emailTrust record. Profile creation still enforces Firebase email
+    // alignment, a static denylist and email-verification-required marker.
     function approved() {
       let p = signedIn() ? profile() : {};
       return signedIn()
@@ -26,16 +20,14 @@ service cloud.firestore {
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
         )
-        // Legacy users are unchanged; new password accounts need confirmed
-        // Firebase email ownership to access approved-role operations.
-        // All Resident/Volunteer profiles (including legacy records) must
-        // prove email ownership; no opt-out by omitting a Firestore flag.
-        && ((p.get('role', '') in ['resident', 'volunteer'])
+        // All Resident/Volunteer accounts (including legacy records) must
+        // have verified email ownership before approved role operations.
+        && ((p.get('role', '') in ['resident', 'volunteer'] ||
+             p.get('residentAccess', false) == true ||
+             p.get('volunteerAccess', false) == true)
           ? request.auth.token.get('email_verified', false) == true
           : (p.get('emailVerificationRequired', false) != true
-            || request.auth.token.get('email_verified', false) == true))
-        && (p.get('emailPolicyVersion', 0) != 1
-          || trustedEmail(request.auth.uid, request.auth.token.get('email', '').lower()));
+            || request.auth.token.get('email_verified', false) == true));
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
@@ -80,9 +72,6 @@ service cloud.firestore {
     function isResident() {
       let p = signedIn() ? profile() : {};
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
-    }
-    match /emailTrust/{uid} {
-      allow read, write: if false;
     }
     match /users/{uid} {
     // Defense in depth: direct Auth SDK signups with common disposable domains
@@ -221,8 +210,9 @@ service cloud.firestore {
         // Every newly registered Resident (Google or email/password) must
         // have the verified-email gate. No client may opt out.
         && request.resource.data.emailVerificationRequired == true
+        // Spark: email domain is checked by rules' known-domain denylist.
+        // New resident profiles never bypass required email-verification.
         && request.resource.data.emailPolicyVersion == 1
-        && trustedEmail(uid, request.auth.token.get('email', '').lower())
         && request.resource.data.skills is list
         && request.resource.data.skills.size() == 0
         && request.resource.data.skillOther == ''
