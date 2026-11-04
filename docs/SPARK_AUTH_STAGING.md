@@ -12,6 +12,30 @@
 4. Staging project → Authentication → Settings → Authorized domains: ensure the actual staging Hosting hostname is authorized for Google popup/redirect. Do not add arbitrary third-party domains.
 5. Keep authentication templates and approved sender settings for staging emails separate; don't share test-only verification links or actual passwords.
 
+## Verify actual mailbox ownership (Nov 5)
+
+The Signup UI **does not guess whether an email inbox exists**: a correct
+domain and syntactically valid address only allow a *pending* Firebase Auth
+account. An account cannot create its Basic Resident profile or enter a
+protected Resident Dashboard without completing the email link challenge.
+
+Step 2 now displays:
+- A provider-neutral verification requested message (not a claim of delivery)
+- A clear explanation that clicking the link proves access to the inbox
+- A red, actionable pending message if Check Verification is clicked too early
+- Resend Verification Email and Use a different email / Start over
+- No raw Firebase SDK error messages or false "email does not exist" claims
+
+Shared `lib/authUserMessages.ts` defines the text. The existing error
+handling still detects a Firebase-reported signup email collision, blocks
+known temporary providers, and validates Gmail/Yahoo/Outlook typos. Login
+instructions are also provider-neutral on Android and web.
+
+Regression tests run with `node scripts/testSignupValidation.cjs`. Do not
+deploy to production before staging browser tests confirm that the verification
+link actually arrives, refreshes the `emailVerified` status, and prevents
+an unverified Resident from completing their profile.
+
 ## Provider-neutral Signup validation (Nov 5)
 
 The signup screens now accept valid **Gmail, Yahoo, Outlook, Hotmail, iCloud,
