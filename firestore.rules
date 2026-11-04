@@ -138,7 +138,15 @@ service cloud.firestore {
           && review.identityPresenceConfirmed == true
           && review.identityPresenceMethod == 'in_person_original_government_id_review';
       }
+      // Distinct Resident and staff-applicant creation routes are routed
+      // by role before evaluating their full checks. The original conditions
+      // inside each route remain unchanged.
       allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && (
+          (request.resource.data.get('role', '') == 'resident'
+            && (signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
         // The profile email must be the Firebase Auth email, not a user-supplied alias.
@@ -218,10 +226,9 @@ service cloud.firestore {
         && request.resource.data.skillOther == ''
         && request.resource.data.availability is list
         && request.resource.data.availability.size() == 0
-        && request.resource.data.createdAt is timestamp;
-      // Staff applications never receive operational permissions at signup.
-      // Only a separately verified Super Admin can promote the pending account.
-      allow create: if signedIn()
+        && request.resource.data.createdAt is timestamp))
+          || (request.resource.data.get('role', '') == 'applicant'
+            && (signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '').lower() == request.resource.data.email
         && allowedSignupEmail()
@@ -257,7 +264,10 @@ service cloud.firestore {
         && request.resource.data.appointmentReference.size() <= 160
         && request.resource.data.province == 'Bulacan'
         && request.resource.data.city == 'City of San Jose del Monte'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time))
+        );
+      // Staff applications never receive operational permissions at signup.
+      // Only a separately verified Super Admin can promote the pending account.
       // Direct privileged account creation is intentionally disabled.
       // Verified LGU staff must submit a pending application and be promoted.
       allow get: if signedIn()
@@ -266,10 +276,15 @@ service cloud.firestore {
           || isAdminOrSuperAdmin()
         );
       allow list: if isAdminOrSuperAdmin();
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        // Edits must not downgrade a previously adult account below the age policy.
-        && (
+
+      // 1. Single route per actor instead of evaluating nine separate update
+      //    grants. All original field validation is retained in the branches.
+      // 2. Self-service cannot evaluate privileged admin paths, and admin
+      //    permissions are only evaluated when modifying another account.
+      // 3. Role checks execute once per branch, not once per alternative.
+      function userSelfUpdate() {
+        return (
+          ((
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
           || (request.resource.data.age is int && request.resource.data.age >= 18
               && request.resource.data.age <= 120)
@@ -326,10 +341,8 @@ service cloud.firestore {
             'San Jose Del Monte',
             'SAN JOSE DEL MONTE'
           ]
-        );
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data
+        ))
+          || (&& request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
@@ -356,10 +369,8 @@ service cloud.firestore {
         && request.resource.data.identityVerifiedBy == ''
         && request.resource.data.identityFailureReason == ''
         && identitySubmissionAfter().uid == uid
-        && identitySubmissionAfter().status == 'pending';
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data
+        && identitySubmissionAfter().status == 'pending')
+          || (&& request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
@@ -377,10 +388,8 @@ service cloud.firestore {
         && request.resource.data.volunteerStatus == 'pending'
         && request.resource.data.activeMode == 'resident'
         && volunteerApplicationAfter().uid == uid
-        && volunteerApplicationAfter().status == 'pending';
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data
+        && volunteerApplicationAfter().status == 'pending')
+          || (&& request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly([
@@ -400,8 +409,12 @@ service cloud.firestore {
             request.resource.data.activeMode == 'volunteer'
             && hasVolunteerAccess()
           )
+        ))
         );
-      allow update: if resource.data.role in [
+      }
+      function userAdminUpdate() {
+        return isAdmin() && (
+          (resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -416,7 +429,6 @@ service cloud.firestore {
             'identityVerifiedBy',
             'identityFailureReason'
           ])
-        && isAdmin()
         && request.resource.data.identityVerifiedBy == request.auth.uid
         && (
           (
@@ -438,8 +450,8 @@ service cloud.firestore {
             && identitySubmissionAfter().status == 'failed'
             && identitySubmissionAfter().reviewedBy == request.auth.uid
           )
-        );
-      allow update: if resource.data.role in [
+        ))
+          || (resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -462,7 +474,6 @@ service cloud.firestore {
             'volunteerReviewedAt',
             'volunteerReviewedBy'
           ])
-        && isAdmin()
         && request.resource.data.residentAccess == true
         && request.resource.data.activeMode == 'resident'
         && request.resource.data.volunteerReviewedAt is timestamp
@@ -483,8 +494,8 @@ service cloud.firestore {
           )
         )
         && volunteerApplicationAfter().status
-          == request.resource.data.volunteerStatus;
-      allow update: if resource.data.role in [
+          == request.resource.data.volunteerStatus)
+          || (resource.data.role in [
           'resident',
           'volunteer'
         ]
@@ -497,18 +508,96 @@ service cloud.firestore {
             'reviewedBy',
             'rejectedReason'
           ])
-        && isAdmin()
         && request.resource.data.status in [
           'approved',
           'suspended'
         ]
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
-        && request.resource.data.rejectedReason is string;
-      allow update: if signedIn()
-        && request.auth.uid != uid
-        && resource.data.role != 'superadmin'
-        && isSuperAdmin()
+        && request.resource.data.rejectedReason is string)
+          || (resource.data.role == 'applicant'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'role',
+            'requestedRole',
+            'primaryRole',
+            'residentAccess',
+            'volunteerAccess',
+            'volunteerStatus',
+            'activeMode',
+            'status',
+            'reviewedAt',
+            'reviewedBy',
+            'rejectedReason',
+            'volunteerReviewedAt',
+            'volunteerReviewedBy'
+          ])
+        && request.resource.data.role in [
+          'applicant',
+          'resident',
+          'volunteer'
+        ]
+        && request.resource.data.status in [
+          'pending_review',
+          'approved',
+          'rejected',
+          'suspended'
+        ]
+        && (
+          !('activeMode' in request.resource.data)
+          || request.resource.data.activeMode in [
+            'resident',
+            'volunteer'
+          ]
+        )
+        && (
+          !('primaryRole' in request.resource.data)
+          || request.resource.data.primaryRole in [
+            'resident',
+            'volunteer'
+          ]
+        )
+        && (
+          !('residentAccess' in request.resource.data)
+          || request.resource.data.residentAccess is bool
+        )
+        && (
+          !('volunteerAccess' in request.resource.data)
+          || request.resource.data.volunteerAccess is bool
+        )
+        && (
+          !('volunteerStatus' in request.resource.data)
+          || request.resource.data.volunteerStatus in [
+            'not_applied',
+            'pending',
+            'approved',
+            'rejected'
+          ]
+        )
+        && (
+          !('volunteerAccess' in request.resource.data)
+          || request.resource.data.volunteerAccess == false
+          || (
+            'volunteerStatus' in request.resource.data
+            && request.resource.data.volunteerStatus == 'approved'
+          )
+        )
+        && (
+          !('activeMode' in request.resource.data)
+          || request.resource.data.activeMode == 'resident'
+          || request.resource.data.role == 'volunteer'
+          || (
+            'volunteerAccess' in request.resource.data
+            && request.resource.data.volunteerAccess == true
+          )
+        ))
+        );
+      }
+      function userSuperAdminUpdate() {
+        return isSuperAdmin() && (
+          resource.data.role != 'superadmin'
         && (
           (
             resource.data.role == 'applicant'
@@ -600,85 +689,14 @@ service cloud.firestore {
                 'adminRevokedBy'
               ])
           )
+        )
         );
-      allow update: if resource.data.role == 'applicant'
-        && request.resource.data
-          .diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'role',
-            'requestedRole',
-            'primaryRole',
-            'residentAccess',
-            'volunteerAccess',
-            'volunteerStatus',
-            'activeMode',
-            'status',
-            'reviewedAt',
-            'reviewedBy',
-            'rejectedReason',
-            'volunteerReviewedAt',
-            'volunteerReviewedBy'
-          ])
-        && isAdmin()
-        && request.resource.data.role in [
-          'applicant',
-          'resident',
-          'volunteer'
-        ]
-        && request.resource.data.status in [
-          'pending_review',
-          'approved',
-          'rejected',
-          'suspended'
-        ]
+      }
+      allow update: if signedIn()
         && (
-          !('activeMode' in request.resource.data)
-          || request.resource.data.activeMode in [
-            'resident',
-            'volunteer'
-          ]
-        )
-        && (
-          !('primaryRole' in request.resource.data)
-          || request.resource.data.primaryRole in [
-            'resident',
-            'volunteer'
-          ]
-        )
-        && (
-          !('residentAccess' in request.resource.data)
-          || request.resource.data.residentAccess is bool
-        )
-        && (
-          !('volunteerAccess' in request.resource.data)
-          || request.resource.data.volunteerAccess is bool
-        )
-        && (
-          !('volunteerStatus' in request.resource.data)
-          || request.resource.data.volunteerStatus in [
-            'not_applied',
-            'pending',
-            'approved',
-            'rejected'
-          ]
-        )
-        && (
-          !('volunteerAccess' in request.resource.data)
-          || request.resource.data.volunteerAccess == false
-          || (
-            'volunteerStatus' in request.resource.data
-            && request.resource.data.volunteerStatus == 'approved'
-          )
-        )
-        && (
-          !('activeMode' in request.resource.data)
-          || request.resource.data.activeMode == 'resident'
-          || request.resource.data.role == 'volunteer'
-          || (
-            'volunteerAccess' in request.resource.data
-            && request.resource.data.volunteerAccess == true
-          )
+          (request.auth.uid == uid && userSelfUpdate())
+          || (request.auth.uid != uid
+            && (userAdminUpdate() || userSuperAdminUpdate()))
         );
       allow delete: if false;
     }
