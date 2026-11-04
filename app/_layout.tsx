@@ -261,7 +261,12 @@ export default function RootLayout() {
      * Legacy profiles (without this opt-in flag) preserve current access.
      * Firestore rules independently enforce the same authorization boundary.
      */
-    if (profile.emailVerificationRequired === true && !authUser.emailVerified) {
+    if (
+      (profile.emailVerificationRequired === true ||
+        profile.role === "resident" ||
+        profile.role === "volunteer") &&
+      !authUser.emailVerified
+    ) {
       if (!isLoginRoute && !isSignupRoute && !isAdministrativeLoginRoute) {
         void (async () => {
           try {
