@@ -35,7 +35,7 @@ service cloud.firestore {
           : (p.get('emailVerificationRequired', false) != true
             || request.auth.token.get('email_verified', false) == true))
         && (p.get('emailPolicyVersion', 0) != 1
-          || trustedEmail(request.auth.uid, request.auth.token.get('email', '')));
+          || trustedEmail(request.auth.uid, request.auth.token.get('email', '').lower()));
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
@@ -153,7 +153,7 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.uid == uid
         // The profile email must be the Firebase Auth email, not a user-supplied alias.
-        && request.auth.token.get('email', '') == request.resource.data.email
+        && request.auth.token.get('email', '').lower() == request.resource.data.email
         && allowedSignupEmail()
         // Self-reported age restriction; original-ID review remains separate.
         && request.resource.data.age is int
@@ -222,7 +222,7 @@ service cloud.firestore {
         // have the verified-email gate. No client may opt out.
         && request.resource.data.emailVerificationRequired == true
         && request.resource.data.emailPolicyVersion == 1
-        && trustedEmail(uid, request.auth.token.get('email', ''))
+        && trustedEmail(uid, request.auth.token.get('email', '').lower())
         && request.resource.data.skills is list
         && request.resource.data.skills.size() == 0
         && request.resource.data.skillOther == ''
@@ -233,7 +233,7 @@ service cloud.firestore {
       // Only a separately verified Super Admin can promote the pending account.
       allow create: if signedIn()
         && request.auth.uid == uid
-        && request.auth.token.get('email', '') == request.resource.data.email
+        && request.auth.token.get('email', '').lower() == request.resource.data.email
         && allowedSignupEmail()
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
