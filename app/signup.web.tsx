@@ -24,7 +24,11 @@ import {
 } from "react-native";
 import { signUpUser } from "../lib/firebaseAuth";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
-import { getLoginErrorMessage } from "../lib/authUserMessages";
+import {
+  getLoginErrorMessage,
+  isRegistrationEmailConflict,
+  REGISTRATION_EMAIL_CONFLICT_MESSAGE,
+} from "../lib/authUserMessages";
 import { auth, db } from "../lib/firebase";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 
@@ -420,6 +424,7 @@ export default function Signup() {
 
   const [step, setStep] = useState<Step>(1);
   const [showStepErrors, setShowStepErrors] = useState(false);
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | null>(null);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [googleBound, setGoogleBound] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -452,8 +457,13 @@ export default function Signup() {
   });
 
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
+    if (field === "email") setExistingAccountEmail(null);
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  const emailAlreadyUsed =
+    existingAccountEmail !== null &&
+    existingAccountEmail === formData.email.trim().toLowerCase();
 
   const today = new Date();
   const maxDOB = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
@@ -529,12 +539,12 @@ export default function Signup() {
 
   const isStepValid = useCallback(
     (s: Step) => {
-      if (s === 1) return validation.step1Valid;
+      if (s === 1) return validation.step1Valid && !emailAlreadyUsed;
       if (s === 2) return validation.step2Valid;
       if (s === 3) return validation.step3Valid;
       return validation.step4Valid;
     },
-    [validation]
+    [validation, emailAlreadyUsed]
   );
 
   const scrollTop = useCallback(
@@ -659,13 +669,20 @@ export default function Signup() {
         { text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
       ], { cancelable: false });
     } catch (e: any) {
-      const message = getFriendlyAuthError(e);
-
-      AppAlert.alert("Registration Error", message);
+      if (isRegistrationEmailConflict(e)) {
+        // Only after an actual signup collision; no public account lookup.
+        setExistingAccountEmail(formData.email.trim().toLowerCase());
+        setStep(1);
+        setShowStepErrors(true);
+        scrollTop();
+        AppAlert.alert("Account May Already Exist", REGISTRATION_EMAIL_CONFLICT_MESSAGE);
+      } else {
+        AppAlert.alert("Registration Error", getFriendlyAuthError(e));
+      }
     } finally {
       setLoadingSubmit(false);
     }
-  }, [formData, googleBound, loadingSubmit, router, validation]);
+  }, [formData, googleBound, loadingSubmit, router, validation, scrollTop]);
 
   const currentMeta = STEP_META[step];
 
@@ -846,17 +863,30 @@ export default function Signup() {
                     value={formData.email}
                     onChange={(v) => updateField("email", v.trim().toLowerCase())}
                     keyboardType="email-address"
-                    invalid={!validation.emailValid && (formData.email.length > 0 || showStepErrors)}
+                    invalid={emailAlreadyUsed || (!validation.emailValid && (formData.email.length > 0 || showStepErrors))}
                     returnKeyType="next"
                     editable={!googleBound}
                     autoCapitalize="none"
                   />
 
-                  {(formData.email.length > 0 || showStepErrors) && !validation.emailValid ? (
+                  {emailAlreadyUsed ? (
+                    <View>
+                      <ValidationText ok={false}>{REGISTRATION_EMAIL_CONFLICT_MESSAGE}</ValidationText>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        onPress={() => router.push("/login")}
+                        style={{ alignSelf: "flex-start", paddingVertical: 8 }}
+                      >
+                        <Text style={{ color: "#B42318", fontWeight: "800", fontSize: 13 }}>
+                          Go to Sign In / Forgot Password
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (formData.email.length > 0 || showStepErrors) && !validation.emailValid ? (
                     <ValidationText ok={false}>{getRegistrationEmailError(formData.email)}</ValidationText>
                   ) : (
                     <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 10 }}>
-                      A verification link is required for email/password signup. Google sign-in must use a verified Google email.
+                      Valid email format does not confirm account availability. If you already registered, use Sign In. Email verification is required after registration.
                     </Text>
                   )}
 
