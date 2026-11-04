@@ -555,7 +555,7 @@ export default function EmailFirstSignup() {
                 </Text>
               </View>
             </View>
-          </View
+          </View>
         ) : null}
         <ScrollView
           style={styles.legacyFormScroll}
