@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import ForgotPasswordModal from "../components/auth/ForgotPasswordModal";
+import { getLoginErrorMessage } from "../lib/authUserMessages";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
@@ -9,7 +11,6 @@ import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
-  sendPasswordResetEmail,
   signInWithCredential,
   setPersistence,
   browserLocalPersistence,
@@ -28,7 +29,7 @@ import {
   View,
 } from "react-native";
 
-import { auth } from "../lib/firebase";
+import { auth, usingFirebaseEmulators } from "../lib/firebase";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
@@ -36,7 +37,6 @@ import {
   homeRouteForProfile,
   isApprovedProfile,
   loginUser,
-  resendResidentVerificationEmail,
 } from "../lib/firebaseAuth";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -52,12 +52,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [attemptedLogin, setAttemptedLogin] = useState(false);
   const emailError = getRegistrationEmailError(email);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
-  const showSuccess = (message: string) => setFeedback({ type: "success", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
@@ -161,50 +161,7 @@ export default function Login() {
 
       router.replace(destination as any);
     } catch (error: any) {
-      const message = error?.message || "Unable to sign in. Please try again.";
-      showError(
-        message.includes("Invalid email or password") || message.includes("Incorrect password")
-          ? message + " If you originally signed up using Google, choose Continue with Google, then open My Profile > Manage Email & Password to create a separate VolunServe password."
-          : message
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (loading || googleLoading) {
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (emailError) {
-      setAttemptedLogin(true);
-      showError(emailError);
-      return;
-    }
-
-    try {
-      clearFeedback();
-      setLoading(true);
-
-      await sendPasswordResetEmail(
-        auth,
-        cleanEmail
-      );
-
-      showSuccess("If this account uses email and password, check your inbox and spam folder for the reset link.");
-    } catch (error: any) {
-      const code = String(error?.code || "");
-
-      if (code === "auth/invalid-email") {
-        showError("Please enter a valid email address.");
-      } else if (code === "auth/too-many-requests") {
-        showError("Too many reset attempts. Please wait and try again later.");
-      } else {
-        showError(error?.message || "Unable to send the password reset email.");
-      }
+      showError(getLoginErrorMessage(error, usingFirebaseEmulators));
     } finally {
       setLoading(false);
     }
@@ -252,28 +209,9 @@ export default function Login() {
     } catch (error: any) {
       await firebaseSignOut(auth).catch(() => undefined);
 
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      showError(getLoginErrorMessage(error, usingFirebaseEmulators));
     } finally {
       setGoogleLoading(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    if (loading || googleLoading) return;
-    clearFeedback();
-    setAttemptedLogin(true);
-    if (emailError) return showError(emailError);
-    if (!password) return showError("Enter your VolunServe password to resend the verification email.");
-    try {
-      setLoading(true);
-      const outcome = await resendResidentVerificationEmail(email, password);
-      showSuccess(outcome === "verified"
-        ? "Your email is verified. Sign in with your VolunServe password."
-        : "Verification link sent. Check Inbox and Spam, then open the link before signing in.");
-    } catch (error: any) {
-      showError(error?.message || "Unable to resend verification. Check your credentials.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -319,15 +257,11 @@ export default function Login() {
             <Ionicons name={rememberMe ? "checkbox-outline" : "square-outline"} size={20} color="#087F66" />
             <Text style={styles.muted}>Remember me</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => void handleForgotPassword()}
+          <TouchableOpacity accessibilityRole="button" onPress={() => setForgotPasswordOpen(true)}
             disabled={loading || googleLoading}>
             <Text style={styles.forgot}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity accessibilityRole="button" onPress={() => void handleResendVerification()}
-          disabled={loading || googleLoading} style={{ alignSelf: "flex-start", marginTop: 4, marginBottom: 5, minHeight: 30 }}>
-          <Text style={styles.forgot}>{loading ? "Sending verification..." : "Resend verification email"}</Text>
-        </TouchableOpacity>
         {!!feedback.message && (
           <AuthFeedback
             message={feedback.message}
@@ -392,6 +326,11 @@ export default function Login() {
           <Text style={styles.createLink}>Create An Account</Text>
         </TouchableOpacity>
       </PremiumAuthShell>
+      <ForgotPasswordModal
+        visible={forgotPasswordOpen}
+        initialEmail={email}
+        onClose={() => setForgotPasswordOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
