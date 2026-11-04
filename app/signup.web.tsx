@@ -1218,8 +1218,8 @@ function LegacySignup() {
                     title="Password Security"
                     subtitle={
                       googleBound
-                        ? "Create a separate VolunServe password (NOT your Gmail password) to sign in manually or with Google."
-                        : "Create a new VolunServe password. Never use or share your Gmail password."
+                        ? "Create a separate VolunServe password (NOT your email provider password) to sign in manually or with Google."
+                        : "Create a new VolunServe password. Never use or share your email provider password."
                     }
                   />
 
