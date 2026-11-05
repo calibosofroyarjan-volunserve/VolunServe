@@ -213,7 +213,7 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Barangay Announcements" subtitle="Prepare and publish official barangay notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
         <Text style={styles.scopeLabel}>
@@ -244,7 +244,7 @@ export default function CreateAnnouncement() {
 
         <Text style={styles.scopeHelp}>
           Ordinary Admin accounts can only publish
-          announcements for their assigned area. Other barangays cannot be selected without additional official authorization.
+          announcements for their assigned area. If no barangay is assigned, ask the Super Admin to verify the LGU profile and assign an official barangay. Other barangays cannot be selected without authorization.
         </Text>
       </View>
 
