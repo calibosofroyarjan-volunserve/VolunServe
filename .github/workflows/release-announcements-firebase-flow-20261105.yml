@@ -1,0 +1,204 @@
+name: Guarded LIVE Announcements Firebase Feed Fix (Hosting ONLY)
+on:
+  push:
+    branches: [fix/announcements-firestore-error-handling-live-20261105]
+    paths: [".github/workflows/release-announcements-firebase-flow-20261105.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-promote:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot guarded Hosting-only Announcements Firebase cleanup'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      LIVE_BASE: "32fcbfad3582922dd7988359d59b2e7e587fc442"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW: "announcements-feed-fix-1105"
+      BACKUP: "backup-announcements-feed-1105"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      EXPO_NO_TELEMETRY: "1"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Require exact LIVE ancestor and ONLY announcement files changed
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/announcements-flow-changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'), assert=require('node:assert/strict');
+          const files=fs.readFileSync(process.env.RUNNER_TEMP+'/announcements-flow-changed.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'app/(tabs)/announcements.tsx',
+            'scripts/test-announcements-live-rules-emulator-20261105.cjs',
+            'scripts/test-announcement-firebase-cleanup-20261105.cjs',
+            '.github/workflows/validate-announcements-firebase-flow-20261105.yml',
+            '.github/workflows/release-announcements-firebase-flow-20261105.yml'
+          ]);
+          assert.deepEqual(files.filter(x=>!allowed.has(x)),[],'STOP: unrelated or protected files changed');
+          assert.equal(files.filter(x=>x.startsWith('app/')).length,2,'Only LGU and Resident/Volunteer Announcements screens may change');
+          assert(files.includes('app/(admin)/create-announcement.tsx'));
+          assert(files.includes('app/(tabs)/announcements.tsx'));
+          console.log('PASS: preserved exact LIVE Login, Signup, Google, Super Admin, Resident/Volunteer, Firestore Rules, Firebase config and backend');
+          NODE
+      - name: Confirm exact LIVE revision before any Hosting preview
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?guard_announcements='+Date.now(),
+                {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP: live marker not readable at '+domain);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP: current live revision changed to '+j.revision);
+              console.log('PASS current live origin '+domain+': '+j.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install exact locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, protected Login/Signup/Google, navigation, and Announcements regression
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-lgu-clean-announcements-live.cjs
+          node scripts/test-announcement-firebase-cleanup-20261105.cjs
+      - name: Fresh static web export with exact SHA (never use cached dist)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          console.log('PASS fresh Hosting assets from exact source '+marker.revision);
+          NODE
+      - name: Check Firebase credentials match current project (not printed)
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase deployment credentials missing"; exit 1; fi
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const s=JSON.parse(process.env.FIREBASE_SA);
+          if(s.type!=='service_account'||s.project_id!==process.env.PROJECT)throw Error('STOP: invalid Firebase project credential');
+          fs.writeFileSync('/tmp/volunserve-announcement-feed-sa-1105.json',process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS credentials belong to exact production Firebase project');
+          NODE
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read-only active Firestore Rules version/hash guard
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            r=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(r,timeout=30) as response:return json.load(response)
+          version='projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164'
+          if get('projects/volunserve-3aa5b/releases/cloud.firestore')['rulesetName']!=version:
+            raise SystemExit('STOP live Firestore Ruleset changed since emulator test')
+          files=get(version).get('source',{}).get('files',[])
+          match=[x for x in files if x.get('name','').endswith('firestore.rules')]
+          if not match and len(files)==1:match=files
+          if len(match)!=1 or hashlib.sha256(match[0]['content'].encode('utf8')).hexdigest()!='f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d':
+            raise SystemExit('STOP live Firestore Rules contents changed since emulator test')
+          print('PASS exact live Firestore Rules match tested version; no Rules release')
+          PY
+      - name: Deploy ONLY web Hosting to isolated temporary preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        id: preview
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: announcements-feed-fix-1105
+          expires: 3d
+      - name: Verify preview has exact tested build and working routes
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node scripts/check-live-hosting.cjs
+          node - <<'NODE'
+          (async()=>{
+            const origin=process.env.VOLUNSERVE_HOSTING_URL;
+            if(!origin||!origin.startsWith('https://'))throw Error('Preview origin unavailable');
+            for(const route of ['/create-announcement','/login','/signup','/admin-login','/admin-accounts']){
+              const r=await fetch(origin.replace(/\/$/,'')+route,{signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP missing route '+route+' HTTP '+r.status);
+              console.log('PASS temporary preview route '+route);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Save exact current production Hosting backup
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-announcement-feed-sa-1105.json
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          touch "$RUNNER_TEMP/announcements-feed-hosting-backup"
+          echo 'Production Hosting backed up without touching Firestore, Login/Signup or Super Admin source' >> "$GITHUB_STEP_SUMMARY"
+      - name: Final concurrency guard and promote ONLY tested Hosting preview
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-announcement-feed-sa-1105.json
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS live volunserve.com now serves $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Hosting exact revision verification failed; enter guarded recovery"
+          exit 1
+      - name: Guarded recovery if Hosting release fails (never overwrite concurrent deployments)
+        if: failure()
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-announcement-feed-sa-1105.json
+        run: |
+          set +e
+          if [ ! -f "$RUNNER_TEMP/announcements-feed-hosting-backup" ]; then
+            echo 'No live promotion was attempted; original Hosting unchanged.'
+            exit 0
+          fi
+          CURRENT="$(node - <<'NODE'
+          (async()=>{try{const r=await fetch('https://volunserve.com/volunserve-release.json?guard_rollback='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});const j=await r.json();process.stdout.write(j.revision||'unknown');}catch(e){process.stdout.write('unknown')}})()
+          NODE
+          )"
+          if [ "$CURRENT" = "$GITHUB_SHA" ]; then
+            node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            echo 'Rolled back exactly this workflow Hosting revision.'
+          elif [ "$CURRENT" = "$LIVE_BASE" ]; then
+            echo 'Original Hosting remains active; no rollback required.'
+          else
+            echo "::error::Different concurrent Hosting version detected, refusing blind rollback."
+            exit 1
+          fi
+      - name: Report explicit release boundary
+        run: |
+          echo 'SUCCESS: Hosting-only UI update; Firestore Rules/Auth/Data/Functions/Storage, Super Admin, Signup, and Login were not deployed or modified.'
+
+# Scoped fixes: announcement publishing/error feedback and resident/volunteer feed only; existing modules preserved.
