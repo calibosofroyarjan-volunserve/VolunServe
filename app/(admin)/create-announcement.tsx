@@ -44,8 +44,6 @@ export default function CreateAnnouncement() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
-  const [barangayOpen, setBarangayOpen] = useState(false);
-  const [chosenBarangay, setChosenBarangay] = useState("");
   const [initialBarangay, setInitialBarangay] = useState("");
   const [barangaySearch, setBarangaySearch] = useState("");
   const [areaConfirmed, setAreaConfirmed] = useState(false);
@@ -119,9 +117,9 @@ export default function CreateAnnouncement() {
       ? profile.barangay.trim()
       : "";
 
-  // Server security rules permit LGU Admin publishing only to the barangay
-  // assigned in their verified profile. Never show an unauthorized audience.
-  const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
+  // Destination comes ONLY from the authenticated LGU Admin profile.
+  // No per-post selection; Firestore independently enforces the same barangay.
+  const publishBarangay = barangay;
   const activeApprovedAdmin = profile?.status === "approved" &&
     String((profile as any)?.adminStatus || "active") !== "suspended";
   const setOfficialArea = async () => {
@@ -153,7 +151,7 @@ export default function CreateAnnouncement() {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!publishBarangay || publishBarangay !== barangay) {
+    if (!publishBarangay) {
       Alert.alert(
         "Barangay Required",
         "Complete the official LGU barangay setup below before publishing."
@@ -229,7 +227,7 @@ export default function CreateAnnouncement() {
 
       Alert.alert(
         "Announcement Posted",
-        `The announcement was published for ${publishBarangay}.`
+        "The announcement was published to your authorized community."
       );
     } catch (error: any) {
       console.error(
@@ -252,40 +250,7 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU WORKSPACE / ANNOUNCEMENTS" title="Announcements" subtitle="Create and publish official notices for your barangay. Residents and volunteers can view relevant updates." icon="megaphone-outline" tag="LGU NOTICES" />
-
-      <View style={styles.scopeCard}>
-        <Text style={styles.scopeLabel}>
-          ANNOUNCEMENT AREA
-        </Text>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Choose authorized announcement barangay"
-          accessibilityState={{ expanded: barangayOpen }}
-          disabled={!barangay || submitting}
-          onPress={() => setBarangayOpen(value => !value)}
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-        >
-          <Text style={styles.scopeValue}>{publishBarangay || "Complete official barangay setup below"}</Text>
-          <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
-        </TouchableOpacity>
-        {barangayOpen && barangay ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
-            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
-            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
-          >
-            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        <Text style={styles.scopeHelp}>
-          LGU Admin announcements are restricted to the official barangay saved in your account.
-          You cannot publish to another barangay. Programmers do not assign announcement recipients.
-        </Text>
-      </View>
+      <AdminReviewHero eyebrow="LGU WORKSPACE / ANNOUNCEMENTS" title="Announcements" subtitle="Create and publish official community notices for residents and volunteers." icon="megaphone-outline" tag="LGU NOTICES" />
 
       {!barangay ? (
         <View style={styles.formCard}>
@@ -344,7 +309,7 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
-        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
+        <Text style={styles.scopeHelp}>Templates are editable. Review the information carefully before publishing.</Text>
         <Text style={styles.inputLabel}>
           TITLE
         </Text>
@@ -401,17 +366,6 @@ export default function CreateAnnouncement() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.noteCard}>
-        <Text style={styles.noteTitle}>
-          Admin Announcement Scope
-        </Text>
-
-        <Text style={styles.noteText}>
-          This page is for local operational
-          announcements only. System-wide announcements
-          are controlled by the Super Admin.
-        </Text>
-      </View>
     </ScrollView>
   );
 }
