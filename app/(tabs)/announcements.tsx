@@ -172,13 +172,12 @@ export default function AnnouncementsScreen() {
    * Super Admin announcement:
    *   audience = "all"
    *
-   * Local Admin announcement:
-   *   audience = Admin barangay
+   * Admin announcement:
+   *   audience = "sjdm" for all city residents/volunteers
+   *   (older local posts can retain their barangay audience).
    *
-   * Resident / Volunteer sees:
-   *   GLOBAL
-   *   +
-   *   their own BARANGAY
+   * Residents / volunteers see system updates, city-wide
+   * Admin notices, and legacy announcements for their barangay.
    */
   const visibleAnnouncements =
     useMemo(() => {
@@ -194,7 +193,7 @@ export default function AnnouncementsScreen() {
               .trim()
               .toLowerCase();
 
-          if (audience === "all") {
+          if (audience === "all" || audience === "sjdm") {
             return true;
           }
 
@@ -245,8 +244,8 @@ export default function AnnouncementsScreen() {
         </Text>
 
         <Text style={styles.subtitle}>
-          View official VolunServe updates and
-          announcements relevant to your area.
+          Read VolunServe system updates and official
+          local notices for San Jose del Monte City.
         </Text>
       </View>
 
@@ -258,17 +257,14 @@ export default function AnnouncementsScreen() {
         </Text>
 
         <Text style={styles.areaValue}>
-          Global
-          {barangay
-            ? ` + ${barangay}`
-            : ""}
+          System Updates + SJDM Notices
+          {barangay ? ` + ${barangay} Local Notices` : ""}
         </Text>
 
         <Text style={styles.areaHelp}>
-          Global announcements are published by
-          the Super Admin. Local announcements
-          are published by the Admin assigned to
-          your area.
+          Super Admin publishes system updates. Admin publishes
+          official SJDM-wide notices. Existing barangay-specific
+          posts remain visible for your area.
         </Text>
       </View>
 
@@ -341,7 +337,7 @@ export default function AnnouncementsScreen() {
                   >
                     {isGlobal
                       ? "GLOBAL"
-                      : "LOCAL"}
+                      : "LGU NOTICE"}
                   </Text>
                 </View>
 
@@ -364,9 +360,10 @@ export default function AnnouncementsScreen() {
               <View style={styles.cardFooter}>
                 <Text style={styles.audienceLabel}>
                   {isGlobal
-                    ? "Visible system-wide"
-                    : announcement.audience ||
-                      barangay}
+                    ? "VolunServe system update"
+                    : (announcement.audience || "").trim().toLowerCase() === "sjdm"
+                      ? "All barangays of San Jose del Monte City"
+                      : announcement.audience || barangay}
                 </Text>
               </View>
             </View>
