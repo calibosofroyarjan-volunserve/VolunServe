@@ -1,6 +1,12 @@
-name: Validate Community Events Permissions (Manual Rules-Only Release)
+name: Validate Community Events Permissions (Guarded Rules-Only Release)
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'scripts/test-community-events-rules.cjs'
+      - '.github/workflows/validate-community-events-permissions.yml'
   pull_request:
     branches: [main]
     paths:
@@ -58,7 +64,7 @@ jobs:
           node --test scripts/test-admin-volunteer-authorization.cjs
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
       - name: Verify latest main and reviewed Firestore rules before manual release
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,7 +75,7 @@ jobs:
             exit 1
           }
           CURRENT_RULES_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)"
-          test "$CURRENT_RULES_BLOB" = "4a32d559b6b5f76da75b6e177fec1f6d585b88bf" || {
+          test "$CURRENT_RULES_BLOB" = "0eeb7c431bb3157f0d2b4eae77c44c35d6262a3a" || {
             echo "::error::Rules changed since the security review. STOP."
             exit 1
           }
@@ -78,7 +84,7 @@ jobs:
             exit 1
           }
       - name: Manually deploy reviewed Firestore rules ONLY to the correct project
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.ref == 'refs/heads/main'
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
