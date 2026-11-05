@@ -4316,26 +4316,29 @@ function DecisionTab({
             subtitle={`Choose LGU/partner support, Donation Support, or no additional support. Donation Support cannot exceed the verified uncovered amount: ${money(Number(reviewRecord?.verifiedUncoveredAmount || 0))}.`}
             icon="layers-outline"
           >
-            <LabelText>How will this need be handled?</LabelText>
+            <LabelText required>How will this need be handled?</LabelText>
             <StatusChoiceRow
               value={supportDecision}
+              error={!!supportIssue("supportDecision")}
               options={SUPPORT_OPTIONS.map(
                 (option) => [option.value, option.label] as [string, string],
               )}
               onChange={setSupportDecision}
             />
+            <ReviewValidationHint message={supportIssue("supportDecision")} />
 
             {supportDecision === "donation_support" && (
               <>
-                <LabelText>Verified remaining unmet amount</LabelText>
+                <LabelText required>Verified remaining unmet amount</LabelText>
                 <TextInput
                   value={remainingAmount}
                   onChangeText={(value) => setRemainingAmount(value.replace(/[^0-9.]/g, ""))}
                   keyboardType="decimal-pad"
                   placeholder="Cannot exceed private verified uncovered amount"
                   placeholderTextColor="#94A3B8"
-                  style={styles.input}
+                  style={[styles.input, !!supportIssue("remainingAmount") && styles.assistanceFieldInvalid]}
                 />
+                <ReviewValidationHint message={supportIssue("remainingAmount")} />
               </>
             )}
 
@@ -4392,31 +4395,35 @@ function DecisionTab({
             subtitle="Set a public LGU-approved place only when assistance or donation coordination needs one. The Resident's home address stays private."
             icon="location-outline"
           >
-            <LabelText>Location type</LabelText>
+            <LabelText required>Location type</LabelText>
             <StatusChoiceRow
               value={locationType}
+              error={!!supportIssue("locationType")}
               options={LOCATION_TYPES.map(
                 (option) => [option.value, option.label] as [string, string],
               )}
               onChange={setLocationType}
             />
+            <ReviewValidationHint message={supportIssue("locationType")} />
 
-            <LabelText>Official location name</LabelText>
+            <LabelText required>Official location name</LabelText>
             <TextInput
               value={locationName}
               onChangeText={setLocationName}
               placeholder="e.g. Barangay Hall Assistance Desk"
               placeholderTextColor="#94A3B8"
-              style={styles.input}
+              style={[styles.input, !!supportIssue("locationName") && styles.assistanceFieldInvalid]}
             />
-            <LabelText>Public address</LabelText>
+            <ReviewValidationHint message={supportIssue("locationName")} />
+            <LabelText required>Public address</LabelText>
             <TextInput
               value={locationAddress}
               onChangeText={setLocationAddress}
               placeholder="Public service location address"
               placeholderTextColor="#94A3B8"
-              style={styles.input}
+              style={[styles.input, !!supportIssue("locationAddress") && styles.assistanceFieldInvalid]}
             />
+            <ReviewValidationHint message={supportIssue("locationAddress")} />
 
             <EmbeddedGoogleMap
               title="LGU-Approved Coordination Point"
