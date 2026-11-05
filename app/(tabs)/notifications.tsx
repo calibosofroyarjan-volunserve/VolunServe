@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { auth, db } from "../../lib/firebase";
 import { activeModeForProfile } from "../../lib/firebaseAuth";
+import { useAnnouncementAlerts } from "../../lib/useAnnouncementAlerts";
 import { useUserSession } from "../../lib/useUserSession";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
@@ -142,6 +143,7 @@ export default function NotificationsScreen() {
   const compact = width < 660;
   const [uid, setUid] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { alerts: announcementAlerts, markAnnouncementRead } = useAnnouncementAlerts();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
@@ -185,16 +187,21 @@ export default function NotificationsScreen() {
     });
   }, [uid, retryKey]);
 
-  const unread = useMemo(() => notifications.filter(item => !item.read).length, [notifications]);
+  const combinedNotifications = useMemo(() => {
+    const notified = new Set(notifications.map(item => item.announcementId).filter(Boolean));
+    return [...notifications, ...announcementAlerts.filter(item => !notified.has(item.announcementId))]
+      .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
+  }, [notifications, announcementAlerts]);
+  const unread = useMemo(() => combinedNotifications.filter(item => !item.read).length, [combinedNotifications]);
   const filtered = useMemo(() => {
     const phrase = search.trim().toLowerCase();
-    return notifications.filter(item => {
+    return combinedNotifications.filter(item => {
       if (filter === "Unread" && item.read) return false;
       if (filter !== "All" && filter !== "Unread" && categoryOf(item) !== filter) return false;
       if (!phrase) return true;
       return [item.title, item.message, item.type].some(v => String(v || "").toLowerCase().includes(phrase));
     });
-  }, [notifications, search, filter]);
+  }, [combinedNotifications, search, filter]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -202,7 +209,7 @@ export default function NotificationsScreen() {
 
   const markAsRead = async (ids: string[]) => {
     if (!uid || !ids.length) return;
-    const ownedUnread = notifications.filter(item => item.userId === uid && !item.read).map(item => item.id);
+    const ownedUnread = combinedNotifications.filter(item => item.userId === uid && !item.read).map(item => item.id);
     const allowed = new Set(ownedUnread);
     const selected = [...new Set(ids)].filter(id => allowed.has(id) && !inFlight.current.has(id));
     if (!selected.length) return;
@@ -214,7 +221,9 @@ export default function NotificationsScreen() {
       let failed = 0;
       for (let start = 0; start < selected.length; start += 15) {
         const results = await Promise.allSettled(selected.slice(start, start + 15)
-          .map(id => updateDoc(doc(db, "notifications", id), { read: true })));
+          .map(id => id.startsWith("feed_announcement_")
+            ? markAnnouncementRead(id)
+            : updateDoc(doc(db, "notifications", id), { read: true })));
         failed += results.filter(result => result.status === "rejected").length;
       }
       if (failed) setError(failed === selected.length
@@ -258,13 +267,13 @@ export default function NotificationsScreen() {
         <Text style={styles.metric}>{unread}</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.metricLabel}>{unread === 1 ? "Unread update" : "Unread updates"}</Text>
-          <Text style={styles.metricHelper}>{notifications.length} total · Private to your account</Text>
+          <Text style={styles.metricHelper}>{combinedNotifications.length} total · Your account and community</Text>
         </View>
       </View>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Mark all unread notifications as read"
         style={[styles.markAll, (!unread || updating) && styles.disabled]}
         disabled={!unread || updating}
-        onPress={() => void markAsRead(notifications.filter(item => !item.read).map(item => item.id))}>
+        onPress={() => void markAsRead(combinedNotifications.filter(item => !item.read).map(item => item.id))}>
         {updating ? <ActivityIndicator color="#076B52" size="small"/> : <Ionicons name="checkmark-done-outline" size={18} color="#076B52"/>}
         <Text style={styles.markAllText}>{updating ? "Saving..." : "Mark all read"}</Text>
       </TouchableOpacity>
