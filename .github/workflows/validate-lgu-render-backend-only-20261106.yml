@@ -1,0 +1,66 @@
+name: Validate Render-Only LGU Cloudinary API from Current Backend (NO DEPLOY)
+on:
+  push:
+    branches: [release/lgu-cloudinary-render-backend-only-20261106]
+    paths:
+      - .github/workflows/validate-lgu-render-backend-only-20261106.yml
+      - backend/server.js
+      - backend/lguCredentialRoutes.js
+      - backend/tests/lguCredentials.test.js
+permissions:
+  contents: read
+jobs:
+  validate-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MAIN_BASE: 8911b9fc493bcbb0e8366742c0abbd1e2c03e4a8
+    steps:
+      - name: Require exact current Render backend file and no frontend changes
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const headers={Authorization:"Bearer "+process.env.GH_TOKEN,Accept:"application/vnd.github+json"};
+            const repo=process.env.GITHUB_REPOSITORY;
+            const base=await fetch("https://api.github.com/repos/"+repo+"/git/trees/"+process.env.MAIN_BASE+"?recursive=1",{headers});
+            assert(base.ok,"Cannot inspect protected baseline");const baseline=await base.json();
+            const server=baseline.tree.find(x=>x.path==="backend/server.js");
+            assert.equal(server?.sha,"e29412c1f5659447862b99ce3768ce7fe5791b82",
+              "STOP: backend source differs from exact LIVE Render code");
+            const diff=await fetch("https://api.github.com/repos/"+repo+"/compare/"+process.env.MAIN_BASE+"..."+process.env.GITHUB_SHA,{headers});
+            assert(diff.ok,"Cannot inspect release changes");const compare=await diff.json();
+            assert.equal(compare.status,"ahead");
+            const expected=new Set([
+              "backend/server.js","backend/lguCredentialRoutes.js",
+              "backend/tests/lguCredentials.test.js",
+              ".github/workflows/validate-lgu-render-backend-only-20261106.yml",
+            ]);
+            const actual=(compare.files||[]).map(x=>x.filename);
+            assert(actual.length===4 && actual.every(x=>expected.has(x)),
+              "STOP: Any Login, Signup, Super Admin, Announcements, Notifications or other frontend changes forbidden");
+            console.log("PASS Render release candidate is backend-only and matches existing LIVE server.js byte-identically before route mount",actual);
+            console.log("NO production changes");
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Load exact source without legacy nested submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -L --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/src.tar.gz"
+          tar -xzf "$RUNNER_TEMP/src.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Locked backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Backend syntax and private Cloudinary security integration tests
+        run: |
+          node --check backend/server.js
+          node --check backend/lguCredentialRoutes.js
+          node --test backend/tests/lguCredentials.test.js
+          echo 'PASS current LIVE Render backend routes preserved. No actual deploy performed.'
