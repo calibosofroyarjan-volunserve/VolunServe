@@ -478,6 +478,14 @@ export default function AdminAccounts() {
 
     setActionError("");
     clearCredentialReview();
+    // Keep the applicant's submitted details, so reviewers don't re-enter
+    // personal information. Reviewers must independently verify them before
+    // checking the final confirmation. No permissions are granted here.
+    if (action === "promote") {
+      setLguOffice(String((account as any).lguOffice || "").trim());
+      setLguPosition(String((account as any).lguPosition || "").trim());
+      setLguReference(String((account as any).appointmentReference || "").trim());
+    }
     setActionType(action);
     setActionTarget(account);
   };
@@ -1727,7 +1735,7 @@ export default function AdminAccounts() {
 
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
-                <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
+                <Text style={styles.reviewKicker}>REVIEW LGU CREDENTIALS</Text>
                 <Text style={styles.reviewHelp}>
                   Compare the applicant's information with an independently obtained official LGU source.
                   Completing this review is required before activating any Admin account.
@@ -1744,25 +1752,13 @@ export default function AdminAccounts() {
                   </View>
                 )}
                 <View style={styles.reviewScroll}>
-                  {([
-                    { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
-                    { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
-                    { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
-                  ] as const).map((field) => (
-                    <View key={field.label} style={styles.reviewField}>
-                      <Text style={styles.reviewLabel}>{field.label}</Text>
-                      <TextInput
-                        accessibilityLabel={field.label}
-                        style={styles.reviewInput}
-                        placeholder={field.placeholder}
-                        placeholderTextColor="#8A9C94"
-                        maxLength={field.maxLength}
-                        value={field.value}
-                        onChangeText={field.onChange}
-                        editable={!savingUid}
-                      />
-                    </View>
-                  ))}
+                  <View style={[styles.applicantDetails, { marginBottom: 10 }]}>
+                    <Text style={styles.reviewLabel}>Submitted information loaded automatically</Text>
+                    <Text style={styles.reviewHelp}>
+                      Confirm the office, position and appointment reference shown above against an official LGU source.
+                      Missing required details will keep approval disabled.
+                    </Text>
+                  </View>
                   <View style={styles.reviewField}>
                     <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
                     <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
@@ -1807,42 +1803,23 @@ export default function AdminAccounts() {
                   </View>
                   <TouchableOpacity
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: identityMatched }}
+                    accessibilityState={{ checked: credentialsConfirmed && identityMatched && lguEmploymentConfirmed }}
                     style={styles.confirmReview}
-                    onPress={() => setIdentityMatched(v => !v)}
                     disabled={!!savingUid}
-                  >
-                    <Ionicons name={identityMatched ? "checkbox" : "square-outline"} size={23} color="#23765F" />
-                    <Text style={styles.confirmReviewText}>
-                      I matched the applicant's identity and submitted details with the independently verified LGU staff information.
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: lguEmploymentConfirmed }}
-                    style={styles.confirmReview}
-                    onPress={() => setLguEmploymentConfirmed(v => !v)}
-                    disabled={!!savingUid}
-                  >
-                    <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
-                    <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: credentialsConfirmed }}
-                    style={styles.confirmReview}
-                    onPress={() => setCredentialsConfirmed((current) => !current)}
-                    disabled={!!savingUid}
+                    onPress={() => {
+                      const confirmed = !(credentialsConfirmed && identityMatched && lguEmploymentConfirmed);
+                      setCredentialsConfirmed(confirmed);
+                      setIdentityMatched(confirmed);
+                      setLguEmploymentConfirmed(confirmed);
+                    }}
                   >
                     <Ionicons
-                      name={credentialsConfirmed ? "checkbox" : "square-outline"}
+                      name={credentialsConfirmed && identityMatched && lguEmploymentConfirmed ? "checkbox" : "square-outline"}
                       size={23}
                       color="#23765F"
                     />
                     <Text style={styles.confirmReviewText}>
-                      I independently reviewed LGU credentials and confirmed that the selected account belongs to the authorized staff member.
+                      I independently verified this applicant's identity, LGU employment, appointment and authorization with an official source.
                     </Text>
                   </TouchableOpacity>
                 </View>
