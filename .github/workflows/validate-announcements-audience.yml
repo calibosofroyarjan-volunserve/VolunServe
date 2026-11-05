@@ -1,0 +1,37 @@
+name: Verify VolunServe Announcement Audience Security (No Deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firestore.indexes.json"
+      - "lib/useCommunityAnnouncements.ts"
+      - "scripts/test-announcements-audience-security.cjs"
+      - ".github/workflows/validate-announcements-audience.yml"
+  push:
+    branches:
+      - feature/community-updates-notifications-20261105
+permissions:
+  contents: read
+jobs:
+  announcement-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test announcement authorization with isolated Firestore emulator
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-announcements-audience-security.cjs'
+      - name: Test prior LGU publishing permissions are preserved
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Compile TypeScript
+        run: npx tsc --noEmit --pretty false

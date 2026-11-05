@@ -695,11 +695,24 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
+      // Admin/Super Admin retain their existing records access.
+      // Members can only read already-published, city-wide notices or
+      // the exact barangay assigned to their approved account.
+      // Firestore queries must constrain audience AND publishAt; client-only
+      // filtering is not a security boundary.
       allow read: if isAdminOrSuperAdmin()
         || (
           approved()
           && resource.data.publishAt is timestamp
           && resource.data.publishAt <= request.time
+          && (
+            resource.data.audience == 'all'
+            || (
+              profile().get('barangay', '') is string
+              && profile().get('barangay', '').size() > 0
+              && resource.data.audience == profile().get('barangay', '')
+            )
+          )
         );
       allow create: if isAdmin()
         && profile().barangay is string
