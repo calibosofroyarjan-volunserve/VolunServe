@@ -116,3 +116,5 @@ jobs:
         run: |
           python3 scripts/activate-notifications-locked-rules-20261106.py rollback
           echo 'Guarded rollback check completed; no production user document writes.' >> "$GITHUB_STEP_SUMMARY"
+
+# One-shot user-approved notification content-integrity hardening, tested against exact published Firestore Rules.
