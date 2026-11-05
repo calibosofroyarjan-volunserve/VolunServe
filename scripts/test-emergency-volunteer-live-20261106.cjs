@@ -19,6 +19,7 @@ const allowed = new Set([
   "components/tabs/MapTracking.web.tsx",
   "components/tabs/ResponseFlow.web.tsx",
   "components/volunteer/VolunteerInvitationInbox.tsx",
+  "components/admin/EmergencyIncidentMap.tsx",
   "components/admin/EmergencyIncidentMap.web.tsx",
   "components/admin/EmergencyIncidentMap.native.tsx",
   "lib/emergencyTaskStatus.ts",
