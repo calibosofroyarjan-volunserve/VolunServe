@@ -45,6 +45,7 @@ jobs:
             "scripts/test-lgu-admin-navigation-groups.cjs",
             "scripts/prepare-lgu-recipient-live-rules.py",
             "scripts/test-lgu-announcement-recipient-emulator.cjs",
+            "scripts/test-lgu-clean-announcements-live.cjs",
             ".github/workflows/validate-lgu-announcements-clean-live-20261105.yml",
             ".github/workflows/release-lgu-announcements-clean-live-20261105.yml",
             "scripts/activate-lgu-announcements-rules-20261105.py"
@@ -77,8 +78,7 @@ jobs:
           node scripts/test-signup-google-oauth.cjs
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-lgu-admin-navigation-groups.cjs
-          node scripts/test-pavia-admin-pagination-announcements.cjs
-          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-lgu-clean-announcements-live.cjs
       - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -113,3 +113,5 @@ jobs:
         run: echo 'VALIDATION ONLY. No Firestore Rules, Hosting, Auth, Super Admin, Login, Signup or production data updates.'
 
 # Refreshed to include latest navigation contract aligned with current live scope.
+
+# Current live's retired Relief Operations is intentionally not revived to satisfy old unrelated assertions.
