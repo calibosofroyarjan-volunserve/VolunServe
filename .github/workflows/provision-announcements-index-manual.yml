@@ -1,12 +1,6 @@
-name: Provision VolunServe Announcements Index (Index Only)
+name: Provision VolunServe Announcements Index (Manual Only)
 # Safe index-only operation: no Firestore rules, Hosting, Functions, Storage or data writes.
 on:
-  # One-time, main-only push trigger. The job guard checks the exact commit
-  # message, so edits or later workflow cleanup cannot re-run index creation.
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/provision-announcements-index-manual.yml"
   workflow_dispatch:
     inputs:
       confirmation:
@@ -26,10 +20,7 @@ jobs:
     if: >-
       github.repository == 'calibosofroyarjan-volunserve/VolunServe' &&
       github.ref == 'refs/heads/main' &&
-      (
-        (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'CREATE_INDEX_ONLY') ||
-        (github.event_name == 'push' && github.event.head_commit.message == 'Provision announcements index one-time guarded check')
-      )
+      inputs.confirmation == 'CREATE_INDEX_ONLY'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -63,10 +54,13 @@ jobs:
       - name: Inspect existing composite indexes (read-only)
         shell: bash
         run: |
-          gcloud firestore indexes composite list \
+          if ! gcloud firestore indexes composite list \
             --project=volunserve-3aa5b \
             --database='(default)' \
-            --format=json > "$RUNNER_TEMP/volunserve-indexes.json"
+            --format=json > "$RUNNER_TEMP/volunserve-indexes.json"; then
+            echo "::error::Firestore index listing failed. The GitHub Firebase service account needs Cloud Datastore Index Admin (roles/datastore.indexAdmin) in project volunserve-3aa5b. No index or application deployment attempted."
+            exit 1
+          fi
 
       - name: Check exact index definition and state
         id: inspect
