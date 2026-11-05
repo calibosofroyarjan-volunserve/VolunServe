@@ -63,3 +63,5 @@ jobs:
 # Read-only independent audit after Notifications Hosting-only rollout 12f840178b6fce3ff642ef33f036e2f8ed4d37cf.
 
 # Fresh read-only verification for November 6 notification security guard after newer live Hosting.
+
+# Read-only confirm rules after blocked notification security release attempts (HTTP 400/409), no production modifications.
