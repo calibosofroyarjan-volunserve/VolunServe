@@ -1,0 +1,83 @@
+name: Combined CURRENT-LIVE Admin + Signup PREVIEW ONLY
+on:
+  push:
+    branches:
+      - review/combined-admin-signup-current-live-20261105
+    paths:
+      - .github/workflows/preview-combined-current-live-20261105.yml
+permissions:
+  contents: read
+concurrency:
+  group: combined-current-live-signup-preview-20261105
+  cancel-in-progress: false
+jobs:
+  preflight-and-preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      VERIFIED_LIVE_BASE: 3c8186a120139ae0a09efbb6a2dfecc8bcc59220
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify the latest Admin and Super Admin code, current Rules and backend are identical to live base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
+          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/(superadmin)' 'app/(admin)' 'components/admin' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: latest Super Admin Assistance Records, Audit Logs, View All and LGU Admin code preserved."
+      - name: Fail closed if another live release replaced the current deployment
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const r = await fetch("https://volunserve.com/volunserve-release.json",{
+              headers:{"cache-control":"no-cache"}, signal:AbortSignal.timeout(15000)
+            });
+            if(!r.ok)throw Error("Unable to confirm live release revision");
+            const d=await r.json();
+            console.log("Current live revision:",d.revision);
+            if(d.revision!==process.env.VERIFIED_LIVE_BASE)throw Error("Live Admin code advanced; do not publish stale combined preview");
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify TypeScript, Signup and Login validation
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
+      - name: Export combined premium Signup and current Admin web app
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require authorized Firebase preview credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase credential missing - NO DEPLOY."
+            exit 1
+          fi
+      - name: Publish Hosting PREVIEW channel ONLY - never production live
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: combined-admin-signup-current-20261105
+          expires: 3d
+      - name: State constraints
+        run: |
+          echo "Preview only. Live Hosting and Firebase Rules/data are unchanged."
+          echo "The preview uses production Firebase; do not create destructive test accounts."
+          echo "Server-side verified-only registration remains a separate, blocked policy cutover."

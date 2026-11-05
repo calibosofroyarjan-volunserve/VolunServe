@@ -1,3 +1,4 @@
+import { canResumeEmailFirstSignup } from "../lib/signupFeature";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
@@ -231,7 +232,7 @@ export default function RootLayout() {
             (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
           );
           if (
-            hasGoogleIdentity &&
+            (hasGoogleIdentity || canResumeEmailFirstSignup(authUser)) &&
             error instanceof Error &&
             error.message === "Profile not found."
           ) {

@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -47,6 +48,14 @@ export default function WebLogin() {
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
+  const [attemptedLogin, setAttemptedLogin] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const inlineEmailError = attemptedLogin || emailTouched ? getLoginEmailError(email) : null;
+  const inlineEmailSuggestion = !inlineEmailError && (attemptedLogin || emailTouched)
+    ? getLoginEmailSuggestion(email) : null;
+  const inlinePasswordError = (attemptedLogin || passwordTouched) && !password
+    ? "Enter your password." : null;
 
   const applySessionPersistence = async () => {
     await setPersistence(
@@ -58,11 +67,9 @@ export default function WebLogin() {
   };
   const handleLogin = async () => {
     if (loading) return;
+    setAttemptedLogin(true);
     clearFeedback();
-    if (!email.trim() || !password) {
-      showError("Please enter your email address and password.");
-      return;
-    }
+    if (getLoginEmailError(email) || !password) return;
     try {
       setLoading(true);
       setPendingAction("login");
@@ -160,17 +167,19 @@ export default function WebLogin() {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PremiumAuthShell active="resident">
         <Text style={styles.label}>Email Address</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "email" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "email" && styles.focused, !!inlineEmailError && styles.invalidInput]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
             textContentType="emailAddress" autoComplete="email" editable={!loading}
-            returnKeyType="next" onFocus={() => setFocusedInput("email")} onBlur={() => setFocusedInput(null)} />
+            returnKeyType="next" onFocus={() => setFocusedInput("email")} onBlur={() => { setFocusedInput(null); setEmailTouched(true); }} />
         </View>
+        {!!inlineEmailError && <Text accessibilityRole="alert" style={styles.fieldError}>{inlineEmailError}</Text>}
+        {!!inlineEmailSuggestion && <Text style={styles.fieldSuggestion}>{inlineEmailSuggestion}</Text>}
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "password" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focusedInput === "password" && styles.focused, !!inlinePasswordError && styles.invalidInput]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
           <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
             accessibilityLabel="Resident or volunteer password"
@@ -178,7 +187,7 @@ export default function WebLogin() {
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
             editable={!loading} returnKeyType="done"
             onSubmitEditing={() => void handleLogin()} onFocus={() => setFocusedInput("password")}
-            onBlur={() => setFocusedInput(null)} />
+            onBlur={() => { setFocusedInput(null); setPasswordTouched(true); }} />
           <TouchableOpacity accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             onPress={() => setShowPassword(value => !value)} disabled={loading}
@@ -186,6 +195,7 @@ export default function WebLogin() {
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
+        {!!inlinePasswordError && <Text accessibilityRole="alert" style={styles.fieldError}>{inlinePasswordError}</Text>}
         <View style={styles.options}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: rememberMe }}
@@ -201,6 +211,7 @@ export default function WebLogin() {
         </View>
         {!!feedback.message && (
           <AuthFeedback
+            title="Check your sign-in details"
             message={feedback.message}
             type={feedback.type}
             onDismiss={clearFeedback}
@@ -283,6 +294,9 @@ const styles = StyleSheet.create({
     borderRadius:13,borderWidth:1,marginBottom:2},
   input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
+  invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
+  fieldError: {color:"#C62828",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
