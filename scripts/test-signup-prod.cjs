@@ -44,15 +44,20 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
-  await check("feature defaults off; only literal true opts in; resume excludes unknown providers",()=>{
+  await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
-      const flag=load(read("lib/signupFeature.ts"),{},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
-      assert.equal(flag.EMAIL_FIRST_SIGNUP_ENABLED,false);
-      assert.equal(flag.canResumeEmailFirstSignup({providerData:[{providerId:"password"}]}),false);
+      const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
+      assert.equal(native.EMAIL_FIRST_SIGNUP_ENABLED,false);
+      assert.equal(native.canResumeEmailFirstSignup({providerData:[{providerId:"password"}]}),false);
+      const web=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"web"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
+      assert.equal(web.EMAIL_FIRST_SIGNUP_ENABLED,true);
+      assert.equal(web.canResumeEmailFirstSignup({providerData:[{providerId:"password"}]}),true);
+      assert.equal(web.canResumeEmailFirstSignup({providerData:[]}),false);
     }
-    const flag=load(read("lib/signupFeature.ts"),{},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:"true"});
-    assert.equal(flag.canResumeEmailFirstSignup({providerData:[{providerId:"password"}]}),true);
-    assert.equal(flag.canResumeEmailFirstSignup({providerData:[]}),false);
+    const nativeOptIn=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:"true"});
+    assert.equal(nativeOptIn.EMAIL_FIRST_SIGNUP_ENABLED,true);
+    const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
+    assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
   await check("original signup rendered layouts and styles match main",()=>{
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
