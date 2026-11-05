@@ -35,6 +35,12 @@ console.log("PASS restricted notification read-only content policy; only read fl
         message:"Open Emergency Tasks.",read:false,
         createdAt:new Date("2026-10-30T03:00:00.000Z")
       });
+      // Legacy notifications may be addressed using recipientUid instead of userId.
+      await db.doc("notifications/legacy-recipient").set({
+        recipientUid:"resident",type:"account",title:"Account status updated",
+        message:"Your account has been reviewed.",read:false,
+        createdAt:new Date("2026-10-27T03:00:00.000Z")
+      });
     });
     const resident=env.authenticatedContext("resident").firestore();
     const volunteer=env.authenticatedContext("volunteer").firestore();
@@ -53,8 +59,15 @@ console.log("PASS restricted notification read-only content policy; only read fl
     await assertFails(resident.doc("notifications/volunteer-invite").get());
     await assertFails(resident.doc("notifications/volunteer-invite").update({read:true}));
     await assertFails(resident.doc("notifications/resident-report").update({title:"Fake urgent instruction"}));
+    await assertFails(resident.doc("notifications/resident-report").update({message:"Forged system instruction"}));
+    await assertFails(resident.doc("notifications/resident-report").update({userId:"volunteer"}));
+    await assertFails(resident.doc("notifications/resident-report").update({read:false}));
+    await assertFails(resident.doc("notifications/resident-report").update({read:true,message:"Forged"}));
+    await assertSucceeds(resident.doc("notifications/legacy-recipient").get());
+    await assertSucceeds(resident.doc("notifications/legacy-recipient").update({read:true}));
+    await assertFails(resident.doc("notifications/legacy-recipient").update({message:"Forged legacy update"}));
     await assertFails(resident.collection("notifications").get());
     await assertFails(anon.collection("notifications").where("userId","==","resident").get());
-    console.log("PASS: current live Firestore rules allow private inbox, read status update; deny cross-user/anonymous access and forged content.");
+    console.log("PASS: approved Resident/Volunteer own alerts read:true, legacy recipientUid, private queries, and denial of title/message/owner/metadata forgery.");
   }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
