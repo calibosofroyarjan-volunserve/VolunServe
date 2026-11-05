@@ -249,3 +249,5 @@ jobs:
 # Inert unless an explicit final one-shot commit with the expected message updates this workflow.
 
 # Explicit one-shot release of validated Assistance Requests from exact latest live; do not repeat this commit.
+
+# One-shot deployment requested: simplify Verify & Decide while preserving every other live VolunServe module.
