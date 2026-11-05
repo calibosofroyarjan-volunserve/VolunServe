@@ -257,3 +257,5 @@ jobs:
 # One-shot release of plain-language decision-only Assistance review after passing CI.
 
 # One-shot Hosting-only release of clear red Reject Request action, after preflight checks.
+
+# One-time Resident Assistance request word validation Hosting-only release after passing CI.
