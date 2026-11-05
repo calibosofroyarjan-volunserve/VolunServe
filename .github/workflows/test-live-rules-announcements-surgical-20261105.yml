@@ -76,9 +76,19 @@ jobs:
           found=list(exact_read.finditer(block))
           if len(found)!=1:raise Exception('STOP: Active announcement read condition unexpected. No changes attempted.')
           match=found[0]
-          candidate=live[:segment_start]+block[:match.start()]+replacement+block[match.end():]+live[segment_end:]
+          patched_block=block[:match.start()]+replacement+block[match.end():]
+          # In the SAME announcements block only, suspended Admins may not
+          # publish, edit, or delete; no other LGU or role rules are touched.
+          for operation in ('create', 'update', 'delete'):
+              old_statement='allow '+operation+': if isAdmin()'
+              new_statement=old_statement+" && profile().get('adminStatus', 'active') != 'suspended'"
+              if patched_block.count(old_statement)!=1:
+                  raise Exception('STOP: unexpected announcements '+operation+' condition')
+              patched_block=patched_block.replace(old_statement,new_statement,1)
+          candidate=live[:segment_start]+patched_block+live[segment_end:]
           if candidate[:segment_start]!=live[:segment_start] or not candidate.endswith(live[segment_end:]):
               raise Exception('STOP: Change would touch another Rules block')
+          print('Surgical diff limited to published announcements block; suspended Admin writes denied.')
           with open('firestore.rules','w') as f:f.write(candidate)
           print('VERIFIED actual active Ruleset: '+release['rulesetName'])
           print('ORIGINAL SHA256: '+hashlib.sha256(live.encode()).hexdigest())
