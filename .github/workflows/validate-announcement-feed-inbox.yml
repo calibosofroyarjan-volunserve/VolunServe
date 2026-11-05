@@ -1,0 +1,38 @@
+name: Announcement Feed and Inbox Regression (No Deploy)
+
+on:
+  pull_request:
+    paths:
+      - 'components/home/Home.web.tsx'
+      - 'app/(tabs)/announcements.tsx'
+      - 'app/(tabs)/notifications.tsx'
+      - 'functions/announcementNotifications.js'
+      - 'functions/announcementAudience.js'
+      - 'functions/index.js'
+      - 'scripts/test-announcement-feed-inbox.cjs'
+      - '.github/workflows/validate-announcement-feed-inbox.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify new Firebase trigger and helpers parse
+        run: |
+          node --check functions/announcementNotifications.js
+          node --check functions/announcementAudience.js
+          node --check functions/index.js
+      - name: Test recipient authorization, current feed and notification inbox
+        run: node scripts/test-announcement-feed-inbox.cjs
+      - name: Lint new Cloud Functions modules
+        run: |
+          npm ci --prefix functions --no-audit --no-fund
+          cd functions
+          npx eslint announcementNotifications.js announcementAudience.js
