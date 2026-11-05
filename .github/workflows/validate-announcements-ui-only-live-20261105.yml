@@ -102,6 +102,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Web-only export for isolated Hosting preview
         run: npx expo export --platform web
+      - name: Verify all legacy routes and stamp EXACT new public Hosting revision
+        run: node scripts/verify-hosting-release.cjs
       - name: Stamp exact candidate SHA and deployed base
         env:
           LIVE_BASE: 579bed559b1ba81e2045ba420847f8635e8f182c
