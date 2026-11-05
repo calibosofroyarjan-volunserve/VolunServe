@@ -1,0 +1,72 @@
+name: Publish Combined Admin and Signup PREVIEW (Never Live)
+
+on:
+  push:
+    branches:
+      - review/combined-superadmin-signup-20261105
+    paths:
+      - .github/workflows/deploy-combined-superadmin-signup-preview.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-combined-admin-signup-preview
+  cancel-in-progress: false
+
+jobs:
+  validate-and-preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      VERIFIED_LIVE_BASE: 08ff6d0a2e1c9d72a84a8216e6413bd42e4aeb01
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require latest live Super Admin as source and preserve protected code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
+          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/(superadmin)' 'app/(admin)' 'components/admin' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: combined preview keeps all updated Admin/Super Admin files and live Rules unchanged."
+      - name: Install dependency lock
+        run: npm ci --no-audit --no-fund
+      - name: Verify Login, Signup and TypeScript
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
+      - name: Export premium combined web build
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase preview credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase preview deploy credentials missing; production unaffected."
+            exit 1
+          fi
+      - name: Publish ONLY Firebase Hosting PREVIEW channel, never the live site
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: combined-admin-signup-20261105
+          expires: 3d
+      - name: Confirm production was not changed by this workflow
+        run: |
+          echo "PREVIEW ONLY. Live channel, Firestore Rules, Functions and database untouched."
+          echo "The preview still connects to production Firebase, so no destructive test data."
