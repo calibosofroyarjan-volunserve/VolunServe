@@ -80,9 +80,15 @@ jobs:
           const raw=fs.readFileSync(process.env.RUNNER_TEMP+'/lgu-preview-result.json','utf8');
           const obj=JSON.parse(raw);
           assert.equal(obj.status,'success','Hosting preview not confirmed');
-          const items=Array.isArray(obj.result)?obj.result:[obj.result];
-          const url=items.map(x=>x?.url).find(x=>typeof x==='string'&&x.startsWith('https://'));
-          assert.ok(url,'No preview URL from Firebase');
+          const urls=[];
+          const scan=(value,key='')=>{
+            if(typeof value==='string' && value.startsWith('https://') && value.includes('web.app')) urls.push(value);
+            else if(value && typeof value==='object') for(const [k,v] of Object.entries(value)) scan(v,k);
+          };
+          scan(obj);
+          const url=urls.find(u=>u.includes('lgu-reject-1105-safe'))||urls[0];
+          console.log('Firebase preview response keys:',Object.keys(obj), 'nested keys:',Object.keys(obj.result||{}));
+          assert.ok(url,'No preview web.app URL in Firebase response');
           console.log('LGU_PREVIEW_URL',url);
           fs.writeFileSync('/tmp/lgu-preview-url',url);
           NODE
