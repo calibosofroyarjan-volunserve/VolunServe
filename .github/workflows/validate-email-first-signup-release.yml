@@ -49,6 +49,7 @@ jobs:
         run: |
           node scripts/test-signup-prod.cjs
           node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
 
       - name: Verify default-off production web export
         env:
