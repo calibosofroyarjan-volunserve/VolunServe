@@ -2940,94 +2940,9 @@ export default function AdminCases() {
     }
   };
 
-  const inviteVolunteerToCase = async (
-    incident: DisasterCase,
-    volunteer: VolunteerProfile
-  ) => {
-    const adminUser = getAuth().currentUser;
-    if (!adminUser) {
-      setInviteFeedback("Admin session expired. Please sign in again.");
-      return;
-    }
-    const busyId = `invite_${incident.id}_${volunteer.uid}`;
-    if (busyKey) return;
-    setBusyKey(busyId);
-    setInviteFeedback("");
-    try {
-      const invitationRef = doc(db, "volunteerInvitations", `${incident.id}_${volunteer.uid}`);
-      const caseRef = doc(db, "disasterCases", incident.id);
-      const volunteerRef = doc(db, "users", volunteer.uid);
-      const notificationRef = doc(collection(db, "notifications"));
-      await runTransaction(db, async (tx) => {
-        const [invitationSnap, caseSnap, volunteerSnap] = await Promise.all([
-          tx.get(invitationRef),
-          tx.get(caseRef),
-          tx.get(volunteerRef),
-        ]);
-        if (!caseSnap.exists() || !volunteerSnap.exists()) {
-          throw new Error("The case or Volunteer account is unavailable.");
-        }
-        const caseData: any = caseSnap.data();
-        const person: any = volunteerSnap.data();
-        if (caseData.reporterUid === volunteer.uid) {
-          throw new Error("A reporter cannot be invited to their own emergency.");
-        }
-        if (["resolved", "closed"].includes(String(caseData.status || "")) ||
-            String(caseData.verificationStatus || "") === "rejected") {
-          throw new Error("Closed, resolved or rejected cases cannot send invitations.");
-        }
-        if (person.status !== "approved" ||
-            person.volunteerAccess !== true ||
-            person.volunteerStatus !== "approved" ||
-            ["admin", "superadmin", "lgu_personnel", "applicant"].includes(String(person.role || ""))) {
-          throw new Error("Only approved, active Volunteer accounts can be invited.");
-        }
-        const previous = invitationSnap.exists()
-          ? String(invitationSnap.data()?.status || "")
-          : "";
-        if (previous === "invited" || previous === "accepted") {
-          throw new Error(previous === "invited"
-            ? "This Volunteer already has an invitation pending."
-            : "This Volunteer already accepted this case invitation.");
-        }
-        if (invitationSnap.exists()) {
-          if (previous !== "declined") throw new Error("Invitation cannot be resent in its current status.");
-          tx.update(invitationRef, { status: "invited", updatedAt: serverTimestamp() });
-        } else {
-          tx.set(invitationRef, {
-            caseId: incident.id,
-            caseTitle: String(caseData.title || incident.title || "Emergency").slice(0, 200),
-            volunteerId: volunteer.uid,
-            volunteerName: volunteer.fullName.slice(0, 160),
-            status: "invited",
-            createdBy: adminUser.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
-        // A distinct notification document triggers in-app alert and existing Android FCM.
-        tx.set(notificationRef, {
-          userId: volunteer.uid,
-          audience: "volunteer",
-          type: "emergency_invitation",
-          title: "New VolunServe Volunteer invitation",
-          message: `LGU Admin invites you to indicate availability for "${String(caseData.title || "an emergency").slice(0, 100)}". Open Emergency Task to Accept or Decline. This is not an emergency dispatch.`,
-          caseId: incident.id,
-          invitationId: invitationRef.id,
-          read: false,
-          createdAt: serverTimestamp(),
-        });
-      });
-      setInviteFeedback(`Invitation sent to ${volunteer.fullName}. Volunteer can Accept or Decline in Emergency Task.`);
-    } catch (error: any) {
-      setInviteFeedback(error?.code === "permission-denied"
-        ? "Invitation denied by Firestore rules. Verify the invitation-only rules release."
-        : String(error?.message || "Could not send the invitation."));
-    } finally {
-      setBusyKey("");
-    }
-  };
-
+  // Direct Admin assignment creates a validated responseAssignment.
+  // Volunteers accept or decline it from the incident card in New.
+  // Historical volunteerInvitations stay in Firestore, but no new ones are issued.
   const assignVolunteerToCase = async (
     incident: DisasterCase,
     volunteer: VolunteerProfile
@@ -5648,7 +5563,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Invite approved Volunteers to help. Tasks are assigned after Admin validation. Volunteers may accept or decline, and this is not official emergency dispatch.
+                              Admin assigns validated community assistance tasks directly to approved Volunteers. Volunteers accept or decline in the incident card under New. This is not official emergency dispatch.
                             </Text>
                           </View>
                         </View>
@@ -5701,7 +5616,7 @@ export default function AdminCases() {
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
                           <Text style={styles.personnelCleanEmptyText}>
-                            Volunteers remain visible even when offline. Validate this emergency before sending an official support offer.
+                            Validate the emergency before assigning a qualified Volunteer. Their New task card includes the incident photo when accessible.
                           </Text>
                         </View>
                       )}
@@ -5723,19 +5638,6 @@ export default function AdminCases() {
                             const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
                               incident.status,
                             );
-                            const currentInvite = invitations.find(
-                              (item) => item.caseId === incident.id && item.volunteerId === volunteer.uid
-                            );
-                            const canInvite = !["resolved", "closed"].includes(String(incident.status)) &&
-                              String(incident.verificationStatus || "") !== "rejected" &&
-                              !["suspended", "rejected", "disabled", "deactivated"].includes(
-                                String(volunteer.status || "").toLowerCase()) &&
-                              !["revoked", "rejected"].includes(String(volunteer.volunteerStatus || "").toLowerCase()) &&
-                              !["admin", "superadmin", "lgu_personnel", "applicant"].includes(
-                                String(volunteer.role || "").toLowerCase());
-                            const inviteBusy = busyKey === `invite_${incident.id}_${volunteer.uid}`;
-                            const inviteDisabled = !canInvite || !!busyKey ||
-                              ["invited", "accepted"].includes(currentInvite?.status || "");
                             const dispatchDisabled = !eligibility.eligible ||
                               !volunteerSupportAvailable || !caseOpenForSupport || !!busyKey;
                             const reasonLower = eligibility.reason.toLowerCase();
@@ -5764,42 +5666,17 @@ export default function AdminCases() {
                                       Approved Volunteer · Citywide SJDM assignments
                                     </Text>
                                   </View>
-                                  <View style={{ gap: 7, alignItems: "flex-end" }}>
-                                    <TouchableOpacity
-                                      accessibilityRole="button"
-                                      accessibilityLabel={`Invite ${volunteer.fullName} to respond Accept or Decline`}
-                                      disabled={inviteDisabled}
-                                      style={[
-                                        styles.volunteerRosterAction,
-                                        inviteDisabled && styles.personnelAssignCompactDisabled,
-                                      ]}
-                                      onPress={() => inviteVolunteerToCase(incident, volunteer)}
-                                    >
-                                      <Text style={[
-                                        styles.volunteerRosterActionText,
-                                        inviteDisabled && styles.personnelAssignCompactTextDisabled,
-                                      ]}>
-                                        {inviteBusy ? "Sending…" :
-                                          currentInvite?.status === "invited" ? "Pending Reply" :
-                                          currentInvite?.status === "accepted" ? "Accepted" :
-                                          currentInvite?.status === "declined" ? "Invite Again" :
-                                          "Invite Volunteer"}
-                                      </Text>
-                                    </TouchableOpacity>
-                                    {currentInvite?.status === "accepted" && (
-                                      <TouchableOpacity
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Activate validated support for ${volunteer.fullName}`}
-                                        disabled={dispatchDisabled}
-                                        style={[styles.volunteerRosterAction, dispatchDisabled && styles.personnelAssignCompactDisabled]}
-                                        onPress={() => assignVolunteerToCase(incident, volunteer)}
-                                      >
-                                        <Text style={[styles.volunteerRosterActionText, dispatchDisabled && styles.personnelAssignCompactTextDisabled]}>
-                                          {dispatchDisabled ? "Dispatch unavailable" : "Offer Validated Response"}
-                                        </Text>
-                                      </TouchableOpacity>
-                                    )}
-                                  </View>
+                                  <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Assign validated community task to ${volunteer.fullName}`}
+                                    disabled={dispatchDisabled}
+                                    style={[styles.volunteerRosterAction, dispatchDisabled && styles.personnelAssignCompactDisabled]}
+                                    onPress={() => assignVolunteerToCase(incident, volunteer)}
+                                  >
+                                    <Text style={[styles.volunteerRosterActionText, dispatchDisabled && styles.personnelAssignCompactTextDisabled]}>
+                                      {dispatchDisabled ? "Assignment Unavailable" : "Assign Volunteer"}
+                                    </Text>
+                                  </TouchableOpacity>
                                 </View>
                                 <View style={styles.volunteerRosterTags}>
                                   <View style={offline ? styles.personnelMiniBadgeMuted : styles.personnelMiniBadgeGood}>
@@ -5820,15 +5697,10 @@ export default function AdminCases() {
                                 )}
                                 {!eligibility.eligible && (
                                   <Text style={styles.volunteerRosterWarning}>
-                                    Dispatch condition: {eligibility.reason}. Invitation remains allowed.
+                                    Assignment condition: {eligibility.reason}.
                                   </Text>
                                 )}
-                                {currentInvite?.status && (
-                                  <Text style={styles.volunteerRosterMeta}>
-                                    Volunteer invitation status: {currentInvite.status === "invited" ? "Awaiting Accept / Decline" :
-                                      currentInvite.status === "accepted" ? "Accepted" : "Declined"}
-                                  </Text>
-                                )}
+
                               </View>
                             );
                           })}
