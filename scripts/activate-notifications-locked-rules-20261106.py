@@ -114,10 +114,10 @@ def do_stage():
         raise RuntimeError("STOP candidate manifest mismatch: original/source hash or published ruleset differs")
     # Only two allowed transformations: exact auth-helper inlining with
     # identical boolean meaning, and the scoped Notifications update condition.
-    eol = "\\r\\n" if "\\r\\n" in original else "\\n"
-    helper = ("    function signedIn() {\\n"
-              "      return request.auth != null;\\n"
-              "    }\\n").replace("\\n", eol)
+    eol = "\r\n" if "\r\n" in original else "\n"
+    helper = ("    function signedIn() {\n"
+              "      return request.auth != null;\n"
+              "    }\n").replace("\n", eol)
     if original.count(helper) != 1:
         raise RuntimeError("STOP original auth helper differs from audited single-line boolean")
     mechanically_equivalent = original.replace(helper, "", 1).replace("signedIn()", "(request.auth != null)")
