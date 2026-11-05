@@ -5,6 +5,9 @@ on:
       - hotfix/live-announcement-feed-inbox-20261106
     paths:
       - 'components/home/Home.web.tsx'
+      - 'components/notifications/NotificationDropdown.tsx'
+      - 'app/(tabs)/notifications.tsx'
+      - 'lib/useAnnouncementAlerts.ts'
       - 'app/(tabs)/announcements.tsx'
       - 'functions/announcementAudience.js'
       - 'functions/announcementNotifications.js'
@@ -43,6 +46,9 @@ jobs:
           const changed=cp.execFileSync('git',['diff','--name-only',baseline,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
           const allowed=new Set([
             'components/home/Home.web.tsx',
+            'components/notifications/NotificationDropdown.tsx',
+            'app/(tabs)/notifications.tsx',
+            'lib/useAnnouncementAlerts.ts',
             'app/(tabs)/announcements.tsx',
             'functions/announcementAudience.js',
             'functions/announcementNotifications.js',
