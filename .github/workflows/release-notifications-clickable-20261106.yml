@@ -217,3 +217,5 @@ jobs:
 # Inert unless its exact one-shot commit message is explicitly triggered after validation.
 
 # One-shot scoped release requested: clickable Notifications UI + notification content read-only security only.
+
+# One-shot retry: preserve all guards and report Firebase Rules activation error body if blocked.
