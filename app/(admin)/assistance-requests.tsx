@@ -10,6 +10,13 @@ import {
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
+  validateAssistanceReview,
+  validateAssistanceReason,
+  validateAssistanceSupport,
+  validateAssistanceLocation,
+  type AssistanceValidationMode,
+} from "../../lib/assistanceReviewValidation";
+import {
   filterAndSortAssistanceQueue,
   type AssistanceQueueSort,
 } from "../../lib/assistanceReviewQueue";
@@ -639,6 +646,9 @@ export default function AssistanceRequestsAdmin() {
     useState("");
   const [rejectionReason, setRejectionReason] =
     useState("");
+  const [validationIntent, setValidationIntent] = useState<AssistanceValidationMode | null>(null);
+  const [reasonAttempt, setReasonAttempt] = useState<"more_information" | "reject" | null>(null);
+  const [supportValidationAttempt, setSupportValidationAttempt] = useState<"support" | "location" | null>(null);
 
   const [supportDecision, setSupportDecision] =
     useState("pending");
@@ -950,6 +960,9 @@ export default function AssistanceRequestsAdmin() {
     setPreviewDocument(null);
     setPreviewAccessUrl("");
     setPreviewError("");
+    setValidationIntent(null);
+    setReasonAttempt(null);
+    setSupportValidationAttempt(null);
   };
 
   useEffect(() => {
@@ -1302,6 +1315,16 @@ export default function AssistanceRequestsAdmin() {
 
   const saveVerificationDraft = async () => {
     if (!selected || !reviewDraft || savingAction) return;
+    setValidationIntent("draft");
+    const errors = validateAssistanceReview(reviewDraft, "draft", selected.category);
+    if (errors.length) {
+      setReviewTab("decision");
+      setReviewFocusStage((current) => ({
+        stage: errors[0].stage,
+        ticket: (current?.ticket ?? 0) + 1,
+      }));
+      return;
+    }
 
     try {
       setSavingAction("save_private_review");
@@ -1575,11 +1598,10 @@ export default function AssistanceRequestsAdmin() {
 
     const note = adminNote.trim();
 
-    if (note.length < 10) {
-      Alert.alert(
-        "Verification Note Required",
-        "Explain exactly what information or evidence the resident must clarify or provide.",
-      );
+    setReasonAttempt("more_information");
+    if (validateAssistanceReason("more_information", note)) {
+      setReviewTab((current) => current === "decision" ? current : "case");
+      setQuickAction("more_info");
       return;
     }
 
@@ -1600,13 +1622,20 @@ export default function AssistanceRequestsAdmin() {
   };
 
   const verifyNeed = () => {
-    if (!selected || !reviewDraft) return;
-
-    if (!reviewReadyForVerification(reviewDraft)) {
-      Alert.alert(
-        "Private Verification Incomplete",
-        "Complete document consistency, duplicate, beneficiary, residency, required facility/cost checks, and any required video/site visit. Resolve every risk flag before verifying the need.",
-      );
+    if (!selected || !reviewDraft || savingAction) return;
+    setValidationIntent("verify");
+    const issues = validateAssistanceReview(reviewDraft, "verify", selected.category);
+    if (issues.length) {
+      setReviewTab("decision");
+      setReviewFocusStage((current) => ({
+        stage: issues[0].stage,
+        ticket: (current?.ticket ?? 0) + 1,
+      }));
+      return;
+    }
+    if (!verificationReview || !reviewReadyForVerification(reviewDraft)) {
+      setReviewTab("decision");
+      Alert.alert("Verification Incomplete", "Start Review and complete all required private checks before verifying the request.");
       return;
     }
 
@@ -1648,11 +1677,9 @@ This still does not automatically create a Donation Campaign.`,
 
     const reason = rejectionReason.trim();
 
-    if (reason.length < 3) {
-      Alert.alert(
-        "Rejection Reason Required",
-        "Enter a clear evidence-based reason for rejecting the assistance request.",
-      );
+    setReasonAttempt("reject");
+    if (validateAssistanceReason("reject", reason)) {
+      if (reviewTab !== "decision") setQuickAction("reject");
       return;
     }
 
@@ -1689,13 +1716,14 @@ This still does not automatically create a Donation Campaign.`,
       return;
     }
 
-    if (!["internal_support", "donation_support", "not_required"].includes(supportDecision)) {
-      Alert.alert("Support Decision Required", "Select how the verified need will be supported.");
+    setSupportValidationAttempt("support");
+    const verifiedCap = Number(verificationReview?.verifiedUncoveredAmount || 0);
+    if (validateAssistanceSupport(supportDecision, remainingAmount, verifiedCap).length) {
+      setReviewTab("decision");
+      setReviewFocusStage((current) => ({ stage: "support", ticket: (current?.ticket ?? 0) + 1 }));
       return;
     }
-
     const amount = Number(remainingAmount || 0);
-    const verifiedCap = Number(verificationReview?.verifiedUncoveredAmount || 0);
 
     if (!Number.isFinite(amount) || amount < 0) {
       Alert.alert("Invalid Remaining Amount", "Enter a valid remaining unmet amount, or 0 if none.");
@@ -1791,15 +1819,10 @@ This still does not automatically create a Donation Campaign.`,
         return;
       }
 
-      if (
-        !locationType ||
-        locationName.trim().length < 3 ||
-        locationAddress.trim().length < 5
-      ) {
-        Alert.alert(
-          "Official Location Required",
-          "Select a location type and enter the official public location name and address.",
-        );
+      setSupportValidationAttempt("location");
+      if (validateAssistanceLocation(locationType, locationName, locationAddress).length) {
+        setReviewTab("decision");
+        setReviewFocusStage((current) => ({ stage: "support", ticket: (current?.ticket ?? 0) + 1 }));
         return;
       }
 
@@ -2210,6 +2233,9 @@ This still does not automatically create a Donation Campaign.`,
         reviewRecord={verificationReview}
         reviewLoading={verificationReviewLoading}
         focusStage={reviewFocusStage}
+        validationIntent={validationIntent}
+        reasonAttempt={reasonAttempt}
+        supportValidationAttempt={supportValidationAttempt}
         onReviewChange={updateReviewDraft}
         allChecksComplete={allChecksComplete}
         onSaveVerificationDraft={saveVerificationDraft}
