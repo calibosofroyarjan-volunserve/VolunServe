@@ -1251,8 +1251,7 @@ export default function DisasterResponse() {
           latitude: pin.latitude,
           longitude: pin.longitude,
 
-          locationSource: pin.source,
-          gpsAccuracyMeters:
+                    gpsAccuracyMeters:
             pin.source === "device_gps" ? pin.accuracy : null,
 
           locationCapturedAt:
@@ -1289,6 +1288,7 @@ export default function DisasterResponse() {
             video ? 1 : 0,
 
           verification: {
+          locationSource: pin.source,
             accountApproved: true,
 
             reporterTrust:
