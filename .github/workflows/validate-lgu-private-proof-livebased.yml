@@ -1,0 +1,79 @@
+name: Validate Private LGU Proofs and Super Admin Review (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-proof-full-flow-livebased-20261105]
+    paths:
+      - .github/workflows/validate-lgu-private-proof-livebased.yml
+      - app/admin-request.tsx
+      - app/(superadmin)/admin-accounts.tsx
+      - components/admin/LguPrivateProofPreview.tsx
+      - lib/lguCredentialImages.ts
+      - storage.rules
+      - scripts/test-lgu-private-proof-storage.cjs
+permissions:
+  contents: read
+jobs:
+  test:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      BASE_SHA: 32fcbfad3582922dd7988359d59b2e7e587fc442
+    steps:
+      - name: Require surgical source changes only on exact live Hosting ancestor
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const h={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'};
+            const u='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/compare/'+process.env.BASE_SHA+'...'+process.env.GITHUB_SHA;
+            const r=await fetch(u,{headers:h});
+            assert(r.ok,'Cannot verify LIVE source diff');
+            const diff=await r.json();
+            assert.equal(diff.status,'ahead','Require exact live ancestor');
+            const allowed=new Set([
+              'app/admin-request.tsx',
+              'app/(superadmin)/admin-accounts.tsx',
+              'components/admin/LguPrivateProofPreview.tsx',
+              'lib/lguCredentialImages.ts','storage.rules',
+              'scripts/test-lgu-private-proof-storage.cjs',
+              '.github/workflows/validate-lgu-private-proof-livebased.yml'
+            ]);
+            const changed=(diff.files||[]).map(x=>x.filename);
+            assert(changed.length>=6 && changed.every(x=>allowed.has(x)),
+              'STOP: unrelated change would overwrite Login, Signup, Admin, or Announcements');
+            console.log('PASS all updated source paths are intentionally scoped LGU private proof files:',changed);
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Fetch exact branch source including latest unmerged LIVE code
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f scripts/test-lgu-private-proof-storage.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile validation
+        run: npx tsc --noEmit
+      - name: Firestore and Storage security emulator - applicant cannot view, only Super Admin
+        run: npx firebase emulators:exec --only firestore,storage --project demo-volunserve --non-interactive "node scripts/test-lgu-private-proof-storage.cjs"
+      - name: Export production web UI for routing and bundler validation (no Hosting publish)
+        run: |
+          npx expo export --platform web --output-dir dist
+          GITHUB_SHA="$GITHUB_SHA" node scripts/verify-hosting-release.cjs
+          echo "PASS compiled LGU photo form, private Super Admin preview and existing web routes."
+          echo "NO LIVE FIRESTORE, STORAGE, HOSTING, AUTH OR DATA CHANGES."
