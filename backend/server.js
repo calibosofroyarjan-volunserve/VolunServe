@@ -1146,6 +1146,12 @@ async function requireAdminOrSuperAdmin(request, response, next) {
 }
 // Secure, explicitly SIMULATED Fund Management workflow. This API does not
 // execute real GCash/Maya payouts or assert LGU bank settlement.
+// Isolated private LGU staff onboarding using existing Cloudinary + Firebase Admin.
+// No changes to public uploads, Community Events, Assistance, or current Auth.
+require("./lguCredentialRoutes").installLguCredentialRoutes({
+  app, db, FieldValue, requireFirebaseUser, cloudinary, configureCloudinary,
+});
+
 require("./fundReleaseDemoRoutes").installFundReleaseDemoRoutes({
   app, db, FieldValue, requireFirebaseUser, requireAdminOrSuperAdmin,
   loadUserProfile, getProfileRole, isVerifiedResidentProfile,
