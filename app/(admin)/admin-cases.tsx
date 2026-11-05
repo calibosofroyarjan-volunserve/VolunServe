@@ -1674,7 +1674,9 @@ export default function AdminCases() {
     const skillReviewNeeded = specializedSkills.length > 0 && skillMatches === 0;
 
     // Any approved Volunteer can support a validated SJDM emergency,
-    // regardless of which barangay they live in.
+    // regardless of which barangay they live in. Incident barangay is kept
+    // solely for location, community records, and completion documentation.
+    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1683,6 +1685,9 @@ export default function AdminCases() {
     }
     if (explicitlyBlockedAccount || explicitlyRejectedIdentity) {
       return { eligible: false, reason: "Volunteer account is not currently eligible", skillMatches };
+    }
+    if (!caseBarangay) {
+      return { eligible: false, reason: "Record the incident barangay for the completion report; the Volunteer may be from any SJDM barangay", skillMatches };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
@@ -3101,6 +3106,19 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
+
+        const currentCaseBarangayRaw = String(
+          currentCase.incidentBarangay ||
+            currentCase.emergencyBarangay ||
+            currentCase.barangay ||
+            currentCase.reporterBarangay ||
+            ""
+        ).trim();
+        if (!normalizeBarangay(currentCaseBarangayRaw)) {
+          throw new Error(
+            "Record the incident barangay for completion documents. The selected Volunteer may be from any SJDM barangay."
+          );
+        }
 
         if (responderLockSnapshot.exists()) {
           const lock: any = responderLockSnapshot.data();
