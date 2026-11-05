@@ -1,0 +1,153 @@
+name: Fix Super Admin Assistance Records (Hosting Only)
+on:
+  push:
+    branches:
+      - release/fix-superadmin-assistance-records-20261105
+    paths:
+      - .github/workflows/release-superadmin-assistance-records-20261105.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy-assistance-ui:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AUDITED_LIVE_SHA: 08ff6d0a2e1c9d72a84a8216e6413bd42e4aeb01
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Check out exact audited release
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Fail closed unless only assistance records display and release guard change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$AUDITED_LIVE_SHA^{commit}"
+          git diff --name-only "$AUDITED_LIVE_SHA" HEAD > /tmp/assistance-ui-changed-files
+          echo "Reviewing scoped Super Admin Assistance Records UI release:"
+          cat /tmp/assistance-ui-changed-files
+          test "$(wc -l < /tmp/assistance-ui-changed-files)" -eq 2
+          grep -Fxq 'app/(superadmin)/all-records.tsx' /tmp/assistance-ui-changed-files
+          grep -Fxq '.github/workflows/release-superadmin-assistance-records-20261105.yml' /tmp/assistance-ui-changed-files
+          echo "PASS: Only Super Admin read-only records presentation and this release guard changed."
+
+      - name: Verify public production revision matches exact previously deployed base
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { accept: "application/json", "cache-control": "no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot verify live Hosting revision; no deploy");
+            const release = await response.json();
+            console.log("Observed live Hosting revision:", release.revision || "(missing)");
+            if (release.app !== "VolunServe" ||
+                release.firebaseProject !== "volunserve-3aa5b" ||
+                release.revision !== process.env.AUDITED_LIVE_SHA) {
+              throw Error("Live revision differs from audited production base; STOP without deploying.");
+            }
+            console.log("PASS: current live Hosting matches audited production source.");
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate assistance template, record isolation and TypeScript
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const assert = require("node:assert/strict");
+          const source = fs.readFileSync("app/(superadmin)/all-records.tsx", "utf8");
+          const assistance = source.indexOf('if (activeTab === "assistance")');
+          const cert = source.indexOf('if (activeTab === "certificates")');
+          const assignments = source.indexOf('"assignments"\n    ) {', assistance);
+          assert(assistance > 0 && cert > assistance && assignments > assistance,
+            "Assistance requires an explicit branch before other templates");
+          const requestTemplate = source.slice(assistance, assignments);
+          for (const field of ['icon="medkit-outline"', 'item.title', 'item.requestId',
+            'item.requesterName', 'item.categoryLabel', 'item.requesterBarangay', 'item.createdAt']) {
+            assert(requestTemplate.includes(field), "Assistance details missing: " + field);
+          }
+          assert(!requestTemplate.includes('"Volunteer Certificate"'),
+            "Certificate template must never appear in Assistance view");
+          assert(source.includes('collectionName: "assistanceRequests"'),
+            "Existing assistance Firestore data source must stay intact");
+          assert(source.includes('collectionName: "certificates"'),
+            "Certificates data source must stay intact");
+          assert(source.includes('title="System Record"'),
+            "Unknown record types must not default to a Certificate");
+          assert(source.includes('pagedRecords.map(renderRecord)') && source.includes('<ListPagination'),
+            "Five-row paging and existing search/filter UI must remain");
+          console.log("PASS: Assistance Requests uses correct read-only card and cannot fall through to Certificates.");
+          NODE
+          npx tsc --noEmit
+
+      - name: Export Expo web without modifying Firestore, Functions, Storage or Auth
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+
+      - name: Recheck live revision immediately before publishing
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { accept: "application/json", "cache-control": "no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot verify current live revision; refusing deploy");
+            const release = await response.json();
+            if (release.revision !== process.env.AUDITED_LIVE_SHA) throw Error("Live Hosting changed during build; refuse deployment.");
+            console.log("PASS: production baseline still matches.");
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
+
+      - name: Require configured Firebase Hosting service account
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials missing. NO DEPLOY attempted."
+            exit 1
+          fi
+
+      - name: Publish ONLY web assets to Firebase Hosting live channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+
+      - name: Confirm new release fingerprint and essential routes on custom domain
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Super Admin Assistance Records fix verified on volunserve.com."
+              exit 0
+            fi
+            echo "Release propagation not verified yet, attempt $attempt"
+            sleep 10
+          done
+          echo "::error::Hosting publish was attempted but custom-domain revision not verified."
+          exit 1
