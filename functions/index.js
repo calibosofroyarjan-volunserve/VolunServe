@@ -2732,3 +2732,6 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+// Post-publish private inbox fanout, scoped to the authorized barangay.
+exports.notifyAnnouncementAudience =
+  require("./announcementNotifications").notifyAnnouncementAudience;
