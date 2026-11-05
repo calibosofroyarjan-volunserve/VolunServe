@@ -74,3 +74,18 @@ test("Resident tracking shows the case map without requiring an LGU Personnel re
   }
 });
 
+
+
+test("retired dedicated personnel portal is not exposed and Admin remains intact", () => {
+  const legacyRoute = read("app/(lgu)/_layout.tsx");
+  const adminNav = read("app/(admin)/_layout.tsx");
+  const adminCases = read("app/(admin)/admin-cases.tsx");
+  assert.match(legacyRoute, /former responder workspace is no longer part of the active/);
+  assert.match(legacyRoute, /logoutUser\(\)/);
+  assert.doesNotMatch(legacyRoute, /<Stack/);
+  assert.match(adminNav, /label: "Emergency Reports"/);
+  assert.match(adminNav, /label: "Assistance Requests"/);
+  assert.match(adminNav, /item\.label !== "LGU Operations"/);
+  assert.match(adminCases, /const assignVolunteerToCase = async/);
+});
+
