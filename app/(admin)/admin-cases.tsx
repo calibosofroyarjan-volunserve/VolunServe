@@ -105,8 +105,10 @@ interface DisasterCase {
   };
 
   location: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: "device_gps" | "manual_map" | "unknown";
+  gpsAccuracyMeters?: number | null;
   details: string;
 
   affectedPeople?: number;
@@ -988,8 +990,10 @@ export default function AdminCases() {
                 : {},
 
             location: data.location || "",
-            latitude: Number(data.latitude),
-            longitude: Number(data.longitude),
+            latitude: data.latitude === null || data.latitude === undefined || data.latitude === "" ? null : Number(data.latitude),
+            longitude: data.longitude === null || data.longitude === undefined || data.longitude === "" ? null : Number(data.longitude),
+            locationSource: data.locationSource === "device_gps" || data.locationSource === "manual_map" ? data.locationSource : "unknown",
+            gpsAccuracyMeters: Number.isFinite(data.gpsAccuracyMeters) ? data.gpsAccuracyMeters : null,
             details: data.details || "",
 
             affectedPeople: Number(data.affectedPeople || 0),
@@ -4074,14 +4078,21 @@ export default function AdminCases() {
               >
                 <View style={styles.locationActionMain}>
                   <Text style={styles.sectionEyebrow}>LOCATION & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Resident response location</Text>
+                  <Text style={styles.locationActionTitle}>Reported incident location</Text>
                   <Text style={styles.locationActionAddress}>
                     {incident.location || "Exact response location not provided"}
                   </Text>
                   <Text style={styles.locationActionCoords}>
                     {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
                       ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                      : "GPS coordinates unavailable"}
+                      : "Incident coordinates unavailable"}
+                  </Text>
+                  <Text style={styles.locationActionCoords}>
+                    {incident.locationSource === "device_gps"
+                      ? `Device GPS · reported accuracy ${incident.gpsAccuracyMeters == null ? "unknown" : Math.round(incident.gpsAccuracyMeters) + " m"} · not independently verified`
+                      : incident.locationSource === "manual_map"
+                        ? "Manually selected map pin · not live GPS"
+                        : "Location source unknown · verify before responding"}
                   </Text>
                 </View>
 
@@ -4167,7 +4178,7 @@ export default function AdminCases() {
                       {Number.isFinite(incident.latitude) &&
                       Number.isFinite(incident.longitude)
                         ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                        : "No GPS coordinates"}
+                        : "No incident coordinates"}
                     </Text>
                   </View>
 
