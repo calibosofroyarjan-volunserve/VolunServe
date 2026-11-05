@@ -1,51 +1,41 @@
-const fs = require("node:fs");
-const path = require("node:path");
-const assert = require("node:assert/strict");
-const read = f => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
-const resident = read("app/login.tsx");
-const admin = read("app/admin-login.tsx");
-const apply = read("app/admin-request.tsx");
-const owner = read("app/(superadmin)/admin-accounts.tsx");
-const rules = read("firestore.rules");
-const shell = read("components/auth/PremiumAuthShell.tsx");
-assert(shell.includes("Resident & Volunteer Login") && shell.includes("LGU & System Administration Login") &&
-  resident.includes('<PremiumAuthShell active="resident">') &&
-  admin.includes('<PremiumAuthShell active="admin">'),
-  "Both login entrypoints must share the Resident/LGU Admin tabs");
-assert(resident.includes('profile.role === "admin" || profile.role === "superadmin"') &&
-  resident.includes("await firebaseSignOut(auth)"),
-  "Community login and Google OAuth must sign out privileged staff accounts");
-assert(!admin.includes("GoogleAuthProvider") && !admin.includes("promptGoogleAsync") &&
-  admin.includes("loginUser(cleanEmail, password)"),
-  "LGU Admin login must use email/password only");
-assert(admin.includes('router.push("/admin-request")'),
-  "A separate LGU staff application must be linked to Admin Login");
+"use strict";
+const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
+const read=f=>fs.readFileSync(path.join(__dirname,"..",f),"utf8");
+const login=read("app/login.tsx"),web=read("app/login.web.tsx"),old=read("app/admin-login.tsx");
+const apply=read("app/admin-request.tsx"),owner=read("app/(superadmin)/admin-accounts.tsx");
+const rules=read("firestore.rules"),shell=read("components/auth/PremiumAuthShell.tsx");
+const policy=read("lib/unifiedLoginRouting.ts");
+assert(shell.includes("VolunServe Login") && !shell.includes("styles.switcher") &&
+  login.includes("<PremiumAuthShell>") && web.includes("<PremiumAuthShell>"),
+  "One clear Login must replace two login-role tabs");
+assert(login.includes("unifiedPasswordDestination(profile)") && web.includes("unifiedPasswordDestination(profile)") &&
+  policy.includes("isAdminProfile(profile)") && policy.includes("isSuperAdminProfile(profile)"),
+  "Password sign-in must route only approved Admin and Super Admin accounts to their own dashboard");
+assert(login.includes('profile.role === "admin" || profile.role === "superadmin"') &&
+  web.includes('profile.role === "admin" || profile.role === "superadmin"'),
+  "Google OAuth must remain community-only for staff");
+assert(old.includes('<Redirect href="/login" />') && login.includes('router.push("/admin-request")'),
+  "Old staff bookmarks redirect to one Login, and the LGU staff application remains accessible");
 assert(apply.includes('role:"applicant",status:"pending_review"') &&
   apply.includes('residentAccess:false,volunteerAccess:false'),
-  "LGU applications must have no resident, volunteer or administrative permissions");
+  "LGU staff applicants must have no approved role at creation");
 assert(owner.includes('role === "applicant" && account.status === "pending_review"') &&
   owner.includes('actionType === "promote"'),
-  "Super Admin must retain pending applicant eligibility and secure review logic even when staff queue is hidden");
+  "Super Admin retains a pending queue and secure approval pathway");
 assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
-  "Rules must prohibit public creation of approved Admin role");
-assert(admin.includes("Request LGU Admin Access") &&
-  apply.includes("LGU Staff Verification Application") &&
+  "Rules must continue to prohibit public privilege elevation");
+assert(apply.includes("LGU Staff Verification Application") &&
   apply.includes("Submit LGU Information for Verification"),
-  "LGU staff access requests must display the approved Super Admin CTA and route to the staff verification form");
-assert(admin.includes("LGU staff applicants receive no privileges until independently verified and approved by Super Admin.") &&
-  apply.includes("role:\"applicant\",status:\"pending_review\"") &&
-  apply.includes("Only after successful confirmation") &&
-  owner.includes("pendingLguApplications"),
-  "Unverified submissions remain pending in the authorized data model");
+  "Existing LGU staff form must remain unchanged");
 assert(owner.includes("setIdentityMatched") &&
   owner.includes("setLguEmploymentConfirmed") &&
   owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&
   owner.includes('actionType === "promote" && !reviewComplete') &&
   owner.includes('return "Promote Verified Staff"'),
-  "Admin promotion must be disabled until independent identity and LGU employment checks pass");
+  "Admin promotion must require official staff credential verification");
 assert(owner.includes("lguAdminCredentialReviews") &&
   owner.includes('reviewStatus: "verified"') &&
   owner.includes('role: "admin"'),
-  "Verification result and role promotion must be captured before operational Admin access");
-console.log("PASS staff login tabs, email-only staff auth, pending LGU applications and verified Super Admin grant");
+  "Admin elevation must record verified review evidence");
+console.log("PASS single staff credential login, pending LGU applications and server-side role guards");
