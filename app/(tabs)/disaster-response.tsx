@@ -22,7 +22,7 @@ export default function EmergencyReportsScreen() {
       <View style={styles.switcher} accessibilityLabel="Emergency Reports sections">
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>EMERGENCY REPORTS</Text>
-          <Text style={styles.subtitle}>Incident reporting and live LGU response in one place</Text>
+          <Text style={styles.subtitle}>Report emergencies and track assigned Volunteer response</Text>
         </View>
         <View style={styles.switchTabs}>
           <Pressable
@@ -43,7 +43,7 @@ export default function EmergencyReportsScreen() {
             style={[styles.tab, active && styles.activeTab]}
           >
             <Ionicons name="map-outline" size={16} color={active ? "#FFFFFF" : "#246958"} />
-            <Text style={[styles.tabLabel, active && styles.activeLabel]}>Live Response Map</Text>
+            <Text style={[styles.tabLabel, active && styles.activeLabel]}>Track My Report</Text>
           </Pressable>
         </View>
       </View>
