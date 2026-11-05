@@ -473,7 +473,7 @@ const errorText = (error: unknown) => {
     message.includes("permission-denied") ||
     message.includes("Missing or insufficient permissions")
   ) {
-    return "Firestore access denied. Community Events security rules must be configured before this action can work.";
+    return "We couldn't load this information. Refresh the page or contact a VolunServe administrator if this continues.";
   }
 
   if (message.includes("Failed to fetch") || message.includes("Network request failed")) {
@@ -953,6 +953,7 @@ export default function CommunityEventsScreen() {
   useEffect(() => {
     if (!user || !canPropose) {
       setProposals([]);
+      setRecordError("");
       return;
     }
 
@@ -985,6 +986,7 @@ export default function CommunityEventsScreen() {
   useEffect(() => {
     if (!user || !isVolunteer) {
       setParticipations([]);
+      setRecordError("");
       return;
     }
 
@@ -2455,7 +2457,7 @@ export default function CommunityEventsScreen() {
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>
             {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
-            {!!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
+            {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && canPropose && !residentDetailsId && (
               <View style={styles.ruiFilterBar}>
                 <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.ruiFilterLabel}>{category === "All" ? "All Categories" : category}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
@@ -3019,7 +3021,7 @@ export default function CommunityEventsScreen() {
           </View>
         )}
 
-        {!!recordError && (
+        {section === "mine" && !!recordError && (
           <View style={styles.notice}>
             <Text style={styles.errorText}>
               {recordError}
