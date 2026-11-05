@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, type Href } from "expo-router";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
   useWindowDimensions, View,
@@ -96,7 +96,7 @@ const destinationFor = (item: InboxItem, volunteerMode: boolean): Href => {
 };
 
 /** Shared resident/volunteer header bell. It does not change Firestore rules or create records. */
-export default function NotificationDropdown() {
+export default function NotificationDropdown({ variant = "default" }: { variant?: "default" | "home" }) {
   const { user, profile } = useUserSession();
   const uid = user?.uid ?? null;
   const volunteerMode = profile ? activeModeForProfile(profile) === "volunteer" : false;
@@ -108,6 +108,8 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(!!uid);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const bellRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState<{ right: number; bottom: number } | null>(null);
 
   useEffect(() => {
     setItems([]);
@@ -171,14 +173,44 @@ export default function NotificationDropdown() {
   };
 
   const mobile = width < 700;
+  const panelWidth = Math.min(width - 18, 405);
+  const panelLeft = anchor
+    ? Math.max(9, Math.min(width - panelWidth - 9, anchor.right - panelWidth))
+    : Math.max(9, width - panelWidth - 9);
+  const panelTop = anchor ? anchor.bottom + 7 : (mobile ? 66 + insets.top : 72);
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setShowUnreadOnly(false);
+    const node = bellRef.current as any;
+    // Anchor to the ACTUAL bell in the home header, not the profile control.
+    // Native measurement remains the fallback for mobile React Native.
+    if (Platform.OS === "web" && typeof node?.getBoundingClientRect === "function") {
+      const rect = node.getBoundingClientRect();
+      setAnchor({ right: rect.right, bottom: rect.bottom });
+      setOpen(true);
+    } else if (typeof node?.measureInWindow === "function") {
+      node.measureInWindow((x: number, y: number, triggerWidth: number, triggerHeight: number) => {
+        setAnchor({ right: x + triggerWidth, bottom: y + triggerHeight });
+        setOpen(true);
+      });
+    } else {
+      setAnchor(null);
+      setOpen(true);
+    }
+  };
+
   return (
     <View style={styles.root}>
-      <Pressable accessibilityRole="button"
+      <Pressable ref={bellRef} accessibilityRole="button"
         accessibilityLabel={"Notifications" + (unread ? ", " + unread + " unread" : "")}
         accessibilityState={{ expanded: open }}
-        onPress={() => { setOpen(value => !value); setShowUnreadOnly(false); }}
-        style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}>
-        <Ionicons name={open ? "notifications" : "notifications-outline"} size={22} color="#17453A" />
+        onPress={toggle}
+        style={({ pressed }) => [styles.bellButton, variant === "home" && styles.homeBellButton, pressed && styles.pressed]}>
+        <Ionicons name={open ? "notifications" : "notifications-outline"} size={variant === "home" ? 23 : 22} color={variant === "home" ? "#122B55" : "#17453A"} />
         {unread > 0 ? <View style={styles.countBadge}>
           <Text style={styles.countText}>{unread > 99 ? "99+" : String(unread)}</Text>
         </View> : null}
@@ -190,9 +222,9 @@ export default function NotificationDropdown() {
           <Pressable accessibilityRole="button" accessibilityLabel="Close notifications"
             style={styles.backdrop} onPress={() => setOpen(false)} />
           <View style={[styles.panel, {
-            top: (mobile ? 66 : 72) + (mobile ? insets.top : 0),
-            right: mobile ? 9 : 22,
-            width: Math.min(width - 18, 405),
+            top: panelTop,
+            left: panelLeft,
+            width: panelWidth,
           }]}>
             <View style={styles.panelHeader}>
               <View style={styles.panelHeaderCopy}>
@@ -268,6 +300,10 @@ const styles = StyleSheet.create({
   bellButton: {
     width: 39, height: 39, borderRadius: 13, backgroundColor: "#FFFFFF",
     borderWidth: 1, borderColor: "#DCE8E1", alignItems: "center", justifyContent: "center",
+  },
+  homeBellButton: {
+    width: 48, height: 48, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.96)", borderColor: "rgba(224,232,240,0.95)",
   },
   pressed: { opacity: 0.76 },
   countBadge: {
