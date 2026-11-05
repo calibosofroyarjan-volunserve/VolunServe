@@ -1,0 +1,81 @@
+name: Validate LGU Selected Announcement Recipient (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-announcement-recipient-latest-main-20261105]
+permissions:
+  contents: read
+concurrency:
+  group: validate-lgu-recipient-main-no-live-20261105
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Guard unrelated modules and Super Admin code
+        env:
+          BASE: 8911b9fc493bcbb0e8366742c0abbd1e2c03e4a8
+        run: |
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --name-only "$BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require("node:fs");
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+"/changed.txt","utf8").split("\n").filter(Boolean);
+          const allowed=new Set([
+            "app/(admin)/create-announcement.tsx",
+            "scripts/prepare-lgu-recipient-live-rules.py",
+            "scripts/test-lgu-announcement-recipient-emulator.cjs",
+            ".github/workflows/validate-lgu-selected-recipient-main-20261105.yml"
+          ]);
+          const bad=paths.filter(p=>!allowed.has(p));
+          if(bad.length)throw Error("STOP: unrelated modules modified: "+bad.join(", "));
+          if(!paths.includes("app/(admin)/create-announcement.tsx"))throw Error("STOP: expected UI not changed");
+          console.log("PASS no Super Admin, login, signup, Google, resident, volunteer or other module changes");
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript + protected login tests
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Build candidate from exact active Firestore rules (not deployed)
+        run: python3 scripts/prepare-lgu-recipient-live-rules.py
+      - name: Emulator permission and invalid recipient checks
+        run: LGU_RECIPIENT_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-lgu-announcement-recipient-emulator.cjs'
+      - name: Existing LGU announcement emulator regression checks
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Web export only - NO LIVE HOSTING DEPLOY
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Ensure published Firestore Rules remain unchanged
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          manifest=json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"lgu-recipient-manifest.json")))
+          token=subprocess.check_output(["gcloud","auth","print-access-token"],text=True).strip()
+          req=urllib.request.Request("https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore",headers={"Authorization":"Bearer "+token})
+          with urllib.request.urlopen(req,timeout=30) as r: actual=json.load(r)
+          if actual["rulesetName"]!=manifest["publishedRuleset"]:
+            raise SystemExit("STOP active Cloud Rules changed during validation")
+          print("PASS active Cloud Rules UNCHANGED",actual["rulesetName"])
+          PY
+      - name: Final release boundary
+        run: echo 'Validation only. No production Hosting, Auth, Rules, data, Functions, Render or Super Admin changed.'
