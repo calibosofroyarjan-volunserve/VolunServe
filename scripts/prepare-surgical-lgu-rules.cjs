@@ -38,8 +38,12 @@ const verifyFn=slice(hardened,
 const usersCreate="      allow create: if signedIn()";
 onlyOnce(target,"      function volunteerApplicationAfter()","live user's volunteer function");
 const usersFunctionEnd="      allow create: if signedIn()";
-onlyOnce(target,usersFunctionEnd,"live resident create");
-target=target.replace(usersFunctionEnd,verifyFn+usersFunctionEnd);
+const usersStart=target.indexOf("    match /users/{uid} {");
+assert(usersStart>=0,"Live /users rule missing");
+const functionStart=target.indexOf("      function volunteerApplicationAfter()",usersStart);
+const residentCreate=target.indexOf(usersFunctionEnd,functionStart);
+assert(residentCreate>functionStart && residentCreate-functionStart<450,"Unexpected resident create placement");
+target=target.slice(0,residentCreate)+verifyFn+target.slice(residentCreate);
 // 2) Exactly one new applicant-only create clause; resident and legacy workflows remain untouched.
 const createStaff=slice(hardened,
 "      // Staff applications never receive operational permissions at signup.",
