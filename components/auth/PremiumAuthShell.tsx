@@ -144,8 +144,8 @@ export default function PremiumAuthShell({ children }: Props) {
               </LinearGradient>
             </View>
             <View style={styles.formHeading}>
-              <Text style={[styles.formTitle, narrow && styles.formTitleNarrow]}>VolunServe Login</Text>
-              <Text style={styles.formSubtitle}>Sign in securely with your account credentials.</Text>
+              <Text style={[styles.formTitle, narrow && styles.formTitleNarrow]}>Welcome Back</Text>
+              <Text style={styles.formSubtitle}>Sign in securely to your account.</Text>
             </View>
             <View style={[styles.formFields, narrow && styles.formFieldsNarrow]}>
               {children}
