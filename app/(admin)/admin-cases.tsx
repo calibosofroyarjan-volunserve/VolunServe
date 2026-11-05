@@ -32,6 +32,7 @@ import {
   View,
 } from "react-native";
 
+import EmergencyIncidentMap from "../../components/admin/EmergencyIncidentMap";
 import { db } from "../../lib/firebase";
 import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 
@@ -3960,7 +3961,7 @@ export default function AdminCases() {
                       ["Reported", true, incident.createdAt],
                       ["Validated", verificationStatus === "validated", incident.validatedAt],
                       [
-                        "LGU Response",
+                        "Volunteer Assigned",
                         ["assigned", "in_progress", "resolved", "closed"].includes(incident.status),
                         incident.assignedAt || incident.updatedAt,
                       ],
@@ -4046,7 +4047,7 @@ export default function AdminCases() {
               >
                 <View style={styles.locationActionMain}>
                   <Text style={styles.sectionEyebrow}>LOCATION & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Resident response location</Text>
+                  <Text style={styles.locationActionTitle}>Reported incident location</Text>
                   <Text style={styles.locationActionAddress}>
                     {incident.location || "Exact response location not provided"}
                   </Text>
@@ -4076,19 +4077,38 @@ export default function AdminCases() {
                 </View>
               </View>
 
-              {detailTab === "map" && Platform.OS === "web" &&
-                Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) && (
-                <View style={{ marginTop: 12, marginBottom: 18, borderRadius: 12, overflow: "hidden", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D9E7DF" }}>
-                  <Text style={{ padding: 13, color: "#173D32", fontWeight: "800", fontSize: 13 }}>
-                    Live Response Map · This emergency report
-                  </Text>
-                  {React.createElement("iframe" as any, {
-                    title: "Embedded authorized LGU live response map for selected emergency",
-                    src: "/admin-live-map?caseId=" + encodeURIComponent(incident.id),
-                    loading: "lazy",
-                    allow: "geolocation",
-                    style: { width: "100%", height: 480, border: 0, display: "block" },
-                  })}
+              {detailTab === "map" && (
+                <View style={{ marginTop: 12, marginBottom: 18, gap: 10 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                    <View style={{ flex: 1, minWidth: 210 }}>
+                      <Text style={{ color: "#153F32", fontSize: 16, fontWeight: "800" }}>
+                        Incident Location & Volunteer Tracking
+                      </Text>
+                      <Text style={{ color: "#61766C", fontSize: 12, marginTop: 3 }}>
+                        Incident pin is always shown. Volunteer GPS appears only while an assigned Volunteer is actively sharing their location.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      disabled={!Number.isFinite(incident.latitude) || !Number.isFinite(incident.longitude)}
+                      onPress={() => router.push(`/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any)}
+                      style={{ backgroundColor: "#087F67", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10 }}
+                    >
+                      <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 12 }}>Open Full Live Map</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) ? (
+                    <EmergencyIncidentMap
+                      caseId={incident.id}
+                      latitude={Number(incident.latitude)}
+                      longitude={Number(incident.longitude)}
+                      assignments={activeAssignments}
+                    />
+                  ) : (
+                    <View style={{ borderRadius: 12, padding: 20, backgroundColor: "#F8FAF9", borderWidth: 1, borderColor: "#DCE7E1" }}>
+                      <Text style={{ color: "#174B3D", fontWeight: "800" }}>Exact GPS not available</Text>
+                      <Text style={{ color: "#64786F", marginTop: 5 }}>Review the resident location evidence. We will not invent a map pin from an incomplete address.</Text>
+                    </View>
+                  )}
                 </View>
               )}
               <View
