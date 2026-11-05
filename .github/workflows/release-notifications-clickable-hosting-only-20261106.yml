@@ -217,3 +217,5 @@ jobs:
 # One-shot scoped release requested: clickable Notifications UI + notification content read-only security only.
 
 # One-shot retry: preserve all guards and report Firebase Rules activation error body if blocked.
+
+# One-shot release requested by user: fully clickable polished Notifications UI only; no Firestore Rules activation.
