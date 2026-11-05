@@ -72,14 +72,12 @@ def main():
         release, ruleset, current = release_state()
         if ruleset != OLD_RULESET or sha(current) != OLD_SHA:
             raise RuntimeError("BLOCKED: another production Firestore Rules release is active")
-        # Immutable ruleset creation is NOT a release. Nothing is live yet.
-        newly_created = request(
-            "POST", "projects/" + PROJECT + "/rulesets",
-            {"source": {"files": [{"name": "firestore.rules", "content": candidate}]}}
-        )
-        new_name = newly_created.get("name", "")
-        if not new_name.startswith("projects/" + PROJECT + "/rulesets/"):
-            raise RuntimeError("Unexpected new Firebase Ruleset response")
+        # This immutable Ruleset was pre-compiled by the separate validation CI
+        # against Firebase's hard 256KB executable quota. No speculative upload.
+        new_name = "projects/volunserve-3aa5b/rulesets/26e27c96-ca08-4e5e-ace5-437ee4df086b"
+        expected_candidate_sha = "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba"
+        if sha(candidate) != expected_candidate_sha:
+            raise RuntimeError("BLOCKED: compact LGU policy differs from compiled audited Ruleset")
         check = request("GET", new_name)
         new_text = max((x.get("content", "") for x in check["source"]["files"]), key=len)
         if new_text != candidate:
