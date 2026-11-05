@@ -1,0 +1,45 @@
+name: Read-Only VolunServe Live Revision For Announcements
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths:
+      - ".github/workflows/audit-live-base-announcements-20261105.yml"
+permissions:
+  contents: read
+jobs:
+  inspect-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Print public live revision, source fingerprint and page availability (READ ONLY)
+        env:
+          EXPECTED_DOMAIN: volunserve.com
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const urls = [
+            "https://volunserve.com/volunserve-release.json",
+            "https://volunserve-3aa5b.web.app/volunserve-release.json",
+            "https://volunserve.com/login",
+            "https://volunserve.com/signup",
+            "https://volunserve.com/admin-login"
+          ];
+          const clean = (obj) => Object.fromEntries(Object.entries(obj).filter(([k]) => /^(revision|sha|commit|scope|project|timestamp|release|source|builtAt)$/i.test(k)));
+          (async () => {
+            let errors=0;
+            for (const url of urls) {
+              try {
+                const r=await fetch(url + (url.includes("?")?"&":"?")+"read_only="+Date.now(), {headers:{"cache-control":"no-cache"},signal:AbortSignal.timeout(12000)});
+                const body=await r.text();
+                console.log("PROBE "+JSON.stringify({url,status:r.status,final:r.url.split("?")[0],contentType:r.headers.get("content-type"),sha256:crypto.createHash("sha256").update(body).digest("hex").slice(0,20),length:body.length}));
+                if(url.endsWith("volunserve-release.json")) {
+                  try { console.log("RELEASE "+JSON.stringify(clean(JSON.parse(body))));}
+                  catch { console.log("RELEASE_INVALID or missing JSON"); errors++; }
+                }
+                if(!r.ok)errors++;
+              } catch(e) {errors++;console.log("PROBE_ERROR "+url+" "+e.message);}
+            }
+            if(errors)process.exitCode=1;
+          })();
+          NODE
