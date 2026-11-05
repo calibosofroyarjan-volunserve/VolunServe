@@ -33,6 +33,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -2122,6 +2123,75 @@ export default function AdminCases() {
     }
   };
 
+  // Volunteer tasks are community assistance, not an official emergency dispatch.
+  // The Admin confirms the verified work; the Volunteer cannot close a case.
+  const confirmVolunteerCompletion = async (
+    incident: DisasterCase,
+    completedAssignment: ResponseAssignment,
+  ) => {
+    const authUser = getAuth().currentUser;
+    if (!authUser) {
+      Alert.alert("Session Expired", "Please sign in again.");
+      return;
+    }
+    const busyId = `confirm_completed_${incident.id}`;
+    setBusyKey(busyId);
+    try {
+      const caseRef = doc(db, "disasterCases", incident.id);
+      const assignmentSnapshot = await getDoc(
+        doc(db, "responseAssignments", completedAssignment.id),
+      );
+      const fieldSnapshot = await getDoc(
+        doc(db, "volunteerFieldReports", completedAssignment.id),
+      );
+      const caseSnapshot = await getDoc(caseRef);
+      if (!caseSnapshot.exists()) throw new Error("The report no longer exists.");
+      const current = caseSnapshot.data();
+      if (
+        !assignmentSnapshot.exists() ||
+        assignmentSnapshot.data().caseId !== incident.id ||
+        assignmentSnapshot.data().status !== "completed"
+      ) {
+        throw new Error("The Volunteer task is not yet completed.");
+      }
+      if (!fieldSnapshot.exists() || fieldSnapshot.data().reportStatus !== "reviewed") {
+        throw new Error("Review the Volunteer's completion report before confirming.");
+      }
+      if (assignmentsForCase(incident.id).some((item) =>
+        ["offered", "accepted", "responding", "on_site"].includes(String(item.status))
+      )) {
+        throw new Error("A Volunteer assignment is still active.");
+      }
+      const currentStatus = String(current.status || "");
+      if (!["assigned", "in_progress"].includes(currentStatus)) {
+        throw new Error("The case is already completed or is not ready for confirmation.");
+      }
+      // Respect existing Firestore transition rules; no rules or schema changes.
+      if (currentStatus === "assigned") {
+        await updateDoc(caseRef, {
+          status: "in_progress",
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await updateDoc(caseRef, {
+        status: "resolved",
+        resolvedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      Alert.alert(
+        "Completion Confirmed",
+        "The Volunteer task was reviewed and the emergency report is marked Completed. Close the case when appropriate.",
+      );
+    } catch (cause) {
+      Alert.alert(
+        "Unable to Confirm Completion",
+        cause instanceof Error ? cause.message : "Please check the report and try again.",
+      );
+    } finally {
+      setBusyKey("");
+    }
+  };
+
   const reviewVolunteerFieldReport = async (
     report: VolunteerFieldReport,
     action: "reviewed" | "dismissed"
@@ -3599,6 +3669,11 @@ export default function AdminCases() {
             {[selectedCase].map((incident) => {
           const incidentAssignments = assignmentsForCase(incident.id);
           const activeAssignments = activeAssignmentsForCase(incident.id);
+          const publicCaseStatus = emergencyTaskStatusLabel(
+            incident.status,
+            incident.verificationStatus,
+            activeAssignments[0]?.status || incidentAssignments.find(item => item.status === "completed")?.status,
+          );
           const incidentFieldReports = fieldReportsForCase(incident.id);
           const incidentLguFieldReports = lguFieldReports.filter(
             (report) => report.caseId === incident.id
@@ -3911,7 +3986,7 @@ export default function AdminCases() {
                     </View>
 
                     <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>Volunteer Support</Text>
+                      <Text style={styles.metaLabel}>Volunteer Assignment</Text>
                       <Text style={styles.metaValue}>
                         {activeAssignments.length > 0
                           ? `${activeAssignments.length} active`
@@ -3992,7 +4067,7 @@ export default function AdminCases() {
                   <View style={styles.overviewCard}>
                     <View style={styles.overviewCardHeader}>
                       <Text style={styles.overviewCardIcon}>◉</Text>
-                      <Text style={styles.overviewCardTitle}>Case Status</Text>
+                      <Text style={styles.overviewCardTitle}>Report Status: {publicCaseStatus}</Text>
                     </View>
 
                     {[
@@ -4834,34 +4909,20 @@ export default function AdminCases() {
                   )}
 
                   <View style={styles.responseLifecycleRow}>
-                    {["validated", "assigned"].includes(incident.status) && (
+                    {["assigned", "in_progress"].includes(incident.status) &&
+                      incidentAssignments.some((item) => item.status === "completed") && (
                       <TouchableOpacity
-                        style={styles.progressButton}
-                        onPress={() =>
-                          changeCaseStatus(incident, "in_progress")
-                        }
+                        disabled={busyKey === `confirm_completed_${incident.id}`}
+                        style={styles.resolveButton}
+                        onPress={() => {
+                          const completed = incidentAssignments.find((item) => item.status === "completed");
+                          if (completed) void confirmVolunteerCompletion(incident, completed);
+                        }}
                       >
                         <Text style={styles.primaryButtonText}>
-                          Start Response
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {incident.status === "in_progress" && (
-                      <TouchableOpacity
-                        disabled={lguFieldReviewPending}
-                        style={[
-                          styles.resolveButton,
-                          lguFieldReviewPending && styles.disabledButton,
-                        ]}
-                        onPress={() =>
-                          changeCaseStatus(incident, "resolved")
-                        }
-                      >
-                        <Text style={styles.primaryButtonText}>
-                          {lguFieldReviewPending
-                            ? "Review LGU Report First"
-                            : "Resolve Case"}
+                          {busyKey === `confirm_completed_${incident.id}`
+                            ? "Confirming…"
+                            : "Confirm Volunteer Completion"}
                         </Text>
                       </TouchableOpacity>
                     )}
