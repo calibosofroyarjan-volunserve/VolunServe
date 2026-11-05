@@ -1,0 +1,53 @@
+name: Diagnose Live Signup HTML and Build Artifacts (READ ONLY)
+on:
+  push:
+    branches: [diagnostic/live-signup-render-20261105]
+    paths: [.github/workflows/diagnose-live-signup-render-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Compare live, Firebase default and final preview Signup HTML
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const hosts = [
+            "https://volunserve.com",
+            "https://volunserve-3aa5b.web.app",
+            "https://volunserve-3aa5b--combined-final-1105-ur59qno6.web.app"
+          ];
+          const markers = ["Step 1", "Email & Password", "Personal Information", "Create VolunServe Password", "Already started? Resume Registration", "Basic Account registration"];
+          (async()=>{
+            for(const host of hosts){
+              console.log("\nHOST "+host);
+              try {
+                const r=await fetch(host+"/volunserve-release.json?diag="+Date.now(),{headers:{"cache-control":"no-cache"},signal:AbortSignal.timeout(15000)});
+                const d=await r.json();
+                console.log("MANIFEST",r.status,d.revision,d.firebaseProject);
+                for(const url of ["/signup","/signup.html","/signup?diag="+Date.now()]){
+                  try {
+                    const res=await fetch(host+url,{headers:{"cache-control":"no-cache"},signal:AbortSignal.timeout(15000)});
+                    const html=await res.text();
+                    const sha=crypto.createHash("sha256").update(html).digest("hex").slice(0,16);
+                    const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(x=>x[1]);
+                    console.log("PAGE",url,res.status,res.headers.get("content-type"),"cache-control",res.headers.get("cache-control"),"sha256",sha,"bytes",html.length,"markers",Object.fromEntries(markers.map(m=>[m,html.includes(m)])),"scripts",scripts.slice(0,8));
+                    if(url==="/signup"&&scripts.length){
+                      const sampled=scripts.slice(0,4);
+                      for(const p of sampled) {
+                        try {
+                          const jsRes=await fetch(new URL(p,host),{signal:AbortSignal.timeout(20000)});
+                          const js=await jsRes.text();
+                          console.log("ASSET",p.slice(0,110),jsRes.status,js.length,crypto.createHash("sha256").update(js).digest("hex").slice(0,16), "containsFlagLiteral",js.includes("EXPO_PUBLIC_EMAIL_FIRST_SIGNUP"), "containsPremiumCopy",js.includes("Step 1 — Email & Password"),"containsLegacyCopy",js.includes("Personal Information"));
+                        }catch(e){console.log("ASSET_ERROR",p,e.message);}
+                      }
+                    }
+                  } catch(e) { console.log("PAGE_ERROR",url,e.message); }
+                }
+              }catch(e){console.log("HOST_ERROR",e.message);}
+            }
+          })();
+          NODE
