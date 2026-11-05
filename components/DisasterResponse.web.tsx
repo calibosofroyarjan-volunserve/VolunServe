@@ -478,6 +478,9 @@ export default function WebDisasterReport() {
   const [pin, setPin] = useState<Pin | null>(null);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [incidentAddress, setIncidentAddress] = useState("");
+  const [addressStatus, setAddressStatus] = useState("");
+  const [resolvingAddress, setResolvingAddress] = useState(false);
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -495,6 +498,8 @@ export default function WebDisasterReport() {
   const frame = useRef<HTMLIFrameElement>(null);
   const lock = useRef(false);
   const pinRef = useRef<Pin | null>(null);
+  const locationSelectionId = useRef(0);
+  const addressManuallyEdited = useRef(false);
 
   const attempt = useRef<{
     id: string;
@@ -537,6 +542,16 @@ export default function WebDisasterReport() {
       accuracy,
     };
 
+    // A new pin invalidates pending address lookups, so stale results
+    // cannot overwrite an address for a different incident location.
+    const selectionId = ++locationSelectionId.current;
+    addressManuallyEdited.current = false;
+    setResolvingAddress(false);
+    setAddressStatus("Pin saved. Add a nearby landmark if you know one.");
+    setIncidentAddress(
+      `GPS/map pin: ${lat.toFixed(6)}, ${lng.toFixed(6)}, City of San Jose del Monte, Bulacan`
+    );
+
     pinRef.current = selected;
     setPin(selected);
     setLatitude(lat.toFixed(6));
@@ -546,6 +561,66 @@ export default function WebDisasterReport() {
       { kind: "set-pin", ...selected },
       "*"
     );
+    return selectionId;
+  };
+
+  // The free client-side endpoint is called only for current device GPS
+  // coordinates obtained with permission, never for stored or map-picked pins.
+  const autoFillGpsAddress = async (
+    lat: number,
+    lng: number,
+    selectionId: number
+  ) => {
+    setResolvingAddress(true);
+    setAddressStatus("Finding your nearby barangay or area from GPS…");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}&localityLanguage=en`,
+        { signal: controller.signal }
+      );
+      if (!response.ok) throw new Error("Address lookup unavailable");
+
+      const data: {
+        locality?: string;
+        countryCode?: string;
+      } = await response.json();
+      if (data.countryCode && data.countryCode !== "PH") {
+        throw new Error("Unexpected country in address lookup");
+      }
+      const locality = String(data.locality || "").trim().slice(0, 120);
+      if (!locality) throw new Error("No nearby locality returned");
+
+      if (
+        locationSelectionId.current === selectionId &&
+        !addressManuallyEdited.current
+      ) {
+        const isCityName = /^(city of )?san jose del monte$/i.test(locality);
+        setIncidentAddress(
+          `${isCityName ? "" : `${locality}, `}City of San Jose del Monte, Bulacan`
+        );
+        setAddressStatus(
+          "Nearby area filled in automatically. Confirm the pin and add a street or landmark if needed."
+        );
+      }
+    } catch {
+      if (
+        locationSelectionId.current === selectionId &&
+        !addressManuallyEdited.current
+      ) {
+        // Coordinates were already saved as the editable fallback address.
+        setAddressStatus(
+          "The exact map pin is saved. Nearby address lookup was unavailable; add a landmark if needed."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (locationSelectionId.current === selectionId) {
+        setResolvingAddress(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -592,11 +667,12 @@ export default function WebDisasterReport() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         if (!lock.current) {
-          selectPin(
-            position.coords.latitude,
-            position.coords.longitude,
-            position.coords.accuracy
-          );
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const selectionId = selectPin(lat, lng, position.coords.accuracy);
+          if (selectionId) {
+            void autoFillGpsAddress(lat, lng, selectionId);
+          }
         }
         setLocating(false);
       },
@@ -1392,15 +1468,28 @@ export default function WebDisasterReport() {
                 </details>
 
                 <label>
-                  Exact address / barangay / landmark
+                  Address / barangay / nearby landmark
                   <input
                     name="location"
                     required
                     minLength={3}
                     maxLength={240}
-                    placeholder="Example: Block 4, Brgy. Muzon, near ..."
+                    value={incidentAddress}
+                    onChange={(event) => {
+                      addressManuallyEdited.current = true;
+                      setIncidentAddress(event.target.value);
+                      setAddressStatus("Your edited address will be used with the selected map pin.");
+                    }}
+                    placeholder="Use GPS to fill this automatically, or select a map pin"
                   />
                 </label>
+                <p className="section-copy" aria-live="polite">
+                  {resolvingAddress
+                    ? "Looking up the nearby area…"
+                    : addressStatus ||
+                      "Use GPS for an automatic nearby address. Please check the pin; GPS may not identify the exact house or landmark."}
+                  {" "}Address lookup uses an external location service.
+                </p>
               </section>
             </div>
 
