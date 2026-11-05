@@ -9,6 +9,7 @@ import {
 import WorkspaceBarChart from "../../components/ui/WorkspaceBarChart";
 import ListPagination from "../../components/ui/ListPagination";
 import { db } from "../../lib/firebase";
+import { isSystemAccessChangeAction } from "../../lib/superAdminAuditCategories";
 import { useUserSession } from "../../lib/useUserSession";
 
 type Source = "users" | "disasterCases" | "assistanceRequests" | "communityEvents";
@@ -120,7 +121,7 @@ export default function SuperAdminDashboard() {
     [latestRecorded,adminUids]);
   const systemChanges = useMemo(() =>
     latestRecorded.filter(item =>
-      /system_settings|admin_account|credential|access|suspend|reactivat|promot|sign_in|login|password|role_update|privacy|data_cleanup/i.test(item.actionType)
+      isSystemAccessChangeAction(item.actionType)
     ),[latestRecorded]);
   const safeActivityPage = Math.min(adminActivityPage, Math.max(1, Math.ceil(adminActions.length / PAGE_SIZE)));
   const safeChangesPage = Math.min(systemChangesPage, Math.max(1, Math.ceil(systemChanges.length / PAGE_SIZE)));
@@ -213,7 +214,7 @@ export default function SuperAdminDashboard() {
           loading={auditLoading || !loaded.users}
           unavailable={auditUnavailable || !!errors.users}
           variant="admin"
-          onViewAll={() => router.push("/(superadmin)/admin-logs" as any)}
+          onViewAll={() => router.push({ pathname: "/(superadmin)/admin-logs", params: { view: "lgu" } } as any)}
         />
         <OverviewAuditTable
           title="System & Access Changes"
@@ -225,7 +226,7 @@ export default function SuperAdminDashboard() {
           loading={auditLoading}
           unavailable={auditUnavailable}
           variant="system"
-          onViewAll={() => router.push("/(superadmin)/admin-logs" as any)}
+          onViewAll={() => router.push({ pathname: "/(superadmin)/admin-logs", params: { view: "system" } } as any)}
         />
       </View>
       {hasUnavailable && (
