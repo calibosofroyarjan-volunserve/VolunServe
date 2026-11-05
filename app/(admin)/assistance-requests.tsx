@@ -627,6 +627,7 @@ export default function AssistanceRequestsAdmin() {
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
+  const [simpleReviewMode, setSimpleReviewMode] = useState(true);
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -963,6 +964,7 @@ export default function AssistanceRequestsAdmin() {
     setValidationIntent(null);
     setReasonAttempt(null);
     setSupportValidationAttempt(null);
+    setSimpleReviewMode(true);
   };
 
   useEffect(() => {
@@ -1035,6 +1037,7 @@ export default function AssistanceRequestsAdmin() {
     setReviewTab("case");
     setReviewFocusStage(null);
     setQuickAction(null);
+    setSimpleReviewMode(true);
     setScreenMode("detail");
   };
 
@@ -2023,6 +2026,7 @@ This still does not automatically create a Donation Campaign.`,
 
 
   const openReviewStage = (stage: ReviewStage = "checks") => {
+    setSimpleReviewMode(false);
     // A new ticket makes even a repeated click on the same checklist entry
     // navigate back to its corresponding verification step.
     setReviewFocusStage((current) => ({ stage, ticket: (current?.ticket ?? 0) + 1 }));
@@ -2204,8 +2208,13 @@ This still does not automatically create a Donation Campaign.`,
         {reviewTab === "case" && (
           <>
             <CaseReviewTab request={selected} />
-            {renderQuickChecklist()}
-            {renderQuickActions()}
+            {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
+              <View style={styles.simpleSummaryAction}>
+                <Text style={styles.simpleCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
+                <ActionButton label="Open Verify & Decide" icon="shield-checkmark-outline" variant="success" loading={false}
+                  onPress={() => {setReviewTab("decision");setSimpleReviewMode(true);}} />
+              </View>
+            )}
           </>
         )}
 
@@ -2233,8 +2242,28 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderDecisionRail = () => {
     if (!selected) return null;
-
+    if (simpleReviewMode && !["verified","rejected"].includes(String(selected.verificationStatus || ""))) {
+      return <CompactAssistanceReview
+        request={selected} reviewDraft={reviewDraft} reviewRecord={verificationReview}
+        reviewLoading={verificationReviewLoading} validationIntent={validationIntent}
+        reasonAttempt={reasonAttempt} adminNote={adminNote} setAdminNote={setAdminNote}
+        rejectionReason={rejectionReason} setRejectionReason={setRejectionReason}
+        savingAction={savingAction} onReviewChange={updateReviewDraft}
+        onStartReview={startReview} onSave={saveVerificationDraft} onVerify={verifyNeed}
+        onMoreInfo={requestMoreInformation} onReject={rejectRequest}
+        onDocuments={() => setReviewTab("evidence")} onResident={() => setReviewTab("resident")}
+        onAdditional={() => {setSimpleReviewMode(false);setReviewFocusStage({stage:"checks",ticket:1});}}
+      />;
+    }
     return (
+      <>
+      {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
+        <TouchableOpacity accessibilityRole="button" style={styles.simpleReturnButton}
+          onPress={() => setSimpleReviewMode(true)}>
+          <Ionicons name="arrow-back-outline" size={17} color="#0F766E" />
+          <Text style={styles.simpleReturnText}>Back to simple review</Text>
+        </TouchableOpacity>
+      )}
       <DecisionTab
         request={selected}
         reviewDraft={reviewDraft}
@@ -2273,6 +2302,7 @@ This still does not automatically create a Donation Campaign.`,
         onSaveLocation={saveOfficialLocation}
         onClearLocation={clearOfficialLocation}
       />
+      </>
     );
   };
 
@@ -3301,6 +3331,249 @@ function ResidentReviewTab({
           }
         />
       </SectionCard>
+    </View>
+  );
+}
+
+
+function CompactAssistanceReview({
+  request, reviewDraft, reviewRecord, reviewLoading, validationIntent, reasonAttempt,
+  adminNote, setAdminNote, rejectionReason, setRejectionReason, savingAction,
+  onReviewChange, onStartReview, onSave, onVerify, onMoreInfo, onReject,
+  onDocuments, onResident, onAdditional,
+}: {
+  request: AssistanceRequest;
+  reviewDraft: PrivateReviewDraft | null;
+  reviewRecord: Record<string, any> | null;
+  reviewLoading: boolean;
+  validationIntent: AssistanceValidationMode | null;
+  reasonAttempt: "more_information" | "reject" | null;
+  adminNote: string;
+  setAdminNote: (value: string) => void;
+  rejectionReason: string;
+  setRejectionReason: (value: string) => void;
+  savingAction: string;
+  onReviewChange: <K extends keyof PrivateReviewDraft>(key: K, value: PrivateReviewDraft[K]) => void;
+  onStartReview: () => void;
+  onSave: () => void;
+  onVerify: () => void;
+  onMoreInfo: () => void;
+  onReject: () => void;
+  onDocuments: () => void;
+  onResident: () => void;
+  onAdditional: () => void;
+}) {
+  const [action, setAction] = useState<"more_info" | "reject" | null>(null);
+  const locked = !!savingAction || ["verified", "rejected"].includes(String(reviewRecord?.finalDecision || ""));
+  const facilityRequired = needsFacilityVerification(request.category) || !!reviewDraft?.facilityVerificationRequired;
+  const costRequired = !!reviewDraft?.costVerificationRequired;
+
+  if (reviewLoading || !reviewDraft) {
+    return <View style={styles.simplePanel}>
+      <ActivityIndicator color="#047857" />
+      <Text style={styles.simpleCopy}>Loading secure case review...</Text>
+    </View>;
+  }
+
+  const attempted = validationIntent === "verify";
+  const issues = validateAssistanceReview(reviewDraft, attempted ? "verify" : "draft", request.category);
+  const error = (key: string) => issues.find((item) => item.field === key)?.message || "";
+  const checkItems: {
+    key: "documentConsistencyStatus" | "duplicateCheckStatus" | "beneficiaryCheckStatus" | "residencyVerificationStatus";
+    title: string; help: string; yes: string; no: string; open: () => void;
+  }[] = [
+    { key: "documentConsistencyStatus", title: "Documents are valid", help: "Check the uploaded evidence and receipts.", yes: "consistent", no: "needs_more_information", open: onDocuments },
+    { key: "duplicateCheckStatus", title: "No duplicate request", help: "Compare the resident's case history.", yes: "clear", no: "potential_duplicate", open: onResident },
+    { key: "beneficiaryCheckStatus", title: "Beneficiary is confirmed", help: "Confirm the requester's identity and relationship.", yes: "confirmed", no: "needs_more_information", open: onResident },
+    { key: "residencyVerificationStatus", title: "Resident address is confirmed", help: "Use reliable records or official proof, not just a map pin.", yes: "verified", no: "unable_to_verify", open: onResident },
+  ];
+  const extraRequired = reviewDraft.videoVerificationRequired || reviewDraft.siteVisitRequired || !!reviewDraft.riskFlags.trim();
+  const actionType = action === "reject" ? "reject" : "more_information";
+  const note = action === "reject" ? rejectionReason : adminNote;
+  const noteIssue = reasonAttempt === actionType ? validateAssistanceReason(actionType, note) : "";
+
+  return (
+    <View style={styles.simplePanel}>
+      <View style={styles.simpleHead}>
+        <View style={styles.simpleIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047857" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.simpleTitle}>Simple Request Review</Text>
+          <Text style={styles.simpleCopy}>Review the proof, confirm the details, then make a decision.</Text>
+        </View>
+      </View>
+
+      {!reviewRecord && <View style={styles.simpleStart}>
+        <Text style={styles.simpleCopy}>Start this case review before saving or making a decision.</Text>
+        <ActionButton label="Start Review" icon="play-circle-outline" variant="primary"
+          loading={savingAction === "start_review"} disabled={!!savingAction} onPress={onStartReview} />
+      </View>}
+
+      <View style={styles.simpleLinks}>
+        <TouchableOpacity accessibilityRole="button" onPress={onDocuments} style={styles.simpleLink}>
+          <Ionicons name="document-text-outline" color="#0F766E" size={17} />
+          <Text style={styles.simpleLinkText}>View documents ({request.documents?.length || 0})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={onResident} style={styles.simpleLink}>
+          <Ionicons name="person-outline" color="#0F766E" size={17} />
+          <Text style={styles.simpleLinkText}>View resident</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.simpleChecks}>
+        {checkItems.map((item) => (
+          <View key={item.key} style={styles.simpleCheck}>
+            <Text style={styles.simpleCheckTitle}>{item.title}<Text style={styles.assistanceRequiredAsterisk}> *</Text></Text>
+            <Text style={styles.simpleCopy}>{item.help}</Text>
+            <View style={styles.simpleOptions}>
+              <TouchableOpacity accessibilityRole="button" accessibilityState={{selected:reviewDraft[item.key]===item.yes}}
+                disabled={locked} onPress={() => onReviewChange(item.key,item.yes)}
+                style={[styles.simpleOption,reviewDraft[item.key]===item.yes&&styles.simpleOptionYes]}>
+                <Ionicons name="checkmark-circle-outline" color="#047857" size={16} />
+                <Text style={styles.simpleOptionLabel}>Confirmed</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" accessibilityState={{selected:reviewDraft[item.key]===item.no}}
+                disabled={locked} onPress={() => onReviewChange(item.key,item.no)}
+                style={[styles.simpleOption,reviewDraft[item.key]===item.no&&styles.simpleOptionIssue]}>
+                <Text style={styles.simpleOptionLabel}>Needs info</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="View supporting evidence"
+                onPress={item.open} style={styles.simpleViewIcon}>
+                <Ionicons name="open-outline" size={17} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ReviewValidationHint message={error(item.key)} />
+          </View>
+        ))}
+
+        {reviewDraft.residencyVerificationStatus === "verified" && <View style={styles.simpleField}>
+          <LabelText required>How was the address checked?</LabelText>
+          <StatusChoiceRow value={reviewDraft.residencyVerificationMethod} disabled={locked}
+            error={!!error("residencyVerificationMethod")}
+            options={[
+              ["profile_address","Profile and supporting evidence"],
+              ["barangay_confirmation","Barangay confirmation"],
+              ["resident_confirmation","Resident confirmation with proof"],
+              ["site_visit","LGU site visit"],
+              ["other","Other official evidence"],
+            ]}
+            onChange={(value) => onReviewChange("residencyVerificationMethod",value)} />
+          <ReviewValidationHint message={error("residencyVerificationMethod")} />
+          <Text style={styles.simpleCopy}>Resident address (private): {reviewDraft.privateAddressSnapshot || request.requesterAddress || "Not recorded"}</Text>
+          {!reviewDraft.privateAddressSnapshot.trim() && <TextInput
+            value={reviewDraft.privateAddressSnapshot}
+            onChangeText={(value) => onReviewChange("privateAddressSnapshot",value)}
+            editable={!locked} placeholder="Enter address from verified proof"
+            placeholderTextColor="#94A3B8"
+            style={[styles.input,!!error("privateAddressSnapshot")&&styles.assistanceFieldInvalid]} />}
+          <ReviewValidationHint message={error("privateAddressSnapshot")} />
+        </View>}
+      </View>
+
+      {(facilityRequired || costRequired) && <View style={styles.simpleFinancial}>
+        <Text style={styles.simpleSection}>Only for this request</Text>
+        {facilityRequired && <View style={styles.simpleField}>
+          <LabelText required>Hospital / facility verified</LabelText>
+          <StatusChoiceRow value={reviewDraft.facilityVerificationStatus} disabled={locked}
+            error={!!error("facilityVerificationStatus")}
+            options={[["pending","Not yet checked"],["confirmed","Confirmed independently"],["unable_to_confirm","Unable to confirm"],["inconsistent","Inconsistent"]]}
+            onChange={(value) => onReviewChange("facilityVerificationStatus",value)} />
+          <ReviewValidationHint message={error("facilityVerificationStatus")} />
+          {reviewDraft.facilityVerificationStatus === "confirmed" && <>
+            <LabelText required>Official facility name</LabelText>
+            <TextInput value={reviewDraft.facilityName} onChangeText={(value) => onReviewChange("facilityName",value)}
+              placeholder="Hospital or clinic" placeholderTextColor="#94A3B8" editable={!locked}
+              style={[styles.input,!!error("facilityName")&&styles.assistanceFieldInvalid]} />
+            <ReviewValidationHint message={error("facilityName")} />
+            <LabelText required>How was it confirmed?</LabelText>
+            <StatusChoiceRow value={reviewDraft.facilityVerificationMethod} disabled={locked}
+              error={!!error("facilityVerificationMethod")}
+              options={[["official_phone","Official phone"],["official_email","Official email"],["official_record","Official record"],["in_person","In person"],["other","Other independent method"]]}
+              onChange={(value) => onReviewChange("facilityVerificationMethod",value)} />
+            <ReviewValidationHint message={error("facilityVerificationMethod")} />
+          </>}
+        </View>}
+        {costRequired && <View style={styles.simpleField}>
+          <LabelText required>Amount checked against a bill or official proof</LabelText>
+          <StatusChoiceRow value={reviewDraft.costVerificationStatus} disabled={locked}
+            error={!!error("costVerificationStatus")}
+            options={[["pending","Not yet checked"],["confirmed","Amount confirmed"],["inconsistent","Amount does not match"]]}
+            onChange={(value) => onReviewChange("costVerificationStatus",value)} />
+          <ReviewValidationHint message={error("costVerificationStatus")} />
+          {reviewDraft.costVerificationStatus === "confirmed" && <>
+            <Text style={styles.simpleCopy}>Resident estimate: {money(request.estimatedAmount)} (not verified)</Text>
+            <LabelText required>Verified total cost (PHP)</LabelText>
+            <TextInput value={reviewDraft.verifiedGrossCost} onChangeText={(value)=>onReviewChange("verifiedGrossCost",value)}
+              keyboardType="decimal-pad" placeholder="e.g. 3500.00" placeholderTextColor="#94A3B8"
+              editable={!locked} style={[styles.input,!!error("verifiedGrossCost")&&styles.assistanceFieldInvalid]} />
+            <ReviewValidationHint message={error("verifiedGrossCost")} />
+            <LabelText>Confirmed assistance already received (PHP)</LabelText>
+            <TextInput value={reviewDraft.confirmedExistingAssistanceAmount}
+              onChangeText={(value)=>onReviewChange("confirmedExistingAssistanceAmount",value)}
+              keyboardType="decimal-pad" placeholder="0 if none" placeholderTextColor="#94A3B8"
+              editable={!locked} style={[styles.input,!!error("confirmedExistingAssistanceAmount")&&styles.assistanceFieldInvalid]} />
+            <ReviewValidationHint message={error("confirmedExistingAssistanceAmount")} />
+          </>}
+        </View>}
+      </View>}
+
+      {(extraRequired || (attempted && issues.length > 0)) && <View style={styles.simpleNotice}>
+        <Ionicons name="alert-circle-outline" color="#92400E" size={18} />
+        <View style={{flex:1,gap:7}}>
+          <Text style={styles.simpleNoticeTitle}>{extraRequired?"Additional checks are required":"Review the highlighted items"}</Text>
+          {attempted && issues.slice(0,4).map((x)=><Text key={x.field} style={styles.simpleNoticeText}>• {x.message}</Text>)}
+          <TouchableOpacity onPress={onAdditional} accessibilityRole="button">
+            <Text style={styles.simpleLinkText}>Open additional verification</Text>
+          </TouchableOpacity>
+        </View>
+      </View>}
+
+      <View style={styles.simpleDecision}>
+        <Text style={styles.simpleSection}>Decision</Text>
+        <Text style={styles.simpleCopy}>Save progress anytime. Only finalize after confirming evidence.</Text>
+        <View style={styles.simpleButtons}>
+          <ActionButton label="Save Review" icon="save-outline" variant="secondary"
+            loading={savingAction==="save_private_review"} disabled={!reviewRecord||locked} onPress={onSave} />
+          <ActionButton label="Verify Need" icon="shield-checkmark-outline" variant="success"
+            loading={savingAction==="verify"} disabled={!reviewRecord||locked} onPress={onVerify} />
+        </View>
+        {!reviewRecord && <Text style={styles.simpleCopy}>Start Review first to unlock decision buttons.</Text>}
+        <View style={styles.simpleSecondary}>
+          <TouchableOpacity accessibilityRole="button" disabled={!!savingAction}
+            onPress={()=>setAction(action==="more_info"?null:"more_info")}>
+            <Text style={styles.simpleLinkText}>Request more info</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" disabled={!!savingAction}
+            onPress={()=>setAction(action==="reject"?null:"reject")}>
+            <Text style={styles.simpleRejectText}>Reject request</Text>
+          </TouchableOpacity>
+        </View>
+        {action && <View style={styles.simpleField}>
+          <LabelText required>{action==="reject"?"Why is this request rejected?":"What information is missing?"}</LabelText>
+          <TextInput value={note} onChangeText={action==="reject"?setRejectionReason:setAdminNote}
+            multiline maxLength={1000} placeholder="Explain clearly for the Resident"
+            placeholderTextColor="#94A3B8"
+            style={[styles.textArea,!!noteIssue&&styles.assistanceFieldInvalid]} />
+          <ReviewValidationHint message={noteIssue} />
+          <View style={styles.simpleButtons}>
+            <ActionButton label="Cancel" icon="close-outline" variant="secondary" loading={false}
+              onPress={()=>setAction(null)} />
+            <ActionButton label={action==="reject"?"Confirm Rejection":"Send Request"}
+              icon={action==="reject"?"close-circle-outline":"send-outline"}
+              variant={action==="reject"?"danger":"primary"}
+              loading={savingAction===(action==="reject"?"reject":"more_info")}
+              disabled={!reviewRecord||!!savingAction}
+              onPress={action==="reject"?onReject:onMoreInfo} />
+          </View>
+        </View>}
+      </View>
+
+      <TouchableOpacity accessibilityRole="button" style={styles.simpleMore} onPress={onAdditional}>
+        <Ionicons name="options-outline" size={17} color="#64748B" />
+        <Text style={{flex:1,color:"#64748B",fontSize:12,fontWeight:"600"}}>
+          Additional verification (special cases only)
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color="#64748B" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -5304,6 +5577,39 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  simplePanel: { padding: 16, gap: 16, backgroundColor: "#FFFFFF", borderRadius: 14, borderColor: "#E2E8F0", borderWidth: 1 },
+  simpleHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  simpleIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5", borderRadius: 10 },
+  simpleTitle: { color: "#102A20", fontSize: 18, fontWeight: "800" },
+  simpleSection: { color: "#102A20", fontSize: 14, fontWeight: "800" },
+  simpleCopy: { color: "#64748B", fontSize: 11.5, lineHeight: 18 },
+  simpleStart: { gap: 10, padding: 13, borderRadius: 10, backgroundColor: "#F0FDF4" },
+  simpleLinks: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  simpleLink: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 8, padding: 10, backgroundColor: "#F0FDF4" },
+  simpleLinkText: { fontSize: 12, fontWeight: "700", color: "#0F766E" },
+  simpleChecks: { borderColor: "#E2E8F0", borderWidth: 1, borderRadius: 10, overflow: "hidden" },
+  simpleCheck: { padding: 13, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", gap: 7 },
+  simpleCheckTitle: { color: "#1E293B", fontSize: 13, fontWeight: "700" },
+  simpleOptions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  simpleOption: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 8, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9 },
+  simpleOptionYes: { backgroundColor: "#ECFDF5", borderColor: "#16A34A" },
+  simpleOptionIssue: { backgroundColor: "#FFFBEB", borderColor: "#F59E0B" },
+  simpleOptionLabel: { fontSize: 11.5, color: "#334155", fontWeight: "700" },
+  simpleViewIcon: { padding: 9 },
+  simpleField: { gap: 8, paddingVertical: 9 },
+  simpleFinancial: { gap: 10, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10 },
+  simpleNotice: { flexDirection: "row", gap: 9, backgroundColor: "#FFFBEB", borderColor: "#FDE68A", borderWidth: 1, borderRadius: 9, padding: 12 },
+  simpleNoticeTitle: { color: "#92400E", fontSize: 12, fontWeight: "800" },
+  simpleNoticeText: { color: "#92400E", fontSize: 11, lineHeight: 17 },
+  simpleDecision: { gap: 12, borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 16 },
+  simpleButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
+  simpleSecondary: { flexDirection: "row", flexWrap: "wrap", gap: 24, paddingVertical: 10 },
+  simpleRejectText: { color: "#B42318", fontSize: 12, fontWeight: "700" },
+  simpleMore: { borderTopWidth: 1, borderTopColor: "#E2E8F0", flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 },
+  simpleReturnButton: { flexDirection: "row", alignItems: "center", gap: 7, padding: 10, alignSelf: "flex-start" },
+  simpleReturnText: { color: "#0F766E", fontSize: 12, fontWeight: "700" },
+  simpleSummaryAction: { gap: 11, padding: 14, marginHorizontal: 16, borderRadius: 10, borderColor: "#E2E8F0", borderWidth: 1, backgroundColor: "#F8FAFC" },
+
   assistanceRequiredAsterisk: {
     color: "#B42318",
     fontWeight: "900",
