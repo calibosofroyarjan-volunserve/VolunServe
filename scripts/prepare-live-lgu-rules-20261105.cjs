@@ -68,23 +68,14 @@ const createStaff=`      allow create: if signedIn()
 onlyOnce(target,"      allow create: if isSuperAdmin()","live Super Admin user creation");
 target=target.replace("      allow create: if isSuperAdmin()",createStaff+"      allow create: if isSuperAdmin()");
 // 3) Independent Super Admin-only pending approval, with a fresh review in the same write batch.
-const guardedGrant=`      // New LGU STAFF workflow: pending -> approved Admin only after a fresh
-      // independent Super Admin credential review in the SAME atomic batch.
-      allow update: if isSuperAdmin()
-        && resource.data.role == 'applicant'
-        && resource.data.status == 'pending_review'
-        && ('lguOffice' in resource.data)
-        && request.resource.data.role == 'admin'
-        && request.resource.data.status == 'approved'
-        && request.resource.data.adminStatus == 'active'
-        && hasFreshLguCredentialReview()
-        && request.resource.data.adminCreatedBy == request.auth.uid
-        && request.resource.data.adminUpdatedBy == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'previousRole','previousPrimaryRole','role','adminStatus','status',
-          'adminCreatedAt','adminCreatedBy','adminUpdatedAt','adminUpdatedBy'
-        ]);
-`;
+// Reuse the already-authorized Super Admin promotion expression and all
+// its existing field/actor/updatedAt constraints. Admit a pending LGU STAFF
+// applicant ONLY with a fresh same-batch credential record; the original
+// approved-user branch is byte-identical and retains its exact semantics.
+const oldGrantCondition="            resource.data.status == 'approved'\\n            && request.resource.data.role == 'admin'";
+const newGrantCondition="            (resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))\\n            && request.resource.data.role == 'admin'";
+onlyOnce(target,oldGrantCondition,"legacy Super Admin verified promotion branch");
+target=target.replace(oldGrantCondition,newGrantCondition);
 const reject=`      // New LGU STAFF workflow: Super Admin review may reject pending staff.
       // No role elevation, applicant data deletion, or resident/volunteer privileges.
       allow update: if isSuperAdmin()
@@ -103,7 +94,7 @@ const reject=`      // New LGU STAFF workflow: Super Admin review may reject pen
 `;
 const superAdminUpdate="      allow update: if isSuperAdmin()";
 onlyOnce(target,superAdminUpdate,"live Super Admin update permission");
-target=target.replace(superAdminUpdate,guardedGrant+reject+superAdminUpdate);
+target=target.replace(superAdminUpdate,reject+superAdminUpdate);
 // 4) Deny operational LGU Admin from reviewing LGU STAFF applications
 // while preserving existing resident and volunteer application paths.
 // The deployed Admin applicant rule has slightly different indentation than
@@ -147,12 +138,12 @@ target=target.replace("    match /adminLogs/{logId}",reviewMatch+"    match /adm
 let reversed=target
  .replace(verifyFn,"")
  .replace(createStaff,"")
- .replace(guardedGrant,"")
+ .replace(newGrantCondition,oldGrantCondition)
  .replace(reject,"")
  .replace(lguStaffGuard,"")
  .replace(reviewMatch,"");
 assert.equal(reversed,original,"Surgical patch altered unrelated live rules");
-assert(target.length>original.length+3000,"Expected reviewed LGU rules were not added");
+assert(target.length>original.length+2900,"Expected reviewed LGU rules were not added");
 fs.writeFileSync(outPath,target);
 console.log("PASS: original live rule fingerprint",LIVE_SHA);
 console.log("PASS: audit-only LGU staff signup, verified approval, rejection and confidential review rules added");
