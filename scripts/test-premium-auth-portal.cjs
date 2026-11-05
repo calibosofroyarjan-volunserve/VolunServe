@@ -8,7 +8,7 @@ assert(shell.includes("const compact = width < 900") &&
   "Premium hero must remain responsive");
 assert(shell.includes("clipPath:") && shell.includes("polygon(") && shell.includes('Platform.OS === "web"'),
   "Safe web and native geometry is preserved");
-for(const label of ["Emergency Reports","Request Assistance","Community Events","VolunServe","Build Safer Communities","VolunServe Login"]){
+for(const label of ["Emergency Reports","Request Assistance","Community Events","VolunServe","Build Safer Communities","Welcome Back"]){
   assert(shell.includes(label), "Premium shell element missing: "+label);
 }
 assert(!shell.includes("styles.switcher") && !shell.includes("styles.roleRow") && shell.includes("styles.formCard"),
