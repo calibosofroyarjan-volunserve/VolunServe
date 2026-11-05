@@ -10,6 +10,7 @@ on:
       - lib/lguCredentialImages.ts
       - storage.rules
       - scripts/test-lgu-private-proof-storage.cjs
+      - scripts/test-lgu-proof-per-applicant.cjs
 permissions:
   contents: read
 jobs:
@@ -42,6 +43,7 @@ jobs:
               'components/admin/LguPrivateProofPreview.tsx',
               'lib/lguCredentialImages.ts','storage.rules',
               'scripts/test-lgu-private-proof-storage.cjs',
+              'scripts/test-lgu-proof-per-applicant.cjs',
               '.github/workflows/validate-lgu-private-proof-current-live.yml'
             ]);
             const changed=(diff.files||[]).map(x=>x.filename);
@@ -69,6 +71,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: TypeScript compile validation
         run: npx tsc --noEmit
+      - name: Verify multiple pending applicants cannot mix document verification
+        run: node --test scripts/test-lgu-proof-per-applicant.cjs
       - name: Firestore and Storage security emulator - applicant cannot view, only Super Admin
         run: npx firebase emulators:exec --only firestore,storage --project demo-volunserve --non-interactive "node scripts/test-lgu-private-proof-storage.cjs"
       - name: Export production web UI for routing and bundler validation (no Hosting publish)
