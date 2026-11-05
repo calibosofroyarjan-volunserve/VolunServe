@@ -10,8 +10,11 @@ if(!rules.includes("match /notifications/"))throw Error("STOP: active rules lack
 const a=rules.indexOf("match /notifications/{notificationId}");
 const b=rules.indexOf("    match /",a+20);
 if(a<0||b<0)throw Error("STOP: exact active notifications rule block missing");
-console.log("READ-ONLY ACTIVE FIRESTORE NOTIFICATION POLICY:");
-console.log(rules.slice(a,b));
+console.log("READ-ONLY EMULATOR CANDIDATE NOTIFICATION POLICY:");
+const block=rules.slice(a,b);
+if(!block.includes(".hasOnly(['read'])") || !block.includes("request.resource.data.read == true"))
+  throw Error("STOP candidate must restrict content edits and accept read:true only");
+console.log("PASS restricted notification read-only content policy; only read flag may change");
 (async()=>{
   const env=await initializeTestEnvironment({
     projectId:"demo-volunserve",firestore:{rules}
