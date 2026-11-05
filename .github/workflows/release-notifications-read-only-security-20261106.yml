@@ -130,3 +130,5 @@ jobs:
 # User-approved compact Rules-only security activation after passing full live-derived emulator validations.
 
 # Explicit user-authorized one-shot compact Notifications Rules-only security fix based on newest production Assistance release.
+
+# Explicit guarded retry: notification content protection plus mathematically equivalent auth-helper inlining, full emulator tests passed.
