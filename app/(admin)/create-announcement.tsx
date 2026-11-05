@@ -224,35 +224,40 @@ export default function CreateAnnouncement() {
       <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Barangay Announcements" subtitle="Prepare and publish official barangay notices to residents and volunteers to your selected recipient barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
-        <Text style={styles.scopeLabel}>
-          ANNOUNCEMENT AREA
-        </Text>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Choose authorized announcement barangay"
+        <Text style={styles.scopeLabel}>RECIPIENT BARANGAY *</Text>
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Select announcement recipient barangay"
           accessibilityState={{ expanded: barangayOpen }}
-          disabled={!barangay || submitting}
-          onPress={() => setBarangayOpen(value => !value)}
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-        >
-          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
+          disabled={submitting || !approvedOperationalAdmin}
+          onPress={() => setBarangayOpen(open => !open)}
+          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+          <Text style={styles.scopeValue}>{publishBarangay || "Select recipient barangay"}</Text>
           <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
         </TouchableOpacity>
-        {barangayOpen && barangay ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
-            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
-            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
-          >
-            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
-          </TouchableOpacity>
+        {barangayOpen ? (
+          <View style={{borderWidth:1,borderColor:"#C7EAE5",backgroundColor:"#FFFFFF",borderRadius:10,padding:8,marginBottom:12}}>
+            <TextInput accessibilityLabel="Search official SJDM barangays" placeholder="Search barangay..."
+              placeholderTextColor="#94A3B8" value={barangaySearch} onChangeText={setBarangaySearch}
+              style={[styles.input,{marginBottom:4}]} />
+            <ScrollView nestedScrollEnabled style={{maxHeight:205}}>
+              {SJDM_BARANGAYS.filter(area => area.toLowerCase().includes(barangaySearch.trim().toLowerCase())).map(area => (
+                <TouchableOpacity key={area} accessibilityRole="radio"
+                  accessibilityState={{checked:recipientBarangay===area}}
+                  onPress={() => {setRecipientBarangay(area);setBarangayOpen(false);setBarangaySearch("");}}
+                  style={{padding:12,borderBottomWidth:1,borderBottomColor:"#EDF3EF",
+                    backgroundColor:recipientBarangay===area?"#EAF8F6":"#FFFFFF"}}>
+                  <Text style={{color:"#173D32",fontWeight:recipientBarangay===area?"800":"500"}}>
+                    {area}{recipientBarangay===area?" · Selected":""}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
-
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area. If no barangay is assigned, ask the Super Admin to verify the LGU profile and assign an official barangay. Other barangays cannot be selected without authorization.
+          Choose the barangay that should receive your official LGU notice.
+          Publishing is available to active, approved LGU Admin accounts only.
+          The programmer Super Admin does not assign announcement recipients.
         </Text>
       </View>
 
