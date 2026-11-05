@@ -1,0 +1,73 @@
+name: Compile LGU Private Proof Storage Rules INACTIVE ONLY (No Live Deploy)
+on:
+  push:
+    branches: [stage/lgu-private-storage-inactive-20261106]
+    paths: [.github/workflows/stage-lgu-private-storage-inactive-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  compile:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require exact tested Storage file and protected live ancestor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse 2a7a3da3917b695efa59d9125eb84700c46acceb:storage.rules)" = "$(git rev-parse HEAD:storage.rules)"
+          test "$(git rev-parse 473e824f7b941fffcaea631d5f0d4beb5d83ac85:app/signup.web.tsx)" = "$(git rev-parse HEAD:app/signup.web.tsx)"
+          test "$(git rev-parse 473e824f7b941fffcaea631d5f0d4beb5d83ac85:app/login.tsx)" = "$(git rev-parse HEAD:app/login.tsx)"
+          echo 'PASS only previously tested Storage policy; no protected Login or Signup changes'
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Create immutable INACTIVE Storage Ruleset, confirm live release unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,hashlib,subprocess
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          root='https://firebaserules.googleapis.com/v1/'
+          def api(method,path,body=None):
+            headers={'Authorization':'Bearer '+token}
+            if body is not None:headers['Content-Type']='application/json'
+            req=urllib.request.Request(root+path,method=method,headers=headers,
+              data=json.dumps(body).encode() if body is not None else None)
+            with urllib.request.urlopen(req,timeout=40) as r:return json.load(r)
+          def list_releases():
+            result=[];cursor=''
+            while True:
+              path='projects/volunserve-3aa5b/releases?pageSize=100'
+              if cursor:
+                from urllib.parse import quote
+                path+='&pageToken='+quote(cursor,safe='')
+              res=api('GET',path)
+              result.extend((r.get('name'),r.get('rulesetName')) for r in res.get('releases',[]))
+              cursor=res.get('nextPageToken','')
+              if not cursor:break
+            return sorted(result)
+          before=list_releases()
+          with open('storage.rules',encoding='utf8',newline='') as f:source=f.read()
+          assert 'match /lguStaffProof/{uid}/{proofName}' in source
+          assert 'allow get: if isSuperAdmin()' in source
+          assert 'allow list, delete: if false' in source
+          result=api('POST','projects/volunserve-3aa5b/rulesets',{
+            'source':{'files':[{'name':'storage.rules','content':source}]}
+          })
+          ruleset=result['name']
+          compiled=api('GET',ruleset)
+          actual=compiled['source']['files'][0]['content']
+          assert actual.replace('\r\n','\n')==source.replace('\r\n','\n')
+          assert list_releases()==before,'CRITICAL: production release state unexpectedly changed'
+          print('PASS immutable INACTIVE Storage candidate',ruleset)
+          print('PASS candidate source SHA256',hashlib.sha256(actual.encode()).hexdigest())
+          print('PASS live Storage and Firestore releases unchanged')
+          print('NO PRODUCTION HOSTING, FIRESTORE, STORAGE RELEASE, AUTH, OR DATA MODIFIED')
+          PY
