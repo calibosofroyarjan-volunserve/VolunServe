@@ -6,6 +6,7 @@ import {
   ActivityIndicator, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from "react-native";
+import ListPagination from "../../components/ui/ListPagination";
 import { db } from "../../lib/firebase";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -21,11 +22,12 @@ type AuditEntry = {
   createdAt?: Timestamp | null;
 };
 
+const PAGE_SIZE = 5;
 const asText = (value: unknown) => typeof value === "string" ? value : "";
 const eventTime = (value?: Timestamp | null) => value?.toMillis?.() || 0;
 const prettyDate = (value?: Timestamp | null) => {
   const date = value?.toDate?.();
-  return date ? date.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : "Pending timestamp";
+  return date ? date.toLocaleString("en-PH", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" }) : "Pending timestamp";
 };
 const prettyAction = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -43,6 +45,7 @@ export default function AdminLogs() {
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const sources = ["adminLogs", "adminActivityLogs"];
 
   useEffect(() => {
@@ -96,6 +99,10 @@ export default function AdminLogs() {
     );
   }, [logs, search]);
 
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   if (sessionLoading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
   if (!authorized) {
     return <View style={styles.center}><Ionicons name="lock-closed-outline" size={30} color="#64748B" />
@@ -125,7 +132,7 @@ export default function AdminLogs() {
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" color="#64748B" size={20} />
       <TextInput
-        style={styles.searchInput} value={search} onChangeText={setSearch}
+        style={styles.searchInput} value={search} onChangeText={(value) => { setSearch(value); setPage(1); }}
         placeholder="Search action, account, actor or reference"
         placeholderTextColor="#94A3B8" autoCapitalize="none"
       />
@@ -135,23 +142,76 @@ export default function AdminLogs() {
         <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
       </View>,
     )}
-    {loading ? <ActivityIndicator style={{ marginTop: 25 }} /> : null}
-    {!loading && visible.length === 0 ?
-      <View style={styles.empty}><Ionicons name="document-text-outline" size={30} color="#73918A" />
-        <Text style={styles.emptyText}>{search ? "No matching audit events." : "No administrative audit events recorded yet."}</Text>
-      </View> : null}
-    {visible.map((item) =>
-      <View key={item.source + ":" + item.id} style={styles.event}>
-        <View style={styles.eventHeader}>
-          <Text style={styles.action}>{prettyAction(item.actionType)}</Text>
-          <Text style={styles.date}>{prettyDate(item.createdAt)}</Text>
+    <View style={styles.tableCard}>
+      <View style={styles.tableTitleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.tableTitle}>Administrative Activity History</Text>
+          <Text style={styles.tableSubtitle}>Recorded actions from LGU Admins and system-access changes.</Text>
         </View>
-        <Text style={styles.description}>{item.description || "No description provided."}</Text>
-        <Text style={styles.meta}>Actor: {item.adminName || item.adminUid || "Not recorded"}</Text>
-        <Text style={styles.meta}>Target: {item.targetType || "record"} · {item.targetId || "Not recorded"}</Text>
-        <Text style={styles.source}>Source: {item.source}</Text>
-      </View>,
-    )}
+      </View>
+      {!loading && (
+        <ListPagination page={safePage} total={visible.length} onChange={setPage} pageSize={PAGE_SIZE} />
+      )}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tableHorizontal}
+        accessibilityLabel="Administrative activity records table"
+      >
+        <View style={styles.tableInner}>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeading, styles.dateCell]}>Date &amp; Time</Text>
+            <Text style={[styles.tableHeading, styles.actorCell]}>User</Text>
+            <Text style={[styles.tableHeading, styles.actionCell]}>Action</Text>
+            <Text style={[styles.tableHeading, styles.detailsCell]}>Details</Text>
+          </View>
+          {loading ? (
+            <View style={styles.emptyTable}>
+              <ActivityIndicator color="#087D66" />
+              <Text style={styles.emptyText}>Loading recorded activity…</Text>
+            </View>
+          ) : pageRows.length === 0 ? (
+            <View style={styles.emptyTable}>
+              <Ionicons name="document-text-outline" size={28} color="#73918A" />
+              <Text style={styles.emptyText}>
+                {search ? "No matching audit events." : "No administrative audit events recorded yet."}
+              </Text>
+            </View>
+          ) : pageRows.map((item, index) => {
+            const isDanger = /suspend|revoke|reject|fail|deny/i.test(item.actionType);
+            const isWarning = /pending|update|config|edit/i.test(item.actionType);
+            return (
+              <View key={item.source + ":" + item.id} style={[styles.tableRow, index % 2 === 1 && styles.alternateRow]}>
+                <Text style={[styles.tableText, styles.dateCell]} numberOfLines={2}>
+                  {prettyDate(item.createdAt)}
+                </Text>
+                <Text style={[styles.tableText, styles.actorCell]} numberOfLines={2}>
+                  {item.adminName || item.adminUid || "Not recorded"}
+                </Text>
+                <View style={styles.actionCell}>
+                  <View style={[styles.actionBadge, isDanger ? styles.actionDanger : isWarning ? styles.actionWarning : styles.actionSuccess]}>
+                    <Text style={[styles.actionBadgeText, isDanger && styles.actionDangerText]} numberOfLines={2}>
+                      {prettyAction(item.actionType)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.detailsCell}>
+                  <Text style={styles.detailText}>{item.description || "No description provided."}</Text>
+                  {(item.targetType || item.targetId) ? (
+                    <Text style={styles.recordMeta} selectable>
+                      Target: {item.targetType || "record"}{item.targetId ? " · " + item.targetId : ""}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.recordMeta}>
+                    Source: {item.source === "adminLogs" ? "System & access changes" : "LGU admin activity"}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   </ScrollView>;
 }
 
@@ -172,13 +232,29 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 9, minWidth: 0, color: "#173B32" },
   error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
   errorText: { color: "#B91C1C", fontSize: 12 },
-  empty: { padding: 35, alignItems: "center", gap: 10 },
-  emptyText: { color: "#64748B", textAlign: "center" },
-  event: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
-  eventHeader: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginBottom: 8 },
-  action: { color: "#087657", fontSize: 14, fontWeight: "900", flexShrink: 1 },
-  date: { color: "#64748B", fontSize: 11 },
-  description: { color: "#243C36", fontSize: 13, lineHeight: 19, marginBottom: 8 },
-  meta: { color: "#64748B", fontSize: 12, marginTop: 3 },
-  source: { color: "#819995", fontSize: 10, marginTop: 9 },
+  emptyText: { color: "#64748B", textAlign: "center", fontSize: 12 },
+  tableCard: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, padding: 16, overflow: "hidden" },
+  tableTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  tableTitle: { fontSize: 17, fontWeight: "900", color: "#17382E" },
+  tableSubtitle: { fontSize: 12, color: "#81938D", lineHeight: 18, marginTop: 3 },
+  tableHorizontal: { flexGrow: 1 },
+  tableInner: { width: "100%", minWidth: 720 },
+  tableHeader: { minHeight: 38, flexDirection: "row", alignItems: "center", backgroundColor: "#F2F6F4", paddingHorizontal: 12, borderTopLeftRadius: 7, borderTopRightRadius: 7 },
+  tableHeading: { fontSize: 12, fontWeight: "900", color: "#34564B" },
+  tableRow: { minHeight: 74, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#ECF1EE" },
+  alternateRow: { backgroundColor: "#FBFDFC" },
+  tableText: { fontSize: 12, color: "#304940", lineHeight: 18 },
+  dateCell: { flex: 1.15, paddingRight: 12 },
+  actorCell: { flex: 1.1, paddingRight: 12 },
+  actionCell: { flex: 1.3, paddingRight: 12, alignItems: "flex-start" },
+  detailsCell: { flex: 2.6, minWidth: 0 },
+  actionBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, maxWidth: "100%" },
+  actionSuccess: { backgroundColor: "#D6F5E7" },
+  actionWarning: { backgroundColor: "#FFF0CF" },
+  actionDanger: { backgroundColor: "#FCE5E3" },
+  actionBadgeText: { fontSize: 11, fontWeight: "800", color: "#135F4C", lineHeight: 15 },
+  actionDangerText: { color: "#9F3838" },
+  detailText: { color: "#304940", fontSize: 12, lineHeight: 18 },
+  recordMeta: { color: "#789086", fontSize: 10, marginTop: 4, lineHeight: 15 },
+  emptyTable: { minHeight: 155, justifyContent: "center", alignItems: "center", gap: 10, padding: 20 },
 });
