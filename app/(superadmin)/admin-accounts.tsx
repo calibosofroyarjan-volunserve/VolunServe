@@ -1514,7 +1514,7 @@ export default function AdminAccounts() {
                   I independently verified the official LGU appointment, position and requested barangay.
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.inputLabel}>REJECTION REASON (if rejecting)</Text>
+              <Text style={{color:"#475569",fontWeight:"700",fontSize:11}}>REJECTION REASON (if rejecting)</Text>
               <TextInput style={styles.searchInput} value={barangayRejectReason}
                 onChangeText={setBarangayRejectReason} maxLength={300}
                 placeholder="Which official details could not be verified?" />
