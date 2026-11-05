@@ -1,0 +1,39 @@
+name: Read-Only Diagnose Barangay Preview Revision and Browser Cache
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/read-only-debug-barangay-preview-cache-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Inspect remote actual revision and served client bundles without writing
+        run: |
+          node - <<'NODE'
+          const B='https://volunserve-3aa5b--system-barangay-preview-v2-1105-jh44ul3r.web.app';
+          const expect='770957c972bc254a7c4dc622c273cdea22729663';
+          (async()=>{
+            for(const path of ['/volunserve-preview.json','/volunserve-release.json','/create-announcement']){
+              const response=await fetch(B+path+'?probe=20261105T2131',{headers:{'cache-control':'no-cache'}});
+              const raw=await response.text();
+              console.log('PATH='+path+' HTTP='+response.status+' CONTENT_TYPE='+response.headers.get('content-type')+' CACHE='+response.headers.get('cache-control')+' ETAG='+response.headers.get('etag'));
+              if(path.endsWith('.json'))console.log('CONTENT='+raw.slice(0,2200));
+              else {
+                console.log('BODY_LENGTH='+raw.length);
+                console.log('INLINE_PUBLISHING_WARNING='+raw.includes('Publishing disabled: Official barangay not assigned'));
+                console.log('INLINE_OLD_LABEL='+raw.includes('No barangay assigned'));
+                const js=[...raw.matchAll(/<script[^>]+src="([^"]+\.js[^"]*)"/gi)].map(x=>x[1]);
+                console.log('SCRIPT_FILES='+JSON.stringify(js.slice(0,30)));
+                for(const [i,src] of js.entries()){
+                  const u=new URL(src,B);
+                  const r=await fetch(u,{headers:{'cache-control':'no-cache'}});
+                  const txt=await r.text();
+                  console.log('JS['+i+']='+u.pathname+' length='+txt.length+' newUI='+txt.includes('Publishing disabled: Official barangay not assigned')+' newWarning='+txt.includes('No verified barangay assigned')+' oldLabel='+txt.includes('No barangay assigned'));
+                }
+              }
+            }
+          })().catch(err=>{console.error('ERROR',err);process.exit(1);});
+          NODE
