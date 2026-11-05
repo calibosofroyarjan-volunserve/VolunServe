@@ -119,3 +119,5 @@ jobs:
       - name: Validate release boundary
         run: |
           echo 'SUCCESS source and Firestore emulator checks only. No production Hosting/Rules/Auth/data changes.'
+
+# Rerun to inspect exact active read restrictions, emulator-only.
