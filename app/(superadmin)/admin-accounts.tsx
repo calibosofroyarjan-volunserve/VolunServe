@@ -28,6 +28,7 @@ import {
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
+import ListPagination from "../../components/ui/ListPagination";
 
 import {
   db,
@@ -136,6 +137,9 @@ export default function AdminAccounts() {
     setFilter,
   ] = useState<AdminFilter>("all");
   const [sort, setSort] = useState<AdminSort>("newest");
+  const [pendingSearch, setPendingSearch] = useState("");
+  const [pendingPage, setPendingPage] = useState(1);
+  const [expandedPendingId, setExpandedPendingId] = useState<string | null>(null);
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
@@ -390,9 +394,27 @@ export default function AdminAccounts() {
       promoteSearch,
     ]);
 
-  const pendingLguApplications = users
-    .filter(account => account.role === "applicant" && account.status === "pending_review")
-    .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
+  const pendingLguApplications = useMemo(() =>
+    users.filter(account => account.role === "applicant" && account.status === "pending_review")
+      .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt)),
+  [users]);
+  const matchingPendingApplications = useMemo(() => {
+    const needle = pendingSearch.trim().toLowerCase();
+    if (!needle) return pendingLguApplications;
+    return pendingLguApplications.filter(account => [
+      nameFor(account),
+      account.email,
+      account.barangay,
+      (account as any).lguOffice,
+      (account as any).lguPosition,
+      (account as any).appointmentReference,
+    ].filter(Boolean).join(" ").toLowerCase().includes(needle));
+  }, [pendingLguApplications, pendingSearch]);
+  const pendingTotalPages = Math.max(1, Math.ceil(matchingPendingApplications.length / ADMIN_PAGE_SIZE));
+  const safePendingPage = Math.min(pendingPage, pendingTotalPages);
+  const pagedPendingApplications = matchingPendingApplications.slice(
+    (safePendingPage - 1) * ADMIN_PAGE_SIZE, safePendingPage * ADMIN_PAGE_SIZE
+  );
 
   const totalAdmins =
     users.filter(
@@ -1094,6 +1116,119 @@ export default function AdminAccounts() {
             >
               Suspended
             </Text>
+          </View>
+        </View>
+
+        <View style={styles.pendingPanel} accessibilityLabel="Pending LGU Admin applications">
+          <View style={styles.pendingHeading}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingTitle}>Pending LGU Admin Applications</Text>
+              <Text style={styles.pendingSubtitle}>Review submitted staff information and verify official authorization before granting access.</Text>
+            </View>
+            <View style={styles.pendingCount}>
+              <Text style={styles.pendingCountText}>{pendingLguApplications.length} pending</Text>
+            </View>
+          </View>
+          <View style={styles.pendingSearchBar}>
+            <Ionicons name="search-outline" size={17} color="#648476" />
+            <TextInput
+              value={pendingSearch}
+              onChangeText={value => { setPendingSearch(value); setPendingPage(1); setExpandedPendingId(null); }}
+              placeholder="Search applicant, email, LGU office or barangay"
+              placeholderTextColor="#91A49A"
+              style={styles.pendingSearchInput}
+              accessibilityLabel="Search pending LGU applications"
+            />
+          </View>
+          <View style={styles.pendingSummary}>
+            <Text style={styles.pendingSummaryText}>
+              {matchingPendingApplications.length === 0 ? "0 applications" :
+                `${(safePendingPage - 1) * ADMIN_PAGE_SIZE + 1}–${Math.min(safePendingPage * ADMIN_PAGE_SIZE, matchingPendingApplications.length)} of ${matchingPendingApplications.length}`}
+              {" · 5 per page"}
+            </Text>
+            <Text style={styles.pendingSummaryText}>Submitted details are not yet verified</Text>
+          </View>
+          {matchingPendingApplications.length === 0 ? (
+            <View style={styles.pendingEmpty}>
+              <Ionicons name="checkmark-circle-outline" size={26} color="#1D8C6A" />
+              <Text style={styles.pendingEmptyTitle}>{pendingSearch ? "No matching applications" : "No pending LGU applications"}</Text>
+              <Text style={styles.pendingSubtitle}>{pendingSearch ? "Try another applicant name or official email." : "New LGU staff requests will appear here for review."}</Text>
+            </View>
+          ) : pagedPendingApplications.map((account, index) => {
+            const expanded = expandedPendingId === account.id;
+            const office = String((account as any).lguOffice || "Not submitted");
+            const position = String((account as any).lguPosition || "Not submitted");
+            const reference = String((account as any).appointmentReference || "Not submitted");
+            return (
+              <View key={account.id} style={[styles.pendingItem, index % 2 === 1 && styles.pendingAlt]}>
+                <View style={styles.pendingRow}>
+                  <View style={styles.pendingPerson}>
+                    <Text style={styles.pendingName}>{nameFor(account)}</Text>
+                    <Text style={styles.pendingMeta} numberOfLines={1}>{account.email || "No official email provided"}</Text>
+                  </View>
+                  <View style={styles.pendingOffice}>
+                    <Text style={styles.pendingColumnTitle}>LGU OFFICE / POSITION</Text>
+                    <Text style={styles.pendingValue} numberOfLines={2}>{office} · {position}</Text>
+                  </View>
+                  <View style={styles.pendingStatus}>
+                    <Text style={styles.pendingStatusText}>Pending review</Text>
+                  </View>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={(expanded ? "Hide " : "View ") + nameFor(account) + " application credentials"}
+                    accessibilityState={{ expanded }}
+                    style={styles.pendingViewButton}
+                    onPress={() => setExpandedPendingId(expanded ? null : account.id)}
+                  >
+                    <Text style={styles.pendingViewText}>{expanded ? "Hide" : "View Credentials"}</Text>
+                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#087354" />
+                  </TouchableOpacity>
+                </View>
+                {expanded ? (
+                  <View style={styles.pendingDetails}>
+                    <Text style={styles.pendingDetailsHeading}>SUBMITTED LGU STAFF INFORMATION · NOT YET VERIFIED</Text>
+                    <View style={styles.pendingDetailsGrid}>
+                      {[
+                        { label: "Applicant", value: nameFor(account) },
+                        { label: "Official Email", value: account.email || "Not submitted" },
+                        { label: "Office / Department", value: office },
+                        { label: "Position / Designation", value: position },
+                        { label: "Assigned Barangay", value: account.barangay || "Not submitted" },
+                        { label: "Appointment Reference", value: reference },
+                      ].map(field => (
+                        <View key={field.label} style={styles.pendingDetailCell}>
+                          <Text style={styles.pendingDetailLabel}>{field.label}</Text>
+                          <Text style={styles.pendingDetailValue} selectable>{field.value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.pendingReviewFooter}>
+                      <Text style={styles.pendingReviewNote}>
+                        Submitted information is self-declared. Confirm employment, identity and appointment with an independent LGU source. Never request passwords.
+                      </Text>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={"Begin LGU credential verification for " + nameFor(account)}
+                        disabled={!!savingUid}
+                        style={[styles.pendingReviewButton, !!savingUid && { opacity: 0.5 }]}
+                        onPress={() => openAdminAction("promote", account)}
+                      >
+                        <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.pendingReviewButtonText}>Verify & Review Access</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+          <View style={styles.pendingPager}>
+            <ListPagination
+              page={safePendingPage}
+              total={matchingPendingApplications.length}
+              pageSize={ADMIN_PAGE_SIZE}
+              onChange={next => { setPendingPage(next); setExpandedPendingId(null); }}
+            />
           </View>
         </View>
 
@@ -2461,4 +2596,61 @@ const styles =
       fontSize: 12,
       fontWeight: "900",
     },
+    pendingPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D9E9DF",
+      borderRadius: 12, overflow: "hidden", marginBottom: 18 },
+    pendingHeading: { flexDirection: "row", alignItems: "center", flexWrap: "wrap",
+      paddingHorizontal: 17, paddingVertical: 16, gap: 12, backgroundColor: "#F5FBF7" },
+    pendingTitle: { fontSize: 16, fontWeight: "900", color: "#163C31" },
+    pendingSubtitle: { marginTop: 4, fontSize: 11, lineHeight: 17, color: "#648071" },
+    pendingCount: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7,
+      backgroundColor: "#FFF0D4" },
+    pendingCountText: { fontSize: 11, fontWeight: "900", color: "#865C15" },
+    pendingSearchBar: { minHeight: 42, marginHorizontal: 16, marginTop: 13,
+      paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DCEAE1", borderRadius: 8 },
+    pendingSearchInput: { flex: 1, color: "#254B3B", fontSize: 12, minHeight: 38 },
+    pendingSummary: { flexDirection: "row", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 7, paddingHorizontal: 16, paddingVertical: 12 },
+    pendingSummaryText: { fontSize: 10.5, color: "#6E8779" },
+    pendingEmpty: { minHeight: 112, padding: 18, alignItems: "center",
+      justifyContent: "center", borderTopWidth: 1, borderColor: "#E8F0EA" },
+    pendingEmptyTitle: { fontSize: 13, fontWeight: "800", marginTop: 5, color: "#315F4D" },
+    pendingItem: { borderTopWidth: 1, borderColor: "#E6EEE8" },
+    pendingAlt: { backgroundColor: "#FCFEFC" },
+    pendingRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+      paddingHorizontal: 16, paddingVertical: 12, gap: 11 },
+    pendingPerson: { flex: 2.3, minWidth: 170 },
+    pendingName: { fontSize: 12, fontWeight: "900", color: "#163D30" },
+    pendingMeta: { fontSize: 10.5, color: "#698275", marginTop: 4 },
+    pendingOffice: { flex: 1.7, minWidth: 160 },
+    pendingColumnTitle: { fontSize: 9.5, color: "#7A9385", fontWeight: "900", marginBottom: 4 },
+    pendingValue: { color: "#345849", fontSize: 11, lineHeight: 16 },
+    pendingStatus: { backgroundColor: "#FFF0D9", borderRadius: 7,
+      paddingHorizontal: 9, paddingVertical: 6, alignSelf: "center" },
+    pendingStatusText: { color: "#956414", fontSize: 10, fontWeight: "900" },
+    pendingViewButton: { minHeight: 35, minWidth: 128, borderWidth: 1,
+      borderColor: "#BCDCCB", backgroundColor: "#F4FBF7", borderRadius: 8,
+      paddingHorizontal: 10, alignItems: "center", justifyContent: "center",
+      flexDirection: "row", gap: 5 },
+    pendingViewText: { fontSize: 10.5, fontWeight: "900", color: "#087354" },
+    pendingDetails: { borderTopWidth: 1, borderColor: "#DFEBE3",
+      backgroundColor: "#F5FAF7", padding: 17 },
+    pendingDetailsHeading: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5,
+      color: "#2D6A50", marginBottom: 12 },
+    pendingDetailsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
+    pendingDetailCell: { flexGrow: 1, flexBasis: "31%", minWidth: 170,
+      padding: 12, borderRadius: 8, borderWidth: 1,
+      borderColor: "#E1ECE5", backgroundColor: "#FFFFFF" },
+    pendingDetailLabel: { fontSize: 10, fontWeight: "800", color: "#72877C" },
+    pendingDetailValue: { fontSize: 12, marginTop: 4, color: "#294D3D", lineHeight: 17 },
+    pendingReviewFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 12, marginTop: 15 },
+    pendingReviewNote: { flex: 1, minWidth: 210, fontSize: 11, lineHeight: 17,
+      color: "#607A6B" },
+    pendingReviewButton: { minHeight: 42, paddingHorizontal: 14,
+      backgroundColor: "#0A7F61", borderRadius: 8,
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+    pendingReviewButtonText: { fontSize: 11.5, color: "#FFFFFF", fontWeight: "900" },
+    pendingPager: { paddingHorizontal: 13, paddingVertical: 9, borderTopWidth: 1,
+      borderColor: "#E7F0EA" },
   });
