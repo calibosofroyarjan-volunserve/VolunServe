@@ -1,3 +1,4 @@
+import { userFacingError } from "./userFacingError";
 /**
  * Clear, non-sensitive feedback for Firebase / Google OAuth failures.
  * Do not expose raw provider payloads, credentials or Firebase internals in the UI.
@@ -38,12 +39,8 @@ export function googleSignInErrorMessage(error: unknown): string {
       return "Google did not return a usable sign-in credential. Please try again.";
   }
 
-  const message = typeof source?.message === "string" ? source.message.trim() : "";
-  if (
-    message.length > 0 && message.length < 260 &&
-    !/firebase|firestore|permission-denied|auth\/|oauth\/|\[[^\]]+\]|error \(|api.?key|token=|client.?secret/i.test(message)
-  ) {
-    return message;
-  }
-  return "Google sign-in could not be completed. Check your connection and try again. If it keeps happening, contact the VolunServe administrator.";
+  return userFacingError(
+    error,
+    "Google sign-in could not be completed. Check your connection and try again. If it keeps happening, contact the VolunServe administrator."
+  );
 }
