@@ -2123,6 +2123,75 @@ export default function AdminCases() {
     }
   };
 
+  // Volunteer tasks are community assistance, not an official emergency dispatch.
+  // The Admin confirms the verified work; the Volunteer cannot close a case.
+  const confirmVolunteerCompletion = async (
+    incident: DisasterCase,
+    completedAssignment: ResponseAssignment,
+  ) => {
+    const authUser = getAuth().currentUser;
+    if (!authUser) {
+      Alert.alert("Session Expired", "Please sign in again.");
+      return;
+    }
+    const busyId = `confirm_completed_${incident.id}`;
+    setBusyKey(busyId);
+    try {
+      const caseRef = doc(db, "disasterCases", incident.id);
+      const assignmentSnapshot = await getDoc(
+        doc(db, "responseAssignments", completedAssignment.id),
+      );
+      const fieldSnapshot = await getDoc(
+        doc(db, "volunteerFieldReports", completedAssignment.id),
+      );
+      const caseSnapshot = await getDoc(caseRef);
+      if (!caseSnapshot.exists()) throw new Error("The report no longer exists.");
+      const current = caseSnapshot.data();
+      if (
+        !assignmentSnapshot.exists() ||
+        assignmentSnapshot.data().caseId !== incident.id ||
+        assignmentSnapshot.data().status !== "completed"
+      ) {
+        throw new Error("The Volunteer task is not yet completed.");
+      }
+      if (!fieldSnapshot.exists() || fieldSnapshot.data().reportStatus !== "reviewed") {
+        throw new Error("Review the Volunteer's completion report before confirming.");
+      }
+      if (assignmentsForCase(incident.id).some((item) =>
+        ["offered", "accepted", "responding", "on_site"].includes(String(item.status))
+      )) {
+        throw new Error("A Volunteer assignment is still active.");
+      }
+      const currentStatus = String(current.status || "");
+      if (!["assigned", "in_progress"].includes(currentStatus)) {
+        throw new Error("The case is already completed or is not ready for confirmation.");
+      }
+      // Respect existing Firestore transition rules; no rules or schema changes.
+      if (currentStatus === "assigned") {
+        await updateDoc(caseRef, {
+          status: "in_progress",
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await updateDoc(caseRef, {
+        status: "resolved",
+        resolvedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      Alert.alert(
+        "Completion Confirmed",
+        "The Volunteer task was reviewed and the emergency report is marked Completed. Close the case when appropriate.",
+      );
+    } catch (cause) {
+      Alert.alert(
+        "Unable to Confirm Completion",
+        cause instanceof Error ? cause.message : "Please check the report and try again.",
+      );
+    } finally {
+      setBusyKey("");
+    }
+  };
+
   const reviewVolunteerFieldReport = async (
     report: VolunteerFieldReport,
     action: "reviewed" | "dismissed"
@@ -2202,7 +2271,7 @@ export default function AdminCases() {
       Alert.alert(
         action === "reviewed" ? "Field Report Reviewed" : "Field Report Dismissed",
         action === "reviewed"
-          ? "The report was reviewed. LGU may now incorporate verified remaining needs into the barangay assessment."
+          ? "The Volunteer task update was reviewed. Admin can confirm completion once all required assistance is verified."
           : "The report was dismissed and will not be used as an official barangay need assessment."
       );
     } catch (error) {
@@ -4528,6 +4597,61 @@ export default function AdminCases() {
                     </TouchableOpacity>
                   </View>
 
+                  {incidentFieldReports.length > 0 && (
+                    <View style={{ marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#D7E8E0", backgroundColor: "#F7FCF9" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 15, color: "#064E3B", marginBottom: 6 }}>
+                        Volunteer Completion Reports
+                      </Text>
+                      <Text style={{ color: "#47675C", fontSize: 12, marginBottom: 10 }}>
+                        Review the actual assistance submitted by assigned Volunteers. Task completion does not automatically close the case.
+                      </Text>
+                      <ListPagination
+                        page={Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))}
+                        total={incidentFieldReports.length}
+                        pageSize={5}
+                        onChange={setFieldReportPage}
+                      />
+                      {pageFive(incidentFieldReports, Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))).map((report) => {
+                        const submitted = String(report.reportStatus || "submitted") === "submitted";
+                        const reviewing = busyKey === `field_reviewed_${report.id}`;
+                        return (
+                          <View key={report.id} style={{ padding: 12, marginVertical: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E0EAE5" }}>
+                            <Text style={{ fontWeight: "800", color: "#143B30" }}>{report.volunteerName || "Assigned Volunteer"}</Text>
+                            <Text style={{ fontSize: 12, color: "#58746B", marginBottom: 6 }}>
+                              Status: {String(report.reportStatus || "Submitted").replace(/_/g, " ")}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              Situation: {report.situationSummary || "Not provided"}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              Assistance: {report.assistanceProvided || "Not provided"}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              People helped: {Number(report.peopleHelped) || 0}
+                            </Text>
+                            {!!report.remainingNeeds?.length && (
+                              <Text style={{ color: "#7B4B25", marginBottom: 6 }}>
+                                Remaining needs: {report.remainingNeeds.join(", ")}
+                              </Text>
+                            )}
+                            {submitted && (
+                              <TouchableOpacity
+                                accessibilityRole="button"
+                                disabled={reviewing}
+                                onPress={() => void reviewVolunteerFieldReport(report, "reviewed")}
+                                style={{ marginTop: 8, borderRadius: 8, backgroundColor: "#087A62", padding: 11, alignItems: "center" }}
+                              >
+                                <Text style={{ fontWeight: "800", color: "#FFFFFF" }}>
+                                  {reviewing ? "Reviewing…" : "Mark Report Reviewed"}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
                   {(lguFieldReportsLoading ||
                     lguFieldReportsError ||
                     latestLguFieldReport ||
@@ -4798,34 +4922,20 @@ export default function AdminCases() {
                   )}
 
                   <View style={styles.responseLifecycleRow}>
-                    {["validated", "assigned"].includes(incident.status) && (
+                    {["assigned", "in_progress"].includes(incident.status) &&
+                      incidentAssignments.some((item) => item.status === "completed") && (
                       <TouchableOpacity
-                        style={styles.progressButton}
-                        onPress={() =>
-                          changeCaseStatus(incident, "in_progress")
-                        }
+                        disabled={busyKey === `confirm_completed_${incident.id}`}
+                        style={styles.resolveButton}
+                        onPress={() => {
+                          const completed = incidentAssignments.find((item) => item.status === "completed");
+                          if (completed) void confirmVolunteerCompletion(incident, completed);
+                        }}
                       >
                         <Text style={styles.primaryButtonText}>
-                          Start LGU Response
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {incident.status === "in_progress" && (
-                      <TouchableOpacity
-                        disabled={lguFieldReviewPending}
-                        style={[
-                          styles.resolveButton,
-                          lguFieldReviewPending && styles.disabledButton,
-                        ]}
-                        onPress={() =>
-                          changeCaseStatus(incident, "resolved")
-                        }
-                      >
-                        <Text style={styles.primaryButtonText}>
-                          {lguFieldReviewPending
-                            ? "Review LGU Report First"
-                            : "Resolve Case"}
+                          {busyKey === `confirm_completed_${incident.id}`
+                            ? "Confirming…"
+                            : "Confirm Volunteer Completion"}
                         </Text>
                       </TouchableOpacity>
                     )}
