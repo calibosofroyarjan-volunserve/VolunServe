@@ -2143,7 +2143,7 @@ This still does not automatically create a Donation Campaign.`,
             icon="shield-checkmark-outline"
             variant="success"
             loading={savingAction === "verify"}
-            onPress={allChecksComplete && verificationReview ? verifyNeed : () => openReviewStage("checks")}
+            onPress={verifyNeed}
           />
         </View>
         {quickAction && (
@@ -3916,7 +3916,7 @@ function DecisionTab({
             <LabelText required={true}>Verified gross cost (PHP)</LabelText>
             <TextInput
               value={reviewDraft.verifiedGrossCost}
-              onChangeText={(value) => onReviewChange("verifiedGrossCost", value.replace(/[^0-9.]/g, ""))}
+              onChangeText={(value) => onReviewChange("verifiedGrossCost", value)}
               placeholder="Verified gross cost (PHP)"
               keyboardType="decimal-pad"
               placeholderTextColor="#94A3B8"
@@ -3927,7 +3927,7 @@ function DecisionTab({
             <LabelText required={false}>Existing assistance (PHP)</LabelText>
             <TextInput
               value={reviewDraft.confirmedExistingAssistanceAmount}
-              onChangeText={(value) => onReviewChange("confirmedExistingAssistanceAmount", value.replace(/[^0-9.]/g, ""))}
+              onChangeText={(value) => onReviewChange("confirmedExistingAssistanceAmount", value)}
               placeholder="Confirmed existing LGU / DSWD / NGO / other assistance (PHP)"
               keyboardType="decimal-pad"
               placeholderTextColor="#94A3B8"
@@ -4332,7 +4332,7 @@ function DecisionTab({
                 <LabelText required>Verified remaining unmet amount</LabelText>
                 <TextInput
                   value={remainingAmount}
-                  onChangeText={(value) => setRemainingAmount(value.replace(/[^0-9.]/g, ""))}
+                  onChangeText={setRemainingAmount}
                   keyboardType="decimal-pad"
                   placeholder="Cannot exceed private verified uncovered amount"
                   placeholderTextColor="#94A3B8"
