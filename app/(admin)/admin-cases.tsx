@@ -937,18 +937,6 @@ export default function AdminCases() {
   const isAuthorized = role === "admin";
 
   useEffect(() => {
-    if (
-      !isAuthorized ||
-      detailTab !== "response" ||
-      !selectedCaseId
-    ) {
-      return;
-    }
-
-    void loadLguFieldReports(selectedCaseId);
-  }, [isAuthorized, detailTab, selectedCaseId]);
-
-  useEffect(() => {
     if (!isAuthorized) return;
 
     const casesQuery = query(
@@ -4478,9 +4466,7 @@ export default function AdminCases() {
                     <View style={styles.responseStatusPill}>
                       <Text style={styles.responseStatusDot}>●</Text>
                       <Text style={styles.responseStatusText}>
-                        {lguFieldReviewPending
-                          ? "LEGACY FIELD REPORT PENDING REVIEW"
-                          : volunteerProgressStatus}
+                        {volunteerProgressStatus}
                       </Text>
                     </View>
                   </View>
