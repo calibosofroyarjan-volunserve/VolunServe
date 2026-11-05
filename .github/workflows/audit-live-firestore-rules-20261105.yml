@@ -48,5 +48,18 @@ jobs:
           print('Base rules SHA256: '+expected)
           print('Live Rules source SHA256: '+real)
           print('LIVE RULE SOURCE MATCHES VERIFIED HOSTING COMMIT: '+str(real==expected))
-          if real!=expected:raise SystemExit('STOP: Actual production Firestore Rules differ from GitHub Hosting base. Never deploy snapshot Rules.')
+          if real!=expected:
+              import difflib
+              base_lines=source.decode('utf-8').splitlines()
+              live_lines=actual.decode('utf-8').splitlines()
+              changes=list(difflib.unified_diff(base_lines,live_lines,fromfile='verified-hosting-source',tofile='actual-deployed-source',n=2))
+              print('SOURCE LINE COUNTS base='+str(len(base_lines))+' live='+str(len(live_lines)))
+              print('DIFF LINE COUNT '+str(len(changes)))
+              print('FIRST DIFF LINES:')
+              for line in changes[:85]:
+                  print(line[:200])
+              print('STOP: Differences found. Do not deploy the snapshot rules.')
+          else:
+              print('PASS: Published Rules source equals GitHub Hosting source.')
+
           PY
