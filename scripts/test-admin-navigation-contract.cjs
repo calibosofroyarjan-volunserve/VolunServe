@@ -58,9 +58,13 @@ assert(lgu.includes(')?.id ?? "none"') && lgu.includes(">Command Center</Text>")
   "Command Center must open without unnecessary expanded sidebar groups");
 assert(!accounts.includes("LGU STAFF VERIFICATION FLOW") &&
   !accounts.includes(">LGU Staff Applications</Text>") &&
-  accounts.includes("credentialsConfirmed") &&
-  accounts.includes("lguEmploymentConfirmed"),
-  "Visible staff onboarding stays hidden, but independent verification safeguards remain in code");
+  accounts.includes("Pending LGU Requests") &&
+  accounts.includes("reviewConfirmed") &&
+  accounts.includes("verificationMethods") &&
+  accounts.includes("I checked the applicant's credentials") &&
+  accounts.includes("lguAdminCredentialReviews") &&
+  accounts.includes('doc(collection(db, "adminLogs"))'),
+  "Pending applicants need one genuine LGU credential review, protected approval and audit");
 assert(!accounts.includes('accessibilityLabel="Create independent LGU Admin account"') &&
   !accounts.includes('>Create LGU Admin</Text>') &&
   !accounts.includes('onPress={() => setShowAddAdmin(true)}'),

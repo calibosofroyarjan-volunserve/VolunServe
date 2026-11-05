@@ -38,12 +38,13 @@ assert(admin.includes("LGU staff applicants receive no privileges until independ
   apply.includes("Only after successful confirmation") &&
   owner.includes("pendingLguApplications"),
   "Unverified submissions remain pending in the authorized data model");
-assert(owner.includes("setIdentityMatched") &&
-  owner.includes("setLguEmploymentConfirmed") &&
-  owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&
+assert(owner.includes("setReviewConfirmed") &&
+  owner.includes("verificationMethods.includes(lguVerificationMethod)") &&
+  owner.includes("submittedOffice.length >= 3") &&
   owner.includes('actionType === "promote" && !reviewComplete') &&
-  owner.includes('return "Promote Verified Staff"'),
-  "Admin promotion must be disabled until independent identity and LGU employment checks pass");
+  owner.includes('return "Approve LGU Admin"') &&
+  owner.includes("I checked the applicant's credentials"),
+  "Admin promotion requires submitted staff details and explicit independent LGU review");
 assert(owner.includes("lguAdminCredentialReviews") &&
   owner.includes('reviewStatus: "verified"') &&
   owner.includes('role: "admin"'),

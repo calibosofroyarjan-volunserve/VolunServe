@@ -442,6 +442,22 @@ service cloud.firestore {
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.rejectedReason is string;
+      // Only a Super Admin can reject a pending LGU applicant.
+      // The applicant keeps their unprivileged role; record reviewer and reason.
+      allow update: if isSuperAdmin()
+        && request.auth.uid != uid
+        && resource.data.role == 'applicant'
+        && resource.data.status == 'pending_review'
+        && request.resource.data.role == 'applicant'
+        && request.resource.data.status == 'rejected'
+        && request.resource.data.rejectedReason is string
+        && request.resource.data.rejectedReason.size() >= 10
+        && request.resource.data.rejectedReason.size() <= 300
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'rejectedReason', 'reviewedBy', 'reviewedAt'
+        ]);
       allow update: if isSuperAdmin()
         && request.auth.uid != uid
         && resource.data.role != 'superadmin'

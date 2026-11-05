@@ -65,6 +65,7 @@ type AdminFilter =
 
 type AdminAction =
   | "promote"
+  | "reject"
   | "suspend"
   | "activate"
   | "revoke";
@@ -135,6 +136,7 @@ export default function AdminAccounts() {
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
+  const [applicationPage, setApplicationPage] = useState(1);
   const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
   const compactDirectory = viewportWidth < 1180;
   const ADMIN_PAGE_SIZE = 5;
@@ -168,33 +170,32 @@ export default function AdminAccounts() {
     setActionError,
   ] = useState("");
 
-  // LGU staff authorization requires an independent human credential check.
-  // Never collect photographs or secret document values in this review.
-  const [lguOffice, setLguOffice] = useState("");
-  const [lguPosition, setLguPosition] = useState("");
-  const [lguReference, setLguReference] = useState("");
+  // Applicant details are read-only. A genuine official check is required before Admin access.
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
-  const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
-  const [identityMatched, setIdentityMatched] = useState(false);
-  const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
   const clearCredentialReview = () => {
-    setLguOffice("");
-    setLguPosition("");
-    setLguReference("");
     setLguVerificationMethod("");
-    setCredentialsConfirmed(false);
-    setIdentityMatched(false);
-    setLguEmploymentConfirmed(false);
+    setReviewConfirmed(false);
+    setRejectionReason("");
   };
+  const submittedOffice = String((actionTarget as any)?.lguOffice || "").trim();
+  const submittedPosition = String((actionTarget as any)?.lguPosition || "").trim();
+  const submittedReference = String((actionTarget as any)?.appointmentReference || "").trim();
+  const verificationMethods = [
+    "In-person verification at LGU office",
+    "Official LGU phone callback",
+    "Official LGU email confirmation",
+    "Official appointment records verification",
+  ];
   const reviewComplete =
-    lguOffice.trim().length >= 3 && lguOffice.trim().length <= 160 &&
-    lguPosition.trim().length >= 3 && lguPosition.trim().length <= 120 &&
-    lguReference.trim().length >= 5 && lguReference.trim().length <= 160 &&
-    lguVerificationMethod.trim().length >= 8 && lguVerificationMethod.trim().length <= 200 &&
-    (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
+    submittedOffice.length >= 3 && submittedOffice.length <= 160 &&
+    submittedPosition.length >= 3 && submittedPosition.length <= 120 &&
+    submittedReference.length >= 5 && submittedReference.length <= 160 &&
+    verificationMethods.includes(lguVerificationMethod) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    reviewConfirmed;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -383,6 +384,13 @@ export default function AdminAccounts() {
     .filter(account => account.role === "applicant" && account.status === "pending_review")
     .sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
 
+  const PENDING_PAGE_SIZE = 5;
+  const applicationPageCount = Math.max(1, Math.ceil(pendingLguApplications.length / PENDING_PAGE_SIZE));
+  const safeApplicationPage = Math.min(applicationPage, applicationPageCount);
+  const pagedApplications = pendingLguApplications.slice(
+    (safeApplicationPage - 1) * PENDING_PAGE_SIZE,
+    safeApplicationPage * PENDING_PAGE_SIZE
+  );
   const totalAdmins =
     users.filter(
       (item) =>
@@ -464,9 +472,12 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Verify Staff and Promote to Admin";
+      return "Review LGU Credentials";
     }
 
+    if (action === "reject") {
+      return "Reject LGU Application";
+    }
     if (action === "suspend") {
       return "Suspend Admin";
     }
@@ -490,9 +501,12 @@ export default function AdminAccounts() {
       nameFor(account);
 
     if (action === "promote") {
-      return `Promote ${name} to LGU Admin only after confirming their identity, legitimate LGU employment and official authorization?`;
+      return `Confirm the LGU credentials for ${name} before granting Admin access.`;
     }
 
+    if (action === "reject") {
+      return `Reject the LGU application for ${name}?`;
+    }
     if (action === "suspend") {
       return `Temporarily suspend Admin access for ${name}?`;
     }
@@ -515,9 +529,12 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Promote Verified Staff";
+      return "Approve LGU Admin";
     }
 
+    if (action === "reject") {
+      return "Reject Application";
+    }
     if (action === "suspend") {
       return "Suspend";
     }
@@ -583,11 +600,15 @@ export default function AdminAccounts() {
 
       if (action === "promote" && !reviewComplete) {
         setActionError(
-          "Verify staff identity and official LGU employment, complete all review fields, and confirm the verification before promoting this applicant to Admin."
+          "Review the applicant details and independently confirm LGU employment before approval."
         );
         return;
       }
 
+      if (action === "reject" && (rejectionReason.trim().length < 10 || rejectionReason.trim().length > 300)) {
+        setActionError("Enter a rejection reason of 10–300 characters.");
+        return;
+      }
       setSavingUid(
         account.id
       );
@@ -609,9 +630,9 @@ export default function AdminAccounts() {
             targetUid: account.id,
             accountEmail: account.email,
             reviewStatus: "verified",
-            office: lguOffice.trim(),
-            position: lguPosition.trim(),
-            credentialReference: lguReference.trim(),
+            office: submittedOffice,
+            position: submittedPosition,
+            credentialReference: submittedReference,
             verificationMethod: lguVerificationMethod.trim(),
             verifiedBy: verified.current.uid,
             verifiedAt: serverTimestamp(),
@@ -678,6 +699,21 @@ export default function AdminAccounts() {
               `${nameFor(
                 account
               )} was granted Admin access.`,
+          };
+        } else if (action === "reject") {
+          batch.update(doc(db, "users", account.id), {
+            status: "rejected",
+            rejectedReason: rejectionReason.trim(),
+            reviewedBy: verified.current.uid,
+            reviewedAt: serverTimestamp(),
+          });
+          logPayload = {
+            actionType: "lgu_admin_application_rejected",
+            targetType: "user",
+            targetId: account.id,
+            adminUid: verified.current.uid,
+            adminName: verified.current.displayName || verified.current.email || "Super Admin",
+            description: `LGU staff application for ${nameFor(account)} rejected after manual review.`,
           };
         } else if (
           action === "suspend"
@@ -1161,6 +1197,46 @@ export default function AdminAccounts() {
         </View>
 
 
+        <View style={[styles.directoryPanel, { marginBottom: 20 }]}>
+          <View style={styles.dirHeading}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dirTitle}>Pending LGU Requests</Text>
+              <Text style={styles.dirNote}>Review staff details and credentials before granting access</Text>
+            </View>
+            <Text style={styles.dirTag}>{pendingLguApplications.length} pending</Text>
+          </View>
+          {pendingLguApplications.length === 0 ? (
+            <View style={styles.dirEmpty}><Text style={styles.dirNote}>No LGU requests awaiting review.</Text></View>
+          ) : pagedApplications.map(applicant => (
+            <View key={applicant.id} style={[styles.dirRecord, { padding: 16, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }]}>
+              <View style={{ flex: 1, minWidth: 180 }}>
+                <Text style={styles.dirName}>{nameFor(applicant)}</Text>
+                <Text style={styles.dirNote}>{applicant.email || "No email"}</Text>
+                <Text style={styles.dirNote}>{String((applicant as any).lguOffice || "No LGU office")} · {String((applicant as any).lguPosition || "No position")}</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" style={styles.dirManage}
+                onPress={() => openAdminAction("promote", applicant)}>
+                <Text style={styles.dirManageText}>Review</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {applicationPageCount > 1 && (
+            <View style={styles.dirPaging}>
+              <TouchableOpacity accessibilityRole="button" disabled={safeApplicationPage <= 1}
+                style={[styles.dirPage, safeApplicationPage <= 1 && { opacity: 0.35 }]}
+                onPress={() => setApplicationPage(Math.max(1, safeApplicationPage - 1))}>
+                <Text style={styles.dirPageText}>Previous</Text>
+              </TouchableOpacity>
+              <Text style={styles.dirNote}>Page {safeApplicationPage} of {applicationPageCount}</Text>
+              <TouchableOpacity accessibilityRole="button" disabled={safeApplicationPage >= applicationPageCount}
+                style={[styles.dirPage, safeApplicationPage >= applicationPageCount && { opacity: 0.35 }]}
+                onPress={() => setApplicationPage(Math.min(applicationPageCount, safeApplicationPage + 1))}>
+                <Text style={styles.dirPageText}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         <View style={styles.directoryPanel}>
           <View style={styles.dirHeading}>
             <View style={{flex:1}}>
@@ -1609,130 +1685,64 @@ export default function AdminAccounts() {
               </View>
             )}
 
-            {actionType === "promote" ? (
+            {actionType === "promote" && (
               <View style={styles.credentialReview}>
-                <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
-                <Text style={styles.reviewHelp}>
-                  Compare the applicant's information with an independently obtained official LGU source.
-                  Completing this review is required before activating any Admin account.
-                </Text>
-                {actionTarget?.role === "applicant" && (
-                  <View style={styles.applicantDetails}>
-                    <Text style={styles.reviewLabel}>Applicant details · Not yet verified</Text>
-                    <Text style={styles.reviewHelp}>Name: {nameFor(actionTarget)}</Text>
-                    <Text style={styles.reviewHelp}>Email: {actionTarget.email || "Not provided"}</Text>
-                    <Text style={styles.reviewHelp}>Office: {String((actionTarget as any).lguOffice || "Not provided")}</Text>
-                    <Text style={styles.reviewHelp}>Position: {String((actionTarget as any).lguPosition || "Not provided")}</Text>
-                    <Text style={styles.reviewHelp}>Barangay: {String((actionTarget as any).barangay || "Not provided")}</Text>
-                    <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
-                  </View>
-                )}
-                <View style={styles.reviewScroll}>
+                <Text style={styles.reviewKicker}>LGU CREDENTIAL REVIEW</Text>
+                <Text style={styles.reviewHelp}>Applicant-provided details. Independently check these with the official LGU office.</Text>
+                <View style={styles.applicantDetails}>
                   {([
-                    { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
-                    { label: "Official Position", value: lguPosition, onChange: setLguPosition, placeholder: "Authorized staff role", maxLength: 120 },
-                    { label: "Verification Reference", value: lguReference, onChange: setLguReference, placeholder: "Non-sensitive official reference", maxLength: 160 },
-                  ] as const).map((field) => (
-                    <View key={field.label} style={styles.reviewField}>
-                      <Text style={styles.reviewLabel}>{field.label}</Text>
-                      <TextInput
-                        accessibilityLabel={field.label}
-                        style={styles.reviewInput}
-                        placeholder={field.placeholder}
-                        placeholderTextColor="#8A9C94"
-                        maxLength={field.maxLength}
-                        value={field.value}
-                        onChangeText={field.onChange}
-                        editable={!savingUid}
-                      />
+                    ["Name", actionTarget ? nameFor(actionTarget) : ""],
+                    ["Email", actionTarget?.email || "Not provided"],
+                    ["LGU office", submittedOffice || "Not provided"],
+                    ["Position", submittedPosition || "Not provided"],
+                    ["Barangay", String((actionTarget as any)?.barangay || "Not provided")],
+                    ["Appointment reference", submittedReference || "Not provided"],
+                  ] as const).map(([label, value]) => (
+                    <View key={label} style={{ marginBottom: 6 }}>
+                      <Text style={styles.reviewLabel}>{label}</Text>
+                      <Text style={styles.reviewHelp}>{value}</Text>
                     </View>
                   ))}
-                  <View style={styles.reviewField}>
-                    <Text style={styles.reviewLabel}>Independent LGU verification method</Text>
-                    <Text style={styles.reviewHelp}>Select the actual official confirmation method. A face scan or ID image alone does not establish LGU employment.</Text>
-                    {[
-                      "In-person verification at LGU office",
-                      "Official LGU phone callback",
-                      "Official LGU email confirmation",
-                      "Official appointment records verification",
-                      "Others — specify independently verified source",
-                    ].map((option) => {
-                      const isOther = option.startsWith("Others");
-                      const otherSelected = !!lguVerificationMethod && ![
-                        "In-person verification at LGU office",
-                        "Official LGU phone callback",
-                        "Official LGU email confirmation",
-                        "Official appointment records verification",
-                      ].includes(lguVerificationMethod);
-                      return (
-                        <TouchableOpacity key={option} accessibilityRole="radio"
-                          accessibilityState={{ checked: isOther ? otherSelected : lguVerificationMethod === option }}
-                          disabled={!!savingUid}
-                          style={[styles.confirmReview, (isOther ? otherSelected : lguVerificationMethod === option) && { borderColor: "#158060", backgroundColor: "#EFFAF4" }]}
-                          onPress={() => setLguVerificationMethod(isOther ? "Other official source: " : option)}>
-                          <Ionicons name={(isOther ? otherSelected : lguVerificationMethod === option) ? "radio-button-on" : "radio-button-off"} size={20} color="#23765F" />
-                          <Text style={styles.confirmReviewText}>{option}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {!!lguVerificationMethod && ![
-                      "In-person verification at LGU office",
-                      "Official LGU phone callback",
-                      "Official LGU email confirmation",
-                      "Official appointment records verification",
-                    ].includes(lguVerificationMethod) && (
-                      <TextInput accessibilityLabel="Specify independent official verification"
-                        placeholder="Describe the official source and what was confirmed"
-                        placeholderTextColor="#8A9C94" maxLength={200}
-                        value={lguVerificationMethod.replace(/^Other official source: /, "")}
-                        onChangeText={value => setLguVerificationMethod("Other official source: " + value)}
-                        editable={!savingUid} style={styles.reviewInput} />
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: identityMatched }}
-                    style={styles.confirmReview}
-                    onPress={() => setIdentityMatched(v => !v)}
-                    disabled={!!savingUid}
-                  >
-                    <Ionicons name={identityMatched ? "checkbox" : "square-outline"} size={23} color="#23765F" />
-                    <Text style={styles.confirmReviewText}>
-                      I matched the applicant's identity and submitted details with the independently verified LGU staff information.
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: lguEmploymentConfirmed }}
-                    style={styles.confirmReview}
-                    onPress={() => setLguEmploymentConfirmed(v => !v)}
-                    disabled={!!savingUid}
-                  >
-                    <Ionicons name={lguEmploymentConfirmed ? "checkbox" : "square-outline"} size={23} color="#23765F" />
-                    <Text style={styles.confirmReviewText}>
-                      I confirmed current LGU employment, appointment and authority directly from an official source.
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: credentialsConfirmed }}
-                    style={styles.confirmReview}
-                    onPress={() => setCredentialsConfirmed((current) => !current)}
-                    disabled={!!savingUid}
-                  >
-                    <Ionicons
-                      name={credentialsConfirmed ? "checkbox" : "square-outline"}
-                      size={23}
-                      color="#23765F"
-                    />
-                    <Text style={styles.confirmReviewText}>
-                      I independently reviewed LGU credentials and confirmed that the selected account belongs to the authorized staff member.
-                    </Text>
-                  </TouchableOpacity>
                 </View>
-                <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
+                <Text style={styles.reviewLabel}>How did you verify the applicant?</Text>
+                {verificationMethods.map(method => (
+                  <TouchableOpacity key={method} accessibilityRole="radio"
+                    accessibilityState={{ checked: lguVerificationMethod === method }}
+                    disabled={!!savingUid}
+                    style={[styles.confirmReview, lguVerificationMethod === method && { borderColor: "#158060", backgroundColor: "#EFFAF4" }]}
+                    onPress={() => setLguVerificationMethod(method)}>
+                    <Ionicons name={lguVerificationMethod === method ? "radio-button-on" : "radio-button-off"} size={19} color="#23765F" />
+                    <Text style={styles.confirmReviewText}>{method}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity accessibilityRole="checkbox"
+                  accessibilityState={{ checked: reviewConfirmed }}
+                  disabled={!!savingUid} style={styles.confirmReview}
+                  onPress={() => setReviewConfirmed(current => !current)}>
+                  <Ionicons name={reviewConfirmed ? "checkbox" : "square-outline"} size={22} color="#23765F" />
+                  <Text style={styles.confirmReviewText}>I checked the applicant's credentials and independently confirmed their identity, LGU employment and authority to be an Admin.</Text>
+                </TouchableOpacity>
+                {!reviewComplete && (
+                  <Text style={styles.reviewHint}>Approval requires complete submitted details, an official verification method and your confirmation.</Text>
+                )}
               </View>
-            ) : null}
+            )}
+            {actionType === "reject" && (
+              <View style={styles.credentialReview}>
+                <Text style={styles.reviewLabel}>Reason for rejection</Text>
+                <TextInput
+                  accessibilityLabel="LGU application rejection reason"
+                  style={[styles.reviewInput, { minHeight: 84, textAlignVertical: "top" }]}
+                  multiline maxLength={300}
+                  placeholder="Explain which credentials could not be confirmed"
+                  placeholderTextColor="#8A9C94"
+                  value={rejectionReason}
+                  onChangeText={setRejectionReason}
+                  editable={!savingUid}
+                />
+                <Text style={styles.reviewHint}>A rejected applicant will not get Admin access.</Text>
+              </View>
+            )}
 
             {!!actionError && (
               <View
@@ -1783,17 +1793,26 @@ export default function AdminAccounts() {
                 </Text>
               </TouchableOpacity>
 
+              {actionType === "promote" && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={!!savingUid}
+                  style={[styles.confirmButton, styles.confirmDangerButton]}
+                  onPress={() => { setActionError(""); setActionType("reject"); }}>
+                  <Text style={styles.confirmPrimaryText}>Reject</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
+                disabled={!!savingUid || (actionType === "promote" && !reviewComplete) || (actionType === "reject" && rejectionReason.trim().length < 10)}
                 style={[
                   styles.confirmButton,
                   actionType ===
                     "revoke" ||
                   actionType ===
-                    "suspend"
+                    "suspend" || actionType === "reject"
                     ? styles.confirmDangerButton
                     : styles.confirmPrimaryButton,
-                  (actionType === "promote" && !reviewComplete) && styles.confirmDisabled,
+                  ((actionType === "promote" && !reviewComplete) || (actionType === "reject" && rejectionReason.trim().length < 10)) && styles.confirmDisabled,
                 ]}
                 onPress={() =>
                   void confirmAdminAction()
