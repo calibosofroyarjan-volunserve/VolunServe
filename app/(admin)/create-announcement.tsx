@@ -119,7 +119,7 @@ export default function CreateAnnouncement() {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!publishBarangay || publishBarangay !== barangay) {
+    if (!publishBarangay || publishBarangay.toLowerCase() === "all" || publishBarangay !== barangay) {
       Alert.alert(
         "Barangay Required",
         "Your Admin account does not have an assigned barangay."
