@@ -7,6 +7,11 @@ if(!process.env.FIRESTORE_EMULATOR_HOST||!process.env.LIVE_NOTIFICATION_RULES_FI
   throw Error("STOP: notifications privacy tests require FIRESTORE EMULATOR");
 const rules=fs.readFileSync(process.env.LIVE_NOTIFICATION_RULES_FILE,"utf8");
 if(!rules.includes("match /notifications/"))throw Error("STOP: active rules lack expected inbox section");
+const a=rules.indexOf("match /notifications/{notificationId}");
+const b=rules.indexOf("    match /",a+20);
+if(a<0||b<0)throw Error("STOP: exact active notifications rule block missing");
+console.log("READ-ONLY ACTIVE FIRESTORE NOTIFICATION POLICY:");
+console.log(rules.slice(a,b));
 (async()=>{
   const env=await initializeTestEnvironment({
     projectId:"demo-volunserve",firestore:{rules}
