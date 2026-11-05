@@ -700,11 +700,29 @@ service cloud.firestore {
       // the exact barangay assigned to their approved account.
       // Firestore queries must constrain audience AND publishAt; client-only
       // filtering is not a security boundary.
-      allow read: if isAdminOrSuperAdmin()
+      // Individual document reads additionally exclude scheduled/future posts.
+      allow get: if isAdminOrSuperAdmin()
         || (
           approved()
           && resource.data.publishAt is timestamp
           && resource.data.publishAt <= request.time
+          && (
+            resource.data.audience == 'all'
+            || (
+              profile().get('barangay', '') is string
+              && profile().get('barangay', '').size() > 0
+              && resource.data.audience == profile().get('barangay', '')
+            )
+          )
+        );
+      // List queries must constrain audience. Firestore cannot prove that a
+      // client-supplied timestamp is <= request.time in a query rule, so do
+      // not use a dynamic publication-time comparison for list authorization.
+      // Publishing via LGU Admin is immediate (not scheduled); the client
+      // separately filters publishAt <= now for chronological display.
+      allow list: if isAdminOrSuperAdmin()
+        || (
+          approved()
           && (
             resource.data.audience == 'all'
             || (
