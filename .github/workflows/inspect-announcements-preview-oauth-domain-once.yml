@@ -1,0 +1,37 @@
+name: READ ONLY Check Firebase Authorized Domain for New Announcements Preview
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/inspect-announcements-preview-oauth-domain-once.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read-only inspect Identity Platform authorizedDomains list
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,urllib.error
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          domain='volunserve-3aa5b--announcements-livebased-20261105-84rgzbt0.web.app'
+          url='https://identitytoolkit.googleapis.com/admin/v2/projects/volunserve-3aa5b/config'
+          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+          try:
+              with urllib.request.urlopen(req,timeout=25) as response:config=json.load(response)
+          except urllib.error.HTTPError as exc:
+              print('AUTHORIZED_DOMAINS_LOOKUP_FAILED_HTTP='+str(exc.code))
+              raise SystemExit(1)
+          authorized=config.get('authorizedDomains',[])
+          print('AUTHORIZED_DOMAINS_TOTAL='+str(len(authorized)))
+          print('PRODUCTION_VOLUNSERVE_DOMAIN_AUTHORIZED='+str('volunserve.com' in authorized))
+          print('NEW_PREVIEW_GOOGLE_OAUTH_DOMAIN_AUTHORIZED='+str(domain in authorized))
+          print('READ_ONLY check. No Auth settings or user accounts modified.')
+          PY
