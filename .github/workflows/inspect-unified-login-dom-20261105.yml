@@ -37,7 +37,7 @@ jobs:
           NODE
           CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
           echo "Chrome binary: $CHROME"
-          for attempt in 1 2; do
+          for attempt in 1 2 3 4 5; do
             timeout 90s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --virtual-time-budget=25000 --dump-dom "$ORIGIN/login?inspect=$attempt" > "/tmp/page-$attempt.html" 2> "/tmp/chrome-$attempt.log" || true
             echo "Attempt $attempt DOM bytes $(wc -c < /tmp/page-$attempt.html)"
             node -e 'const fs=require("fs"); const s=fs.readFileSync(process.argv[1],"utf8"); console.log("MARKERS",JSON.stringify({unified:s.includes("VolunServe Login"),request:s.includes("Request Admin Access"),legacy:s.includes("Residents & Volunteers"),html:s.includes("<html"),root:s.includes("id=\"root\""),loading:s.includes("Loading"),error:s.includes("Application error") })); console.log("DOM HEAD",s.slice(0,2200)); console.log("DOM TAIL",s.slice(-2200));' "/tmp/page-$attempt.html"
