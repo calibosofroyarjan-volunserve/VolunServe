@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   guarded-production:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded Emergency Volunteer Hosting-only release'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded Emergency Volunteer direct Hosting-only release'
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -19,8 +19,6 @@ jobs:
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       PROJECT: volunserve-3aa5b
       LIVE_BASE: e2f5017ed849869139010ba4d434a66daa447344
-      PREVIEW_CHANNEL: emergency-volunteer-reviewed-1106
-      BACKUP_CHANNEL: backup-emergency-volunteer-1106
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-emergency-volunteer-prod.json
     steps:
@@ -128,28 +126,82 @@ jobs:
           fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
           console.log('PASS project-bound Hosting credentials present');
           NODE
-      - name: Publish an isolated Firebase Hosting preview only
-        id: preview
+      - name: Snapshot exact prior LIVE Firebase Hosting version with no new channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+          cat > "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" <<'NODE'
+          const fs=require('node:fs');
+          const crypto=require('node:crypto');
+          const project=process.env.PROJECT;
+          const mode=process.argv[2];
+          const credentials=JSON.parse(process.env.FIREBASE_SA);
+          const priorPath=process.env.RUNNER_TEMP+'/emergency-volunteer-prior-hosting-version.txt';
+          const api='https://firebasehosting.googleapis.com/v1beta1/sites/'+project;
+          const encodeJson=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const header={alg:'RS256',typ:'JWT'};
+            const payload={
+              iss:credentials.client_email,
+              scope:'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/cloud-platform',
+              aud:credentials.token_uri,
+              iat:now,
+              exp:now+3000
+            };
+            const unsigned=encodeJson(header)+'.'+encodeJson(payload);
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(unsigned),credentials.private_key).toString('base64url');
+            const response=await fetch(credentials.token_uri,{
+              method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion:unsigned+'.'+signature
+              }),signal:AbortSignal.timeout(25000)
+            });
+            if(!response.ok)throw Error('Could not authenticate Hosting version snapshot: '+response.status);
+            const data=await response.json();
+            if(!data.access_token)throw Error('Missing Hosting REST access token');
+            return data.access_token;
+          }
+          (async()=>{
+            const access=await token();
+            if(mode==='snapshot'){
+              const response=await fetch(api+'/releases?pageSize=1',{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('STOP cannot snapshot prior Firebase Hosting version: '+response.status);
+              const result=await response.json();
+              const version=String(result.releases?.[0]?.version?.name||'');
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('STOP prior live version missing');
+              fs.writeFileSync(priorPath,version+'\n',{mode:0o600});
+              console.log('PASS existing live Hosting version snapshotted for rollback');
+            }else if(mode==='restore'){
+              const version=fs.readFileSync(priorPath,'utf8').trim();
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('Unsafe backup reference');
+              const response=await fetch(api+'/releases?versionName='+encodeURIComponent(version),{
+                method:'POST',headers:{Authorization:'Bearer '+access},
+                signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('Hosting rollback failed: '+response.status);
+              console.log('RESTORED prior live Hosting version from immutable Firebase version history');
+            }else throw Error('Unknown Hosting API mode');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" snapshot
+
+      - name: Check current live revision one final time before Hosting-only promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/emergency-volunteer-prior-hosting-version.txt"
+          node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
+      - name: Publish exact previously tested web assets to LIVE Hosting only
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ env.FIREBASE_SA }}
           projectId: volunserve-3aa5b
-          channelId: emergency-volunteer-reviewed-1106
-          expires: 3d
-      - name: Confirm preview revision and routes before LIVE
-        env:
-          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Backup exact current LIVE and promote tested preview (Hosting only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
-          node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
-          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
-          node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
-          $CLI hosting:clone "$PROJECT:$PREVIEW_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          channelId: live
       - name: Confirm exact new LIVE revision, preserved public routes, and both domains
         shell: bash
         run: |
@@ -165,17 +217,20 @@ jobs:
           test "$passed" = 1 || { echo "::error::Live promotion not yet confirmed"; exit 1; }
           VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs
           echo "PASS: live volunserve.com serves Emergency Volunteer revision $GITHUB_SHA; Hosting-only release, data and rules unchanged" >> "$GITHUB_STEP_SUMMARY"
-      - name: Roll back only when this exact release still owns LIVE
+      - name: Restore exact prior immutable Hosting version only if this release owns LIVE
         if: failure()
         shell: bash
         run: |
           set +e
-          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+          if [ ! -s "$RUNNER_TEMP/emergency-volunteer-prior-hosting-version.txt" ]; then
+            echo "No immutable prior Hosting snapshot; production was not promoted by this release."
+            exit 0
+          fi
           if node "$RUNNER_TEMP/check-both-live.cjs" "$GITHUB_SHA"; then
-            $CLI hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            node "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" restore
             node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
           else
-            echo "Production was never confirmed as our revision; not rolling back a newer or different deploy."
+            echo "The active release is not confirmed as ours. Do not overwrite another deploy; check Hosting history manually."
           fi
 
-# Explicit user-authorized, guarded VolunServe Emergency Volunteer Hosting-only release.
+# Preview channel quota reached (HTTP 429); use immutable existing LIVE version snapshot and guarded Hosting-only publish.
