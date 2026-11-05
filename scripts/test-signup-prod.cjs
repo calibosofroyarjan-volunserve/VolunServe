@@ -135,7 +135,7 @@ function harness(source, enabled, options = {}) {
   await check("new signup reports existing email without signing in or redirecting",async()=>{
     const h=harness(current,true,{createError:"auth/email-already-in-use",noUser:true});
     await assert.rejects(
-      h.registration.authenticateEmailSignup(data.email,data.password,false),
+      h.registration.authenticateEmailSignup(data.email,data.password,false,true),
       error=>error.code==="auth/email-already-in-use"
     );
     assert(h.calls.includes("create"));
@@ -144,6 +144,8 @@ function harness(source, enabled, options = {}) {
     assert.equal(h.auth.currentUser,null);
     const screen=read("components/auth/EmailFirstSignup.tsx");
     assert(screen.includes('code === "auth/email-already-in-use") return REGISTRATION_EMAIL_CONFLICT_MESSAGE'));
+    assert(screen.includes("authenticateEmailSignup(email, password, resumeMode, !resumeMode)"),
+      "Only the Create Account button must reject existing emails");
   });
   await check("Resume Registration only signs in and inspects the existing UID",async()=>{
     const h=harness(current,true,{verified:false});const user=await h.registration.authenticateEmailSignup(data.email,data.password,true);const state=await h.registration.inspectSignupUser(user);assert.equal(user.uid,h.user.uid);assert.equal(state.profileExists,false);assert.equal(user.emailVerified,false);assert(!h.calls.includes("create"));assert(!h.calls.includes("transaction"));
