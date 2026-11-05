@@ -1,7 +1,7 @@
-name: Validate Single-Branch LGU Accept Reject Rules (NO LIVE DEPLOY)
+name: Validate Root-Helper Scoped LGU Rules (NO LIVE DEPLOY)
 on:
   push:
-    branches: [fix/lgu-accept-reject-smaller-rules-20261105]
+    branches: [fix/lgu-helper-scope-compiled-20261105]
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
@@ -71,17 +71,24 @@ jobs:
           set -euo pipefail
           node scripts/prepare-live-lgu-rules-20261105.cjs /tmp/volunserve-live-before.rules /tmp/volunserve-lgu-candidate.rules
           cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+      - name: Localize unchanged global Super Admin helper and prove byte-exact inverse
+        run: |
+          set -euo pipefail
+          node scripts/scope-superadmin-helper.cjs /tmp/volunserve-lgu-candidate.rules /tmp/volunserve-lgu-scoped.rules
+          cp /tmp/volunserve-lgu-scoped.rules firestore.rules
       - name: Install locked project dependencies (no app deploy)
         run: npm ci --no-audit --no-fund
       - name: Emulator security tests — approve and reject + unauthorized denials
-        run: npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs"
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs && node scripts/test-community-events-rules.cjs"
       - name: Compile immutable candidate Ruleset to prove real Firebase size quota — never activate
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import hashlib,json,os,subprocess,urllib.request,urllib.error
           t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
-          content=open('/tmp/volunserve-lgu-candidate.rules',encoding='utf8',newline='').read()
+          content=open('/tmp/volunserve-lgu-scoped.rules',encoding='utf8',newline='').read()
           req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets',
             data=json.dumps({'source':{'files':[{'name':'firestore.rules','content':content}]}}).encode(),
             headers={'Authorization':'Bearer '+t,'Content-Type':'application/json'},method='POST')
