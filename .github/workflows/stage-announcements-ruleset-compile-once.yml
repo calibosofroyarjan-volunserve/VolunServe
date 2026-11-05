@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   compile-inactive-only:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot compile inactive VolunServe announcement Ruleset after emulator tests'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Retry inactive Ruleset compilation with raw-byte checksum of emulator-tested file'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -46,7 +46,7 @@ jobs:
           import hashlib, json, os, subprocess, urllib.request, urllib.error
           t=os.environ["RUNNER_TEMP"]
           metadata=json.load(open(t+"/candidate-metadata.json"))
-          candidate=open("firestore.rules",encoding="utf8").read()
+          candidate=open("firestore.rules","rb").read().decode("utf8")
           if hashlib.sha256(candidate.encode()).hexdigest()!=metadata["candidateSha"]:
               raise SystemExit("STOP: candidate changed since emulator tests")
           token=subprocess.check_output(["gcloud","auth","print-access-token"],text=True).strip()
