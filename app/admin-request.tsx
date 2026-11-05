@@ -159,6 +159,23 @@ export default function LguStaffApplication() {
             </ScrollView>
             {!!form.barangay&&<Text style={styles.selection}>Selected: {form.barangay}</Text>}
           </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Valid staff / government ID photo <Text style={styles.required}>*</Text></Text>
+            <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={()=>void selectProof("staff-id")}
+              style={[styles.option,{borderWidth:1,borderColor:"#D6E6DD",borderRadius:10}]}>
+              <Text style={styles.selection}>{staffIdImage?"Change selected ID photo":"Choose ID photo (JPG, PNG or WEBP, up to 3 MB)"}</Text>
+            </TouchableOpacity>
+            {!!staffIdImage&&<Image source={{uri:staffIdImage.uri}} resizeMode="contain" style={{width:"100%",height:135,backgroundColor:"#F3F8F5",borderRadius:10}}/>}
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Appointment letter / LGU employment proof image <Text style={styles.required}>*</Text></Text>
+            <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={()=>void selectProof("appointment-letter")}
+              style={[styles.option,{borderWidth:1,borderColor:"#D6E6DD",borderRadius:10}]}>
+              <Text style={styles.selection}>{appointmentImage?"Change selected proof":"Choose employment proof image (JPG, PNG or WEBP, up to 3 MB)"}</Text>
+            </TouchableOpacity>
+            {!!appointmentImage&&<Image source={{uri:appointmentImage.uri}} resizeMode="contain" style={{width:"100%",height:135,backgroundColor:"#F3F8F5",borderRadius:10}}/>}
+          </View>
+          <Text style={{fontSize:11,lineHeight:17,color:"#527767"}}>These confidential images are accessible only to approved programmer Super Admin reviewers. Uploading proof never grants LGU Admin access automatically.</Text>
           {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           <TouchableOpacity accessibilityRole="button" style={[styles.submit,busy&&{opacity:.6}]}
             disabled={busy} onPress={()=>void submit()}>
