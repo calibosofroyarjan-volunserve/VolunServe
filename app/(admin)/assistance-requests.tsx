@@ -9,6 +9,10 @@ import {
 } from "firebase/firestore";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import {
+  filterAndSortAssistanceQueue,
+  type AssistanceQueueSort,
+} from "../../lib/assistanceReviewQueue";
 import React, {
   useEffect,
   useMemo,
@@ -610,7 +614,7 @@ export default function AssistanceRequestsAdmin() {
     useState<ReviewFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortOrder, setSortOrder] =
-    useState<"newest" | "oldest" | "resident_az" | "resident_za" | "title_az" | "title_za">("newest");
+    useState<AssistanceQueueSort>("newest");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStage | null>(null);
@@ -917,69 +921,19 @@ export default function AssistanceRequestsAdmin() {
     };
   }, [requests]);
 
-  const filteredRequests = useMemo(() => {
-    const term = search.trim().toLowerCase();
-
-    return requests.filter((item) => {
-      const status = String(
-        item.status || "pending",
-      );
-
-      const matchesFilter =
-        filter === "all" ||
-        (filter === "completed"
-          ? [
-              "assistance_provided",
-              "campaign_created",
-              "closed",
-            ].includes(status)
-          : status === filter);
-
-      if (!matchesFilter || (categoryFilter !== "all" && item.category !== categoryFilter)) {
-        return false;
-      }
-
-      if (!term) {
-        return true;
-      }
-
-      const haystack = [
-        item.requestId,
-        item.requesterName,
-        item.requesterEmail,
-        item.requesterBarangay,
-        item.beneficiaryName,
-        item.categoryLabel,
-        item.title,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(term);
-    }).sort((a, b) => {
-      const nameA = String(a.requesterName || a.beneficiaryName || "").trim();
-      const nameB = String(b.requesterName || b.beneficiaryName || "").trim();
-      const titleA = String(a.title || "").trim();
-      const titleB = String(b.title || "").trim();
-      const stable = String(a.id).localeCompare(String(b.id));
-      switch (sortOrder) {
-        case "resident_az": return nameA.localeCompare(nameB, "en", { sensitivity: "base" }) || stable;
-        case "resident_za": return nameB.localeCompare(nameA, "en", { sensitivity: "base" }) || stable;
-        case "title_az": return titleA.localeCompare(titleB, "en", { sensitivity: "base" }) || stable;
-        case "title_za": return titleB.localeCompare(titleA, "en", { sensitivity: "base" }) || stable;
-        case "oldest": return timestampMillis(a.createdAt) - timestampMillis(b.createdAt) || stable;
-        default: return timestampMillis(b.createdAt) - timestampMillis(a.createdAt) || stable;
-      }
-    });
-  }, [
-    requests,
-    filter,
-    categoryFilter,
-    sortOrder,
-    search,
-  ]);
-
+  const filteredRequests = useMemo(
+    () => filterAndSortAssistanceQueue(
+      requests,
+      {
+        status: filter,
+        category: categoryFilter,
+        sort: sortOrder,
+        search,
+      },
+      timestampMillis,
+    ),
+    [requests, filter, categoryFilter, sortOrder, search],
+  );
   const requestPages = Math.max(1, Math.ceil(filteredRequests.length / 5));
   const activeRequestPage = Math.max(1, Math.min(recordPage, requestPages));
   const pagedRequests = filteredRequests.slice((activeRequestPage - 1) * 5, activeRequestPage * 5);
