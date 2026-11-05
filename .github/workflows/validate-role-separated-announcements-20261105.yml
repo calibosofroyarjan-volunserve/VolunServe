@@ -41,7 +41,8 @@ jobs:
             'scripts/test-system-updates-firebase-roles.cjs',
             'scripts/prepare-system-updates-live-rules.py',
             '.github/workflows/validate-role-separated-announcements-20261105.yml',
-            '.github/workflows/stage-role-separated-announcements-rules-inactive.yml'
+            '.github/workflows/stage-role-separated-announcements-rules-inactive.yml',
+            '.github/workflows/preview-role-separated-announcements-20261105.yml'
           ]);
           const bad=changed.filter(x=>!allowed.has(x));
           if(bad.length)throw Error('Changes outside announcement-specific files: '+bad.join(', '));
