@@ -27,14 +27,10 @@ import {
    FIREBASE
 ============================================================ */
 
-import {
-  collection,
-  getDocs,
-} from "firebase/firestore";
-
 import { db } from "../../lib/firebase";
 import { activeModeForProfile, hasVolunteerAccess, setActiveUserMode } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { useCommunityAnnouncements } from "../../lib/useCommunityAnnouncements";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -66,7 +62,7 @@ export default function HomeScreen() {
     profile?.fullName?.trim()?.split(" ")[0] ||
     "VolunServe Member";
 
-  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const { announcements, error: announcementError } = useCommunityAnnouncements(profile?.barangay, Boolean(profile));
 
   /* ==========================================================
      HEADER ANIMATION
@@ -112,33 +108,6 @@ export default function HomeScreen() {
     new Animated.Value(1)
   ).current;
 
-  /* ==========================================================
-     LOAD FIREBASE ANNOUNCEMENTS
-  ========================================================== */
-
-  useEffect(() => {
-    const fetchAnnouncements = async () => {
-      try {
-        const snapshot = await getDocs(
-          collection(db, "announcements")
-        );
-
-        const data = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        }));
-
-        setAnnouncements(data);
-      } catch (error) {
-        console.log(
-          "Error fetching announcements:",
-          error
-        );
-      }
-    };
-
-    fetchAnnouncements();
-  }, []);
 
   /* ==========================================================
      SCREEN ENTRANCE
@@ -620,6 +589,42 @@ export default function HomeScreen() {
                 />
               </>
             )}
+
+            {/* Community updates are a dashboard section, not a separate user module. */}
+            <View style={styles.communityUpdatesPanel}>
+              <View style={styles.communityUpdatesHeader}>
+                <View style={styles.communityUpdatesHeading}>
+                  <Ionicons name="megaphone-outline" size={20} color="#0C7958" />
+                  <Text style={styles.communityUpdatesTitle}>Community Updates</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="View all updates in Notifications"
+                  onPress={() => router.push("/notifications" as Href)}>
+                  <Text style={styles.communityUpdatesAction}>View all  ›</Text>
+                </Pressable>
+              </View>
+              {announcements.length === 0 ? (
+                <Text style={styles.communityUpdatesEmpty}>
+                  {announcementError || "No published updates for your area yet."}
+                </Text>
+              ) : announcements.slice(0, 3).map(item => (
+                <Pressable key={item.id} style={styles.communityUpdatesRow}
+                  accessibilityRole="button" accessibilityLabel={"Open notifications for " + item.title}
+                  onPress={() => router.push("/notifications" as Href)}>
+                  <View style={styles.communityUpdatesIcon}>
+                    <Ionicons name={item.priority === "urgent" ? "alert-circle-outline" : item.audience === "all" ? "settings-outline" : "megaphone-outline"}
+                      size={20} color={item.priority === "urgent" ? "#B42318" : "#087D60"} />
+                  </View>
+                  <View style={styles.communityUpdatesCopy}>
+                    <Text style={styles.communityUpdatesItemTitle} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.communityUpdatesItemMessage} numberOfLines={2}>{item.message}</Text>
+                    <Text style={styles.communityUpdatesAudience}>
+                      {item.audience === "all" ? "VolunServe System Update" : "Barangay Announcement • " + item.audience}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward-outline" size={16} color="#88A99A" />
+                </Pressable>
+              ))}
+            </View>
 
             <View style={styles.bottomSpace} />
           </View>
@@ -1306,6 +1311,19 @@ function ServiceCard({
 ============================================================ */
 
 const styles = StyleSheet.create({
+  communityUpdatesPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE9E0", borderRadius: 16, padding: 15, marginTop: 20 },
+  communityUpdatesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  communityUpdatesHeading: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+  communityUpdatesTitle: { color: "#173D32", fontSize: 16, fontWeight: "800" },
+  communityUpdatesAction: { color: "#087D60", fontSize: 12, fontWeight: "800" },
+  communityUpdatesEmpty: { color: "#6B8577", fontSize: 12, lineHeight: 19, paddingVertical: 14 },
+  communityUpdatesRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12, borderTopWidth: 1, borderColor: "#EDF3EF" },
+  communityUpdatesIcon: { backgroundColor: "#E9F7F0", borderRadius: 11, padding: 10 },
+  communityUpdatesCopy: { flex: 1, minWidth: 0 },
+  communityUpdatesItemTitle: { color: "#173D32", fontWeight: "800", fontSize: 13 },
+  communityUpdatesItemMessage: { color: "#4F6E5C", fontSize: 12, lineHeight: 17, marginTop: 3 },
+  communityUpdatesAudience: { color: "#087D60", fontSize: 11, fontWeight: "700", marginTop: 4 },
+
   journeyBar: {
     backgroundColor: "#F5FAF7", borderBottomWidth: 1, borderTopWidth: 1,
     borderColor: "#DDEAE2", paddingHorizontal: 15, paddingVertical: 13,
