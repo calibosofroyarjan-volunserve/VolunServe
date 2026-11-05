@@ -1,0 +1,100 @@
+name: Guarded System Updates Rules-Only Release (Manual)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type DEPLOY_SYSTEM_UPDATES_RULES_ONLY to allow a production rules release"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PROJECT_ID: volunserve-3aa5b
+      REVIEWED_FEATURE_SHA: a18d39fdadac9cc0f88a39fe12ba4304d5a23f07
+      EXPECTED_LIVE_SHA: 905c0442b43a683bffe5b740ea061994cd94e8f2
+      EXPECTED_ACTIVE_RULESET: projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec
+    steps:
+      - name: Require explicit confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          test "$CONFIRMATION" = "DEPLOY_SYSTEM_UPDATES_RULES_ONLY" || {
+            echo "::error::Explicit production authorization missing"
+            exit 1
+          }
+      - name: Checkout exact reviewed announcement candidate (never stale main app)
+        uses: actions/checkout@v4
+        with:
+          ref: a18d39fdadac9cc0f88a39fe12ba4304d5a23f07
+          persist-credentials: false
+      - name: Check exact feature content and Firebase target
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVIEWED_FEATURE_SHA"
+          node <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          assert.equal(JSON.parse(fs.readFileSync('.firebaserc','utf8')).projects.default,process.env.PROJECT_ID);
+          assert.equal(JSON.parse(fs.readFileSync('firebase.json','utf8')).firestore.rules,'firestore.rules');
+          assert.ok(fs.existsSync('scripts/prepare-system-updates-live-rules.py'));
+          assert.ok(fs.existsSync('scripts/test-system-updates-firebase-roles.cjs'));
+          console.log('PASS exact tested source and Firestore-only scope');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Prepare candidate by surgically patching ACTUAL ACTIVE Rules (no deploy)
+        run: python3 scripts/prepare-system-updates-live-rules.py
+      - name: Test proposed Super Admin and Barangay permissions
+        run: REVIEWED_RULES_FILE=firestore.rules npx firebase-tools emulators:exec --only firestore --project demo-volunserve 'node scripts/test-system-updates-firebase-roles.cjs'
+      - name: Recheck production Hosting and active Rules immediately before deployment
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          def get(url,headers=None):
+              with urllib.request.urlopen(urllib.request.Request(url,headers=headers or {}),timeout=30) as response:
+                  return json.load(response)
+          live=get('https://volunserve.com/volunserve-release.json?verify_system_updates_rules=20261105',{'Cache-Control':'no-cache'})
+          if live.get('revision')!=os.environ['EXPECTED_LIVE_SHA']:
+              raise SystemExit('STOP: Hosting source has changed; this candidate may be stale')
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          release=get('https://firebaserules.googleapis.com/v1/projects/'+os.environ['PROJECT_ID']+'/releases/cloud.firestore',{'Authorization':'Bearer '+token})
+          if release.get('rulesetName')!=os.environ['EXPECTED_ACTIVE_RULESET']:
+              raise SystemExit('STOP: published Firestore rules changed; no overwrite')
+          manifest=get('file://'+os.path.abspath(os.path.join(os.environ['RUNNER_TEMP'],'system-update-rules-manifest.json')))
+          if manifest['oldRuleset']!=release['rulesetName']:
+              raise SystemExit('STOP: rule manifest drift')
+          print('PASS unchanged live Hosting and active Firestore rules')
+          PY
+      - name: Publish ONLY Firestore Rules (never Hosting, Auth, indexes, Functions or Storage)
+        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+      - name: Record resulting active Ruleset
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=30) as r:
+              print('Firestore Rules release: '+json.load(r).get('rulesetName','unknown'))
+          print('NOTE: Test authenticated Super Admin System Updates publish and LGU barangay isolation manually.')
+          PY
