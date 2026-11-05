@@ -1,0 +1,75 @@
+name: Compile and Emulator-Test Compact LGU Approval Rules (Never Live)
+on:
+  push:
+    branches: [fix/lgu-rules-compiled-size-20261105]
+    paths:
+      - .github/workflows/compile-compact-lgu-rules-20261105.yml
+      - scripts/prepare-surgical-lgu-rules.cjs
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      LIVE_RULES_SHA: '67fb37a13603b172c9a9c8bea6037fb75243907dd8a98bd18d90466681816db0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Download exact current Firestore Rules, no writes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,subprocess,hashlib,os
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+t})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          rules=get(release['rulesetName'])
+          raw=max((x['content'] for x in rules['source']['files']),key=len)
+          if hashlib.sha256(raw.encode()).hexdigest()!=os.environ['LIVE_RULES_SHA']:
+            raise SystemExit('BLOCKED: deployed Firestore policy changed')
+          open('/tmp/volunserve-lgu-original.rules','w').write(raw)
+          print('PASS unchanged live Firestore source captured')
+          PY
+          node scripts/prepare-surgical-lgu-rules.cjs /tmp/volunserve-lgu-original.rules /tmp/volunserve-lgu-candidate.rules
+      - name: Test exact candidate in Firestore emulator
+        run: |
+          npm ci --no-audit --no-fund
+          cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-lgu-admin-rules.cjs"
+      - name: Check compiled Ruleset size with Firebase validation; do not activate any release
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error,subprocess
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          candidate=open('/tmp/volunserve-lgu-candidate.rules').read()
+          req=urllib.request.Request(
+            'https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets',
+            data=json.dumps({'source':{'files':[{'name':'firestore.rules','content':candidate}]}}).encode(),
+            headers={'Authorization':'Bearer '+t,'Content-Type':'application/json'},
+            method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=35) as r: result=json.load(r)
+          except urllib.error.HTTPError as e:
+            print('COMPILE_FAILED:',e.read().decode()[:1400])
+            raise
+          print('PASS compiled Ruleset within Firebase size quota:',result['name'])
+          print('NO CHANGE to live cloud.firestore release pointer, Storage, Hosting or user data')
+          PY
