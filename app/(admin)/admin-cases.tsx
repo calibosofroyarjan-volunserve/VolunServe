@@ -990,7 +990,7 @@ export default function AdminCases() {
             location: data.location || "",
             latitude: data.latitude === null || data.latitude === undefined || data.latitude === "" ? null : Number(data.latitude),
             longitude: data.longitude === null || data.longitude === undefined || data.longitude === "" ? null : Number(data.longitude),
-            locationSource: data.locationSource === "device_gps" || data.locationSource === "manual_map" ? data.locationSource : "unknown",
+            locationSource: data.verification?.locationSource === "device_gps" || data.verification?.locationSource === "manual_map" ? data.verification.locationSource : "unknown",
             gpsAccuracyMeters: Number.isFinite(data.gpsAccuracyMeters) ? data.gpsAccuracyMeters : null,
             details: data.details || "",
 
