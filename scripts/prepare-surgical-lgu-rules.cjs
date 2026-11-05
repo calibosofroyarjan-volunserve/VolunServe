@@ -103,8 +103,18 @@ const restrictedAdminApplicant=`      allow update: if isAdmin()
         && resource.data.role == 'applicant'
         && !('lguOffice' in resource.data)
         && request.resource.data`;
-onlyOnce(target,existingAdminApplicant,"live unrelated operational Admin applicant transition");
-target=target.replace(existingAdminApplicant,restrictedAdminApplicant);
+// Some earlier live Firestore releases predate the LGU STAFF applicant path entirely.
+// The old release has no such operational Admin applicant transition to restrict;
+// in that case the separate Super Admin-only approval/rejection rules below suffice.
+// Emulator tests MUST still prove LGU Admin cannot access this path.
+const adminApplicantCount=target.split(existingAdminApplicant).length-1;
+assert(adminApplicantCount<=1,"Unexpected duplicate Admin applicant transition");
+if(adminApplicantCount===1){
+ target=target.replace(existingAdminApplicant,restrictedAdminApplicant);
+ console.log("Restricted legacy LGU Admin applicant transitions for staff only");
+} else {
+ console.log("PASS live LGU Admin rules have no applicant-update clause to change");
+}
 // 5) Extract the audited private review-record validation block. Never store ID files here.
 const reviewMatch=slice(hardened,
 "    // Private human-verified LGU credentials: reference only, never ID scans.",
