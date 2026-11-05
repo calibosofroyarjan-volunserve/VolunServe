@@ -66,7 +66,7 @@ jobs:
         run: |
           npm ci --prefix functions --no-audit --no-fund
           cd functions
-          ESLINT_USE_FLAT_CONFIG=false npx eslint --config .eslintrc.js announcementNotifications.js announcementAudience.js
+          ESLINT_USE_FLAT_CONFIG=false npx eslint --config .eslintrc.js --parser-options '{"ecmaVersion":2022}' announcementNotifications.js announcementAudience.js
       - name: Firestore permissions for published announcements (emulator only)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcements-firestore.cjs"
       - name: Verify complete live TypeScript project
