@@ -16,11 +16,16 @@ for(const token of [
   'title="Announcements"','eyebrow="LGU WORKSPACE / ANNOUNCEMENTS"',
   "Complete My Official Barangay","SJDM_BARANGAYS.includes(initialBarangay)",
   "await updateDoc(doc(db, \"users\", user.uid)","barangayDeclaredBy: user.uid",
-  "barangayDeclaredAt: serverTimestamp()","publishBarangay !== barangay",
-  'accessibilityLabel="Choose authorized announcement barangay"',
+  "barangayDeclaredAt: serverTimestamp()","const publishBarangay = barangay;",
   "audience: publishBarangay","cleanMessage.length < 10",
   "disabled={submitting || !barangay || !activeApprovedAdmin}"
 ]){
   assert(announcement.includes(token),"Missing announcement safety/UX token: "+token);
 }
+for(const disallowed of ["ANNOUNCEMENT AREA", "Choose authorized announcement barangay", "Publish to assigned barangay", "barangayOpen", "chosenBarangay", "Admin Announcement Scope"]) {
+  assert(!announcement.includes(disallowed), "Redundant selector or scope block visible: " + disallowed);
+}
+assert(announcement.includes('if (!publishBarangay)') && announcement.includes("const publishBarangay = barangay;") &&
+  announcement.includes('audience: publishBarangay'),
+  "Publishing must resolve ONLY the authenticated LGU Admin's saved area; never a per-post choice.");
 console.log("PASS: clean standalone Announcements, no Disputes entry, protected one-time LGU area and scoped publishing.");
