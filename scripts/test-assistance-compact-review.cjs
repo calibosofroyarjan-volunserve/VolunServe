@@ -84,10 +84,10 @@ for (const token of [
   'profile.status === "approved"',
   'label="Summary"',
   'label="Verify & Decide"',
-  'label="Resident A–Z"',
-  'label="Resident Z–A"',
-  'label="Request A–Z"',
-  'label="Request Z–A"',
+  'label: "Resident A–Z"',
+  'label: "Resident Z–A"',
+  'label: "Request A–Z"',
+  'label: "Request Z–A"',
 ]) assert(screen.includes(token), "Missing Assistance UI/security integration: " + token);
 
 console.log("PASS Assistance queue A-Z/Z-A, category/status/search filters, completed grouping, 5-per-page pagination, and secured review action wiring");
