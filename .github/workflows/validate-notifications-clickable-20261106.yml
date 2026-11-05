@@ -43,6 +43,7 @@ jobs:
             'app/(tabs)/notifications.tsx',
             'scripts/test-notification-clickthrough-polish-20261106.cjs',
             'scripts/test-notifications-private-emulator-20261106.cjs',
+            'scripts/prepare-notification-read-only-rules-20261106.py',
             '.github/workflows/validate-notifications-clickable-20261106.yml',
             '.github/workflows/release-notifications-clickable-20261106.yml'
           ]);
@@ -81,28 +82,18 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: volunserve-3aa5b
       - uses: google-github-actions/setup-gcloud@v3
-      - name: Read ONLY active published Cloud Firestore rules and verify SHA
+      - name: Build candidate ONLY from exact active Cloud Rules (never deploy)
         run: |
-          python3 - <<'PY'
-          import json,hashlib,subprocess,os,urllib.request
-          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
-          def get(path):
-            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
-            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
-          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
-          if release.get('rulesetName')!=os.environ['EXPECTED_RULESET']:raise SystemExit('STOP active rules changed')
-          files=get(release['rulesetName']).get('source',{}).get('files',[])
-          candidates=[f for f in files if f.get('name','').endswith('firestore.rules')]
-          if not candidates and len(files)==1:candidates=files
-          if len(candidates)!=1:raise SystemExit('STOP ambiguous current Rules source')
-          source=candidates[0]['content']
-          if hashlib.sha256(source.encode('utf8')).hexdigest()!=os.environ['EXPECTED_RULES_SHA']:
-            raise SystemExit('STOP live Rules source fingerprint mismatch')
-          with open('live-notifications.rules','w',encoding='utf8') as f:f.write(source)
-          print('PASS exact active Ruleset and source; no production writes')
-          PY
+          python3 scripts/prepare-notification-read-only-rules-20261106.py
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const d=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/notification-rules-manifest.json','utf8'));
+          assert.equal(d.originalRuleset,process.env.EXPECTED_RULESET);
+          assert.equal(d.originalSha,process.env.EXPECTED_RULES_SHA);
+          console.log('PASS immutable live-derived Rules candidate created for emulator only');
+          NODE
       - name: Emulator-only notification ownership, private query and mark-read test
-        run: LIVE_NOTIFICATION_RULES_FILE=live-notifications.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
+        run: LIVE_NOTIFICATION_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
       - name: Fresh web build with exact SHA, NO DEPLOY
         run: |
           rm -rf dist .expo
@@ -116,4 +107,4 @@ jobs:
           NODE
       - name: Read-only completion marker
         run: |
-          echo 'Validated UI and real Firestore permissions in emulator. NO production Hosting/Rules/Auth/Functions/Storage/User changes.'
+          echo 'Validated notification clickthrough and the corrected live-derived read-only-content Rules in emulator. No production Hosting/Rules/Auth/Data changes.'
