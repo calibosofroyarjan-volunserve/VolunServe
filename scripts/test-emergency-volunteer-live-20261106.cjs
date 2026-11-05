@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
 const read = path => fs.readFileSync(path, "utf8");
-const baseline = "e2f5017ed849869139010ba4d434a66daa447344";
+const baseline = "2b596300a2c4e0c12793bae106017d372b69abdd";
 const allowed = new Set([
   "app/(admin)/_layout.tsx",
   "app/(admin)/admin-cases.tsx",
@@ -18,6 +18,7 @@ const allowed = new Set([
   "components/tabs/MapTracking.native.tsx",
   "components/tabs/MapTracking.web.tsx",
   "components/tabs/ResponseFlow.web.tsx",
+  "components/volunteer/VolunteerInvitationInbox.tsx",
   "lib/emergencyTaskStatus.ts",
   "scripts/test-emergency-volunteer-live-20261106.cjs",
   ".github/workflows/validate-emergency-volunteer-live-20261106.yml",
@@ -125,4 +126,51 @@ test("Admin may assign any approved Volunteer throughout SJDM regardless of bara
     "Roster must clearly show citywide participation instead of Volunteer barangay");
   assert.ok(src.includes("INCIDENT BARANGAY"),
     "Keep the incident's own location for mapping and records");
+});
+
+test("New Emergency Tasks contains photo-rich assigned cards and inline earlier invitations", () => {
+  const admin = read("app/(admin)/admin-cases.tsx");
+  const web = read("app/(tabs)/volunteer.web.tsx");
+  const native = read("app/(tabs)/volunteer.tsx");
+  const legacy = read("components/volunteer/VolunteerInvitationInbox.tsx");
+
+  // A validated Admin action is sufficient to offer a task; Volunteer accepts
+  // or declines only after the actual assignment exists.
+  assert.ok(admin.includes("onPress={() => assignVolunteerToCase(incident, volunteer)}"));
+  assert.ok(admin.includes('"Assign Volunteer"'));
+  assert.ok(!admin.includes("inviteVolunteerToCase(incident, volunteer)"));
+  assert.ok(!admin.includes('currentInvite?.status === "accepted"'));
+  assert.ok(admin.includes('status: "offered"'));
+  assert.ok(admin.includes('type: "response_assignment"'));
+
+  for (const source of [web, native]) {
+    assert.ok(source.includes('onPendingCountChange={setLegacyPendingCount}'),
+      "Older invitations must contribute to New tab count");
+    assert.ok(source.includes('assignedCaseIds={caseIds}'),
+      "Hide earlier invitations when Admin already assigned the same case");
+    assert.ok(source.includes('visible={filter === "new" || filter === "all"}'),
+      "Earlier invitations must be rendered inside New/All only");
+    assert.ok(!source.includes("<VolunteerInvitationInbox />"),
+      "Never show the redundant standalone invitation panel");
+    assert.ok(source.includes('collection(db, "responseAssignments")'),
+      "Assigned tasks must remain connected to Firestore");
+    assert.ok(source.includes('"offered"'),
+      "New tasks must include actual Admin offers");
+  }
+  assert.ok(web.includes("<IncidentMedia incident={incident} />"),
+    "Desktop task cards must display incident image from case evidence");
+  assert.ok(native.includes("firstIncidentImage(") &&
+    native.includes("incident?.attachments"),
+    "Mobile tasks must display uploaded resident incident photos");
+  assert.ok(legacy.includes('collection(db, "volunteerInvitations")'),
+    "Existing pending invitations remain accessible, never deleted");
+  assert.ok(legacy.includes('status === "invited"') &&
+    legacy.includes('updateDoc(doc(db, "volunteerInvitations"'),
+    "Earlier requests remain actionable without changing Firestore rules");
+  assert.ok(legacy.includes("Photo available after assignment"),
+    "Do not fabricate a photo for legacy invitations without case access");
+  assert.ok(legacy.includes("!assigned.has(invitation.caseId)"),
+    "Avoid duplicate invitation/assignment cards for one incident");
+  assert.ok(!legacy.includes('doc(db, "disasterCases",'),
+    "Do not bypass assigned-Volunteer-only incident evidence access");
 });
