@@ -2155,16 +2155,25 @@ This still does not automatically create a Donation Campaign.`,
               {quickAction === "reject"
                 ? "Give a clear, evidence-based reason. The final rejection requires confirmation."
                 : "Specify the missing proof or information before sending the request."}
+              <Text style={styles.assistanceRequiredAsterisk}> *</Text>
             </Text>
             <TextInput
               value={quickAction === "reject" ? rejectionReason : adminNote}
               onChangeText={quickAction === "reject" ? setRejectionReason : setAdminNote}
               placeholder={quickAction === "reject" ? "Enter a rejection reason" : "What details or evidence are missing?"}
               placeholderTextColor="#94A3B8"
-              style={styles.textArea}
+              style={[styles.textArea, reasonAttempt === (quickAction === "reject" ? "reject" : "more_information") &&
+                validateAssistanceReason(quickAction === "reject" ? "reject" : "more_information", quickAction === "reject" ? rejectionReason : adminNote)
+                  ? styles.assistanceFieldInvalid : null]}
               multiline
               maxLength={1000}
             />
+            {reasonAttempt === (quickAction === "reject" ? "reject" : "more_information") && (
+              <ReviewValidationHint message={validateAssistanceReason(
+                quickAction === "reject" ? "reject" : "more_information",
+                quickAction === "reject" ? rejectionReason : adminNote,
+              )} />
+            )
             {!verificationReview && (
               <Text style={styles.assistanceWarning}>
                 Start Review first to create the protected record before submitting a decision.
@@ -2177,8 +2186,7 @@ This still does not automatically create a Donation Campaign.`,
                 icon={quickAction === "reject" ? "close-circle-outline" : "send-outline"}
                 variant={quickAction === "reject" ? "danger" : "primary"}
                 loading={savingAction === (quickAction === "reject" ? "reject" : "more_info")}
-                disabled={!verificationReview || !!savingAction ||
-                  (quickAction === "reject" ? rejectionReason.trim().length < 3 : adminNote.trim().length < 10)}
+                disabled={!verificationReview || !!savingAction}
                 onPress={quickAction === "reject" ? rejectRequest : requestMoreInformation}
               />
             </View>
