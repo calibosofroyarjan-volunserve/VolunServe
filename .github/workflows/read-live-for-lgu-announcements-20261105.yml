@@ -55,3 +55,5 @@ jobs:
 # Independent read-only check after guarded release 717ec8624a5e0f4b955e4a6fe66d6c68cceb5355.
 
 # Read-only post-release verification for UI-only picker removal SHA 32fcbfad3582922dd7988359d59b2e7e587fc442.
+
+# Independent read-only post-release check for 473e824f7b941fffcaea631d5f0d4beb5d83ac85: no Firestore writes.
