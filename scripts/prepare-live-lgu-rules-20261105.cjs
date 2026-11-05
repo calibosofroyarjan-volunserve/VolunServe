@@ -72,8 +72,8 @@ target=target.replace("      allow create: if isSuperAdmin()",createStaff+"     
 // its existing field/actor/updatedAt constraints. Admit a pending LGU STAFF
 // applicant ONLY with a fresh same-batch credential record; the original
 // approved-user branch is byte-identical and retains its exact semantics.
-const oldGrantCondition="            resource.data.status == 'approved'\\n            && request.resource.data.role == 'admin'";
-const newGrantCondition="            (resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))\\n            && request.resource.data.role == 'admin'";
+const oldGrantCondition="            resource.data.status == 'approved'\n            && request.resource.data.role == 'admin'";
+const newGrantCondition="            (resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))\n            && request.resource.data.role == 'admin'";
 onlyOnce(target,oldGrantCondition,"legacy Super Admin verified promotion branch");
 target=target.replace(oldGrantCondition,newGrantCondition);
 const reject=`      // New LGU STAFF workflow: Super Admin review may reject pending staff.
