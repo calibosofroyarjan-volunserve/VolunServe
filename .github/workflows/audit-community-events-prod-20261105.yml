@@ -25,16 +25,9 @@ jobs:
           }
           console.log('Correct production project credentials available.');
           NODE
-      - name: Authenticate to Firebase Rules REST API (read-only)
-        uses: google-github-actions/auth@v3
-        id: auth
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
       - name: Inspect active Firestore rules, compare with pre-fix and latest main; NO WRITES
         env:
-          FIREBASE_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
           GH_TOKEN: ${{ github.token }}
           OLD_SHA: '4bbf70939ac54c56ec1e07800dbde3a9a1c60799'
           NEW_SHA: '1432da781e54fe47fe8ed76f89520588bab78b1d'
@@ -45,16 +38,37 @@ jobs:
           const project='volunserve-3aa5b';
           const repo=process.env.GITHUB_REPOSITORY;
           const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+          const getServiceAccountToken=async()=>{
+            const sa=JSON.parse(process.env.FIREBASE_SA);
+            if(sa.project_id!==project||sa.type!=='service_account')throw Error('Incorrect Firebase account');
+            const encode=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
+            const now=Math.floor(Date.now()/1000);
+            const unsigned=encode({alg:'RS256',typ:'JWT'})+'.'+encode({
+              iss:sa.client_email,scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3000
+            });
+            const sig=crypto.sign('RSA-SHA256',Buffer.from(unsigned),sa.private_key).toString('base64url');
+            const response=await fetch('https://oauth2.googleapis.com/token',{
+              method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:unsigned+'.'+sig}),
+              signal:AbortSignal.timeout(20000)
+            });
+            if(!response.ok)throw Error('OAuth service-account exchange failed HTTP '+response.status);
+            const result=await response.json();
+            if(!result.access_token)throw Error('Missing OAuth token');
+            return result.access_token;
+          };
           const request=async(url,token)=>{
             const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(20000)});
             if(!r.ok)throw Error('Read-only request '+new URL(url).pathname+' failed HTTP '+r.status);
             return r.json();
           };
           (async()=>{
-            const rel=await request('https://firebaserules.googleapis.com/v1/projects/'+project+'/releases/cloud.firestore',process.env.FIREBASE_ACCESS_TOKEN);
+            const firebaseAccessToken=await getServiceAccountToken();
+            const rel=await request('https://firebaserules.googleapis.com/v1/projects/'+project+'/releases/cloud.firestore',firebaseAccessToken);
             console.log('Active Firestore release '+rel.name);
             console.log('Active Firestore ruleset '+rel.rulesetName);
-            const rule=await request('https://firebaserules.googleapis.com/v1/'+rel.rulesetName,process.env.FIREBASE_ACCESS_TOKEN);
+            const rule=await request('https://firebaserules.googleapis.com/v1/'+rel.rulesetName,firebaseAccessToken);
             const files=rule.source?.files||[];
             console.log('Active rules file count '+files.length+'; names: '+files.map(f=>f.name).join(', '));
             const current=files.length===1?files[0].content:files.find(f=>f.name==='firestore.rules')?.content;
