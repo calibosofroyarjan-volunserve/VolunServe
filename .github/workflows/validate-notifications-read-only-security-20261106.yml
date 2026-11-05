@@ -41,6 +41,7 @@ jobs:
           const allow=new Set([
             'scripts/test-notifications-private-emulator-20261106.cjs',
             'scripts/activate-notifications-locked-rules-20261106.py',
+            'scripts/prepare-notification-read-only-rules-20261106.py',
             '.github/workflows/validate-notifications-read-only-security-20261106.yml',
             '.github/workflows/release-notifications-read-only-security-20261106.yml'
           ]);
