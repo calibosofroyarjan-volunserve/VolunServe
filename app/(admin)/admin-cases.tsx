@@ -583,6 +583,7 @@ export default function AdminCases() {
   const [volunteerPage, setVolunteerPage] = useState(1);
   const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
   const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
+  const [fieldReportPage, setFieldReportPage] = useState(1);
   const [photoPage, setPhotoPage] = useState(1);
   const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -2200,7 +2201,7 @@ export default function AdminCases() {
       Alert.alert(
         action === "reviewed" ? "Field Report Reviewed" : "Field Report Dismissed",
         action === "reviewed"
-          ? "The report was reviewed. LGU may now incorporate verified remaining needs into the barangay assessment."
+          ? "The Volunteer field report was reviewed. Admin can now decide whether any additional action is needed."
           : "The report was dismissed and will not be used as an official barangay need assessment."
       );
     } catch (error) {
@@ -3613,6 +3614,25 @@ export default function AdminCases() {
             officialLguResponseStatus ===
             "completed_pending_admin_review";
           const volunteerSupportAvailable = activeAssignments.length === 0;
+          // Assignment updates stream from Firestore; no LGU responder is needed.
+          const liveVolunteerStatus = activeAssignments.some((assignment) => assignment.status === "on_site")
+            ? "VOLUNTEER ON SITE"
+            : activeAssignments.some((assignment) => assignment.status === "responding")
+              ? "VOLUNTEER RESPONDING"
+              : activeAssignments.some((assignment) => assignment.status === "accepted")
+                ? "ASSIGNMENT ACCEPTED"
+                : activeAssignments.some((assignment) => assignment.status === "offered")
+                  ? "WAITING FOR VOLUNTEER"
+                  : incidentAssignments.some((assignment) => assignment.status === "completed")
+                    ? "TASK COMPLETED"
+                    : incident.status === "validated"
+                      ? "READY TO ASSIGN"
+                      : "NO ACTIVE VOLUNTEER";
+          const volunteerProgressStatus = incident.status === "closed"
+            ? "CASE CLOSED"
+            : incident.status === "resolved"
+              ? "CASE RESOLVED"
+              : liveVolunteerStatus;
           const photoUrl = firstIncidentImage(incident.attachments);
           const note = notes[incident.id] ?? incident.adminNote ?? "";
 
@@ -4456,19 +4476,8 @@ export default function AdminCases() {
                       <Text style={styles.responseStatusDot}>●</Text>
                       <Text style={styles.responseStatusText}>
                         {lguFieldReviewPending
-                          ? "LGU REPORT PENDING REVIEW"
-                          : officialLguResponseStatus === "reviewed" &&
-                              incident.status === "in_progress"
-                            ? "READY FOR ADMIN DECISION"
-                            : incident.status === "validated"
-                              ? "READY FOR RESPONSE"
-                              : incident.status === "assigned"
-                                ? "SUPPORT REQUESTED"
-                                : incident.status === "in_progress"
-                                  ? "RESPONSE ACTIVE"
-                                  : incident.status === "resolved"
-                                    ? "RESOLVED"
-                                    : "CLOSED"}
+                          ? "LEGACY REPORT NEEDS REVIEW"
+                          : volunteerProgressStatus}
                       </Text>
                     </View>
                   </View>
@@ -4500,6 +4509,61 @@ export default function AdminCases() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {incidentFieldReports.length > 0 && (
+                    <View style={{ marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#D7E8E0", backgroundColor: "#F7FCF9" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 15, color: "#064E3B", marginBottom: 6 }}>
+                        Volunteer Completion Reports
+                      </Text>
+                      <Text style={{ color: "#47675C", fontSize: 12, marginBottom: 10 }}>
+                        Review the actual assistance submitted by assigned Volunteers. Task completion does not automatically close the case.
+                      </Text>
+                      <ListPagination
+                        page={Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))}
+                        total={incidentFieldReports.length}
+                        pageSize={5}
+                        onChange={setFieldReportPage}
+                      />
+                      {pageFive(incidentFieldReports, fieldReportPage).map((report) => {
+                        const submitted = String(report.reportStatus || "submitted") === "submitted";
+                        const reviewing = busyKey === `field_reviewed_${report.id}`;
+                        return (
+                          <View key={report.id} style={{ padding: 12, marginVertical: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E0EAE5" }}>
+                            <Text style={{ fontWeight: "800", color: "#143B30" }}>{report.volunteerName || "Assigned Volunteer"}</Text>
+                            <Text style={{ fontSize: 12, color: "#58746B", marginBottom: 6 }}>
+                              Status: {String(report.reportStatus || "Submitted").replace(/_/g, " ")}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              Situation: {report.situationSummary || "Not provided"}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              Assistance: {report.assistanceProvided || "Not provided"}
+                            </Text>
+                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
+                              People helped: {Number(report.peopleHelped) || 0}
+                            </Text>
+                            {!!report.remainingNeeds?.length && (
+                              <Text style={{ color: "#7B4B25", marginBottom: 6 }}>
+                                Remaining needs: {report.remainingNeeds.join(", ")}
+                              </Text>
+                            )}
+                            {submitted && (
+                              <TouchableOpacity
+                                accessibilityRole="button"
+                                disabled={reviewing}
+                                onPress={() => void reviewVolunteerFieldReport(report, "reviewed")}
+                                style={{ marginTop: 8, borderRadius: 8, backgroundColor: "#087A62", padding: 11, alignItems: "center" }}
+                              >
+                                <Text style={{ fontWeight: "800", color: "#FFFFFF" }}>
+                                  {reviewing ? "Reviewing…" : "Mark Report Reviewed"}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
 
                   {(lguFieldReportsLoading ||
                     (latestLguFieldReport && incident.activeLguResponderUid) ||
