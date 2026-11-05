@@ -112,10 +112,19 @@ def do_stage():
         gen.get("originalSha") != EXPECTED_OLD_HASH or
         gen.get("candidateSha") != sha(candidate)):
         raise RuntimeError("STOP candidate manifest mismatch: original/source hash or published ruleset differs")
-    start = original.find("match /notifications/{notificationId} {")
-    end = original.find("    match /", start + len("match /notifications/{notificationId} {"))
-    if start < 0 or end < 0 or candidate[:start] != original[:start] or not candidate.endswith(original[end:]):
-        raise RuntimeError("STOP candidate changed non-notification policies")
+    # Only two allowed transformations: exact auth-helper inlining with
+    # identical boolean meaning, and the scoped Notifications update condition.
+    eol = "\\r\\n" if "\\r\\n" in original else "\\n"
+    helper = ("    function signedIn() {\\n"
+              "      return request.auth != null;\\n"
+              "    }\\n").replace("\\n", eol)
+    if original.count(helper) != 1:
+        raise RuntimeError("STOP original auth helper differs from audited single-line boolean")
+    mechanically_equivalent = original.replace(helper, "", 1).replace("signedIn()", "(request.auth != null)")
+    start = mechanically_equivalent.find("match /notifications/{notificationId} {")
+    end = mechanically_equivalent.find("    match /", start + len("match /notifications/{notificationId} {"))
+    if start < 0 or end < 0 or candidate[:start] != mechanically_equivalent[:start] or not candidate.endswith(mechanically_equivalent[end:]):
+        raise RuntimeError("STOP candidate contains changes beyond notification policy and equivalent auth-helper inlining")
     if "A recipient can acknowledge a notification" not in candidate:
         raise RuntimeError("STOP notification read-only-content guard missing")
     if len(candidate.encode("utf8")) >= 262144:
