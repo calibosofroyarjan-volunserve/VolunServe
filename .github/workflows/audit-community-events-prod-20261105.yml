@@ -88,6 +88,12 @@ jobs:
             const pos=current.indexOf(marker);
             console.log('ACTIVE proposal rule present '+(pos>=0));
             if(pos>=0){
+              const readPos=current.indexOf('allow get, list:',pos);
+              console.log('ACTIVE proposal read excerpt '+(readPos>=0?JSON.stringify(current.slice(readPos,readPos+220)):'no list rule found'));
+              const exactOld="allow get, list: if isAdminOrSuperAdmin()\\n        || (isResident()\\n          && resource.data.proposedBy == request.auth.uid);";
+              console.log('ACTIVE exact known owner-rule occurrence '+current.split(exactOld).length);
+            }
+            if(pos>=0){
               const gate=current.slice(pos,pos+2600).match(/allow get, list:[\\s\\S]{0,300}?;/);
               console.log('ACTIVE proposal read condition '+(gate?gate[0].replace(/\\s+/g,' '):'not found'));
             }
