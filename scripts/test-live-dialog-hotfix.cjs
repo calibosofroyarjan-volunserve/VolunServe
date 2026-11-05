@@ -27,8 +27,9 @@ test("Resident account dropdown retains branded logout confirmation without side
 test("Actual Resident Home.web logout uses VolunServe modal rather than browser confirm",()=>{
  const home=read("components/home/Home.web.tsx");
  const routing=read("app/(tabs)/index.tsx");
- assert.match(routing,/import HomeWeb from "\.\.\/\.\.\/components\/home\/Home\.web"/);
- assert.match(routing,/Platform\.OS === "web" \? HomeWeb/);
+ // The web Home is now chosen by Metro's platform resolver, not eagerly imported.
+ assert.ok(routing.includes('export { default } from "../../components/home/Home";'));
+ assert.ok(read("components/home/Home.tsx").includes('export { default } from "./Home.native";'));
  assert.match(home,/import \{ AppAlert \} from "\.\.\/\.\.\/lib\/appDialog"/);
  assert.match(home,/await AppAlert\.confirm\("Log Out"/);
  assert.match(home,/if \(!confirmed\) return/);

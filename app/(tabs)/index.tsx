@@ -1,8 +1,3 @@
-import { Platform } from "react-native";
-
-import HomeNative from "../../components/home/Home.native";
-import HomeWeb from "../../components/home/Home.web";
-
-const HomeScreen = Platform.OS === "web" ? HomeWeb : HomeNative;
-
-export default HomeScreen;
+// Let Metro choose Home.web.tsx for browsers and Home.native.tsx for Android/iOS.
+// Importing both eagerly can pull web-only dependencies into a native APK.
+export { default } from "../../components/home/Home";
