@@ -568,7 +568,7 @@ export function useResponseFlow(
           const responderName = String(
             current.volunteerName ||
               nameOf(profile) ||
-              "Your assigned responder",
+              "Your assigned Volunteer",
           ).trim();
 
           const noticeByStatus: Record<
@@ -580,26 +580,26 @@ export function useResponseFlow(
           > = {
             accepted: {
               title:
-                "Responder accepted your request",
-              message: `${responderName} accepted the LGU response assignment for your emergency request.`,
+                "Volunteer accepted your task",
+              message: `${responderName} accepted the Admin-assigned community assistance task.`,
             },
 
             responding: {
               title:
-                "Responder is on the way",
-              message: `${responderName} is responding to your location and is now sharing a live responder location. Open Map Tracking to follow the response.`,
+                "Volunteer started the task",
+              message: `${responderName} started the assigned community task. GPS tracking appears only when location sharing is permitted and active.`,
             },
 
             on_site: {
               title:
-                "Responder arrived",
+                "Volunteer marked arrival",
               message: `${responderName} has arrived at your assistance location.`,
             },
 
             completed: {
               title:
                 "Please confirm the assistance received",
-              message: `${responderName} marked the mission complete and submitted a contribution summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.`,
+              message: `${responderName} submitted a task completion summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.`,
             },
           };
 
@@ -2056,7 +2056,7 @@ export function ResponsePanel({
       <p>
         {flow.admin
           ? "Monitor assigned responders and their live shared positions here. Validate cases and assign volunteers from Disaster Cases to keep one clear LGU workflow."
-          : "Open an accepted assignment from Volunteer Tasks, then choose Respond & Share GPS. During an active response, your assigned resident and authorized administrators can see your shared responder position."}
+          : "Open an accepted assignment from Volunteer Tasks, then choose Respond & Share GPS. During an active task, your assigned resident and Admin can see your shared responder position."}
       </p>
 
       {flow.error && (

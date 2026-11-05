@@ -792,7 +792,7 @@ export default function WebDisasterReport() {
 
     if (photoFiles.length === 0) {
       setError(
-        "At least one incident photo is required so Admin can verify the request before dispatch."
+        "At least one incident photo is required so Admin can verify the request before Volunteer assignment."
       );
       return;
     }
@@ -1190,7 +1190,7 @@ export default function WebDisasterReport() {
             <span className="eyebrow">VOLUNSERVE · EMERGENCY RESPONSE</span>
             <h1>Report an Emergency</h1>
             <strong className="emergency-hero-tagline">Report clearly. Respond together.</strong>
-            <p>Share incident details, the exact location, and supporting evidence for coordinated LGU response.</p>
+            <p>Submit a photo, description, and GPS location for Admin review and community Volunteer coordination. For immediate danger, call 911.</p>
           </div>
         </div>
         <div className="emergency-review-card">
@@ -1203,8 +1203,8 @@ export default function WebDisasterReport() {
             </svg>
           </span>
           <span className="emergency-review-copy">
-            <strong>LGU response verification</strong>
-            <span>Reports are reviewed for urgency, location and evidence before responder coordination.</span>
+            <strong>Admin report review</strong>
+            <span>Admin checks the report, location, and evidence before assigning an approved Volunteer.</span>
           </span>
         </div>
       </header>
@@ -1235,7 +1235,7 @@ export default function WebDisasterReport() {
           <div>
             <h2>Emergency report received</h2>
             <p>
-              The LGU can now review your severity, exact location, and evidence.
+              Admin can now review the incident details, saved GPS location, and evidence.
               Keep the same case for updates and live tracking instead of submitting
               a duplicate report.
             </p>
@@ -1329,7 +1329,7 @@ export default function WebDisasterReport() {
                       </label>
                     </div>
                     <small className="field-hint">
-                      The LGU verifies the final operational priority.
+                      Admin reviews the report and confirms its priority.
                     </small>
                   </div>
                 </div>
@@ -1365,7 +1365,7 @@ export default function WebDisasterReport() {
                 </h2>
                 <p className="section-copy">
                   Use GPS or select the exact incident point. Exact coordinates stay
-                  private to the LGU and the authorized responder for this case.
+                  private to Admin and the assigned Volunteer.
                 </p>
 
                 <button

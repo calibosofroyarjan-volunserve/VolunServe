@@ -2265,7 +2265,7 @@ export default function DisasterResponse() {
         </TouchableOpacity>
 
         <Text style={styles.submitNote}>
-          Critical reports may be escalated to official LGU response while verification continues. Volunteer dispatch remains subject to Admin coordination.
+          For immediate danger, call 911. Admin coordinates approved community Volunteers after checking the incident details.
         </Text>
 
         <View style={{ height: 36 }} />

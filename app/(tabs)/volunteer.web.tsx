@@ -804,7 +804,7 @@ export default function VolunteerTasksWeb() {
             </View>
           </View>
           <Text style={styles.mobileTaskDescription}>
-            Optional volunteer support assignments coordinated by LGU/Admin.
+            Community assistance tasks assigned by Admin. This is not official emergency dispatch.
           </Text>
           <TouchableOpacity
             style={styles.mobileTaskMapButton}
@@ -830,7 +830,7 @@ export default function VolunteerTasksWeb() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.title}>Emergency Tasks</Text>
                 <Text style={styles.subtitle}>
-                  Optional Volunteer support assignments coordinated by LGU/Admin.
+                  Community assistance tasks assigned by Admin. This is not official emergency dispatch.
                 </Text>
               </View>
             </View>
@@ -1130,7 +1130,7 @@ export default function VolunteerTasksWeb() {
                       <Text style={styles.completeButtonText}>
                         {completionId === assignment.id
                           ? "Hide Field Report"
-                          : "Complete & Report to LGU"}
+                          : "Complete Task & Submit Update"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1152,7 +1152,7 @@ export default function VolunteerTasksWeb() {
                     <View style={styles.completedBox}>
                       <Ionicons name="checkmark-circle" size={20} color="#16845b" />
                       <Text style={styles.completedBoxText}>
-                        Field report submitted to LGU/Admin
+                        Task update submitted to Admin
                       </Text>
                     </View>
                   )}
@@ -1171,7 +1171,7 @@ export default function VolunteerTasksWeb() {
                   <View style={styles.completionHeader}>
                     <View>
                       <Text style={styles.completionEyebrow}>
-                        LGU FIELD REPORT
+                        VOLUNTEER TASK UPDATE
                       </Text>
                       <Text style={styles.completionTitle}>
                         Complete your support assignment and report the situation
@@ -1322,7 +1322,7 @@ export default function VolunteerTasksWeb() {
                   />
 
                   <Text style={styles.completionLabel}>
-                    Does LGU/Admin still need to follow up?
+                    Does Admin need to follow up?
                   </Text>
                   <View style={styles.followUpRow}>
                     <TouchableOpacity

@@ -1080,7 +1080,7 @@ export default function VolunteerTasks() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Optional Volunteer support assignments coordinated by LGU/Admin.
+            Community assistance tasks assigned by Admin. This is not official emergency dispatch.
           </Text>
         </View>
       </View>
@@ -1595,7 +1595,7 @@ export default function VolunteerTasks() {
                         {completionId ===
                         assignment.id
                           ? "Hide Field Report"
-                          : "Complete & Report to LGU"}
+                          : "Complete Task & Submit Update"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1647,7 +1647,7 @@ export default function VolunteerTasks() {
                           styles.completedText
                         }
                       >
-                        Field report submitted to LGU/Admin
+                        Task update submitted to Admin
                       </Text>
                     </View>
                   )}
@@ -1914,7 +1914,7 @@ export default function VolunteerTasks() {
                             styles.inputLabel
                           }
                         >
-                          Does LGU/Admin still need to follow up?
+                          Does Admin need to follow up?
                         </Text>
 
                         <View
