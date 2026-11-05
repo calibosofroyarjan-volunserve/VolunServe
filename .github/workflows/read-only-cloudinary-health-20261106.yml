@@ -1,0 +1,39 @@
+name: Check existing Render Cloudinary readiness (READ ONLY)
+on:
+  push:
+    branches: [audit/cloudinary-health-private-lgu-20261106]
+    paths: [.github/workflows/read-only-cloudinary-health-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Probe public health endpoint and report ONLY non-secret flags
+        env:
+          BASE: https://volunserve.onrender.com
+        run: |
+          node <<'NODE'
+          (async()=>{
+            for(let attempt=1;attempt<=4;attempt++){
+              try{
+                const r=await fetch(process.env.BASE+'/health',{signal:AbortSignal.timeout(60000),headers:{'Accept':'application/json'}});
+                if(!r.ok)throw Error('HTTP '+r.status);
+                const obj=await r.json();
+                if(obj.service!=='volunserve-backend')throw Error('Unexpected Render application');
+                console.log('RENDER_HEALTH_HTTP',r.status);
+                console.log('RENDER_SERVICE',obj.service);
+                console.log('CLOUDINARY_CREDENTIALS_FLAG',obj.assistanceEvidenceStorage==='secure_cloudinary_configured'?'CONFIGURED':obj.assistanceEvidenceStorage==='secure_cloudinary_not_configured'?'NOT_CONFIGURED':'UNKNOWN');
+                console.log('PRIVATE_EVIDENCE_VIEWER_FLAG',obj.assistanceEvidenceViewer==='time_limited_private_download_v1'?'SUPPORTED':'UNKNOWN');
+                console.log('READ_ONLY_ONLY no files/uploads/secrets/Auth/Hosting/Firestore/Storage/Cloudinary data changed');
+                return;
+              }catch(err){
+                console.log('HEALTH_ATTEMPT',attempt,String(err.message||err).slice(0,100));
+                if(attempt<4)await new Promise(r=>setTimeout(r,8000));
+              }
+            }
+            process.exitCode=1;
+          })();
+          NODE
