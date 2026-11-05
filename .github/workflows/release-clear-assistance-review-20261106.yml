@@ -251,3 +251,5 @@ jobs:
 # Explicit one-shot release of validated Assistance Requests from exact latest live; do not repeat this commit.
 
 # One-shot deployment requested: simplify Verify & Decide while preserving every other live VolunServe module.
+
+# One-shot release of plain-language decision-only Assistance review after passing CI.
