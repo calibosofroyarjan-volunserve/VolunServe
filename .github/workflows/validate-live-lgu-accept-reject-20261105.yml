@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
+      - scripts/scope-superadmin-helper.cjs
       - scripts/test-surgical-lgu-review-live.cjs
       - scripts/test-superadmin-lgu-approval-rejection.cjs
 permissions:
