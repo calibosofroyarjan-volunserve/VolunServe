@@ -1,0 +1,109 @@
+name: Read-only Audit: Live Notification Click Routes and Read State
+on:
+  push:
+    branches: [audit/notifications-live-click-read-20261106]
+    paths: [".github/workflows/audit-notifications-click-read-20261106.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      LIVE_BASE: "12f840178b6fce3ff642ef33f036e2f8ed4d37cf"
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Ensure audit branch has no live application changes
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const expected=[
+            'scripts/audit-notifications-current-live-emulator-20261106.cjs',
+            '.github/workflows/audit-notifications-click-read-20261106.yml'
+          ];
+          assert.deepEqual(paths.sort(),expected.sort(),'STOP audit altered application/production files');
+          console.log('PASS: source matches LIVE; no application files, login, signup, Super Admin, Rules or database changes');
+          NODE
+      - name: Check live revision and existing destination URLs without login
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            const bases=['https://volunserve.com','https://volunserve-3aa5b.web.app'];
+            for(const domain of bases){
+              const r=await fetch(domain+'/volunserve-release.json?notification_audit='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('Live marker inaccessible: '+domain);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP: NEW live Hosting revision '+j.revision);
+              console.log('PASS live Hosting SHA '+domain+' '+j.revision);
+            }
+            // Public HTTP route existence only. These checks cannot prove authenticated navigation.
+            const paths=[
+              '/notifications','/announcements','/my-cases','/community-events',
+              '/donation','/donation-history','/disaster-response','/volunteer',
+              '/volunteer-impact','/certificate','/profile','/login','/signup'
+            ];
+            for(const path of paths){
+              const res=await fetch(bases[0]+path,{signal:AbortSignal.timeout(25000)});
+              if(res.status!==200)throw Error('STOP route '+path+' returned '+res.status);
+              console.log('PASS reachable route '+path);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Locked dependency install
+        run: npm ci --no-audit --no-fund
+      - name: Actual live code action mapping and compilation
+        run: |
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+          npx tsc --noEmit --pretty false
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Fetch exact CURRENT published Firestore Rules READ ONLY
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            r=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(r,timeout=30) as response:return json.load(response)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          expected='projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164'
+          if release.get('rulesetName')!=expected:raise SystemExit('STOP published Rules changed; audit needs new baseline')
+          files=get(expected).get('source',{}).get('files',[])
+          matches=[f for f in files if f.get('name','').endswith('firestore.rules')]
+          if not matches and len(files)==1:matches=files
+          if len(matches)!=1:raise SystemExit('STOP Firestore Rules source ambiguous')
+          source=matches[0]['content']
+          sha=hashlib.sha256(source.encode('utf8')).hexdigest()
+          if sha!='f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d':
+            raise SystemExit('STOP current live Firestore Rules hash differs')
+          with open('audit-current-live-firestore.rules','w',encoding='utf8') as out:out.write(source)
+          print('PASS exact live Firestore Rules fetched READ ONLY '+expected)
+          PY
+      - name: Verify real active Rules in emulator ONLY, no production writes
+        env:
+          ACTIVE_RULES_FILE: audit-current-live-firestore.rules
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/audit-notifications-current-live-emulator-20261106.cjs'
+      - name: Final no-change verification
+        run: |
+          echo 'READ ONLY production. No Hosting deploy, Firestore Rules release, Cloud Functions, Auth or database changes.'
