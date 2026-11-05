@@ -178,9 +178,13 @@ export default function AdminAccounts() {
     setActionError,
   ] = useState("");
   const [rejectReason, setRejectReason] = useState("");
-  const [proofReady, setProofReady] = useState<{ uid: string; complete: boolean } | null>(null);
+  // Keep each LGU applicant's verification result separate. A second card
+  // loading must never replace the selected applicant's credential status.
+  const [proofReadyByUid, setProofReadyByUid] = useState<Record<string, boolean>>({});
   const onProofReady = React.useCallback((uid: string, complete: boolean) => {
-    setProofReady({ uid, complete });
+    setProofReadyByUid(current =>
+      current[uid] === complete ? current : { ...current, [uid]: complete }
+    );
   }, []);
 
   // LGU staff authorization requires an independent human credential check.
@@ -210,7 +214,7 @@ export default function AdminAccounts() {
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
     credentialsConfirmed && identityMatched && lguEmploymentConfirmed &&
-    proofReady?.uid === actionTarget?.id && proofReady.complete;
+    !!actionTarget?.id && proofReadyByUid[actionTarget.id] === true;
 
   React.useEffect(() => {
     if (sessionLoading) {
