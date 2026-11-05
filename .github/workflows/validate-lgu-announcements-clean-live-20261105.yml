@@ -111,3 +111,5 @@ jobs:
           NODE
       - name: No production writes
         run: echo 'VALIDATION ONLY. No Firestore Rules, Hosting, Auth, Super Admin, Login, Signup or production data updates.'
+
+# Refreshed to include latest navigation contract aligned with current live scope.
