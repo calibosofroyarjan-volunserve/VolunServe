@@ -159,7 +159,7 @@ export default function WebLogin() {
 
       // Staff access must remain password-only, regardless of approval status.
       if (profile.role === "admin" || profile.role === "superadmin") {
-        throw new Error("This Google account belongs to an Admin or Super Admin. Use your VolunServe email and password to sign in.");
+        throw new Error("Staff accounts must use email and password. This Google account belongs to an Admin or Super Admin; use the sign-in fields above.");
       }
       if (!isApprovedProfile(profile)) {
         if (profile.status === "rejected") {
