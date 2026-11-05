@@ -63,7 +63,7 @@ assert.deepEqual(ids(records), before, "Filters must not mutate live snapshot or
 const firstPage = run({ sort: "resident_az" }).slice(0, 5);
 const secondPage = run({ sort: "resident_az" }).slice(5, 10);
 assert.deepEqual(ids(firstPage), ["1", "2", "4", "5", "6"]);
-assert.deepEqual(ids(secondPage), ["7", "8"]);
+assert.deepEqual(ids(secondPage), ["7", "8", "3"]);
 
 // Source-level integration gates: these validate wiring and role/privacy conditions
 // without making any production request or modifying real resident records.
