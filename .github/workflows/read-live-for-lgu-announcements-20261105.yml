@@ -51,3 +51,5 @@ jobs:
           PY
       - name: Confirm READ ONLY no deployment
         run: echo 'No Hosting, Firestore, auth, user data or source changes performed.'
+
+# Independent read-only check after guarded release 717ec8624a5e0f4b955e4a6fe66d6c68cceb5355.
