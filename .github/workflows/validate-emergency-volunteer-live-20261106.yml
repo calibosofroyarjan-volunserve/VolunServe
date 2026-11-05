@@ -1,0 +1,35 @@
+name: Validate Live-Based Emergency Volunteer Coordination (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/emergency-volunteer-from-live-20261106
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Production baseline and Volunteer Emergency regression checks
+        run: |
+          node --test scripts/test-emergency-volunteer-live-20261106.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-isolated-emergency-volunteer-release.cjs
+      - name: Compile TypeScript and Expo for web
+        run: |
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Validate exported paths (read only, no deploy)
+        run: |
+          node -e "const fs=require('fs'); const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8')); if(marker.revision!==process.env.GITHUB_SHA)process.exit(1); console.log('PASS',marker.revision);"
