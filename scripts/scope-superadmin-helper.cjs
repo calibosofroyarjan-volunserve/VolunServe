@@ -18,9 +18,8 @@ const [sourcePath, outputPath] = process.argv.slice(2);
 if (!sourcePath || !outputPath) throw Error("Usage: scope-superadmin-helper.cjs <candidate.rules> <scoped.rules>");
 const original = fs.readFileSync(sourcePath, "utf8");
 const sha = x => crypto.createHash("sha256").update(x).digest("hex");
-const nl = original.includes("\r\n") ? "\r\n" : "\n";
-assert.ok(!original.includes("\r\n") || !original.replaceAll("\r\n","").includes("\n"),
-  "Mixed newline style; fail closed.");
+// Preserve mixed original line endings byte-for-byte; only new helper copies use LF.
+const nl = "\n";
 const rootDefinition = /(^[ \t]*function isSuperAdmin\(\) \{(?:\r?\n(?!(?:[ \t]*function|[ \t]*match)\b)[^\r\n]*)*\r?\n[ \t]*\}\r?\n)/m;
 // More reliable: isolate the exact root helper between its header and next known
 // root helper comment, using its original braces and indentation.
@@ -45,7 +44,7 @@ const insertion = prefix + cloned;
 const calls = [];
 let depth=0;
 const stack=[];
-const lines=noRoot.split(/\r?\n/);
+const lines=noRoot.match(/[^\n]*\n|[^\n]+$/g) || [];
 function braceDelta(line) {
   let quote=null, escape=false, delta=0;
   for (let i=0;i<line.length;i++) {
@@ -64,7 +63,7 @@ function braceDelta(line) {
   return delta;
 }
 for (let i=0;i<lines.length;i++) {
-  const line=lines[i];
+  const line=lines[i].replace(/\r?\n$/,"");
   const match=line.match(/^[ \t]*match (.+?) \{[ \t]*$/);
   if (match) stack.push({path:match[1],header:i,d:depth+1});
   if (/\bisSuperAdmin\s*\(/.test(line) &&
@@ -91,14 +90,14 @@ for (const header of headers) assert.ok(
 // The helper belongs inside exactly those matches that reference it.
 // Insert in descending line order so prior indices cannot shift.
 for (const header of [...headers].sort((a,b)=>b-a)) {
-  lines.splice(header+1,0,insertion.trimEnd());
+  lines.splice(header+1,0,insertion);
 }
-const output = lines.join(nl);
+const output = lines.join("");
 assert.equal((output.match(/function isSuperAdmin\(\)/g)||[]).length,
   headers.length,"All and only authorized collection scopes receive the same helper.");
 // Remove the exact repeated insertion and restore original root helper.
 // If any unrelated byte changed, including line endings, fail closed.
-const injectedSegment=insertion.trimEnd()+nl;
+const injectedSegment=insertion;
 const n = output.split(injectedSegment).length-1;
 assert.equal(n,headers.length, "Scoped helper marker count mismatch");
 const reverseNoRoot=output.split(injectedSegment).join("");
