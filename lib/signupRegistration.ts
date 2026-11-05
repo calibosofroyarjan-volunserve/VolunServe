@@ -6,7 +6,7 @@ import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
 
 /** No profile writes, credential linking, password changes, or local PII storage. */
-export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false): Promise<User> {
+export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false, rejectExisting = false): Promise<User> {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !password) throw new Error("Enter your registration email and password.");
   let user: User;
@@ -16,9 +16,9 @@ export async function authenticateEmailSignup(email: string, password: string, r
     try {
       user = (await createUserWithEmailAndPassword(auth, normalized, password)).user;
     } catch (error) {
-      if ((error as {code?: string}).code !== "auth/email-already-in-use") throw error;
-      // Possession of the SAME password is required to resume an existing Auth UID.
-      // Never create a second UID, reset credentials, or overwrite an existing profile.
+      if ((error as {code?: string}).code !== "auth/email-already-in-use" || rejectExisting) throw error;
+      // The legacy profile-first form must keep its existing same-UID recovery.
+      // The email-first Create Account button sets rejectExisting=true instead.
       user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
     }
   }

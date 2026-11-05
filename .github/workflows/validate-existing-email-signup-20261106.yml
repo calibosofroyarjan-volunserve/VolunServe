@@ -1,0 +1,45 @@
+name: Verify Existing Email Signup Conflict (NO LIVE DEPLOY)
+on:
+  push:
+    branches:
+      - fix/signup-existing-email-validation-only-20261106
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify new registration never signs into an existing account
+        run: node scripts/test-signup-prod.cjs
+      - name: Verify Google signup and existing login flows
+        run: node scripts/test-signup-google-oauth.cjs
+      - name: Type-check email-first and existing app
+        run: npx tsc --noEmit
+      - name: Validate enabled email-first signup web export (NO DEPLOY)
+        env:
+          EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+        run: npx expo export --platform web --clear
+      - name: Verify only duplicate-email fix, test and CI script differ from baseline
+        env:
+          BASE_REF: d583e881fc49bc6b3d7a533cea0cd7588bcc9176
+        run: |
+          node <<'NODE'
+          const {execFileSync} = require('node:child_process');
+          const assert = require('node:assert/strict');
+          const changed = execFileSync('git', ['diff', '--name-only', process.env.BASE_REF, 'HEAD'], {encoding: 'utf8'}).trim().split(/\r?\n/).filter(Boolean).sort();
+          const allowed = ['.github/workflows/validate-existing-email-signup-20261106.yml','lib/signupRegistration.ts','scripts/test-signup-prod.cjs'].sort();
+          assert.deepEqual(changed, allowed, 'Unexpected modification outside isolated signup fix');
+          console.log('PASS scoped change only:', changed);
+          NODE
