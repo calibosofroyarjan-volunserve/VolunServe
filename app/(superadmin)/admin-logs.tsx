@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -9,6 +9,7 @@ import {
 import ListPagination from "../../components/ui/ListPagination";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import { db } from "../../lib/firebase";
+import { isSystemAccessChangeAction } from "../../lib/superAdminAuditCategories";
 import { useUserSession } from "../../lib/useUserSession";
 
 type AuditEntry = {
@@ -22,6 +23,10 @@ type AuditEntry = {
   description: string;
   createdAt?: Timestamp | null;
 };
+
+type AuditView = "all" | "lgu" | "system" | "access";
+const auditViewFromParam = (value: unknown): AuditView =>
+  value === "lgu" || value === "system" ? value : "all";
 
 const PAGE_SIZE = 5;
 const asText = (value: unknown) => typeof value === "string" ? value : "";
@@ -40,6 +45,7 @@ const prettyAction = (value: string) =>
  */
 export default function AdminLogs() {
   const router = useRouter();
+  const { view } = useLocalSearchParams<{ view?: string }>();
   const { user, profile, loading: sessionLoading } = useUserSession();
   const authorized = !!user && profile?.role === "superadmin" && profile?.status === "approved";
   const [bySource, setBySource] = useState<Record<string, AuditEntry[]>>({});
@@ -47,9 +53,44 @@ export default function AdminLogs() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [kind, setKind] = useState<"all" | "lgu" | "system" | "access">("all");
+  const [kind, setKind] = useState<AuditView>(() => auditViewFromParam(view));
+  const [adminUids, setAdminUids] = useState<string[]>([]);
+  const [adminsLoaded, setAdminsLoaded] = useState(false);
+  const [adminsError, setAdminsError] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest" | "actor" | "action">("newest");
   const sources = ["adminLogs", "adminActivityLogs"];
+
+  // The View All links open the exact category visible on System Overview.
+  // Reset the category when a dashboard link changes while this route is mounted.
+  useEffect(() => {
+    setKind(auditViewFromParam(view));
+    setPage(1);
+  }, [view]);
+
+  // Dashboard's LGU Admin activity preview uses actor UID membership in users.
+  // Use the same rule here so View All cannot show an unrelated log category.
+  useEffect(() => {
+    if (!authorized || kind !== "lgu") {
+      setAdminUids([]);
+      setAdminsLoaded(false);
+      setAdminsError("");
+      return;
+    }
+    setAdminsLoaded(false);
+    const stop = onSnapshot(collection(db, "users"),
+      snapshot => {
+        setAdminUids(snapshot.docs.filter(doc => doc.data().role === "admin").map(doc => doc.id));
+        setAdminsError("");
+        setAdminsLoaded(true);
+      },
+      error => {
+        setAdminUids([]);
+        setAdminsError(error.message || "Unable to load LGU Admin accounts");
+        setAdminsLoaded(true);
+      },
+    );
+    return stop;
+  }, [authorized, kind]);
 
   useEffect(() => {
     if (!authorized) {
@@ -96,8 +137,8 @@ export default function AdminLogs() {
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return logs.filter(item => {
-      if (kind === "lgu" && item.source !== "adminActivityLogs") return false;
-      if (kind === "system" && item.source !== "adminLogs") return false;
+      if (kind === "lgu" && !adminUids.includes(item.adminUid)) return false;
+      if (kind === "system" && !isSystemAccessChangeAction(item.actionType)) return false;
       if (kind === "access" && !/account|access|suspend|activat|revok|promot/i.test(item.actionType)) return false;
       return !needle || [item.actionType, item.adminName, item.adminUid, item.targetType,
         item.targetId, item.description, item.source].join(" ").toLowerCase().includes(needle);
@@ -107,7 +148,7 @@ export default function AdminLogs() {
       if (sort === "action") return prettyAction(a.actionType).localeCompare(prettyAction(b.actionType));
       return eventTime(b.createdAt) - eventTime(a.createdAt);
     });
-  }, [logs, search, kind, sort]);
+  }, [logs, search, kind, sort, adminUids]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -118,14 +159,23 @@ export default function AdminLogs() {
     return <View style={styles.center}><Ionicons name="lock-closed-outline" size={30} color="#64748B" />
       <Text style={styles.denied}>Super Admin access required.</Text></View>;
   }
-  const loading = sources.some((source) => !loaded[source]);
+  const loading = sources.some((source) => !loaded[source]) ||
+    (kind === "lgu" && !adminsLoaded);
+  const viewTitle = kind === "lgu" ? "LGU Admin Activity" :
+    kind === "system" ? "System & Access Changes" :
+    kind === "access" ? "Account Access Events" : "Admin Activity & Audit Logs";
+  const viewDescription = kind === "lgu"
+    ? "Recorded actions by LGU Admin accounts. This matches the System Overview activity list."
+    : kind === "system"
+      ? "Configuration, security, and account-access changes shown in System Overview."
+      : "Recorded administrative actions, including account access changes.";
 
   return <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
     <View style={styles.header}>
       <View style={{ flex: 1 }}>
         <Text style={styles.eyebrow}>SUPER ADMIN · SYSTEM OVERSIGHT</Text>
-        <Text style={styles.title}>Admin Activity & Audit Logs</Text>
-        <Text style={styles.subtitle}>Recorded administrative actions, including account access changes.</Text>
+        <Text style={styles.title}>{viewTitle}</Text>
+        <Text style={styles.subtitle}>{viewDescription}</Text>
       </View>
       <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
         <Ionicons name="arrow-back" size={18} color="#086F55" />
@@ -166,6 +216,11 @@ export default function AdminLogs() {
       ]}
       onSortChange={value => { setSort(value); setPage(1); }}
     />
+    {kind === "lgu" && adminsError ? (
+      <View style={styles.error}><Text style={styles.errorText}>
+        Unable to identify LGU Admin actors: {adminsError}
+      </Text></View>
+    ) : null}
     {Object.entries(errors).map(([source, message]) =>
       <View key={source} style={styles.error}>
         <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
@@ -174,8 +229,8 @@ export default function AdminLogs() {
     <View style={styles.tableCard}>
       <View style={styles.tableTitleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.tableTitle}>Administrative Activity History</Text>
-          <Text style={styles.tableSubtitle}>Recorded actions from LGU Admins and system-access changes.</Text>
+          <Text style={styles.tableTitle}>{kind === "all" ? "Administrative Activity History" : viewTitle + " History"}</Text>
+          <Text style={styles.tableSubtitle}>{kind === "all" ? "Recorded actions from LGU Admins and system-access changes." : viewDescription}</Text>
         </View>
       </View>
       {!loading && (
@@ -203,7 +258,7 @@ export default function AdminLogs() {
             <View style={styles.emptyTable}>
               <Ionicons name="document-text-outline" size={28} color="#73918A" />
               <Text style={styles.emptyText}>
-                {search ? "No matching audit events." : "No administrative audit events recorded yet."}
+                {adminsError && kind === "lgu" ? "LGU Admin actor lookup unavailable." : search ? "No matching audit events." : "No recorded events in this category yet."}
               </Text>
             </View>
           ) : pageRows.map((item, index) => {
