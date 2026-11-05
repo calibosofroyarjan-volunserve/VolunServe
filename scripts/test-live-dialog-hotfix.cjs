@@ -28,8 +28,8 @@ test("Actual Resident Home.web logout uses VolunServe modal rather than browser 
  const home=read("components/home/Home.web.tsx");
  const routing=read("app/(tabs)/index.tsx");
  // The web Home is now chosen by Metro's platform resolver, not eagerly imported.
- assert.match(routing,/export \\{ default \\} from "\\.\\.\\/\\.\\.\\/components\\/home\\/Home"/);
- assert.match(read("components/home/Home.tsx"),/export \\{ default \\} from "\\.\\/Home\\.native"/);
+ assert.ok(routing.includes('export { default } from "../../components/home/Home";'));
+ assert.ok(read("components/home/Home.tsx").includes('export { default } from "./Home.native";'));
  assert.match(home,/import \{ AppAlert \} from "\.\.\/\.\.\/lib\/appDialog"/);
  assert.match(home,/await AppAlert\.confirm\("Log Out"/);
  assert.match(home,/if \(!confirmed\) return/);
