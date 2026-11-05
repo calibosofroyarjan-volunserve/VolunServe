@@ -4570,7 +4570,14 @@ export default function AdminCases() {
                     {["assigned", "in_progress"].includes(incident.status) &&
                       incidentAssignments.some((item) => item.status === "completed") && (
                       <TouchableOpacity
-                        disabled={busyKey === `confirm_completed_${incident.id}`}
+                        disabled={
+                          busyKey === `confirm_completed_${incident.id}` ||
+                          !incidentAssignments.some((item) =>
+                            item.status === "completed" &&
+                            item.residentConfirmationStatus === "resident_confirmed" &&
+                            item.residentConfirmationOutcome === "fully_helped"
+                          )
+                        }
                         style={styles.resolveButton}
                         onPress={() => {
                           const completed = incidentAssignments.find((item) => item.status === "completed");
@@ -4580,7 +4587,18 @@ export default function AdminCases() {
                         <Text style={styles.primaryButtonText}>
                           {busyKey === `confirm_completed_${incident.id}`
                             ? "Confirming…"
-                            : "Confirm Volunteer Completion"}
+                            : incidentAssignments.some((item) =>
+                                item.status === "completed" &&
+                                item.residentConfirmationStatus === "resident_confirmed" &&
+                                item.residentConfirmationOutcome === "fully_helped"
+                              )
+                              ? "Review & Resolve Case"
+                              : incidentAssignments.some((item) =>
+                                  item.status === "completed" &&
+                                  ["partially_helped", "not_helped"].includes(String(item.residentConfirmationOutcome || ""))
+                                )
+                                ? "Follow-up Required · Keep Case Open"
+                                : "Awaiting Resident Confirmation"}
                         </Text>
                       </TouchableOpacity>
                     )}
