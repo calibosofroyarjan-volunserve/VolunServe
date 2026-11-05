@@ -28,6 +28,7 @@ import {
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 import LguPrivateProofPreview from "../../components/admin/LguPrivateProofPreview";
+import { reviewPendingLguApplication } from "../../lib/lguCredentialImages";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -665,6 +666,33 @@ export default function AdminAccounts() {
       setActionError("");
 
       try {
+        if (action === "promote" || action === "reject") {
+          // Firebase Admin SDK validates the REAL Super Admin session,
+          // requires both private Cloudinary documents before approval,
+          // and atomically records the role change + audit log. Firestore
+          // client-side Rules never need to grant direct privileged writes.
+          await reviewPendingLguApplication(
+            verified.current, account.id,
+            action === "promote" ? "approve" : "reject",
+            action === "promote" ? {
+              office: lguOffice.trim(),
+              position: lguPosition.trim(),
+              credentialReference: lguReference.trim(),
+              verificationMethod: lguVerificationMethod.trim(),
+              identityMatched, lguEmploymentConfirmed, credentialsConfirmed,
+            } : { reason: rejectReason.trim() }
+          );
+          if (action === "promote") {
+            setShowAddAdmin(false);
+            setPromoteSearch("");
+          }
+          setActionType(null);
+          setActionTarget(null);
+          setActionError("");
+          setRejectReason("");
+          clearCredentialReview();
+          return;
+        }
         const batch =
           writeBatch(db);
 
