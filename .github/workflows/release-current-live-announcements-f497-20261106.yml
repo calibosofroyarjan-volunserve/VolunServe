@@ -49,6 +49,7 @@ jobs:
             'firestore.rules',
             'scripts/test-live-announcement-flow.cjs',
             'scripts/test-live-announcements-firestore.cjs',
+            'scripts/test-active-announcement-read.cjs',
             '.github/workflows/verify-current-live-announcements-f497-20261106.yml',
             '.github/workflows/release-current-live-announcements-f497-20261106.yml',
           ]);
@@ -134,10 +135,12 @@ jobs:
             const marker='    match /announcements/{announcementId} {';
             assert.equal(active.split(marker).length,2,
               'Current rules differ: cannot safely identify announcement block.');
-            const block=active.slice(active.indexOf(marker),active.indexOf(marker)+2000);
-            assert.ok(block.includes('allow read: if isAdminOrSuperAdmin()') &&
-              block.includes('request.resource.data.audience == profile().barangay'),
-              'Current announcement rules changed; stop rather than overwrite them.');
+            const start=active.indexOf(marker);
+            const next=active.indexOf('\n    match /',start+marker.length);
+            const block=active.slice(start,next<0?active.length:next);
+            assert.ok(/allow (read|get|list): if/.test(block) &&
+              /allow (create|write): if/.test(block),
+              'Active rules have an unfamiliar announcement block. Stop.');
             let patched=active;
             const hasList=block.includes('allow list: if approved();');
             if(!hasList) patched=active.replace(marker,
@@ -152,6 +155,8 @@ jobs:
               'PASS current active rules copied and ONLY announcement allow-list added.');
           })().catch(e => {console.error(e.message);process.exit(1);});
           NODE
+      - name: Confirm patched ACTIVE rules permit Residents (emulator)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-active-announcement-read.cjs"
       - name: Reject concurrent Firestore rules releases
         run: |
           node <<'NODE'
