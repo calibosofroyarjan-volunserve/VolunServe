@@ -267,6 +267,40 @@ async function main() {
             }), true);
 
         if (joined) {
+          await check("Volunteer can query ONLY their own My Events history", () =>
+            volunteer.collection("communityEventParticipants")
+              .where("uid", "==", volunteerUid).get());
+          await check("Volunteer cannot list another user's event history", () =>
+            volunteer.collection("communityEventParticipants")
+              .where("uid", "==", otherUid).get(), true);
+          await check("Resident cannot list another user's event history", () =>
+            other.collection("communityEventParticipants")
+              .where("uid", "==", volunteerUid).get(), true);
+
+          // History reads remain owner-only after a user switches out of Volunteer mode.
+          await env.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc("users/" + volunteerUid)
+              .update({activeMode: "resident"});
+          });
+          await check("Volunteer history read still works in Resident mode", () =>
+            partRef.get());
+          await check("Volunteer My Events query still works in Resident mode", () =>
+            volunteer.collection("communityEventParticipants")
+              .where("uid", "==", volunteerUid).get());
+          await env.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc("users/" + volunteerUid)
+              .update({volunteerAccess: false, volunteerStatus: "not_applied"});
+          });
+          await check("Revoked Volunteer cannot read past participation", () =>
+            partRef.get(), true);
+          await check("Revoked Volunteer cannot list past participation", () =>
+            volunteer.collection("communityEventParticipants")
+              .where("uid", "==", volunteerUid).get(), true);
+          await env.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc("users/" + volunteerUid)
+              .update({activeMode: "volunteer", volunteerAccess: true, volunteerStatus: "approved"});
+          });
+
           const started = await check("ADMIN STARTS EVENT", () =>
             publishedRef.update({status: "active", updatedAt: stamp()}));
           if (started) {
