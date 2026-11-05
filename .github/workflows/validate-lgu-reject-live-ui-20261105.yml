@@ -72,4 +72,5 @@ jobs:
       - name: Export production web bundle (validation only, no Hosting deploy)
         run: npx expo export --platform web --output-dir dist
       - name: Verify no production deploy occurred
-        run: echo "PASS: UI validated only. No Firebase Hosting/Rules, user records, or login/signup deployments attempted."
+        run: |
+          echo "PASS: UI validated only. No Firebase Hosting/Rules, user records, or login/signup deployments attempted."
