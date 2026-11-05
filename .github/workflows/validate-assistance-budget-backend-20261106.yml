@@ -1,0 +1,30 @@
+name: Validate Assistance Budget Backend (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/assistance-postapproval-budget-backend-20261106
+  pull_request:
+    paths:
+      - "backend/server.js"
+      - "backend/assistanceDonationBudget.js"
+      - "backend/tests/assistanceDonationBudget.test.js"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax and isolated backend budget tests
+        run: |
+          node --check backend/server.js
+          node --check backend/assistanceDonationBudget.js
+          node --test backend/tests/assistanceDonationBudget.test.js
+      - name: Confirm no deployment occurred
+        run: echo "VALIDATION ONLY — does not modify Render, Firestore or Hosting"
