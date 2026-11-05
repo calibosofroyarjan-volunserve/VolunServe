@@ -38,7 +38,8 @@ jobs:
             'scripts/prepare-lgu-barangay-assignment-live-rules.py',
             'scripts/test-lgu-barangay-assignment-emulator.cjs',
             'scripts/verify-lgu-barangay-assignment-ui.cjs',
-            '.github/workflows/validate-lgu-barangay-assignment-20261105.yml'
+            '.github/workflows/validate-lgu-barangay-assignment-20261105.yml',
+            '.github/workflows/preview-lgu-barangay-assignment-20261105.yml'
           ]);
           const illegal=changed.filter(p=>!allowed.has(p));
           if(illegal.length)throw Error('STOP: protected files changed: '+illegal.join(','));
