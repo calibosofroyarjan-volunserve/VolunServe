@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import React, { useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { userFacingError } from "../lib/userFacingError";
+import { pickLguProofImage, uploadLguProof, type LguProofImage } from "../lib/lguCredentialImages";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
