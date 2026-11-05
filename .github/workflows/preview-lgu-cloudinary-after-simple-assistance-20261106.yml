@@ -1,3 +1,4 @@
+# Verified source CI completed successfully before preview retry.
 name: PREVIEW ONLY LGU Cloudinary on Protected Latest Assistance Hosting
 on:
   push:
