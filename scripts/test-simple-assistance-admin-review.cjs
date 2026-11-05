@@ -23,7 +23,7 @@ for (const [label, value] of Object.entries({
   "professional inline dropdown": "CompactReviewSelect",
   "verify button": 'label="Approve Request"',
   "more info action": "Request more information",
-  "reject action": 'label="Reject"',
+  "reject action": 'label="Reject Request"',
   "visual error messaging": "ReviewValidationHint",
   "residency evidence": "How was the address checked?",
   "backend review precondition": "Start Review",
