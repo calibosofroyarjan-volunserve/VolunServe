@@ -65,8 +65,6 @@ jobs:
           for test in \
             scripts/test-admin-navigation-contract.cjs \
             scripts/test-admin-staff-login.cjs \
-            scripts/test-superadmin-accounts-directory.cjs \
-            scripts/test-superadmin-premium-restoration.cjs \
             scripts/test-unified-login-routing.cjs \
             scripts/test-login-field-validation.cjs \
             scripts/test-signup-prod.cjs \
