@@ -62,6 +62,12 @@ const navItems: NavItem[] = [
     route: "/(superadmin)/all-records",
     match: "/all-records",
   },
+  {
+    label: "System Updates",
+    icon: "megaphone-outline",
+    route: "/(superadmin)/system-updates",
+    match: "/system-updates",
+  },
 ];
 
 export default function SuperAdminLayout() {

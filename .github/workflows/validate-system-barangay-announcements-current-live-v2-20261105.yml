@@ -1,0 +1,149 @@
+name: Validate Role-Separated System + Barangay Announcements on Latest LIVE (PREVIEW ONLY)
+on:
+  push:
+    branches: [feature/system-barangay-announcements-current-live-v2-20261105]
+permissions:
+  contents: read
+concurrency:
+  group: system-barangay-announcements-latest-live-preview
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Exact live ancestor and protect unrelated files
+        env:
+          EXACT_LIVE: 905c0442b43a683bffe5b740ea061994cd94e8f2
+        run: |
+          git merge-base --is-ancestor "$EXACT_LIVE" HEAD
+          git diff --name-only "$EXACT_LIVE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const files=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'app/(superadmin)/_layout.tsx',
+            'app/(superadmin)/system-updates.tsx',
+            'app/(tabs)/announcements.tsx',
+            'app/(tabs)/notifications.tsx',
+            'components/home/Home.native.tsx',
+            'components/home/Home.web.tsx',
+            'lib/useCommunityAnnouncements.ts',
+            'scripts/prepare-system-updates-live-rules.py',
+            'scripts/test-system-updates-firebase-roles.cjs',
+            '.github/workflows/validate-system-barangay-announcements-current-live-v2-20261105.yml'
+          ]);
+          const outside=files.filter(file=>!allowed.has(file));
+          if(outside.length)throw Error('UNSAFE unrelated live source changed: '+outside.join(','));
+          console.log('PASS source isolation; Login, Signup, Auth, Super Admin account admin, resident/volunteer modules untouched.');
+          NODE
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile TypeScript and check role routing
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-admin-staff-login.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Build surgical candidate from CURRENT active Cloud Rules (NO DEPLOY)
+        run: python3 scripts/prepare-system-updates-live-rules.py
+      - name: Emulator role + cross-barangay permissions
+        run: REVIEWED_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-system-updates-firebase-roles.cjs'
+      - name: Emulator existing LGU publishing and suspended admin regression
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Build all production web routes without deploying live
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Final current production Hosting and Rules drift guard
+        env:
+          EXACT_LIVE: 905c0442b43a683bffe5b740ea061994cd94e8f2
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?audit='+Date.now(),{headers:{'cache-control':'no-cache'}});
+            if(!r.ok)throw Error('Live Hosting revision unavailable');
+            const j=await r.json();
+            if(j.revision!==process.env.EXACT_LIVE)throw Error('STOP: LIVE Hosting changed; no preview from outdated branch');
+            console.log('PASS exact current production Hosting source: '+j.revision);
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+  preview:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Build only approved current-source web candidate
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Stamp the exact source in temporary preview
+        env:
+          EXACT_LIVE: 905c0442b43a683bffe5b740ea061994cd94e8f2
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          fs.writeFileSync('dist/volunserve-preview.json',JSON.stringify({
+            revision:process.env.GITHUB_SHA,
+            basedOnLive:process.env.EXACT_LIVE,
+            scope:'superadmin-system-updates-and-lgu-barangay-announcements',
+            rulesChangesInProduction:false
+          }));
+          NODE
+      - name: Deploy to TEMPORARY Hosting preview channel ONLY
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: system-barangay-preview-v2-1105
+          expires: 1d
+      - name: Assert preview points to exact latest code; verify auth routes exist
+        env:
+          EXPECTED_BASE: 905c0442b43a683bffe5b740ea061994cd94e8f2
+          PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url=process.env.PREVIEW_URL?.replace(/\/$/,'');
+            if(!url?.startsWith('https://'))throw Error('Missing preview URL');
+            const stamp=await fetch(url+'/volunserve-preview.json');
+            assert.equal(stamp.status,200);
+            const meta=await stamp.json();
+            assert.equal(meta.revision,process.env.GITHUB_SHA);
+            assert.equal(meta.basedOnLive,process.env.EXPECTED_BASE);
+            const manifest=await fetch(url+'/volunserve-release.json');
+            assert.equal(manifest.status,200);
+            assert.equal((await manifest.json()).revision,process.env.GITHUB_SHA);
+            for(const route of ['login','signup','admin-login','admin-request','system-updates','create-announcement']){
+              const r=await fetch(url+'/'+route,{redirect:'follow'});
+              assert.equal(r.status,200,'Missing route '+route);
+              console.log('PASS preview route '+route);
+            }
+            console.log('PASS TEMPORARY PREVIEW '+url);
+          })().catch(e=>{console.error(e);process.exit(1);});
+          NODE
