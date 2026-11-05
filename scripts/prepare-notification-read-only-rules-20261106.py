@@ -65,6 +65,10 @@ new = """      // Approved users may only READ their own notification documents.
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['read'])
         && request.resource.data.read == true;"""
+# Keep the exact published newline convention (CRLF or LF) in the candidate.
+eol = "\\r\\n" if "\\r\\n" in original else "\\n"
+old = old.replace("\\n", eol)
+new = new.replace("\\n", eol)
 if block.count(old) != 1:
     raise SystemExit("STOP unexpected published notification permissions; requires manual review")
 if "allow read, update, delete: if isAdmin();" not in block:
