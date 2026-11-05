@@ -1,11 +1,12 @@
-name: Validate Root-Helper Scoped LGU Rules (NO LIVE DEPLOY)
+name: Validate Localized Role Helpers And LGU Permissions (NO LIVE DEPLOY)
 on:
   push:
-    branches: [fix/lgu-helper-scope-compiled-20261105]
+    branches: [fix/lgu-compiler-global-helpers-20261105]
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
       - scripts/scope-superadmin-helper.cjs
+      - scripts/scope-additional-role-helpers.cjs
       - scripts/test-surgical-lgu-review-live.cjs
       - scripts/test-superadmin-lgu-approval-rejection.cjs
 permissions:
@@ -76,7 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/scope-superadmin-helper.cjs /tmp/volunserve-lgu-candidate.rules /tmp/volunserve-lgu-scoped.rules
-          cp /tmp/volunserve-lgu-scoped.rules firestore.rules
+          node scripts/scope-additional-role-helpers.cjs /tmp/volunserve-lgu-scoped.rules /tmp/volunserve-lgu-optimized.rules
+          cp /tmp/volunserve-lgu-optimized.rules firestore.rules
       - name: Install locked project dependencies (no app deploy)
         run: npm ci --no-audit --no-fund
       - name: Emulator security tests — approve and reject + unauthorized denials
@@ -122,7 +124,7 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,os,subprocess,urllib.request,urllib.error
           t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
-          content=open('/tmp/volunserve-lgu-scoped.rules',encoding='utf8',newline='').read()
+          content=open('/tmp/volunserve-lgu-optimized.rules',encoding='utf8',newline='').read()
           req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets',
             data=json.dumps({'source':{'files':[{'name':'firestore.rules','content':content}]}}).encode(),
             headers={'Authorization':'Bearer '+t,'Content-Type':'application/json'},method='POST')
