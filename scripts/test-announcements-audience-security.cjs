@@ -80,7 +80,9 @@ const makeNotice = (audience, publishAt = publishedAt) => ({
     await assertFails(pending.doc("announcements/local-muzon").get());
     await assertFails(unauthenticated.doc("announcements/citywide").get());
 
+    console.log('Testing scoped Muzon list...');
     await assertSucceeds(permittedQuery(muzon, "Muzon East").get());
+    console.log('Testing scoped global list...');
     await assertSucceeds(permittedQuery(muzon, "all").get());
     await assertSucceeds(permittedQuery(tungko, "Tungko").get());
     await assertFails(permittedQuery(muzon, "Tungko").get());
