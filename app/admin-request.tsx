@@ -16,6 +16,9 @@ import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
 import { uploadLguProofFiles, validateLguProofFile } from "../lib/lguProofDocuments";
 
+// Fail closed until production Storage Rules, bucket CORS and privacy review are complete.
+const LGU_PRIVATE_PROOFS_ENABLED = process.env.EXPO_PUBLIC_LGU_PRIVATE_PROOFS_ENABLED === "true";
+
 const emptyForm = {
   fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",
   appointmentReference:"",barangay:"",
@@ -107,6 +110,10 @@ export default function LguStaffApplication() {
   const submit=async()=>{
     if(busy)return;
     setError("");
+    if (!LGU_PRIVATE_PROOFS_ENABLED) {
+      setError("Secure LGU proof uploads are not enabled. Do not submit personal documents in this preview.");
+      return;
+    }
     if (Platform.OS!=="web") {
       setError("For secure LGU document upload, open https://volunserve.com/admin-request in a browser.");
       return;
@@ -175,6 +182,7 @@ export default function LguStaffApplication() {
           </TouchableOpacity>
         </> : <>
           <Text style={styles.notice}>Submit your LGU employee ID and ONE official supporting document. The Super Admin reviews these proofs and independently checks your LGU employment before approval. No AI face scan or National ID is required.</Text>
+          {!LGU_PRIVATE_PROOFS_ENABLED && <Text accessibilityRole="alert" style={styles.previewWarning}>Preview only — private Storage uploads are not active. Do not submit real IDs or documents here.</Text>}
           <TouchableOpacity onPress={()=>{setResuming(v=>!v);setError("");}} style={styles.resumeRow} disabled={busy}>
             <Text style={styles.resumeText}>{resuming||pendingCreated?"New LGU application":"Already applied? Resume Proof Upload"}</Text>
           </TouchableOpacity>
@@ -224,8 +232,8 @@ export default function LguStaffApplication() {
             </TouchableOpacity>
           </View>
           {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-          <TouchableOpacity accessibilityRole="button" style={[styles.submit,busy&&{opacity:.6}]}
-            disabled={busy} onPress={()=>void submit()}>
+          <TouchableOpacity accessibilityRole="button" style={[styles.submit,(busy||!LGU_PRIVATE_PROOFS_ENABLED)&&{opacity:.5}]}
+            disabled={busy||!LGU_PRIVATE_PROOFS_ENABLED} onPress={()=>void submit()}>
             {busy?<ActivityIndicator color="#FFFFFF"/>:<Text style={styles.submitText}>{resuming||pendingCreated?"Complete Proof Upload":"Submit for Super Admin Verification"}</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>router.replace("/login")} style={{alignItems:"center",padding:12}}>
@@ -258,6 +266,7 @@ const styles=StyleSheet.create({
  submitText:{color:"#FFFFFF",fontSize:13,fontWeight:"800"},
  proofs:{borderWidth:1,borderColor:"#DCE9E2",borderRadius:13,padding:15,gap:12,
    backgroundColor:"#F7FBF8",marginTop:10},
+ previewWarning:{fontSize:12,lineHeight:19,fontWeight:"800",color:"#9E3B2C",backgroundColor:"#FFF3EE",padding:12,borderRadius:10},
  proofsHeading:{fontSize:15,fontWeight:"900",color:"#153B31"},
  proofsHint:{fontSize:12,color:"#597A69",lineHeight:18},
  privacyRow:{flexDirection:"row",alignItems:"flex-start",gap:10,marginTop:8,padding:7},
