@@ -68,40 +68,18 @@ jobs:
           VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
           VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
         run: node scripts/check-live-hosting.cjs
-      - name: Verify browser shows ONE login card, no staff selector
+      - name: Verify real Chrome hydration and one unified Login card
         env:
           PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
         shell: bash
         run: |
           set -euo pipefail
           CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
-          if [ -z "$CHROME" ]; then echo "::error::Chrome not installed; fail closed."; exit 1; fi
-          # Expo Router can hydrate asynchronously on a brand-new Firebase preview.
-          # Require an actually hydrated page, while tolerating a one-off slow browser start.
-          verified=0
-          for attempt in 1 2 3 4 5; do
-            timeout 75s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --virtual-time-budget=20000 --dump-dom "$PREVIEW_ORIGIN/login?smoke=$GITHUB_SHA&attempt=$attempt" > /tmp/login-unified-dom.html 2>/tmp/login-unified-browser.log || true
-            if node <<'NODE'
-          const fs=require('node:fs'),assert=require('node:assert/strict');
-          const html=fs.readFileSync('/tmp/login-unified-dom.html','utf8');
-          for(const marker of ['VolunServe Login','Request Admin Access','Sign In','Sign Up','Continue with Google','Continue as Guest']){
-            assert(html.includes(marker),'Missing login UI: '+marker);
-          }
-          assert(!html.includes('Residents & Volunteers</') && !html.includes('LGU & System Admin</'),
-            'Old role selector unexpectedly present in rendered Login');
-          console.log('PASS: ONE premium Login, all community links and LGU application link rendered.');
-          NODE
-            then
-              verified=1
-              break
-            fi
-            echo "UI hydration not ready on browser attempt $attempt; retrying..."
-            sleep 2
-          done
-          if [ "$verified" -ne 1 ]; then
-            echo "::error::Unified Login failed all browser hydration attempts; preview not certified."
-            exit 1
-          fi
+          if [ -z "$CHROME" ]; then echo "::error::Chrome unavailable"; exit 1; fi
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-unified-cdp about:blank > /tmp/chrome-unified.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
       - name: Release constraints
         run: |
           echo "PREVIEW ONLY: live Hosting, Firestore Rules, Auth users, Storage, Functions, Maps, Donations and records unchanged."
