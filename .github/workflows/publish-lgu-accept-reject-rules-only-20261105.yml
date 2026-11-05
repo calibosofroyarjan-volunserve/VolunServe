@@ -22,7 +22,7 @@ jobs:
       OLD_RULESET: projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec
       OLD_SHA: 600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584
       NEW_RULESET: projects/volunserve-3aa5b/rulesets/7db0905c-1a5b-4987-a7f1-1fe9b0a9e7bc
-      NEW_SHA: ac8445bdb36d779a4b1d8ec2775200227ae8ee3656946753de74dfa61b592a17
+      NEW_SHA: 92f13aa421662312707d80b891f920c8793a7fbc5f5165c515407c2d255e64a8
     steps:
       - name: Require official green Firebase compilation and emulator test from pinned commit
         shell: bash
@@ -92,7 +92,7 @@ jobs:
           node scripts/prepare-live-lgu-rules-20261105.cjs /tmp/lgu-before.rules /tmp/lgu-prepared.rules
           python3 - <<'PY'
           import hashlib,os
-          with open('/tmp/lgu-prepared.rules',encoding='utf8',newline='') as f:prepared=f.read().replace('\r\n','\n')
+          with open('/tmp/lgu-prepared.rules',encoding='utf8',newline='') as f:prepared=f.read()
           with open('/tmp/lgu-compiled.rules',encoding='utf8',newline='') as f:compiled=f.read()
           assert prepared==compiled,'BLOCKED: compiled Ruleset differs from isolated patch to present live Rules'
           assert hashlib.sha256(compiled.encode()).hexdigest()==os.environ['NEW_SHA']
