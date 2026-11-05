@@ -216,3 +216,5 @@ jobs:
 # Scoped fixes: announcement publishing/error feedback and resident/volunteer feed only; existing modules preserved.
 
 # One-shot user-requested functional bug fix: authorized Firestore feed and safe Admin publish error handling.
+
+# One-shot rerun after verified preview propagation parity audit; route checks remain mandatory.
