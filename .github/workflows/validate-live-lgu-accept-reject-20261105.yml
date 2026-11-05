@@ -1,7 +1,7 @@
-name: Compile and Test LGU Accept Reject Against Exact Live Rules (NO DEPLOY)
+name: Validate Compact LGU Accept Reject Rules (INACTIVE ONLY)
 on:
   push:
-    branches: [fix/lgu-accept-reject-live-safe-20261105]
+    branches: [fix/lgu-accept-reject-compact-live-20261105]
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
