@@ -562,6 +562,20 @@ export default function VolunteerTasksWeb() {
         }
 
         const caseId = String(current.caseId || assignment.caseId || "").trim();
+        // Offers may be sent to a Volunteer who is already busy. The
+        // Volunteer decides Accept or Decline. Accepting a second active
+        // mission is blocked atomically by the per-Volunteer lock.
+        const responderLockRef = (next === "accepted" || next === "completed")
+          ? doc(db, "responderLocks", user.uid)
+          : null;
+        const responderLockSnapshot = responderLockRef
+          ? await transaction.get(responderLockRef)
+          : null;
+        if (next === "accepted" && responderLockSnapshot?.exists()) {
+          throw new Error(
+            "You already have an active Volunteer task. Complete it before accepting another offer, or Decline this task."
+          );
+        }
         let reporterUid = "";
         let caseData: Record<string, any> | null = null;
 
@@ -612,6 +626,23 @@ export default function VolunteerTasksWeb() {
           patch.completionNotes = completionNotes.trim().slice(0, 600);
           patch.completedAt = serverTimestamp();
           patch.residentConfirmationStatus = "pending";
+        }
+
+        if (next === "accepted" && responderLockRef) {
+          transaction.set(responderLockRef, {
+            responderUid: user.uid,
+            assignmentId: assignment.id,
+            caseId,
+            status: "accepted",
+            updatedAt: serverTimestamp(),
+          });
+        } else if (
+          next === "completed" &&
+          responderLockRef &&
+          responderLockSnapshot?.exists() &&
+          String(responderLockSnapshot.data()?.assignmentId || "") === assignment.id
+        ) {
+          transaction.delete(responderLockRef);
         }
 
         transaction.update(assignmentRef, patch);
