@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Guarded immutable compile, activate and rollback of ONLY notification read-only-content security.
+"""Guarded immutable compile, activate and rollback of ONLY notification content security.
 
-Never deploys Hosting, writes Firestore documents, changes sign-in or touches
-any programmer Super Admin or LGU Admin authorization rules. Must be used with a tested candidate built from
-the exact active production rules source.
+Never deploys Hosting, writes Firestore documents, changes sign-in or alters
+programmer Super Admin / LGU Admin authorization. Compile from the exact active
+Cloud Rules source, test with the emulator, then update ONLY the release pointer.
+The Firebase Rules REST PATCH updateMask belongs in the JSON body, not URL.
 """
 import hashlib
 import json
@@ -18,7 +19,7 @@ API = "https://firebaserules.googleapis.com/v1/"
 RELEASE = f"projects/{PROJECT}/releases/cloud.firestore"
 EXPECTED_OLD = f"projects/{PROJECT}/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
 EXPECTED_OLD_HASH = "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
-EXPECTED_HOSTING = "473e824f7b941fffcaea631d5f0d4beb5d83ac85"
+EXPECTED_HOSTING = "12f840178b6fce3ff642ef33f036e2f8ed4d37cf"
 RUNNER_TEMP = os.environ.get("RUNNER_TEMP", ".")
 MANIFEST_FILE = os.path.join(RUNNER_TEMP, "notifications-locked-rules-release.json")
 SOURCE_MANIFEST = os.path.join(RUNNER_TEMP, "notification-rules-manifest.json")
@@ -74,9 +75,12 @@ def manifest():
 
 def patch_pointer(name):
     response = request(
-        RELEASE + "?updateMask=rulesetName",
+        RELEASE,
         method="PATCH",
-        payload={"release": {"name": RELEASE, "rulesetName": name}},
+        payload={
+            "release": {"name": RELEASE, "rulesetName": name},
+            "updateMask": "rulesetName",
+        },
     )
     if response.get("rulesetName") != name:
         raise RuntimeError("Unexpected Firebase Rules release update response")
