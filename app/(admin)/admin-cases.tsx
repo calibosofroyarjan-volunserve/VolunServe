@@ -1673,8 +1673,8 @@ export default function AdminCases() {
     const skillMatches = skillMatchCount(incident, volunteer);
     const skillReviewNeeded = specializedSkills.length > 0 && skillMatches === 0;
 
-    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
-
+    // Any approved Volunteer can support a validated SJDM emergency,
+    // regardless of which barangay they live in.
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1683,9 +1683,6 @@ export default function AdminCases() {
     }
     if (explicitlyBlockedAccount || explicitlyRejectedIdentity) {
       return { eligible: false, reason: "Volunteer account is not currently eligible", skillMatches };
-    }
-    if (!caseBarangay) {
-      return { eligible: false, reason: "Emergency case barangay is missing", skillMatches };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
@@ -1704,8 +1701,6 @@ export default function AdminCases() {
   };
 
   const volunteerCandidatesForCase = (incident: DisasterCase) => {
-    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
-
     return approvedVolunteers
       .filter((volunteer) => {
         const isReporter =
@@ -1716,7 +1711,6 @@ export default function AdminCases() {
         const skillSearchMatch =
           !search ||
           volunteer.fullName.toLowerCase().includes(search) ||
-          volunteer.barangay.toLowerCase().includes(search) ||
           volunteer.skills.some((skill) => skill.toLowerCase().includes(search));
 
         // The Resident who filed this emergency must never appear in the
@@ -1728,16 +1722,11 @@ export default function AdminCases() {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
-        // Preserve every approved profile: prioritize assignable Volunteers,
-        // then same-barangay proximity and skill matches (never hard gates).
+        // Citywide roster: safety/eligibility and skills determine order,
+        // never the Volunteer's home barangay.
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
-        const caseArea = normalizeBarangay(caseBarangayValue(incident));
-        const aLocal = normalizeBarangay(a.barangay) === caseArea;
-        const bLocal = normalizeBarangay(b.barangay) === caseArea;
-        if (aLocal !== bLocal) return aLocal ? -1 : 1;
-
         if (eligibilityA.skillMatches !== eligibilityB.skillMatches) {
           return eligibilityB.skillMatches - eligibilityA.skillMatches;
         }
@@ -3112,22 +3101,6 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
-
-        const currentCaseBarangayRaw = String(
-          currentCase.incidentBarangay ||
-            currentCase.emergencyBarangay ||
-            currentCase.barangay ||
-            currentCase.reporterBarangay ||
-            ""
-        ).trim();
-        const currentCaseBarangay = normalizeBarangay(
-          currentCaseBarangayRaw
-        );
-        if (!currentCaseBarangay) {
-          throw new Error(
-            "This emergency case has no barangay. Add or verify the case barangay before requesting local Volunteer support."
-          );
-        }
 
         if (responderLockSnapshot.exists()) {
           const lock: any = responderLockSnapshot.data();
@@ -5665,13 +5638,13 @@ export default function AdminCases() {
 
                       <View style={styles.personnelBarangayStrip}>
                         <View>
-                          <Text style={styles.personnelNeedLabel}>CASE BARANGAY</Text>
+                          <Text style={styles.personnelNeedLabel}>INCIDENT BARANGAY</Text>
                           <Text style={styles.personnelBarangayValue}>
                             {barangayDisplay(caseBarangayValue(incident))}
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Local Volunteers appear first; approved Volunteers from other barangays can also receive offers. Review travel distance and skills first.
+                          Volunteers from any SJDM barangay can be assigned. Review skills, actual availability, travel distance, and safe support duties.
                         </Text>
                       </View>
 
@@ -5770,7 +5743,7 @@ export default function AdminCases() {
                                   <View style={styles.volunteerRosterIdentity}>
                                     <Text style={styles.volunteerRosterName}>{volunteer.fullName}</Text>
                                     <Text style={styles.volunteerRosterMeta}>
-                                      {barangayDisplay(volunteer.barangay)} · Approved Volunteer
+                                      Approved Volunteer · Citywide SJDM assignments
                                     </Text>
                                   </View>
                                   <View style={{ gap: 7, alignItems: "flex-end" }}>
