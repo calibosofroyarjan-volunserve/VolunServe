@@ -1829,7 +1829,7 @@ export default function AdminCases() {
 
           notificationTitle = "Emergency report validated";
           notificationMessage =
-            "Your emergency report was verified. LGU response may proceed, with optional Volunteer support when appropriate.";
+            "Admin approved your emergency report. A qualified Volunteer may be offered a community assistance task.";
           logAction = "Emergency Request Validated";
         }
 
@@ -3307,8 +3307,8 @@ export default function AdminCases() {
             caseId: incident.id,
             volunteerId: volunteer.uid,
             volunteerName: volunteer.fullName,
-            title: "Optional Volunteer Support Offered",
-            message: `LGU/Admin offered ${volunteer.fullName} as optional Volunteer support for your emergency. The Volunteer must accept before support becomes active or appears on live tracking.`,
+            title: "Volunteer Task Offered",
+            message: `Admin offered ${volunteer.fullName} a community assistance task. Live GPS appears only after the Volunteer starts the task and enables sharing.`,
             read: false,
             createdAt: serverTimestamp(),
           });
@@ -5649,7 +5649,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Volunteer Invitations & Assignments</Text>
+                              <Text style={styles.personnelCleanTitle}>Volunteer Task Assignments</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5657,7 +5657,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Invite any approved Volunteer, even offline or busy. They may Accept or Decline the invitation before case validation. Actual emergency dispatch still requires a verified case and an available responder.
+                              Invite approved Volunteers to help. Tasks are assigned after Admin validation. Volunteers may accept or decline, and this is not official emergency dispatch.
                             </Text>
                           </View>
                         </View>
@@ -5681,7 +5681,7 @@ export default function AdminCases() {
                             One Volunteer support assignment is already active
                           </Text>
                           <Text style={styles.personnelSupportNoticeText}>
-                            Finish or cancel it before offering support to another Volunteer. LGU response continues independently.
+                            Finish or cancel the active task before assigning another Volunteer.
                           </Text>
                         </View>
                       )}
