@@ -182,6 +182,8 @@ type ResponseAssignment = {
   volunteerName: string;
   caseTitle: string;
   status: AssignmentStatus;
+  residentConfirmationStatus?: string;
+  residentConfirmationOutcome?: string;
   createdAt?: any;
   updatedAt?: any;
 };
@@ -1257,6 +1259,8 @@ export default function AdminCases() {
             volunteerName: data.volunteerName || "Volunteer",
             caseTitle: data.caseTitle || "Incident",
             status: data.status || "offered",
+            residentConfirmationStatus: String(data.residentConfirmationStatus || ""),
+            residentConfirmationOutcome: String(data.residentConfirmationOutcome || ""),
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           };
@@ -2144,6 +2148,13 @@ export default function AdminCases() {
       if (!fieldSnapshot.exists() || fieldSnapshot.data().reportStatus !== "reviewed") {
         throw new Error("Review the Volunteer's completion report before confirming.");
       }
+      const finalAssignment = assignmentSnapshot.data();
+      if (String(finalAssignment.residentConfirmationStatus || "") !== "resident_confirmed") {
+        throw new Error("Wait for the Resident to confirm receiving assistance in My Reports.");
+      }
+      if (String(finalAssignment.residentConfirmationOutcome || "") !== "fully_helped") {
+        throw new Error("Assistance is incomplete or disputed. Keep the report open for Admin follow-up.");
+      }
       if (assignmentsForCase(incident.id).some((item) =>
         ["offered", "accepted", "responding", "on_site"].includes(String(item.status))
       )) {
@@ -2167,7 +2178,7 @@ export default function AdminCases() {
       });
       Alert.alert(
         "Completion Confirmed",
-        "The Volunteer task was reviewed and the emergency report is marked Completed. Close the case when appropriate.",
+        "The Volunteer report and Resident confirmation were reviewed. The case is Resolved and can now be closed.",
       );
     } catch (cause) {
       Alert.alert(
