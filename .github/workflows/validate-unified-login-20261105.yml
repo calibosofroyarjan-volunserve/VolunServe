@@ -1,0 +1,58 @@
+name: Validate Unified VolunServe Login (NO LIVE DEPLOY)
+on:
+  push:
+    branches:
+      - review/unified-login-roles-20261105
+    paths:
+      - .github/workflows/validate-unified-login-20261105.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-unified-login-validation
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      PRESERVED_LIVE_BASE: "61110074569aebf8dcc1e43f3e4b68d00450a3ba"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Assert Signup, Admin, Super Admin and production Rules exactly preserved
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$PRESERVED_LIVE_BASE" HEAD
+          git diff --exit-code "$PRESERVED_LIVE_BASE" HEAD -- 'app/(admin)' 'app/(superadmin)' 'app/(tabs)' 'components/admin' 'components/volunteer' 'app/signup.tsx' 'app/signup.web.tsx' 'components/auth/EmailFirstSignup.tsx' 'lib/firebaseAuth.ts' 'lib/signupFeature.ts' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --incremental false
+      - name: Test role isolation, Google-only community, LGU approvals and previous premium regressions
+        run: |
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node --test scripts/test-login-ui-release.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+      - name: Build premium web and check Firebase Hosting manifest
+        env:
+          EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Build native bundle (NO APK release)
+        run: npx expo export --platform android --clear
+      - name: Explicit release status
+        run: |
+          echo "PASS: isolated branch validation only. Production unchanged."
+          echo "Real authorized Admin/Super Admin logins and Guest/Google UI still require preview acceptance."
