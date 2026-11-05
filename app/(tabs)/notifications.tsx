@@ -16,8 +16,8 @@ type NotificationItem = {
   read?: boolean;
   createdAt?: any;
 };
-type Filter = "All" | "Unread" | "Emergency" | "Events" | "Donations" | "Account";
-const FILTERS: Filter[] = ["All", "Unread", "Emergency", "Events", "Donations", "Account"];
+type Filter = "All" | "Unread" | "Emergency" | "Events" | "Donations" | "Announcements" | "Account";
+const FILTERS: Filter[] = ["All", "Unread", "Emergency", "Events", "Donations", "Announcements", "Account"];
 const PAGE_SIZE = 5;
 
 const timestamp = (value: any): number => {
@@ -30,6 +30,7 @@ const timestamp = (value: any): number => {
 };
 const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> => {
   const raw = String(item.type || "").toLowerCase();
+  if (/announc|community_update|advisory/.test(raw)) return "Announcements";
   if (/emergency|disaster|rescue|incident|response|evacuat/.test(raw)) return "Emergency";
   if (/event|volunteer|attendance|certificate|schedule|task/.test(raw)) return "Events";
   if (/donat|assistance|fund|campaign|payment|release|receipt/.test(raw)) return "Donations";
@@ -176,7 +177,7 @@ export default function NotificationsScreen() {
         {visible.map(item => <View key={item.id} style={[styles.card, !item.read && styles.unreadCard]}>
           <View style={styles.cardTop}>
             <View style={[styles.typeIcon, !item.read && styles.typeIconUnread]}>
-              <Ionicons name={categoryOf(item) === "Emergency" ? "alert-circle-outline" : categoryOf(item) === "Events" ? "calendar-outline" : categoryOf(item) === "Donations" ? "heart-outline" : "shield-checkmark-outline"} size={19} color="#087D60"/>
+              <Ionicons name={categoryOf(item) === "Emergency" ? "alert-circle-outline" : categoryOf(item) === "Events" ? "calendar-outline" : categoryOf(item) === "Donations" ? "heart-outline" : categoryOf(item) === "Announcements" ? "megaphone-outline" : "shield-checkmark-outline"} size={19} color="#087D60"/>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.titleRow}>
