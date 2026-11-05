@@ -114,8 +114,8 @@ export default function CreateAnnouncement() {
       ? profile.barangay.trim()
       : "";
 
-  // Server security rules permit LGU Admin publishing only to the barangay
-  // assigned in their verified profile. Never show an unauthorized audience.
+  // LGU Admin selects the recipient of each local announcement.
+  // Author and SJDM audience are validated by server rules, not Super Admin assignment.
   useEffect(() => {
     if (SJDM_BARANGAYS.includes(barangay)) setRecipientBarangay(barangay);
   }, [barangay]);
