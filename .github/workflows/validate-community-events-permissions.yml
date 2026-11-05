@@ -22,10 +22,26 @@ jobs:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      # This repository contains a broken legacy Git gitlink named VolunServe,
+      # without a matching .gitmodules URL. Standard checkout fails during
+      # credentials cleanup even with submodules: false; use the exact ref tarball.
+      - name: Extract exact current source without legacy gitlink checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            -o "$RUNNER_TEMP/volunserve-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f firestore.rules
+          test -f package-lock.json
+          test -f scripts/test-community-events-rules.cjs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -48,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
-          test "$(git rev-parse HEAD)" = "$CURRENT_MAIN" || {
+          test "$SOURCE_SHA" = "$CURRENT_MAIN" || {
             echo "::error::Main advanced during the run. Retry with latest sources."
             exit 1
           }
