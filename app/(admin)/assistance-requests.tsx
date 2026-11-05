@@ -3336,7 +3336,55 @@ function ResidentReviewTab({
 }
 
 
-function CompactAssistanceReviefunction CompactAssistanceReview({
+
+function CompactReviewSelect({
+  value, options, onChange, disabled = false, error = false,
+}: {
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  error?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(([key]) => key === value)?.[1] || "Choose an option";
+  return (
+    <View style={styles.clearReviewDropdownWrap}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={selected}
+        accessibilityState={{ expanded: open, disabled }}
+        activeOpacity={0.82}
+        disabled={disabled}
+        onPress={() => setOpen((current) => !current)}
+        style={[styles.clearReviewDropdown, error && styles.assistanceFieldInvalid, disabled && { opacity: 0.6 }]}
+      >
+        <Text numberOfLines={1} style={styles.clearReviewDropdownValue}>{selected}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color="#64748B" />
+      </TouchableOpacity>
+      {open && !disabled && (
+        <View style={styles.clearReviewDropdownOptions}>
+          {options.map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              accessibilityRole="button"
+              accessibilityState={{ selected: value === key }}
+              onPress={() => { onChange(key); setOpen(false); }}
+              style={[styles.clearReviewDropdownOption, value === key && styles.clearReviewDropdownActive]}
+            >
+              <Text style={[styles.clearReviewDropdownOptionText, value === key && styles.clearReviewDropdownOptionChosen]}>
+                {label}
+              </Text>
+              {value === key && <Ionicons name="checkmark" size={16} color="#047857" />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CompactAssistanceReview({
   request, reviewDraft, reviewRecord, reviewLoading, validationIntent, reasonAttempt,
   adminNote, setAdminNote, rejectionReason, setRejectionReason, savingAction,
   onReviewChange, onStartReview, onVerify, onMoreInfo, onReject,
@@ -3355,7 +3403,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
   savingAction: string;
   onReviewChange: <K extends keyof PrivateReviewDraft>(key: K, value: PrivateReviewDraft[K]) => void;
   onStartReview: () => void;
-    onVerify: () => void;
+  onVerify: () => void;
   onMoreInfo: () => void;
   onReject: () => void;
   onDocuments: () => void;
@@ -3426,7 +3474,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
         {checkItems.map((item) => (
           <View key={item.key} style={styles.simpleCheck}>
             <Text style={styles.simpleCheckTitle}>{item.title}</Text>
-                        <View style={styles.simpleOptions}>
+            <View style={styles.simpleOptions}>
               <TouchableOpacity accessibilityRole="button" accessibilityState={{selected:reviewDraft[item.key]===item.yes}}
                 disabled={locked} onPress={() => onReviewChange(item.key,item.yes)}
                 style={[styles.simpleOption,reviewDraft[item.key]===item.yes&&styles.simpleOptionYes]}>
@@ -3449,7 +3497,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
 
         {reviewDraft.residencyVerificationStatus === "verified" && <View style={styles.simpleField}>
           <LabelText required>What proof confirmed the address?</LabelText>
-          <StatusChoiceRow value={reviewDraft.residencyVerificationMethod} disabled={locked}
+          <CompactReviewSelect value={reviewDraft.residencyVerificationMethod} disabled={locked}
             error={!!error("residencyVerificationMethod")}
             options={[
               ["profile_address","Profile and supporting evidence"],
@@ -3475,19 +3523,19 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
         <Text style={styles.simpleSection}>2. Check the hospital and amount</Text>
         {facilityRequired && <View style={styles.simpleField}>
           <LabelText required>Was the hospital or clinic confirmed?</LabelText>
-          <StatusChoiceRow value={reviewDraft.facilityVerificationStatus} disabled={locked}
+          <CompactReviewSelect value={reviewDraft.facilityVerificationStatus} disabled={locked}
             error={!!error("facilityVerificationStatus")}
-            options={[["pending","Not checked yet"],["confirmed","Yes, confirmed with official records"],["unable_to_confirm","Need more hospital information"],["inconsistent","Hospital details do not match"]]}
+            options={[["pending","Not checked yet"],["confirmed","Yes, confirmed using official records"],["unable_to_confirm","Need more hospital information"],["inconsistent","Hospital details do not match"]]}
             onChange={(value) => onReviewChange("facilityVerificationStatus",value)} />
           <ReviewValidationHint message={error("facilityVerificationStatus")} />
           {reviewDraft.facilityVerificationStatus === "confirmed" && <>
             <LabelText required>Hospital or clinic name</LabelText>
             <TextInput value={reviewDraft.facilityName} onChangeText={(value) => onReviewChange("facilityName",value)}
-              placeholder="Name on the official record" placeholderTextColor="#94A3B8" editable={!locked}
+              placeholder="Name shown on the official record" placeholderTextColor="#94A3B8" editable={!locked}
               style={[styles.input,!!error("facilityName")&&styles.assistanceFieldInvalid]} />
             <ReviewValidationHint message={error("facilityName")} />
             <LabelText required>How did you confirm it?</LabelText>
-            <StatusChoiceRow value={reviewDraft.facilityVerificationMethod} disabled={locked}
+            <CompactReviewSelect value={reviewDraft.facilityVerificationMethod} disabled={locked}
               error={!!error("facilityVerificationMethod")}
               options={[["official_phone","Called the hospital"],["official_email","Official email"],["official_record","Checked official documents"],["in_person","Verified in person"],["other","Other independent proof"]]}
               onChange={(value) => onReviewChange("facilityVerificationMethod",value)} />
@@ -3496,9 +3544,9 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
         </View>}
         {costRequired && <View style={styles.simpleField}>
           <LabelText required>Does the bill support the amount?</LabelText>
-          <StatusChoiceRow value={reviewDraft.costVerificationStatus} disabled={locked}
+          <CompactReviewSelect value={reviewDraft.costVerificationStatus} disabled={locked}
             error={!!error("costVerificationStatus")}
-            options={[["pending","Not checked yet"],["confirmed","Yes, checked against an official bill"],["inconsistent","The amount needs clarification"]]}
+            options={[["pending","Not checked yet"],["confirmed","Yes, verified using official proof"],["inconsistent","The amount needs clarification"]]}
             onChange={(value) => onReviewChange("costVerificationStatus",value)} />
           <ReviewValidationHint message={error("costVerificationStatus")} />
           {reviewDraft.costVerificationStatus === "confirmed" && <>
@@ -3511,7 +3559,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
             <LabelText>Assistance already received (PHP)</LabelText>
             <TextInput value={reviewDraft.confirmedExistingAssistanceAmount}
               onChangeText={(value)=>onReviewChange("confirmedExistingAssistanceAmount",value)}
-              keyboardType="decimal-pad" placeholder="0 if you confirmed none was received" placeholderTextColor="#94A3B8"
+              keyboardType="decimal-pad" placeholder="0 if you confirmed no other assistance" placeholderTextColor="#94A3B8"
               editable={!locked} style={[styles.input,!!error("confirmedExistingAssistanceAmount")&&styles.assistanceFieldInvalid]} />
             <ReviewValidationHint message={error("confirmedExistingAssistanceAmount")} />
           </>}
@@ -3531,12 +3579,12 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
 
       <View style={styles.simpleDecision}>
         <Text style={styles.simpleSection}>3. Choose a decision</Text>
-        <Text style={styles.simpleCopy}>The review is recorded when you submit a decision. No separate Save button is needed.</Text>
+        <Text style={styles.simpleCopy}>Your review is recorded when you submit a decision. No extra Save button.</Text>
         <View style={styles.simpleButtons}>
-                    <ActionButton label="Verify Request" icon="shield-checkmark-outline" variant="success"
+          <ActionButton label="Verify Request" icon="shield-checkmark-outline" variant="success"
             loading={savingAction==="verify"} disabled={!reviewRecord||locked} onPress={onVerify} />
         </View>
-        {!reviewRecord && <Text style={styles.simpleCopy}>Use Begin Review above to unlock decisions.</Text>}
+        {!reviewRecord && <Text style={styles.simpleCopy}>Choose Begin Review above to unlock decisions.</Text>}
         <View style={styles.simpleSecondary}>
           <TouchableOpacity accessibilityRole="button" disabled={!!savingAction}
             onPress={()=>setAction(action==="more_info"?null:"more_info")}>
@@ -3550,7 +3598,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
         {action && <View style={styles.simpleField}>
           <LabelText required>{action==="reject"?"Why is this request rejected?":"What details should the resident provide?"}</LabelText>
           <TextInput value={note} onChangeText={action==="reject"?setRejectionReason:setAdminNote}
-            multiline maxLength={1000} placeholder="Describe the missing proof or the reason for rejection"
+            multiline maxLength={1000} placeholder="Explain the missing proof or the reason for rejection"
             placeholderTextColor="#94A3B8"
             style={[styles.textArea,!!noteIssue&&styles.assistanceFieldInvalid]} />
           <ReviewValidationHint message={noteIssue} />
@@ -3570,7 +3618,7 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
       <TouchableOpacity accessibilityRole="button" style={styles.simpleMore} onPress={onAdditional}>
         <Ionicons name="options-outline" size={17} color="#64748B" />
         <Text style={{flex:1,color:"#64748B",fontSize:12,fontWeight:"600"}}>
-          Other checks (only if needed)
+          Other checks (only when needed)
         </Text>
         <Ionicons name="chevron-forward" size={16} color="#64748B" />
       </TouchableOpacity>
@@ -3578,7 +3626,8 @@ function CompactAssistanceReviefunction CompactAssistanceReview({
   );
 }
 
-t,
+function DecisionTab({
+  request,
   reviewDraft,
   reviewRecord,
   reviewLoading,
@@ -5576,7 +5625,15 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
-  simpleReviewSectionHeading: { gap: 4 },
+  simpleReviewSectionHeading: { gap: 5 },
+  clearReviewDropdownWrap: { gap: 4 },
+  clearReviewDropdown: { minHeight: 44, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  clearReviewDropdownValue: { flex: 1, fontSize: 12, fontWeight: "700", color: "#334155" },
+  clearReviewDropdownOptions: { borderRadius: 9, borderWidth: 1, borderColor: "#D8E2EA", backgroundColor: "#FFFFFF", overflow: "hidden", marginTop: 3 },
+  clearReviewDropdownOption: { minHeight: 42, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  clearReviewDropdownActive: { backgroundColor: "#EFFAF3" },
+  clearReviewDropdownOptionText: { flex: 1, fontSize: 12, color: "#334155", lineHeight: 18 },
+  clearReviewDropdownOptionChosen: { color: "#047857", fontWeight: "800" },
 
   simplePanel: { padding: 16, gap: 16, backgroundColor: "#FFFFFF", borderRadius: 14, borderColor: "#E2E8F0", borderWidth: 1 },
   simpleHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
