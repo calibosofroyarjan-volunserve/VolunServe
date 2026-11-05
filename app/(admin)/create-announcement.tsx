@@ -1,5 +1,5 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 import {
@@ -21,7 +21,10 @@ import {
 import {
   addDoc,
   collection,
+  doc,
+  onSnapshot,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 
 import {
@@ -42,9 +45,15 @@ export default function CreateAnnouncement() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
-  const [barangayOpen, setBarangayOpen] = useState(false);
-  const [chosenBarangay, setChosenBarangay] = useState("");
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
+  // LGU Admin declares the official area; programmers verify rather than choose it.
+  const [requestedBarangay, setRequestedBarangay] = useState("");
+  const [requestOffice, setRequestOffice] = useState("");
+  const [requestPosition, setRequestPosition] = useState("");
+  const [requestReference, setRequestReference] = useState("");
+  const [requestStatus, setRequestStatus] = useState("");
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestError, setRequestError] = useState("");
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
     { label: "Volunteer Schedule Update", title: "Volunteer Schedule Update", body: "Volunteers, please review your assigned activities and any schedule updates in VolunServe." },
@@ -53,6 +62,20 @@ export default function CreateAnnouncement() {
 
   const [submitting, setSubmitting] =
     useState(false);
+
+  useEffect(() => {
+    if (!user?.uid || profile?.role !== "admin") return;
+    return onSnapshot(
+      doc(db, "lguBarangayRequests", user.uid),
+      snapshot => {
+        const data = snapshot.data();
+        setRequestStatus(typeof data?.status === "string" ? data.status : "");
+        if (data?.status === "rejected")
+          setRequestError("The previous request was not verified. Check your official details and submit again.");
+      },
+      () => setRequestError("Area verification is unavailable. Please try again after server permissions are enabled.")
+    );
+  }, [user?.uid, profile?.role]);
 
   if (loading) {
     return (
@@ -116,7 +139,39 @@ export default function CreateAnnouncement() {
   // Server security rules permit LGU Admin publishing only to the barangay
   // assigned in their verified profile. Never show an unauthorized audience.
   const validOfficialBarangay = SJDM_BARANGAYS.includes(barangay);
-  const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
+  const publishBarangay = validOfficialBarangay ? barangay : "";
+
+  const submitAreaVerification = async () => {
+    if (!user || requestBusy || validOfficialBarangay ||
+        requestStatus === "pending" || requestStatus === "approved") return;
+    if (!SJDM_BARANGAYS.includes(requestedBarangay)) {
+      setRequestError("Select your officially assigned barangay in San Jose del Monte.");
+      return;
+    }
+    const office = requestOffice.trim();
+    const position = requestPosition.trim();
+    const reference = requestReference.trim();
+    if (office.length < 3 || office.length > 160 || position.length < 3 ||
+        position.length > 120 || reference.length < 5 || reference.length > 160) {
+      setRequestError("Enter your official LGU office, position, and non-sensitive appointment reference.");
+      return;
+    }
+    setRequestError("");
+    setRequestBusy(true);
+    try {
+      await setDoc(doc(db, "lguBarangayRequests", user.uid), {
+        uid: user.uid, desiredBarangay: requestedBarangay, office, position,
+        appointmentReference: reference, status: "pending",
+        submittedAt: serverTimestamp(), reviewedBy: "",
+        reviewedAt: null, rejectionReason: "",
+      });
+      setRequestStatus("pending");
+    } catch {
+      setRequestError("Request not submitted. Please check your connection and that area-verification permissions are enabled.");
+    } finally {
+      setRequestBusy(false);
+    }
+  };
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
@@ -124,7 +179,7 @@ export default function CreateAnnouncement() {
     if (!validOfficialBarangay || !publishBarangay || publishBarangay.toLowerCase() === "all" || publishBarangay !== barangay) {
       Alert.alert(
         "Barangay Required",
-        "This account has no verified LGU barangay. Ask the Super Admin to assign the correct area in Administrator Directory > Manage > Assign Barangay."
+        "Your official LGU area is not yet verified. Complete the area-verification request on this page."
       );
 
       return;
@@ -218,38 +273,70 @@ export default function CreateAnnouncement() {
       <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Barangay Announcements" subtitle="Prepare and publish official barangay notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
-        <Text style={styles.scopeLabel}>
-          ANNOUNCEMENT AREA
-        </Text>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Choose authorized announcement barangay"
-          accessibilityState={{ expanded: barangayOpen }}
-          disabled={!validOfficialBarangay || submitting}
-          onPress={() => setBarangayOpen(value => !value)}
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-        >
-          <Text style={styles.scopeValue}>{validOfficialBarangay ? publishBarangay : "No verified barangay assigned"}</Text>
-          <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
-        </TouchableOpacity>
-        {barangayOpen && barangay ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
-            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
-            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
-          >
-            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
-          </TouchableOpacity>
-        ) : null}
-
+        <Text style={styles.scopeLabel}>OFFICIAL LGU ANNOUNCEMENT AREA</Text>
+        <View style={[styles.input, { justifyContent: "center" }]}>
+          <Text style={styles.scopeValue}>{validOfficialBarangay ? barangay : "Official barangay not verified"}</Text>
+        </View>
         <Text style={styles.scopeHelp}>
-          Ordinary LGU Admin accounts can only publish
-          announcements for their verified assigned area. The Super Admin must verify the official LGU assignment in Administrator Directory → Manage → Assign Barangay. No self-selection is allowed.
+          Announcements are published only to the area verified with the LGU appointment.
+          Programmers handle system access and verification, not selecting operational barangays.
         </Text>
       </View>
 
+      {!validOfficialBarangay ? (
+        <View style={styles.formCard}>
+          <Text style={styles.noteTitle}>Request Official Barangay Verification</Text>
+          <Text style={styles.scopeHelp}>
+            This legacy Admin account has no verified area. Select the barangay where you
+            are officially assigned and submit your LGU appointment details. Super Admin
+            verifies the request without picking a barangay. Publishing stays unavailable until approved.
+          </Text>
+          {requestStatus === "pending" || requestStatus === "approved" ? (
+            <View style={{ padding: 14, backgroundColor: "#EAF8F6", borderRadius: 9, marginTop: 14 }}>
+              <Text style={styles.noteTitle}>
+                {requestStatus === "pending" ? "Verification pending" : "Area verified"}
+              </Text>
+              <Text style={styles.scopeHelp}>
+                {requestStatus === "pending"
+                  ? "Your request is recorded. Publishing unlocks after independent LGU verification."
+                  : "Your authorized area will appear after the Admin profile is refreshed."}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.inputLabel}>OFFICIAL ASSIGNED BARANGAY *</Text>
+              <ScrollView nestedScrollEnabled style={{ maxHeight: 170, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10 }}>
+                {SJDM_BARANGAYS.map(area => (
+                  <TouchableOpacity key={area} accessibilityRole="radio"
+                    accessibilityState={{ checked: requestedBarangay === area }}
+                    onPress={() => setRequestedBarangay(area)}
+                    style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#E2E8F0",
+                      backgroundColor: requestedBarangay === area ? "#EAF8F6" : "#FFFFFF" }}>
+                    <Text style={{ color: "#173D32", fontWeight: requestedBarangay === area ? "700" : "400" }}>
+                      {area}{requestedBarangay === area ? " · Selected" : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={styles.inputLabel}>LGU OFFICE / DEPARTMENT *</Text>
+              <TextInput style={styles.input} value={requestOffice} onChangeText={setRequestOffice}
+                placeholder="Official LGU office" placeholderTextColor="#94A3B8" maxLength={160} />
+              <Text style={styles.inputLabel}>OFFICIAL POSITION *</Text>
+              <TextInput style={styles.input} value={requestPosition} onChangeText={setRequestPosition}
+                placeholder="Position on appointment" placeholderTextColor="#94A3B8" maxLength={120} />
+              <Text style={styles.inputLabel}>APPOINTMENT REFERENCE *</Text>
+              <TextInput style={styles.input} value={requestReference} onChangeText={setRequestReference}
+                placeholder="Non-sensitive official memo/reference" placeholderTextColor="#94A3B8" maxLength={160} />
+              <Text style={styles.scopeHelp}>Do not enter government ID numbers, private scans or passwords.</Text>
+              {!!requestError && <Text accessibilityRole="alert" style={{ color: "#B91C1C", marginVertical: 10 }}>{requestError}</Text>}
+              <TouchableOpacity style={[styles.submitButton, requestBusy && styles.submitButtonDisabled]}
+                disabled={requestBusy} onPress={() => void submitAreaVerification()}>
+                <Text style={styles.submitText}>{requestBusy ? "Submitting..." : "Submit for Official Verification"}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ) : (
       <View style={styles.formCard}>
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose announcement type"
@@ -265,15 +352,6 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
-        {!validOfficialBarangay ? (
-          <View style={{padding:12,borderRadius:10,backgroundColor:"#FFF4E5",marginBottom:10}}>
-            <Text style={{color:"#92400E",fontWeight:"700"}}>Publishing disabled: Official barangay not assigned</Text>
-            <Text style={{color:"#92400E",marginTop:5,lineHeight:19}}>
-              Ask your Super Admin to verify your LGU appointment and assign your barangay in
-              Administrator Directory → Manage → Assign Barangay.
-            </Text>
-          </View>
-        ) : null}
         <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
         <Text style={styles.inputLabel}>
           TITLE
@@ -330,6 +408,7 @@ export default function CreateAnnouncement() {
           )}
         </TouchableOpacity>
       </View>
+      )}
 
       <View style={styles.noteCard}>
         <Text style={styles.noteTitle}>
