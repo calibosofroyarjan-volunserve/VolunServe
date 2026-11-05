@@ -1,0 +1,134 @@
+name: Restore Premium Email-First Signup on Latest Super Admin (Hosting Only)
+on:
+  push:
+    branches:
+      - hotfix/premium-signup-web-persistent-20261105
+    paths:
+      - .github/workflows/restore-premium-web-signup-20261105.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-hotfix:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      VERIFIED_LIVE_BASE: "1142946133c4f995c23366011e8d8e33a0359d3a"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-hotfix-firebase-sa.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify only web Signup flag, its test and this release workflow changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
+          git diff --name-only "$VERIFIED_LIVE_BASE" HEAD > /tmp/changed.txt
+          cat /tmp/changed.txt
+          test "$(wc -l < /tmp/changed.txt)" -eq 3
+          grep -Fxq 'lib/signupFeature.ts' /tmp/changed.txt
+          grep -Fxq 'scripts/test-signup-prod.cjs' /tmp/changed.txt
+          grep -Fxq '.github/workflows/restore-premium-web-signup-20261105.yml' /tmp/changed.txt
+          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/(superadmin)' 'app/(admin)' 'app/(tabs)' 'components/admin' 'components/volunteer' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: latest Pending LGU Applications + all Admin/Super Admin and Firebase resources preserved."
+
+      - name: Verify live Hosting still has exact latest Admin version
+        run: VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+
+      - name: Install dependency lock
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate web premium default, native rollback behavior, Login, Signup and TypeScript
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
+
+      - name: Export premium Signup web and verify routes
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+
+      - name: Require Firebase preview credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase service account missing. NO live deploy."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Create isolated tested preview channel
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: premium-signup-fixed-1105
+          expires: 3d
+
+      - name: Verify preview version and correct signup actually renders in a browser
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/check-live-hosting.cjs
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME" ]; then
+            echo "::error::Chrome not installed on runner; cannot verify UI. STOP before live."
+            exit 1
+          fi
+          echo "Checking actual hydrated Signup in headless Chrome..."
+          timeout 60s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --virtual-time-budget=12000 --dump-dom "$VOLUNSERVE_HOSTING_URL/signup?smoke=$GITHUB_SHA" > /tmp/signup-dom.html 2>/tmp/signup-chrome.log || true
+          node <<'NODE'
+          const fs=require('node:fs');
+          const html=fs.readFileSync('/tmp/signup-dom.html','utf8');
+          console.log('Hydrated Signup DOM length:',html.length,'step1:',html.includes('Step 1'),'legacyPersonal:',html.includes('Personal Information'),'newSignupButton:',html.includes('Create Account'));
+          if(!html.includes('Step 1') || !html.includes('Create Account') || html.includes('Personal Information')){
+            console.error('Browser rendered legacy Signup or failed to hydrate. No production release.');
+            process.exit(1);
+          }
+          console.log('PASS: real browser displays premium Step 1 (not legacy Personal Information).');
+          NODE
+
+      - name: BACKUP and promote exact verified preview only while latest Admin is still live
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+          PROJECT=volunserve-3aa5b
+          BACKUP=backup-1105-before-premium-fix
+          PREVIEW=premium-signup-fixed-1105
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Backup completed: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Premium Signup + latest Admin live as $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "Hosting only; production Firestore Rules, Functions and records untouched." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::Live verification failed. Backup exists at $BACKUP. Check current revision before rollback."
+          exit 1
