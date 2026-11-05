@@ -66,7 +66,7 @@ async function main(){
       });
       last=result.result?.value||{};
       const text=last.text||"";
-      const keys=["LGU Staff Verification Application","Proof of LGU Employment","LGU Employee ID","Supporting official document","Resume Proof Upload","Submit for Super Admin Verification"];
+      const keys=["LGU Staff Verification Application","Proof of LGU Employment","LGU Employee ID","Supporting official document","Resume Proof Upload","Submit for Super Admin Verification","Preview only"];
       if(keys.every(x=>text.includes(x))){
         assert(!text.includes("Use an AI face scan"),"Face recognition unexpectedly present.");
         console.log("PASS LGU documents application UI fully hydrated",JSON.stringify({url:last.url,ready:last.ready,scripts:last.scripts,bytes:text.length}));
