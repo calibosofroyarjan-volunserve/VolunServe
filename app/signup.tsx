@@ -1,4 +1,5 @@
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
@@ -210,7 +211,7 @@ function getFriendlyAuthError(error: any) {
   if (code === "auth/weak-password") return "Your password is too weak.";
   if (code === "auth/network-request-failed") return "Network error. Please check your internet connection and try again.";
   if (code === "auth/account-exists-with-different-credential") return "An account already exists with this email using a different sign-in method.";
-  return error?.message || "Something went wrong. Please try again.";
+  return userFacingError(error, "Unable to complete registration. Check your details and try again.");
 }
 
 function splitDisplayName(displayName: string) {
@@ -504,7 +505,7 @@ function LegacySignup() {
 
         Alert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
       } catch (error: any) {
-        Alert.alert("Firebase Error", getFriendlyAuthError(error));
+        Alert.alert("Unable to continue", getFriendlyAuthError(error));
       }
     };
     handleGoogleSuccess();
