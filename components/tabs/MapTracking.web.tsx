@@ -22,6 +22,7 @@ import CaseChat from "./CaseChat.web";
 import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
+import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
@@ -3750,9 +3751,7 @@ export default function WebMapTracking() {
     ],
   );
 
-  // Resident map keeps the official LGU responder primary at all times.
-  // An accepted/active Volunteer is optional additional support and may appear
-  // beside the LGU; it never replaces the LGU responder.
+  // Case-scoped Volunteer locations are the only responder pins in the Resident map.
   const residentActiveVolunteerAssignment =
     isResidentMode && residentShareAssignment
       ? residentShareAssignment
@@ -3771,25 +3770,15 @@ export default function WebMapTracking() {
         }))
     : [];
 
+  const adminFocusedVolunteerPin =
+    adminVolunteerPins.find((point) => point.caseId === focusedCaseId) || null;
+
   const mapResponderPins = isAdministrator
-    ? [
-        ...(adminLguPin ? [adminLguPin] : []),
-        ...adminVolunteerPins,
-      ]
+    ? adminVolunteerPins
     : isResidentMode
-      ? [
-          ...(residentLguPin
-            ? [{ ...residentLguPin, selectable: false }]
-            : []),
-          ...residentActiveVolunteerPins,
-        ]
+      ? residentActiveVolunteerPins
       : missionMode
-        ? [
-            ...(volunteerLguPin
-              ? [{ ...volunteerLguPin, selectable: false }]
-              : []),
-            ...flow.responders,
-          ]
+        ? flow.responders
         : [];
 
   const residentShareMode: "lgu" | "volunteer" =
@@ -3797,6 +3786,7 @@ export default function WebMapTracking() {
 
   const residentShareCanPublish =
     isResidentMode &&
+    !!residentShareAssignment &&
     !!user &&
     !!residentShareCaseId &&
     !!residentCoordinationCase &&
@@ -3822,9 +3812,8 @@ export default function WebMapTracking() {
       user.uid,
     );
 
-    // When there is no accepted/responding Volunteer, the Resident may still
-    // explicitly share live GPS with the LGU. If a Volunteer later becomes
-    // active, this same document switches to volunteer mode automatically.
+    // Resident live GPS can be shared only while their assigned Volunteer
+    // has accepted an active mission. Never publish to an unassigned role.
     const assignmentId = residentShareAssignment?.id || "";
     const responseMode = residentShareMode;
     const caseId = residentShareCaseId;
@@ -4021,15 +4010,6 @@ export default function WebMapTracking() {
     router.replace("/disaster-response?view=tracking" as any);
   };
 
-  const residentResponderLastShared = Math.max(
-    residentLguPin?.lastShared || 0,
-    residentResponderPins.reduce(
-      (latest, point) =>
-        Math.max(latest, point.lastShared || 0),
-      0,
-    ),
-  );
-
   const residentDisplayedAssignment =
     isResidentMode &&
     residentPrimaryAssignment &&
@@ -4041,6 +4021,7 @@ export default function WebMapTracking() {
 
   const residentCanStartShare =
     isResidentMode &&
+    !!residentShareAssignment &&
     !!selectedCase &&
     selectedCase.id === residentCoordinationCaseId &&
     ["reported", "validated", "assigned", "in_progress"].includes(
@@ -4052,13 +4033,7 @@ export default function WebMapTracking() {
       return null;
     }
 
-    // Official LGU is always the Resident's primary route source.
-    // Optional Volunteer GPS is only a fallback when no LGU GPS has ever been
-    // published yet for the assigned case.
-    if (residentLguPin) {
-      return residentLguPin;
-    }
-
+    // Resident route originates only from the assigned Volunteer with opt-in GPS.
     if (residentActiveVolunteerAssignment) {
       return (
         residentResponderPins.find(
@@ -4074,29 +4049,25 @@ export default function WebMapTracking() {
     isResidentMode,
     residentActiveVolunteerAssignment?.volunteerId,
     residentResponderPins,
-    residentLguPin,
   ]);
 
   const routeOrigin = useMemo<RouteCoordinate | null>(() => {
-    if (isResidentMode && routeResponderPoint) {
+    if (isResidentMode && routeResponderPoint && !routeResponderPoint.stale) {
       return {
         latitude: Number(routeResponderPoint.latitude),
         longitude: Number(routeResponderPoint.longitude),
       };
     }
 
-    if (
-      isAdministrator &&
-      adminMissionMode &&
-      adminLguPin
-    ) {
+    if (isAdministrator && adminMissionMode) {
+      if (!adminFocusedVolunteerPin || adminFocusedVolunteerPin.stale) return null;
       return {
-        latitude: Number(adminLguPin.latitude),
-        longitude: Number(adminLguPin.longitude),
+        latitude: Number(adminFocusedVolunteerPin.latitude),
+        longitude: Number(adminFocusedVolunteerPin.longitude),
       };
     }
 
-    if ((missionMode || adminMissionMode) && userLocation) {
+    if ((missionMode || (adminMissionMode && !isAdministrator)) && userLocation) {
       return {
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
@@ -4110,8 +4081,9 @@ export default function WebMapTracking() {
     routeResponderPoint?.longitude,
     isAdministrator,
     adminMissionMode,
-    adminLguPin?.latitude,
-    adminLguPin?.longitude,
+    adminFocusedVolunteerPin?.latitude,
+    adminFocusedVolunteerPin?.longitude,
+    adminFocusedVolunteerPin?.stale,
     missionMode,
     userLocation?.latitude,
     userLocation?.longitude,
@@ -5496,59 +5468,37 @@ export default function WebMapTracking() {
     residentDisplayedAssignment?.status,
   );
 
-  const residentLguResponseStatus = normalize(
-    residentCoordinationCase?.officialLguResponseStatus,
+  const residentVolunteerStatus = normalize(residentPrimaryAssignment?.status);
+  const residentCaseStatus = emergencyTaskStatusLabel(
+    residentCoordinationCase?.status,
+    residentCoordinationCase?.verificationStatus,
+    residentVolunteerStatus,
   );
-
-  const residentLguArrivalStatus = normalize(
-    residentCoordinationCase?.lguArrivalConfirmationStatus,
-  );
-
-  const residentFlowIndex =
-    [
-      "completed",
-      "completed_pending_admin_review",
-      "reviewed",
-    ].includes(residentLguResponseStatus)
-      ? 4
-      : residentLguResponseStatus === "on_site" ||
-          ["pending", "confirmed"].includes(residentLguArrivalStatus)
-        ? 3
-        : ["responding", "acknowledged"].includes(residentLguResponseStatus)
-          ? 2
-          : residentLguResponseStatus === "assigned"
-            ? 1
-            : normalize(residentCoordinationCase?.status) === "resolved"
-              ? 4
-              : residentLguPin && roadRoute && roadRoute.distanceMeters < 20
-                ? 3
-                : residentLguPin
-                  ? 2
-                  : ["validated", "assigned", "in_progress"].includes(
-                        normalize(residentCoordinationCase?.status),
-                      )
-                    ? 1
-                    : 0;
+  const residentFlowIndex = residentCaseStatus === "Completed" ? 5
+    : residentCaseStatus === "In Progress" ? 4
+    : residentCaseStatus === "Assigned" ? 3
+    : residentCaseStatus === "Approved" ? 2
+    : residentCaseStatus === "Pending" ? 1 : 0;
 
   const residentNeedsCaseSelection =
     isResidentMode && !residentCoordinationCase;
 
   const pageTitle =
     adminMissionMode && isAdministrator
-      ? "LGU Response Monitoring"
+      ? "Volunteer Response Monitoring"
       : adminMissionMode
         ? "LGU Emergency Navigation"
     : isAdministrator
-      ? "LGU Emergency Command Map"
+      ? "Emergency Reports Map"
       : missionMode
         ? "Volunteer Response Map"
         : isResidentMode
-          ? "Emergency Response Tracking"
+          ? "Emergency Report Tracking"
           : "Volunteer Response Map";
 
   const pageSubtitle =
     adminMissionMode && isAdministrator
-      ? "View the assigned LGU responder, Resident destination, route, ETA, and live response status. Admin does not control responder GPS."
+      ? "Monitor the assigned Volunteer, Resident destination, response progress, and GPS shared during an active mission."
       : adminMissionMode
         ? "Navigate from the LGU's current GPS position to the Resident's active emergency location."
     : isAdministrator
@@ -5556,7 +5506,7 @@ export default function WebMapTracking() {
       : missionMode
         ? "Respond, navigate, arrive, and complete the mission in one clear flow."
         : isResidentMode
-          ? "Follow LGU case updates and authorized responder locations when available."
+          ? "Follow your report, assigned Volunteer, and opt-in response GPS."
           : "View evacuation centers here. Open an assigned emergency from Volunteer Tasks to start live response navigation.";
 
   return (
@@ -5575,7 +5525,7 @@ export default function WebMapTracking() {
         <div>
           <span className="eyebrow">
             {isAdministrator
-              ? "VOLUNSERVE · LGU COMMAND"
+              ? "VOLUNSERVE · ADMIN MONITORING"
               : isLguPersonnel
                 ? "VOLUNSERVE · LGU RESPONDER"
                 : isVolunteerMode
@@ -5590,7 +5540,7 @@ export default function WebMapTracking() {
           className={`clean-live-badge ${
             adminMissionMode
               ? isAdministrator
-                ? adminLguPin
+                ? adminFocusedVolunteerPin && !adminFocusedVolunteerPin.stale
                   ? "active"
                   : ""
                 : tracking
@@ -5600,7 +5550,7 @@ export default function WebMapTracking() {
                 ? tracking && ["responding", "on_site"].includes(missionAssignmentStatus)
                   ? "active"
                   : ""
-                : isResidentMode && residentResponderLastShared
+                : isResidentMode && residentActiveVolunteerPins.some((pin) => !pin.stale)
                   ? "active"
                   : ""
           }`}
@@ -5608,11 +5558,11 @@ export default function WebMapTracking() {
           <span />
           {adminMissionMode
             ? isAdministrator
-              ? adminLguPin
-                ? adminLguPin.stale
-                  ? "LGU GPS · STALE"
-                  : "LGU RESPONSE · GPS LIVE"
-                : "WAITING FOR LGU GPS"
+              ? adminFocusedVolunteerPin
+                ? adminFocusedVolunteerPin.stale
+                  ? "VOLUNTEER GPS · STALE"
+                  : "VOLUNTEER GPS · LIVE"
+                : "WAITING FOR VOLUNTEER GPS"
               : tracking
                 ? "LGU RESPONSE · GPS LIVE"
                 : "READY TO NAVIGATE"
@@ -5625,9 +5575,9 @@ export default function WebMapTracking() {
                     ? "LIVE RESPONSE"
                     : statusLabel(missionAssignmentStatus || "accepted")
                 : isResidentMode
-                  ? residentResponderLastShared
-                    ? "RESPONDER LIVE"
-                    : "RESPONSE STATUS"
+                  ? residentActiveVolunteerPins.some((pin) => !pin.stale)
+                    ? "VOLUNTEER GPS LIVE"
+                    : "REPORT STATUS"
                   : "READY"}
         </div>
       </header>
@@ -5695,66 +5645,32 @@ export default function WebMapTracking() {
       )}
 
       {adminMissionMode && adminCase && (
-        <section
-          className="admin-response-overview"
-          aria-label="LGU direct response overview"
-        >
+        <section className="admin-response-overview" aria-label="Assigned Volunteer tracking overview">
           <div className="admin-response-overview-main">
-            <span className="clean-kicker">
-              {isAdministrator
-                ? "LGU RESPONSE MONITORING"
-                : "LGU DIRECT RESPONSE"}
-            </span>
-            <strong>{adminCase.title || "Emergency response"}</strong>
+            <span className="clean-kicker">VOLUNTEER RESPONSE TRACKING</span>
+            <strong>{adminCase.title || "Emergency report"}</strong>
             <small>
-              Destination:{" "}
-              {usingResidentLiveDestination
-                ? "Resident live shared location"
-                : adminCase.location ||
-                  adminCase.reporterAddress ||
-                  "Saved emergency GPS pin"}
+              Resident destination: {usingResidentLiveDestination
+                ? "Resident's shared location"
+                : adminCase.location || adminCase.reporterAddress || "Saved reported location"}
             </small>
           </div>
-
           <div className="admin-response-overview-status">
-            <span>Route status</span>
+            <span>Assigned Volunteer GPS</span>
             <strong>
-              {isAdministrator
-                ? adminLguPin
-                  ? roadRoute
-                    ? roadRoute.distanceMeters < 20
-                      ? "LGU at resident destination"
-                      : `${formatRoadDistance(roadRoute.distanceMeters)} · ${formatDriveTime(
-                          roadRoute.durationSeconds,
-                        )}`
-                    : routeLoading
-                      ? "Calculating LGU route…"
-                      : adminLguPin.stale
-                        ? "LGU GPS reading is stale"
-                        : "LGU GPS received · waiting for route"
-                  : "Waiting for assigned LGU GPS"
-                : tracking
-                  ? roadRoute
-                    ? roadRoute.distanceMeters < 20
-                      ? "At resident destination"
-                      : `${formatRoadDistance(roadRoute.distanceMeters)} · ${formatDriveTime(
-                          roadRoute.durationSeconds,
-                        )}`
-                    : routeLoading || locating
-                      ? "Calculating route…"
-                      : "GPS active · waiting for route"
-                  : "Ready to navigate"}
+              {adminFocusedVolunteerPin
+                ? adminFocusedVolunteerPin.stale
+                  ? "Location needs refresh"
+                  : roadRoute
+                    ? `${formatRoadDistance(roadRoute.distanceMeters)} · ${formatDriveTime(roadRoute.durationSeconds)}`
+                    : routeLoading ? "Calculating road route…" : "GPS sharing active"
+                : "Waiting for active Volunteer GPS"}
             </strong>
             <small>
-              {isAdministrator
-                ? adminLguPin
-                  ? `Red LGU responder → green Resident destination · last GPS ${new Date(
-                      adminLguPin.lastShared,
-                    ).toLocaleTimeString()}`
-                  : "Admin is view-only. The route appears when the assigned LGU Personnel shares GPS."
-                : tracking
-                  ? "Red LGU pin → green Resident destination"
-                  : "Start navigation from the Resident panel on the right."}
+              {adminFocusedVolunteerPin?.lastShared
+                ? `Last GPS update: ${new Date(adminFocusedVolunteerPin.lastShared).toLocaleString("en-PH")} · ${Number(adminFocusedVolunteerPin.latitude).toFixed(5)}, ${Number(adminFocusedVolunteerPin.longitude).toFixed(5)}`
+                : "No Volunteer GPS published yet"}
+              {" · "}Admin can monitor but cannot activate or control a Volunteer's GPS.
             </small>
           </div>
         </section>
@@ -5814,7 +5730,7 @@ export default function WebMapTracking() {
         <section className="clean-flow-card resident-clean-flow" aria-label="Resident response flow">
           <div className="clean-flow-summary">
             <div>
-              <span className="clean-kicker">YOUR EMERGENCY RESPONSE</span>
+              <span className="clean-kicker">EMERGENCY REPORT · {residentCaseStatus.toUpperCase()}</span>
               <h2>{residentCoordinationCase.title || "Emergency request"}</h2>
               <p>
                 {residentUsingOwnLiveDestination
@@ -5835,24 +5751,30 @@ export default function WebMapTracking() {
             </div>
 
             <div className="clean-summary-person">
-              <span>LGU response</span>
+              <span>Assigned Volunteer</span>
               <strong>
-                {residentLguPin?.name ||
-                  residentCoordinationCase?.activeLguResponderName ||
-                  "Awaiting LGU assignment"}
+                {["declined", "cancelled"].includes(residentVolunteerStatus)
+                  ? "Waiting for Admin reassignment"
+                  : residentPrimaryAssignment?.volunteerName ||
+                    "Waiting for Admin assignment"}
               </strong>
               <small>
-                {residentLguPin
-                  ? `Official LGU responder · ${residentLguPin.stale ? "STALE" : "LIVE"}`
-                  : residentCoordinationCase?.activeLguResponderUid
-                    ? "Official LGU responder · WAITING GPS"
-                    : "No LGU responder assigned yet"}
+                {residentPrimaryAssignment
+                  ? residentVolunteerStatus === "offered"
+                    ? "Offer sent · awaiting Volunteer acceptance"
+                    : ["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "The previous assignment ended · Admin can assign another Volunteer"
+                    : residentVolunteerStatus === "accepted"
+                      ? "Accepted · waiting to respond"
+                      : residentVolunteerStatus === "responding"
+                        ? "On the way"
+                        : residentVolunteerStatus === "on_site"
+                          ? "Arrived"
+                          : residentVolunteerStatus === "completed"
+                            ? "Completed · awaiting Admin review"
+                            : statusLabel(residentVolunteerStatus)
+                  : "Admin will review your report before assignment"}
               </small>
-              {residentActiveVolunteerAssignment && (
-                <small>
-                  Optional Volunteer support · {residentActiveVolunteerAssignment.volunteerName || "Volunteer"} · {statusLabel(residentActiveVolunteerAssignment.status)}
-                </small>
-              )}
             </div>
 
             <div className="clean-summary-metric">
@@ -5879,7 +5801,7 @@ export default function WebMapTracking() {
           </div>
 
           <div className="clean-flow-steps">
-            {["Coordinating", "On the way", "Arrived", "Response complete"].map(
+            {["Pending", "Approved", "Assigned", "In Progress", "Completed"].map(
               (label, index) => {
                 const step = index + 1;
                 const complete = residentFlowIndex > step;
@@ -6016,12 +5938,6 @@ export default function WebMapTracking() {
             {isAdministrator && (
               <>
                 <span><i className="legend-dot resident-role-dot" /> Resident</span>
-                {adminMissionMode && (
-                  <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
-                )}
-                {!!adminLguPin && (
-                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
-                )}
                 {adminVolunteerPins.length > 0 && (
                   <span><i className="legend-dot responder-dot" /> Accepted Volunteer</span>
                 )}
@@ -6039,11 +5955,8 @@ export default function WebMapTracking() {
                 <span><i className="legend-dot resident-role-dot" /> Reported resident GPS</span>
                 {publicPlacePins.length > 0 && <span>🏛️ Mapped government building</span>}
                 {verifiedCityLguCount > 0 && <span>🏢 LGU facility (database verified)</span>}
-                {residentLguPin && (
-                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
-                )}
                 {residentActiveVolunteerAssignment && (
-                  <span><i className="legend-dot responder-dot" /> Optional Volunteer support</span>
+                  <span><i className="legend-dot responder-dot" /> Assigned Volunteer</span>
                 )}
               </>
             )}
@@ -6052,9 +5965,7 @@ export default function WebMapTracking() {
                 <span><i className="legend-dot responder-dot" /> Volunteer / You</span>
                 <span><i className="legend-dot resident-role-dot" /> Resident</span>
                 <span><i className="legend-dot lgu-base-dot" /> LGU Base</span>
-                {volunteerLguPin && (
-                  <span><i className="legend-dot lgu-role-dot" /> LGU responder</span>
-                )}
+
               </>
             )}
             {(missionMode || adminMissionMode || isResidentMode) && roadRoute && (
@@ -6097,6 +6008,45 @@ export default function WebMapTracking() {
                     selectedAdminVolunteer.caseId ||
                     "No active case recorded"}
                 </p>
+              </div>
+            </>
+          ) : isAdministrator && selectedCase ? (
+            <>
+              <div className="clean-side-heading">
+                <div>
+                  <span className="clean-kicker">EMERGENCY REPORT</span>
+                  <h2>{selectedCase.title || "Emergency case"}</h2>
+                </div>
+                <span className={`clean-status-pill status-${normalize(selectedCase.status || "reported")}`}>
+                  {statusLabel(selectedCase.status || "reported")}
+                </span>
+              </div>
+              <div className="clean-info-block">
+                <strong>Resident</strong>
+                <p>{selectedCase.reporterName || "Resident"}</p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Reported location</strong>
+                <p>{selectedCase.location || selectedCase.reporterAddress || "No saved location"}</p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Assigned Volunteer GPS</strong>
+                <p>
+                  {adminVolunteerPins.some((point) => point.caseId === selectedCase.id && !point.stale)
+                    ? "Volunteer is sharing a live location."
+                    : "No fresh GPS from an assigned Volunteer. Check the assignment in Admin Emergency Reports."}
+                </p>
+              </div>
+              <div className="clean-info-block">
+                <strong>Emergency details</strong>
+                <p>{selectedCase.details || "No additional details"}</p>
+              </div>
+              <div className="clean-resident-message">
+                Review and assign Volunteers from Admin Emergency Reports. This map is view-only.
+              </div>
+              <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:10}}>
+                <a href="tel:911" className="secondary-button">Call 911 · Emergency</a>
+                <a href="tel:09326000119" className="secondary-button">Call SJDM CDRRMO</a>
               </div>
             </>
           ) : isOperationalLgu && selectedCase ? (
@@ -6837,25 +6787,24 @@ export default function WebMapTracking() {
             <>
               <div className="clean-side-heading">
                 <div>
-                  <span className="clean-kicker">LGU RESPONSE</span>
+                  <span className="clean-kicker">ASSIGNED VOLUNTEER</span>
                   <h2>
-                    {residentLguPin?.name ||
-                      residentCoordinationCase?.activeLguResponderName ||
-                      "Awaiting LGU assignment"}
+                    {["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "Waiting for Admin reassignment"
+                      : residentPrimaryAssignment?.volunteerName ||
+                        "Waiting for Admin assignment"}
                   </h2>
                 </div>
-                <span
-                  className={`clean-status-pill ${
-                    routeResponderPoint ? "status-responding" : ""
-                  }`}
-                >
-                  {residentLguPin
-                    ? residentLguPin.stale
-                      ? "LGU STALE"
-                      : "LGU LIVE"
-                    : residentCoordinationCase?.activeLguResponderUid
-                      ? "WAITING GPS"
-                      : "UNASSIGNED"}
+                <span className={`clean-status-pill ${routeResponderPoint && !routeResponderPoint.stale ? "status-responding" : ""}`}>
+                  {routeResponderPoint
+                    ? routeResponderPoint.stale
+                      ? "GPS STALE"
+                      : "GPS LIVE"
+                    : residentPrimaryAssignment
+                      ? residentVolunteerStatus === "offered"
+                        ? "OFFER SENT"
+                        : "WAITING GPS"
+                      : "NOT ASSIGNED"}
                 </span>
               </div>
 
@@ -6887,30 +6836,51 @@ export default function WebMapTracking() {
                       ? routeResponderPoint.stale
                         ? "STALE"
                         : "LIVE"
-                      : residentCoordinationCase?.activeLguResponderUid
+                      : residentPrimaryAssignment
                         ? "WAITING GPS" : "NOT ASSIGNED"}
                   </strong>
                 </div>
               </div>
 
+              <div className="clean-info-block">
+                <strong>Report status</strong>
+                <p>{residentCaseStatus}{residentCaseStatus === "Rejected" ? " · Admin did not approve this report" : ""}</p>
+              </div>
               <div className="clean-resident-message">
-                {residentLguPin
-                  ? residentLguPin.stale
-                    ? "The official LGU response is still assigned. The red LGU pin shows the responder's last known location while VolunServe waits for a fresh GPS update."
-                    : "The official LGU response is active. The green pin is your location and the red LGU pin shows the responder in real time."
-                  : residentCoordinationCase?.activeLguResponderUid
-                    ? "An official LGU responder is assigned. Waiting for the responder's first or next GPS update."
-                    : "No official LGU responder is assigned to this case yet. Your report is saved; live GPS and ETA will appear only after authorized LGU assignment and active location sharing."}
+                {routeResponderPoint
+                  ? routeResponderPoint.stale
+                    ? "The assigned Volunteer's last GPS update is old. Wait for a fresh location before relying on the map."
+                    : "Your assigned Volunteer's active GPS location appears on the map during response."
+                  : residentPrimaryAssignment
+                    ? ["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "The previous assignment ended. Admin can assign another Volunteer; the incident map stays available."
+                      : residentVolunteerStatus === "offered"
+                      ? "Admin sent an assignment. Tracking begins only after acceptance and active GPS sharing."
+                      : "The Volunteer is assigned. Their GPS appears once live sharing begins."
+                    : "Your report is saved. Admin must validate it and assign a Volunteer before tracking can start."}
               </div>
 
-              {!residentLguPin && (
+              <div className="clean-info-block">
+                <strong>Last Volunteer GPS update</strong>
+                <p>
+                  {routeResponderPoint?.lastShared
+                    ? new Date(routeResponderPoint.lastShared).toLocaleString("en-PH")
+                    : "No location shared yet"}
+                </p>
+                <small>
+                  {routeResponderPoint
+                    ? `Last reported: ${Number(routeResponderPoint.latitude).toFixed(5)}, ${Number(routeResponderPoint.longitude).toFixed(5)} · ${routeResponderPoint.stale ? "GPS may be outdated" : "GPS recently updated"}`
+                    : "No live GPS until the assigned Volunteer starts the task and permits location sharing."}
+                </small>
+              </div>
+              {true && (
                 <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:10,marginBottom:10}}>
                   <a href="tel:911" className="secondary-button"
                     style={{padding:"9px 12px",borderRadius:9,background:"#FFF2E8",
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
                     Call 911 · Emergency
                   </a>
-                  <a href="tel:09366000119" className="secondary-button"
+                  <a href="tel:09326000119" className="secondary-button"
                     style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
                     Call SJDM CDRRMO
@@ -6918,62 +6888,9 @@ export default function WebMapTracking() {
                 </div>
               )}
 
-              {residentLguArrivalStatus === "pending" && (
-                <div className="resident-arrival-confirm-card">
-                  <div>
-                    <span>LGU ARRIVAL</span>
-                    <strong>Responder reports they are on site</strong>
-                    <small>
-                      Confirm only if the official LGU responder has reached your emergency location.
-                    </small>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="primary-button resident-confirm-arrival-button"
-                    disabled={residentArrivalBusy}
-                    onClick={() => {
-                      void confirmResidentLguArrival();
-                    }}
-                  >
-                    {residentArrivalBusy
-                      ? "Confirming…"
-                      : "Confirm Arrival"}
-                  </button>
-                </div>
-              )}
-
-              {residentLguArrivalStatus === "confirmed" && (
-                <div className="resident-arrival-confirmed-card">
-                  <strong>✓ LGU arrival confirmed</strong>
-                  <span>Confirmation recorded for this emergency response.</span>
-                </div>
-              )}
-
-              {!!residentArrivalMessage && (
-                <div className="resident-arrival-feedback success">
-                  {residentArrivalMessage}
-                </div>
-              )}
-
-              {!!residentArrivalError && (
-                <div className="resident-arrival-feedback error">
-                  {residentArrivalError}
-                </div>
-              )}
-
-              {residentActiveVolunteerAssignment && (
-                <div className="clean-info-block">
-                  <strong>Optional Volunteer support</strong>
-                  <p>
-                    {residentActiveVolunteerAssignment.volunteerName || "Volunteer"} · {statusLabel(residentActiveVolunteerAssignment.status)}. This support is additional and does not replace the official LGU responder.
-                  </p>
-                </div>
-              )}
-
               {residentAssignmentStatus === "completed" && (
                 <div className="clean-info-block">
-                  <strong>Volunteer support completed</strong>
+                  <strong>Volunteer response completed</strong>
                   <p>Confirm the assistance from My Reports when requested.</p>
                 </div>
               )}
@@ -6987,7 +6904,7 @@ export default function WebMapTracking() {
                     <div>
                       <strong>Share my moving location</strong>
                       <small>
-                        Optional. Share your live GPS with the LGU during an active emergency. If a Volunteer is actively responding, the same live location is shared only with that assigned responder.
+                        Optional. Share your changing location only with the assigned Volunteer during an active response. You can stop at any time.
                       </small>
                     </div>
                     {residentShareCaseId === selectedCase.id ? (
@@ -7011,7 +6928,7 @@ export default function WebMapTracking() {
                 )}
 
               <div className="clean-info-block">
-                <strong>Original reported location</strong>
+                <strong>Reported location</strong>
                 <p>
                   {selectedCase.location ||
                     selectedCase.reporterAddress ||
@@ -7021,7 +6938,7 @@ export default function WebMapTracking() {
                  insideSjdmBoundary(sjdmBoundary, Number(selectedCase.latitude),
                    Number(selectedCase.longitude)) ? (
                   <small>Map pin is based on coordinates saved with the Resident's report.
-                    This is not independent LGU verification of the incident.</small>
+                    The report location is not independently confirmed by a responder.</small>
                 ) : (
                   <p className="route-warning" role="status">
                     No valid in-city GPS coordinate is saved for this report.
