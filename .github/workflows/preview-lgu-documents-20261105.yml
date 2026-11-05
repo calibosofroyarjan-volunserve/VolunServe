@@ -2,7 +2,12 @@ name: PREVIEW Private LGU Employee ID + Official Proof (Never Production)
 on:
   push:
     branches: [feature/lgu-staff-documents-review-20261105]
-    paths: [.github/workflows/preview-lgu-documents-20261105.yml]
+    paths:
+      - .github/workflows/preview-lgu-documents-20261105.yml
+      - app/admin-request.tsx
+      - scripts/verify-lgu-application-browser.cjs
+      - components/admin/LguApplicantProofReview.tsx
+      - lib/lguProofDocuments.ts
 permissions:
   contents: read
 concurrency:
