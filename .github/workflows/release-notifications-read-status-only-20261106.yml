@@ -155,3 +155,5 @@ jobs:
 # Super Admin, Admin, Signup, Login, other rules and Hosting source remain unchanged.
 
 # Final one-shot Rules-only hotfix: documented PATCH body with immutable tested Ruleset, no Hosting changes.
+
+# Rules-only release has exact active rules SHA guard; concurrent Hosting releases are not overwritten.
