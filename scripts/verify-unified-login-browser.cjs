@@ -66,7 +66,7 @@ async function main(){
       });
       last=result.result?.value||{};
       const text=last.text||"";
-      const keys=["VolunServe Login","Request Admin Access","Sign In","Sign Up","Continue with Google","Continue as Guest"];
+      const keys=["Welcome Back","Sign in securely to your account.","Request Admin Access","Sign In","Sign Up","Continue with Google","Continue as Guest"];
       if(keys.every(x=>text.includes(x))){
         assert(!text.includes("Residents & Volunteers\nLGU & System Admin"),"Role selection tabs unexpectedly visible");
         console.log("PASS unified login fully hydrated",JSON.stringify({url:last.url,ready:last.ready,scripts:last.scripts,bytes:text.length}));
