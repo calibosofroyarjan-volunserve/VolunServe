@@ -1,20 +1,10 @@
 // Private, idempotent inbox delivery for new published community announcements.
 // No client can choose recipients: recipient UIDs are obtained from Firestore.
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 
-function eligibleRecipient(profile) {
-  const role = String(profile.role || "").toLowerCase();
-  if (["admin", "superadmin", "lgu_personnel", "applicant"].includes(role)) {
-    return false;
-  }
-  const approved = profile.status === "approved" ||
-    (profile.status === undefined && role !== "applicant");
-  return approved && (profile.residentAccess === true ||
-    profile.volunteerAccess === true || role === "resident" ||
-    role === "volunteer");
-}
+const {eligibleRecipient} = require("./announcementAudience");
 
 exports.notifyAnnouncementAudience = onDocumentCreated(
     {
@@ -39,50 +29,58 @@ exports.notifyAnnouncementAudience = onDocumentCreated(
       }
 
       const database = getFirestore();
-      // Barangay targeting is preserved: other barangays NEVER receive
-      // private inbox records for local LGU announcements.
-      const userQuery = audience.toLowerCase() === "all" ?
-        database.collection("users") :
-        database.collection("users").where("barangay", "==", audience);
-      const userSnapshots = await userQuery.get();
-      const recipients = userSnapshots.docs.filter((userDoc) =>
-        eligibleRecipient(userDoc.data()));
       let delivered = 0;
+      let eligibleRecipients = 0;
+      let lastUser = null;
 
-      // Deterministic notification IDs, plus existence checks, make retries
-      // safe: an already-read notification is never reset to unread.
-      for (let i = 0; i < recipients.length; i += 200) {
-        const batchRecipients = recipients.slice(i, i + 200);
-        const references = batchRecipients.map((userDoc) =>
-          database.collection("notifications")
-              .doc(`announcement_${event.params.announcementId}_` +
-                userDoc.id));
-        const existing = await database.getAll(...references);
-        const batch = database.batch();
-        let pending = 0;
-        existing.forEach((notificationSnapshot, index) => {
-          if (notificationSnapshot.exists) return;
-          batch.create(references[index], {
-            userId: batchRecipients[index].id,
-            audience: "resident",
-            type: "community_announcement",
-            announcementId: event.params.announcementId,
-            title: title.slice(0, 160),
-            message: message.slice(0, 500),
-            read: false,
-            createdAt: FieldValue.serverTimestamp(),
+      // Paginate user profiles so mixed-case barangay labels still receive
+      // the same notices shown by the Resident web announcement feed.
+      // Never accept a recipient UID supplied by the publishing client.
+      while (true) {
+        let userPageQuery = database.collection("users")
+            .orderBy(FieldPath.documentId()).limit(200);
+        if (lastUser) userPageQuery = userPageQuery.startAfter(lastUser);
+        const page = await userPageQuery.get();
+        if (page.empty) break;
+        lastUser = page.docs[page.docs.length - 1];
+
+        const recipients = page.docs.filter((userDoc) =>
+          eligibleRecipient(userDoc.data(), audience));
+        eligibleRecipients += recipients.length;
+
+        if (recipients.length) {
+          const references = recipients.map((userDoc) =>
+            database.collection("notifications")
+                .doc(`announcement_${event.params.announcementId}_` +
+                  userDoc.id));
+          const existing = await database.getAll(...references);
+          const batch = database.batch();
+          let pending = 0;
+          existing.forEach((notificationSnapshot, index) => {
+            if (notificationSnapshot.exists) return;
+            batch.create(references[index], {
+              userId: recipients[index].id,
+              audience: "resident",
+              type: "community_announcement",
+              announcementId: event.params.announcementId,
+              title: title.slice(0, 160),
+              message: message.slice(0, 500),
+              read: false,
+              createdAt: FieldValue.serverTimestamp(),
+            });
+            pending++;
           });
-          pending++;
-        });
-        if (pending) {
-          await batch.commit();
-          delivered += pending;
+          if (pending) {
+            await batch.commit();
+            delivered += pending;
+          }
         }
+        if (page.size < 200) break;
       }
 
       logger.info("Announcement inbox delivery complete", {
         announcementId: event.params.announcementId,
-        eligibleRecipients: recipients.length,
+        eligibleRecipients,
         newlyDelivered: delivered,
       });
     },
