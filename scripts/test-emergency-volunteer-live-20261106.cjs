@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
 const read = path => fs.readFileSync(path, "utf8");
-const baseline = "2b596300a2c4e0c12793bae106017d372b69abdd";
+const baseline = "bd2beb003b8b431065e4d7b13146490476edd043";
 const allowed = new Set([
   "app/(admin)/_layout.tsx",
   "app/(admin)/admin-cases.tsx",
