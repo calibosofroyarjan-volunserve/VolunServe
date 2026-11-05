@@ -89,3 +89,35 @@ test("Native tracking only reads assigned Volunteer GPS; sharing is opt-in and c
   const statuses = read("lib/emergencyTaskStatus.ts");
   for (const state of ["Pending","Approved","Assigned","In Progress","Completed","Rejected"]) assert.ok(statuses.includes('"' + state + '"'));
 });
+
+
+test("Admin may assign any approved Volunteer throughout SJDM regardless of barangay", () => {
+  const src = read("app/(admin)/admin-cases.tsx");
+  const eligibility = src.slice(
+    src.indexOf("const volunteerEligibilityForCase = ("),
+    src.indexOf("const reviewVerification = async", src.indexOf("const volunteerEligibilityForCase = ("))
+  );
+  assert.ok(eligibility.includes("return approvedVolunteers"), "Use approved Volunteer roster");
+  assert.ok(eligibility.includes("skillMatchCount"), "Keep safety and skill suitability checks");
+  assert.ok(eligibility.includes("busyOnAnotherCase"), "Do not double-assign active Volunteers");
+  assert.ok(eligibility.includes("reporterIsVolunteer"), "Do not self-assign a resident report");
+  assert.ok(!eligibility.includes("aLocal") && !eligibility.includes("bLocal"),
+    "Do not give preferential assignment ranking based on home barangay");
+  assert.ok(!eligibility.includes('reason: "Emergency case barangay is missing"'),
+    "Do not block assignments because a case barangay string is missing");
+  assert.ok(!eligibility.includes("volunteer.barangay.toLowerCase().includes(search)"),
+    "Volunteer search is by name and skills, not home barangay");
+  const assignStart = src.indexOf("const assignVolunteerToCase = async");
+  const cancelStart = src.indexOf("const cancelAssignment = async", assignStart);
+  const assign = src.slice(assignStart, cancelStart);
+  assert.ok(assign.includes("currentVerification !== \"validated\""),
+    "Admin validation remains required for citywide assignment");
+  assert.ok(assign.includes("responderLockSnapshot.exists()"),
+    "Busy Volunteer lock remains enforced");
+  assert.ok(!assign.includes("currentCaseBarangay"),
+    "The assignment transaction cannot depend on case or Volunteer barangay");
+  assert.ok(src.includes("Approved Volunteer · Citywide SJDM assignments"),
+    "Roster must clearly show citywide participation instead of Volunteer barangay");
+  assert.ok(src.includes("INCIDENT BARANGAY"),
+    "Keep the incident's own location for mapping and records");
+});
