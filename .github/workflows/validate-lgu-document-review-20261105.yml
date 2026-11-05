@@ -2,7 +2,15 @@ name: Validate Private LGU Staff Document Review (No Production Deploy)
 on:
   push:
     branches: [feature/lgu-staff-documents-review-20261105]
-    paths: [.github/workflows/validate-lgu-document-review-20261105.yml]
+    paths:
+      - .github/workflows/validate-lgu-document-review-20261105.yml
+      - app/admin-request.tsx
+      - app/(superadmin)/admin-accounts.tsx
+      - components/admin/LguApplicantProofReview.tsx
+      - lib/lguProofDocuments.ts
+      - storage.rules
+      - scripts/test-admin-staff-login.cjs
+      - scripts/test-lgu-proof-storage-security.cjs
 permissions:
   contents: read
 jobs:
