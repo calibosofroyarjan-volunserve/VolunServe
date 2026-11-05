@@ -8,6 +8,7 @@ on:
       - 'components/notifications/NotificationDropdown.tsx'
       - 'app/(tabs)/notifications.tsx'
       - 'lib/useAnnouncementAlerts.ts'
+      - 'firestore.rules'
       - 'app/(tabs)/announcements.tsx'
       - 'functions/announcementAudience.js'
       - 'functions/announcementNotifications.js'
@@ -49,6 +50,7 @@ jobs:
             'components/notifications/NotificationDropdown.tsx',
             'app/(tabs)/notifications.tsx',
             'lib/useAnnouncementAlerts.ts',
+            'firestore.rules',
             'app/(tabs)/announcements.tsx',
             'functions/announcementAudience.js',
             'functions/announcementNotifications.js',
