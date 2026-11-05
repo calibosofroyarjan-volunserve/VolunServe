@@ -1,5 +1,8 @@
+import { authenticateEmailSignup } from "./signupRegistration";
+import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
-  createUserWithEmailAndPassword,
+  getIdToken,
+  reload,
   sendEmailVerification,
   EmailAuthProvider,
   onAuthStateChanged as firebaseOnAuthStateChanged,
@@ -15,8 +18,8 @@ import {
   doc,
   getDoc,
   serverTimestamp,
+  runTransaction,
   updateDoc,
-  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
@@ -215,7 +218,7 @@ export interface SignupData {
   age: number;
   email: string;
   password: string;
-  authProvider?: "email" | "google";
+  authProvider?: "email" | "google" | "verified_email";
   phoneNumber: string;
   region: string;
   province: string;
@@ -460,7 +463,11 @@ export const signUpUser = async (
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
     const usesGoogle = data.authProvider === "google";
-    if (usesGoogle) {
+    const usesVerifiedEmail = data.authProvider === "verified_email";
+    if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
+      throw new Error("Email-first signup is not enabled.");
+    }
+    if (usesGoogle || usesVerifiedEmail) {
       if (!auth.currentUser) {
         throw new Error(
           "Your Google registration session expired. Connect your Google account again."
@@ -477,32 +484,44 @@ export const signUpUser = async (
         );
       }
       user = auth.currentUser;
-    } else {
-      if (auth.currentUser) {
-        await signOut(auth);
+      if (usesVerifiedEmail) {
+        await reload(user);
+        if (auth.currentUser?.uid !== user.uid || !user.emailVerified) {
+          throw new Error("Verify your email before completing registration.");
+        }
+        if (!hasPasswordSignInProvider(user)) {
+          throw new Error("Link your VolunServe password before completing registration.");
+        }
+        await getIdToken(user, true);
       }
-      const userCredential =
-        await createUserWithEmailAndPassword(
-          auth,
-          submittedEmail,
-          data.password
-        );
-      user = userCredential.user;
+    } else {
+      user = await authenticateEmailSignup(submittedEmail, data.password);
     }
     const uid = user.uid;
     const profileRef = doc(db, "users", uid);
+    await reload(user);
+    if (auth.currentUser?.uid !== uid || user.email?.toLowerCase() !== submittedEmail) {
+      throw new Error("Your registration session changed. Please resume registration.");
+    }
     const existing = await getDoc(profileRef);
-    if (existing.exists()) {
-      throw new Error(
-        "This account already has a VolunServe profile. Please sign in instead or use a different account for this registration."
-      );
+    if (existing.exists() && user.emailVerified) {
+      throw new Error("This account already has a VolunServe profile. Please sign in.");
     }
-    // Google OAuth is an independent registration choice. Do not require or
-    // silently attach an email/password credential to the Google identity.
-    // Password accounts are created only by the email signup path.
-    if (usesGoogle && !user.emailVerified) {
-      throw new Error("This Google account's email is not verified.");
+    if (!user.emailVerified) {
+      if (usesGoogle || usesVerifiedEmail) {
+        throw new Error("Verify your email before completing registration.");
+      }
+      // Compatibility for the original form: Auth first, inbox proof next.
+      // Keep the form in memory; resubmitting authenticates the SAME UID.
+      // No personal profile is written until the server confirms verification.
+      try {
+        await sendEmailVerification(user);
+      } finally {
+        if (auth.currentUser?.uid === uid) await signOut(auth);
+      }
+      return user;
     }
+    await getIdToken(user, true);
     const fullName = [
       data.lastName,
       data.firstName,
@@ -522,13 +541,12 @@ export const signUpUser = async (
         data.occupationSpecialization.trim()
       ) ||
       data.occupationCategory;
-    const batch = writeBatch(db);
     /**
      * FINAL PUBLIC SIGNUP RULE:
      * Every registration creates one Basic Resident account.
      * Volunteer access can only be requested later by a Verified Resident.
      */
-    batch.set(profileRef, {
+    const newProfile = {
       uid,
       fullName,
       lastName: data.lastName.trim(),
@@ -581,17 +599,18 @@ export const signUpUser = async (
         user.photoURL || "",
       createdAt:
         serverTimestamp(),
-    });
-    await batch.commit();
-    if (!usesGoogle && !user.emailVerified) {
-      // Always end an email/password registration session until the inbox
-      // verification link has been opened (including if delivery fails).
-      try {
-        await sendEmailVerification(user);
-      } finally {
-        await signOut(auth);
+    };
+    // Atomic create on EVERY signup path, including verified legacy resubmission.
+    await runTransaction(db, async transaction => {
+      const latest = await transaction.get(profileRef);
+      if (latest.exists()) {
+        throw new Error("This account already has a VolunServe profile. Please sign in.");
       }
-    }
+      if (auth.currentUser?.uid !== uid || !user.emailVerified) {
+        throw new Error("Your registration session changed. Please resume registration.");
+      }
+      transaction.set(profileRef, newProfile);
+    });
     return user;
   } catch (err: any) {
     const message =
