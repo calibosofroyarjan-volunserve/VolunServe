@@ -3675,9 +3675,10 @@ function DecisionTab({
           </View>
         )}
 
-        <LabelText>Document consistency</LabelText>
+        <LabelText required>Document consistency</LabelText>
         <StatusChoiceRow
           value={reviewDraft.documentConsistencyStatus}
+          error={!!issue("documentConsistencyStatus")}
           options={[
             ["pending", "Pending"],
             ["consistent", "Consistent"],
@@ -3687,6 +3688,7 @@ function DecisionTab({
           disabled={reviewLocked}
           onChange={(value) => onReviewChange("documentConsistencyStatus", value)}
         />
+        <ReviewValidationHint message={issue("documentConsistencyStatus")} />
         <TextInput
           value={reviewDraft.documentConsistencyNotes}
           onChangeText={(value) => onReviewChange("documentConsistencyNotes", value)}
@@ -3700,9 +3702,10 @@ function DecisionTab({
 
         <Divider />
 
-        <LabelText>Duplicate / history check</LabelText>
+        <LabelText required>Duplicate / history check</LabelText>
         <StatusChoiceRow
           value={reviewDraft.duplicateCheckStatus}
+          error={!!issue("duplicateCheckStatus")}
           options={[
             ["pending", "Pending"],
             ["clear", "Clear"],
@@ -3712,6 +3715,7 @@ function DecisionTab({
           disabled={reviewLocked}
           onChange={(value) => onReviewChange("duplicateCheckStatus", value)}
         />
+        <ReviewValidationHint message={issue("duplicateCheckStatus")} />
         <TextInput
           value={reviewDraft.duplicateRequestIds}
           onChangeText={(value) => onReviewChange("duplicateRequestIds", value)}
@@ -3733,9 +3737,10 @@ function DecisionTab({
 
         <Divider />
 
-        <LabelText>Beneficiary verification</LabelText>
+        <LabelText required>Beneficiary verification</LabelText>
         <StatusChoiceRow
           value={reviewDraft.beneficiaryCheckStatus}
+          error={!!issue("beneficiaryCheckStatus")}
           options={[
             ["pending", "Pending"],
             ["confirmed", "Confirmed"],
@@ -3745,6 +3750,7 @@ function DecisionTab({
           disabled={reviewLocked}
           onChange={(value) => onReviewChange("beneficiaryCheckStatus", value)}
         />
+        <ReviewValidationHint message={issue("beneficiaryCheckStatus")} />
         <TextInput
           value={reviewDraft.beneficiaryCheckNotes}
           onChangeText={(value) => onReviewChange("beneficiaryCheckNotes", value)}
@@ -3787,8 +3793,10 @@ function DecisionTab({
 
         {reviewDraft.facilityVerificationRequired && (
           <>
-            <StatusChoiceRow
+            <LabelText required>Facility verification status</LabelText>
+        <StatusChoiceRow
               value={reviewDraft.facilityVerificationStatus}
+          error={!!issue("facilityVerificationStatus")}
               options={[
                 ["pending", "Pending"],
                 ["confirmed", "Confirmed"],
@@ -3798,15 +3806,18 @@ function DecisionTab({
               disabled={reviewLocked}
               onChange={(value) => onReviewChange("facilityVerificationStatus", value)}
             />
+        <ReviewValidationHint message={issue("facilityVerificationStatus")} />
 
+            <LabelText required={true}>Official facility name</LabelText>
             <TextInput
               value={reviewDraft.facilityName}
               onChangeText={(value) => onReviewChange("facilityName", value)}
               placeholder="Official hospital / clinic / vet facility name"
               placeholderTextColor="#94A3B8"
               editable={!reviewLocked}
-              style={styles.input}
+              style={[styles.input, !!issue("facilityName") && styles.assistanceFieldInvalid]}
             />
+            <ReviewValidationHint message={issue("facilityName")} />
             <LabelText>Facility type</LabelText>
             <PresetOrOtherReviewField
               value={reviewDraft.facilityType}
@@ -3889,8 +3900,10 @@ function DecisionTab({
 
         {reviewDraft.costVerificationRequired && (
           <>
-            <StatusChoiceRow
+            <LabelText required>Cost verification status</LabelText>
+        <StatusChoiceRow
               value={reviewDraft.costVerificationStatus}
+          error={!!issue("costVerificationStatus")}
               options={[
                 ["pending", "Pending"],
                 ["confirmed", "Confirmed"],
@@ -3899,6 +3912,8 @@ function DecisionTab({
               disabled={reviewLocked}
               onChange={(value) => onReviewChange("costVerificationStatus", value)}
             />
+        <ReviewValidationHint message={issue("costVerificationStatus")} />
+            <LabelText required={true}>Verified gross cost (PHP)</LabelText>
             <TextInput
               value={reviewDraft.verifiedGrossCost}
               onChangeText={(value) => onReviewChange("verifiedGrossCost", value.replace(/[^0-9.]/g, ""))}
@@ -3906,8 +3921,10 @@ function DecisionTab({
               keyboardType="decimal-pad"
               placeholderTextColor="#94A3B8"
               editable={!reviewLocked}
-              style={styles.input}
+              style={[styles.input, !!issue("verifiedGrossCost") && styles.assistanceFieldInvalid]}
             />
+            <ReviewValidationHint message={issue("verifiedGrossCost")} />
+            <LabelText required={false}>Existing assistance (PHP)</LabelText>
             <TextInput
               value={reviewDraft.confirmedExistingAssistanceAmount}
               onChangeText={(value) => onReviewChange("confirmedExistingAssistanceAmount", value.replace(/[^0-9.]/g, ""))}
@@ -3915,8 +3932,9 @@ function DecisionTab({
               keyboardType="decimal-pad"
               placeholderTextColor="#94A3B8"
               editable={!reviewLocked}
-              style={styles.input}
+              style={[styles.input, !!issue("confirmedExistingAssistanceAmount") && styles.assistanceFieldInvalid]}
             />
+            <ReviewValidationHint message={issue("confirmedExistingAssistanceAmount")} />
             <TextInput
               value={reviewDraft.costReferenceNumber}
               onChangeText={(value) => onReviewChange("costReferenceNumber", value)}
@@ -3978,7 +3996,7 @@ function DecisionTab({
                 editable={!reviewLocked}
                 maxLength={300}
                 onSubmitEditing={runPrivateAddressSearch}
-                style={[styles.input, styles.addressSearchInput]}
+                style={[styles.input, styles.addressSearchInput, !!issue("privateAddressSnapshot") && styles.assistanceFieldInvalid]}
               />
               <TouchableOpacity
                 style={[
@@ -3993,6 +4011,7 @@ function DecisionTab({
                 <Text style={styles.addressSearchButtonText}>Search Address</Text>
               </TouchableOpacity>
             </View>
+            <ReviewValidationHint message={issue("privateAddressSnapshot")} />
 
             {privateMapSearchTouched && (
               <View style={styles.mapSearchStatus}>
@@ -4014,9 +4033,10 @@ function DecisionTab({
 
           <Divider />
 
-          <LabelText>Residency verification method</LabelText>
+          <LabelText required>Residency verification method</LabelText>
           <StatusChoiceRow
             value={reviewDraft.residencyVerificationMethod}
+          error={!!issue("residencyVerificationMethod")}
             options={[
               ["profile_address", "Profile + Evidence"],
               ["resident_confirmation", "Resident Confirmation"],
@@ -4029,10 +4049,12 @@ function DecisionTab({
               onReviewChange("residencyVerificationMethod", value)
             }
           />
+        <ReviewValidationHint message={issue("residencyVerificationMethod")} />
 
-          <LabelText>Residency status</LabelText>
+          <LabelText required>Residency status</LabelText>
           <StatusChoiceRow
             value={reviewDraft.residencyVerificationStatus}
+          error={!!issue("residencyVerificationStatus")}
             options={[
               ["pending", "Pending"],
               ["verified", "Verified"],
@@ -4049,6 +4071,7 @@ function DecisionTab({
               onReviewChange("residencyVerificationStatus", value);
             }}
           />
+        <ReviewValidationHint message={issue("residencyVerificationStatus")} />
 
           {reviewDraft.residencyVerificationStatus === "verified" && (
             <View style={styles.residencyVerifiedCard}>
@@ -4098,8 +4121,10 @@ function DecisionTab({
         />
         {reviewDraft.videoVerificationRequired && (
           <>
-            <StatusChoiceRow
+            <LabelText required>Video verification status</LabelText>
+        <StatusChoiceRow
               value={reviewDraft.videoVerificationStatus}
+          error={!!issue("videoVerificationStatus")}
               options={[
                 ["pending", "Pending"],
                 ["requested", "Requested"],
@@ -4109,6 +4134,7 @@ function DecisionTab({
               disabled={reviewLocked}
               onChange={(value) => onReviewChange("videoVerificationStatus", value)}
             />
+        <ReviewValidationHint message={issue("videoVerificationStatus")} />
             <TextInput
               value={reviewDraft.videoVerificationNotes}
               onChangeText={(value) => onReviewChange("videoVerificationNotes", value)}
@@ -4135,8 +4161,10 @@ function DecisionTab({
         />
         {reviewDraft.siteVisitRequired && (
           <>
-            <StatusChoiceRow
+            <LabelText required>Site visit status</LabelText>
+        <StatusChoiceRow
               value={reviewDraft.siteVisitStatus}
+          error={!!issue("siteVisitStatus")}
               options={[
                 ["pending", "Pending"],
                 ["scheduled", "Scheduled"],
@@ -4146,6 +4174,7 @@ function DecisionTab({
               disabled={reviewLocked}
               onChange={(value) => onReviewChange("siteVisitStatus", value)}
             />
+        <ReviewValidationHint message={issue("siteVisitStatus")} />
             <TextInput
               value={reviewDraft.siteVisitNotes}
               onChangeText={(value) => onReviewChange("siteVisitNotes", value)}
