@@ -10,7 +10,7 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
