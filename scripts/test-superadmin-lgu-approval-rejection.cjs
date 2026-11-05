@@ -34,9 +34,10 @@ async function main(){
    await assertFails(updateDoc(doc(db("super-reviewer"),"users","other-applicant"),reject));
    await assertFails(updateDoc(doc(db("super-reviewer"),"users","rejected-lgustaff"),reject));
    console.log("PASS: applicant, Resident, LGU Admin, invalid rejection and non-staff records are denied.");
-   const batch=writeBatch(db("super-reviewer"));
-   batch.update(doc(db("super-reviewer"),"users",staff),reject);
-   batch.set(doc(db("super-reviewer"),"adminLogs","reject-test-record"),{
+   const superDb=db("super-reviewer");
+   const batch=writeBatch(superDb);
+   batch.update(doc(superDb,"users",staff),reject);
+   batch.set(doc(superDb,"adminLogs","reject-test-record"),{
      actionType:"lgu_admin_application_rejected",targetType:"user",targetId:staff,
      adminUid:"super-reviewer",adminName:"Test Super Admin",
      description:"Application rejected after authorized review.",createdAt:serverTimestamp(),
