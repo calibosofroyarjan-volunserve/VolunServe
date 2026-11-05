@@ -74,7 +74,6 @@ target=target.replace("      allow create: if isSuperAdmin()",createStaff+"     
 const guardedGrant=`      // New LGU STAFF workflow: pending -> approved Admin only after a fresh
       // independent Super Admin credential review in the SAME atomic batch.
       allow update: if isSuperAdmin()
-        && request.auth.uid != uid
         && resource.data.role == 'applicant'
         && resource.data.status == 'pending_review'
         && ('lguOffice' in resource.data)
@@ -84,8 +83,6 @@ const guardedGrant=`      // New LGU STAFF workflow: pending -> approved Admin o
         && hasFreshLguCredentialReview()
         && request.resource.data.adminCreatedBy == request.auth.uid
         && request.resource.data.adminUpdatedBy == request.auth.uid
-        && request.resource.data.adminCreatedAt == request.time
-        && request.resource.data.adminUpdatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'previousRole','previousPrimaryRole','role','adminStatus','status',
           'adminCreatedAt','adminCreatedBy','adminUpdatedAt','adminUpdatedBy'
@@ -94,14 +91,10 @@ const guardedGrant=`      // New LGU STAFF workflow: pending -> approved Admin o
 const reject=`      // New LGU STAFF workflow: Super Admin review may reject pending staff.
       // No role elevation, applicant data deletion, or resident/volunteer privileges.
       allow update: if isSuperAdmin()
-        && request.auth.uid != uid
         && resource.data.role == 'applicant'
         && resource.data.status == 'pending_review'
         && ('lguOffice' in resource.data)
-        && request.resource.data.role == 'applicant'
         && request.resource.data.status == 'rejected'
-        && request.resource.data.residentAccess == false
-        && request.resource.data.volunteerAccess == false
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.reviewedAt == request.time
         && request.resource.data.rejectedReason is string
@@ -130,7 +123,7 @@ console.log("PASS current LGU Admin applicant handler now excludes LGU STAFF pro
 // Super Admin and a same-commit verifiedAt timestamp; not client-controlled proof.
 const reviewMatch=`    match /lguAdminCredentialReviews/{targetUid} {
       allow read: if isSuperAdmin();
-      allow create, update: if isSuperAdmin()
+      allow create: if isSuperAdmin()
         && request.auth.uid != targetUid
         && request.resource.data.keys().hasOnly([
           'targetUid','accountEmail','reviewStatus','office','position',
@@ -145,7 +138,7 @@ const reviewMatch=`    match /lguAdminCredentialReviews/{targetUid} {
         && request.resource.data.verificationMethod is string
         && request.resource.data.verifiedBy == request.auth.uid
         && request.resource.data.verifiedAt == request.time;
-      allow delete: if false;
+      allow update, delete: if false;
     }
 `;
 onlyOnce(target,"    match /adminLogs/{logId}","live Admin audit log rule");
