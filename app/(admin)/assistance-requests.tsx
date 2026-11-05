@@ -3573,11 +3573,55 @@ function CompactVerifiedAssistance({
               {cap > 0 ? (
                 <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
               ) : (
-                <View style={styles.simpleReviewAmountNotice}>
-                  <Ionicons name="information-circle-outline" color="#92400E" size={17} />
-                  <Text style={[styles.simpleCopy,{ flex: 1 }]}>
-                    No donation budget has been approved yet. For food, pet care, or supplies, confirm the needed items and estimated prices with the LGU before raising money.
+                <View style={styles.simpleField}>
+                  <Text style={styles.simpleCopy}>
+                    {canSetBudget
+                      ? "Confirm the needed items and prices. A hospital bill is not required for food or supplies."
+                      : "No remaining monetary budget is available for this verified request."}
                   </Text>
+                  {canSetBudget && (
+                    <View style={styles.assistanceBudgetFields}>
+                      <Text style={styles.simpleCheckTitle}>Confirmed total cost (PHP) *</Text>
+                      <TextInput
+                        value={budgetTotal}
+                        onChangeText={(value) => setBudgetTotal(value.replace(/[^0-9.]/g, ""))}
+                        editable={!busy}
+                        keyboardType="decimal-pad"
+                        placeholder="Example: 3600"
+                        placeholderTextColor="#94A3B8"
+                        style={[styles.input, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
+                      />
+                      <Text style={styles.simpleCheckTitle}>Other assistance already received (PHP)</Text>
+                      <TextInput
+                        value={alreadyReceived}
+                        onChangeText={(value) => setAlreadyReceived(value.replace(/[^0-9.]/g, ""))}
+                        editable={!busy}
+                        keyboardType="decimal-pad"
+                        placeholder="Enter 0 if none"
+                        placeholderTextColor="#94A3B8"
+                        style={styles.input}
+                      />
+                      <Text style={styles.simpleCheckTitle}>Item breakdown and price basis *</Text>
+                      <TextInput
+                        value={budgetBasis}
+                        onChangeText={setBudgetBasis}
+                        editable={!busy}
+                        multiline
+                        maxLength={800}
+                        placeholder="Example: 12 bags of dog food x PHP 300, based on local supplier prices."
+                        placeholderTextColor="#94A3B8"
+                        style={[styles.textArea, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
+                      />
+                      {budgetAttempted && !budgetIsValid && (
+                        <ReviewValidationHint message="Enter a valid item budget, any assistance already received, and the price basis (at least 20 characters)." />
+                      )}
+                      {budgetIsValid && (
+                        <Text style={styles.simpleVerifiedAmount}>
+                          Amount to raise: {money(Math.round((numericTotal - numericAlreadyReceived) * 100) / 100)}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                 </View>
               )}
               {cap > 0 && (
@@ -5670,6 +5714,7 @@ function DocumentPreviewModal({
 
 const styles = StyleSheet.create({
   simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
+  assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
   simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
 
