@@ -77,8 +77,8 @@ jobs:
           if (match?.state === 'READY') {
             console.log('Index already READY; no changes required.');
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=ready\n');
-          } else if (match?.state === 'CREATING' || match?.state === 'NEEDS_REPAIR') {
-            console.log('Index exists with state ' + match.state + '. No duplicate creation attempted.');
+          } else if (match?.state === 'CREATING') {
+            console.log('Index is still CREATING. Do not release the new queries yet.');
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=existing\n');
           } else if (match) {
             throw Error('Index exists in unexpected state (' + match.state + '). Manual review required.');
