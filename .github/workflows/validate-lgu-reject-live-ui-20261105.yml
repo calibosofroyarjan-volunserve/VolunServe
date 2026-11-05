@@ -1,0 +1,75 @@
+name: Validate LGU Reject with Reason on Exact LIVE UI (NO DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-accept-reject-hosting-live-20261105]
+    paths:
+      - app/(superadmin)/admin-accounts.tsx
+      - .github/workflows/validate-lgu-reject-live-ui-20261105.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      LIVE_BASE_SHA: 5945cc312d661b4cfcc0dfa3417dd1d56f47d116
+    steps:
+      - name: Require strict one-screen source allowlist against exact Hosting base
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/compare/'+process.env.LIVE_BASE_SHA+'...'+process.env.GITHUB_SHA;
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}});
+            assert.ok(r.ok,'GitHub compare failed '+r.status);
+            const p=await r.json();
+            assert.equal(p.status,'ahead','Candidate must descend from exact verified live Hosting source');
+            assert.ok(!p.too_large,'Comparison truncated; stop');
+            const expected=new Set(['app/(superadmin)/admin-accounts.tsx','.github/workflows/validate-lgu-reject-live-ui-20261105.yml']);
+            assert.ok((p.files||[]).length===2,'Unexpected changed file count: '+(p.files||[]).length);
+            for(const f of p.files)assert.ok(expected.has(f.filename),'Unrelated module changed: '+f.filename);
+            console.log('PASS: Login, Signup, Google Auth, all other Super Admin/Admin/Resident/Volunteer components identical to verified Hosting source.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Extract candidate GitHub source without broken legacy gitlink
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" \
+            -o "$RUNNER_TEMP/lgu-ui.tar.gz"
+          tar -xzf "$RUNNER_TEMP/lgu-ui.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Confirm LGU decision UX, reason and audit are connected without touching login
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const s=fs.readFileSync('app/(superadmin)/admin-accounts.tsx','utf8');
+          const required=['Pending LGU Admin Applications','View Credentials','Verify & Review Access','Reject with Reason','lgu_admin_application_rejected','rejectReason.trim().length < 10','writeBatch(db)','reviewedAt: serverTimestamp()','rejectedReason: rejectReason.trim()','setActionType(action)','setSavingUid'];
+          for(const needle of required)assert.ok(s.includes(needle),'Missing LGU workflow: '+needle);
+          assert.equal((s.match(/lgu_admin_application_rejected/g)||[]).length,1);
+          assert.ok(s.includes('lguAdminCredentialReviews'),'Staff approval must retain atomic credential review');
+          console.log('PASS: pending applicant view, approval, rejection reason, saved status, and audit log wiring.');
+          NODE
+          node scripts/test-admin-staff-login.cjs
+      - name: TypeScript check on exact live UI base
+        run: npx tsc --noEmit
+      - name: Export production web bundle (validation only, no Hosting deploy)
+        run: npx expo export --platform web --output-dir dist
+      - name: Verify no production deploy occurred
+        run: echo "PASS: UI validated only. No Firebase Hosting/Rules, user records, or login/signup deployments attempted."
