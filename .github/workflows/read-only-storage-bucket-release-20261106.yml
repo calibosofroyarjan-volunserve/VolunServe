@@ -1,0 +1,55 @@
+name: Read-only Production Storage Bucket Rules Release Audit
+on:
+  push:
+    branches: [audit/lgu-storage-bucket-release-readonly-20261106]
+    paths: [.github/workflows/read-only-storage-bucket-release-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  readonly-audit:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read-only verify effective Storage bucket release and current Hosting
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,urllib.error,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(path):
+            req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+token,'Cache-Control':'no-cache'})
+            try:
+              with urllib.request.urlopen(req,timeout=30) as resp:return json.load(resp)
+            except urllib.error.HTTPError as e:
+              if e.code==404:
+                print('NOT_FOUND',path)
+                return None
+              raise
+          bucket='volunserve-3aa5b.firebasestorage.app'
+          for name in [f'projects/volunserve-3aa5b/releases/firebase.storage/{bucket}',
+                       'projects/volunserve-3aa5b/releases/firebase.storage']:
+            entry=get(name)
+            if entry:
+              print('STORAGE_RELEASE_NAME',entry['name'])
+              print('STORAGE_RULESET',entry['rulesetName'])
+              body=get(entry['rulesetName'])
+              if body:
+                source=''.join(f.get('content','') for f in body['source']['files'])
+                print('STORAGE_RULES_SHA256',hashlib.sha256(source.encode()).hexdigest())
+                print('STORAGE_RULES_BYTES',len(source.encode()))
+                print('STORAGE_HAS_PRIVATE_LGU_PATH','lguStaffProof' in source)
+                print('STORAGE_HAS_DISASTER_CASES','disasterCases' in source)
+                print('STORAGE_HAS_ANNOUNCEMENTS','announcements' in source)
+          active=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          print('ACTIVE_FIRESTORE_RULESET',active['rulesetName'])
+          for origin in ['https://volunserve.com','https://volunserve-3aa5b.web.app']:
+            with urllib.request.urlopen(origin+'/volunserve-release.json?storage_read_only=20261106',timeout=20) as resp:v=json.load(resp)
+            print('LIVE_HOSTING_REVISION',origin,v.get('revision'))
+          print('READ_ONLY_COMPLETE no Storage, Firestore, Hosting, Auth, or data changes')
+          PY
