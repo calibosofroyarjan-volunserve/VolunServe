@@ -42,6 +42,7 @@ type Pin = {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  source: "device_gps" | "manual_map";
 };
 
 type EvidenceAsset = {
@@ -403,7 +404,8 @@ export default function DisasterResponse() {
     latitude: number,
     longitude: number,
     accuracy: number | null = null,
-    center = true
+    center = true,
+    source: "device_gps" | "manual_map" = "manual_map"
   ) => {
     if (
       !Number.isFinite(latitude) ||
@@ -418,6 +420,7 @@ export default function DisasterResponse() {
       latitude,
       longitude,
       accuracy,
+      source,
     };
 
     setPin(nextPin);
@@ -460,7 +463,9 @@ export default function DisasterResponse() {
       setIncidentPin(
         position.coords.latitude,
         position.coords.longitude,
-        position.coords.accuracy
+        position.coords.accuracy,
+        true,
+        "device_gps"
       );
     } catch (error) {
       console.log(error);
@@ -1177,8 +1182,9 @@ export default function DisasterResponse() {
           latitude: pin.latitude,
           longitude: pin.longitude,
 
+          locationSource: pin.source,
           gpsAccuracyMeters:
-            pin.accuracy,
+            pin.source === "device_gps" ? pin.accuracy : null,
 
           locationCapturedAt:
             serverTimestamp(),
