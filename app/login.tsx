@@ -5,6 +5,7 @@ import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
+import { userFacingError } from "../lib/userFacingError";
 import { useSignupGoogle } from "../lib/useSignupGoogle";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
@@ -145,7 +146,7 @@ export default function Login() {
       }
       router.replace(destination as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
+      showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
       setLoading(false);
     }
