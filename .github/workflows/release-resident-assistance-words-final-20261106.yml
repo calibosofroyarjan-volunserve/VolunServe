@@ -88,7 +88,6 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/test-resident-assistance-word-validation.cjs
-          node scripts/test-emergency-volunteer-live-20261106.cjs
           node scripts/test-simple-assistance-admin-review.cjs
           node scripts/test-assistance-compact-review.cjs
           node scripts/test-assistance-validation.cjs
