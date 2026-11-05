@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
 const read = path => fs.readFileSync(path, "utf8");
-const baseline = "2b596300a2c4e0c12793bae106017d372b69abdd";
+const baseline = "b7f1c0a0e8f12468ab7fbe6ae99407a6ed4aae5b";
 const allowed = new Set([
   "app/(admin)/_layout.tsx",
   "app/(admin)/admin-cases.tsx",
@@ -19,6 +19,9 @@ const allowed = new Set([
   "components/tabs/MapTracking.web.tsx",
   "components/tabs/ResponseFlow.web.tsx",
   "components/volunteer/VolunteerInvitationInbox.tsx",
+  "components/admin/EmergencyIncidentMap.tsx",
+  "components/admin/EmergencyIncidentMap.web.tsx",
+  "components/admin/EmergencyIncidentMap.native.tsx",
   "lib/emergencyTaskStatus.ts",
   "scripts/test-emergency-volunteer-live-20261106.cjs",
   ".github/workflows/validate-emergency-volunteer-live-20261106.yml",
@@ -53,7 +56,7 @@ test("Admin directly coordinates approved Volunteers and verifies completion", (
     "const assignVolunteerToCase = async",
     "currentVerification !== \"validated\"",
     "volunteer.uid === incident.reporterUid",
-    "responderLockSnapshot.exists()",
+    "status: \"offered\"",
     "const confirmVolunteerCompletion = async",
     'fieldSnapshot.data().reportStatus !== "reviewed"',
     "Volunteer Completion Reports",
@@ -100,7 +103,7 @@ test("Admin may assign any approved Volunteer throughout SJDM regardless of bara
   );
   assert.ok(eligibility.includes("return approvedVolunteers"), "Use approved Volunteer roster");
   assert.ok(eligibility.includes("skillMatchCount"), "Keep safety and skill suitability checks");
-  assert.ok(eligibility.includes("busyOnAnotherCase"), "Do not double-assign active Volunteers");
+  assert.ok(!eligibility.includes("busyOnAnotherCase"), "Pending offers must be possible even when another task is active");
   assert.ok(eligibility.includes("reporterIsVolunteer"), "Do not self-assign a resident report");
   assert.ok(!eligibility.includes("aLocal") && !eligibility.includes("bLocal"),
     "Do not give preferential assignment ranking based on home barangay");
@@ -115,8 +118,9 @@ test("Admin may assign any approved Volunteer throughout SJDM regardless of bara
   const assign = src.slice(assignStart, cancelStart);
   assert.ok(assign.includes("currentVerification !== \"validated\""),
     "Admin validation remains required for citywide assignment");
-  assert.ok(assign.includes("responderLockSnapshot.exists()"),
-    "Busy Volunteer lock remains enforced");
+  assert.ok(!assign.includes("responderLockSnapshot.exists()") &&
+    !assign.includes("activeCount >= 1"),
+    "Pending task offers must not be blocked by another task or a prior offer");
   assert.ok(!assign.includes("currentVolunteerBarangay") &&
     !assign.includes("volunteerBarangay"),
     "The assignment transaction must not restrict the Volunteer home barangay");
@@ -137,7 +141,7 @@ test("New Emergency Tasks contains photo-rich assigned cards and inline earlier 
   // A validated Admin action is sufficient to offer a task; Volunteer accepts
   // or declines only after the actual assignment exists.
   assert.ok(admin.includes("onPress={() => assignVolunteerToCase(incident, volunteer)}"));
-  assert.ok(admin.includes('"Assign Volunteer"'));
+  assert.ok(admin.includes('"Send Task Offer"'));
   assert.ok(!admin.includes("inviteVolunteerToCase(incident, volunteer)"));
   assert.ok(!admin.includes('currentInvite?.status === "accepted"'));
   assert.ok(admin.includes('status: "offered"'));
@@ -173,4 +177,47 @@ test("New Emergency Tasks contains photo-rich assigned cards and inline earlier 
     "Avoid duplicate invitation/assignment cards for one incident");
   assert.ok(!legacy.includes('doc(db, "disasterCases",'),
     "Do not bypass assigned-Volunteer-only incident evidence access");
+});
+
+test("Busy approved Volunteers can receive offers; Accept remains one-active-mission-at-a-time", () => {
+  const admin=read("app/(admin)/admin-cases.tsx");
+  const begin=admin.indexOf("const volunteerEligibilityForCase = (");
+  const end=admin.indexOf("const reviewVerification = async",begin);
+  const eligible=admin.slice(begin,end);
+  const assign=admin.slice(admin.indexOf("const assignVolunteerToCase = async"),admin.indexOf("const cancelAssignment = async"));
+  assert.ok(!eligible.includes('Busy on another active emergency'));
+  assert.ok(!eligible.includes('busyOnAnotherCase'));
+  assert.ok(!assign.includes('responderLockSnapshot.exists()'));
+  assert.ok(!assign.includes('activeCount >= 1'));
+  assert.ok(!admin.includes('!volunteerSupportAvailable || !caseOpenForSupport'));
+  assert.ok(admin.includes('Send Task Offer'));
+  assert.ok(admin.includes('status: "offered"'));
+  for (const path of ["app/(tabs)/volunteer.web.tsx","app/(tabs)/volunteer.tsx"]) {
+    const task=read(path);
+    assert.ok(task.includes('next === "accepted" && responderLockSnapshot?.exists()'),
+      "Accept must atomically block a second active mission in "+path);
+    assert.ok(task.includes('transaction.set(responderLockRef, {'),
+      "Accept must create the Volunteer lock in "+path);
+    assert.ok(task.includes('transaction.delete(responderLockRef)'),
+      "Completion must release the Volunteer lock in "+path);
+    assert.ok(task.includes('transaction.update(') && task.includes('"declined"'),
+      "Keep real Accept/Decline status transitions in "+path);
+  }
+});
+
+test("Admin Map & Route contains only incident map, no nested Admin sidebar", () => {
+  const admin=read("app/(admin)/admin-cases.tsx");
+  const map=read("components/admin/EmergencyIncidentMap.web.tsx");
+  const native=read("components/admin/EmergencyIncidentMap.native.tsx");
+  assert.ok(admin.includes('<EmergencyIncidentMap'));
+  assert.ok(admin.includes('Open Full Live Map'));
+  assert.ok(!admin.includes('src: "/admin-live-map?caseId="'),
+    "Never embed the entire Admin shell in a frame");
+  assert.ok(map.includes('srcDoc:MAP_HTML') &&
+    map.includes('https://tiles.openfreemap.org/styles/liberty'));
+  assert.ok(map.includes('doc(db, "responseLocations", String(item.volunteerId))'));
+  assert.ok(map.includes('["responding","on_site"]'));
+  assert.ok(map.includes('String(data.assignmentId||"") !== item.id'));
+  assert.ok(map.includes('clock-p.updatedAt<120000'));
+  assert.ok(native.includes("Open Full Live Map"));
 });
