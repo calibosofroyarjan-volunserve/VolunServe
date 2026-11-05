@@ -58,6 +58,41 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Sensitive LGU employment evidence. Only the pending applicant can upload;
+    // only the owner (while pending) and approved Super Admin can read.
+    // No public tokenized URLs; only two fixed filenames, max 5 MiB each.
+    // Existing Storage paths and permissions are untouched.
+    function pendingLguApplicant(uid) {
+      let application = signedIn()
+        ? firestore.get(/databases/(default)/documents/users/$(uid)).data
+        : {};
+      return signedIn()
+        && request.auth.uid == uid
+        && application.get('role', '') == 'applicant'
+        && application.get('status', '') == 'pending_review';
+    }
+
+    function verifiedSuperAdminReviewer() {
+      return approved()
+        && profile().role == 'superadmin'
+        && profile().status == 'approved';
+    }
+
+    match /lguApplicantProofs/{uid}/{kind} {
+      allow get: if kind in ['employee-id', 'supporting-document']
+        && (pendingLguApplicant(uid) || verifiedSuperAdminReviewer());
+      allow list: if false;
+      allow create, update: if kind in ['employee-id', 'supporting-document']
+        && pendingLguApplicant(uid)
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'application/pdf'];
+      // Deletion of credentials is privileged: applicant may replace while pending;
+      // Super Admin can delete after a review under the retention policy.
+      allow delete: if kind in ['employee-id', 'supporting-document']
+        && verifiedSuperAdminReviewer();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
