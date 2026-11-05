@@ -1,0 +1,93 @@
+name: Publish Unified VolunServe Login PREVIEW (Never Live)
+on:
+  push:
+    branches:
+      - review/unified-login-roles-20261105
+    paths:
+      - .github/workflows/preview-unified-login-20261105.yml
+permissions:
+  contents: read
+concurrency:
+  group: unified-volunserve-login-preview-20261105
+  cancel-in-progress: false
+jobs:
+  validate-and-preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_SOURCE_BASE: "61110074569aebf8dcc1e43f3e4b68d00450a3ba"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Guard latest released Admin and all system privileges
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_SOURCE_BASE" HEAD
+          git diff --exit-code "$LIVE_SOURCE_BASE" HEAD -- 'app/(admin)' 'app/(superadmin)' 'app/(tabs)' 'components/admin' 'components/volunteer' 'app/signup.tsx' 'app/signup.web.tsx' 'components/auth/EmailFirstSignup.tsx' 'lib/firebaseAuth.ts' 'lib/signupFeature.ts' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify one login, protected staff, LGU approval and TypeScript
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node --test scripts/test-login-ui-release.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+      - name: Export web with email-first Signup still enabled
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require scoped Hosting credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase Hosting credentials unavailable; no deploy."; exit 1; fi
+      - name: Deploy Firebase Hosting preview ONLY
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: unified-login-1105
+          expires: 3d
+      - name: Verify preview public routes and release fingerprint
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Verify browser shows ONE login card, no staff selector
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME" ]; then echo "::error::Chrome not installed; fail closed."; exit 1; fi
+          timeout 70s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --virtual-time-budget=15000 --dump-dom "$PREVIEW_ORIGIN/login" > /tmp/login-unified-dom.html 2>/tmp/login-unified-browser.log || true
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const html=fs.readFileSync('/tmp/login-unified-dom.html','utf8');
+          for(const marker of ['VolunServe Login','Request Admin Access','Sign In','Sign Up','Continue with Google','Continue as Guest']){
+            assert(html.includes(marker),'Missing login UI: '+marker);
+          }
+          assert(!html.includes('Residents & Volunteers</') && !html.includes('LGU & System Admin</'),
+            'Old role selector unexpectedly present in rendered Login');
+          console.log('PASS: ONE premium Login, all community links and LGU application link rendered.');
+          NODE
+      - name: Release constraints
+        run: |
+          echo "PREVIEW ONLY: live Hosting, Firestore Rules, Auth users, Storage, Functions, Maps, Donations and records unchanged."
+          echo "Only verified staff credentials may reach protected Admin routes. Real authorized login acceptance still required."
