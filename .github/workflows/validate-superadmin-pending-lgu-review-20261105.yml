@@ -1,0 +1,67 @@
+name: Validate Super Admin Pending LGU Review (No Deploy)
+on:
+  push:
+    branches:
+      - release/superadmin-pending-lgu-review-20261105
+    paths:
+      - .github/workflows/validate-superadmin-pending-lgu-review-20261105.yml
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify scoped changes and secure review flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only 195984a90343d77910b398ef14b83522f0313f79 HEAD | sort > /tmp/diff-files
+          cat /tmp/diff-files
+          test "$(wc -l < /tmp/diff-files)" -eq 3
+          grep -Fxq 'app/(superadmin)/admin-accounts.tsx' /tmp/diff-files
+          grep -Fxq 'app/(superadmin)/index.tsx' /tmp/diff-files
+          grep -Fxq '.github/workflows/validate-superadmin-pending-lgu-review-20261105.yml' /tmp/diff-files
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const fs = require("node:fs");
+          const accounts = fs.readFileSync("app/(superadmin)/admin-accounts.tsx", "utf8");
+          const overview = fs.readFileSync("app/(superadmin)/index.tsx", "utf8");
+          const form = fs.readFileSync("app/admin-request.tsx", "utf8");
+          for (const token of [
+            'role === "applicant" && account.status === "pending_review"',
+            'Pending LGU Admin Applications', 'View Credentials',
+            'Verify & Review Access', 'openAdminAction("promote", account)',
+            'lguOffice', 'lguPosition', 'appointmentReference',
+            'sessionProfile.role === "superadmin"',
+            'batch.set(doc(db, "lguAdminCredentialReviews", account.id)',
+            'credentialsConfirmed && identityMatched && lguEmploymentConfirmed',
+            'pageSize={ADMIN_PAGE_SIZE}', '<ListPagination'
+          ]) assert(accounts.includes(token), "Missing applicant review invariant: " + token);
+          for(const token of [
+            'Pending LGU Applications',
+            'pending: accounts.filter(item => item.role === "applicant"',
+            'Review Applications',
+            'router.push("/(superadmin)/admin-accounts"'
+          ]) assert(overview.includes(token), "Missing dashboard entry point: " + token);
+          assert(form.includes('appointmentReference:reference'), "Original staff application schema must remain");
+          assert(!accounts.includes("account.password"), "Never display applicant password");
+          console.log("PASS: pending application queue, view-only submitted details, independent LGU verification and existing role grant guards intact");
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit
+      - name: Web export smoke check (no deployment)
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+          echo "PASSED preview validation; intentionally did not publish production."
