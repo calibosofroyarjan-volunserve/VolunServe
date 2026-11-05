@@ -4689,13 +4689,20 @@ function DecisionTab({
                   </Text>
 
                   {(donationCampaignReady || request.donationCampaignId) && (
-                    <ActionButton
-                      label={request.donationCampaignId ? "Open Donation Campaign" : "Create Donation Campaign"}
-                      icon="heart-outline"
-                      variant="primary"
-                      loading={false}
-                      onPress={openDonationCampaign}
-                    />
+                    <>
+                      <ActionButton
+                        label={request.donationCampaignId ? "View Published Campaign" : "Continue to Publish"}
+                        icon={request.donationCampaignId ? "open-outline" : "megaphone-outline"}
+                        variant={request.donationCampaignId ? "primary" : "publish"}
+                        loading={false}
+                        onPress={openDonationCampaign}
+                      />
+                      {!request.donationCampaignId && (
+                        <Text style={styles.assistancePublishInfo}>
+                          Opens the final Donation Campaign form. This request is not public until the Admin reviews and confirms publication there.
+                        </Text>
+                      )}
+                    </>
                   )}
                 </View>
               </View>
@@ -5469,7 +5476,8 @@ function ActionButton({
     | "primary"
     | "secondary"
     | "danger"
-    | "success";
+    | "success"
+    | "publish";
   loading: boolean;
   disabled?: boolean;
   onPress: () => void;
@@ -5489,6 +5497,11 @@ function ActionButton({
       backgroundColor: "#FFF1F2",
       borderColor: "#FDA4AF",
       textColor: "#B42318",
+    },
+    publish: {
+      backgroundColor: "#B42318",
+      borderColor: "#B42318",
+      textColor: "#FFFFFF",
     },
     success: {
       backgroundColor: "#ECFDF3",
@@ -5626,6 +5639,11 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  assistancePublishInfo: {
+    color: "#64748B",
+    fontSize: 11.5,
+    lineHeight: 18,
+  },
   simpleReviewSectionHeading: { gap: 5 },
   clearReviewDropdownWrap: { gap: 4 },
   clearReviewDropdown: { minHeight: 44, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
