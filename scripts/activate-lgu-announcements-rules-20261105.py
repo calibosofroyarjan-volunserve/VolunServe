@@ -83,12 +83,12 @@ def do_stage():
     name, original = content_for(EXPECTED_OLD)
     if sha(original) != EXPECTED_OLD_HASH:
         raise RuntimeError("STOP active Rules source hash differs from verified production")
-    candidate = open("firestore.rules", encoding="utf8").read()
+    candidate = open("firestore.rules", "rb").read().decode("utf8")
     gen = json.load(open(SOURCE_MANIFEST, encoding="utf8"))
     if (gen.get("publishedRuleset") != EXPECTED_OLD or
         gen.get("originalSha") != EXPECTED_OLD_HASH or
         gen.get("candidateSha") != sha(candidate)):
-        raise RuntimeError("STOP candidate was not derived from exact live Rules source")
+        raise RuntimeError("STOP candidate manifest mismatch: original/source hash or published ruleset differs")
     start = original.find("match /users/{uid} {")
     end = original.find("    match /", start + len("match /users/{uid} {"))
     if start < 0 or end < 0 or candidate[:start] != original[:start] or not candidate.endswith(original[end:]):
@@ -125,7 +125,7 @@ def do_activate():
     if current() != EXPECTED_OLD:
         raise RuntimeError("STOP production Rules changed before activation")
     _, staged_source = content_for(info["new"])
-    candidate = open("firestore.rules", encoding="utf8").read()
+    candidate = open("firestore.rules", "rb").read().decode("utf8")
     if canonical(staged_source) != canonical(candidate) or sha(candidate) != info["newHash"]:
         raise RuntimeError("STOP previously compiled source no longer matches tested candidate")
     patch_pointer(info["new"])
