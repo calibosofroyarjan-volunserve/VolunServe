@@ -494,10 +494,10 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. {announcementError || "New community announcements will appear here."}"}
+                      {announcements.length ? `${announcements.length} published updates available.` : (announcementError || "No published updates yet. New community notices will appear here.")}
                     </Text>
                     <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/notifications")}>
-                      <Text style={styles.mobileSlideActionText}>View announcements</Text>
+                      <Text style={styles.mobileSlideActionText}>View in Notifications</Text>
                       <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
                     </Pressable>
                   </>
@@ -902,7 +902,7 @@ export default function WebHome() {
                       No published updates
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementError || "New community announcements will appear here."}
                     </Text>
                   </View>
                 </View>
