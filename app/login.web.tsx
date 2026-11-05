@@ -4,6 +4,8 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { userFacingError } from "../lib/userFacingError";
+import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -70,7 +72,11 @@ export default function WebLogin() {
     if (loading) return;
     setAttemptedLogin(true);
     clearFeedback();
-    if (getLoginEmailError(email) || !password) return;
+    const emailError = getLoginEmailError(email);
+    if (emailError || !password) {
+      showError(emailError || "Enter your password.");
+      return;
+    }
     try {
       setLoading(true);
       setPendingAction("login");
@@ -88,7 +94,7 @@ export default function WebLogin() {
       }
       router.replace(destination as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
+      showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
       setLoading(false);
       setPendingAction(null);
@@ -152,7 +158,7 @@ export default function WebLogin() {
         // Keep the original authentication error as the user-facing message.
       }
 
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      showError(googleSignInErrorMessage(error));
     } finally {
       setLoading(false);
       setPendingAction(null);
