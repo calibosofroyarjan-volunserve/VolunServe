@@ -12,7 +12,7 @@ import subprocess
 import urllib.request
 
 PROJECT = "volunserve-3aa5b"
-EXPECTED_RELEASE = "projects/volunserve-3aa5b/rulesets/eeb04c64-09ad-4b91-8652-284347ca70b2"
+EXPECTED_RELEASE = "projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec"
 EXPECTED_HOSTING = "8cf5141d6fc51b29e443878efb8619fb7186b086"
 RULES_API = "https://firebaserules.googleapis.com/v1/"
 TOKEN = subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
@@ -42,6 +42,8 @@ matches=[item for item in files if item.get("name","").endswith("firestore.rules
 if not matches and len(files)==1:matches=files
 if len(matches)!=1:raise SystemExit("STOP: could not isolate active Firestore rules source")
 original=matches[0]["content"]
+if sha(original) != "600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584":
+    raise SystemExit("STOP: active Rules source differs from reviewed new Cloud Ruleset")
 if "function isSuperAdmin()" not in original:raise SystemExit("STOP: role helper missing")
 start=original.find("match /announcements/{announcementId} {")
 if start<0:raise SystemExit("STOP: announcements rule block absent")
