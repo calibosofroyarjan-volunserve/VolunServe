@@ -270,3 +270,5 @@ jobs:
           else
             echo "Cannot safely identify active deployment; leave newer/other live releases untouched, inspect Hosting history."
           fi
+
+# One-shot release trigger after green notification UI tests; baseline guard remains required.
