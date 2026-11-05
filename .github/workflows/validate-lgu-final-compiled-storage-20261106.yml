@@ -1,0 +1,76 @@
+name: Final Optimized LGU Firestore and Storage Integrated Security (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [audit/lgu-final-scoped-storage-integration-20261106]
+    paths: [.github/workflows/validate-lgu-final-compiled-storage-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  integrated-security:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      RULESET: projects/volunserve-3aa5b/rulesets/f88a7f66-d877-4ad7-acd3-38cb01c42138
+      RULES_SHA: 4c67cb83f75695a6c56cb3f29674f0c6df027e6734c87b582bec5f9177618475
+      ACTIVE_BASE: projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164
+      STORAGE_RULESET: projects/volunserve-3aa5b/rulesets/580dfa14-44bc-47c0-b502-1818b0f6d140
+      STORAGE_SHA: 04306df1698b7c90d3f7530f50c6447a173d1d4f95e457e0d3a063255f504f92
+      HOSTING_BASE: 473e824f7b941fffcaea631d5f0d4beb5d83ac85
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Check both LIVE hosting origins and exact current Cloud Firestore base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.request,hashlib,subprocess
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url,auth=False):
+            headers={'Cache-Control':'no-cache'}
+            if auth:headers['Authorization']='Bearer '+token
+            with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=30) as r:return json.load(r)
+          api='https://firebaserules.googleapis.com/v1/'
+          for domain in ('https://volunserve.com','https://volunserve-3aa5b.web.app'):
+            p=get(domain+'/volunserve-release.json?integrated_lgu_audit=20261106')
+            assert p.get('revision')==os.environ['HOSTING_BASE'], 'STOP: other team deployed newer Hosting, no stale source can be promoted'
+            print('PASS production origin pinned',domain,p['revision'])
+          current=get(api+'projects/volunserve-3aa5b/releases/cloud.firestore',True)
+          assert current['rulesetName']==os.environ['ACTIVE_BASE'],'STOP active Firestore changed; prior audit obsolete'
+          print('PASS active Firestore remains unchanged',current['rulesetName'])
+          fire=get(api+os.environ['RULESET'],True)['source']['files'][0]['content']
+          sha=lambda s:hashlib.sha256(s.encode()).hexdigest()
+          print('FIRESTORE_RAW_SHA256',sha(fire))
+          print('FIRESTORE_CRLF_NORMALIZED_SHA256',sha(fire.replace(chr(13)+chr(10),chr(10))))
+          assert sha(fire.replace(chr(13)+chr(10),chr(10)))==os.environ['RULES_SHA'], 'STOP tested inactive Firestore candidate normalized SHA mismatch'
+          image=get(api+os.environ['STORAGE_RULESET'],True)['source']['files'][0]['content']
+          assert sha(image)==os.environ['STORAGE_SHA'], 'STOP tested inactive Storage policy SHA mismatch'
+          with open('storage.rules',encoding='utf8',newline='') as f:repo_rules=f.read()
+          assert repo_rules.replace('\r\n','\n')==image.replace('\r\n','\n'),'STOP applicant Storage rules differ from tested candidate'
+          with open('firestore.rules','w',encoding='utf8',newline='') as f:f.write(fire)
+          print('PASS copied immutable candidate rules into ephemeral runner ONLY')
+          print('NO production Cloud Rules release pointers or data changed')
+          PY
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Real integrated Firestore + Storage emulator acceptance tests
+        run: |
+          npx firebase emulators:exec --only firestore,storage --project demo-volunserve --non-interactive "node scripts/test-lgu-all-in-one-credential-integration.cjs"
+      - name: Final read-only result
+        run: echo 'PASS end-to-end pending LGU applicant, upload two private images, Super Admin visibility, atomic approval/rejection and audit in emulators only; zero production writes'
