@@ -101,7 +101,7 @@ jobs:
           fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
           console.log('PASS correct Firebase project');
           NODE
-          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:backup-superadmin-lgu-review-v2-1106" --project "$PROJECT" --non-interactive
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:backup-before-lgu-latest-20261106" --project "$PROJECT" --non-interactive
       - name: Block deployment if live moved during build
         shell: bash
         run: |
