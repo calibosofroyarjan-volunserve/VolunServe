@@ -25,6 +25,7 @@ import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
 import { googleSignInErrorMessage } from "./googleSignInFeedback";
+import { userFacingError } from "./userFacingError";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -438,15 +439,12 @@ function friendlyAuthError(err: any) {
   if (code === "auth/too-many-requests") {
     return "Too many login attempts. Please try again later.";
   }
-  return err?.message || "Something went wrong.";
+  return userFacingError(err, "Unable to verify your account. Please try again.");
 }
 
 function friendlyFirestoreError(err: any) {
   const code = err?.code;
-  if (code === "permission-denied") {
-    return "Firestore permission denied. Check Firestore Rules.";
-  }
-  return err?.message || "Firestore error.";
+  return userFacingError(err, "Unable to access your account details. Please try again or contact an administrator.");
 }
 
 export const signUpUser = async (
