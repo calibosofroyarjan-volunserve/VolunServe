@@ -69,10 +69,10 @@ def main():
         # Firebase API canonicalizes CRLF to LF when storing immutable Ruleset
         # sources. Require BOTH the audited byte-exact original and compiled
         # canonical fingerprint, never silently normalize unknown differences.
-        if sha(candidate_raw) != "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba":
+        if sha(candidate_raw) != "df027b1203b556f543cf87579b8a9c153ed2d92a88b3d779f997210674be9283":
             raise RuntimeError("BLOCKED: candidate source changed from emulator-tested exact bytes")
         candidate = candidate_raw.replace("\r\n", "\n")
-        if sha(candidate) != "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673":
+        if sha(candidate) != "b28399d8e0c25bfa8212189fa85348b6d6cf21dbee15fa14201e5724661cbe50":
             raise RuntimeError("BLOCKED: normalized candidate differs from Firebase-compiled audited Ruleset")
         old = open(OLD_FILE, encoding="utf8", newline="").read()
         if sha(old) != OLD_SHA:
@@ -82,8 +82,8 @@ def main():
             raise RuntimeError("BLOCKED: another production Firestore Rules release is active")
         # This immutable Ruleset was pre-compiled by the separate validation CI
         # against Firebase's hard 256KB executable quota. No speculative upload.
-        new_name = "projects/volunserve-3aa5b/rulesets/26e27c96-ca08-4e5e-ace5-437ee4df086b"
-        expected_candidate_sha = "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673"
+        new_name = "projects/volunserve-3aa5b/rulesets/dc625db9-8b32-4e05-aa58-25723c087815"
+        expected_candidate_sha = "b28399d8e0c25bfa8212189fa85348b6d6cf21dbee15fa14201e5724661cbe50"
         if sha(candidate) != expected_candidate_sha:
             raise RuntimeError("BLOCKED: compact LGU policy differs from compiled audited Ruleset")
         check = request("GET", new_name)
@@ -106,7 +106,7 @@ def main():
         _, active_name, active_content = release_state()
         candidate_raw = open(CANDIDATE, encoding="utf8", newline="").read()
         candidate = candidate_raw.replace("\r\n", "\n")
-        if sha(candidate_raw) != "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba" or sha(candidate) != "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673":
+        if sha(candidate_raw) != "df027b1203b556f543cf87579b8a9c153ed2d92a88b3d779f997210674be9283" or sha(candidate) != "b28399d8e0c25bfa8212189fa85348b6d6cf21dbee15fa14201e5724661cbe50":
             raise RuntimeError("Candidate Rules fingerprint mismatch")
         if active_content != candidate:
             raise RuntimeError("Live Rules verification failed")
