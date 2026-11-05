@@ -1,0 +1,121 @@
+name: Validate LIVE-BASED Announcements Firebase Flow (READ ONLY)
+on:
+  push:
+    branches: [fix/announcements-firestore-error-handling-live-20261105]
+    paths: [".github/workflows/validate-announcements-firebase-flow-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LIVE_BASE: "32fcbfad3582922dd7988359d59b2e7e587fc442"
+      EXPECTED_RULESET: "projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
+      RULES_SHA256: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Protect exact live source and all unrelated modules
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/announcement-changed.txt"
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+'/announcement-changed.txt','utf8').split('\n').filter(Boolean);
+          const allow=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'app/(tabs)/announcements.tsx',
+            'scripts/test-announcements-live-rules-emulator-20261105.cjs',
+            'scripts/test-announcement-firebase-cleanup-20261105.cjs',
+            '.github/workflows/validate-announcements-firebase-flow-20261105.yml',
+            '.github/workflows/release-announcements-firebase-flow-20261105.yml'
+          ]);
+          assert.deepEqual(paths.filter(p=>!allow.has(p)),[],'STOP unrelated/protected file changes');
+          console.log('PASS no Super Admin, Login, Signup, Google, Firestore Rules, Auth, Functions, notifications, resident/volunteer navigation or production data changes');
+          NODE
+      - name: Assert actual live Hosting unchanged on both domains
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const d of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(d+'/volunserve-release.json?announcement_audit='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP cannot verify live Hosting');
+              const v=await r.json();
+              if(v.revision!==process.env.LIVE_BASE)throw Error('STOP another deployment is live: '+v.revision);
+              console.log('PASS exact live Hosting base: '+d);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install dependencies from locked baseline
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and authentication and source-level regression tests
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-announcement-firebase-cleanup-20261105.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Fetch ACTUAL published production Firestore Rules READ ONLY
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,urllib.request
+          project='volunserve-3aa5b'
+          access_token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def fetch(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+access_token})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          release=fetch('projects/'+project+'/releases/cloud.firestore')
+          name=release['rulesetName']
+          if name!=os.environ['EXPECTED_RULESET']:raise SystemExit('STOP active Firebase Rules version changed')
+          files=fetch(name).get('source',{}).get('files',[])
+          sources=[f for f in files if f.get('name','').endswith('firestore.rules')]
+          if not sources and len(files)==1:sources=files
+          if len(sources)!=1:raise SystemExit('STOP ambiguous active published rules source')
+          source=sources[0]['content']
+          if hashlib.sha256(source.encode('utf8')).hexdigest()!=os.environ['RULES_SHA256']:
+            raise SystemExit('STOP active Firebase Rules source fingerprint changed')
+          with open('live-announcements-firestore.rules','w',encoding='utf8') as f:f.write(source)
+          print('PASS downloaded only verified active published Ruleset '+name)
+          print('NO Firestore Rules publish, release or database writes')
+          PY
+      - name: Real publish and resident/volunteer Firestore query tests in emulator ONLY
+        env:
+          LIVE_ANNOUNCEMENTS_RULES_FILE: live-announcements-firestore.rules
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-announcements-live-rules-emulator-20261105.cjs'
+      - name: Fresh web build (NOT deployed)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const data=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(data.revision,process.env.GITHUB_SHA);
+          console.log('PASS fresh no-cache export from exact validated source');
+          NODE
+      - name: Validate release boundary
+        run: |
+          echo 'SUCCESS source and Firestore emulator checks only. No production Hosting/Rules/Auth/data changes.'
