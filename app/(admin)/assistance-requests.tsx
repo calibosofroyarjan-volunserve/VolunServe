@@ -4022,39 +4022,6 @@ function DecisionTab({
     } as any);
   };
 
-  const [privateAddressSearch, setPrivateAddressSearch] = useState("");
-  const [privateMapSearchQuery, setPrivateMapSearchQuery] = useState("");
-  const [privateMapSearchTouched, setPrivateMapSearchTouched] = useState(false);
-
-  useEffect(() => {
-    const savedAddress = String(
-      reviewRecord?.privateAddressSnapshot || request.requesterAddress || "",
-    ).trim();
-
-    const fallbackAddress = [
-      request.requesterBarangay
-        ? `Barangay ${String(request.requesterBarangay).trim()}`
-        : "",
-      "City of San Jose del Monte",
-      "Bulacan",
-      "Philippines",
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    const seed = savedAddress || fallbackAddress;
-
-    setPrivateAddressSearch(seed);
-    setPrivateMapSearchQuery(reviewLocked ? seed : "");
-    setPrivateMapSearchTouched(reviewLocked && seed.length > 0);
-  }, [
-    request.id,
-    request.requesterAddress,
-    request.requesterBarangay,
-    reviewRecord?.privateAddressSnapshot,
-    reviewLocked,
-  ]);
-
   if (reviewLoading || !reviewDraft) {
     return (
       <View style={styles.tabContent}>
@@ -4090,89 +4057,19 @@ function DecisionTab({
   const existingAssistance = safeNumber(reviewDraft.confirmedExistingAssistanceAmount);
   const verifiedUncoveredAmount = Math.max(0, grossCost - existingAssistance);
 
-  const normalizePrivateAddressQuery = (value: string) => {
-    const raw = value.trim();
-    if (!raw) return "";
-
-    const parts = [raw];
-
-    if (!/san\s+jose\s+del\s+monte/i.test(raw)) {
-      parts.push("City of San Jose del Monte");
-    }
-
-    if (!/bulacan/i.test(raw)) {
-      parts.push("Bulacan");
-    }
-
-    if (!/philippines/i.test(raw)) {
-      parts.push("Philippines");
-    }
-
-    return parts.join(", ");
-  };
-
-  const runPrivateAddressSearch = () => {
-    if (reviewLocked) return;
-
-    const raw = privateAddressSearch.trim();
-
-    if (raw.length < 3) {
-      Alert.alert(
-        "Address Required",
-        "Enter the Resident's Block/Lot, street, subdivision or purok, barangay, and other available address details before searching.",
-      );
-      return;
-    }
-
-    const query = normalizePrivateAddressQuery(raw);
-
-    setPrivateMapSearchQuery(query);
-    setPrivateMapSearchTouched(true);
-
-    onReviewChange("privateAddressSnapshot", raw.slice(0, 300));
-
-    // Address search is only a geographic consistency check.
-    // Clear any old experimental exact-pin coordinates so they are not
-    // mistaken for proof of the Resident's household location.
-    onReviewChange("privateLatitude", "");
-    onReviewChange("privateLongitude", "");
-  };
-
   const confirmResidencyAtAddress = () => {
     if (reviewLocked) return;
-
-    if (
-      !privateMapSearchTouched ||
-      !privateMapSearchQuery.trim() ||
-      !reviewDraft.privateAddressSnapshot.trim()
-    ) {
-      Alert.alert(
-        "Search Address First",
-        "Search and review the Resident's declared address on the map before marking residency as verified.",
-      );
+    if (reviewDraft.privateAddressSnapshot.trim().length < 5) {
+      Alert.alert("Address needed", "Enter the address found on the supporting document.");
       return;
     }
-
-    if (
-      !reviewDraft.residencyVerificationMethod ||
-      reviewDraft.residencyVerificationMethod === "not_applicable"
-    ) {
-      Alert.alert(
-        "Verification Method Required",
-        "Select how the LGU confirmed that the Resident is associated with this address.",
-      );
+    if (!reviewDraft.residencyVerificationMethod ||
+        reviewDraft.residencyVerificationMethod === "not_applicable") {
+      Alert.alert("Choose proof", "Select how the LGU confirmed the Resident's address.");
       return;
     }
-
     onReviewChange("residencyVerificationStatus", "verified");
   };
-
-  const publicMapQuery = [
-    locationName.trim(),
-    locationAddress.trim(),
-  ]
-    .filter(Boolean)
-    .join(", ");
 
   return (
     <View style={styles.tabContent}>
@@ -4576,48 +4473,19 @@ function DecisionTab({
           </View>
 
           <View style={styles.addressSearchPanel}>
-            <Text style={styles.addressSearchLabel}>ADDRESS TO CHECK</Text>
-            <View style={styles.addressSearchRow}>
-              <TextInput
-                value={privateAddressSearch}
-                onChangeText={(value) => {
-                  setPrivateAddressSearch(value);
-                  setPrivateMapSearchTouched(false);
-                }}
-                placeholder="Block/Lot, street, phase, subdivision/purok, barangay"
-                placeholderTextColor="#94A3B8"
-                editable={!reviewLocked}
-                maxLength={300}
-                onSubmitEditing={runPrivateAddressSearch}
-                style={[styles.input, styles.addressSearchInput, !!issue("privateAddressSnapshot") && styles.assistanceFieldInvalid]}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.addressSearchButton,
-                  reviewLocked && styles.addressSearchButtonDisabled,
-                ]}
-                onPress={runPrivateAddressSearch}
-                disabled={reviewLocked}
-                activeOpacity={0.82}
-              >
-                <Ionicons name="search-outline" size={17} color="#FFFFFF" />
-                <Text style={styles.addressSearchButtonText}>Search Address</Text>
-              </TouchableOpacity>
-            </View>
+            <LabelText required>Address shown on supporting proof</LabelText>
+            <TextInput
+              value={reviewDraft.privateAddressSnapshot}
+              onChangeText={(value) => onReviewChange("privateAddressSnapshot", value)}
+              editable={!reviewLocked}
+              maxLength={300}
+              placeholder="Street, barangay, San Jose del Monte, Bulacan"
+              placeholderTextColor="#94A3B8"
+              style={[styles.input, !!issue("privateAddressSnapshot") && styles.assistanceFieldInvalid]}
+            />
             <ReviewValidationHint message={issue("privateAddressSnapshot")} />
-
-            {privateMapSearchTouched && (
-              <View style={styles.mapSearchStatus}>
-                <Ionicons name="checkmark-circle-outline" size={17} color="#0369A1" />
-                <Text style={styles.mapSearchStatusText}>
-                  Address loaded on the private map. Check whether the result is consistent with the declared barangay/city and available evidence.
-                </Text>
-              </View>
-            )}
+            <Text style={styles.simpleCopy}>Check the submitted documents or LGU records. This is never a public donation address.</Text>
           </View>
-
-          <Text style={styles.simpleCopy}>Use official records or supporting documents to verify the address. No map needed.</Text>
-
           <Divider />
 
           <LabelText required>Residency verification method</LabelText>
