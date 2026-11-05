@@ -260,3 +260,5 @@ jobs:
 # One-shot Hosting-only release of clear red Reject Request action, after preflight checks.
 
 # One-time Resident Assistance request word validation Hosting-only release after passing CI.
+
+# One-shot guarded release of Resident Assistance word validation onto newest live, no other modules changed.
