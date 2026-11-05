@@ -1850,8 +1850,8 @@ This still does not automatically create a Donation Campaign.`,
         "Mark Assistance Provided",
         "Confirm that the verified assistance has been provided or otherwise completed without opening a public Donation Campaign.",
         "Confirm",
-        () =>
-          updateRequest(
+        async () => {
+          await updateRequest(
             "assistance_provided",
             {
               status:
@@ -1872,7 +1872,8 @@ This still does not automatically create a Donation Campaign.`,
                   .trim()
                   .slice(0, 2000),
             },
-          ),
+          );
+        },
       );
     };
 
