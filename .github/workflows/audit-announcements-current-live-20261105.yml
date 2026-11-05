@@ -43,6 +43,12 @@ jobs:
           announcement=rulesText[start:end]
           print('ACTUAL_RULESET_NAME='+release['rulesetName'])
           print('ACTUAL_RULESET_SHA256='+hashlib.sha256(rulesText.encode()).hexdigest())
+          for n in range(623,min(682,len(rulesText.splitlines()))):
+              print('LIVE_RULE_L'+str(n+1)+': '+rulesText.splitlines()[n][:160])
+          for i,line in enumerate(rulesText.splitlines()):
+              if 'function approved(' in line or 'function profile(' in line:
+                  for n in range(max(0,i),min(i+13,len(rulesText.splitlines()))):
+                      print('LIVE_FUNCTION_L'+str(n+1)+': '+rulesText.splitlines()[n][:160])
           print('ANNOUNCEMENTS_BLOCK_START')
           print(announcement[:4100])
           print('ANNOUNCEMENTS_BLOCK_END')
