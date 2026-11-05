@@ -672,6 +672,21 @@ export default function VolunteerTasks() {
                 ""
             ).trim();
 
+          // Receiving a task offer is allowed while busy. Accepting it is
+          // exclusive: the same Volunteer cannot start two active missions.
+          const responderLockRef =
+            next === "accepted" || next === "completed"
+              ? doc(db, "responderLocks", user.uid)
+              : null;
+          const responderLockSnapshot = responderLockRef
+            ? await transaction.get(responderLockRef)
+            : null;
+          if (next === "accepted" && responderLockSnapshot?.exists()) {
+            throw new Error(
+              "You already have an active Volunteer task. Complete it before accepting another offer, or Decline this task."
+            );
+          }
+
           let reporterUid = "";
           let caseData:
             Record<string, any> | null =
@@ -763,6 +778,23 @@ export default function VolunteerTasks() {
 
             patch.residentConfirmationStatus =
               "pending";
+          }
+
+          if (next === "accepted" && responderLockRef) {
+            transaction.set(responderLockRef, {
+              responderUid: user.uid,
+              assignmentId: assignment.id,
+              caseId,
+              status: "accepted",
+              updatedAt: serverTimestamp(),
+            });
+          } else if (
+            next === "completed" &&
+            responderLockRef &&
+            responderLockSnapshot?.exists() &&
+            String(responderLockSnapshot.data()?.assignmentId || "") === assignment.id
+          ) {
+            transaction.delete(responderLockRef);
           }
 
           transaction.update(
