@@ -142,6 +142,7 @@ export default function WebHome() {
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementsError, setAnnouncementsError] = useState(false);
+  const [announcementQueryTime, setAnnouncementQueryTime] = useState(() => Date.now());
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -188,10 +189,17 @@ export default function WebHome() {
   const profileVerified = profile?.identityVerified === true || profile?.identityStatus === "verified";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
+  // A query anchored to Timestamp.now() never sees later posts unless refreshed.
+  // Rebuild the published-only listener regularly without relaxing Firestore rules.
+  useEffect(() => {
+    const timer = setInterval(() => setAnnouncementQueryTime(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
+      where("publishAt", "<=", Timestamp.fromMillis(announcementQueryTime)),
       orderBy("publishAt", "desc")
     );
 
@@ -222,7 +230,7 @@ export default function WebHome() {
         setAnnouncements([]);
       }
     );
-  }, [profile?.barangay]);
+  }, [profile?.barangay, announcementQueryTime]);
 
   useEffect(() => {
     if (!user) {
