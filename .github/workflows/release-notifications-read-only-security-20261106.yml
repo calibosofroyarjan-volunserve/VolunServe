@@ -96,7 +96,7 @@ jobs:
           npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
       - name: Compile immutable Firebase Ruleset, INACTIVE and read back exact source
         run: python3 scripts/activate-notifications-locked-rules-20261106.py stage
-      - name: ACTIVATE tested notification rule with Firebase CLI --only firestore:rules
+      - name: ACTIVATE tested notification rule via guarded Firebase Rules API
         run: |
           python3 -m py_compile scripts/activate-notifications-locked-rules-20261106.py
           python3 scripts/activate-notifications-locked-rules-20261106.py activate
@@ -108,9 +108,9 @@ jobs:
           token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
           req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
           with urllib.request.urlopen(req,timeout=30) as r:actual=json.load(r)
-          if actual.get('rulesetName')!=info.get('cliDeployedRuleset'):
-            raise SystemExit('STOP: CLI Rules release pointer differs from exact tested candidate')
-          print('PASS ACTIVE Firestore Rules',info['cliDeployedRuleset'])
+          if actual.get('rulesetName')!=info['new']:
+            raise SystemExit('STOP active Ruleset pointer differs from exact tested candidate')
+          print('PASS ACTIVE Firestore Rules',info['new'])
           print('NO Hosting, Auth, Functions, Storage, user data, Super Admin, LGU, login or signup updates')
           PY
           echo "SUCCESS guarded FIRESTORE RULES-ONLY content restriction. No Hosting or data changes." >> "$GITHUB_STEP_SUMMARY"
