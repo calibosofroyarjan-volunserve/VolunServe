@@ -91,7 +91,21 @@ jobs:
         env:
           VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
           VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: node scripts/check-live-hosting.cjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # New Firebase preview channels may need a short DNS/CDN propagation delay.
+          # Do not proceed until all public routes and the exact release revision match.
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "PASS: verified the exact combined preview after propagation."
+              exit 0
+            fi
+            echo "New Hosting preview not accessible yet; attempt $attempt/12"
+            sleep 7
+          done
+          echo "::error::Preview failed to serve required routes and revision. LIVE DEPLOY BLOCKED."
+          exit 1
 
       - name: "Actual browser: unified Welcome Back Login and multi-step premium Signup"
         env:
