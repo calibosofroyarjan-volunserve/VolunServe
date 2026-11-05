@@ -65,8 +65,8 @@ def update_pointer(new_name):
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "publish":
-        candidate = open(CANDIDATE, encoding="utf8").read()
-        old = open(OLD_FILE, encoding="utf8").read()
+        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
+        old = open(OLD_FILE, encoding="utf8", newline="").read()
         if sha(old) != OLD_SHA:
             raise RuntimeError("Local backup of the original audited rules has changed")
         release, ruleset, current = release_state()
@@ -98,7 +98,7 @@ def main():
         print("No Rules release deleted, no user data accessed, no Storage/Functions/index changes")
     elif mode == "verify":
         _, active_name, active_content = release_state()
-        candidate = open(CANDIDATE, encoding="utf8").read()
+        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
         if active_content != candidate:
             raise RuntimeError("Live Rules verification failed")
         print("PASS exact surgical LGU staff Rules published", active_name)
@@ -111,7 +111,7 @@ def main():
         if active_name != new_name:
             print("Skip rule rollback: another ruleset is live; never overwrite it")
             return
-        candidate = open(CANDIDATE, encoding="utf8").read()
+        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
         if active != candidate:
             print("Skip rule rollback: published source differs from our candidate")
             return
