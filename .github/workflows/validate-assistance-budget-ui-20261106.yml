@@ -1,0 +1,26 @@
+name: Validate Assistance Budget UI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/assistance-itemized-budget-ui-20261106
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Compile TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Export web assets, without deploying
+        run: npx expo export --platform web
+      - name: Confirm no deployment occurred
+        run: echo "VALIDATION ONLY — Firebase Hosting was not modified"
