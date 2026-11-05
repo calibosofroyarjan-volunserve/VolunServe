@@ -312,6 +312,7 @@ export default function VolunteerTasksWeb() {
   const { loading, user, profile } = useUserSession();
 
   const [assignments, setAssignments] = useState<ResponseAssignment[]>([]);
+  const [legacyPendingCount, setLegacyPendingCount] = useState(0);
   const [casesById, setCasesById] = useState<Record<string, DisasterCase>>({});
   const [assignmentsReady, setAssignmentsReady] = useState(false);
   const [error, setError] = useState("");
@@ -419,7 +420,7 @@ export default function VolunteerTasksWeb() {
   }, [caseIdsKey]);
 
   const counts = useMemo(() => {
-    const newCount = assignments.filter((item) => item.status === "offered").length;
+    const newCount = assignments.filter((item) => item.status === "offered").length + legacyPendingCount;
     const activeCount = assignments.filter((item) =>
       ACTIVE_STATUSES.includes(String(item.status || "")),
     ).length;
@@ -431,9 +432,9 @@ export default function VolunteerTasksWeb() {
       new: newCount,
       active: activeCount,
       completed: completedCount,
-      all: assignments.length,
+      all: assignments.length + legacyPendingCount,
     };
-  }, [assignments]);
+  }, [assignments, legacyPendingCount]);
 
   const visibleAssignments = useMemo(() => {
     const filtered = assignments.filter((item) => {
@@ -889,8 +890,6 @@ export default function VolunteerTasksWeb() {
         />
       </View>
 
-      <VolunteerInvitationInbox />
-
       <View style={[styles.toolbar, compact && styles.toolbarCompact, mobile && styles.toolbarMobile]}>
         <View style={[styles.filters, mobile && styles.filtersMobile]}>
           {(
@@ -935,6 +934,14 @@ export default function VolunteerTasksWeb() {
         </TouchableOpacity>
       </View>
 
+      {/* Older invitation records share the same New cards area; all new
+          assignments use the photo-rich responseAssignments cards below. */}
+      <VolunteerInvitationInbox
+        visible={filter === "new" || filter === "all"}
+        assignedCaseIds={caseIds}
+        onPendingCountChange={setLegacyPendingCount}
+      />
+
       {!!error && (
         <View style={styles.errorBox}>
           <Ionicons name="warning-outline" size={19} color="#b42318" />
@@ -947,7 +954,8 @@ export default function VolunteerTasksWeb() {
           <ActivityIndicator color="#078F82" />
           <Text style={styles.emptyTitle}>Loading assignments…</Text>
         </View>
-      ) : visibleAssignments.length === 0 ? (
+      ) : visibleAssignments.length === 0 &&
+          !((filter === "new" || filter === "all") && legacyPendingCount > 0) ? (
         <View style={[styles.emptyCard, mobile && styles.emptyCardMobile]}>
           <View style={styles.emptyIcon}>
             <Ionicons name="shield-checkmark-outline" size={30} color="#078F82" />
