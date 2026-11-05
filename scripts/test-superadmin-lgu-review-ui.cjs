@@ -9,7 +9,7 @@ assert(a.includes('key==="appointmentReference"?"no":"auto"'),"Appointment refer
 for(const marker of [
  'Pending LGU Admin Applications',
  'View Credentials',
- 'Review & Approve',
+ 'Review & Accept',
  'Reject',
  'action === "reject"',
  'actionType === "reject"',
