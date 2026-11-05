@@ -1,0 +1,113 @@
+name: Provision VolunServe Announcements Index (Manual Only)
+# Safe index-only operation: no Firestore rules, Hosting, Functions, Storage or data writes.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type CREATE_INDEX_ONLY to provision or check announcements index'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-announcements-composite-index-only
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    if: >-
+      github.repository == 'calibosofroyarjan-volunserve/VolunServe' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.confirmation == 'CREATE_INDEX_ONLY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout workflow source
+        uses: actions/checkout@v4
+
+      - name: Confirm Firebase credentials refer to the correct project
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const value = process.env.FIREBASE_SA;
+          assert.ok(value, 'Missing Firebase service-account secret. No index changes attempted.');
+          const account = JSON.parse(value);
+          assert.equal(account.type, 'service_account', 'Expected service-account credentials');
+          assert.equal(account.project_id, 'volunserve-3aa5b', 'Wrong project. Stop.');
+          console.log('Project credentials verified (no secret values printed).');
+          NODE
+
+      - name: Authenticate to the approved Firebase project
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Inspect existing composite indexes (read-only)
+        shell: bash
+        run: |
+          gcloud firestore indexes composite list \
+            --project=volunserve-3aa5b \
+            --database='(default)' \
+            --format=json > "$RUNNER_TEMP/volunserve-indexes.json"
+
+      - name: Check exact index definition and state
+        id: inspect
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = process.env.RUNNER_TEMP + '/volunserve-indexes.json';
+          const indexes = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const match = indexes.find(index => {
+            if (index.collectionGroup !== 'announcements' || index.queryScope !== 'COLLECTION') return false;
+            const fields = (index.fields || []).filter(field => field.fieldPath !== '__name__');
+            return fields.length === 2 &&
+              fields[0].fieldPath === 'audience' && fields[0].order === 'ASCENDING' &&
+              fields[1].fieldPath === 'publishAt' && fields[1].order === 'DESCENDING';
+          });
+          if (match?.state === 'READY') {
+            console.log('Index already READY; no changes required.');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=ready\n');
+          } else if (match?.state === 'CREATING' || match?.state === 'NEEDS_REPAIR') {
+            console.log('Index exists with state ' + match.state + '. No duplicate creation attempted.');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=existing\n');
+          } else if (match) {
+            throw Error('Index exists in unexpected state (' + match.state + '). Manual review required.');
+          } else {
+            console.log('Exact index does not exist; authorize creation of one index.');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=create\n');
+          }
+          NODE
+
+      - name: Create ONLY the missing announcements composite index
+        if: steps.inspect.outputs.action == 'create'
+        shell: bash
+        run: |
+          gcloud firestore indexes composite create \
+            --project=volunserve-3aa5b \
+            --database='(default)' \
+            --collection-group=announcements \
+            --query-scope=collection \
+            --field-config=field-path=audience,order=ascending \
+            --field-config=field-path=publishAt,order=descending \
+            --async --quiet
+
+      - name: Report index readiness (no application deployment)
+        shell: bash
+        run: |
+          gcloud firestore indexes composite list \
+            --project=volunserve-3aa5b \
+            --database='(default)' \
+            --filter='collectionGroup:announcements' \
+            --format='table(collectionGroup,queryScope,state,fields)'
+          echo 'Provisioning only. If CREATING, wait until READY before publishing new queries.'
+          echo 'No Firestore security rules, Hosting, Functions, or application code were deployed.'
