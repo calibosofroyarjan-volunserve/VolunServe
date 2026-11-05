@@ -171,4 +171,5 @@ jobs:
             exit 1
           fi
       - name: Report explicit release boundary
-        run: echo 'SUCCESS: Hosting-only UI update; Firestore Rules/Auth/Data/Functions/Storage, Super Admin, Signup, and Login were not deployed or modified.'
+        run: |
+          echo 'SUCCESS: Hosting-only UI update; Firestore Rules/Auth/Data/Functions/Storage, Super Admin, Signup, and Login were not deployed or modified.'
