@@ -25,6 +25,7 @@ import {
   UserProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import NotificationDropdown from "../../components/notifications/NotificationDropdown";
 
 type TabDefinition = {
   name: string;
@@ -212,14 +213,7 @@ export default function TabLayout() {
               {mode === "volunteer" ? "VOLUNTEER" : "RESIDENT"} · {currentModule}
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-            onPress={() => visit("notifications")}
-            style={styles.mobileHeaderButton}
-          >
-            <Ionicons name="notifications-outline" size={21} color="#12365B" />
-          </Pressable>
+          <NotificationDropdown />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={mobileProfileOpen ? "Close account menu" : "Open account menu"}
@@ -332,10 +326,15 @@ export default function TabLayout() {
   }
 
   return (
-    <Tabs
-      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
-      tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
-    />
+    <View style={styles.desktopWorkspace}>
+      <Tabs
+        screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+        tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
+      />
+      <View style={styles.desktopBellAnchor}>
+        <NotificationDropdown />
+      </View>
+    </View>
   );
 }
 
@@ -649,6 +648,8 @@ function CustomTabBar({
 }
 
 const styles = StyleSheet.create({
+  desktopWorkspace: { flex: 1 },
+  desktopBellAnchor: { position: "absolute", top: 20, right: 22, zIndex: 70 },
   journeyAction: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#226859", minHeight: 42, paddingHorizontal: 12, marginBottom: 10, borderRadius: 9 },
   journeyActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
