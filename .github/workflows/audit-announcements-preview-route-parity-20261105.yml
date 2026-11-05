@@ -1,0 +1,32 @@
+name: Read-Only Parity Audit LIVE vs Announcement Preview Routes
+on:
+  push:
+    branches: [fix/announcements-firestore-error-handling-live-20261105]
+    paths: [".github/workflows/audit-announcements-preview-route-parity-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check live vs candidate preview HTML routes without writes
+        run: |
+          node - <<'NODE'
+          const live='https://volunserve.com';
+          const preview='https://volunserve-3aa5b--announcements-feed-fix-1105-vx9dhc1x.web.app';
+          const routes=['/','/login','/signup','/admin-login','/create-announcement','/admin-accounts','/announcements','/my-cases','/map-tracking','/community-events'];
+          (async()=>{
+            for(const path of routes){
+              const get=async(origin)=>{
+                const r=await fetch(origin+path,{redirect:'follow',signal:AbortSignal.timeout(25000)});
+                return {status:r.status, contentType:r.headers.get('content-type')||''};
+              };
+              const a=await get(live),b=await get(preview);
+              console.log('ROUTE '+path+' LIVE='+a.status+' PREVIEW='+b.status+' liveType='+a.contentType+' previewType='+b.contentType);
+              if(a.status===200 && b.status!==200)throw Error('STOP preview route regression: '+path);
+              if(b.status>=500)throw Error('STOP preview server error: '+path);
+            }
+            console.log('PASS candidate preview does not regress current live HTML routes');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
