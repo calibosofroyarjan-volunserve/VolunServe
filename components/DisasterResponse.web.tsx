@@ -35,6 +35,7 @@ type Pin = {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  source: "device_gps" | "manual_map";
 };
 
 type Attachment = {
@@ -520,7 +521,8 @@ export default function WebDisasterReport() {
   const selectPin = (
     lat: number,
     lng: number,
-    accuracy: number | null = null
+    accuracy: number | null = null,
+    source: "device_gps" | "manual_map" = "manual_map"
   ) => {
     if (
       !Number.isFinite(lat) ||
@@ -540,6 +542,7 @@ export default function WebDisasterReport() {
       latitude: lat,
       longitude: lng,
       accuracy,
+      source,
     };
 
     // A changed pin invalidates pending lookups and any address filled
@@ -663,7 +666,7 @@ export default function WebDisasterReport() {
         if (!lock.current) {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          const revision = selectPin(lat, lng, position.coords.accuracy);
+          const revision = selectPin(lat, lng, position.coords.accuracy, "device_gps");
           if (typeof revision === "number") {
             lastAutoAddress.current = "";
             setIncidentAddress("");
@@ -1071,7 +1074,8 @@ export default function WebDisasterReport() {
         location: value("location"),
         latitude: pin.latitude,
         longitude: pin.longitude,
-        gpsAccuracyMeters: pin.accuracy,
+        locationSource: pin.source,
+        gpsAccuracyMeters: pin.source === "device_gps" ? pin.accuracy : null,
         locationCapturedAt: serverTimestamp(),
 
         details: value("details"),
@@ -1100,7 +1104,7 @@ export default function WebDisasterReport() {
             profileData.identityStatus || "basic",
           emailVerified: Boolean(user.emailVerified),
           phoneOnFile: Boolean(contactNumber),
-          gpsProvided: true,
+          gpsProvided: pin.source === "device_gps",
           photoEvidenceProvided: photoFiles.length > 0,
           videoEvidenceProvided: Boolean(videoFile),
           duplicateCheckStatus: "pending_admin_review",
