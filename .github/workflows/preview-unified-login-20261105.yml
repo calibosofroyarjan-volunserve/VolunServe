@@ -79,7 +79,11 @@ jobs:
           "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-unified-cdp about:blank > /tmp/chrome-unified.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
-          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+          if ! node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"; then
+            echo "::error::Unified Login browser failed; Chrome startup or page hydration details:"
+            tail -n 50 /tmp/chrome-unified.log || true
+            exit 1
+          fi
       - name: Release constraints
         run: |
           echo "PREVIEW ONLY: live Hosting, Firestore Rules, Auth users, Storage, Functions, Maps, Donations and records unchanged."
