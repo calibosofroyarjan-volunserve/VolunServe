@@ -103,8 +103,10 @@ test("Admin may assign any approved Volunteer throughout SJDM regardless of bara
   assert.ok(eligibility.includes("reporterIsVolunteer"), "Do not self-assign a resident report");
   assert.ok(!eligibility.includes("aLocal") && !eligibility.includes("bLocal"),
     "Do not give preferential assignment ranking based on home barangay");
-  assert.ok(!eligibility.includes('reason: "Emergency case barangay is missing"'),
-    "Do not block assignments because a case barangay string is missing");
+  assert.ok(!eligibility.includes("normalizeBarangay(volunteer.barangay)"),
+    "Volunteer residence cannot be compared with incident barangay");
+  assert.ok(eligibility.includes("Record the incident barangay for the completion report"),
+    "Keep incident-area documentation separate from Volunteer residence");
   assert.ok(!eligibility.includes("volunteer.barangay.toLowerCase().includes(search)"),
     "Volunteer search is by name and skills, not home barangay");
   const assignStart = src.indexOf("const assignVolunteerToCase = async");
@@ -114,8 +116,11 @@ test("Admin may assign any approved Volunteer throughout SJDM regardless of bara
     "Admin validation remains required for citywide assignment");
   assert.ok(assign.includes("responderLockSnapshot.exists()"),
     "Busy Volunteer lock remains enforced");
-  assert.ok(!assign.includes("currentCaseBarangay"),
-    "The assignment transaction cannot depend on case or Volunteer barangay");
+  assert.ok(!assign.includes("currentVolunteerBarangay") &&
+    !assign.includes("volunteerBarangay"),
+    "The assignment transaction must not restrict the Volunteer home barangay");
+  assert.ok(assign.includes("Record the incident barangay for completion documents"),
+    "Preserve the incident's own location documentation");
   assert.ok(src.includes("Approved Volunteer · Citywide SJDM assignments"),
     "Roster must clearly show citywide participation instead of Volunteer barangay");
   assert.ok(src.includes("INCIDENT BARANGAY"),
