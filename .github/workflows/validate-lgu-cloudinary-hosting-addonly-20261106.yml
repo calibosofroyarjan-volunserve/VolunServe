@@ -75,6 +75,15 @@ jobs:
             console.log('PASS active backend and private Cloudinary credential route security');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Verify full original Git history for Signup preservation tests
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git show e7c2cc8:lib/firebaseAuth.ts >/dev/null
+          echo "PASS original signup baseline accessible for full regression"
       - name: Load exact branch source with no stale workspace state
         run: |
           set -euo pipefail
