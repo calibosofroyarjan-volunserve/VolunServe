@@ -174,10 +174,12 @@ export default function WebLogin() {
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: unknown) {
       const message = googleSignInErrorMessage(error);
+      // Preserve every Google failure (including a cancelled or blocked popup)
+      // across any auth-driven remount, not only a successfully selected UID.
+      rememberGoogleLoginNotice(message);
       if (selectedUid && auth.currentUser?.uid === selectedUid) {
         // Authentication succeeded but VolunServe authorization failed.
         // Save feedback BEFORE sign-out: the global auth guard may remount Login.
-        rememberGoogleLoginNotice(message);
         try {
           await logoutUser();
         } catch {
