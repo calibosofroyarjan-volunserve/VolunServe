@@ -44,7 +44,7 @@ assert(!ui.includes('label="Save Review"'), "No redundant Save button in main re
 assert(!route.includes("onSave={saveVerificationDraft}"), "Compact review must submit through decisions, not an extra save action");
 const dropdowns = ui.split("<CompactReviewSelect").length - 1;
 assert.equal(dropdowns, 4, "Use four clean inline dropdowns instead of full-screen selection modals");
-assert(ui.includes('The review is recorded when you submit a decision.'), "Explain submission without save");
+assert(ui.includes('Your review is recorded when you submit a decision.'), "Explain submission without save");
 assert(ui.includes("validated") === false || ui.includes("Verify Request"), "Keep simple user-facing wording");
 
 assert(src.includes("setSimpleReviewMode(true);") && src.includes("setReviewDraft(null);"), "No stale review state between residents");
