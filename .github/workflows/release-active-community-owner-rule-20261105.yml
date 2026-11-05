@@ -119,13 +119,57 @@ jobs:
             console.log('No Firebase changes made in preparation.');
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
-      - name: Test minimally patched active rules in isolated Firestore emulator
+      - name: Test exact owner-only permission regression against minimally patched ACTIVE rules
         shell: bash
         run: |
           set -euo pipefail
-          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+          cat > scripts/test-active-community-owner-read.cjs <<'NODE'
+          const fs=require('node:fs');
+          const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
+          if(!process.env.FIRESTORE_EMULATOR_HOST)throw Error('Firestore emulator is required. No production access permitted.');
+          const ownerId='owner-target',otherId='other-resident',adminId='lgu-admin-test',superId='super-admin-test';
+          (async()=>{
+            const env=await initializeTestEnvironment({projectId:'demo-volunserve',firestore:{rules:fs.readFileSync('firestore.rules','utf8')}});
+            try {
+              await env.clearFirestore();
+              await env.withSecurityRulesDisabled(async ctx=>{
+                const db=ctx.firestore();
+                await db.doc('users/'+ownerId).set({uid:ownerId,role:'resident',status:'approved',residentAccess:true,activeMode:'volunteer',volunteerAccess:false,volunteerStatus:'not_applied'});
+                await db.doc('users/'+otherId).set({uid:otherId,role:'resident',status:'approved',residentAccess:true,activeMode:'resident'});
+                await db.doc('users/'+adminId).set({uid:adminId,role:'admin',status:'approved',adminStatus:'active'});
+                await db.doc('users/'+superId).set({uid:superId,role:'superadmin',status:'approved'});
+                await db.doc('communityEventProposals/existing').set({proposedBy:ownerId,status:'pending',title:'Protected Proposal'});
+              });
+              const owner=env.authenticatedContext(ownerId).firestore();
+              const other=env.authenticatedContext(otherId).firestore();
+              const admin=env.authenticatedContext(adminId).firestore();
+              const superAdmin=env.authenticatedContext(superId).firestore();
+              const guest=env.unauthenticatedContext().firestore();
+              const path='communityEventProposals/existing';
+              await assertSucceeds(owner.doc(path).get());
+              console.log('PASS: owner can read their existing proposal with stale volunteer mode');
+              await assertSucceeds(owner.collection('communityEventProposals').where('proposedBy','==',ownerId).get());
+              console.log('PASS: owner-only proposal query works');
+              await assertFails(other.doc(path).get());
+              await assertFails(other.collection('communityEventProposals').where('proposedBy','==',ownerId).get());
+              console.log('PASS: other residents cannot read or query the owner\'s proposals');
+              await assertFails(guest.doc(path).get());
+              await assertFails(owner.doc('communityEventProposals/unauthorized-write').set({proposedBy:ownerId,status:'pending'}));
+              console.log('PASS: unauthenticated reads and stale-mode writes remain denied');
+              await assertSucceeds(admin.doc(path).get());
+              await assertSucceeds(superAdmin.doc(path).get());
+              console.log('PASS: existing Admin and Super Admin read access remains');
+              await env.withSecurityRulesDisabled(async ctx=>{
+                await ctx.firestore().doc('users/'+ownerId).update({status:'pending_review'});
+              });
+              await assertFails(owner.doc(path).get());
+              console.log('PASS: pending review resident remains blocked');
+              console.log('All targeted active rules owner-read regression tests PASSED.');
+            }finally{await env.cleanup();}
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-active-community-owner-read.cjs"
           node --test scripts/test-admin-volunteer-authorization.cjs
-          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
       - name: Release only minimal ACTIVE owner-read change through Firebase Rules API
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
