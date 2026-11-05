@@ -4,6 +4,7 @@ import {
   Stack,
   useRouter,
   useSegments,
+  useRootNavigationState,
 } from "expo-router";
 import { GoogleAuthProvider, type User } from "firebase/auth";
 import React, {
@@ -39,6 +40,8 @@ const ioniconsFont = require(
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const rootNavigationState = useRootNavigationState();
+  const rootNavigatorReady = Boolean(rootNavigationState?.key);
   const [fontsLoaded, fontError] = useFonts({
     Ionicons: ioniconsFont,
     ionicons: ioniconsFont,
@@ -125,6 +128,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (
+      !rootNavigatorReady ||
       (!fontsLoaded && !fontError) ||
       !authChecked ||
       profileLoading
@@ -407,34 +411,21 @@ export default function RootLayout() {
     fontsLoaded,
     profile,
     profileLoading,
+    rootNavigatorReady,
     router,
     segments,
   ]);
 
   useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
-  if (
+  // Always mount the Expo Router Stack even while Firebase is initializing.
+  // An early router.replace without a mounted navigator can prevent APK launch.
+  const startupLoading =
+    !rootNavigatorReady ||
     (!fontsLoaded && !fontError) ||
     !authChecked ||
     profileLoading ||
-    guardLoading
-  ) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color="#078C83"
-        />
-        <Text style={styles.loadingText}>
-          {!authChecked ||
-          profileLoading ||
-          guardLoading
-            ? "Checking your account..."
-            : "Loading VolunServe..."}
-        </Text>
-      </View>
-    );
-  }
+    guardLoading;
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -455,6 +446,16 @@ export default function RootLayout() {
         <Stack.Screen name="(lgu)" />
       </Stack>
       <AppDialogHost />
+      {startupLoading && (
+        <View pointerEvents="auto" style={[styles.loadingScreen, styles.loadingOverlay]}>
+          <ActivityIndicator size="large" color="#078C83" />
+          <Text style={styles.loadingText}>
+            {!authChecked || profileLoading || guardLoading
+              ? "Checking your account..."
+              : "Loading VolunServe..."}
+          </Text>
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -462,6 +463,10 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
   loadingScreen: {
     flex: 1,
