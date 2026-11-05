@@ -1,10 +1,10 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import React, { useState } from "react";
+import { AppAlert } from "../../lib/appDialog";
+import React, { useRef, useState } from "react";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -57,6 +57,9 @@ export default function CreateAnnouncement() {
 
   const [submitting, setSubmitting] =
     useState(false);
+  // The ref locks the write synchronously, before React applies disabled styles.
+  const publishingRef = useRef(false);
+  const [publishError, setPublishError] = useState("");
 
   if (loading) {
     return (
@@ -125,7 +128,7 @@ export default function CreateAnnouncement() {
   const setOfficialArea = async () => {
     if (!user || !activeApprovedAdmin || barangay || settingArea) return;
     if (!areaConfirmed || !SJDM_BARANGAYS.includes(initialBarangay)) {
-      Alert.alert("Official Barangay Required", "Choose your official LGU barangay and confirm that it matches your appointment.");
+      AppAlert.alert("Official Barangay Required", "Choose your official LGU barangay and confirm that it matches your appointment.");
       return;
     }
     try {
@@ -136,10 +139,10 @@ export default function CreateAnnouncement() {
         barangayDeclaredAt: serverTimestamp(),
         barangayDeclaredBy: user.uid,
       });
-      Alert.alert("Barangay Saved", "Your official LGU area was recorded. You can now publish local announcements for that barangay.");
+      AppAlert.alert("Barangay Saved", "Your official LGU area was recorded. You can now publish local announcements for that barangay.");
       setAreaConfirmed(false);
     } catch (error: any) {
-      Alert.alert("Unable to Save Barangay",
+      AppAlert.alert("Unable to Save Barangay",
         error?.code === "permission-denied"
           ? "This account cannot complete area registration with the current security rules. No changes were saved."
           : "Could not save your official barangay. Check your connection and retry.");
@@ -148,11 +151,13 @@ export default function CreateAnnouncement() {
     }
   };
   const handleSubmit = async () => {
+    if (publishingRef.current || submitting) return;
+    setPublishError("");
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
     if (!publishBarangay) {
-      Alert.alert(
+      AppAlert.alert(
         "Barangay Required",
         "Complete the official LGU barangay setup below before publishing."
       );
@@ -161,12 +166,12 @@ export default function CreateAnnouncement() {
     }
 
     if (!activeApprovedAdmin) {
-      Alert.alert("Publishing Unavailable", "Only approved, active LGU Admin accounts can publish.");
+      AppAlert.alert("Publishing Unavailable", "Only approved, active LGU Admin accounts can publish.");
       return;
     }
 
     if (cleanTitle.length < 3) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Title",
         "Please enter a clear announcement title."
       );
@@ -175,7 +180,7 @@ export default function CreateAnnouncement() {
     }
 
     if (cleanMessage.length < 10) {
-      Alert.alert(
+      AppAlert.alert(
         "Invalid Message",
         "Write at least 10 characters so the announcement meets the official publishing rules."
       );
@@ -184,6 +189,7 @@ export default function CreateAnnouncement() {
     }
 
     try {
+      publishingRef.current = true;
       setSubmitting(true);
 
       await addDoc(
@@ -224,23 +230,28 @@ export default function CreateAnnouncement() {
 
       setTitle("");
       setMessage("");
+      setCustomAnnouncement(true);
 
-      Alert.alert(
+      AppAlert.alert(
         "Announcement Posted",
         "The announcement was published to your authorized community."
       );
     } catch (error: any) {
-      console.error(
-        "Create announcement error:",
-        error
-      );
-
-      Alert.alert(
-        "Unable to Post",
-        error?.message ||
-          "The announcement could not be published."
-      );
+      // Never surface raw Firebase/Firestore internals in the LGU interface.
+      const code = String(error?.code || "").toLowerCase();
+      const message =
+        code === "permission-denied" || code === "unauthenticated"
+          ? "Your account is not authorized to publish to this area. Sign in again or confirm your LGU account is approved and active."
+          : code === "unavailable" || code === "deadline-exceeded" || code === "network-request-failed"
+            ? "Could not connect to the announcement service. Check your internet connection and try again. Your draft is still here."
+            : code === "resource-exhausted"
+              ? "The announcement service is busy. Try again shortly. Your draft was preserved."
+              : "We could not confirm that the announcement was saved. Check the announcements feed before retrying to avoid duplicates.";
+      setPublishError(message);
+      console.warn("Announcement publishing failed", { code: code || "unknown" });
+      AppAlert.alert("Announcement Not Published", message);
     } finally {
+      publishingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -295,6 +306,11 @@ export default function CreateAnnouncement() {
       ) : null}
 
       <View style={styles.formCard}>
+        {publishError ? (
+          <Text accessibilityRole="alert" style={{ color: "#9F1239", marginBottom: 12, lineHeight: 20 }}>
+            {publishError}
+          </Text>
+        ) : null}
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose announcement type"
           accessibilityState={{ expanded: templateOpen }} onPress={() => setTemplateOpen(!templateOpen)}
