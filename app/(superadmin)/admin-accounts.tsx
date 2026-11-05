@@ -27,6 +27,8 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguPrivateProofPreview from "../../components/admin/LguPrivateProofPreview";
+import { reviewPendingLguApplication } from "../../lib/lguCredentialImages";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -69,6 +71,7 @@ type AdminSort = "newest" | "oldest" | "name_asc" | "name_desc";
 
 type AdminAction =
   | "promote"
+  | "reject"
   | "suspend"
   | "activate"
   | "revoke";
@@ -175,9 +178,18 @@ export default function AdminAccounts() {
     actionError,
     setActionError,
   ] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  // Keep each LGU applicant's verification result separate. A second card
+  // loading must never replace the selected applicant's credential status.
+  const [proofReadyByUid, setProofReadyByUid] = useState<Record<string, boolean>>({});
+  const onProofReady = React.useCallback((uid: string, complete: boolean) => {
+    setProofReadyByUid(current =>
+      current[uid] === complete ? current : { ...current, [uid]: complete }
+    );
+  }, []);
 
   // LGU staff authorization requires an independent human credential check.
-  // Never collect photographs or secret document values in this review.
+  // View uploaded credentials privately; never store passwords or public media tokens.
   const [lguOffice, setLguOffice] = useState("");
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
@@ -202,7 +214,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed &&
+    !!actionTarget?.id && proofReadyByUid[actionTarget.id] === true;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -477,6 +490,7 @@ export default function AdminAccounts() {
     }
 
     setActionError("");
+    setRejectReason("");
     clearCredentialReview();
     setActionType(action);
     setActionTarget(account);
@@ -489,6 +503,7 @@ export default function AdminAccounts() {
       }
 
       setActionError("");
+      setRejectReason("");
       setActionType(null);
       setActionTarget(null);
     };
@@ -498,6 +513,10 @@ export default function AdminAccounts() {
   ) => {
     if (action === "promote") {
       return "Verify Staff and Promote to Admin";
+    }
+
+    if (action === "reject") {
+      return "Reject LGU Staff Application";
     }
 
     if (action === "suspend") {
@@ -526,6 +545,10 @@ export default function AdminAccounts() {
       return `Promote ${name} to LGU Admin only after confirming their identity, legitimate LGU employment and official authorization?`;
     }
 
+    if (action === "reject") {
+      return `Reject the pending LGU application of ${name}? This does not delete their account or grant any privileges.`;
+    }
+
     if (action === "suspend") {
       return `Temporarily suspend Admin access for ${name}?`;
     }
@@ -549,6 +572,10 @@ export default function AdminAccounts() {
   ) => {
     if (action === "promote") {
       return "Promote Verified Staff";
+    }
+
+    if (action === "reject") {
+      return "Reject Application";
     }
 
     if (action === "suspend") {
@@ -621,6 +648,17 @@ export default function AdminAccounts() {
         return;
       }
 
+      if (action === "reject" && (
+        account.role !== "applicant" ||
+        account.status !== "pending_review" ||
+        !(account as any).lguOffice ||
+        rejectReason.trim().length < 10 ||
+        rejectReason.trim().length > 300
+      )) {
+        setActionError("Enter a clear reason (10–300 characters) for the pending LGU staff application.");
+        return;
+      }
+
       setSavingUid(
         account.id
       );
@@ -628,91 +666,39 @@ export default function AdminAccounts() {
       setActionError("");
 
       try {
+        if (action === "promote" || action === "reject") {
+          // Firebase Admin SDK validates the REAL Super Admin session,
+          // requires both private Cloudinary documents before approval,
+          // and atomically records the role change + audit log. Firestore
+          // client-side Rules never need to grant direct privileged writes.
+          await reviewPendingLguApplication(
+            verified.current, account.id,
+            action === "promote" ? "approve" : "reject",
+            action === "promote" ? {
+              office: lguOffice.trim(),
+              position: lguPosition.trim(),
+              credentialReference: lguReference.trim(),
+              verificationMethod: lguVerificationMethod.trim(),
+              identityMatched, lguEmploymentConfirmed, credentialsConfirmed,
+            } : { reason: rejectReason.trim() }
+          );
+          if (action === "promote") {
+            setShowAddAdmin(false);
+            setPromoteSearch("");
+          }
+          setActionType(null);
+          setActionTarget(null);
+          setActionError("");
+          setRejectReason("");
+          clearCredentialReview();
+          return;
+        }
         const batch =
           writeBatch(db);
 
         let logPayload: AdminAuditPayload;
 
         if (
-          action === "promote"
-        ) {
-          // Atomic grant: Firestore rules require this fresh review record
-          // in the same batch as the role change.
-          batch.set(doc(db, "lguAdminCredentialReviews", account.id), {
-            targetUid: account.id,
-            accountEmail: account.email,
-            reviewStatus: "verified",
-            office: lguOffice.trim(),
-            position: lguPosition.trim(),
-            credentialReference: lguReference.trim(),
-            verificationMethod: lguVerificationMethod.trim(),
-            verifiedBy: verified.current.uid,
-            verifiedAt: serverTimestamp(),
-          });
-          batch.update(
-            doc(
-              db,
-              "users",
-              account.id
-            ),
-            {
-              previousRole:
-                account.role ||
-                "resident",
-
-              previousPrimaryRole:
-                account.primaryRole ||
-                account.role ||
-                "resident",
-
-              role: "admin",
-
-              adminStatus:
-                "active",
-
-              status:
-                "approved",
-
-              adminCreatedAt:
-                serverTimestamp(),
-
-              adminCreatedBy:
-                verified.current.uid,
-
-              adminUpdatedAt:
-                serverTimestamp(),
-
-              adminUpdatedBy:
-                verified.current.uid,
-            }
-          );
-
-          logPayload = {
-            actionType:
-              "admin_account_created",
-
-            targetType:
-              "user",
-
-            targetId:
-              account.id,
-
-            adminUid:
-              verified.current.uid,
-
-            adminName:
-              verified.current
-                .displayName ||
-              verified.current
-                .email ||
-              "Super Admin",
-
-            description:
-              `${nameFor(
-                account
-              )} was granted Admin access.`,
-          };
-        } else if (
           action === "suspend"
         ) {
           batch.update(
@@ -890,21 +876,10 @@ export default function AdminAccounts() {
         });
         await batch.commit();
 
-        if (
-          action === "promote"
-        ) {
-          setShowAddAdmin(
-            false
-          );
-
-          setPromoteSearch(
-            ""
-          );
-        }
-
         setActionType(null);
         setActionTarget(null);
         setActionError("");
+        setRejectReason("");
         clearCredentialReview();
       } catch (error: any) {
         console.log(
@@ -1202,6 +1177,7 @@ export default function AdminAccounts() {
                         </View>
                       ))}
                     </View>
+                    <LguPrivateProofPreview uid={account.id} onReady={onProofReady}/>
                     <View style={styles.pendingReviewFooter}>
                       <Text style={styles.pendingReviewNote}>
                         Submitted information is self-declared. Confirm employment, identity and appointment with an independent LGU source. Never request passwords.
@@ -1215,6 +1191,16 @@ export default function AdminAccounts() {
                       >
                         <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.pendingReviewButtonText}>Verify & Review Access</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={"Reject " + nameFor(account) + " LGU staff application"}
+                        disabled={!!savingUid}
+                        style={[styles.pendingReviewButton, { backgroundColor: "#FFF1F2", borderWidth: 1, borderColor: "#FDA4AF" }, !!savingUid && { opacity: 0.5 }]}
+                        onPress={() => openAdminAction("reject", account)}
+                      >
+                        <Ionicons name="close-circle-outline" size={16} color="#BE123C" />
+                        <Text style={[styles.pendingReviewButtonText, { color: "#9F1239" }]}>Reject with Reason</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1850,6 +1836,25 @@ export default function AdminAccounts() {
               </View>
             ) : null}
 
+            {actionType === "reject" ? (
+              <View style={styles.credentialReview}>
+                <Text style={styles.reviewKicker}>REJECTION REASON · REQUIRED</Text>
+                <Text style={styles.reviewHelp}>Give a specific, respectful explanation. The applicant remains unprivileged and no account is deleted.</Text>
+                <TextInput
+                  accessibilityLabel="Reason for rejecting LGU application"
+                  value={rejectReason}
+                  onChangeText={setRejectReason}
+                  maxLength={300}
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Explain why official LGU authorization could not be verified (10–300 characters)"
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, padding: 12, minHeight: 100, color: "#0F172A", backgroundColor: "#FFFFFF", textAlignVertical: "top" }}
+                />
+                <Text style={styles.reviewHint}>{rejectReason.trim().length}/300 characters · No passwords or ID numbers</Text>
+              </View>
+            ) : null}
+
             {!!actionError && (
               <View
                 style={
@@ -1900,9 +1905,10 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
+                disabled={!!savingUid || (actionType === "promote" && !reviewComplete) || (actionType === "reject" && (rejectReason.trim().length < 10 || rejectReason.trim().length > 300))}
                 style={[
                   styles.confirmButton,
+                  actionType === "reject" ||
                   actionType ===
                     "revoke" ||
                   actionType ===
@@ -1910,6 +1916,7 @@ export default function AdminAccounts() {
                     ? styles.confirmDangerButton
                     : styles.confirmPrimaryButton,
                   (actionType === "promote" && !reviewComplete) && styles.confirmDisabled,
+                  (actionType === "reject" && (rejectReason.trim().length < 10 || rejectReason.trim().length > 300)) && styles.confirmDisabled,
                 ]}
                 onPress={() =>
                   void confirmAdminAction()
