@@ -11,6 +11,7 @@ import os
 import sys
 import subprocess
 import urllib.request
+import urllib.error
 
 PROJECT = "volunserve-3aa5b"
 API = "https://firebaserules.googleapis.com/v1/"
@@ -35,8 +36,12 @@ def request(path, method="GET", payload=None):
     if body is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(API + path, data=body, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=45) as reply:
-        return json.load(reply)
+    try:
+        with urllib.request.urlopen(req, timeout=45) as reply:
+            return json.load(reply)
+    except urllib.error.HTTPError as error:
+        details = error.read().decode("utf8", errors="replace")
+        raise RuntimeError("Firebase Rules API HTTP " + str(error.code) + ": " + details[:1400]) from error
 
 def current():
     return request(RELEASE)["rulesetName"]
