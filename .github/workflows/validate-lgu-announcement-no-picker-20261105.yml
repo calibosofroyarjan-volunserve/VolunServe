@@ -79,4 +79,5 @@ jobs:
           console.log('PASS fresh generated web asset from exact source');
           NODE
       - name: Explicit no-live-change boundary
-        run: echo 'Validation only: No Hosting, Firestore Rules, Functions, Storage, Auth, database or Super Admin changes.'
+        run: |
+          echo 'Validation only: No Hosting, Firestore Rules, Functions, Storage, Auth, database or Super Admin changes.'
