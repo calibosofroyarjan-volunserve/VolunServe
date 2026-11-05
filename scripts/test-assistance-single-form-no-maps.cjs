@@ -21,10 +21,10 @@ assert(route.includes("<CompactVerifiedAssistance"),"Streamlined form must rende
 assert(route.indexOf("<CompactVerifiedAssistance") < route.indexOf("<DecisionTab"),"Streamlined flow must be default");
 assert(route.includes("key={selected.id}"),"Review state must reset when switching residents");
 for(const item of [
-  "Request Verified","Raise Donations","LGU / Partner Help","No More Help Needed",
-  "Continue to Donation Campaign","Public coordination office","Public office address",
-  "Taken from the completed LGU review","No unpaid amount was verified",
-  "It does not publish or collect donations automatically",
+  "Request Verified","Create Donation Campaign","LGU or Partner Support","No Further Support",
+  "Set Up Donation Campaign","Public coordination location","Public office address",
+  "Approved amount from the LGU review","Confirmed total cost (PHP)",
+  "Donations do not start automatically",
 ])assert(verified.includes(item),"Missing simple UI item "+item);
 assert(verified.includes("verifiedUncoveredAmount"),"Verified donation cap must originate from LGU review");
 assert(!verified.includes("onChangeText={setRemainingAmount}"),"Do not ask for arbitrary donation amount");
@@ -32,7 +32,7 @@ assert(!verified.includes("Save Support Decision"),"No separate Save Support but
 assert(!verified.includes("Save Official Location"),"No separate Save Location button in simple flow");
 assert(verified.includes("submitting"),"Single call to action must prevent double submissions");
 assert(verified.includes("publicOfficeAddress.trim().length < 5"),"Required public address check remains");
-assert(verified.includes("Do not use the Resident's home"),"Public coordination privacy guide remains");
+assert(verified.includes("Do not use the resident’s home address"),"Public coordination privacy guide remains");
 for(const item of [
   '"save_location"','"resource_assessment"','"donation_support"',
   'verificationReview.verifiedUncoveredAmount','validateAssistanceLocation',
@@ -46,6 +46,6 @@ assert(backend.includes("return false;") && backend.includes("return true;"),"Mu
 for(const item of ['onVerify={verifyNeed}','onReject={rejectRequest}','onMoreInfo={requestMoreInformation}']){
   assert(route.includes(item),"Original secure decision handler missing: "+item);
 }
-assert(pending.includes('label="Verify Request"') && pending.includes('label="Reject Request"'),"Verify/Reject retained");
-assert(pending.includes("Special case details (only if needed)"),"Advanced checks hidden unless necessary");
+assert(pending.includes('label="Approve Request"') && pending.includes('label="Reject Request"'),"Verify/Reject retained");
+assert(pending.includes("onAdditional"),"Additional check handler remains available when required");
 console.log("PASS one-form post-verification, no Google Maps, real verified amount, public-office privacy, sequential secure operations, and original LGU decisions");
