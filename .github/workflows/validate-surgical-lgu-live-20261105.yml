@@ -2,7 +2,11 @@ name: Validate Surgical Live LGU Accept Reject Rules and Existing Modules (No De
 on:
   push:
     branches: [release/lgu-admin-decisions-live-20261105]
-    paths: [.github/workflows/validate-surgical-lgu-live-20261105.yml]
+    paths:
+      - .github/workflows/validate-surgical-lgu-live-20261105.yml
+      - scripts/prepare-surgical-lgu-rules.cjs
+      - scripts/test-surgical-lgu-review-live.cjs
+      - scripts/test-superadmin-lgu-review-ui.cjs
 permissions:
   contents: read
 jobs:
