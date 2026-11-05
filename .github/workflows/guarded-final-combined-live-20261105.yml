@@ -24,7 +24,7 @@ jobs:
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       VERIFIED_LIVE_BASE: "195984a90343d77910b398ef14b83522f0313f79"
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
-      GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-deploy-sa.json
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-deploy-sa.json
       GOOGLE_CLOUD_PROJECT: volunserve-3aa5b
 
     steps:
