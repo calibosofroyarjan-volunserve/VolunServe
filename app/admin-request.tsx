@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import React, { useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { userFacingError } from "../lib/userFacingError";
+import { pickLguProofImage, uploadLguProof, type LguProofImage } from "../lib/lguCredentialImages";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -17,6 +19,18 @@ export default function LguStaffApplication() {
   const [busy,setBusy]=useState(false);
   const [success,setSuccess]=useState(false);
   const [error,setError]=useState("");
+  const [staffIdImage,setStaffIdImage]=useState<LguProofImage|null>(null);
+  const [appointmentImage,setAppointmentImage]=useState<LguProofImage|null>(null);
+  const selectProof=async(kind:"staff-id"|"appointment-letter")=>{
+    if(busy)return;
+    try{
+      const image=await pickLguProofImage();
+      if(!image)return;
+      if(kind==="staff-id")setStaffIdImage(image);
+      else setAppointmentImage(image);
+      setError("");
+    }catch(error){setError(userFacingError(error,"Unable to read that image."));}
+  };
   const update=(key:keyof typeof form,value:string)=>setForm(old=>({...old,[key]:value}));
 
   const submit=async()=>{
@@ -34,7 +48,8 @@ export default function LguStaffApplication() {
       (office.length < 3 || office.length > 160 ? "Enter your official LGU office or department (3 to 160 characters)." : null) ||
       (position.length < 3 || position.length > 120 ? "Enter your LGU job position (3 to 120 characters)." : null) ||
       (reference.length < 5 || reference.length > 160 ? "Enter your valid appointment or employment reference (5 to 160 characters)." : null) ||
-      (!SJDM_BARANGAYS.includes(form.barangay) ? "Choose your valid San Jose del Monte barangay." : null);
+      (!SJDM_BARANGAYS.includes(form.barangay) ? "Choose your valid San Jose del Monte barangay." : null) ||
+      (!staffIdImage || !appointmentImage ? "Attach both your valid ID photo and an appointment/employment proof image." : null);
     if (fieldIssue) {
       setError(fieldIssue);
       return;
@@ -43,23 +58,51 @@ export default function LguStaffApplication() {
     const app=initializeApp(firebaseConfig,"lgu-application-"+Date.now());
     const candidateAuth=getAuth(app);
     const candidateDb=getFirestore(app);
+    const candidateStorage=getStorage(app);
     let newUser:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;
+    let profileCreated=false, createdAuth=false;
     try{
-      newUser=(await createUserWithEmailAndPassword(candidateAuth,email,form.password)).user;
-      await setDoc(doc(candidateDb,"users",newUser.uid),{
+      try{
+        newUser=(await createUserWithEmailAndPassword(candidateAuth,email,form.password)).user;
+        createdAuth=true;
+      }catch(authError:any){
+        if(authError?.code!=="auth/email-already-in-use")throw authError;
+        // Retrying an incomplete upload requires the ORIGINAL email and password.
+        newUser=(await signInWithEmailAndPassword(candidateAuth,email,form.password)).user;
+      }
+      if(createdAuth){
+        await setDoc(doc(candidateDb,"users",newUser.uid),{
         uid:newUser.uid,email,fullName,age:0,phoneNumber:"",
         role:"applicant",status:"pending_review",residentAccess:false,volunteerAccess:false,
         region:"Region III – Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",
         barangay:form.barangay,lguOffice:office,lguPosition:position,
-        appointmentReference:reference,createdAt:serverTimestamp(),
-      });
+          appointmentReference:reference,createdAt:serverTimestamp(),
+        });
+        profileCreated=true;
+      }else{
+        const prior=await getDoc(doc(candidateDb,"users",newUser.uid));
+        const data=prior.data();
+        if(!prior.exists() || data?.role!=="applicant" || data.status!=="pending_review" ||
+            String(data.email).toLowerCase()!==email)
+          throw new Error("This email is not a pending LGU staff application.");
+        profileCreated=true;
+      }
+      // Use secondary-app Auth for uploads, not the resident's active session.
+      await uploadLguProof(candidateStorage,newUser.uid,"staff-id",staffIdImage!);
+      await uploadLguProof(candidateStorage,newUser.uid,"appointment-letter",appointmentImage!);
       void sendEmailVerification(newUser).catch(()=>undefined);
       setForm({fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",appointmentReference:"",barangay:""});
+      setStaffIdImage(null);
+      setAppointmentImage(null);
       setSuccess(true);
     }catch(err:any){
-      // Roll back newly created Auth account when Firestore application fails.
-      if(newUser)await deleteUser(newUser).catch(()=>undefined);
-      setError(userFacingError(err, "Unable to submit your application. No Admin access has been granted. Please try again."));
+      // Never delete a pending profile if an image upload fails. That profile
+      // remains unprivileged, and its owner can retry with the same credentials.
+      if(createdAuth && !profileCreated && newUser)await deleteUser(newUser).catch(()=>undefined);
+      const hint=profileCreated
+        ? " The pending application has no Admin access. Retry with the SAME email and password and both images."
+        : "";
+      setError(userFacingError(err, "Unable to submit your application.")+hint);
     }finally{
       await signOut(candidateAuth).catch(()=>undefined);
       await deleteApp(app).catch(()=>undefined);
@@ -88,12 +131,12 @@ export default function LguStaffApplication() {
           </View>
         </View>
         {success ? <>
-          <Text style={styles.success}>Your LGU staff information was submitted for review. Your account is PENDING with no Admin privileges. Our programmer Super Admin team will independently verify your identity, employment and authorization with official LGU sources. Only after successful confirmation may they promote this account to LGU Admin. Check your email for verification instructions.</Text>
+          <Text style={styles.success}>Your LGU staff information was submitted for review. Your account is PENDING with no Admin privileges. Our programmer Super Admin team will independently verify your identity, employment and authorization with official LGU sources. Only after successful confirmation may they promote this account to LGU Admin. Your two private credential photos were submitted for Super Admin review. Check your email for verification instructions.</Text>
           <TouchableOpacity style={styles.submit} onPress={()=>router.replace("/admin-login")}>
             <Text style={styles.submitText}>Return to Admin Login</Text>
           </TouchableOpacity>
         </> : <>
-          <Text style={styles.notice}>Fields marked with a red * are required. STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Do not submit sensitive ID scans or passwords as proof.</Text>
+          <Text style={styles.notice}>Fields marked with a red * are required. STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Attach two images: a clear valid ID and your appointment/employment document. These are private to Super Admin reviewers. Never upload passwords.</Text>
           {fields.map(([key,label,hint,secret])=><View key={key} style={styles.field}>
             <Text style={styles.label}>{label} <Text style={styles.required}>*</Text></Text>
             <TextInput style={styles.input} placeholder={hint} placeholderTextColor="#8CA89A"
@@ -116,6 +159,23 @@ export default function LguStaffApplication() {
             </ScrollView>
             {!!form.barangay&&<Text style={styles.selection}>Selected: {form.barangay}</Text>}
           </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Valid staff / government ID photo <Text style={styles.required}>*</Text></Text>
+            <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={()=>void selectProof("staff-id")}
+              style={[styles.option,{borderWidth:1,borderColor:"#D6E6DD",borderRadius:10}]}>
+              <Text style={styles.selection}>{staffIdImage?"Change selected ID photo":"Choose ID photo (JPG, PNG or WEBP, up to 3 MB)"}</Text>
+            </TouchableOpacity>
+            {!!staffIdImage&&<Image source={{uri:staffIdImage.uri}} resizeMode="contain" style={{width:"100%",height:135,backgroundColor:"#F3F8F5",borderRadius:10}}/>}
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Appointment letter / LGU employment proof image <Text style={styles.required}>*</Text></Text>
+            <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={()=>void selectProof("appointment-letter")}
+              style={[styles.option,{borderWidth:1,borderColor:"#D6E6DD",borderRadius:10}]}>
+              <Text style={styles.selection}>{appointmentImage?"Change selected proof":"Choose employment proof image (JPG, PNG or WEBP, up to 3 MB)"}</Text>
+            </TouchableOpacity>
+            {!!appointmentImage&&<Image source={{uri:appointmentImage.uri}} resizeMode="contain" style={{width:"100%",height:135,backgroundColor:"#F3F8F5",borderRadius:10}}/>}
+          </View>
+          <Text style={{fontSize:11,lineHeight:17,color:"#527767"}}>These confidential images are accessible only to approved programmer Super Admin reviewers. Uploading proof never grants LGU Admin access automatically.</Text>
           {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           <TouchableOpacity accessibilityRole="button" style={[styles.submit,busy&&{opacity:.6}]}
             disabled={busy} onPress={()=>void submit()}>
