@@ -153,3 +153,5 @@ jobs:
 
 # Only the original live notification read/update policy is modified.
 # Super Admin, Admin, Signup, Login, other rules and Hosting source remain unchanged.
+
+# Final one-shot Rules-only hotfix: documented PATCH body with immutable tested Ruleset, no Hosting changes.
