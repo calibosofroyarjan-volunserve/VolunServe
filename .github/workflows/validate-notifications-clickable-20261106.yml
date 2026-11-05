@@ -44,6 +44,7 @@ jobs:
             'scripts/test-notification-clickthrough-polish-20261106.cjs',
             'scripts/test-notifications-private-emulator-20261106.cjs',
             'scripts/prepare-notification-read-only-rules-20261106.py',
+            'scripts/activate-notifications-locked-rules-20261106.py',
             '.github/workflows/validate-notifications-clickable-20261106.yml',
             '.github/workflows/release-notifications-clickable-20261106.yml'
           ]);
