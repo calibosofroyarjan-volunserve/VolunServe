@@ -577,7 +577,7 @@ const mapDocument = `
             label.className = "destination-label";
             label.textContent = item.residentSelf
               ? "RESIDENT · YOU"
-              : "RESIDENT DESTINATION";
+              : "REPORTED INCIDENT LOCATION";
             label.style.color = "#15803d";
             wrapper.appendChild(label);
           }
@@ -1828,6 +1828,11 @@ const mapDocument = `
 `;
 
 function numericCoordinate(value: unknown) {
+  // A missing coordinate must never become the numeric value 0.
+  // The map should display no incident pin rather than invent a position.
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+
   const number =
     typeof value === "number" ? value : Number(value);
 
