@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Create an EMULATOR-ONLY candidate from the exact PUBLISHED Firestore Ruleset.
 
-The only change is to prevent notification recipients changing title/message/
-recipient metadata. Recipients can still acknowledge their OWN notice by
-setting read:true. Admin authority and every other Firestore rule are unchanged.
+This changes the Notifications recipient condition, plus mechanically inlines
+the original single-expression signedIn() helper to reduce compiled Rules
+binary size. The helper's return value is exactly request.auth != null, so
+its callers and every other collection's authorization remain equivalent.
+Recipients may mark their own notice read:true but not rewrite its content.
 This script NEVER calls a write endpoint or activates a Rules release.
 """
 import hashlib
@@ -72,9 +74,24 @@ if block.count(old) != 1:
 if "allow read, update, delete: if isAdmin();" not in block:
     raise SystemExit("STOP existing LGU Admin authority unexpectedly changed")
 patched_block = block.replace(old, new)
-candidate = original[:start] + patched_block + original[end:]
-if candidate[:start] != original[:start] or not candidate.endswith(original[end:]):
-    raise SystemExit("STOP candidate differs outside notification policies")
+notification_patched = original[:start] + patched_block + original[end:]
+if notification_patched[:start] != original[:start] or not notification_patched.endswith(original[end:]):
+    raise SystemExit("STOP source differs unexpectedly outside notification policy")
+# Explicit mechanically equivalent refactor: original signedIn() returns only
+# request.auth != null. Inlining its caller expression removes the global
+# helper's repeated compiled symbol overhead in every matched collection.
+helper = ("    function signedIn() {\\n"
+          "      return request.auth != null;\\n"
+          "    }\\n").replace("\\n", eol)
+if notification_patched.count(helper) != 1:
+    raise SystemExit("STOP signedIn helper is not the expected single expression")
+candidate = notification_patched.replace(helper, "", 1)
+count = candidate.count("signedIn()")
+if not 5 <= count <= 90:
+    raise SystemExit("STOP unexpected signedIn reference count; requires review")
+candidate = candidate.replace("signedIn()", "(request.auth != null)")
+if "function signedIn()" in candidate or "signedIn()" in candidate:
+    raise SystemExit("STOP signedIn alias refactor incomplete")
 if candidate.count("A recipient can acknowledge a notification") != 1:
     raise SystemExit("STOP notification restriction not uniquely inserted")
 with open("firestore.rules", "w", encoding="utf8", newline="\n") as output:
@@ -87,8 +104,9 @@ manifest = {
 }
 with open(os.path.join(os.environ.get("RUNNER_TEMP", "."), "notification-rules-manifest.json"), "w") as output:
     json.dump(manifest, output)
-print("PASS candidate differs only within notifications allow read/update")
-print("PASS preserve Admin permissions, all other collections, and existing data")
+print("PASS notification content-only update plus mechanical signedIn alias inlining")
+print("PASS replaced", count, "signedIn() call sites with exactly request.auth != null")
+print("PASS other collections are semantically unchanged; no user/document writes")
 print("PASS exact old Cloud Ruleset SHA:", ORIGINAL_SHA)
 print("PASS candidate SHA:", manifest["candidateSha"])
 print("NO FIREBASE RULES DEPLOYMENT")
