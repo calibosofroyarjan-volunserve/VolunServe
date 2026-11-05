@@ -3311,6 +3311,9 @@ function DecisionTab({
   reviewRecord,
   reviewLoading,
   focusStage,
+  validationIntent,
+  reasonAttempt,
+  supportValidationAttempt,
   onReviewChange,
   allChecksComplete,
   onSaveVerificationDraft,
@@ -3345,6 +3348,9 @@ function DecisionTab({
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
   focusStage: ReviewStageFocus | null;
+  validationIntent: AssistanceValidationMode | null;
+  reasonAttempt: "more_information" | "reject" | null;
+  supportValidationAttempt: "support" | "location" | null;
   onReviewChange: <K extends keyof PrivateReviewDraft>(
     key: K,
     value: PrivateReviewDraft[K],
@@ -3469,6 +3475,23 @@ function DecisionTab({
       </View>
     );
   }
+
+  const validationIssues = validateAssistanceReview(
+    reviewDraft,
+    validationIntent === "verify" ? "verify" : "draft",
+    request.category,
+  );
+  const issue = (field: string) => validationIssues.find((entry) => entry.field === field)?.message || "";
+  const noteIssue = reasonAttempt === "more_information"
+    ? validateAssistanceReason("more_information", adminNote) : "";
+  const rejectionIssue = reasonAttempt === "reject"
+    ? validateAssistanceReason("reject", rejectionReason) : "";
+  const supportIssues = supportValidationAttempt === "support"
+    ? validateAssistanceSupport(supportDecision, remainingAmount, Number(reviewRecord?.verifiedUncoveredAmount || 0))
+    : supportValidationAttempt === "location"
+      ? validateAssistanceLocation(locationType, locationName, locationAddress)
+      : [];
+  const supportIssue = (field: string) => supportIssues.find((entry) => entry.field === field)?.message || "";
 
   const grossCost = safeNumber(reviewDraft.verifiedGrossCost);
   const existingAssistance = safeNumber(reviewDraft.confirmedExistingAssistanceAmount);
@@ -3610,6 +3633,31 @@ function DecisionTab({
           Switching steps keeps your draft on this page. Select Save Progress to store it securely before leaving the request.
         </Text>
       </View>
+
+      {validationIssues.length > 0 && (
+        <View style={styles.assistanceValidationSummary} accessibilityRole="alert">
+          <Text style={styles.assistanceValidationSummaryTitle}>
+            {validationIssues.length} item{validationIssues.length === 1 ? "" : "s"} need attention
+          </Text>
+          {validationIssues.slice(0, 5).map((entry) => (
+            <TouchableOpacity
+              key={entry.field}
+              accessibilityRole="button"
+              onPress={() => setReviewStage(entry.stage)}
+              style={styles.assistanceValidationSummaryLink}
+            >
+              <Ionicons name="alert-circle-outline" color="#B42318" size={14} />
+              <Text style={styles.assistanceValidationSummaryLinkText}>{entry.message}</Text>
+              <Ionicons name="chevron-forward" color="#B42318" size={15} />
+            </TouchableOpacity>
+          ))}
+          {validationIssues.length > 5 && (
+            <Text style={styles.assistanceValidationSummaryLinkText}>
+              +{validationIssues.length - 5} more — open the relevant review steps.
+            </Text>
+          )}
+        </View>
+      )}
 
       {reviewStage === "checks" && (
         <>
