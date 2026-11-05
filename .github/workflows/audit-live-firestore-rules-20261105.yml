@@ -1,0 +1,52 @@
+name: READ ONLY compare real live Firestore Rules with Hosting source
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths:
+      - ".github/workflows/audit-live-firestore-rules-20261105.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Query LIVE deployed Firestore Ruleset source without writing
+        env:
+          VERIFIED_HOSTING_REVISION: 579bed559b1ba81e2045ba420847f8635e8f182c
+        run: |
+          git fetch --no-tags origin "$VERIFIED_HOSTING_REVISION"
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess, urllib.request
+          sha=os.environ['VERIFIED_HOSTING_REVISION']
+          source=subprocess.check_output(['git','show',f'{sha}:firestore.rules'])
+          expected=hashlib.sha256(source).hexdigest()
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  return json.load(response)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          ruleset=get(release['rulesetName'])
+          files=ruleset.get('source',{}).get('files',[])
+          candidates=[x for x in files if x.get('name','').endswith('firestore.rules')]
+          if not candidates and len(files)==1:candidates=files
+          if len(candidates)!=1:raise SystemExit('STOP: Ambiguous published Firestore Rules source.')
+          actual=candidates[0].get('content','').encode('utf-8')
+          real=hashlib.sha256(actual).hexdigest()
+          print('LIVE published ruleset: '+release['rulesetName'])
+          print('Hosting Git SHA: '+sha)
+          print('Base rules SHA256: '+expected)
+          print('Live Rules source SHA256: '+real)
+          print('LIVE RULE SOURCE MATCHES VERIFIED HOSTING COMMIT: '+str(real==expected))
+          if real!=expected:raise SystemExit('STOP: Actual production Firestore Rules differ from GitHub Hosting base. Never deploy snapshot Rules.')
+          PY
