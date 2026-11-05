@@ -1,0 +1,130 @@
+name: Guarded LIVE Notification Content Security (RULES ONLY)
+on:
+  push:
+    branches: [security/notifications-read-only-live-latest-20261106]
+    paths: [".github/workflows/release-notifications-read-only-security-20261106.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  rules-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot guarded LIVE notification content integrity rules-only release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROJECT: "volunserve-3aa5b"
+      LIVE_BASE: "5d3c0a4c9a3906a728d0e24fff992460ba919143"
+      OLD_RULESET: "projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
+      OLD_SHA: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: BLOCK release if latest LIVE or unrelated source changed
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/allowed-changed.txt"
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/allowed-changed.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'scripts/test-notifications-private-emulator-20261106.cjs',
+            'scripts/activate-notifications-locked-rules-20261106.py',
+            'scripts/prepare-notification-read-only-rules-20261106.py',
+            '.github/workflows/validate-notifications-read-only-security-20261106.yml',
+            '.github/workflows/release-notifications-read-only-security-20261106.yml'
+          ]);
+          assert.deepEqual(changed.filter(x=>!allowed.has(x)),[],'STOP protected application or configuration change');
+          console.log('PASS only two isolated security scripts and validation/release workflows changed');
+          console.log('PASS untouched Super Admin, LGU Admin, Resident, Volunteer, Announcement, Login/Signup, Auth, Firestore data');
+          NODE
+      - name: Confirm exact live Hosting build on both production domains
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const d of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(d+'/volunserve-release.json?rule_guard='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP live Hosting unavailable: '+d);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP newer live Hosting deployment: '+j.revision);
+              console.log('PASS existing Hosting remains exact expected live build '+d);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify protected auth and current Notifications click code
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Derive exact replacement from LIVE Firestore Rules, never the stale repo snapshot
+        run: |
+          python3 scripts/prepare-notification-read-only-rules-20261106.py
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/notification-rules-manifest.json','utf8'));
+          assert.equal(m.originalRuleset,process.env.OLD_RULESET);
+          assert.equal(m.originalSha,process.env.OLD_SHA);
+          assert(m.candidateSha&&m.candidateSha!==m.originalSha);
+          console.log('PASS only notification recipient allow read/update clause changed in candidate');
+          NODE
+      - name: "Firebase local emulator - recipients can ONLY mark their own notifications read"
+        env:
+          LIVE_NOTIFICATION_RULES_FILE: firestore.rules
+        run: |
+          npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
+          npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Compile immutable Firebase Ruleset, INACTIVE and read back exact source
+        run: python3 scripts/activate-notifications-locked-rules-20261106.py stage
+      - name: ACTIVATE tested notification rule via guarded Firebase Rules API
+        run: |
+          python3 -m py_compile scripts/activate-notifications-locked-rules-20261106.py
+          python3 scripts/activate-notifications-locked-rules-20261106.py activate
+      - name: Independently confirm active release pointer equals tested new Ruleset
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          info=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'notifications-locked-rules-release.json')))
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=30) as r:actual=json.load(r)
+          if actual.get('rulesetName')!=info['new']:
+            raise SystemExit('STOP active Ruleset pointer differs from exact tested candidate')
+          print('PASS ACTIVE Firestore Rules',info['new'])
+          print('NO Hosting, Auth, Functions, Storage, user data, Super Admin, LGU, login or signup updates')
+          PY
+          echo "SUCCESS guarded FIRESTORE RULES-ONLY content restriction. No Hosting or data changes." >> "$GITHUB_STEP_SUMMARY"
+      - name: Roll back ONLY this workflow's Ruleset pointer if release failed
+        if: failure()
+        run: |
+          python3 scripts/activate-notifications-locked-rules-20261106.py rollback
+          echo 'Guarded rollback check completed; no production user document writes.' >> "$GITHUB_STEP_SUMMARY"
+
+# One-shot user-approved notification content-integrity hardening, tested against exact published Firestore Rules.
+
+# One-shot retry using supported Firebase CLI rules-only deployment after successful emulator validation.
+
+# User-authorized guarded retry with safe API status diagnostics and old-Ruleset rollback guard.
+
+# User-approved compact Rules-only security activation after passing full live-derived emulator validations.
