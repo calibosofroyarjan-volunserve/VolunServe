@@ -1,0 +1,138 @@
+name: SAFE LIVE LGU Required Red Asterisks (Hosting Only)
+on:
+  push:
+    branches: [release/lgu-red-required-live-safe-20261105]
+    paths: [.github/workflows/deploy-lgu-required-red-20261105.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-preview-backup-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      LIVE_BASE: '4520b201c9f6e86f810d2b7c3c1377c158ac424e'
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-lgu-required-hosting-sa.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require exactly one LGU staff UI change on latest production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD | while IFS= read -r file; do
+            case "$file" in
+              app/admin-request.tsx|scripts/verify-lgu-pending-browser.cjs|.github/workflows/deploy-lgu-required-red-20261105.yml) ;;
+              *) echo "::error::Unapproved difference: $file"; exit 1 ;;
+            esac
+          done
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'app/(tabs)' 'firestore.rules' 'storage.rules' 'functions' 'backend' 'firebase.json' '.firebaserc'
+          echo "PASS all other Admin/Super Admin, Signup, Login and data policies unchanged"
+      - name: Verify live Hosting is still exact audited version
+        shell: bash
+        run: VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+      - name: Install and fully validate
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-admin-staff-login.cjs
+          node - <<'NODE'
+          const fs=require("fs"),assert=require("node:assert/strict");
+          const x=fs.readFileSync("app/admin-request.tsx","utf8");
+          assert(x.includes('required:{color:"#DC2626"'));
+          assert(x.includes('Assigned barangay (San Jose del Monte) <Text style={styles.required}>*</Text>'));
+          assert(x.includes('key==="appointmentReference"?"no":"auto"'));
+          console.log("PASS red required markers and correct LGU appointment autofill");
+          NODE
+      - name: Export latest web with premium Signup enabled
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase Hosting service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing Firebase Hosting credentials"; exit 1; fi
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+      - name: Publish exact candidate to isolated Hosting preview
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: lgu-required-1105
+          expires: 3d
+      - name: Verify preview fingerprint and essential pages
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 7
+          done
+          echo "::error::Preview failed health and revision checks"; exit 1
+      - name: Verify red required LGU fields and unified Login in Chrome
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable)"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-lgu-required-cdp about:blank > /tmp/lgu-required-browser.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-lgu-pending-browser.cjs "$PREVIEW_ORIGIN"
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+      - name: Last live source check, backup existing Hosting, then promote preview only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PROJECT="volunserve-3aa5b"
+          BACKUP="backup-lgu-required-1105"
+          CANDIDATE="lgu-required-1105"
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Current Hosting backed up to $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:$CANDIDATE" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          verified=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              verified=1; break
+            fi
+            sleep 7
+          done
+          if [ "$verified" -ne 1 ]; then
+            echo "::error::Live fingerprint failed; considering safe Hosting rollback."
+            actual="$(node -e '(async()=>{try{let r=await fetch("https://volunserve.com/volunserve-release.json?b="+Date.now());let j=await r.json();process.stdout.write(j.revision||"unknown")}catch(e){process.stdout.write("unknown")}})()')"
+            if [ "$actual" = "$GITHUB_SHA" ]; then
+              $CLI hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "Hosting-only rollback performed from $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Newer/unknown release: no automatic overwrite."
+            fi
+            exit 1
+          fi
+          echo "SUCCESS: LGU red required form live at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Hosting only. Firestore Rules, Storage, production data, Admin, Super Admin, Login and Signup unchanged." >> "$GITHUB_STEP_SUMMARY"
