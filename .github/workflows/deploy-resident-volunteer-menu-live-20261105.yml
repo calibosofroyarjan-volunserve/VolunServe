@@ -1,0 +1,196 @@
+name: Guarded Hosting-Only Resident and Volunteer Account Menu Cleanup
+
+on:
+  push:
+    branches: [release/remove-duplicate-settings-live-20261105]
+    paths: [.github/workflows/deploy-resident-volunteer-menu-live-20261105.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  validate-preview-backup-and-promote:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      LIVE_BASE: '5945cc312d661b4cfcc0dfa3417dd1d56f47d116'
+      GH_TOKEN: ${{ github.token }}
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-account-menu-hosting-sa.json
+
+    steps:
+      - name: Fail closed unless only the two menu files, one test, and this workflow changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const base = process.env.LIVE_BASE, head = process.env.GITHUB_SHA;
+          (async () => {
+            const r = await fetch('https://api.github.com/repos/' + process.env.GITHUB_REPOSITORY + '/compare/' + base + '...' + head, {
+              headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN, Accept: 'application/vnd.github+json' },
+              signal: AbortSignal.timeout(20000)
+            });
+            assert.equal(r.status, 200, 'Cannot validate GitHub source diff');
+            const diff = await r.json();
+            assert.equal(diff.status, 'ahead', 'Source must be based on exact live commit');
+            assert.equal(diff.behind_by, 0, 'Source must not omit the live baseline');
+            const actual = diff.files.map(f => f.filename).sort();
+            const expected = [
+              '.github/workflows/deploy-resident-volunteer-menu-live-20261105.yml',
+              'app/(tabs)/_layout.tsx',
+              'components/home/Home.web.tsx',
+              'scripts/test-resident-volunteer-sidebar.cjs'
+            ].sort();
+            assert.deepEqual(actual, expected, 'Unapproved file changes; refusing release');
+            console.log('PASS: only Resident/Volunteer menu UI and its test differ from verified LIVE. Login, Signup, Google OAuth, Admin, Super Admin, Auth, rules, Functions, backend and data remain byte-identical.');
+          })().catch(e => { console.error(e); process.exit(1); });
+          NODE
+
+      - name: Download EXACT live-derived candidate (no legacy gitlink checkout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" \
+            -o "$RUNNER_TEMP/volunserve-menu-candidate.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-menu-candidate.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json && test -f app/login.web.tsx && test -f firebase.json
+          # Legacy test depends on this one historical source file; never replace deployed app files.
+          git init -q
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin e7c2cc84afcc1b0a8885ce94a41a9a444dcfe751 >/dev/null
+          git cat-file -e e7c2cc8:lib/firebaseAuth.ts
+
+      - name: Verify the website is STILL on the same exact live base (read-only)
+        env:
+          VOLUNSERVE_EXPECTED_SHA: '5945cc312d661b4cfcc0dfa3417dd1d56f47d116'
+        run: node scripts/check-live-hosting.cjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Test Resident/Volunteer account menus and preserve Login and Super Admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node --test scripts/test-volunteer-profile-progress-shortcut.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          npx tsc --noEmit --incremental false
+
+      - name: Clean web export with preserved production Email-First Signup
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          test "$(node -p "JSON.parse(require('fs').readFileSync('dist/volunserve-release.json','utf8')).revision")" = "$GITHUB_SHA"
+          node <<'NODE'
+          const fs = require('node:fs'), assert = require('node:assert/strict');
+          const hosting = JSON.parse(fs.readFileSync('firebase.json', 'utf8')).hosting;
+          assert.equal(hosting.public, 'dist');
+          for(const page of ['/login','/signup']) {
+            const route = hosting.headers.find(x => x.source === page);
+            assert(route?.headers?.some(x => x.key.toLowerCase() === 'cache-control' && x.value.includes('no-store')));
+          }
+          console.log('PASS: no-store Login and Signup cache policy retained');
+          NODE
+
+      - name: Verify exact Firebase service account before preview; no live writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing Hosting service-account secret, refusing deployment"; exit 1; fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = JSON.parse(process.env.FIREBASE_SA);
+          if(p.type !== 'service_account' || p.project_id !== 'volunserve-3aa5b') throw Error('Unexpected Firebase project credentials');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, process.env.FIREBASE_SA, {mode:0o600});
+          NODE
+
+      - name: Deploy only Hosting preview, not production
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: account-menu-safe-1105
+          expires: 3d
+
+      - name: Verify exact preview fingerprint and public routes
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 7
+          done
+          echo "::error::Preview verification failed. No live deployment."
+          exit 1
+
+      - name: Real browser smoke test: Login hydration remains intact on preview
+        shell: bash
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          test -n "$CHROME"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --remote-allow-origins='*' --remote-debugging-port=9223 \
+            --user-data-dir=/tmp/volunserve-menu-cdp about:blank >/tmp/volunserve-menu-cdp.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+
+      - name: Backup LIVE, recheck exact base, then promote ONLY Hosting preview
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PROJECT=volunserve-3aa5b
+          BACKUP=backup-account-menu-1105
+          PREVIEW=account-menu-safe-1105
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+
+          # Abort if another release happened since the read-only preflight.
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Hosting-only backup: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: volunserve.com Hosting-only account menu cleanup at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "No other Login, Signup, Admin, Super Admin, Firestore, Rules, Functions, Storage, backend, Auth, or user data changed." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Live version not confirmed. Inspect release before any additional production action."
+          exit 1
