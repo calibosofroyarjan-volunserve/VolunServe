@@ -13,7 +13,7 @@ const required = [
   ["Offline support offer label", "Offline · can receive offer"],
   ["Volunteer assignment view", "Volunteer Task Assignments"],
   ["Spacious roster cards", "styles.volunteerRosterCard"],
-  ["Visible Volunteer action", "Offer Validated Response"],
+  ["Visible Volunteer action", '"Assign Volunteer"'],
   ["Five-row roster pagination", "pageFive(volunteerCandidates, volunteerPage)"],
   ["Five-row assignment pagination", "pageFive(activeAssignments, activeAssignmentPage)"],
   ["New notification per offer", 'doc(collection(db, "notifications"))'],
@@ -24,7 +24,7 @@ const required = [
   ["Single active support guard", "activeCount >= 1"],
   ["Suspended accounts blocked", '"suspended"'],
   ["Revoked Volunteer blocked", '"revoked"'],
-  ["Volunteer must accept", 'currentInvite?.status === "accepted"'],
+  ["Volunteer must accept assignment in New", 'status: "offered"'],
   ["Embedded emergency map preserved", 'detailTab === "map"'],
   ["Case details retained", "setSelectedCaseId(item.id)"],
   ["Evidence retained", "pageFive(imageEvidence, photoPage)"],
@@ -41,4 +41,6 @@ assert(!nav.includes('label: "Relief Operations"') &&
   nav.includes('label: "Assistance Requests"') &&
   retiredRelief.includes('<Redirect href="/(admin)/command-center" />'),
   "Retired Relief Operations must disappear from nav and old URLs must redirect");
-console.log("PASS: isolated Emergency Reports UI, offline approved Volunteer offers, security guards, response/map/pagination preservation, retired Relief redirect");
+assert(!emergency.includes("inviteVolunteerToCase(incident, volunteer)"),
+  "Admin must not require a separate availability invitation before task assignment");
+console.log("PASS: direct Admin task offers, approved Volunteers, response/map/pagination, retired Relief redirect");
