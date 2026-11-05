@@ -262,3 +262,5 @@ jobs:
 # One-time Resident Assistance request word validation Hosting-only release after passing CI.
 
 # One-shot guarded release of Resident Assistance word validation onto newest live, no other modules changed.
+
+# One-time current live hosting-only Resident word validation deployment after passing all latest checks.
