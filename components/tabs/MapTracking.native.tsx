@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -69,16 +70,18 @@ type Incident = {
   assignedVolunteerId?: string;
   assignedVolunteerName?: string;
   responseVehicleType?: string;
-  activeLguResponderUid?: string;
+  activeLguResponderUid?: string; // kept for legacy records only
+  activeVolunteerSupportUid?: string;
+  activeVolunteerSupportAssignmentId?: string;
   distanceKm?: number;
   etaMinutes?: number;
   createdAt?: any;
 };
 
-type RealLguGps = {
+type VolunteerTaskGps = {
   caseId: string;
-  responderUid: string;
-  responderRole: string;
+  volunteerId: string;
+  assignmentId: string;
   latitude: number;
   longitude: number;
   updatedAt?: { toMillis?: () => number };
@@ -173,7 +176,11 @@ export default function MapTracking() {
     }
     return result.slice(0,100);
   }, [sjdmBoundary,lguFacilities]);
-  const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
+  const [volunteerTaskPins, setVolunteerTaskPins] = useState<Record<string, VolunteerTaskGps>>({});
+  const [myTaskStatus, setMyTaskStatus] = useState("");
+  const [volunteerGpsConsent, setVolunteerGpsConsent] = useState(false);
+  const lastVolunteerCoordinatesRef = useRef<{ coords: UserLocation; receivedAt: number } | null>(null);
+  const nativeGpsWriteQueue = useRef<Promise<unknown>>(Promise.resolve());
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -394,65 +401,171 @@ export default function MapTracking() {
     [incidents]
   );
 
-  // Subscribe only to case-specific LGU GPS docs for emergencies owned by this
-  // Resident. No collection-wide responder GPS reads and no simulated positions.
-  const trackedLguCaseIds = incidents
+  // Resident GPS tracking is bound only to the Volunteer chosen by Admin.
+  // No dedicated LGU Personnel responder is needed and no unassigned GPS appears.
+  const trackedVolunteerCaseIds = incidents
     .filter(item => userRole === "resident" &&
       item.reportedBy === CURRENT_USER_ID &&
-      ["reported", "validated", "assigned", "in_progress"].includes(item.status || ""))
-    .map(item => item.id).sort().join("|");
+      ["assigned", "in_progress"].includes(item.status || ""))
+    .map(item => [item.id, item.activeVolunteerSupportUid || "",
+      item.activeVolunteerSupportAssignmentId || ""].join(":"))
+    .sort().join("|");
+
   useEffect(() => {
-    if (!trackedLguCaseIds || userRole !== "resident" || !CURRENT_USER_ID) {
-      setLiveLguPins({});
-      return;
-    }
-    const ids = trackedLguCaseIds.split("|");
-    setLiveLguPins({});
-    const unsubs = ids.map(caseId => onSnapshot(
-      doc(db, "lguResponseLocations", caseId),
-      snapshot => {
-        const raw = snapshot.exists() ? snapshot.data() : null;
-        const point = raw && {
-          caseId: String(raw.caseId || ""),
-          responderUid: String(raw.responderUid || ""),
-          responderRole: String(raw.responderRole || ""),
-          latitude: Number(raw.latitude), longitude: Number(raw.longitude),
-          updatedAt: raw.updatedAt,
-        };
-        const valid = point && point.caseId === caseId &&
-          point.responderRole === "lgu" &&
-          point.responderUid.length > 0 &&
-          Number.isFinite(point.latitude) && Number.isFinite(point.longitude) &&
-          Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;
-        setLiveLguPins(previous => {
-          const next = { ...previous };
-          if (valid) next[caseId] = point as RealLguGps;
-          else delete next[caseId];
-          return next;
-        });
-      },
-      () => setLiveLguPins(previous => {
-        const next = { ...previous };
+    setVolunteerTaskPins({});
+    if (!trackedVolunteerCaseIds || userRole !== "resident" || !CURRENT_USER_ID) return;
+    const unsubs: (() => void)[] = [];
+    const liveDisposers = new Map<string, () => void>();
+    const clearPin = (caseId: string) => {
+      setVolunteerTaskPins(current => {
+        if (!current[caseId]) return current;
+        const next = { ...current };
         delete next[caseId];
         return next;
-      }),
-    ));
-    return () => unsubs.forEach(unsubscribe => unsubscribe());
-  }, [trackedLguCaseIds, userRole, CURRENT_USER_ID]);
+      });
+    };
+    for (const record of trackedVolunteerCaseIds.split("|")) {
+      const [caseId, volunteerId, assignmentId] = record.split(":");
+      if (!caseId || !volunteerId || !assignmentId) continue;
+      unsubs.push(onSnapshot(doc(db, "responseAssignments", assignmentId), assignment => {
+        liveDisposers.get(caseId)?.();
+        liveDisposers.delete(caseId);
+        clearPin(caseId);
+        if (!assignment.exists()) return;
+        const task = assignment.data();
+        if (
+          task.caseId !== caseId ||
+          task.volunteerId !== volunteerId ||
+          !["responding", "on_site"].includes(String(task.status || ""))
+        ) return;
+        const stop = onSnapshot(doc(db, "responseLocations", volunteerId), snapshot => {
+          const point = snapshot.exists() ? snapshot.data() : null;
+          const latitude = Number(point?.latitude);
+          const longitude = Number(point?.longitude);
+          if (!point || point.caseId !== caseId || point.assignmentId !== assignmentId ||
+            point.volunteerId !== volunteerId || !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude) || Math.abs(latitude) > 90 ||
+            Math.abs(longitude) > 180 || (latitude === 0 && longitude === 0)) {
+            clearPin(caseId);
+            return;
+          }
+          setVolunteerTaskPins(current => ({
+            ...current,
+            [caseId]: {
+              caseId, volunteerId, assignmentId,
+              latitude, longitude, updatedAt: point.updatedAt,
+            },
+          }));
+        }, () => clearPin(caseId));
+        liveDisposers.set(caseId, stop);
+      }, () => clearPin(caseId)));
+    }
+    return () => {
+      unsubs.forEach(stop => stop());
+      liveDisposers.forEach(stop => stop());
+    };
+  }, [trackedVolunteerCaseIds, userRole, CURRENT_USER_ID]);
+
   useEffect(() => {
     const interval = setInterval(() => setGpsClock(Date.now()), 10_000);
     return () => clearInterval(interval);
   }, []);
-  const visibleLguVehiclePins = incidents.flatMap(incident => {
-    const point = liveLguPins[incident.id];
-    if (userRole !== "resident" || incident.reportedBy !== CURRENT_USER_ID ||
-      !point || !incident.activeLguResponderUid ||
-      point.responderUid !== incident.activeLguResponderUid ||
-      !["reported", "validated", "assigned", "in_progress"].includes(incident.status || "")) return [];
+
+  // The volunteer moving pin is displayed only for a recently shared GPS reading.
+  // The fixed reported incident pin remains independently visible without it.
+  const visibleVolunteerTaskPins = Object.values(volunteerTaskPins).filter(point => {
     const lastReading = point.updatedAt?.toMillis?.() || 0;
-    if (!lastReading || gpsClock - lastReading > 120_000 || lastReading > gpsClock + 10_000) return [];
-    return [{ ...point, vehicle: vehicleInfo(incident.responseVehicleType) }];
+    return lastReading > 0 &&
+      gpsClock - lastReading <= 120000 &&
+      lastReading <= gpsClock + 10000 &&
+      inCity(point.latitude, point.longitude);
   });
+
+  // Only the Admin-issued assignment authorizes a native Volunteer task.
+  useEffect(() => {
+    setMyTaskStatus("");
+    setVolunteerGpsConsent(false);
+    const assignmentId = focusedIncident?.activeVolunteerSupportAssignmentId;
+    if (userRole !== "volunteer" || !CURRENT_USER_ID || !assignmentId ||
+      focusedIncident?.activeVolunteerSupportUid !== CURRENT_USER_ID) return;
+    return onSnapshot(doc(db, "responseAssignments", assignmentId), snapshot => {
+      const data = snapshot.exists() ? snapshot.data() : null;
+      const status = data?.volunteerId === CURRENT_USER_ID &&
+        data?.caseId === focusedCaseId ? String(data?.status || "") : "";
+      setMyTaskStatus(status);
+      if (!["responding", "on_site"].includes(status)) setVolunteerGpsConsent(false);
+    }, () => {
+      setMyTaskStatus("");
+      setVolunteerGpsConsent(false);
+    });
+  }, [userRole, CURRENT_USER_ID, focusedCaseId,
+    focusedIncident?.activeVolunteerSupportAssignmentId,
+    focusedIncident?.activeVolunteerSupportUid]);
+
+  const canPublishVolunteerGps =
+    userRole === "volunteer" &&
+    volunteerGpsConsent &&
+    !!CURRENT_USER_ID && !!focusedCaseId &&
+    focusedIncident?.activeVolunteerSupportUid === CURRENT_USER_ID &&
+    !!focusedIncident?.activeVolunteerSupportAssignmentId &&
+    ["responding", "on_site"].includes(myTaskStatus);
+
+  // Sharing stops on withdrawal, mission completion/cancellation, or map exit.
+  useEffect(() => {
+    if (!canPublishVolunteerGps || !CURRENT_USER_ID) return;
+    let stopped = false;
+    const gpsRef = doc(db, "responseLocations", CURRENT_USER_ID);
+    const assignmentId = String(focusedIncident?.activeVolunteerSupportAssignmentId || "");
+    const volunteerId = CURRENT_USER_ID;
+    const caseId = focusedCaseId;
+    const publish = () => {
+      const reading = lastVolunteerCoordinatesRef.current;
+      if (stopped || !reading || Date.now() - reading.receivedAt > 30000 ||
+        !inCity(reading.coords.latitude, reading.coords.longitude)) return;
+      const { latitude, longitude } = reading.coords;
+      nativeGpsWriteQueue.current = nativeGpsWriteQueue.current
+        .catch(() => {})
+        .then(async () => {
+          if (stopped) return;
+          await setDoc(gpsRef, {
+            caseId, assignmentId, volunteerId,
+            latitude, longitude, accuracy: null,
+            updatedAt: serverTimestamp(),
+          });
+        })
+        .catch(() => {
+          if (!stopped) {
+            Alert.alert("GPS Sharing Paused", "Your GPS could not be shared. Check your connection and location permission.");
+            setVolunteerGpsConsent(false);
+          }
+        });
+    };
+    publish();
+    const ticker = setInterval(publish, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(ticker);
+      nativeGpsWriteQueue.current = nativeGpsWriteQueue.current
+        .catch(() => {})
+        .then(() => deleteDoc(gpsRef))
+        .catch(() => {});
+    };
+  }, [canPublishVolunteerGps,
+    focusedIncident?.activeVolunteerSupportAssignmentId,
+    CURRENT_USER_ID, focusedCaseId, userRole, sjdmBoundary]);
+
+  const requestVolunteerGpsConsent = async () => {
+    if (!["responding", "on_site"].includes(myTaskStatus)) {
+      Alert.alert("Start Task First", "Open Emergency Tasks and start your assigned task first.");
+      return;
+    }
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== "granted") {
+      Alert.alert("Location Not Allowed", "Your location will not be shared without permission.");
+      return;
+    }
+    setVolunteerGpsConsent(true);
+  };
 
   const nearestCenter = useMemo(() => {
     if (!location || !inCity(location.latitude, location.longitude) || centers.length === 0) return null;
@@ -776,6 +889,7 @@ export default function MapTracking() {
           };
 
           setLocation(initialLocation);
+          lastVolunteerCoordinatesRef.current = { coords: initialLocation, receivedAt: Date.now() };
         }
       } catch (error) {
         console.log("Last known location unavailable:", error);
@@ -792,6 +906,7 @@ export default function MapTracking() {
         };
 
         setLocation(initialLocation);
+          lastVolunteerCoordinatesRef.current = { coords: initialLocation, receivedAt: Date.now() };
       } catch (error) {
         console.log("Current location error:", error);
 
@@ -844,6 +959,7 @@ export default function MapTracking() {
           };
 
           setLocation(updatedLoc);
+          lastVolunteerCoordinatesRef.current = { coords: updatedLoc, receivedAt: Date.now() };
 
           if (followUserRef.current && modeRef.current === "map" &&
               cityBoundaryRef.current &&
@@ -882,31 +998,12 @@ export default function MapTracking() {
       const role = userRoleRef.current;
 
       if (role === "volunteer") {
-        const volunteerRef = doc(
-          db,
-          "volunteers_live_locations",
-          CURRENT_USER_ID
-        );
-
-        const payload: any = {
-          name: CURRENT_USER_NAME,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          updatedAt: serverTimestamp(),
-        };
-
-        // Preserve responding/offline state during GPS updates.
-        // Only a brand-new volunteer document starts as available.
+        // Do not publish GPS to a general-purpose Volunteer feed.
+        // GPS for emergency tasks is opt-in and case-scoped below.
         if (initializeVolunteerRecord) {
-          const existing = await getDoc(volunteerRef);
-
-          if (!existing.exists()) {
-            payload.status = "available";
-            payload.assignedIncidentId = "";
-          }
+          await deleteDoc(doc(db, "volunteers_live_locations", CURRENT_USER_ID)).catch(() => {});
         }
-
-        await setDoc(volunteerRef, payload, { merge: true });
+        return;
       } else {
         await setDoc(
           doc(db, "users_live_locations", CURRENT_USER_ID),
@@ -958,6 +1055,8 @@ export default function MapTracking() {
               assignedVolunteerName: raw.assignedVolunteerName ?? "",
               responseVehicleType: raw.responseVehicleType ?? "",
               activeLguResponderUid: raw.activeLguResponderUid ?? "",
+              activeVolunteerSupportUid: raw.activeVolunteerSupportUid ?? "",
+              activeVolunteerSupportAssignmentId: raw.activeVolunteerSupportAssignmentId ?? "",
               distanceKm: Number(raw.distanceKm ?? 0),
               etaMinutes: Number(raw.etaMinutes ?? 0),
               createdAt: raw.createdAt,
@@ -1358,6 +1457,44 @@ export default function MapTracking() {
             </TouchableOpacity>
           ) : null}
         </View>
+        {userRole === "resident" && focusedIncident && (
+          <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: "#E7F4ED", borderRadius: 8, marginTop: 8 }}>
+            <Text style={{ color: "#15553F", fontWeight: "700", fontSize: 12 }}>
+              Reported incident location · Volunteer GPS is optional
+            </Text>
+            <Text style={{ color: "#42695B", fontSize: 11, marginTop: 3 }}>
+              {(() => {
+                const reading = visibleVolunteerTaskPins.find(point => point.caseId === focusedIncident.id);
+                return reading?.updatedAt?.toMillis
+                  ? `Last Volunteer GPS: ${new Date(reading.updatedAt.toMillis()).toLocaleString("en-PH")}`
+                  : "Volunteer GPS has not been shared yet";
+              })()}
+            </Text>
+          </View>
+        )}
+        {userRole === "volunteer" &&
+          focusedIncident?.activeVolunteerSupportUid === CURRENT_USER_ID && (
+          <View style={{ padding: 10, borderRadius: 8, backgroundColor: "#E7F4ED", marginTop: 8 }}>
+            <Text style={{ color: "#134E3D", fontSize: 12, fontWeight: "700" }}>
+              Assigned task: {myTaskStatus ? myTaskStatus.replace(/_/g, " ") : "Waiting"}
+            </Text>
+            <Text style={{ color: "#42695B", fontSize: 11, marginVertical: 5 }}>
+              Community assistance only, not official emergency dispatch.
+              Location is shared only after you start the task and consent.
+            </Text>
+            {["responding", "on_site"].includes(myTaskStatus) && (
+              <TouchableOpacity accessibilityRole="button"
+                onPress={() => volunteerGpsConsent
+                  ? setVolunteerGpsConsent(false) : void requestVolunteerGpsConsent()}
+                style={{ borderRadius: 8, padding: 10,
+                  backgroundColor: volunteerGpsConsent ? "#994536" : "#087A62" }}>
+                <Text style={{ textAlign: "center", fontWeight: "800", color: "#FFFFFF" }}>
+                  {volunteerGpsConsent ? "Stop GPS Sharing" : "Share GPS for This Task"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </SafeAreaView>
 
       {/* =====================================================
@@ -1505,21 +1642,16 @@ export default function MapTracking() {
             </Marker>
           ))}
 
-          {/* Real assigned LGU GPS only: icon identifies actual dispatched vehicle.
-              No icon appears without a fresh authorized GPS reading. */}
-          {visibleLguVehiclePins.filter(point =>
-            (!focusedCaseId || point.caseId === focusedCaseId) &&
-            inCity(point.latitude, point.longitude)).map(point => (
-            <Marker key={"lgu-" + point.caseId}
-              coordinate={{ latitude:point.latitude, longitude:point.longitude }}
-              title={"LGU responder · " + point.vehicle.label}
-              description="Current assigned response GPS (updated within two minutes)">
-              <View style={{
-                width:44,height:44,borderRadius:24,alignItems:"center",justifyContent:"center",
-                backgroundColor:point.vehicle.color,borderWidth:2,borderColor:"#FFFFFF",
-              }}>
-                <Text style={{fontSize:23,color:"#FFFFFF"}}>{point.vehicle.symbol}</Text>
-              </View>
+          {/* Actual opt-in Volunteer location for this Resident's approved task. */}
+          {visibleVolunteerTaskPins.filter(point =>
+            !focusedCaseId || point.caseId === focusedCaseId).map(point => (
+            <Marker key={"volunteer-task-" + point.caseId}
+              coordinate={{latitude: point.latitude, longitude: point.longitude}}
+              title="Assigned Volunteer · GPS shared"
+              description={"Last GPS update: " + (point.updatedAt?.toMillis
+                ? new Date(point.updatedAt.toMillis()).toLocaleString("en-PH")
+                : "unavailable")}>
+              <MapPin color="#1677E8" icon="person" />
             </Marker>
           ))}
 

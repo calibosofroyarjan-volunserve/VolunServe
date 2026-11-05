@@ -58,7 +58,10 @@ assert(caseSrc.includes("pagedCases") && caseSrc.includes("pageSize={5}") &&
   caseSrc.includes("caseSearch") && caseSrc.includes("detailTab === \"map\"") &&
   caseSrc.includes("assignLguPersonnelToCase") && caseSrc.includes("cancelAssignment"),
   "Original Emergency Reports queue, GPS and authorized response actions must remain");
-for (const name of ["personnelPage", "volunteerPage", "activeAssignmentPage", "historyAssignmentPage"]) {
+assert(caseSrc.includes("Volunteer Response Progress") && caseSrc.includes("Volunteer Assignments") &&
+  !caseSrc.includes("<Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>"),
+  "Admin Emergency Response must prioritize Volunteers without rendering the retired LGU Personnel selection");
+for (const name of ["volunteerPage", "activeAssignmentPage", "historyAssignmentPage"]) {
   assert(caseSrc.includes("set" + name[0].toUpperCase() + name.slice(1)) &&
     caseSrc.includes("pageSize={5}"),
     "Emergency secondary queue must have five-row pagination: " + name);
@@ -67,7 +70,7 @@ assert(caseSrc.includes("pageFive(imageEvidence, photoPage)") &&
   caseSrc.includes("pageFive(videoEvidence, videoPage)") &&
   caseSrc.includes("onChange={setPhotoPage}") && caseSrc.includes("onChange={setVideoPage}"),
   "Emergency photo and video evidence must retain every item with independent 5-record pages");
-for (const name of ["onDutyPersonnel", "volunteerCandidates", "activeAssignments", "incidentAssignments"]) {
+for (const name of ["volunteerCandidates", "activeAssignments", "incidentAssignments"]) {
   assert(caseSrc.includes("pageFive(" + name + ", "),
     "Emergency " + name + " records must render only five at a time");
 }

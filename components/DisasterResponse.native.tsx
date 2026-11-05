@@ -865,7 +865,7 @@ export default function DisasterResponse() {
     if (photos.length === 0) {
       Alert.alert(
         "Photo Required",
-        "At least one incident photo is required for Admin verification."
+        "An incident photo is required for Admin review."
       );
       return;
     }
@@ -922,7 +922,7 @@ export default function DisasterResponse() {
     if (contactNumber.length < 8) {
       Alert.alert(
         "Contact Number Required",
-        "Add a valid contact number in Account Settings before submitting an emergency report so Admin or responders can contact you."
+        "Add a valid contact number to your profile so Admin can contact you about your report."
       );
       return;
     }

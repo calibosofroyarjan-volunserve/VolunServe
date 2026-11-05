@@ -63,8 +63,12 @@ assert(cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("!volunteerSupportAvailable") &&
   cases.includes("!caseOpenForSupport"),
   "Maintain local eligibility and case verification; do not promise unrestricted dispatch");
-assert(cases.includes("pageFive(onDutyPersonnel") &&
+assert(cases.includes("pageFive(volunteerCandidates") &&
   cases.includes("pageFive(activeAssignments") &&
   cases.includes("pageFive(videoEvidence"),
-  "Preserve secondary Emergency pagination");
+  "Preserve five-item Volunteer and Emergency evidence pagination");
+assert(cases.includes("Volunteer Response Progress") &&
+  cases.includes("Assign Volunteer") &&
+  !cases.includes("<Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>"),
+  "Admin Emergency task coordination must center on approved Volunteers");
 console.log("PASS unified LGU sidebar & duty page, visible scrollbars, secure live map, offline Volunteer offers and all Emergency records");

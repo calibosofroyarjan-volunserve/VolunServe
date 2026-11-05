@@ -525,7 +525,7 @@ export default function VolunteerTasksWeb() {
       }
 
       if (lguFollowUpRequired === null) {
-        setError("Select whether LGU/Admin follow-up is still required.");
+        setError("Select whether Admin follow-up is still required.");
         return;
       }
 
@@ -686,8 +686,8 @@ export default function VolunteerTasksWeb() {
             completed: {
               title: "Volunteer field report submitted",
               message:
-                `${responderName} completed the assigned support response and submitted a field report to LGU/Admin. ` +
-                "LGU will review any remaining needs and decide the next action.",
+                `${responderName} completed the assigned community task and sent an update to Admin. ` +
+                "The emergency report remains open until Admin confirms completion.",
             },
           };
 
@@ -733,7 +733,7 @@ export default function VolunteerTasksWeb() {
       } else {
         showMessage(
           "Field report submitted",
-          "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action.",
+          "Your task update was submitted to Admin. The report stays open until Admin confirms completion.",
         );
         resetCompletion();
         setFilter("completed");
@@ -803,7 +803,7 @@ export default function VolunteerTasksWeb() {
             </View>
           </View>
           <Text style={styles.mobileTaskDescription}>
-            Optional volunteer support assignments coordinated by LGU/Admin.
+            Community assistance tasks assigned by Admin. Not official emergency dispatch.
           </Text>
           <TouchableOpacity
             style={styles.mobileTaskMapButton}
@@ -829,7 +829,7 @@ export default function VolunteerTasksWeb() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.title}>Emergency Tasks</Text>
                 <Text style={styles.subtitle}>
-                  Optional Volunteer support assignments coordinated by LGU/Admin.
+                  Community assistance tasks assigned by Admin. Not official emergency dispatch.
                 </Text>
               </View>
             </View>
@@ -1127,7 +1127,7 @@ export default function VolunteerTasksWeb() {
                       <Text style={styles.completeButtonText}>
                         {completionId === assignment.id
                           ? "Hide Field Report"
-                          : "Complete & Report to LGU"}
+                          : "Complete Task & Submit Update"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1149,7 +1149,7 @@ export default function VolunteerTasksWeb() {
                     <View style={styles.completedBox}>
                       <Ionicons name="checkmark-circle" size={20} color="#16845b" />
                       <Text style={styles.completedBoxText}>
-                        Field report submitted to LGU/Admin
+                        Task update sent to Admin
                       </Text>
                     </View>
                   )}
@@ -1168,7 +1168,7 @@ export default function VolunteerTasksWeb() {
                   <View style={styles.completionHeader}>
                     <View>
                       <Text style={styles.completionEyebrow}>
-                        LGU FIELD REPORT
+                        VOLUNTEER TASK UPDATE
                       </Text>
                       <Text style={styles.completionTitle}>
                         Complete your support assignment and report the situation
@@ -1181,7 +1181,7 @@ export default function VolunteerTasksWeb() {
                   </View>
 
                   <Text style={styles.completionNoticeBox}>
-                    LGU/Admin remains the primary responder and final authority.
+                    Admin coordinates this community task. Volunteers are not trained emergency responders.
                     This report records what you observed, what you actually did,
                     and what needs may still require LGU action.
                   </Text>
@@ -1319,7 +1319,7 @@ export default function VolunteerTasksWeb() {
                   />
 
                   <Text style={styles.completionLabel}>
-                    Does LGU/Admin still need to follow up?
+                    Does Admin still need to follow up?
                   </Text>
                   <View style={styles.followUpRow}>
                     <TouchableOpacity
