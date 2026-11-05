@@ -1,0 +1,37 @@
+name: Validate Clear One-Step LGU Assistance Review
+on:
+  push:
+    branches: [ux/clear-one-step-assistance-review-20261106]
+  pull_request:
+    paths:
+      - "app/(admin)/assistance-requests.tsx"
+      - "scripts/test-simple-assistance-admin-review.cjs"
+      - ".github/workflows/validate-clear-assistance-review-20261106.yml"
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate review buttons, red validation and pagination
+        run: |
+          node scripts/test-simple-assistance-admin-review.cjs
+          node scripts/test-assistance-compact-review.cjs
+          node scripts/test-assistance-validation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Validate clean web build without any deployment
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
