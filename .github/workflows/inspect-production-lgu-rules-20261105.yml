@@ -42,7 +42,7 @@ jobs:
                 print(str(j+1)+": "+lines[j][:280])
           idx=next((i for i,l in enumerate(lines) if 'match /users/{uid}' in l),-1)
           if idx<0:raise SystemExit("Missing users rules")
-          for a,b in [(idx+15,idx+95),(idx+290,idx+420)]:
+          for a,b in [(idx+15,idx+95),(idx+380,idx+535)]:
             print("\nUSER_RULES",a+1,b)
             for i in range(a,min(b,len(lines))):print(str(i+1)+": "+lines[i][:280])
           print("READ_ONLY no Firebase or code changes")
