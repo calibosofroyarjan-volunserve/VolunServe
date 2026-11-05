@@ -4524,7 +4524,7 @@ export default function AdminCases() {
                         pageSize={5}
                         onChange={setFieldReportPage}
                       />
-                      {pageFive(incidentFieldReports, fieldReportPage).map((report) => {
+                      {pageFive(incidentFieldReports, Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))).map((report) => {
                         const submitted = String(report.reportStatus || "submitted") === "submitted";
                         const reviewing = busyKey === `field_reviewed_${report.id}`;
                         return (
