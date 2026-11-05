@@ -1,0 +1,56 @@
+name: Diagnose LIVE GPS Address bundle (READ ONLY)
+on:
+  push:
+    branches: [diagnose/gps-address-live-browser-20261106]
+    paths: [".github/workflows/diagnose-gps-browser-serving-20261106.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect current HTML, cache headers and JS bundles without modifying production
+        shell: bash
+        run: |
+          node <<'NODE'
+          const urls=['https://volunserve.com','https://volunserve-3aa5b.web.app'];
+          const oldText='Example: Block 4, Brgy. Muzon, near';
+          const newText='Use GPS to fill this, or enter an address / landmark';
+          const feedback='GPS can suggest a nearby street or barangay';
+          (async () => {
+            for(const origin of urls){
+              const h={'cache-control':'no-cache','pragma':'no-cache'};
+              async function get(url){
+                const r=await fetch(url,{headers:h,signal:AbortSignal.timeout(30000)});
+                if(!r.ok)throw Error(url+' HTTP '+r.status);
+                return {r,body:await r.text()};
+              }
+              const marker=await get(origin+'/volunserve-release.json?gps='+Date.now());
+              const m=JSON.parse(marker.body);
+              const page=await get(origin+'/disaster-response?gps='+Date.now());
+              console.log('DOMAIN',origin);
+              console.log('LIVE_REVISION',m.revision);
+              console.log('PAGE_HTTP',page.r.status,'cache-control',page.r.headers.get('cache-control'),'etag',page.r.headers.get('etag'));
+              console.log('HTML_OLD',page.body.includes(oldText),'HTML_NEW',page.body.includes(newText),'HTML_FEEDBACK',page.body.includes(feedback));
+              const links=[...page.body.matchAll(/(?:src|href)=["']([^"']+\.(?:js|html)(?:\?[^"']*)?)["']/ig)].map(x=>x[1]);
+              const uniq=[...new Set(links)].filter(x=>x.endsWith('.js')||x.includes('.js?')).slice(0,120);
+              console.log('PAGE_ASSET_COUNT',uniq.length,'first',uniq.slice(0,12));
+              let oldCount=0,newCount=0,feedbackCount=0,checked=0,bad=[];
+              for(const asset of uniq){
+                try{
+                  const u=new URL(asset,origin);
+                  if(u.origin!==new URL(origin).origin)continue;
+                  const r=await get(u.href);
+                  checked++;
+                  oldCount+=r.body.includes(oldText)?1:0;
+                  newCount+=r.body.includes(newText)?1:0;
+                  feedbackCount+=r.body.includes(feedback)?1:0;
+                  if(r.body.includes(oldText)||r.body.includes(newText))console.log('STRING_IN_ASSET',u.pathname,'OLD',r.body.includes(oldText),'NEW',r.body.includes(newText),'CACHE',r.r.headers.get('cache-control'));
+                }catch(e){bad.push(String(e).slice(0,180));}
+              }
+              console.log('JS_INSPECTED',checked,'OLD_MATCHES',oldCount,'NEW_MATCHES',newCount,'FEEDBACK_MATCHES',feedbackCount);
+              if(bad.length)console.log('ASSET_ERRORS',bad.slice(0,4));
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
