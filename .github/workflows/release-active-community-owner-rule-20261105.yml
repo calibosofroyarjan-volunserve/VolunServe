@@ -1,0 +1,159 @@
+name: Safely Patch ACTIVE Community Event Proposal Owner Read Only
+on:
+  push:
+    branches: [release/community-events-safe-20261105]
+    paths: ['.github/workflows/release-active-community-owner-rule-20261105.yml']
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  patch-active-rules:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MAIN_PIN: '1432da781e54fe47fe8ed76f89520588bab78b1d'
+      ACTIVE_RULESET_PIN: 'projects/volunserve-3aa5b/rulesets/eeb04c64-09ad-4b91-8652-284347ca70b2'
+      ACTIVE_CONTENT_SHA256: '7faeea5beb9491a42ef419d5df0997e6b7fd9c611144753723ef57af2a03e2a4'
+    steps:
+      - name: Refuse code or production baseline drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$MAIN_PIN"
+      - name: Download exact merged main for isolated test dependencies, no legacy gitlink
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${MAIN_PIN}" \
+            -o "$RUNNER_TEMP/volunserve-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f firestore.rules && test -f scripts/test-community-events-rules.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Read ACTIVE production rules and prepare a one-clause owner-only patch
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/volunserve-rules-auth.cjs" <<'NODE'
+          const crypto=require('node:crypto');
+          const fs=require('node:fs');
+          const project='volunserve-3aa5b';
+          const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
+          async function accessToken(){
+            const sa=JSON.parse(process.env.FIREBASE_SA||'null');
+            if(sa?.type!=='service_account'||sa?.project_id!==project)throw Error('Incorrect service account; no writes');
+            const e=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+            const now=Math.floor(Date.now()/1000);
+            const head=e({alg:'RS256',typ:'JWT'});
+            const body=e({iss:sa.client_email,scope:'https://www.googleapis.com/auth/cloud-platform',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+2400});
+            const unsigned=head+'.'+body;
+            const jwt=unsigned+'.'+crypto.sign('RSA-SHA256',Buffer.from(unsigned),sa.private_key).toString('base64url');
+            const r=await fetch('https://oauth2.googleapis.com/token',{
+              method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt}),
+              signal:AbortSignal.timeout(20000)
+            });
+            if(!r.ok)throw Error('OAuth exchange HTTP '+r.status);
+            return (await r.json()).access_token;
+          }
+          async function rulesApi(path,token,method='GET',body){
+            const r=await fetch('https://firebaserules.googleapis.com/v1/'+path,{
+              method,
+              headers:{Authorization:'Bearer '+token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
+              body:body?JSON.stringify(body):undefined,
+              signal:AbortSignal.timeout(30000)
+            });
+            if(!r.ok){const detail=(await r.text()).slice(0,350);throw Error('Rules API '+method+' '+path.split('/').pop()+' HTTP '+r.status+' '+detail);}
+            return r.json();
+          }
+          function patchExact(source){
+            const marker='match /communityEventProposals/{proposalId}';
+            const start=source.indexOf(marker);
+            const end=source.indexOf('match /communityEvents/{eventId}',start);
+            if(start<0||end<=start)throw Error('Active rules lack expected proposal scope.');
+            const section=source.slice(start,end);
+            const old=/allow get, list: if isAdminOrSuperAdmin\(\)\r?\n        \|\| \(isResident\(\)\r?\n          && resource\.data\.proposedBy == request\.auth\.uid\);/g;
+            const found=[...section.matchAll(old)];
+            if(found.length!==1)throw Error('Expected exactly one existing proposal owner rule; found '+found.length);
+            const oldBlock=found[0][0];
+            const newBlock=oldBlock.replace('|| (isResident()','|| (hasResidentAccess()');
+            const edited=source.slice(0,start)+section.replace(oldBlock,newBlock)+source.slice(end);
+            if(edited===source||edited.length-source.length!=='hasResidentAccess'.length-'isResident'.length)throw Error('Patch changed unexpected data.');
+            if(!edited.includes(newBlock))throw Error('Owner access edit missing.');
+            return edited;
+          }
+          module.exports={accessToken,rulesApi,patchExact,hash,project,fs};
+          NODE
+          node <<'NODE'
+          const {accessToken,rulesApi,patchExact,hash,project,fs}=require(process.env.RUNNER_TEMP+'/volunserve-rules-auth.cjs');
+          (async()=>{
+            const token=await accessToken();
+            const release=await rulesApi('projects/'+project+'/releases/cloud.firestore',token);
+            if(release.rulesetName!==process.env.ACTIVE_RULESET_PIN)throw Error('Active release changed; stop.');
+            const ruleset=await rulesApi(release.rulesetName,token);
+            if(ruleset.source?.files?.length!==1)throw Error('Unexpected ruleset file count.');
+            const original=ruleset.source.files[0].content;
+            if(hash(original)!==process.env.ACTIVE_CONTENT_SHA256)throw Error('Active rules content changed; stop.');
+            const patched=patchExact(original);
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-active-original.rules',original,{mode:0o600});
+            fs.writeFileSync('firestore.rules',patched);
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-patched.sha256',hash(patched));
+            console.log('Prepared minimal owner-only read patch from exact ACTIVE production rules.');
+            console.log('Active rules sha256 '+hash(original)+'; proposed sha256 '+hash(patched));
+            console.log('No Firebase changes made in preparation.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Test minimally patched active rules in isolated Firestore emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Release only minimal ACTIVE owner-read change through Firebase Rules API
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$MAIN_PIN"
+          node <<'NODE'
+          const {accessToken,rulesApi,patchExact,hash,project,fs}=require(process.env.RUNNER_TEMP+'/volunserve-rules-auth.cjs');
+          (async()=>{
+            const token=await accessToken();
+            const release=await rulesApi('projects/'+project+'/releases/cloud.firestore',token);
+            if(release.rulesetName!==process.env.ACTIVE_RULESET_PIN)throw Error('Active production release changed since test; STOP.');
+            const active=await rulesApi(release.rulesetName,token);
+            const original=active.source?.files?.[0]?.content;
+            if(hash(original)!==process.env.ACTIVE_CONTENT_SHA256)throw Error('Production rules changed; STOP.');
+            const modified=patchExact(original);
+            if(hash(modified)!==fs.readFileSync(process.env.RUNNER_TEMP+'/volunserve-patched.sha256','utf8'))throw Error('Patch changed after testing; STOP.');
+            const newRule=await rulesApi('projects/'+project+'/rulesets',token,'POST',{
+              source:{files:[{name:'firestore.rules',content:modified}]}
+            });
+            if(!newRule.name||!newRule.name.startsWith('projects/'+project+'/rulesets/'))throw Error('Unexpected created Ruleset');
+            console.log('New validated ruleset created; promoting only cloud.firestore release.');
+            const payload={release:{name:'projects/'+project+'/releases/cloud.firestore',rulesetName:newRule.name}};
+            await rulesApi('projects/'+project+'/releases/cloud.firestore',token,'PATCH',payload);
+            const verified=await rulesApi('projects/'+project+'/releases/cloud.firestore',token);
+            if(verified.rulesetName!==newRule.name)throw Error('Release did not confirm exact new ruleset.');
+            console.log('SUCCESS: active production Firestore rules switched to minimal owner-only patch.');
+            console.log('No other security rules, web files, user data, Auth, Backend, Functions, Storage or indexes changed.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
