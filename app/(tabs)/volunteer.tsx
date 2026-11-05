@@ -1530,7 +1530,7 @@ export default function VolunteerTasks() {
                             styles.secondaryButtonText
                           }
                         >
-                          Decline
+                          Reject
                         </Text>
                       </TouchableOpacity>
                     </View>
