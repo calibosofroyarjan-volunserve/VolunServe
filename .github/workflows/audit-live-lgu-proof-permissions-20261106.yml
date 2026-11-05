@@ -1,0 +1,62 @@
+name: Read-Only Live LGU Proof and Approvals Permissions Audit
+on:
+  push:
+    branches: [audit/live-lgu-proof-permissions-20261106]
+    paths: [.github/workflows/audit-live-lgu-proof-permissions-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Inspect current Firestore, Storage, Hosting only (NO WRITES)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,subprocess,json,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          root='https://firebaserules.googleapis.com/v1/'
+          def get(uri):
+            req=urllib.request.Request(uri if uri.startswith('https:') else root+uri,
+              headers={'Authorization':'Bearer '+token,'Cache-Control':'no-cache'})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          for domain in ['https://volunserve.com','https://volunserve-3aa5b.web.app']:
+            marker=get(domain+'/volunserve-release.json?lgu_proof_readonly_audit=20261106')
+            print('HOSTING_REVISION',domain,marker.get('revision'))
+          releases=[]
+          next_page=''
+          while True:
+            url='projects/volunserve-3aa5b/releases?pageSize=100'
+            if next_page:
+              import urllib.parse
+              url+='&pageToken='+urllib.parse.quote(next_page,safe='')
+            result=get(url)
+            releases.extend(result.get('releases',[]))
+            next_page=result.get('nextPageToken','')
+            if not next_page:break
+          for item in releases:
+            name=item.get('name','')
+            if not (name.endswith('/cloud.firestore') or '/firebase.storage' in name):continue
+            ruleset=item.get('rulesetName','')
+            source=get(ruleset)['source']['files'][0]['content']
+            is_firestore=name.endswith('/cloud.firestore')
+            print('ACTIVE_RELEASE',name)
+            print('ACTIVE_RULESET',ruleset)
+            print('ACTIVE_RULES_SHA256',hashlib.sha256(source.encode()).hexdigest())
+            if is_firestore:
+              print('FIRESTORE_LGU_PRIVATE_CREDENTIAL_REVIEW_ENABLED', 'match /lguAdminCredentialReviews/{targetUid}' in source)
+              print('FIRESTORE_LGU_REJECTION_POLICY_PRESENT', "rejectedReason" in source)
+              print('FIRESTORE_APPLICANT_ROLE_PRESENT', "pending_review" in source and "'applicant'" in source)
+            else:
+              print('STORAGE_PRIVATE_LGU_PROOF_PATH_ENABLED','match /lguStaffProof/{uid}/{proofName}' in source)
+              print('STORAGE_SUPERADMIN_PERMISSION_PRESENT', 'isSuperAdmin()' in source)
+          print('READ_ONLY_AUDIT_PASS no Firebase/Hosting/Data writes performed')
+          PY
