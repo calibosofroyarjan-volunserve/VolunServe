@@ -1,7 +1,7 @@
-name: Validate Localized Role Helpers And LGU Permissions (NO LIVE DEPLOY)
+name: Validate LGU Approval Security Against Latest ANNOUNCEMENTS Live Rules (NO DEPLOY)
 on:
   push:
-    branches: [fix/lgu-compiler-global-helpers-20261105]
+    branches: [fix/lgu-live-after-announcements-20261105]
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
@@ -22,8 +22,8 @@ jobs:
     env:
       CI: 'true'
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_LIVE_RULESET: projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec
-      EXPECTED_LIVE_SHA: 600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584
+      EXPECTED_LIVE_RULESET: projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164
+      EXPECTED_LIVE_SHA: f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d
     steps:
       - name: Load exact branch source as a tarball (legacy submodule safe)
         run: |
@@ -65,6 +65,9 @@ jobs:
           raw=files[0]['content']
           assert hashlib.sha256(raw.encode()).hexdigest()==os.environ['EXPECTED_LIVE_SHA'],'STOP: active source changed'
           with open('/tmp/volunserve-live-before.rules','w',encoding='utf8',newline='') as f:f.write(raw)
+          req=urllib.request.Request('https://volunserve.com/volunserve-release.json?lgu_safe_audit=20261105',headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=20) as r: hosted=json.load(r)
+          assert hosted.get('revision')=='717ec8624a5e0f4b955e4a6fe66d6c68cceb5355', 'STOP: Hosting changed; preserve latest Login, Signup and Super Admin'
           print('PASS: backed up exact current live Rules source in ephemeral runner')
           print('SOURCE_SHA',hashlib.sha256(raw.encode()).hexdigest())
           PY
