@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguApplicantProofReview from "../../components/admin/LguApplicantProofReview";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -176,8 +177,14 @@ export default function AdminAccounts() {
     setActionError,
   ] = useState("");
 
-  // LGU staff authorization requires an independent human credential check.
-  // Never collect photographs or secret document values in this review.
+  // LGU staff authorization requires independent official verification.
+  // Sensitive proofs stay inside restricted Firebase Storage, not public URLs.
+  const [lguProofsConfirmed, setLguProofsConfirmed] = useState(false);
+  const LEGACY_PROOF_CUTOFF = Date.parse("2026-11-05T07:00:00Z");
+  const legacyProofExempt = !!actionTarget && (
+    !timestampValue(actionTarget.createdAt) ||
+    timestampValue(actionTarget.createdAt) < LEGACY_PROOF_CUTOFF
+  );
   const [lguOffice, setLguOffice] = useState("");
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
@@ -193,6 +200,7 @@ export default function AdminAccounts() {
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
     setLguEmploymentConfirmed(false);
+    setLguProofsConfirmed(false);
   };
   const reviewComplete =
     lguOffice.trim().length >= 3 && lguOffice.trim().length <= 160 &&
@@ -202,7 +210,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed &&
+    (legacyProofExempt || lguProofsConfirmed);
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -616,7 +625,7 @@ export default function AdminAccounts() {
 
       if (action === "promote" && !reviewComplete) {
         setActionError(
-          "Verify staff identity and official LGU employment, complete all review fields, and confirm the verification before promoting this applicant to Admin."
+          "Verify the LGU ID and supporting document for new applications, independently confirm employment, and complete all review fields before promoting to Admin."
         );
         return;
       }
@@ -1202,9 +1211,10 @@ export default function AdminAccounts() {
                         </View>
                       ))}
                     </View>
+                    <LguApplicantProofReview uid={account.id} />
                     <View style={styles.pendingReviewFooter}>
                       <Text style={styles.pendingReviewNote}>
-                        Submitted information is self-declared. Confirm employment, identity and appointment with an independent LGU source. Never request passwords.
+                        Submitted information and uploaded proofs are unverified. Independently confirm LGU identity, employment and authorization. Never request passwords.
                       </Text>
                       <TouchableOpacity
                         accessibilityRole="button"
@@ -1743,6 +1753,10 @@ export default function AdminAccounts() {
                     <Text style={styles.reviewHelp}>Appointment reference: {String((actionTarget as any).appointmentReference || "Not provided")}</Text>
                   </View>
                 )}
+                {actionTarget?.role === "applicant" && <>
+                  <LguApplicantProofReview uid={actionTarget.id} onComplete={setLguProofsConfirmed}/>
+                  {legacyProofExempt && <Text style={styles.reviewHint}>Existing application predates the document upload requirement. Continue independent official verification, or request updated proof.</Text>}
+                </>}
                 <View style={styles.reviewScroll}>
                   {([
                     { label: "LGU Office / Department", value: lguOffice, onChange: setLguOffice, placeholder: "Official department", maxLength: 160 },
@@ -1846,7 +1860,7 @@ export default function AdminAccounts() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.reviewHint}>No ID scans or passwords are stored here. Only the review reference and reviewer are recorded.</Text>
+                <Text style={styles.reviewHint}>Uploaded LGU ID and one supporting document remain in protected Storage. Passwords are never exposed. Independently verify employment and authorization with the LGU.</Text>
               </View>
             ) : null}
 
