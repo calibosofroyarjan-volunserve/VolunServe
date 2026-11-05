@@ -2173,7 +2173,7 @@ This still does not automatically create a Donation Campaign.`,
                 quickAction === "reject" ? "reject" : "more_information",
                 quickAction === "reject" ? rejectionReason : adminNote,
               )} />
-            )
+            )}
             {!verificationReview && (
               <Text style={styles.assistanceWarning}>
                 Start Review first to create the protected record before submitting a decision.
