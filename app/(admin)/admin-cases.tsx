@@ -1635,15 +1635,6 @@ export default function AdminCases() {
       (item) => item.volunteerId === volunteer.uid
     );
 
-    const busyOnAnotherCase = assignments.some(
-      (item) =>
-        item.caseId !== incident.id &&
-        item.volunteerId === volunteer.uid &&
-        ["offered", "accepted", "responding", "on_site"].includes(
-          String(item.status)
-        )
-    );
-
     const reporterIsVolunteer =
       String(volunteer.uid || "").trim() ===
       String(incident.reporterUid || "").trim();
@@ -1691,9 +1682,6 @@ export default function AdminCases() {
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
-    }
-    if (busyOnAnotherCase) {
-      return { eligible: false, reason: "Busy on another active emergency", skillMatches };
     }
     // Skill suitability is reviewed by LGU. No automatic dispatch occurs.
     return {
@@ -2963,18 +2951,6 @@ export default function AdminCases() {
       return;
     }
 
-    const activeCount = activeAssignmentsForCase(incident.id).length;
-
-    // Emergency Volunteer support is optional and limited to one active
-    // Volunteer assignment at a time. LGU response never depends on it.
-    if (activeCount >= 1) {
-      Alert.alert(
-        "Volunteer Support Already Active",
-        "This emergency already has an active Volunteer support assignment. Finish or cancel it before assigning another Volunteer."
-      );
-      return;
-    }
-
     const eligibility = volunteerEligibilityForCase(incident, volunteer);
     if (!eligibility.eligible) {
       Alert.alert("Volunteer Not Eligible", eligibility.reason);
@@ -2987,7 +2963,6 @@ export default function AdminCases() {
     try {
       const caseRef = doc(db, "disasterCases", incident.id);
       const volunteerRef = doc(db, "users", volunteer.uid);
-      const responderLockRef = doc(db, "responderLocks", volunteer.uid);
       const assignmentRef = doc(
         db,
         "responseAssignments",
@@ -3003,12 +2978,10 @@ export default function AdminCases() {
           caseSnapshot,
           volunteerSnapshot,
           assignmentSnapshot,
-          responderLockSnapshot,
         ] = await Promise.all([
           transaction.get(caseRef),
           transaction.get(volunteerRef),
           transaction.get(assignmentRef),
-          transaction.get(responderLockRef),
         ]);
 
         if (!caseSnapshot.exists()) {
@@ -3035,17 +3008,10 @@ export default function AdminCases() {
           );
         }
 
-        if (responderLockSnapshot.exists()) {
-          const lock: any = responderLockSnapshot.data();
-          throw new Error(
-            `${volunteer.fullName} is already active on another emergency response (${String(
-              lock.caseId || "active case",
-            )}). Choose another available qualified responder.`,
-          );
-        }
-
-        // Volunteer support is independent from the official LGU responder.
-        // LGU remains the primary authority even when optional support is offered.
+        // A pending offer is not an active response. Admin may offer a
+        // validated, safe support task to an approved Volunteer even when busy.
+        // On Accept, the Volunteer transaction enforces one active mission
+        // through responderLocks. No volunteer is dispatched automatically.
 
         if (
           String(currentCase.reporterUid || "").trim() ===
@@ -5563,7 +5529,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Admin assigns validated community assistance tasks directly to approved Volunteers. Volunteers accept or decline in the incident card under New. This is not official emergency dispatch.
+                              Select an approved Volunteer and send a task offer. It appears with the resident's incident photo in New, where they may Accept or Decline. These are community support tasks, not official dispatch.
                             </Text>
                           </View>
                         </View>
@@ -5577,17 +5543,17 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Volunteers from any SJDM barangay can be assigned. Review skills, actual availability, travel distance, and safe support duties.
+                          Any approved SJDM Volunteer may receive a task offer, even with another task. Volunteers choose Accept or Decline; live response starts only with their consent.
                         </Text>
                       </View>
 
-                      {!volunteerSupportAvailable && (
+                      {activeAssignments.length > 0 && (
                         <View style={styles.personnelSupportNotice}>
                           <Text style={styles.personnelSupportNoticeTitle}>
-                            One Volunteer support assignment is already active
+                            {activeAssignments.length} existing task offer(s) or active task(s)
                           </Text>
                           <Text style={styles.personnelSupportNoticeText}>
-                            Finish or cancel the active task before assigning another Volunteer.
+                            You can offer this case to other approved Volunteers. They may Accept or Decline; only one active mission per Volunteer is permitted.
                           </Text>
                         </View>
                       )}
@@ -5639,12 +5605,11 @@ export default function AdminCases() {
                               incident.status,
                             );
                             const dispatchDisabled = !eligibility.eligible ||
-                              !volunteerSupportAvailable || !caseOpenForSupport || !!busyKey;
+                              !caseOpenForSupport || !!busyKey;
                             const reasonLower = eligibility.reason.toLowerCase();
                             const availabilityText = volunteer.availability.join(" ").toLowerCase();
                             const offline = /offline|unavailable|off.?duty/.test(availabilityText);
-                            const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
-                              !eligibility.eligible ? "Restricted" :
+                            const availabilityLabel = !eligibility.eligible ? "Restricted" :
                               offline ? "Offline · offer allowed" : "Eligible";
 
                             return (
@@ -5674,7 +5639,7 @@ export default function AdminCases() {
                                     onPress={() => assignVolunteerToCase(incident, volunteer)}
                                   >
                                     <Text style={[styles.volunteerRosterActionText, dispatchDisabled && styles.personnelAssignCompactTextDisabled]}>
-                                      {dispatchDisabled ? "Assignment Unavailable" : "Assign Volunteer"}
+                                      {dispatchDisabled ? "Cannot Offer" : "Send Task Offer"}
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
