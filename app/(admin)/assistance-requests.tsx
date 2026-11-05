@@ -53,6 +53,7 @@ type ReviewTab =
   | "decision";
 
 type ReviewStage = "checks" | "costs" | "residency" | "decision" | "support";
+type ReviewStageFocus = { stage: ReviewStage; ticket: number };
 
 type StoredDocument = {
   documentType?: string;
@@ -617,7 +618,7 @@ export default function AssistanceRequestsAdmin() {
     useState<AssistanceQueueSort>("newest");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
-  const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStage | null>(null);
+  const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
 
   const [selected, setSelected] =
@@ -938,16 +939,30 @@ export default function AssistanceRequestsAdmin() {
   const activeRequestPage = Math.max(1, Math.min(recordPage, requestPages));
   const pagedRequests = filteredRequests.slice((activeRequestPage - 1) * 5, activeRequestPage * 5);
 
+  const resetProtectedReviewView = () => {
+    // Prevent the previous Resident's private review and evidence from
+    // appearing while the next request is loading.
+    setResidentProfile(null);
+    setResidentLoading(false);
+    setReviewDraft(null);
+    setVerificationReview(null);
+    setVerificationReviewLoading(true);
+    setPreviewDocument(null);
+    setPreviewAccessUrl("");
+    setPreviewError("");
+  };
+
   useEffect(() => {
-    if (!wide || loadingRequests || sessionLoading || !isOperationalAdmin) return;
+    if (!wide || loadingRequests || sessionLoading || !isOperationalAdmin || !!savingAction) return;
     const visibleSelected = pagedRequests.some((item) => item.id === selected?.id);
     if (!visibleSelected) {
+      resetProtectedReviewView();
       setSelected(pagedRequests[0] || null);
       setReviewTab("case");
       setReviewFocusStage(null);
       setQuickAction(null);
     }
-  }, [wide, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id]);
+  }, [wide, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id, savingAction]);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -996,6 +1011,13 @@ export default function AssistanceRequestsAdmin() {
   const selectRequest = (
     item: AssistanceRequest,
   ) => {
+    if (savingAction) {
+      Alert.alert("Update in Progress", "Finish saving the current review before opening another request.");
+      return;
+    }
+    if (selected?.id !== item.id) {
+      resetProtectedReviewView();
+    }
     setSelected(item);
     setReviewTab("case");
     setReviewFocusStage(null);
@@ -1004,6 +1026,11 @@ export default function AssistanceRequestsAdmin() {
   };
 
   const backToQueue = () => {
+    if (savingAction) {
+      Alert.alert("Update in Progress", "Finish saving the current review before returning to the list.");
+      return;
+    }
+    resetProtectedReviewView();
     setSelected(null);
     setReviewTab("case");
     setReviewFocusStage(null);
@@ -1973,7 +2000,9 @@ This still does not automatically create a Donation Campaign.`,
 
 
   const openReviewStage = (stage: ReviewStage = "checks") => {
-    setReviewFocusStage(stage);
+    // A new ticket makes even a repeated click on the same checklist entry
+    // navigate back to its corresponding verification step.
+    setReviewFocusStage((current) => ({ stage, ticket: (current?.ticket ?? 0) + 1 }));
     setReviewTab("decision");
     setQuickAction(null);
   };
@@ -1993,7 +2022,7 @@ This still does not automatically create a Donation Campaign.`,
       label: "Beneficiary and resident address verified",
       done: reviewDraft?.beneficiaryCheckStatus === "confirmed" &&
         reviewDraft?.residencyVerificationStatus === "verified",
-      stage: "residency" as ReviewStage,
+      stage: (reviewDraft?.beneficiaryCheckStatus === "confirmed" ? "residency" : "checks") as ReviewStage,
     },
     {
       label: "Required amount, facility, and extra checks complete",
@@ -2003,7 +2032,16 @@ This still does not automatically create a Donation Campaign.`,
         ["not_required", "completed"].includes(reviewDraft.videoVerificationStatus) &&
         ["not_required", "completed"].includes(reviewDraft.siteVisitStatus) &&
         reviewDraft.riskFlags.trim().length === 0,
-      stage: "costs" as ReviewStage,
+      stage: (!reviewDraft ||
+        (reviewDraft.facilityVerificationRequired && reviewDraft.facilityVerificationStatus !== "confirmed") ||
+        (reviewDraft.costVerificationRequired && reviewDraft.costVerificationStatus !== "confirmed"))
+          ? "costs"
+          : (!["not_required", "completed"].includes(reviewDraft.videoVerificationStatus) ||
+            !["not_required", "completed"].includes(reviewDraft.siteVisitStatus))
+            ? "residency"
+            : reviewDraft.riskFlags.trim().length > 0
+              ? "decision"
+              : "costs" as ReviewStage,
     },
   ];
 
@@ -3272,7 +3310,7 @@ function DecisionTab({
   reviewDraft: PrivateReviewDraft | null;
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
-  focusStage: ReviewStage | null;
+  focusStage: ReviewStageFocus | null;
   onReviewChange: <K extends keyof PrivateReviewDraft>(
     key: K,
     value: PrivateReviewDraft[K],
@@ -3321,7 +3359,7 @@ function DecisionTab({
   }, [request.id, request.verificationStatus]);
 
   useEffect(() => {
-    if (focusStage) setReviewStage(focusStage);
+    if (focusStage) setReviewStage(focusStage.stage);
   }, [focusStage]);
 
   const reviewStages: { id: ReviewStage; label: string }[] = [
