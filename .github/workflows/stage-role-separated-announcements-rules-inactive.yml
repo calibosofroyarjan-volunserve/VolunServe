@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   stage:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot compile inactive Super Admin System Updates Ruleset after emulator checks'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Revalidate Super Admin System Updates Ruleset with malformed all-area LGU Admin blocked'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
