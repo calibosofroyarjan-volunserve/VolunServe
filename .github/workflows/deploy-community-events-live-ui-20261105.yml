@@ -62,6 +62,13 @@ jobs:
             -o "$RUNNER_TEMP/volunserve-live-ui-candidate.tar.gz"
           tar -xzf "$RUNNER_TEMP/volunserve-live-ui-candidate.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
           test -f package-lock.json && test -f app/login.web.tsx && test -f firebase.json
+          # Some existing Signup preservation tests inspect one historical
+          # GitHub version with git show. Fetch ONLY that object; never
+          # replace the exact live-derived source in the working tree.
+          git init -q
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin e7c2cc8 >/dev/null
+          git cat-file -e e7c2cc8:lib/firebaseAuth.ts
       - name: Require exact live baseline before preparing any release
         env:
           VOLUNSERVE_EXPECTED_SHA: 8cf5141d6fc51b29e443878efb8619fb7186b086
