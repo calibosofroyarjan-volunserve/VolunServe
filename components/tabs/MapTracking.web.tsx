@@ -3811,9 +3811,8 @@ export default function WebMapTracking() {
       user.uid,
     );
 
-    // When there is no accepted/responding Volunteer, the Resident may still
-    // explicitly share live GPS with the LGU. If a Volunteer later becomes
-    // active, this same document switches to volunteer mode automatically.
+    // Resident live GPS can be shared only while their assigned Volunteer
+    // has accepted an active mission. Never publish to an unassigned role.
     const assignmentId = residentShareAssignment?.id || "";
     const responseMode = residentShareMode;
     const caseId = residentShareCaseId;
@@ -5752,13 +5751,17 @@ export default function WebMapTracking() {
             <div className="clean-summary-person">
               <span>Assigned Volunteer</span>
               <strong>
-                {residentPrimaryAssignment?.volunteerName ||
-                  "Waiting for Admin assignment"}
+                {["declined", "cancelled"].includes(residentVolunteerStatus)
+                  ? "Waiting for Admin reassignment"
+                  : residentPrimaryAssignment?.volunteerName ||
+                    "Waiting for Admin assignment"}
               </strong>
               <small>
                 {residentPrimaryAssignment
                   ? residentVolunteerStatus === "offered"
                     ? "Offer sent · awaiting Volunteer acceptance"
+                    : ["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "The previous assignment ended · Admin can assign another Volunteer"
                     : residentVolunteerStatus === "accepted"
                       ? "Accepted · waiting to respond"
                       : residentVolunteerStatus === "responding"
@@ -6784,8 +6787,10 @@ export default function WebMapTracking() {
                 <div>
                   <span className="clean-kicker">ASSIGNED VOLUNTEER</span>
                   <h2>
-                    {residentPrimaryAssignment?.volunteerName ||
-                      "Waiting for Admin assignment"}
+                    {["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "Waiting for Admin reassignment"
+                      : residentPrimaryAssignment?.volunteerName ||
+                        "Waiting for Admin assignment"}
                   </h2>
                 </div>
                 <span className={`clean-status-pill ${routeResponderPoint && !routeResponderPoint.stale ? "status-responding" : ""}`}>
@@ -6841,7 +6846,9 @@ export default function WebMapTracking() {
                     ? "The assigned Volunteer's last GPS update is old. Wait for a fresh location before relying on the map."
                     : "Your assigned Volunteer's active GPS location appears on the map during response."
                   : residentPrimaryAssignment
-                    ? residentVolunteerStatus === "offered"
+                    ? ["declined", "cancelled"].includes(residentVolunteerStatus)
+                      ? "The previous assignment ended. Admin can assign another Volunteer; the incident map stays available."
+                      : residentVolunteerStatus === "offered"
                       ? "Admin sent an assignment. Tracking begins only after acceptance and active GPS sharing."
                       : "The Volunteer is assigned. Their GPS appears once live sharing begins."
                     : "Your report is saved. Admin must validate it and assign a Volunteer before tracking can start."}
