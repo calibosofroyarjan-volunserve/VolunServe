@@ -1,0 +1,82 @@
+name: Validate Minimal LGU Announcement UI (No Production Deploy)
+on:
+  push:
+    branches: [fix/lgu-announcements-hide-recipient-picker-live-20261105]
+    paths: [".github/workflows/validate-lgu-announcement-no-picker-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      LIVE_BASE: "717ec8624a5e0f4b955e4a6fe66d6c68cceb5355"
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Require current LIVE-based source and strict allowlist
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const names=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const allow=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'scripts/test-lgu-clean-announcements-live.cjs',
+            '.github/workflows/validate-lgu-announcement-no-picker-20261105.yml',
+            '.github/workflows/release-lgu-announcement-no-picker-20261105.yml'
+          ]);
+          assert.deepEqual(names.filter(n=>!allow.has(n)),[],'Changes outside the isolated LGU announcement page are prohibited');
+          assert(names.includes('app/(admin)/create-announcement.tsx'));
+          console.log('PASS only LGU Announcement UI + tests/workflows; Super Admin, Signup, Login, Rules, Auth and data untouched');
+          NODE
+      - name: Current live release must still be exact base
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?before_ui_only='+Date.now(),
+                {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('Live revision unavailable '+domain);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('Newer live release detected; stop: '+j.revision);
+              console.log('PASS live domain '+domain);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Full TypeScript, Login/Signup and announcement boundary checks
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-lgu-clean-announcements-live.cjs
+      - name: Fresh web export and no-cache version marker (NOT DEPLOYED)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(m.revision,process.env.GITHUB_SHA);
+          console.log('PASS fresh generated web asset from exact source');
+          NODE
+      - name: Explicit no-live-change boundary
+        run: echo 'Validation only: No Hosting, Firestore Rules, Functions, Storage, Auth, database or Super Admin changes.'
