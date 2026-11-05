@@ -2343,6 +2343,18 @@ This still does not automatically create a Donation Campaign.`,
     { value: "title_za", label: "Request Z–A" },
   ];
 
+  const changeStatusFilter = (value: ReviewFilter) => {
+    // Keep every existing status choice while resetting pagination deterministically.
+    switch (value) {
+      case "all": setFilter("all"); setRecordPage(1); break;
+      case "pending": setFilter("pending"); setRecordPage(1); break;
+      case "under_review": setFilter("under_review"); setRecordPage(1); break;
+      case "verified": setFilter("verified"); setRecordPage(1); break;
+      case "rejected": setFilter("rejected"); setRecordPage(1); break;
+      case "completed": setFilter("completed"); setRecordPage(1); break;
+    }
+  };
+
   const renderCompactQueue = () => (
     <View style={styles.assistanceQueueCard}>
       <View style={styles.assistanceQueueHeading}>
@@ -2375,7 +2387,7 @@ This still does not automatically create a Donation Campaign.`,
           label="Status"
           value={filter}
           options={statusOptions}
-          onChange={(value) => { setFilter(value as ReviewFilter); setRecordPage(1); }}
+          onChange={(value) => changeStatusFilter(value as ReviewFilter)}
         />
       </View>
       <ReviewPicker
@@ -2442,15 +2454,13 @@ This still does not automatically create a Donation Campaign.`,
     <View style={styles.page}>
       {wide ? (
         <View style={styles.assistanceDesktop}>
-          <View style={styles.assistanceDesktopHeading}>
-            <View style={styles.assistanceHeadingIcon}>
-              <Ionicons name="heart-outline" size={24} color="#047857" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.assistancePageHeading}>Assistance Requests</Text>
-              <Text style={styles.assistanceSubtext}>Review and verify assistance requests from residents.</Text>
-            </View>
-          </View>
+          <AdminReviewHero
+            eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+            title="Assistance Requests"
+            subtitle="Review and verify assistance requests from residents."
+            icon="hand-left-outline"
+            tag="RESIDENT ASSISTANCE"
+          />
           <View style={styles.assistanceSplitWorkspace}>
             <ScrollView
               style={styles.assistanceListPanel}
@@ -2466,15 +2476,13 @@ This still does not automatically create a Donation Campaign.`,
         </View>
       ) : screenMode === "queue" ? (
         <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
-          <View style={styles.assistanceDesktopHeading}>
-            <View style={styles.assistanceHeadingIcon}>
-              <Ionicons name="heart-outline" size={22} color="#047857" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.assistancePageHeading}>Assistance Requests</Text>
-              <Text style={styles.assistanceSubtext}>Review and verify requests from residents.</Text>
-            </View>
-          </View>
+          <AdminReviewHero
+            eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+            title="Assistance Requests"
+            subtitle="Review and verify assistance requests from residents."
+            icon="hand-left-outline"
+            tag="RESIDENT ASSISTANCE"
+          />
           {renderCompactQueue()}
         </ScrollView>
       ) : (
