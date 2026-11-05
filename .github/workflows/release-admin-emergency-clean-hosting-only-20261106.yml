@@ -1,0 +1,243 @@
+name: Guarded LIVE Admin Emergency Cleanup Hosting ONLY
+on:
+  push:
+    branches: [fix/emergency-live-baseline-clean-20261106]
+    paths: [".github/workflows/release-admin-emergency-clean-hosting-only-20261106.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-production:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded Admin Emergency cleanup Hosting-only release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      PROJECT: volunserve-3aa5b
+      LIVE_BASE: f4977098ae1a3f5568294164860f480520b85b89
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-emergency-volunteer-prod.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Guard exact live ancestor and scoped Emergency-only changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/emergency-admin-changes.txt"
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-admin-changes.txt','utf8').trim().split('\\n').filter(Boolean).sort();
+          const expected=[
+            '.github/workflows/release-admin-emergency-clean-hosting-only-20261106.yml',
+            'app/(admin)/admin-cases.tsx',
+            'components/DisasterResponse.native.tsx',
+            'components/DisasterResponse.web.tsx',
+            'components/tabs/MapTracking.web.tsx'
+          ].sort();
+          assert.deepEqual(changed,expected,'STOP: non-emergency/protected production source modified');
+          for(const file of ['firestore.rules','firebase.json','app/login.tsx','app/login.web.tsx','app/signup.tsx','app/signup.web.tsx','app/(admin)/assistance-requests.tsx','app/(tabs)/notifications.tsx']){
+            assert(!changed.includes(file),'STOP protected production file changed: '+file);
+          }
+          console.log('PASS only four audited Emergency source files and release workflow changed');
+          NODE
+      - name: Check public live revision on both Hosting domains BEFORE changing anything
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/check-both-live.cjs" <<'NODE'
+          const expected=process.argv[2];
+          if(!/^[0-9a-f]{40}$/.test(expected||''))throw Error('Missing full expected SHA');
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const response=await fetch(origin+'/volunserve-release.json?emergency_guard='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('STOP live marker unavailable '+origin+' HTTP '+response.status);
+              const marker=await response.json();
+              if(marker.revision!==expected)throw Error('STOP live was updated by another release '+origin+' expected '+expected+' got '+marker.revision);
+              console.log('PASS live domain revision '+origin+' '+expected);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
+      - name: Install dependencies, verify emergency UI and protect authentication modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --test scripts/test-clean-emergency-report-header.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          for t in \\
+            scripts/test-unified-login-routing.cjs \\
+            scripts/test-login-field-validation.cjs \\
+            scripts/test-signup-prod.cjs \\
+            scripts/test-signup-google-oauth.cjs \\
+            scripts/test-admin-staff-login.cjs \\
+            scripts/test-notification-clickthrough-polish-20261106.cjs \\
+            scripts/test-lgu-clean-announcements-live.cjs; do
+            test -f "$t"
+            node "$t"
+          done
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const admin=fs.readFileSync('app/(admin)/admin-cases.tsx','utf8');
+          const web=fs.readFileSync('components/DisasterResponse.web.tsx','utf8');
+          const mobile=fs.readFileSync('components/DisasterResponse.native.tsx','utf8');
+          const map=fs.readFileSync('components/tabs/MapTracking.web.tsx','utf8');
+          assert(!admin.includes('OFFICIAL LGU FIELD REPORT'));
+          assert(admin.includes('Review & Resolve Case') && admin.includes('Send Task Offer'));
+          assert(admin.includes('Wait for the Resident to confirm'));
+          assert(web.includes('locationSource: pin.source') && mobile.includes('locationSource: pin.source'));
+          assert(map.includes('REPORTED INCIDENT LOCATION'));
+          console.log('PASS scoped Emergency Admin and Resident/Volunteer UI contracts');
+          NODE
+          npx tsc --noEmit --pretty false
+      - name: Clean Expo production export with exact deployed revision fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          assert.equal(marker.firebaseProject,process.env.PROJECT);
+          for(const route of ['login','signup','admin-login','admin-request','notifications','announcements','disaster-response','map-tracking','my-cases']){
+            assert(['dist/'+route+'.html','dist/'+route+'/index.html'].some(path=>fs.existsSync(path)),'STOP missing protected web route '+route);
+          }
+          console.log('PASS exact release fingerprint and protected web assets');
+          NODE
+      - name: Validate Hosting-only Firebase credentials and create local private credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase service account is missing. Production not touched."; exit 1; fi
+          node <<'NODE'
+          const fs=require('node:fs'), cred=JSON.parse(process.env.FIREBASE_SA);
+          if(cred.type!=='service_account'||cred.project_id!==process.env.PROJECT)throw Error('STOP incorrect Firebase project credentials');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS project-bound Hosting credentials present');
+          NODE
+      - name: Snapshot exact prior LIVE Firebase Hosting version with no new channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          # check-both-live.cjs already verified both domains above. Preserve
+          # prior Firebase Hosting version before any deployment; do not reference
+          # a temporary script that was never created in this job.
+          cat > "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" <<'NODE'
+          const fs=require('node:fs');
+          const crypto=require('node:crypto');
+          const project=process.env.PROJECT;
+          const mode=process.argv[2];
+          const credentials=JSON.parse(process.env.FIREBASE_SA);
+          const priorPath=process.env.RUNNER_TEMP+'/emergency-volunteer-prior-hosting-version.txt';
+          const api='https://firebasehosting.googleapis.com/v1beta1/sites/'+project;
+          const encodeJson=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const header={alg:'RS256',typ:'JWT'};
+            const payload={
+              iss:credentials.client_email,
+              scope:'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/cloud-platform',
+              aud:credentials.token_uri,
+              iat:now,
+              exp:now+3000
+            };
+            const unsigned=encodeJson(header)+'.'+encodeJson(payload);
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(unsigned),credentials.private_key).toString('base64url');
+            const response=await fetch(credentials.token_uri,{
+              method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion:unsigned+'.'+signature
+              }),signal:AbortSignal.timeout(25000)
+            });
+            if(!response.ok)throw Error('Could not authenticate Hosting version snapshot: '+response.status);
+            const data=await response.json();
+            if(!data.access_token)throw Error('Missing Hosting REST access token');
+            return data.access_token;
+          }
+          (async()=>{
+            const access=await token();
+            if(mode==='snapshot'){
+              const response=await fetch(api+'/releases?pageSize=1',{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('STOP cannot snapshot prior Firebase Hosting version: '+response.status);
+              const result=await response.json();
+              const version=String(result.releases?.[0]?.version?.name||'');
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('STOP prior live version missing');
+              fs.writeFileSync(priorPath,version+'\n',{mode:0o600});
+              console.log('PASS existing live Hosting version snapshotted for rollback');
+            }else if(mode==='restore'){
+              const version=fs.readFileSync(priorPath,'utf8').trim();
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('Unsafe backup reference');
+              const response=await fetch(api+'/releases?versionName='+encodeURIComponent(version),{
+                method:'POST',headers:{Authorization:'Bearer '+access},
+                signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('Hosting rollback failed: '+response.status);
+              console.log('RESTORED prior live Hosting version from immutable Firebase version history');
+            }else throw Error('Unknown Hosting API mode');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" snapshot
+
+      - name: Check current live revision one final time before Hosting-only promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/emergency-volunteer-prior-hosting-version.txt"
+          node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
+      - name: Publish exact previously tested web assets to LIVE Hosting only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact new LIVE revision, preserved public routes, and both domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          passed=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node "$RUNNER_TEMP/check-both-live.cjs" "$GITHUB_SHA"; then
+              passed=1
+              break
+            fi
+            sleep 8
+          done
+          test "$passed" = 1 || { echo "::error::Live promotion not yet confirmed"; exit 1; }
+          VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs
+          echo "PASS: live volunserve.com serves Emergency Volunteer revision $GITHUB_SHA; Hosting-only release, data and rules unchanged" >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore exact prior immutable Hosting version only if this release owns LIVE
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          if [ ! -s "$RUNNER_TEMP/emergency-volunteer-prior-hosting-version.txt" ]; then
+            echo "No immutable prior Hosting snapshot; production was not promoted by this release."
+            exit 0
+          fi
+          if node "$RUNNER_TEMP/check-both-live.cjs" "$GITHUB_SHA"; then
+            node "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" restore
+            node "$RUNNER_TEMP/check-both-live.cjs" "$LIVE_BASE"
+          else
+            echo "The active release is not confirmed as ours. Do not overwrite another deploy; check Hosting history manually."
+          fi
+
+# Preview channel quota reached (HTTP 429); use immutable existing LIVE version snapshot and guarded Hosting-only publish.
