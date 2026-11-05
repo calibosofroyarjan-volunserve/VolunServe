@@ -72,9 +72,16 @@ target=target.replace("      allow create: if isSuperAdmin()",createStaff+"     
 // its existing field/actor/updatedAt constraints. Admit a pending LGU STAFF
 // applicant ONLY with a fresh same-batch credential record; the original
 // approved-user branch is byte-identical and retains its exact semantics.
-const oldGrantCondition="            resource.data.status == 'approved'\n            && request.resource.data.role == 'admin'";
-const newGrantCondition="            (resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))\n            && request.resource.data.role == 'admin'";
-onlyOnce(target,oldGrantCondition,"legacy Super Admin verified promotion branch");
+// Match line breaks and indentation from the LIVE Cloud Rules snapshot, not
+// GitHub's stale formatting. Stop unless exactly ONE original grant case exists.
+const legacyGrantPattern=/([ \\t]*)resource\\.data\\.status == 'approved'(\\r?\\n)([ \\t]*)&& request\\.resource\\.data\\.role == 'admin'/g;
+const originalGrantMatches=[...target.matchAll(legacyGrantPattern)];
+assert.equal(originalGrantMatches.length,1,"BLOCKED: unexpected existing Super Admin promotion shape");
+const oldGrantCondition=originalGrantMatches[0][0];
+const newGrantCondition=oldGrantCondition.replace(
+  "resource.data.status == 'approved'",
+  "(resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))"
+);
 target=target.replace(oldGrantCondition,newGrantCondition);
 const reject=`      // New LGU STAFF workflow: Super Admin review may reject pending staff.
       // No role elevation, applicant data deletion, or resident/volunteer privileges.
