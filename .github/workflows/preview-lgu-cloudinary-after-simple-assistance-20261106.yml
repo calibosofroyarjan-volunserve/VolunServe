@@ -1,0 +1,108 @@
+name: PREVIEW ONLY LGU Cloudinary on Protected Latest Assistance Hosting
+on:
+  push:
+    branches: [preview/lgu-cloudinary-after-simple-assistance-20261106]
+    paths: [.github/workflows/preview-lgu-cloudinary-after-simple-assistance-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  safe-preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE: 30ac81824c9207f7d18ff12c828d3b02a2ca3699
+      VERIFIED_RUN: 42086155281
+      VERIFIED_SHA: a64255a78f29c0f531046f3fb796c82907f1af2e
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Protect exact Assistance LIVE source and validated LGU-only diff
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const files=cp.execFileSync('git',['diff','--name-only',process.env.BASE,'HEAD'],{encoding:'utf8'}).split('\n').filter(Boolean);
+          const allowed=[
+            'app/admin-request.tsx','app/(superadmin)/admin-accounts.tsx',
+            'components/admin/LguPrivateProofPreview.tsx','lib/lguCredentialImages.ts',
+            '.github/workflows/validate-lgu-cloudinary-after-simple-assistance-20261106.yml',
+            '.github/workflows/preview-lgu-cloudinary-after-simple-assistance-20261106.yml',
+          ];
+          assert.deepEqual([...files].sort(),[...allowed].sort(),'STOP unrelated production code changed');
+          for(const name of ['app/admin-request.tsx','app/(superadmin)/admin-accounts.tsx',
+            'components/admin/LguPrivateProofPreview.tsx','lib/lguCredentialImages.ts']){
+            const expected=cp.execFileSync('git',['rev-parse',process.env.VERIFIED_SHA+':'+name],{encoding:'utf8'}).trim();
+            const actual=cp.execFileSync('git',['rev-parse','HEAD:'+name],{encoding:'utf8'}).trim();
+            assert.equal(actual,expected,'STOP changed tested LGU file '+name);
+          }
+          console.log('PASS exact additive LGU code and verified newest live Assistance source preserved');
+          NODE
+      - name: Require green matching protected regression run
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const u='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/actions/runs/'+process.env.VERIFIED_RUN;
+            const r=await fetch(u,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}});
+            if(!r.ok)throw Error('Cannot verify past validation');const v=await r.json();
+            if(v.head_sha!==process.env.VERIFIED_SHA||v.conclusion!=='success')throw Error('STOP tested release not green');
+            console.log('PASS green exact-source TypeScript, Login Signup, API security and Expo web tests');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Confirm public production unchanged and backend Cloudinary ready
+        run: |
+          node <<'NODE'
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(origin+'/volunserve-release.json?lgu_preview_only='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(30000)});
+              const v=await r.json();
+              if(!r.ok||v.revision!==process.env.BASE)throw Error('STOP LIVE revision moved on '+origin);
+              console.log('PASS protected live Hosting remains '+v.revision);
+            }
+            const h=await fetch('https://volunserve.onrender.com/health',{signal:AbortSignal.timeout(45000)});
+            if(!h.ok)throw Error('Render backend unavailable');
+            const s=await h.json();
+            if(s.assistanceEvidenceStorage!=='secure_cloudinary_configured')throw Error('Cloudinary not available');
+            const unauth=await fetch('https://volunserve.onrender.com/api/lgu-staff/application',{method:'POST',signal:AbortSignal.timeout(30000)});
+            if(unauth.status!==401)throw Error('Private applicant API missing security guard');
+            console.log('PASS private Cloudinary backend live; unauthenticated requests denied');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Compile tested frontend from freshest protected source
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Publish PREVIEW CHANNEL ONLY - production live is untouched
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: lgu-cloudinary-after-simple-assist-1106
+          expires: 3d
+      - name: Verify preview without touching LIVE
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ready=0
+          for n in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then ready=1; break; fi
+            sleep 8
+          done
+          test "$ready" = 1
+          echo 'PASS isolated LGU Cloudinary preview current LIVE source preserved; NO production Hosting, Firestore, Storage, backend, Auth, or data mutation.'
