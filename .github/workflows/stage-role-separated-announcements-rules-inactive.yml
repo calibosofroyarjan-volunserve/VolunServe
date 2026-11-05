@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   stage:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Revalidate Super Admin System Updates Ruleset with malformed all-area LGU Admin blocked'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Compile current published Ruleset with Super Admin global authority after concurrent release'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -78,7 +78,7 @@ jobs:
           token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
           req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
           with urllib.request.urlopen(req,timeout=20) as r:active=json.load(r)
-          expected='projects/volunserve-3aa5b/rulesets/eeb04c64-09ad-4b91-8652-284347ca70b2'
+          expected='projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec'
           if active.get('rulesetName') != expected:raise SystemExit('ALERT different active Ruleset; release NOT attempted by this workflow')
           print('PASS active Cloud Ruleset unchanged')
           PY
