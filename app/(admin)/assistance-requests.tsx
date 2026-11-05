@@ -4206,8 +4206,9 @@ function DecisionTab({
           multiline
           maxLength={2500}
           editable={!reviewLocked}
-          style={styles.textArea}
+          style={[styles.textArea, !!issue("riskFlags") && styles.assistanceFieldInvalid]}
         />
+        <ReviewValidationHint message={issue("riskFlags")} />
         <TextInput
           value={reviewDraft.internalNotes}
           onChangeText={(value) => onReviewChange("internalNotes", value)}
@@ -4233,8 +4234,9 @@ function DecisionTab({
           placeholderTextColor="#94A3B8"
           multiline
           maxLength={1800}
-          style={styles.textArea}
+          style={[styles.textArea, !!noteIssue && styles.assistanceFieldInvalid]}
         />
+        <ReviewValidationHint message={noteIssue} />
         <Text style={styles.counterText}>{adminNote.length}/1800</Text>
       </SectionCard>
 
@@ -4266,7 +4268,7 @@ function DecisionTab({
               label="Verify Need"
               icon="shield-checkmark-outline"
               variant="success"
-              disabled={!allChecksComplete}
+              disabled={!!savingAction}
               loading={savingAction === "verify"}
               onPress={onVerify}
             />
@@ -4278,13 +4280,13 @@ function DecisionTab({
               <View style={styles.noteCopy}>
                 <Text style={styles.warningTitle}>Verify Need is locked</Text>
                 <Text style={styles.warningText}>
-                  Complete all required verification checks and clear unresolved risk flags first.
+                  Select Verify Need to see exactly which required checks still need attention.
                 </Text>
               </View>
             </View>
           )}
 
-          <LabelText>Rejection reason</LabelText>
+          <LabelText required>Rejection reason</LabelText>
           <TextInput
             value={rejectionReason}
             onChangeText={setRejectionReason}
@@ -4292,8 +4294,9 @@ function DecisionTab({
             placeholderTextColor="#94A3B8"
             multiline
             maxLength={1000}
-            style={[styles.textArea, styles.rejectArea]}
+            style={[styles.textArea, styles.rejectArea, !!rejectionIssue && styles.assistanceFieldInvalid]}
           />
+          <ReviewValidationHint message={rejectionIssue} />
           <ActionButton
             label="Reject Request"
             icon="close-circle-outline"
