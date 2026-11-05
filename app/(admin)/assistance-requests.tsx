@@ -607,9 +607,14 @@ export default function AssistanceRequestsAdmin() {
     useState("");
 
   const [filter, setFilter] =
-    useState<ReviewFilter>("pending");
+    useState<ReviewFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortOrder, setSortOrder] =
+    useState<"newest" | "oldest" | "resident_az" | "resident_za" | "title_az" | "title_za">("newest");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStage | null>(null);
+  const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -930,7 +935,7 @@ export default function AssistanceRequestsAdmin() {
             ].includes(status)
           : status === filter);
 
-      if (!matchesFilter) {
+      if (!matchesFilter || (categoryFilter !== "all" && item.category !== categoryFilter)) {
         return false;
       }
 
@@ -952,16 +957,43 @@ export default function AssistanceRequestsAdmin() {
         .toLowerCase();
 
       return haystack.includes(term);
+    }).sort((a, b) => {
+      const nameA = String(a.requesterName || a.beneficiaryName || "").trim();
+      const nameB = String(b.requesterName || b.beneficiaryName || "").trim();
+      const titleA = String(a.title || "").trim();
+      const titleB = String(b.title || "").trim();
+      const stable = String(a.id).localeCompare(String(b.id));
+      switch (sortOrder) {
+        case "resident_az": return nameA.localeCompare(nameB, "en", { sensitivity: "base" }) || stable;
+        case "resident_za": return nameB.localeCompare(nameA, "en", { sensitivity: "base" }) || stable;
+        case "title_az": return titleA.localeCompare(titleB, "en", { sensitivity: "base" }) || stable;
+        case "title_za": return titleB.localeCompare(titleA, "en", { sensitivity: "base" }) || stable;
+        case "oldest": return timestampMillis(a.createdAt) - timestampMillis(b.createdAt) || stable;
+        default: return timestampMillis(b.createdAt) - timestampMillis(a.createdAt) || stable;
+      }
     });
   }, [
     requests,
     filter,
+    categoryFilter,
+    sortOrder,
     search,
   ]);
 
   const requestPages = Math.max(1, Math.ceil(filteredRequests.length / 5));
   const activeRequestPage = Math.max(1, Math.min(recordPage, requestPages));
   const pagedRequests = filteredRequests.slice((activeRequestPage - 1) * 5, activeRequestPage * 5);
+
+  useEffect(() => {
+    if (!wide || loadingRequests || sessionLoading || !isOperationalAdmin) return;
+    const visibleSelected = pagedRequests.some((item) => item.id === selected?.id);
+    if (!visibleSelected) {
+      setSelected(pagedRequests[0] || null);
+      setReviewTab("case");
+      setReviewFocusStage(null);
+      setQuickAction(null);
+    }
+  }, [wide, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id]);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -1012,12 +1044,16 @@ export default function AssistanceRequestsAdmin() {
   ) => {
     setSelected(item);
     setReviewTab("case");
+    setReviewFocusStage(null);
+    setQuickAction(null);
     setScreenMode("detail");
   };
 
   const backToQueue = () => {
     setSelected(null);
     setReviewTab("case");
+    setReviewFocusStage(null);
+    setQuickAction(null);
     setScreenMode("queue");
   };
 
@@ -1982,17 +2018,171 @@ This still does not automatically create a Donation Campaign.`,
   }
 
 
+  const openReviewStage = (stage: ReviewStage = "checks") => {
+    setReviewFocusStage(stage);
+    setReviewTab("decision");
+    setQuickAction(null);
+  };
+
+  const quickChecklist = [
+    {
+      label: "Documents reviewed and consistent",
+      done: reviewDraft?.documentConsistencyStatus === "consistent",
+      stage: "checks" as ReviewStage,
+    },
+    {
+      label: "No confirmed duplicate request",
+      done: reviewDraft?.duplicateCheckStatus === "clear",
+      stage: "checks" as ReviewStage,
+    },
+    {
+      label: "Beneficiary and resident address verified",
+      done: reviewDraft?.beneficiaryCheckStatus === "confirmed" &&
+        reviewDraft?.residencyVerificationStatus === "verified",
+      stage: "residency" as ReviewStage,
+    },
+    {
+      label: "Required amount, facility, and extra checks complete",
+      done: !!reviewDraft &&
+        (!reviewDraft.costVerificationRequired || reviewDraft.costVerificationStatus === "confirmed") &&
+        (!reviewDraft.facilityVerificationRequired || reviewDraft.facilityVerificationStatus === "confirmed") &&
+        ["not_required", "completed"].includes(reviewDraft.videoVerificationStatus) &&
+        ["not_required", "completed"].includes(reviewDraft.siteVisitStatus) &&
+        reviewDraft.riskFlags.trim().length === 0,
+      stage: "costs" as ReviewStage,
+    },
+  ];
+
+  const renderQuickChecklist = () => {
+    if (!selected) return null;
+    const completed = quickChecklist.filter((check) => check.done).length;
+    const locked = selected.verificationStatus === "verified" || selected.verificationStatus === "rejected";
+    return (
+      <View style={styles.assistanceQuickChecklist}>
+        <View style={styles.assistanceChecklistHeading}>
+          <Ionicons name="shield-checkmark-outline" size={21} color="#047857" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.assistanceSectionTitle}>Verification Checklist</Text>
+            <Text style={styles.assistanceSubtext}>
+              {verificationReviewLoading
+                ? "Loading the protected review record..."
+                : `${completed} of ${quickChecklist.length} verification groups complete`}
+            </Text>
+          </View>
+        </View>
+        {quickChecklist.map((check) => (
+          <TouchableOpacity
+            key={check.label}
+            disabled={verificationReviewLoading || locked}
+            accessibilityRole="button"
+            accessibilityLabel={`${check.label}: ${check.done ? "verified" : "not verified"}. Open review.`}
+            onPress={() => openReviewStage(check.stage)}
+            style={styles.assistanceChecklistRow}
+          >
+            <Ionicons
+              name={check.done ? "checkmark-circle" : "ellipse-outline"}
+              size={22}
+              color={check.done ? "#047857" : "#94A3B8"}
+            />
+            <Text style={styles.assistanceChecklistText}>{check.label}</Text>
+            {!locked && <Ionicons name="chevron-forward" size={16} color="#94A3B8" />}
+          </TouchableOpacity>
+        ))}
+        <Text style={styles.assistanceChecklistHelp}>
+          The checks reflect saved or current private review details. Opening a check lets the Admin verify its evidence; a tick does not approve a request.
+        </Text>
+        {!locked && (
+          <TouchableOpacity accessibilityRole="button" onPress={() => openReviewStage("checks")} style={styles.assistanceTextLink}>
+            <Text style={styles.assistanceLinkText}>Open detailed verification</Text>
+            <Ionicons name="arrow-forward" size={15} color="#047857" />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderQuickActions = () => {
+    if (!selected || ["verified", "rejected"].includes(String(selected.verificationStatus || ""))) return null;
+    return (
+      <View style={styles.assistanceQuickActions}>
+        {selected.status === "pending" && !verificationReview && (
+          <ActionButton label="Start Review" icon="play-outline" variant="secondary" loading={savingAction === "start_review"} onPress={startReview} />
+        )}
+        <View style={styles.assistanceQuickButtons}>
+          <ActionButton
+            label="Request More Info"
+            icon="chatbox-ellipses-outline"
+            variant="secondary"
+            loading={savingAction === "more_info"}
+            onPress={() => setQuickAction(quickAction === "more_info" ? null : "more_info")}
+          />
+          <ActionButton
+            label="Reject"
+            icon="close-circle-outline"
+            variant="danger"
+            loading={savingAction === "reject"}
+            onPress={() => setQuickAction(quickAction === "reject" ? null : "reject")}
+          />
+          <ActionButton
+            label={allChecksComplete ? "Verify Need" : "Complete Checks"}
+            icon="shield-checkmark-outline"
+            variant="success"
+            loading={savingAction === "verify"}
+            onPress={allChecksComplete && verificationReview ? verifyNeed : () => openReviewStage("checks")}
+          />
+        </View>
+        {quickAction && (
+          <View style={styles.assistanceQuickNote}>
+            <Text style={styles.assistanceSectionTitle}>
+              {quickAction === "reject" ? "Reason for rejection" : "Information needed from the Resident"}
+            </Text>
+            <Text style={styles.assistanceSubtext}>
+              {quickAction === "reject"
+                ? "Give a clear, evidence-based reason. The final rejection requires confirmation."
+                : "Specify the missing proof or information before sending the request."}
+            </Text>
+            <TextInput
+              value={quickAction === "reject" ? rejectionReason : adminNote}
+              onChangeText={quickAction === "reject" ? setRejectionReason : setAdminNote}
+              placeholder={quickAction === "reject" ? "Enter a rejection reason" : "What details or evidence are missing?"}
+              placeholderTextColor="#94A3B8"
+              style={styles.textArea}
+              multiline
+              maxLength={1000}
+            />
+            {!verificationReview && (
+              <Text style={styles.assistanceWarning}>
+                Start Review first to create the protected record before submitting a decision.
+              </Text>
+            )}
+            <View style={styles.assistanceQuickButtons}>
+              <ActionButton label="Cancel" icon="close-outline" variant="secondary" onPress={() => setQuickAction(null)} />
+              <ActionButton
+                label={quickAction === "reject" ? "Confirm Rejection" : "Send Request"}
+                icon={quickAction === "reject" ? "close-circle-outline" : "send-outline"}
+                variant={quickAction === "reject" ? "danger" : "primary"}
+                disabled={!verificationReview || !!savingAction ||
+                  (quickAction === "reject" ? rejectionReason.trim().length < 3 : adminNote.trim().length < 10)}
+                onPress={quickAction === "reject" ? rejectRequest : requestMoreInformation}
+              />
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderReviewMain = () => {
     if (!selected) return null;
 
     return (
       <>
         {reviewTab === "case" && (
-          <CaseReviewTab
-            request={selected}
-            relatedRequestCount={relatedRequests.length}
-            sameBeneficiaryCount={sameBeneficiaryRequests.length}
-          />
+          <>
+            <CaseReviewTab request={selected} />
+            {renderQuickChecklist()}
+            {renderQuickActions()}
+          </>
         )}
 
         {reviewTab === "evidence" && (
@@ -2026,6 +2216,7 @@ This still does not automatically create a Donation Campaign.`,
         reviewDraft={reviewDraft}
         reviewRecord={verificationReview}
         reviewLoading={verificationReviewLoading}
+        focusStage={reviewFocusStage}
         onReviewChange={updateReviewDraft}
         allChecksComplete={allChecksComplete}
         onSaveVerificationDraft={saveVerificationDraft}
@@ -2063,7 +2254,7 @@ This still does not automatically create a Donation Campaign.`,
 
     return (
       <>
-        <View style={styles.detailBreadcrumbRow}>
+        {!wide && <View style={styles.detailBreadcrumbRow}>
           <TouchableOpacity
             style={styles.mockBackLink}
             onPress={backToQueue}
@@ -2088,7 +2279,7 @@ This still does not automatically create a Donation Campaign.`,
               Authorized LGU Review
             </Text>
           </View>
-        </View>
+        </View>}
 
         <View style={styles.detailHeaderCard}>
           <RequestReviewHeader request={selected} />
@@ -2096,25 +2287,25 @@ This still does not automatically create a Donation Campaign.`,
 
         <View style={styles.mockDetailTabs}>
           <ReviewTabButton
-            label="1. Request"
+            label="Summary"
             icon="document-text-outline"
             active={reviewTab === "case"}
             onPress={() => setReviewTab("case")}
           />
           <ReviewTabButton
-            label={`2. Documents (${selected.documents?.length || 0})`}
+            label={`Documents (${selected.documents?.length || 0})`}
             icon="images-outline"
             active={reviewTab === "evidence"}
             onPress={() => setReviewTab("evidence")}
           />
           <ReviewTabButton
-            label="3. Resident"
+            label="Resident"
             icon="person-outline"
             active={reviewTab === "resident"}
             onPress={() => setReviewTab("resident")}
           />
           <ReviewTabButton
-            label="4. Review & Decide"
+            label="Verify & Decide"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
             onPress={() => setReviewTab("decision")}
@@ -2124,279 +2315,172 @@ This still does not automatically create a Donation Campaign.`,
     );
   };
 
+  const categoryOptions = [
+    { value: "all", label: "All Types" },
+    { value: "disaster_recovery", label: "Disaster Recovery" },
+    { value: "medical_health", label: "Medical / Health" },
+    { value: "surgery_treatment", label: "Surgery / Treatment" },
+    { value: "cancer_serious_illness", label: "Serious Illness" },
+    { value: "animal_pet_welfare", label: "Animal / Pet Welfare" },
+    { value: "elderly_assistance", label: "Elderly Assistance" },
+    { value: "homeless_basic_needs", label: "Basic Needs" },
+    { value: "other_community_assistance", label: "Other Assistance" },
+  ];
+  const statusOptions = [
+    { value: "all", label: "All Statuses" },
+    { value: "pending", label: "Pending Review" },
+    { value: "under_review", label: "Under Review" },
+    { value: "verified", label: "Verified" },
+    { value: "rejected", label: "Rejected" },
+    { value: "completed", label: "Completed" },
+  ];
+  const sortingOptions = [
+    { value: "newest", label: "Newest First" },
+    { value: "oldest", label: "Oldest First" },
+    { value: "resident_az", label: "Resident A–Z" },
+    { value: "resident_za", label: "Resident Z–A" },
+    { value: "title_az", label: "Request A–Z" },
+    { value: "title_za", label: "Request Z–A" },
+  ];
+
+  const renderCompactQueue = () => (
+    <View style={styles.assistanceQueueCard}>
+      <View style={styles.assistanceQueueHeading}>
+        <Text style={styles.assistanceQueueTitle}>Requests ({filteredRequests.length})</Text>
+        {loadingRequests && <ActivityIndicator color="#047857" />}
+      </View>
+      <View style={styles.assistanceSearchField}>
+        <Ionicons name="search-outline" size={19} color="#64748B" />
+        <TextInput
+          value={search}
+          onChangeText={(value) => { setSearch(value); setRecordPage(1); }}
+          placeholder="Search request, resident, or reference no."
+          placeholderTextColor="#94A3B8"
+          style={styles.assistanceSearchText}
+        />
+        {!!search && (
+          <TouchableOpacity accessibilityLabel="Clear search" onPress={() => { setSearch(""); setRecordPage(1); }}>
+            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={styles.assistanceFilterRow}>
+        <ReviewPicker
+          label="Category"
+          value={categoryFilter}
+          options={categoryOptions}
+          onChange={(value) => { setCategoryFilter(value); setRecordPage(1); }}
+        />
+        <ReviewPicker
+          label="Status"
+          value={filter}
+          options={statusOptions}
+          onChange={(value) => { setFilter(value as ReviewFilter); setRecordPage(1); }}
+        />
+      </View>
+      <ReviewPicker
+        label="Sort"
+        value={sortOrder}
+        options={sortingOptions}
+        onChange={(value) => { setSortOrder(value as typeof sortOrder); setRecordPage(1); }}
+      />
+      {!!listenerError && (
+        <View style={styles.errorBox}>
+          <Ionicons name="alert-circle-outline" size={17} color="#B42318" />
+          <Text style={styles.errorText}>{listenerError}</Text>
+        </View>
+      )}
+      {!loadingRequests && pagedRequests.length === 0 && (
+        <View style={styles.assistanceEmptyQueue}>
+          <Ionicons name="file-tray-outline" size={30} color="#94A3B8" />
+          <Text style={styles.assistanceSubtext}>No requests match these filters.</Text>
+        </View>
+      )}
+      {pagedRequests.map((item) => (
+        <MockQueueRow
+          key={item.id}
+          request={item}
+          active={selected?.id === item.id}
+          onPress={() => selectRequest(item)}
+        />
+      ))}
+      <View style={styles.assistancePageControl}>
+        <ListPagination
+          page={activeRequestPage}
+          total={filteredRequests.length}
+          pageSize={5}
+          onChange={(page) => { setRecordPage(page); setQuickAction(null); }}
+        />
+      </View>
+      <Text style={styles.assistanceListFootnote}>Showing up to 5 requests per page</Text>
+    </View>
+  );
+
+  const renderSelectedWorkspace = () => !selected ? (
+    <View style={styles.assistanceNoSelection}>
+      <Ionicons name="document-text-outline" size={40} color="#94A3B8" />
+      <Text style={styles.assistanceSectionTitle}>Select an assistance request</Text>
+      <Text style={styles.assistanceSubtext}>
+        Choose a request from the list to see its details, documents, and LGU review.
+      </Text>
+    </View>
+  ) : (
+    <>
+      {renderDetailChrome()}
+      <ScrollView
+        key={selected.id + ":" + reviewTab}
+        style={styles.assistanceReviewScroll}
+        contentContainerStyle={styles.assistanceReviewContent}
+        showsVerticalScrollIndicator
+      >
+        {renderReviewMain()}
+      </ScrollView>
+    </>
+  );
+
   return (
     <View style={styles.page}>
-      {screenMode === "queue" ? (
-        <ScrollView
-          style={styles.pageScroll}
-          contentContainerStyle={styles.pageContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <>
-            <AdminReviewHero
-              eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
-              title="Assistance Requests"
-              subtitle="Review verified Resident requests for individual support, assess supporting evidence, and document the LGU decision. Incident emergencies belong under Emergency Reports; separate approved financial support is handled through Donations & Funds."
-              icon="hand-left-outline"
-              tag="RESIDENT ASSISTANCE"
-            />
-
-            <View style={styles.mockTopTabsRow}>
-              <MockStatusTab
-                label="Pending"
-                count={stats.pending}
-                active={filter === "pending"}
-                onPress={() => { setFilter("pending"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Under Review"
-                count={stats.underReview}
-                active={filter === "under_review"}
-                onPress={() => { setFilter("under_review"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Verified"
-                count={stats.verified}
-                active={filter === "verified"}
-                onPress={() => { setFilter("verified"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Rejected"
-                count={stats.rejected}
-                active={filter === "rejected"}
-                onPress={() => { setFilter("rejected"); setRecordPage(1); }}
-              />
-
-              <View style={styles.mockTopTabsSpacer} />
-
-              <TouchableOpacity
-                style={[
-                  styles.mockHistoryButton,
-                  filter === "completed" &&
-                    styles.mockHistoryButtonActive,
-                ]}
-                onPress={() => { setFilter("completed"); setRecordPage(1); }}
-              >
-                <Ionicons
-                  name="archive-outline"
-                  size={15}
-                  color={
-                    filter === "completed"
-                      ? "#2563EB"
-                      : "#64748B"
-                  }
-                />
-                <Text
-                  style={[
-                    styles.mockHistoryButtonText,
-                    filter === "completed" &&
-                      styles.mockHistoryButtonTextActive,
-                  ]}
-                >
-                  Completed
-                </Text>
-              </TouchableOpacity>
+      {wide ? (
+        <View style={styles.assistanceDesktop}>
+          <View style={styles.assistanceDesktopHeading}>
+            <View style={styles.assistanceHeadingIcon}>
+              <Ionicons name="heart-outline" size={24} color="#047857" />
             </View>
-
-            <View style={styles.mockSearchRow}>
-              <View style={styles.searchBox}>
-                <Ionicons
-                  name="search-outline"
-                  size={18}
-                  color="#64748B"
-                />
-                <TextInput
-                  value={search}
-                  onChangeText={value => { setSearch(value); setRecordPage(1); }}
-                  placeholder="Search request ID, Resident, beneficiary, barangay, or title"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.searchInput}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.mockAllButton,
-                  filter === "all" &&
-                    styles.mockAllButtonActive,
-                ]}
-                onPress={() => { setFilter("all"); setRecordPage(1); }}
-              >
-                <Text
-                  style={[
-                    styles.mockAllButtonText,
-                    filter === "all" &&
-                      styles.mockAllButtonTextActive,
-                  ]}
-                >
-                  All
-                </Text>
-              </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assistancePageHeading}>Assistance Requests</Text>
+              <Text style={styles.assistanceSubtext}>Review and verify assistance requests from residents.</Text>
             </View>
-
-            {!!listenerError && (
-              <View style={styles.errorBox}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={18}
-                  color="#B42318"
-                />
-                <Text style={styles.errorText}>
-                  {listenerError}
-                </Text>
-              </View>
-            )}
-
-            <ListPagination page={activeRequestPage} total={filteredRequests.length} pageSize={5} onChange={setRecordPage} />
-            <View style={styles.mockQueuePanel}>
-              <View style={styles.mockQueueHeader}>
-                <View>
-                  <Text style={styles.panelEyebrow}>
-                    REVIEW QUEUE
-                  </Text>
-                  <Text style={styles.panelTitle}>
-                    {filteredRequests.length} request
-                    {filteredRequests.length === 1
-                      ? ""
-                      : "s"}
-                  </Text>
-                </View>
-
-                {loadingRequests && (
-                  <ActivityIndicator
-                    color="#4F46E5"
-                  />
-                )}
-              </View>
-
-              {!loadingRequests &&
-              filteredRequests.length === 0 ? (
-                <View style={styles.mockQueueEmpty}>
-                  <Ionicons
-                    name="file-tray-outline"
-                    size={38}
-                    color="#94A3B8"
-                  />
-                  <Text style={styles.emptyTitle}>
-                    No requests in this status
-                  </Text>
-                  <Text style={styles.emptyText}>
-                    Valid new Request Assistance
-                    submissions will appear here for
-                    LGU review.
-                  </Text>
-                </View>
-              ) : (
-                pagedRequests.map((item) => (
-                  <MockQueueRow
-                    key={item.id}
-                    request={item}
-                    onPress={() =>
-                      selectRequest(item)
-                    }
-                  />
-                ))
-              )}
-            </View>
-          </>
-        </ScrollView>
-      ) : !selected ? (
-        <ScrollView
-          style={styles.pageScroll}
-          contentContainerStyle={styles.pageContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.mockQueueEmpty}>
-            <Ionicons
-              name="file-tray-outline"
-              size={38}
-              color="#94A3B8"
-            />
-            <Text style={styles.emptyTitle}>
-              Request no longer available
-            </Text>
-            <Text style={styles.emptyText}>
-              Return to Assistance Requests and
-              select another record.
-            </Text>
-            <TouchableOpacity
-              style={styles.mockBackPrimary}
-              onPress={backToQueue}
+          </View>
+          <View style={styles.assistanceSplitWorkspace}>
+            <ScrollView
+              style={styles.assistanceListPanel}
+              contentContainerStyle={styles.assistanceListContent}
+              showsVerticalScrollIndicator
             >
-              <Text
-                style={styles.mockBackPrimaryText}
-              >
-                Back to Assistance Requests
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      ) : wide ? (
-        <View style={styles.detailShell}>
-          <View style={styles.detailChrome}>
-            {renderDetailChrome()}
-          </View>
-
-          <View style={styles.detailWorkspace}>
-            <View style={styles.detailMainPane}>
-              <View style={styles.detailPaneHeader}>
-                <View style={styles.detailPaneHeaderIcon}>
-                  <Ionicons
-                    name={
-                      reviewTab === "case"
-                        ? "document-text-outline"
-                        : reviewTab === "evidence"
-                          ? "images-outline"
-                          : reviewTab === "resident"
-                            ? "person-outline"
-                            : "shield-checkmark-outline"
-                    }
-                    size={17}
-                    color="#4338CA"
-                  />
-                </View>
-                <View style={styles.detailPaneHeaderCopy}>
-                  <Text style={styles.detailPaneEyebrow}>
-                    REQUEST WORKSPACE
-                  </Text>
-                  <Text style={styles.detailPaneTitle}>
-                    {
-                      reviewTab === "case"
-                        ? "Case Details"
-                        : reviewTab === "evidence"
-                          ? "Supporting Documents"
-                          : reviewTab === "resident"
-                            ? "Resident Information"
-                            : "Review & Decision"
-                    }
-                  </Text>
-                </View>
-              </View>
-
-              <ScrollView
-                style={styles.detailMainScroll}
-                contentContainerStyle={styles.detailMainContent}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              >
-                {renderReviewMain()}
-              </ScrollView>
+              {renderCompactQueue()}
+            </ScrollView>
+            <View style={styles.assistanceSelectedPanel}>
+              {renderSelectedWorkspace()}
             </View>
-
           </View>
         </View>
-      ) : (
-        <ScrollView
-          style={styles.pageScroll}
-          contentContainerStyle={styles.pageContent}
-          showsVerticalScrollIndicator
-        >
-          {renderDetailChrome()}
-
-          <View style={styles.mobileDetailSection}>
-            {renderReviewMain()}
+      ) : screenMode === "queue" ? (
+        <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
+          <View style={styles.assistanceDesktopHeading}>
+            <View style={styles.assistanceHeadingIcon}>
+              <Ionicons name="heart-outline" size={22} color="#047857" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assistancePageHeading}>Assistance Requests</Text>
+              <Text style={styles.assistanceSubtext}>Review and verify requests from residents.</Text>
+            </View>
           </View>
-
+          {renderCompactQueue()}
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
+          {renderDetailChrome()}
+          {renderReviewMain()}
         </ScrollView>
       )}
 
@@ -2408,6 +2492,51 @@ This still does not automatically create a Donation Campaign.`,
         onClose={closeDocumentPreview}
         onOpenExternal={openExternalDocument}
       />
+    </View>
+  );
+}
+
+function ReviewPicker({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const selectedLabel = options.find((option) => option.value === value)?.label || label;
+  return (
+    <View style={styles.assistancePicker}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${selectedLabel}`}
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((open) => !open)}
+        style={styles.assistancePickerButton}
+      >
+        <Text numberOfLines={1} style={styles.assistancePickerValue}>{selectedLabel}</Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#475569" />
+      </TouchableOpacity>
+      {expanded && (
+        <View style={styles.assistancePickerChoices}>
+          {options.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: value === option.value }}
+              onPress={() => { onChange(option.value); setExpanded(false); }}
+              style={[styles.assistancePickerChoice, value === option.value && styles.assistancePickerChoiceSelected]}
+            >
+              <Text style={styles.assistancePickerChoiceText}>{option.label}</Text>
+              {value === option.value && <Ionicons name="checkmark" size={16} color="#047857" />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -2447,9 +2576,11 @@ function MockStatusTab({
 
 function MockQueueRow({
   request,
+  active = false,
   onPress,
 }: {
   request: AssistanceRequest;
+  active?: boolean;
   onPress: () => void;
 }) {
   const category = assistanceCategoryMeta(
@@ -2459,7 +2590,7 @@ function MockQueueRow({
 
   return (
     <TouchableOpacity
-      style={styles.mockQueueRow}
+      style={[styles.mockQueueRow, active && styles.mockQueueRowSelected]}
       onPress={onPress}
       activeOpacity={0.82}
     >
@@ -2723,136 +2854,18 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({
-  request,
-  relatedRequestCount,
-  sameBeneficiaryCount,
-}: {
-  request: AssistanceRequest;
-  relatedRequestCount: number;
-  sameBeneficiaryCount: number;
-}) {
+function CaseReviewTab({ request }: { request: AssistanceRequest }) {
   return (
     <View style={styles.tabContent}>
-      <SectionCard
-        title="Request Information"
-        subtitle="Resident-submitted non-emergency assistance details."
-        icon="document-text-outline"
-      >
+      <SectionCard title="Request Details" subtitle="Information submitted by the Resident." icon="document-text-outline">
         <InfoGrid>
-          <InfoItem
-            label="Category"
-            value={
-              request.categoryLabel ||
-              request.category ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Current Situation"
-            value={
-              request.currentSituation ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Estimated Need"
-            value={money(
-              request.estimatedAmount,
-            )}
-          />
-          <InfoItem
-            label="Submitted"
-            value={readableDate(
-              request.createdAt,
-            )}
-          />
+          <InfoItem label="Description" value={request.description || "No description provided"} />
+          <InfoItem label="Estimated Amount" value={money(request.estimatedAmount)} />
+          <InfoItem label="Assistance Type" value={request.categoryLabel || request.category || "Not recorded"} />
+          <InfoItem label="Date Requested" value={readableDate(request.createdAt)} />
+          <InfoItem label="Beneficiary" value={request.beneficiaryName || "Not recorded"} />
+          <InfoItem label="Current Situation" value={request.currentSituation || "Not recorded"} />
         </InfoGrid>
-
-        <Divider />
-
-        <LabelText>
-          Description
-        </LabelText>
-        <BodyText>
-          {request.description ||
-            "No description was recorded."}
-        </BodyText>
-
-      </SectionCard>
-
-      <SectionCard
-        title="Beneficiary Information"
-        subtitle="Confirm who will receive the assistance and the requester's relationship to the beneficiary."
-        icon="people-outline"
-      >
-        <InfoGrid>
-          <InfoItem
-            label="Beneficiary"
-            value={
-              request.beneficiaryName ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Beneficiary Type"
-            value={
-              request.beneficiaryType ===
-              "self"
-                ? "Requester / Self"
-                : "Someone Else"
-            }
-          />
-          <InfoItem
-            label="Relationship"
-            value={
-              request.relationshipToBeneficiary ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Contact"
-            value={
-              request.contactNumber ||
-              "Not recorded"
-            }
-          />
-        </InfoGrid>
-      </SectionCard>
-
-      <SectionCard
-        title="Initial Risk & Consistency Signals"
-        subtitle="These are review prompts only. They do not automatically approve or reject a request."
-        icon="alert-circle-outline"
-      >
-        <SignalRow
-          label="Other requests from same Resident"
-          value={String(
-            relatedRequestCount,
-          )}
-          attention={
-            relatedRequestCount > 0
-          }
-        />
-        <SignalRow
-          label="Other requests for same beneficiary name"
-          value={String(
-            sameBeneficiaryCount,
-          )}
-          attention={
-            sameBeneficiaryCount > 0
-          }
-        />
-        <SignalRow
-          label="Supporting files submitted"
-          value={String(
-            request.documents?.length ||
-              0,
-          )}
-          attention={
-            !request.documents?.length
-          }
-        />
       </SectionCard>
     </View>
   );
@@ -3262,6 +3275,7 @@ function DecisionTab({
   reviewDraft,
   reviewRecord,
   reviewLoading,
+  focusStage,
   onReviewChange,
   allChecksComplete,
   onSaveVerificationDraft,
@@ -3295,6 +3309,7 @@ function DecisionTab({
   reviewDraft: PrivateReviewDraft | null;
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
+  focusStage: ReviewStage | null;
   onReviewChange: <K extends keyof PrivateReviewDraft>(
     key: K,
     value: PrivateReviewDraft[K],
@@ -3341,6 +3356,10 @@ function DecisionTab({
       request.verificationStatus === "rejected" ? "decision" : "checks",
     );
   }, [request.id, request.verificationStatus]);
+
+  useEffect(() => {
+    if (focusStage) setReviewStage(focusStage);
+  }, [focusStage]);
 
   const reviewStages: { id: ReviewStage; label: string }[] = [
     { id: "checks", label: "1. Basic Checks" },
