@@ -18,6 +18,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Verify Assistance review flows and pagination
+        run: |
+          node scripts/test-simple-assistance-admin-review.cjs
+          node scripts/test-assistance-compact-review.cjs
+          node scripts/test-assistance-validation.cjs
+          node scripts/test-assistance-budget-ui.cjs
       - name: Compile TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Export web assets, without deploying
