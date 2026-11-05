@@ -1,0 +1,41 @@
+name: Read-only Existing VolunServe Storage Buckets and Firebase Config Audit
+on:
+  push:
+    branches: [audit/lgu-project-storage-buckets-readonly-20261106]
+    paths: [.github/workflows/read-only-project-storage-buckets-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read-only list bucket names (no objects, no data, no deployment)
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,urllib.error,urllib.parse
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          root='https://storage.googleapis.com/storage/v1/b?project=volunserve-3aa5b&fields=items(name,location),nextPageToken'
+          current='volunserve-3aa5b.firebasestorage.app'
+          buckets=[];page=''
+          while True:
+            url=root+('&pageToken='+urllib.parse.quote(page,safe='') if page else '')
+            req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+            try:
+              with urllib.request.urlopen(req,timeout=30) as resp:res=json.load(resp)
+            except urllib.error.HTTPError as err:
+              print('BUCKET_LIST_NOT_AVAILABLE_HTTP',err.code)
+              break
+            buckets.extend(item['name'] for item in res.get('items',[]))
+            page=res.get('nextPageToken','')
+            if not page:break
+          print('PROJECT_BUCKET_NAMES',json.dumps(buckets,sort_keys=True))
+          print('CONFIGURED_BUCKET_PRESENT',current in buckets)
+          print('READ_ONLY_DONE: no objects, metadata updates, Auth, Cloud Rules or Hosting changed')
+          PY
