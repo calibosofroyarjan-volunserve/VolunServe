@@ -23,13 +23,18 @@ for(const token of [
   "canReadAnnouncements = Boolean(user && isApprovedProfile(profile))",
   "if (sessionLoading) return;",
   "if (!canReadAnnouncements)",
-  "setInterval(() => setRefreshKey(value => value + 1), 30_000)",
-  'where("publishAt", "<=", Timestamp.now())',
-  'orderBy("publishAt", "desc")',
+  "setInterval(() => setNowMs(Date.now()), 30_000)",
+  'where("audience", "in", allowedAudiences)',
+  'const allowedAudiences = barangay ? ["all", barangay] : ["all"]',
+  'return published.sort((first, second) =>',
   'onPress={() => setRefreshKey(value => value + 1)}',
   "unsubscribe();",
   'code === "failed-precondition"',
   'audience === normalizedBarangay',
 ]) assert(feed.includes(token),"Missing Firestore feed safety: "+token);
 assert(root.includes("<AppDialogHost />"),"Branded dialog host must be present");
-console.log("PASS: guarded LGU publishing with cross-platform dialogs + draft retention, authenticated retryable feed, rotating published-only listener.");
+assert(!feed.includes('where("publishAt", "<=", Timestamp.now())'),
+  "Never restore the unscoped feed query denied by active Firestore Rules");
+assert(!feed.includes('orderBy("publishAt", "desc")'),
+  "Use one indexed audience query; no composite index dependency");
+console.log("PASS: guarded publisher dialogs + draft retention; authorized-audience realtime query, session wait and retry.");
