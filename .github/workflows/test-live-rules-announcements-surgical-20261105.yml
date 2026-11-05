@@ -41,39 +41,29 @@ jobs:
           if not candidates and len(ruleset.get('source',{}).get('files',[]))==1:candidates=ruleset['source']['files']
           if len(candidates)!=1:raise Exception('Unexpected live rules source')
           live=candidates[0]['content']
-          old="""      allow read: if isAdminOrSuperAdmin()
-                  || (
-                    approved()
-                    && resource.data.publishAt is timestamp
-                    && resource.data.publishAt <= request.time
-                  );"""
-          # Normalize indentation from the real source. No other rule is changed.
-          original="""      allow read: if isAdminOrSuperAdmin()
-                  || (
-                    approved()
-                    && resource.data.publishAt is timestamp
-                    && resource.data.publishAt <= request.time
-                  );"""
-          pattern="""      allow read: if isAdminOrSuperAdmin()
-                  || (
-          approved()
-          && resource.data.publishAt is timestamp
-          && resource.data.publishAt <= request.time
-                  );"""
-          replacement="""      // Explicit city-wide or own-barangay scope for all member reads.
-                function ownAnnouncementArea() {
-                  return resource.data.audience == 'all'
-          || resource.data.audience == profile().get('barangay', '');
-                }
-                allow get: if isAdminOrSuperAdmin()
-                  || (approved()
-          && ownAnnouncementArea()
-          && resource.data.publishAt is timestamp
-          && resource.data.publishAt <= request.time);
-                // Query authorization is audience-scoped; the query also constrains publishAt.
-                // Future-scheduled announcements require a separate published-state policy.
-                allow list: if isAdminOrSuperAdmin()
-                  || (approved() && ownAnnouncementArea());"""
+          pattern="\n".join([
+              "      allow read: if isAdminOrSuperAdmin()",
+              "        || (",
+              "          approved()",
+              "          && resource.data.publishAt is timestamp",
+              "          && resource.data.publishAt <= request.time",
+              "        );",
+          ])
+          replacement="\n".join([
+              "      // Explicit city-wide or own-barangay scope for all member reads.",
+              "      function ownAnnouncementArea() {",
+              "        return resource.data.audience == 'all'",
+              "          || resource.data.audience == profile().get('barangay', '');",
+              "      }",
+              "      allow get: if isAdminOrSuperAdmin()",
+              "        || (approved()",
+              "          && ownAnnouncementArea()",
+              "          && resource.data.publishAt is timestamp",
+              "          && resource.data.publishAt <= request.time);",
+              "      // Audience scope for collection queries; client additionally constrains publishAt.",
+              "      allow list: if isAdminOrSuperAdmin()",
+              "        || (approved() && ownAnnouncementArea());",
+          ])
           if live.count(pattern)!=1:raise Exception('STOP: Published announcement rule differs from expected. No changes attempted.')
           candidate=live.replace(pattern,replacement,1)
           before=live.split('match /announcements/{announcementId}')[0]
