@@ -206,3 +206,5 @@ jobs:
           fi
           python3 scripts/activate-lgu-announcements-rules-20261105.py rollback
           echo 'Guarded recovery attempted; inspect current live revision and Rules pointer.'
+
+# One-shot production release authorized: exact live base 905c0442; scoped Admin UI and one-time LGU area rules only.
