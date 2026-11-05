@@ -5159,8 +5159,12 @@ service cloud.firestore {
           );
       }
 
+      // Only the proposal owner (or an administrator) may read it.
+      // Reading one's own history must not depend on the current UI mode:
+      // the app can fall back to Resident mode if Volunteer access is revoked.
+      // Writes remain restricted by isResident() below.
       allow get, list: if isAdminOrSuperAdmin()
-        || (isResident()
+        || (hasResidentAccess()
           && resource.data.proposedBy == request.auth.uid);
 
       allow create: if isResident()
