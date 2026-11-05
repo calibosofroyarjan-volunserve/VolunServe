@@ -1,0 +1,149 @@
+name: Publish Super Admin Pending LGU Applications (Hosting Only)
+on:
+  push:
+    branches:
+      - release/pending-lgu-review-from-live-20261105
+    paths:
+      - .github/workflows/release-pending-lgu-review-20261105.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-deploy-pending-lgu-applications:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AUDITED_LIVE_SHA: 319acbe37db96e47350f346edf764f541edec1ff
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Check out exact audited release
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Fail closed on unrelated source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$AUDITED_LIVE_SHA^{commit}"
+          git diff --name-only "$AUDITED_LIVE_SHA" HEAD > /tmp/pending-ui-changed-files
+          cat /tmp/pending-ui-changed-files
+          test "$(wc -l < /tmp/pending-ui-changed-files)" -eq 3
+          grep -Fxq 'app/(superadmin)/admin-accounts.tsx' /tmp/pending-ui-changed-files
+          grep -Fxq 'app/(superadmin)/index.tsx' /tmp/pending-ui-changed-files
+          grep -Fxq '.github/workflows/release-pending-lgu-review-20261105.yml' /tmp/pending-ui-changed-files
+          echo "PASS: No Login, Signup, Resident, Volunteer, LGU Admin, Rules or Backend changes."
+
+      - name: Verify live production version still matches release base
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              signal: AbortSignal.timeout(15000),
+              headers: { accept:"application/json", "cache-control":"no-cache" }
+            });
+            if (!response.ok) throw Error("Live revision unavailable: refusing deployment");
+            const info = await response.json();
+            console.log("Live revision:", info.revision);
+            if (info.app !== "VolunServe" ||
+                info.firebaseProject !== "volunserve-3aa5b" ||
+                info.revision !== process.env.AUDITED_LIVE_SHA)
+              throw Error("Production version changed, stop without publishing.");
+            console.log("PASS: exact current live version is the release base");
+          })().catch(e => { console.error(e.message); process.exit(1); });
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate pending queue and LGU authorization requirements
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const fs = require("node:fs");
+          const accounts = fs.readFileSync("app/(superadmin)/admin-accounts.tsx","utf8");
+          const overview = fs.readFileSync("app/(superadmin)/index.tsx","utf8");
+          const form = fs.readFileSync("app/admin-request.tsx", "utf8");
+          for (const token of [
+            'role === "applicant" && account.status === "pending_review"',
+            "Pending LGU Admin Applications", "View Credentials",
+            "Verify & Review Access", 'openAdminAction("promote", account)',
+            "appointmentReference", "lguOffice", "lguPosition",
+            'sessionProfile.role === "superadmin"',
+            'batch.set(doc(db, "lguAdminCredentialReviews", account.id)',
+            "credentialsConfirmed && identityMatched && lguEmploymentConfirmed",
+            "<ListPagination", "pageSize={ADMIN_PAGE_SIZE}"
+          ]) assert(accounts.includes(token), "Missing credential review safeguard: " + token);
+          for (const token of [
+            "Pending LGU Applications",
+            'pending: accounts.filter(item => item.role === "applicant"',
+            "Review Applications",
+            'router.push("/(superadmin)/admin-accounts"'
+          ]) assert(overview.includes(token), "Missing pending LGU dashboard route: " + token);
+          assert(form.includes("appointmentReference:reference"), "Applicant source contract changed");
+          assert(!accounts.includes("account.password"), "Do not show passwords to Super Admin");
+          console.log("PASS: pending applications and submitted non-secret staff credentials are visible; role promotion still requires independent verification");
+          NODE
+          npx tsc --noEmit
+
+      - name: Production web export and Firebase Hosting output validation
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+
+      - name: Recheck production version immediately before publishing
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json",{
+              signal: AbortSignal.timeout(15000),
+              headers: { accept:"application/json", "cache-control":"no-cache" },
+            });
+            if (!response.ok) throw Error("Cannot verify current live version; stop.");
+            const data = await response.json();
+            if (data.revision !== process.env.AUDITED_LIVE_SHA) throw Error("Live Hosting changed during build; no publish.");
+            console.log("PASS: exact production baseline still matches");
+          })().catch(e=>{console.error(e.message);process.exit(1);});
+          NODE
+
+      - name: Require configured Firebase Hosting service account
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase Hosting credentials missing. No deploy attempted."
+            exit 1
+          fi
+
+      - name: Publish ONLY web assets to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+
+      - name: Verify live custom-domain release fingerprint
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Super Admin Pending LGU Applications review is verified live."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Publish attempted but custom domain revision not verified"
+          exit 1
