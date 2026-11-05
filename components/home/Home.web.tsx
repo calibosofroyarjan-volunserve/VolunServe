@@ -141,6 +141,7 @@ export default function WebHome() {
   const { user, profile } = useUserSession();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementsError, setAnnouncementsError] = useState(false);
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -213,9 +214,11 @@ export default function WebHome() {
           });
 
         setAnnouncements(nextAnnouncements);
+        setAnnouncementsError(false);
       },
       (error) => {
         console.error("Resident community announcements listener error:", error);
+        setAnnouncementsError(true);
         setAnnouncements([]);
       }
     );
@@ -523,7 +526,7 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                      {announcementsError ? "Unable to load community updates. Please refresh." : announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
                     </Text>
                     <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
                       <Text style={styles.mobileSlideActionText}>View announcements</Text>
@@ -926,10 +929,10 @@ export default function WebHome() {
                   </View>
                   <View style={styles.emptyUpdatesCopy}>
                     <Text style={styles.emptyUpdatesTitle}>
-                      No published updates
+                      {announcementsError ? "Unable to load updates" : "No published updates"}
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementsError ? "Please refresh or check your connection." : "Official announcements will appear here."}
                     </Text>
                   </View>
                 </View>
