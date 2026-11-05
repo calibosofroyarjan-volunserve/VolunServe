@@ -128,3 +128,5 @@ jobs:
 # User-authorized guarded retry with safe API status diagnostics and old-Ruleset rollback guard.
 
 # User-approved compact Rules-only security activation after passing full live-derived emulator validations.
+
+# Explicit user-authorized one-shot compact Notifications Rules-only security fix based on newest production Assistance release.
