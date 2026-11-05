@@ -360,6 +360,10 @@ export default function DisasterResponse() {
 
   const [incidentAddress, setIncidentAddress] =
     useState("");
+  const [addressFeedback, setAddressFeedback] =
+    useState("");
+  const addressRevision = useRef(0);
+  const lastAutoAddress = useRef("");
 
   const [pin, setPin] =
     useState<Pin | null>(null);
@@ -420,6 +424,16 @@ export default function DisasterResponse() {
       accuracy,
     };
 
+    // Reject stale address lookups when the pin changes or gets dragged.
+    const revision = ++addressRevision.current;
+    const previousAutoAddress = lastAutoAddress.current;
+    if (previousAutoAddress) {
+      setIncidentAddress((current) =>
+        current === previousAutoAddress ? "" : current
+      );
+      lastAutoAddress.current = "";
+    }
+    setAddressFeedback("");
     setPin(nextPin);
 
     if (center) {
@@ -433,6 +447,7 @@ export default function DisasterResponse() {
         350
       );
     }
+    return revision;
   };
 
   const useCurrentLocation = async () => {
@@ -457,11 +472,62 @@ export default function DisasterResponse() {
           accuracy: Location.Accuracy.High,
         });
 
-      setIncidentPin(
-        position.coords.latitude,
-        position.coords.longitude,
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const revision = setIncidentPin(
+        latitude,
+        longitude,
         position.coords.accuracy
       );
+
+      if (typeof revision === "number") {
+        // The resident explicitly requested the GPS point, so replace the
+        // previous address with an editable suggestion for this exact pin.
+        lastAutoAddress.current = "";
+        setIncidentAddress("");
+        setAddressFeedback("Finding nearby address from GPS...");
+
+        try {
+          const nearbyPlaces = await Location.reverseGeocodeAsync({
+            latitude,
+            longitude,
+          });
+          const place = nearbyPlaces[0];
+          if (!place) throw new Error("No address found");
+
+          const street = [place.streetNumber, place.street]
+            .filter(Boolean).join(" ").trim();
+          const area = place.district || place.subregion || place.name || "";
+          const formatted = String(place.formattedAddress || "").trim();
+          if (!street && !area && !formatted) {
+            throw new Error("No nearby area found");
+          }
+
+          const address = (street || area
+            ? Array.from(new Set([
+                street,
+                area,
+                place.city || "City of San Jose del Monte",
+                place.region || "Bulacan",
+              ].map((part) => String(part || "").trim()).filter(Boolean))).join(", ")
+            : formatted
+          ).slice(0, 240);
+
+          if (addressRevision.current === revision) {
+            lastAutoAddress.current = address;
+            setIncidentAddress(address);
+            setAddressFeedback(
+              "Nearby address filled from GPS. Verify or edit the barangay, house number, or landmark."
+            );
+          }
+        } catch {
+          if (addressRevision.current === revision) {
+            setAddressFeedback(
+              "GPS pin saved, but the address could not be identified. Please enter a barangay or landmark."
+            );
+          }
+        }
+      }
     } catch (error) {
       console.log(error);
 
@@ -764,6 +830,9 @@ export default function DisasterResponse() {
     setAssistanceTypes([]);
     setOtherAssistance("");
     setNeedsNote("");
+    addressRevision.current += 1;
+    lastAutoAddress.current = "";
+    setAddressFeedback("");
     setIncidentAddress("");
     setPin(null);
     setPhotos([]);
@@ -1782,14 +1851,21 @@ export default function DisasterResponse() {
               styles.multilineSmall,
             ]}
             value={incidentAddress}
-            onChangeText={
-              setIncidentAddress
-            }
-            placeholder="Example: Block 4, Brgy. Muzon, near..."
+            onChangeText={(value) => {
+              // Resident edits take priority over the GPS lookup.
+              addressRevision.current += 1;
+              lastAutoAddress.current = "";
+              setAddressFeedback("");
+              setIncidentAddress(value);
+            }}
+            placeholder="Use GPS to fill this, or enter a landmark"
             multiline
             maxLength={240}
             textAlignVertical="top"
           />
+          <Text style={styles.helper}>
+            {addressFeedback || "GPS suggests a nearby address, not necessarily the exact house or landmark. You can edit it."}
+          </Text>
         </View>
 
         <View style={styles.sectionCard}>
