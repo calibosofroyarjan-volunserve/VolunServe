@@ -96,4 +96,5 @@ jobs:
       - name: Verify original Admin publishing flow still passes
         run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
       - name: Explicitly confirm no production deployment was attempted
-        run: echo 'PASS: emulator only. LIVE Firebase Rules, Hosting, Auth, data, Functions unchanged.'
+        run: |
+          echo 'PASS: emulator only. LIVE Firebase Rules, Hosting, Auth, data, Functions unchanged.'
