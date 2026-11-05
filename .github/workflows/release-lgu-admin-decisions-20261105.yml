@@ -1,0 +1,252 @@
+name: RELEASE LGU Staff Super Admin Accept Reject - Rules and Hosting Only
+on:
+  push:
+    branches: [release/lgu-admin-decisions-live-20261105]
+    paths: [.github/workflows/release-lgu-admin-decisions-20261105.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  vetted-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      PROJECT: 'volunserve-3aa5b'
+      LIVE_BASE: '579bed559b1ba81e2045ba420847f8635e8f182c'
+      EXPECTED_LIVE_RULES_SHA: '67fb37a13603b172c9a9c8bea6037fb75243907dd8a98bd18d90466681816db0'
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify exact latest live base and unchanged resident volunteer Login Signup Admin and sensitive Storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/admin-request.tsx' 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(tabs)' 'lib/firebaseAuth.ts' 'storage.rules' 'firestore.rules' 'firebase.json' '.firebaserc' 'functions' 'backend'
+          echo "PASS: only Super Admin LGU review UI and testing scripts differ from current live source."
+
+      - name: Guard current production Hosting revision before any changes
+        run: VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Read and backup exact current production Firestore rules, without changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib,os
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+            req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          txt=max((f.get('content','') for f in get(base+release['rulesetName'])['source']['files']),key=len)
+          digest=hashlib.sha256(txt.encode()).hexdigest()
+          if digest!=os.environ['EXPECTED_LIVE_RULES_SHA']:raise SystemExit('BLOCKED: production Firestore security policy changed since audit')
+          with open('/tmp/volunserve-lgu-rules-backup.rules','w') as o:o.write(txt)
+          with open('/tmp/volunserve-lgu-original-ruleset-id','w') as o:o.write(release['rulesetName'])
+          print('PASS verified exact live Firestore rules fingerprint; in-run backup created')
+          print('Original ruleset:',release['rulesetName'])
+          PY
+
+      - name: Compose limited LGU staff rules on actual deployed Firestore rules - do not overwrite other permissions
+        run: |
+          node scripts/prepare-surgical-lgu-rules.cjs /tmp/volunserve-lgu-rules-backup.rules /tmp/volunserve-lgu-candidate.rules
+          cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+          sha256sum firestore.rules
+
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify TypeScript and all touched Signup Login Admin review contracts
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-superadmin-lgu-review-ui.cjs
+
+      - name: Verify applicant creates no privileges and Super Admin alone may Accept or Reject
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs"
+
+      - name: Export web including latest updated Super Admin and unchanged premium Signup Login
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+
+      - name: Require existing Hosting deployment credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase hosting credentials missing"; exit 1; fi
+
+      - name: Deploy isolated Hosting preview before touching production
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: lgu-accept-reject-1105
+          expires: 3d
+
+      - name: Verify preview code fingerprint and public Signup Login LGU application routes
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "PASS preview serves tested exact GitHub revision"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Preview failed fingerprint/route health checks; no production changes"
+          exit 1
+
+      - name: Chrome browser verifies LGU Application Signup and unified Login
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable)"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/lgu-accept-reject-cdp about:blank > /tmp/chrome-lgu-review.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-lgu-pending-browser.cjs "$PREVIEW_ORIGIN"
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+          node scripts/verify-premium-signup-browser.cjs "$PREVIEW_ORIGIN"
+
+      - name: Reconfirm exact rules and live Hosting; BACKUP current Hosting before promotion
+        id: backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib,os
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+            req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          txt=max((f.get('content','') for f in get(base+release['rulesetName'])['source']['files']),key=len)
+          if hashlib.sha256(txt.encode()).hexdigest()!=os.environ['EXPECTED_LIVE_RULES_SHA']:
+            raise SystemExit('BLOCKED: live rules changed before promotion; no production deployment')
+          print("PASS live Firestore ruleset is still the audited original.")
+          PY
+          npx firebase hosting:clone "$PROJECT:live" "$PROJECT:backup-lgu-accept-1105" --project "$PROJECT" --non-interactive
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          echo "Live Hosting backed up as backup-lgu-accept-1105." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy ONLY reviewed LGU Firestore security rules, no indexes Storage or data
+        id: rule_deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
+          echo "Firestore rules-only release attempted; verifying exact source next."
+
+      - name: Confirm published live Firestore rules exactly match surgical candidate
+        id: verify_rules
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+            req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          actual=max((f.get('content','') for f in get(base+release['rulesetName'])['source']['files']),key=len)
+          expected=open('/tmp/volunserve-lgu-candidate.rules').read()
+          if actual!=expected:raise SystemExit("BLOCKED: unexpected deployed Firestore Rules contents; no Hosting promotion")
+          print("PASS exact LGU scoped rules active in Firebase; unrelated rules preserved.")
+          PY
+
+      - name: Promote only verified Hosting preview (no other Firebase resources)
+        id: promote
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          npx firebase hosting:clone "$PROJECT:lgu-accept-reject-1105" "$PROJECT:live" --project "$PROJECT" --non-interactive
+
+      - name: Post-deploy verify production /login /signup /admin-request and release revision
+        id: postverify
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Unified Login, premium Signup, LGU applicant and Accept/Reject Super Admin release live."
+              echo "Production live revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "Firestore-only scoped review rule update; Storage, Functions, data and other modules untouched." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Production live Hosting did not verify; recovery step will check and safely roll back."
+          exit 1
+
+      - name: On failure attempt conservative Hosting and rules recovery only if our exact revision is live
+        if: failure() && steps.backup.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          echo "::warning::Release failed. Checking for safe recovery without overwriting newer changes."
+          if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+            npx firebase hosting:clone "$PROJECT:backup-lgu-accept-1105" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            echo "Recovered live Hosting from backup-lgu-accept-1105" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 - <<'PY'
+          import json,hashlib,subprocess,urllib.request,os
+          try:
+            token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+            def get(url):
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+            base='https://firebaserules.googleapis.com/v1/'
+            rel=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+            current=max((f.get('content','') for f in get(base+rel['rulesetName'])['source']['files']),key=len)
+            candidate=open('/tmp/volunserve-lgu-candidate.rules').read()
+            original=open('/tmp/volunserve-lgu-rules-backup.rules').read()
+            if current==candidate:
+              open('firestore.rules','w').write(original)
+              open('/tmp/safe-lgu-rule-recovery-eligible','w').write('yes')
+              print('Rollback eligible: our exact candidate is still deployed')
+            else:
+              print('No rule rollback: live rules differ, preserving another release')
+          except Exception as e:print('No rule rollback: could not verify latest state',str(e))
+          PY
+          if [ -f /tmp/safe-lgu-rule-recovery-eligible ]; then
+            npx firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive || true
+            echo "Attempted Firestore rules rollback to original audited live snapshot" >> "$GITHUB_STEP_SUMMARY"
+          fi
