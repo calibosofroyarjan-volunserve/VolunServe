@@ -19,6 +19,18 @@ export default function LguStaffApplication() {
   const [busy,setBusy]=useState(false);
   const [success,setSuccess]=useState(false);
   const [error,setError]=useState("");
+  const [staffIdImage,setStaffIdImage]=useState<LguProofImage|null>(null);
+  const [appointmentImage,setAppointmentImage]=useState<LguProofImage|null>(null);
+  const selectProof=async(kind:"staff-id"|"appointment-letter")=>{
+    if(busy)return;
+    try{
+      const image=await pickLguProofImage();
+      if(!image)return;
+      if(kind==="staff-id")setStaffIdImage(image);
+      else setAppointmentImage(image);
+      setError("");
+    }catch(error){setError(userFacingError(error,"Unable to read that image."));}
+  };
   const update=(key:keyof typeof form,value:string)=>setForm(old=>({...old,[key]:value}));
 
   const submit=async()=>{
@@ -36,7 +48,8 @@ export default function LguStaffApplication() {
       (office.length < 3 || office.length > 160 ? "Enter your official LGU office or department (3 to 160 characters)." : null) ||
       (position.length < 3 || position.length > 120 ? "Enter your LGU job position (3 to 120 characters)." : null) ||
       (reference.length < 5 || reference.length > 160 ? "Enter your valid appointment or employment reference (5 to 160 characters)." : null) ||
-      (!SJDM_BARANGAYS.includes(form.barangay) ? "Choose your valid San Jose del Monte barangay." : null);
+      (!SJDM_BARANGAYS.includes(form.barangay) ? "Choose your valid San Jose del Monte barangay." : null) ||
+      (!staffIdImage || !appointmentImage ? "Attach both your valid ID photo and an appointment/employment proof image." : null);
     if (fieldIssue) {
       setError(fieldIssue);
       return;
