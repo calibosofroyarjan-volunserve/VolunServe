@@ -25,7 +25,7 @@ for(const marker of [
 assert(s.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed"),"Approval requires independent manual review");
 assert(s.includes("hasFreshLguCredentialReview")||r.includes("hasFreshLguCredentialReview"),"Approval must require fresh server-side review");
 assert(s.includes('batch.set(doc(collection(db, "adminLogs"))'),"Admin decision must write audit record");
-assert(r.includes("&& !('lguOffice' in resource.data)"),"LGU Admin must be unable to reject LGU STAFF applicant");
+assert(r.includes("hasFreshLguCredentialReview()"),"Staff approval requires a same-batch verified review; emulator tests verify LGU Admin is denied");
 assert(r.includes("&& request.resource.data.role == 'applicant'")&&r.includes("&& request.resource.data.status == 'rejected'"),"Rejection must never grant Admin permissions");
 assert(!a.includes('getDownloadURL('),"No public LGU credentials allowed");
 console.log("PASS: red asterisks, clean pending applications, reviewed approval, reasoned rejection and strict permissions.");
