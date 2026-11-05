@@ -18,7 +18,7 @@ jobs:
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       PROJECT: volunserve-3aa5b
-      LIVE_BASE: e2f5017ed849869139010ba4d434a66daa447344
+      LIVE_BASE: fb08d8e0c669d0c93cf54c6e2ef14da3b43402e9
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-emergency-volunteer-prod.json
     steps:
@@ -51,8 +51,17 @@ jobs:
             'scripts/test-isolated-emergency-volunteer-release.cjs'
           ]);
           const files=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-change-list.txt','utf8').split('\n').filter(Boolean);
-          assert(files.length >= 10,'No Emergency feature patch');
-          for(const file of files)assert(allowed.has(file),'STOP: unrelated LIVE source modified '+file);
+          // This release changes only the Volunteer roster, its regression
+          // test, and this guarded workflow. Anything else must stop.
+          const expected=new Set([
+            '.github/workflows/release-emergency-volunteer-hosting-only-20261106.yml',
+            'app/(admin)/admin-cases.tsx',
+            'scripts/test-emergency-volunteer-live-20261106.cjs'
+          ]);
+          assert(files.length===expected.size,'STOP: unexpected file count compared with latest LIVE release');
+          for(const file of files){
+            assert(expected.has(file) && allowed.has(file),'STOP: unrelated LIVE source modified '+file);
+          }
           for(const path of ['firestore.rules','firebase.json','app/login.tsx','app/login.web.tsx','app/signup.tsx','app/signup.web.tsx','app/(superadmin)/index.tsx','app/(admin)/assistance-requests.tsx','app/(tabs)/notifications.tsx']){
             assert(!files.includes(path),'STOP: protected production file overwritten '+path);
           }
