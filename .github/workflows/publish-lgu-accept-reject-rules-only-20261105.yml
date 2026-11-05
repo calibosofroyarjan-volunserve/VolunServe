@@ -1,0 +1,146 @@
+name: Guarded LIVE LGU Accept Reject Firestore Rules ONLY (No Hosting)
+on:
+  push:
+    branches: [release/lgu-accept-reject-rules-only-20261105]
+    paths: [.github/workflows/publish-lgu-accept-reject-rules-only-20261105.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  publish-rules-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      GH_TOKEN: ${{ github.token }}
+      PROJECT: volunserve-3aa5b
+      TEST_RUN: 42028955016
+      TEST_SHA: 183379761d41d91d79131aee3da30c1869c6633a
+      OLD_RULESET: projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec
+      OLD_SHA: 600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584
+      NEW_RULESET: projects/volunserve-3aa5b/rulesets/7db0905c-1a5b-4987-a7f1-1fe9b0a9e7bc
+      NEW_SHA: ac8445bdb36d779a4b1d8ec2775200227ae8ee3656946753de74dfa61b592a17
+    steps:
+      - name: Require official green Firebase compilation and emulator test from pinned commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/actions/runs/'+process.env.TEST_RUN;
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}});
+            assert.ok(r.ok,'Missing previous release evidence');
+            const d=await r.json();
+            assert.equal(d.conclusion,'success','Test/compile run not green');
+            assert.equal(d.head_sha,process.env.TEST_SHA,'Tested source revision mismatch');
+            assert.equal(d.name,'Compile and Test LGU Accept Reject Against Exact Live Rules (NO DEPLOY)');
+            console.log('PASS reviewed emulator and immutable compilation evidence is pinned to exact tested source.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Extract exact already-tested source without legacy broken gitlink
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$TEST_SHA" \
+            -o "$RUNNER_TEMP/tested-lgu-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/tested-lgu-source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f scripts/prepare-live-lgu-rules-20261105.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Backup currently active immutable Ruleset and verify exact compiled replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,hashlib,subprocess,urllib.request
+          tok=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+tok})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          rel=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          assert rel['rulesetName']==os.environ['OLD_RULESET'],'BLOCKED: active Ruleset changed; preserve latest release'
+          old=get(os.environ['OLD_RULESET'])
+          new=get(os.environ['NEW_RULESET'])
+          assert len(old['source']['files'])==len(new['source']['files'])==1,'BLOCKED: unexpected rules file count'
+          a=old['source']['files'][0]['content'];b=new['source']['files'][0]['content']
+          sha=lambda v:hashlib.sha256(v.encode()).hexdigest()
+          assert sha(a)==os.environ['OLD_SHA'],'BLOCKED: live baseline hash changed'
+          assert sha(b)==os.environ['NEW_SHA'],'BLOCKED: compiled candidate content hash changed'
+          with open('/tmp/lgu-before.rules','w',encoding='utf8',newline='') as f:f.write(a)
+          with open('/tmp/lgu-compiled.rules','w',encoding='utf8',newline='') as f:f.write(b)
+          print('PASS live immutable backup retained at',os.environ['OLD_RULESET'])
+          print('PASS candidate already compiled by Firebase, no source or module rewrites')
+          PY
+          node scripts/prepare-live-lgu-rules-20261105.cjs /tmp/lgu-before.rules /tmp/lgu-prepared.rules
+          python3 - <<'PY'
+          import hashlib,os
+          with open('/tmp/lgu-prepared.rules',encoding='utf8',newline='') as f:prepared=f.read().replace('\r\n','\n')
+          with open('/tmp/lgu-compiled.rules',encoding='utf8',newline='') as f:compiled=f.read()
+          assert prepared==compiled,'BLOCKED: compiled Ruleset differs from isolated patch to present live Rules'
+          assert hashlib.sha256(compiled.encode()).hexdigest()==os.environ['NEW_SHA']
+          print('PASS reverse-diff verifies all unrelated live rules preserved byte-for-byte')
+          PY
+          cp /tmp/lgu-compiled.rules firestore.rules
+      - name: Install exact project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Re-run positive and negative Firebase emulator tests + announcement regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs"
+      - name: Activate only pinned existing Firestore rules release pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,urllib.request,urllib.error
+          BASE='https://firebaserules.googleapis.com/v1/'
+          release='projects/volunserve-3aa5b/releases/cloud.firestore'
+          tok=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def request(method,path,body=None):
+            headers={'Authorization':'Bearer '+tok}
+            data=None
+            if body is not None:
+              headers['Content-Type']='application/json'
+              data=json.dumps(body).encode()
+            req=urllib.request.Request(BASE+path,headers=headers,data=data,method=method)
+            with urllib.request.urlopen(req,timeout=35) as r:return json.load(r)
+          old=os.environ['OLD_RULESET'];new=os.environ['NEW_RULESET']
+          def state():
+            return request('GET',release)['rulesetName']
+          if state()!=old:
+            raise SystemExit('BLOCKED: another Cloud Rules release is active; no production changes')
+          try:
+            result=request('PATCH',release,{'release':{'name':release,'rulesetName':new},'updateMask':'rulesetName'})
+            assert result['rulesetName']==new,'PATCH did not acknowledge compiled Ruleset'
+            assert state()==new,'Production pointer mismatch after PATCH'
+            rule=request('GET',new)['source']['files'][0]['content']
+            assert hashlib.sha256(rule.encode()).hexdigest()==os.environ['NEW_SHA']
+            print('SUCCESS: exact compiled LGU Accept/Reject Ruleset active:',new)
+            print('Previous immutable rules remain available:',old)
+            print('NO Hosting, Login, Signup, Auth, Firestore user data, Functions, Storage or Render deployment')
+          except Exception:
+            # Roll back only if our exact new Ruleset is still the live pointer.
+            if state()==new:
+              request('PATCH',release,{'release':{'name':release,'rulesetName':old},'updateMask':'rulesetName'})
+              if state()!=old:raise RuntimeError('Rollback verification failed')
+              print('SAFE ROLLBACK verified to exact original Ruleset')
+            raise
+          PY
