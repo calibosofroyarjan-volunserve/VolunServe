@@ -35,4 +35,4 @@ jobs:
         run: |
           npm ci --prefix functions --no-audit --no-fund
           cd functions
-          npx eslint announcementNotifications.js announcementAudience.js
+          ESLINT_USE_FLAT_CONFIG=false npx eslint --config .eslintrc.js announcementNotifications.js announcementAudience.js
