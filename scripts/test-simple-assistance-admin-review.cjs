@@ -24,7 +24,7 @@ for (const [label, value] of Object.entries({
   "verify button": 'label="Verify Request"',
   "more info action": "Ask for more information",
   "reject action": 'label="Reject Request"',
-  "extra checks intentionally hidden": "Other checks (only when needed)",
+  "extra checks intentionally hidden": "Special case details (only if needed)",
   "visual error messaging": "ReviewValidationHint",
   "residency evidence": "What proof confirmed the address?",
   "backend review precondition": "Begin Review",
@@ -44,7 +44,7 @@ assert(!ui.includes('label="Save Review"'), "No redundant Save button in main re
 assert(ui.includes('variant="danger"'), "Reject action must have red danger styling");
 assert(ui.includes('onPress={() => setAction((current) => current === "reject" ? null : "reject")}'), "Reject button must reveal the required reason without immediately rejecting");
 assert(ui.includes('onPress={action==="reject"?onReject:onMoreInfo}'), "Confirmation must call original reject action");
-assert(ui.includes("To publish a donation campaign, complete Donation Support separately after verification."), "Verify must not falsely promise automatic public publishing");
+assert(ui.includes("Campaign publishing is still a separate confirmation."), "Verify must not falsely promise automatic public publishing");
 assert(src.includes('backgroundColor: "#B42318"') && src.includes('textColor: "#FFFFFF"'), "Danger buttons should be visibly red with white labels");
 assert(!route.includes("onSave={saveVerificationDraft}"), "Compact review must submit through decisions, not an extra save action");
 const dropdowns = ui.split("<CompactReviewSelect").length - 1;
