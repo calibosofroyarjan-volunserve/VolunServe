@@ -1,0 +1,45 @@
+name: Inspect Unified Login Preview DOM (Read Only)
+on:
+  push:
+    branches:
+      - review/unified-login-roles-20261105
+    paths:
+      - .github/workflows/inspect-unified-login-dom-20261105.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inspect public preview HTML and browser hydration - no Firebase deploy
+        env:
+          ORIGIN: https://volunserve-3aa5b--unified-login-1105-us83azmw.web.app
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async()=>{
+            for(const p of ['/volunserve-release.json','/login','/admin-login']){
+              const r=await fetch(process.env.ORIGIN+p,{signal:AbortSignal.timeout(15000)});
+              const s=await r.text();
+              console.log('FETCH',p,r.status,r.headers.get('content-type'),s.length,s.slice(0,200).replace(/\n/g,' '));
+              if(p==='/login'){
+                const scripts=[...s.matchAll(/<script[^>]*src="([^"]+)"/gi)].map(m=>m[1]);
+                console.log('SCRIPTS',scripts);
+                for(const path of scripts.slice(0,2)){
+                  const asset=await fetch(new URL(path,process.env.ORIGIN));
+                  const js=await asset.text();
+                  console.log('JS_ASSET',path,asset.status,js.length,'contains VolunServe Login',js.includes('VolunServe Login'));
+                }
+              }
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          echo "Chrome binary: $CHROME"
+          for attempt in 1 2; do
+            timeout 90s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --virtual-time-budget=25000 --dump-dom "$ORIGIN/login?inspect=$attempt" > "/tmp/page-$attempt.html" 2> "/tmp/chrome-$attempt.log" || true
+            echo "Attempt $attempt DOM bytes $(wc -c < /tmp/page-$attempt.html)"
+            node -e 'const fs=require("fs"); const s=fs.readFileSync(process.argv[1],"utf8"); console.log("MARKERS",JSON.stringify({unified:s.includes("VolunServe Login"),request:s.includes("Request Admin Access"),legacy:s.includes("Residents & Volunteers"),html:s.includes("<html"),root:s.includes("id=\"root\""),loading:s.includes("Loading"),error:s.includes("Application error") })); console.log("DOM HEAD",s.slice(0,2200)); console.log("DOM TAIL",s.slice(-2200));' "/tmp/page-$attempt.html"
+            echo "Chrome stderr tail"; tail -n 25 "/tmp/chrome-$attempt.log" || true
+          done
