@@ -13,14 +13,11 @@ export async function authenticateEmailSignup(email: string, password: string, r
   if (resumeOnly) {
     user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
   } else {
-    try {
-      user = (await createUserWithEmailAndPassword(auth, normalized, password)).user;
-    } catch (error) {
-      if ((error as {code?: string}).code !== "auth/email-already-in-use") throw error;
-      // Possession of the SAME password is required to resume an existing Auth UID.
-      // Never create a second UID, reset credentials, or overwrite an existing profile.
-      user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
-    }
+    // A new registration must never silently sign in an existing account.
+    // Let auth/email-already-in-use reach the signup screen so it can show
+    // the existing-account message without navigating away.
+    // Only the explicit Resume Registration action can sign in a pending UID.
+    user = (await createUserWithEmailAndPassword(auth, normalized, password)).user;
   }
   if (auth.currentUser?.uid !== user.uid || user.email?.toLowerCase() !== normalized) {
     throw new Error("Your registration session changed. Sign in again to resume.");
