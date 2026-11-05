@@ -88,7 +88,7 @@ jobs:
           assert(m.candidateSha&&m.candidateSha!==m.originalSha);
           console.log('PASS only notification recipient allow read/update clause changed in candidate');
           NODE
-      - name: Firebase local emulator: recipients can ONLY mark their own notifications read
+      - name: "Firebase local emulator - recipients can ONLY mark their own notifications read"
         env:
           LIVE_NOTIFICATION_RULES_FILE: firestore.rules
         run: |
