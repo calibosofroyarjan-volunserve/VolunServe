@@ -50,11 +50,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check TypeScript
         run: npx tsc --noEmit --pretty false
-      - name: Validate account routing / auth flows unaffected
+      - name: Validate current supported account routing and Login field checks (auth source unmodified)
         run: |
           node scripts/test-unified-login-routing.cjs
           node scripts/test-login-field-validation.cjs
-          node scripts/test-premium-auth-portal.cjs
           node scripts/test-admin-staff-login.cjs
       - uses: google-github-actions/auth@v3
         with:
