@@ -1,4 +1,4 @@
-name: Read-only Audit: Live Notification Click Routes and Read State
+name: "Read-only Audit - Live Notification Click Routes and Read State"
 on:
   push:
     branches: [audit/notifications-live-click-read-20261106]
