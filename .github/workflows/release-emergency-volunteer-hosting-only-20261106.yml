@@ -130,7 +130,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+          # check-both-live.cjs already verified both domains above. Preserve
+          # prior Firebase Hosting version before any deployment; do not reference
+          # a temporary script that was never created in this job.
           cat > "$RUNNER_TEMP/emergency-volunteer-hosting-api.cjs" <<'NODE'
           const fs=require('node:fs');
           const crypto=require('node:crypto');
