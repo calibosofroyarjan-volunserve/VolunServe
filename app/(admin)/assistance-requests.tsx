@@ -2244,6 +2244,7 @@ This still does not automatically create a Donation Campaign.`,
     if (!selected) return null;
     if (simpleReviewMode && !["verified","rejected"].includes(String(selected.verificationStatus || ""))) {
       return <CompactAssistanceReview
+        key={selected.id}
         request={selected} reviewDraft={reviewDraft} reviewRecord={verificationReview}
         reviewLoading={verificationReviewLoading} validationIntent={validationIntent}
         reasonAttempt={reasonAttempt} adminNote={adminNote} setAdminNote={setAdminNote}
