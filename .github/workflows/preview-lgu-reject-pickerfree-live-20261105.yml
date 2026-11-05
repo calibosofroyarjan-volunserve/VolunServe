@@ -1,0 +1,100 @@
+name: Preview LGU Reject UI on Current Picker-Free LIVE Source (NO PRODUCTION DEPLOY)
+on:
+  push:
+    branches: [preview/lgu-reject-pickerfree-live-20261105]
+    paths: [.github/workflows/preview-lgu-reject-pickerfree-live-20261105.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-lgu-reject-preview-20261105
+  cancel-in-progress: false
+jobs:
+  stage-preview-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      TESTED_UI_SHA: b9ce5ba6d8c473664dc58fdf523de65b2c53f930
+      UI_VALIDATION_RUN: 42058960073
+      SOURCE_LIVE_SHA: 32fcbfad3582922dd7988359d59b2e7e587fc442
+      PROJECT: volunserve-3aa5b
+    steps:
+      - name: Require pinned fully green UI build and exact source
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const api='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY;
+            const headers={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'};
+            let response=await fetch(api+'/actions/runs/'+process.env.UI_VALIDATION_RUN,{headers});
+            assert.ok(response.ok,'UI CI evidence unavailable');
+            const run=await response.json();
+            assert.equal(run.head_sha,process.env.TESTED_UI_SHA);
+            assert.equal(run.conclusion,'success');
+            response=await fetch(api+'/compare/'+process.env.SOURCE_LIVE_SHA+'...'+process.env.TESTED_UI_SHA,{headers});
+            assert.ok(response.ok,'Base diff unavailable');
+            const diff=await response.json();
+            assert.equal(diff.status,'ahead');
+            const modified=(diff.files||[]).filter(f=>f.filename.startsWith('app/')||f.filename.startsWith('components/')||f.filename.startsWith('lib/')||f.filename==='firestore.rules'||f.filename==='storage.rules'||f.filename==='firebase.json'||f.filename==='package.json');
+            assert.deepEqual(modified.map(f=>f.filename),['app/(superadmin)/admin-accounts.tsx']);
+            console.log('PASS only Admin Accounts review UI changed; old Login, Signup and all other app sources identical to verified live base.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Download exact tested source as GitHub tarball
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$TESTED_UI_SHA" \
+            -o "$RUNNER_TEMP/lgu-tested-ui.tar.gz"
+          tar -xzf "$RUNNER_TEMP/lgu-tested-ui.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - name: Build exact tested web app and set correct source fingerprint
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npx expo export --platform web --output-dir dist
+          GITHUB_SHA="$TESTED_UI_SHA" node scripts/verify-hosting-release.cjs
+      - name: Stage only Firebase Hosting preview channel, never production
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:channel:deploy lgu-reject-pickerfree-safe \
+            --project "$PROJECT" --expires 3d --non-interactive --json \
+            > "$RUNNER_TEMP/lgu-preview-result.json"
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const raw=fs.readFileSync(process.env.RUNNER_TEMP+'/lgu-preview-result.json','utf8');
+          const obj=JSON.parse(raw);
+          assert.equal(obj.status,'success','Hosting preview not confirmed');
+          const urls=[];
+          const scan=(value,key='')=>{
+            if(typeof value==='string' && value.startsWith('https://') && value.includes('web.app')) urls.push(value);
+            else if(value && typeof value==='object') for(const [k,v] of Object.entries(value)) scan(v,k);
+          };
+          scan(obj);
+          const url=urls.find(u=>u.includes('lgu-reject-pickerfree-safe'))||urls[0];
+          console.log('Firebase preview response keys:',Object.keys(obj), 'nested keys:',Object.keys(obj.result||{}));
+          assert.ok(url,'No preview web.app URL in Firebase response');
+          console.log('LGU_PREVIEW_URL',url);
+          fs.writeFileSync('/tmp/lgu-preview-url',url);
+          NODE
+      - name: Verify preview public routes and exact tested release marker
+        run: |
+          set -euo pipefail
+          PREVIEW_URL="$(cat /tmp/lgu-preview-url)"
+          VOLUNSERVE_HOSTING_URL="$PREVIEW_URL" VOLUNSERVE_EXPECTED_SHA="$TESTED_UI_SHA" node scripts/check-live-hosting.cjs
+          echo "PASS only preview channel updated. Production Hosting, Rules, Login, Signup, and all data unchanged."
