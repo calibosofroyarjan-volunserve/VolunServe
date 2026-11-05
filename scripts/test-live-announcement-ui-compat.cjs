@@ -1,7 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
-const {initializeTestEnvironment,assertSucceeds}=require("@firebase/rules-unit-testing");
+const {initializeTestEnvironment,assertFails,assertSucceeds}=require("@firebase/rules-unit-testing");
 const firebase=require("firebase/compat/app");
 require("firebase/compat/firestore");
 
@@ -43,10 +43,14 @@ const notice=(audience)=>({
    ]);
    assert.deepEqual(local.docs.map(d=>d.id),["muzon"]);
    assert.deepEqual(citywide.docs.map(d=>d.id),["citywide"]);
-   await assertSucceeds(db.collection("announcements")
+   // The old broad collection query was already permission-denied on the
+   // old live Ruleset. The repaired policy intentionally requires audience.
+   await assertFails(db.collection("announcements")
       .where("publishAt","<=",now)
       .orderBy("publishAt","desc").get());
-   console.log("PASS: exact live Ruleset permits newly scoped notices and previous client queries");
-   console.log("NOTICE: existing live Ruleset does not enforce cross-barangay server-side access.");
+   await assertFails(published("Tungko").get());
+   await assertFails(db.doc("announcements/tungko").get());
+   console.log("PASS: active live Rules allow own barangay + city-wide only");
+   console.log("PASS: cross-barangay and unscoped reads denied at server");
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
