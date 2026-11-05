@@ -1,0 +1,119 @@
+name: Validate Clickable Polished Notifications (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/notifications-clickable-polish-live-20261106]
+permissions:
+  contents: read
+concurrency:
+  group: validate-clickable-notifications-20261106
+  cancel-in-progress: true
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "473e824f7b941fffcaea631d5f0d4beb5d83ac85"
+      EXPECTED_RULESET: "projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
+      EXPECTED_RULES_SHA: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: LIVE ancestor and no protected-source edits
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'), assert=require('node:assert/strict');
+          const names=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const allow=new Set([
+            'app/(tabs)/notifications.tsx',
+            'scripts/test-notification-clickthrough-polish-20261106.cjs',
+            'scripts/test-notifications-private-emulator-20261106.cjs',
+            '.github/workflows/validate-notifications-clickable-20261106.yml',
+            '.github/workflows/release-notifications-clickable-20261106.yml'
+          ]);
+          assert.deepEqual(names.filter(x=>!allow.has(x)),[],'STOP non-notification files changed');
+          assert(names.includes('app/(tabs)/notifications.tsx'));
+          console.log('PASS exact live base, only notifications UI and tests/release workflows. Super Admin, Signup, Login, LGU Admin, and all other modules untouched.');
+          NODE
+      - name: Check current live Hosting revision, both domains, read-only
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const response=await fetch(origin+'/volunserve-release.json?pre_notification_1106='+Date.now(),
+                {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!response.ok)throw Error('STOP live revision unavailable '+origin);
+              const data=await response.json();
+              if(data.revision!==process.env.LIVE_BASE)
+                throw Error('STOP newer live deployment is active '+origin+' '+data.revision);
+              console.log('PASS current production Hosting '+origin+' '+data.revision);
+            }
+          })().catch(error=>{console.error(error);process.exit(1)});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, actual clickthrough cases, auth and signup regressions
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read ONLY active published Cloud Firestore rules and verify SHA
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,subprocess,os,urllib.request
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          if release.get('rulesetName')!=os.environ['EXPECTED_RULESET']:raise SystemExit('STOP active rules changed')
+          files=get(release['rulesetName']).get('source',{}).get('files',[])
+          candidates=[f for f in files if f.get('name','').endswith('firestore.rules')]
+          if not candidates and len(files)==1:candidates=files
+          if len(candidates)!=1:raise SystemExit('STOP ambiguous current Rules source')
+          source=candidates[0]['content']
+          if hashlib.sha256(source.encode('utf8')).hexdigest()!=os.environ['EXPECTED_RULES_SHA']:
+            raise SystemExit('STOP live Rules source fingerprint mismatch')
+          with open('live-notifications.rules','w',encoding='utf8') as f:f.write(source)
+          print('PASS exact active Ruleset and source; no production writes')
+          PY
+      - name: Emulator-only notification ownership, private query and mark-read test
+        run: LIVE_NOTIFICATION_RULES_FILE=live-notifications.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
+      - name: Fresh web build with exact SHA, NO DEPLOY
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const data=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(data.revision,process.env.GITHUB_SHA);
+          console.log('PASS clean notification UI build from exact tested commit');
+          NODE
+      - name: Read-only completion marker
+        run: |
+          echo 'Validated UI and real Firestore permissions in emulator. NO production Hosting/Rules/Auth/Functions/Storage/User changes.'
