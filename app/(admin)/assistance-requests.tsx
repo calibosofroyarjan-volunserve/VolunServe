@@ -601,6 +601,7 @@ const assistanceCategoryMeta = (
 };
 
 export default function AssistanceRequestsAdmin() {
+  const router = useRouter();
   const {
     loading: sessionLoading,
     user,
@@ -1373,14 +1374,15 @@ export default function AssistanceRequestsAdmin() {
   const updateRequest = async (
     actionKey: string,
     values: Record<string, any>,
-  ) => {
+    quiet = false,
+  ): Promise<boolean> => {
     if (
       !selected ||
       !user ||
       !isOperationalAdmin ||
       savingAction
     ) {
-      return;
+      return false;
     }
 
     try {
@@ -1466,16 +1468,19 @@ export default function AssistanceRequestsAdmin() {
         successMessages[actionKey] ||
         "Assistance Request update has been saved.";
 
-      if (Platform.OS === "web") {
-        const browserAlert = (globalThis as any).alert;
-        if (typeof browserAlert === "function") {
-          browserAlert(message);
+      if (!quiet) {
+        if (Platform.OS === "web") {
+          const browserAlert = (globalThis as any).alert;
+          if (typeof browserAlert === "function") {
+            browserAlert(message);
+          } else {
+            Alert.alert("Saved", message);
+          }
         } else {
           Alert.alert("Saved", message);
         }
-      } else {
-        Alert.alert("Saved", message);
       }
+      return true;
     } catch (error: any) {
       console.error(
         "assistance request operation error",
@@ -1498,9 +1503,72 @@ export default function AssistanceRequestsAdmin() {
       } else {
         Alert.alert("Update Failed", message);
       }
+      return false;
     } finally {
       setSavingAction("");
     }
+  };
+
+  const continueToDonationCampaign = async (
+    publicOfficeName: string,
+    publicOfficeAddress: string,
+  ): Promise<boolean> => {
+    if (!selected || selected.verificationStatus !== "verified" || !verificationReview) {
+      Alert.alert("Review first", "This request must be verified before setting up donations.");
+      return false;
+    }
+    if (selected.donationCampaignId) {
+      router.push({ pathname: "/donation-list", params: { assistanceRequestId: selected.id } } as any);
+      return true;
+    }
+    const verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
+    if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
+      Alert.alert("Amount needs checking", "This request has no verified unpaid amount. Review the official bill and recorded assistance before creating a donation campaign.");
+      return false;
+    }
+    const savedPlace = String(selected.assignedLocationName || "").trim();
+    const savedAddress = String(selected.assignedLocationAddress || "").trim();
+    if (!savedPlace || !savedAddress) {
+      const locIssue = validateAssistanceLocation(
+        locationType || "lgu_office",
+        publicOfficeName,
+        publicOfficeAddress,
+      );
+      if (locIssue.length) {
+        Alert.alert("Public office details needed", "Enter the official LGU office or partner location and its public address. Do not enter the resident's home.");
+        return false;
+      }
+      const saved = await updateRequest(
+        "save_location",
+        {
+          assignedLocationType: locationType || "lgu_office",
+          assignedLocationName: publicOfficeName.trim(),
+          assignedLocationAddress: publicOfficeAddress.trim(),
+          assignedLocationNotes: "",
+        },
+        true,
+      );
+      if (!saved) return false;
+    }
+    const supportAlreadySaved =
+      selected.supportDecision === "donation_support" &&
+      Number(selected.remainingAmount || 0) === verifiedAmount;
+    if (!supportAlreadySaved) {
+      const supportSaved = await updateRequest(
+        "resource_assessment",
+        { supportDecision: "donation_support", remainingAmount: verifiedAmount },
+        true,
+      );
+      if (!supportSaved) return false;
+    }
+    router.push({ pathname: "/donation-list", params: { assistanceRequestId: selected.id } } as any);
+    return true;
+  };
+
+  const saveSimpleSupportChoice = async (choice: string): Promise<boolean> => {
+    if (!selected || selected.verificationStatus !== "verified" ||
+        !["internal_support", "not_required"].includes(choice)) return false;
+    return updateRequest("resource_assessment", { supportDecision: choice, remainingAmount: 0 });
   };
 
   const startReview = () => {
@@ -2242,6 +2310,25 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderDecisionRail = () => {
     if (!selected) return null;
+    if (selected.verificationStatus === "verified") {
+      return <CompactVerifiedAssistance
+        key={selected.id}
+        request={selected}
+        reviewRecord={verificationReview}
+        reviewLoading={verificationReviewLoading}
+        publicOfficeName={locationName}
+        setPublicOfficeName={setLocationName}
+        publicOfficeAddress={locationAddress}
+        setPublicOfficeAddress={setLocationAddress}
+        savingAction={savingAction}
+        onDonation={continueToDonationCampaign}
+        onSaveOtherSupport={saveSimpleSupportChoice}
+        onOpenCampaign={() => router.push({
+          pathname: "/donation-list",
+          params: { assistanceRequestId: selected.id },
+        } as any)}
+      />;
+    }
     if (simpleReviewMode && !["verified","rejected"].includes(String(selected.verificationStatus || ""))) {
       return <CompactAssistanceReview
         key={selected.id}
