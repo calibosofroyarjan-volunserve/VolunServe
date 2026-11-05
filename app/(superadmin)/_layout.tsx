@@ -27,6 +27,7 @@ import {
   logoutUser,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { userFacingError } from "../../lib/userFacingError";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -121,7 +122,7 @@ export default function SuperAdminLayout() {
     } catch (error: any) {
       Alert.alert(
         "Sign Out Failed",
-        error?.message || "Unable to sign out. Please try again."
+        userFacingError(error, "Unable to sign out. Please try again.")
       );
     }
   };
