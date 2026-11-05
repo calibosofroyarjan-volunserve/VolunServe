@@ -123,3 +123,5 @@ jobs:
 # One-shot user-approved notification content-integrity hardening, tested against exact published Firestore Rules.
 
 # One-shot retry using supported Firebase CLI rules-only deployment after successful emulator validation.
+
+# User-authorized guarded retry with safe API status diagnostics and old-Ruleset rollback guard.
