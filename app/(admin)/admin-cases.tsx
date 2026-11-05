@@ -2112,7 +2112,7 @@ export default function AdminCases() {
       Alert.alert(
         "Case Updated",
         nextStatus === "in_progress"
-          ? "LGU response is now marked In Progress. Volunteer support remains optional."
+          ? "Emergency response is now marked In Progress."
           : `Status changed to ${labelOfStatus(nextStatus)}.`
       );
     } catch (error) {
@@ -2459,7 +2459,7 @@ export default function AdminCases() {
 
     if (!["in_progress", "resolved"].includes(incident.status)) {
       Alert.alert(
-        "Start LGU Response First",
+        "Start Response First",
         "Start the LGU response before creating a relief assessment."
       );
       return;
@@ -3216,8 +3216,8 @@ export default function AdminCases() {
             caseId: incident.id,
             volunteerId: volunteer.uid,
             volunteerName: volunteer.fullName,
-            title: "Optional Volunteer Support Offered",
-            message: `LGU/Admin offered ${volunteer.fullName} as optional Volunteer support for your emergency. The Volunteer must accept before support becomes active or appears on live tracking.`,
+            title: "Volunteer Assignment Offered",
+            message: `Admin offered ${volunteer.fullName} an emergency assignment. Tracking begins after Volunteer acceptance and active GPS sharing.`,
             read: false,
             createdAt: serverTimestamp(),
           });
@@ -3234,8 +3234,8 @@ export default function AdminCases() {
       });
 
       Alert.alert(
-        "Volunteer Support Offered",
-        `${volunteer.fullName} received an optional Volunteer support offer. LGU remains the official primary responder, and the Volunteer appears on Resident tracking only after accepting.`
+        "Volunteer Assignment Offered",
+        `${volunteer.fullName} received an optional Volunteer support offer. Resident tracking starts only after Volunteer acceptance and active GPS sharing.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);
@@ -3899,16 +3899,7 @@ export default function AdminCases() {
                       </Text>
                     </View>
 
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>LGU LIVE OWNER</Text>
-                      <Text style={styles.metaValue}>
-                        {incident.activeLguResponderUid
-                          ? lguOwnerFresh
-                            ? incident.activeLguResponderName || "Active LGU responder"
-                            : "Takeover available · previous session stale"
-                          : "Available"}
-                      </Text>
-                    </View>
+
                   </View>
                 </View>
               </View>
@@ -4483,28 +4474,7 @@ export default function AdminCases() {
                   </View>
 
                   <View style={styles.responseActionGrid}>
-                    <TouchableOpacity
-                      disabled={lguFieldReviewPending}
-                      style={[
-                        styles.assignLguButton,
-                        lguFieldReviewPending && styles.disabledButton,
-                      ]}
-                      onPress={() => setDetailTab("personnel")}
-                    >
-                      <Text style={styles.assignLguButtonIcon}>♙</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.assignLguButtonTitle}>
-                          {lguFieldReviewPending
-                            ? "Review LGU Report First"
-                            : "Assign LGU Personnel"}
-                        </Text>
-                        <Text style={styles.assignLguButtonSub}>
-                          {lguFieldReviewPending
-                            ? "Official field response completed and is awaiting Admin review"
-                            : "View official responder / attendance status"}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
+
 
                     <TouchableOpacity
                       style={[
@@ -4519,11 +4489,9 @@ export default function AdminCases() {
                       }}
                     >
                       <Text style={styles.supportButtonTitle}>
-                        {assignmentPanelOpen
-                          ? "Hide Volunteer Support"
-                          : activeAssignments.length > 0
-                            ? "View Volunteer Support"
-                            : "Request Volunteer Support"}
+                        {activeAssignments.length > 0
+                          ? "View Assigned Volunteer"
+                          : "Assign Volunteer"}
                       </Text>
                       <Text style={styles.supportButtonSub}>
                         {activeAssignments.length > 0
@@ -4534,8 +4502,7 @@ export default function AdminCases() {
                   </View>
 
                   {(lguFieldReportsLoading ||
-                    lguFieldReportsError ||
-                    latestLguFieldReport ||
+                    (latestLguFieldReport && incident.activeLguResponderUid) ||
                     lguFieldReviewPending) && (
                     <View style={styles.lguOfficialReportSection}>
                       <View style={styles.lguOfficialReportHeader}>
@@ -4811,7 +4778,7 @@ export default function AdminCases() {
                         }
                       >
                         <Text style={styles.primaryButtonText}>
-                          Start LGU Response
+                          Start Response
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -5536,278 +5503,6 @@ export default function AdminCases() {
               {detailTab === "personnel" && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelReferenceMain}>
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={styles.personnelCleanHeaderLeft}>
-                          <View style={styles.personnelSectionIconBlue}>
-                            <Text style={styles.personnelSectionIconText}>♙</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>
-                            <Text style={styles.personnelCleanSubtitle}>
-                              Official LGU responders are the main response for this emergency case.
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.personnelCleanStatusPill,
-                            !incident.activeLguResponderUid && styles.personnelCleanStatusPillMuted,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.personnelCleanStatusText,
-                              !incident.activeLguResponderUid && styles.personnelCleanStatusTextMuted,
-                            ]}
-                          >
-                            {incident.activeLguResponderUid ? "ASSIGNED" : "NOT ASSIGNED"}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {incident.activeLguResponderUid ? (
-                        <View style={styles.primaryResponderCompactRow}>
-                          <View style={styles.personnelAvatarCompact}>
-                            <Text style={styles.personnelAvatarCompactText}>
-                              {(incident.activeLguResponderName || "LGU")
-                                .split(" ")
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .map((part) => part[0]?.toUpperCase())
-                                .join("") || "LG"}
-                            </Text>
-                          </View>
-
-                          <View style={styles.personnelCompactIdentity}>
-                            <View style={styles.personnelCompactNameRow}>
-                              <Text style={styles.personnelCompactName}>
-                                {incident.activeLguResponderName || "LGU Responder"}
-                              </Text>
-                              {activeLguProfile?.isTestAccount && (
-                                <View style={styles.personnelMiniBadgeBlue}>
-                                  <Text style={styles.personnelMiniBadgeBlueText}>TEST</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <Text style={styles.personnelCompactMeta}>
-                              {[activeLguProfile?.department, activeLguProfile?.position]
-                                .filter(Boolean)
-                                .join(" · ") || "Official LGU responder"}
-                            </Text>
-
-                            <View style={styles.personnelCompactChipRow}>
-                              <View style={styles.personnelMiniBadgeGood}>
-                                <Text style={styles.personnelMiniBadgeGoodText}>
-                                  {labelOfStatus(activeLguProfile?.dutyStatus || "on_duty")}
-                                </Text>
-                              </View>
-                              <View style={styles.personnelMiniBadgeGood}>
-                                <Text style={styles.personnelMiniBadgeGoodText}>
-                                  {activeLguTrackingLabel}
-                                </Text>
-                              </View>
-                              {(activeLguProfile?.capabilities || []).slice(0, 2).map((capability) => (
-                                <View
-                                  key={`primary_${activeLguProfile?.uid || "lgu"}_${capability}`}
-                                  style={styles.personnelSkillPill}
-                                >
-                                  <Text style={styles.personnelSkillPillText}>{capability}</Text>
-                                </View>
-                              ))}
-                            </View>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.personnelPrimaryAction}
-                            onPress={() =>
-                              router.push(
-                                `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any
-                              )
-                            }
-                          >
-                            <Text style={styles.personnelPrimaryActionText}>View Live Map ↗</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>No official LGU responder assigned</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Assign one verified LGU personnel who is currently On Duty and Available.
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.personnelCleanTitleRow}>
-                            <Text style={styles.personnelCleanTitle}>On-Duty LGU Personnel</Text>
-                            <View style={styles.personnelCountBadge}>
-                              <Text style={styles.personnelCountBadgeText}>
-                                {lguPersonnel.filter(
-                                  (personnel) =>
-                                    personnel.uid !== incident.activeLguResponderUid &&
-                                    personnel.dutyStatus === "on_duty" &&
-                                    personnel.availabilityStatus === "available" &&
-                                    !personnel.activeCaseId &&
-                                    !personnel.activeAssignmentId,
-                                ).length} available
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={styles.personnelCleanSubtitle}>
-                            Only verified personnel who are On Duty and Available can be assigned as the official responder.
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.personnelRefreshCompact}
-                          disabled={lguPersonnelLoading}
-                          onPress={() => void loadLguPersonnel()}
-                        >
-                          <Text style={styles.personnelRefreshCompactText}>
-                            {lguPersonnelLoading ? "Loading…" : "Refresh"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {!!lguPersonnelError && (
-                        <View style={styles.lguPersonnelError}>
-                          <Text style={styles.lguPersonnelErrorText}>{lguPersonnelError}</Text>
-                        </View>
-                      )}
-
-                      {lguPersonnelLoading && lguPersonnel.length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Loading LGU Personnel…</Text>
-                        </View>
-                      ) : lguPersonnel.filter(
-                          (personnel) =>
-                            personnel.uid !== incident.activeLguResponderUid &&
-                            personnel.dutyStatus === "on_duty",
-                        ).length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>No other On-Duty LGU personnel</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Personnel will appear here after Time In.
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(personnelPage, Math.ceil(onDutyPersonnel.length / 5) || 1))} total={onDutyPersonnel.length} pageSize={5} onChange={setPersonnelPage} />
-                          {pageFive(onDutyPersonnel, personnelPage).map((personnel) => {
-                              const assignable =
-                                personnel.verificationStatus === "verified" &&
-                                personnel.employmentStatus === "active" &&
-                                personnel.dutyStatus === "on_duty" &&
-                                personnel.availabilityStatus === "available" &&
-                                !personnel.activeCaseId &&
-                                !personnel.activeAssignmentId;
-
-                              const caseReady =
-                                verificationStatus === "validated" &&
-                                ["validated", "assigned", "in_progress"].includes(incident.status);
-                              const busyId = `${incident.id}_${personnel.uid}`;
-                              const disabled =
-                                Boolean(incident.activeLguResponderUid) ||
-                                !assignable ||
-                                !caseReady ||
-                                busyKey === busyId;
-
-                              let actionLabel = "Assign";
-                              if (busyKey === busyId) actionLabel = "Assigning…";
-                              else if (incident.activeLguResponderUid) actionLabel = "Case Assigned";
-                              else if (!assignable) actionLabel = "Not Available";
-                              else if (!caseReady) actionLabel = "Case Not Ready";
-
-                              return (
-                                <View key={personnel.uid} style={styles.personnelCompactRow}>
-                                  <View style={styles.personnelAvatarCompact}>
-                                    <Text style={styles.personnelAvatarCompactText}>
-                                      {personnel.fullName
-                                        .split(" ")
-                                        .filter(Boolean)
-                                        .slice(0, 2)
-                                        .map((part) => part[0]?.toUpperCase())
-                                        .join("") || "LG"}
-                                    </Text>
-                                  </View>
-
-                                  <View style={styles.personnelCompactIdentity}>
-                                    <View style={styles.personnelCompactNameRow}>
-                                      <Text style={styles.personnelCompactName}>{personnel.fullName}</Text>
-                                      {personnel.isTestAccount && (
-                                        <View style={styles.personnelMiniBadgeBlue}>
-                                          <Text style={styles.personnelMiniBadgeBlueText}>TEST</Text>
-                                        </View>
-                                      )}
-                                    </View>
-                                    <Text style={styles.personnelCompactMeta}>
-                                      {[personnel.department, personnel.position]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    </Text>
-                                  </View>
-
-                                  <View style={styles.personnelCompactChipRowWide}>
-                                    <View style={styles.personnelMiniBadgeGood}>
-                                      <Text style={styles.personnelMiniBadgeGoodText}>On Duty</Text>
-                                    </View>
-                                    <View
-                                      style={
-                                        personnel.availabilityStatus === "available"
-                                          ? styles.personnelMiniBadgeGood
-                                          : styles.personnelMiniBadgeMuted
-                                      }
-                                    >
-                                      <Text
-                                        style={
-                                          personnel.availabilityStatus === "available"
-                                            ? styles.personnelMiniBadgeGoodText
-                                            : styles.personnelMiniBadgeMutedText
-                                        }
-                                      >
-                                        {labelOfStatus(personnel.availabilityStatus || "unavailable")}
-                                      </Text>
-                                    </View>
-                                    {(personnel.capabilities || []).slice(0, 2).map((capability) => (
-                                      <View
-                                        key={`${personnel.uid}_${capability}`}
-                                        style={styles.personnelSkillPill}
-                                      >
-                                        <Text style={styles.personnelSkillPillText}>{capability}</Text>
-                                      </View>
-                                    ))}
-                                  </View>
-
-                                  <TouchableOpacity
-                                    disabled={disabled}
-                                    style={[
-                                      styles.personnelAssignCompact,
-                                      disabled && styles.personnelAssignCompactDisabled,
-                                    ]}
-                                    onPress={() => void assignLguPersonnelToCase(incident, personnel)}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.personnelAssignCompactText,
-                                        disabled && styles.personnelAssignCompactTextDisabled,
-                                      ]}
-                                    >
-                                      {actionLabel}
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                              );
-                            })}
-                        </View>
-                      )}
-                    </View>
-
                     <View style={styles.personnelCleanCard}>
                       <View style={styles.personnelCleanHeader}>
                         <View style={styles.personnelCleanHeaderLeft}>
