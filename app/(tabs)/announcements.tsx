@@ -16,9 +16,7 @@ import {
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 
@@ -66,6 +64,7 @@ export default function AnnouncementsScreen() {
   const [error, setError] =
     useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [nowMs, setNowMs] = useState(Date.now());
   const canReadAnnouncements = Boolean(user && isApprovedProfile(profile));
 
   const barangay =
@@ -73,14 +72,13 @@ export default function AnnouncementsScreen() {
       ? profile.barangay.trim()
       : "";
 
-  // The published-only query uses a point-in-time cutoff. Refreshing its
-  // subscription is necessary to include notices created AFTER its initial
-  // cutoff; otherwise new posts never enter an already-open feed.
+  // One audience-constrained Firestore listener is genuinely realtime.
+  // A local clock tick only makes future-dated system notices visible when due;
+  // it does NOT reconnect Firebase or trigger repeated reads.
   useEffect(() => {
-    if (!canReadAnnouncements) return;
-    const timer = setInterval(() => setRefreshKey(value => value + 1), 30_000);
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
-  }, [canReadAnnouncements, user?.uid]);
+  }, []);
 
   useEffect(() => {
     // Never query Firestore while Firebase Auth or the account profile is loading:
@@ -100,10 +98,13 @@ export default function AnnouncementsScreen() {
     }
     setError("");
 
+    // Critical: the active Cloud Firestore LIST rule requires a constrained
+    // audience. Querying by publishAt alone causes permission-denied. This
+    // single-field "in" query needs no new composite index or Rules release.
+    const allowedAudiences = barangay ? ["all", barangay] : ["all"];
     const announcementQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
-      orderBy("publishAt", "desc")
+      where("audience", "in", allowedAudiences)
     );
 
     const unsubscribe = onSnapshot(
@@ -150,7 +151,7 @@ export default function AnnouncementsScreen() {
     return () => {
       unsubscribe();
     };
-  }, [sessionLoading, user?.uid, canReadAnnouncements, refreshKey]);
+  }, [sessionLoading, user?.uid, canReadAnnouncements, barangay, refreshKey]);
 
   /*
    * USER VISIBILITY
@@ -171,7 +172,7 @@ export default function AnnouncementsScreen() {
       const normalizedBarangay =
         barangay.toLowerCase();
 
-      return announcements.filter(
+      const published = announcements.filter(
         (announcement) => {
           const audience =
             (
@@ -180,23 +181,25 @@ export default function AnnouncementsScreen() {
               .trim()
               .toLowerCase();
 
-          if (audience === "all") {
-            return true;
-          }
-
-          if (
-            normalizedBarangay &&
-            audience === normalizedBarangay
-          ) {
-            return true;
-          }
-
-          return false;
+          const value = announcement.publishAt;
+          const publishedAt = typeof value?.toMillis === "function"
+            ? value.toMillis() : Number.NaN;
+          if (!Number.isFinite(publishedAt) || publishedAt > nowMs) return false;
+          return audience === "all" ||
+            (normalizedBarangay.length > 0 && audience === normalizedBarangay);
         }
       );
+      return published.sort((first, second) => {
+        const a = typeof first.publishAt?.toMillis === "function"
+          ? first.publishAt.toMillis() : 0;
+        const b = typeof second.publishAt?.toMillis === "function"
+          ? second.publishAt.toMillis() : 0;
+        return b - a;
+      });
     }, [
       announcements,
       barangay,
+      nowMs,
     ]);
 
   if (sessionLoading || loading) {
