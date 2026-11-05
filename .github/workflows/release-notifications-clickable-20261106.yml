@@ -215,3 +215,5 @@ jobs:
           echo 'Guarded recovery attempted; inspect current live revision and Rules pointer.'
 
 # Inert unless its exact one-shot commit message is explicitly triggered after validation.
+
+# One-shot scoped release requested: clickable Notifications UI + notification content read-only security only.
