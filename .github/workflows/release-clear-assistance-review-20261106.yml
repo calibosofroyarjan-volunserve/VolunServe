@@ -23,8 +23,8 @@ jobs:
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       LIVE_BASE: "30ac81824c9207f7d18ff12c828d3b02a2ca3699"
       PROJECT: "volunserve-3aa5b"
-      PREVIEW: "clear-assistance-review-preview-1106"
-      BACKUP: "backup-clear-assistance-review-1106"
+      PREVIEW: "simple-assistance-review-preview-1106"
+      BACKUP: "backup-simple-assistance-review-1106"
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-clear-assistance-sa-1106.json"
 
@@ -146,7 +146,7 @@ jobs:
         with:
           firebaseServiceAccount: ${{ env.FIREBASE_SA }}
           projectId: volunserve-3aa5b
-          channelId: clear-assistance-review-preview-1106
+          channelId: simple-assistance-review-preview-1106
           expires: 3d
 
       - name: Verify preview exact commit and protected routes
