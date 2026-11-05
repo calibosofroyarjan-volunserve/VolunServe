@@ -1,0 +1,28 @@
+name: Audit Live Hosting SHA for Assistance Safe Release (NO DEPLOY)
+on:
+  push:
+    branches:
+      - audit/assistance-hosting-live-revision-20261106
+permissions:
+  contents: read
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read live Hosting release stamp without changing anything
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in https://volunserve.com https://volunserve-3aa5b.web.app; do
+            echo "::group::Read live release marker from $domain"
+            code=$(curl -L -sS -o /tmp/live-release.json -w '%{http_code}' --max-time 22 --retry 2 -H 'Cache-Control: no-cache' "$domain/volunserve-release.json?audit=$GITHUB_RUN_ID" || true)
+            echo "HTTP status: $code"
+            if [[ "$code" == "200" ]]; then
+              node -e 'let fs=require("node:fs");try{let x=JSON.parse(fs.readFileSync("/tmp/live-release.json","utf8"));console.log("release SHA:",x.sha||"MISSING");console.log("release scope:",x.scope||"MISSING");console.log("release project:",x.project||"MISSING");}catch(e){console.log("Release marker is not valid JSON:",e.message)}'
+            else
+              echo 'Release marker unavailable; do not assume GitHub main is the deployed website.'
+            fi
+            echo "::endgroup::"
+          done
+          echo 'NO DEPLOY performed. No Firebase, Render, or Firestore writes.'
