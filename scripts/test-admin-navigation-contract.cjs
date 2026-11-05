@@ -37,9 +37,8 @@ const expectedGroups = [
   {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests","Relief Operations"]},
   {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},
-  {title:"Communication & Reports",items:["Announcements","Disputes"]},
 ];
-const adminLabels = ["Command Center",...expectedGroups.flatMap(group=>group.items)];
+const adminLabels = ["Command Center",...expectedGroups.flatMap(group=>group.items),"Announcements"];
 for (let i=0;i<adminLabels.length;i++){
   const label = adminLabels[i];
   assert(adminItems.includes('label: "'+label+'"'),"Missing admin route: "+label);
@@ -54,6 +53,13 @@ for(let i=0;i<expectedGroups.length;i++){
   if(i>0)assert(sectionItems.indexOf('title: "'+expectedGroups[i-1].title+'"') <
     sectionItems.indexOf('title: "'+title+'"'),"Wrong group order");
 }
+assert(adminItems.includes('label: "Announcements"') &&
+  !adminItems.includes('label: "Disputes"') &&
+  !sectionItems.includes("Communication & Reports") &&
+  !sectionItems.includes('"reports"') &&
+  lgu.includes('accessibilityLabel="Announcements"') &&
+  lgu.includes('NAV_ITEMS.filter(item => item.label === "Announcements")'),
+  "Announcements must be a single top-level LGU sidebar item; Disputes and Communication & Reports absent");
 assert(lgu.includes(')?.id ?? "none"') && lgu.includes(">Command Center</Text>"),
   "Command Center must open without unnecessary expanded sidebar groups");
 assert(!accounts.includes("LGU STAFF VERIFICATION FLOW") &&
