@@ -1,0 +1,80 @@
+name: Validate Spark Cloudinary LGU ID and Super Admin Review (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-cloudinary-private-credential-flow-20261106]
+    paths:
+      - .github/workflows/validate-lgu-cloudinary-20261106.yml
+      - backend/lguCredentialRoutes.js
+      - backend/server.js
+      - backend/tests/lguCredentials.test.js
+      - lib/lguCredentialImages.ts
+      - app/admin-request.tsx
+      - app/(superadmin)/admin-accounts.tsx
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      GH_TOKEN: ${{ github.token }}
+      EXPO_NO_TELEMETRY: '1'
+      BASE_SHA: 98f20ca11f50a6fa8e447ee66b7c38bd10a96d3c
+      PROTECTED_BACKEND_BLOB: e29412c1f5659447862b99ce3768ce7fe5791b82
+    steps:
+      - name: Block any unrelated change to protected live baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const h={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'};
+            const u='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/compare/'+process.env.BASE_SHA+'...'+process.env.GITHUB_SHA;
+            const r=await fetch(u,{headers:h});
+            assert(r.ok,'Unable to check exact protected live source diff');
+            const diff=await r.json();assert.equal(diff.status,'ahead');
+            const allowed=new Set([
+              '.github/workflows/validate-lgu-cloudinary-20261106.yml',
+              'backend/lguCredentialRoutes.js','backend/server.js','backend/tests/lguCredentials.test.js',
+              'lib/lguCredentialImages.ts','app/admin-request.tsx','app/(superadmin)/admin-accounts.tsx',
+            ]);
+            const paths=(diff.files||[]).map(f=>f.filename);
+            assert(paths.length>=5 && paths.every(p=>allowed.has(p)),
+              'STOP: unrelated Login, Signup, Notifications, Announcements, Admin or backend changes detected');
+            console.log('PASS only LGU Cloudinary credential integration files changed:',paths);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Retrieve exact branch source (no legacy submodule recursion)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f backend/lguCredentialRoutes.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked web dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install locked Render backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: JS syntax and Auth, Cloudinary route smoke tests
+        run: |
+          node --check backend/server.js
+          node --check backend/lguCredentialRoutes.js
+          node --check backend/tests/lguCredentials.test.js
+          node --test backend/tests/lguCredentials.test.js
+      - name: Compile Web and Native TypeScript without changing Login Signup
+        run: npx tsc --noEmit
+      - name: Verify preview web export and protected Login routes (NO publish)
+        run: |
+          npx expo export --platform web --output-dir dist
+          GITHUB_SHA="$GITHUB_SHA" node scripts/verify-hosting-release.cjs
+          echo 'PASS LGU private Cloudinary credentials and Super Admin review integration ready for authorized backend + Hosting release.'
+          echo 'NO live Firebase Rules, Storage, Hosting, Render deploys, Auth or user records modified.'
