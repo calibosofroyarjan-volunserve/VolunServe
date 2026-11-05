@@ -53,3 +53,5 @@ jobs:
         run: echo 'No Hosting, Firestore, auth, user data or source changes performed.'
 
 # Independent read-only check after guarded release 717ec8624a5e0f4b955e4a6fe66d6c68cceb5355.
+
+# Read-only post-release verification for UI-only picker removal SHA 32fcbfad3582922dd7988359d59b2e7e587fc442.
