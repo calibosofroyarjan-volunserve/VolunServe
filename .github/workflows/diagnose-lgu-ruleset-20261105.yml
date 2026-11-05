@@ -1,0 +1,56 @@
+name: Diagnose Precompiled Firebase LGU Rules Source (Read Only)
+on:
+  push:
+    branches: [fix/lgu-rules-compiled-size-20261105]
+    paths: [.github/workflows/diagnose-lgu-ruleset-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Compare immutable precompiled Ruleset against locally audited candidate, read only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,subprocess,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as f:return json.load(f)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          original=get(release['rulesetName'])
+          source=max((x['content'] for x in original['source']['files']),key=len)
+          open('/tmp/volunserve-lgu-before.rules','w').write(source)
+          print('ACTIVE_RULESET',release['rulesetName'])
+          PY
+          node scripts/prepare-surgical-lgu-rules.cjs /tmp/volunserve-lgu-before.rules /tmp/volunserve-lgu-candidate.rules
+          python3 - <<'PY'
+          import json,urllib.request,subprocess,hashlib,difflib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          name='projects/volunserve-3aa5b/rulesets/26e27c96-ca08-4e5e-ace5-437ee4df086b'
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+name,headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=30) as f:compiled=json.load(f)
+          remote=max((x['content'] for x in compiled['source']['files']),key=len)
+          candidate=open('/tmp/volunserve-lgu-candidate.rules').read()
+          sha=lambda t:hashlib.sha256(t.encode()).hexdigest()
+          print('CANDIDATE',len(candidate),sha(candidate))
+          print('IMMUTABLE',len(remote),sha(remote))
+          print('EXACT',remote==candidate)
+          print('NEWLINE_NORMALIZED',remote.replace('\r\n','\n').strip()==candidate.replace('\r\n','\n').strip())
+          diff=list(difflib.unified_diff(candidate.splitlines(),remote.splitlines(),n=1))
+          print('DIFF_LINES',len(diff))
+          for item in diff[:40]:print('DIFF',item[:250])
+          print('NO production release or records changed')
+          PY
