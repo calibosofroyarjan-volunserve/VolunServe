@@ -49,22 +49,20 @@ old = """      allow read, update: if approved()
           resource.data.userId == request.auth.uid
           || resource.data.recipientUid == request.auth.uid
         );"""
-new = """      // Approved users may only READ their own notification documents.
-      allow read: if approved()
+new = """      // A recipient can acknowledge a notification but never edit its content.
+      // Keep a single permission expression to meet compiled Firestore Rules size.
+      allow read, update: if approved()
         && (
-          resource.data.get('userId', '') == request.auth.uid
-          || resource.data.get('recipientUid', '') == request.auth.uid
-        );
-      // A recipient can acknowledge a notification but cannot forge its
-      // title, content, owner, reference, category, or delivery fields.
-      allow update: if approved()
-        && (
-          resource.data.get('userId', '') == request.auth.uid
-          || resource.data.get('recipientUid', '') == request.auth.uid
+          resource.data.userId == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid
         )
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['read'])
-        && request.resource.data.read == true;"""
+        && (
+          request.method != 'update'
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+            && request.resource.data.read == true
+          )
+        );"""
 # Keep the exact published newline convention (CRLF or LF) in the candidate.
 eol = "\r\n" if "\r\n" in original else "\n"
 old = old.replace("\n", eol)
