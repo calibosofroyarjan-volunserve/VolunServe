@@ -9,6 +9,7 @@ const {
   FieldValue,
 } = require("./firebaseAdmin");
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
+const { evaluateBudgetInput, budgetApprovalIsEligible } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   getProfileRole,
@@ -7152,6 +7153,7 @@ app.post(
       if (
         ![
           "resource_assessment",
+          "approve_donation_budget",
           "assistance_provided",
           "save_location",
           "clear_location",
@@ -7261,6 +7263,42 @@ app.post(
                   FieldValue
                     .serverTimestamp(),
               };
+              if (action === "approve_donation_budget") {
+                // A case can be verified as a genuine need before the Resident
+                // has provided any monetary estimate. Only that zero-budget case
+                // may receive a separately documented LGU itemized budget.
+                if (!budgetApprovalIsEligible(assistanceData, reviewData)) {
+                  throw makeHttpError(
+                    409, "donation_budget_not_editable",
+                    "Only a verified request without an earlier monetary assessment or campaign can receive an itemized donation budget.",
+                  );
+                }
+                const budget = evaluateBudgetInput(request.body);
+                if (!budget.ok) {
+                  throw makeHttpError(400, budget.code, budget.message);
+                }
+                transaction.update(reviewRef, {
+                  costVerificationRequired: true,
+                  costVerificationStatus: "confirmed",
+                  verifiedGrossCost: budget.approvedGrossCost,
+                  confirmedExistingAssistanceAmount: budget.confirmedExistingAssistanceAmount,
+                  verifiedUncoveredAmount: budget.verifiedUncoveredAmount,
+                  costNotes: budget.budgetEvidenceNote,
+                  postApprovalBudgetBasis: budget.budgetEvidenceNote,
+                  postApprovalBudgetAt: FieldValue.serverTimestamp(),
+                  postApprovalBudgetBy: adminUid,
+                  updatedAt: FieldValue.serverTimestamp(),
+                });
+                transaction.update(assistanceRef, {
+                  ...commonUpdate,
+                  approvedDonationBudget: budget.verifiedUncoveredAmount,
+                });
+                return {
+                  approvedGrossCost: budget.approvedGrossCost,
+                  confirmedExistingAssistanceAmount: budget.confirmedExistingAssistanceAmount,
+                  verifiedUncoveredAmount: budget.verifiedUncoveredAmount,
+                };
+              }
               if (
                 action ===
                 "resource_assessment"
