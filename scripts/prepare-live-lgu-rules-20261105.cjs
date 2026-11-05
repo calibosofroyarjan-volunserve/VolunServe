@@ -14,7 +14,7 @@ const assert=require("node:assert/strict");
 const livePath=process.argv[2],outPath=process.argv[3];
 if(!livePath||!outPath)throw Error("Usage node prepare-surgical-lgu-rules.cjs <live.rules> <patched.rules>");
 const original=fs.readFileSync(livePath,"utf8");
-const LIVE_SHA="600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584";
+const LIVE_SHA="f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d";
 const sha=x=>crypto.createHash("sha256").update(x).digest("hex");
 assert.equal(sha(original),LIVE_SHA,"Live rules diverged from audited source; RELEASE BLOCKED");
 // Historical same-batch review gate embedded exactly from reviewed main rules.
