@@ -3858,7 +3858,7 @@ function CompactAssistanceReview({
           />
         </View>
         <Text style={styles.simpleCopy}>
-          Verifying confirms the need. To publish a donation campaign, complete Donation Support separately after verification.
+          After verifying, you can choose donation support here. Campaign publishing is still a separate confirmation.
         </Text>
         {!reviewRecord && <Text style={styles.simpleCopy}>Choose Begin Review above to unlock decisions.</Text>}
         <View style={styles.simpleSecondary}>
@@ -3887,13 +3887,17 @@ function CompactAssistanceReview({
         </View>}
       </View>
 
-      <TouchableOpacity accessibilityRole="button" style={styles.simpleMore} onPress={onAdditional}>
-        <Ionicons name="options-outline" size={17} color="#64748B" />
-        <Text style={{flex:1,color:"#64748B",fontSize:12,fontWeight:"600"}}>
-          Other checks (only when needed)
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color="#64748B" />
-      </TouchableOpacity>
+      {(extraRequired || (attempted && issues.some((entry) =>
+        ["riskFlags", "videoVerificationStatus", "siteVisitStatus"].includes(entry.field)
+      ))) && (
+        <TouchableOpacity accessibilityRole="button" style={styles.simpleMore} onPress={onAdditional}>
+          <Ionicons name="options-outline" size={17} color="#64748B" />
+          <Text style={{flex:1,color:"#64748B",fontSize:12,fontWeight:"600"}}>
+            Special case details (only if needed)
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color="#64748B" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
