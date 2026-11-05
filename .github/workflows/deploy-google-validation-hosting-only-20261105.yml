@@ -1,0 +1,222 @@
+name: Guarded LIVE Google Login Validation (Hosting Only)
+on:
+  push:
+    branches:
+      - release/google-validation-hosting-only-20261105
+    paths:
+      - .github/workflows/deploy-google-validation-hosting-only-20261105.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-preview-backup-and-promote:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      LIVE_BASE: '579bed559b1ba81e2045ba420847f8635e8f182c'
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-google-validation-hosting-sa.json
+    steps:
+      - name: Check out exact candidate source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Fail closed unless change is ONLY approved Login/Signup validations
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > /tmp/google-validation-changes.txt
+          cat /tmp/google-validation-changes.txt
+          node <<'NODE'
+          const fs = require("fs");
+          const assert = require("node:assert/strict");
+          const allowed = new Set([
+            ".github/workflows/deploy-google-validation-hosting-only-20261105.yml",
+            "app/admin-request.tsx",
+            "app/login.tsx",
+            "app/login.web.tsx",
+            "app/signup.tsx",
+            "app/signup.web.tsx",
+            "components/auth/EmailFirstSignup.tsx",
+            "lib/googleSignInFeedback.ts",
+            "lib/useSignupGoogle.web.ts",
+            "lib/userFacingError.ts"
+          ]);
+          const files=fs.readFileSync("/tmp/google-validation-changes.txt","utf8").trim().split("\n").filter(Boolean);
+          assert(files.length > 0, "Empty candidate");
+          for (const file of files) {
+            assert(allowed.has(file), "Unapproved file changed: "+file);
+          }
+          for (const file of ["app/login.web.tsx","lib/userFacingError.ts","lib/useSignupGoogle.web.ts"]) {
+            assert(files.includes(file), "Required Google fix missing: "+file);
+          }
+          console.log("PASS: only approved auth and registration UI code differs");
+          NODE
+          git diff --exit-code "$LIVE_BASE" HEAD -- \
+            'app/(admin)' 'app/(superadmin)' 'app/(tabs)' \
+            'lib/firebaseAuth.ts' 'lib/useSignupGoogle.ts' \
+            'firebase.json' '.firebaserc' 'firestore.rules' 'firestore.indexes.json' \
+            'storage.rules' 'functions' 'backend' 'app.json' 'app.config.js' \
+            'package.json' 'package-lock.json'
+          echo "PASS: current Admin, Super Admin, Residents, Volunteers, backend, security and native OAuth unchanged"
+
+      - name: Verify exact current live source before doing anything
+        shell: bash
+        run: VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+
+      - name: Install reproducible locked dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run validation and role-preservation checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const ts=require("typescript");
+          const contents=fs.readFileSync("lib/userFacingError.ts","utf8");
+          const output=ts.transpileModule(contents,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+          const mod={exports:{}};
+          new Function("module","exports",output)(mod,mod.exports);
+          const format=mod.exports.userFacingError;
+          assert.match(format({code:"permission-denied",message:"FirebaseError: Missing or insufficient permissions"}),/do not have permission/i);
+          assert.match(format({code:"auth/network-request-failed"}),/internet/i);
+          assert.match(format({code:"unknown",message:"FirebaseError: internal SDK crash"}),/could not complete/i);
+          const login=fs.readFileSync("app/login.web.tsx","utf8");
+          assert(login.includes("GOOGLE_LOGIN_NOTICE_KEY"),"Google rejection feedback must survive sign-out remount");
+          assert(login.includes("<AuthFeedback"),"Google error notice must be visible");
+          assert(login.includes("Google account connected. Checking your VolunServe account"));
+          console.log("PASS: safe user-facing errors and Google status/rejection feedback");
+          NODE
+
+      - name: Rebuild web from clean source (no old cache)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require("node:fs");
+          const assert=require("node:assert/strict");
+          const release=JSON.parse(fs.readFileSync("dist/volunserve-release.json","utf8"));
+          const hosting=JSON.parse(fs.readFileSync("firebase.json","utf8")).hosting;
+          assert.equal(release.revision,process.env.GITHUB_SHA);
+          assert.equal(hosting.public,"dist");
+          for(const page of ["/login","/signup"]) {
+            const route=hosting.headers.find(x=>x.source===page);
+            assert(route?.headers?.some(x=>x.key.toLowerCase()==="cache-control"&&x.value.includes("no-store")),page+" must bypass stale page cache");
+          }
+          console.log("PASS: release marker and no-store Login/Signup HTML headers retained");
+          NODE
+
+      - name: Require Firebase Hosting credentials, no live writes yet
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing Firebase Hosting credentials - no deployment"
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Publish only Hosting to isolated preview channel
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: google-validation-1105
+          expires: 3d
+
+      - name: Verify exact preview fingerprint and public routes
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 7
+          done
+          echo "::error::Preview revision or public route check failed"
+          exit 1
+
+      - name: Headless Chrome verifies real web hydration without user credentials
+        shell: bash
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$CHROME" ]; then echo "::error::Chrome unavailable, refusing release"; exit 1; fi
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --remote-allow-origins='*' --remote-debugging-port=9223 \
+            --user-data-dir=/tmp/volunserve-google-cdp about:blank > /tmp/google-login-cdp.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+
+      - name: Backup exact current live and promote tested Hosting ONLY
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PROJECT=volunserve-3aa5b
+          BACKUP=backup-google-validation-1105
+          PREVIEW=google-validation-1105
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+
+          # Fail closed: never overwrite a newer unrelated live deploy.
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Hosting-only backup channel: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          VERIFIED=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              VERIFIED=1; break
+            fi
+            sleep 7
+          done
+          if [ "$VERIFIED" -ne 1 ]; then
+            echo "::error::Live fingerprint not confirmed, checking safe rollback"
+            ACTUAL="$(node -e '(async()=>{try{const r=await fetch("https://volunserve.com/volunserve-release.json?verify="+Date.now(),{headers:{"cache-control":"no-cache"}});const d=await r.json();process.stdout.write(d.revision||"unknown")}catch{process.stdout.write("unknown")}})()')"
+            if [ "$ACTUAL" = "$GITHUB_SHA" ]; then
+              $CLI hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "Rolled back only our own Hosting release" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Different or unknown live revision; no automatic overwrite of concurrent changes"
+            fi
+            exit 1
+          fi
+          echo "SUCCESS: Google validation Hosting live at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "No Rules, Storage, Functions, backend or production data deployed." >> "$GITHUB_STEP_SUMMARY"

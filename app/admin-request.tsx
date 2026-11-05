@@ -7,6 +7,8 @@ import React, { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
+import { userFacingError } from "../lib/userFacingError";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -23,12 +25,18 @@ export default function LguStaffApplication() {
     const fullName=form.fullName.trim().replace(/\s+/g," ");
     const email=form.email.trim().toLowerCase();
     const office=form.lguOffice.trim(),position=form.lguPosition.trim(),reference=form.appointmentReference.trim();
-    if(fullName.length<5||fullName.length>160||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||
-      office.length<3||office.length>160||position.length<3||position.length>120||
-      reference.length<5||reference.length>160||form.password.length<12||
-      !/[A-Z]/.test(form.password)||!/[a-z]/.test(form.password)||!/[0-9]/.test(form.password)||
-      !/[^a-zA-Z0-9]/.test(form.password)||!SJDM_BARANGAYS.includes(form.barangay)){
-      setError("Complete all official LGU details, select a valid SJDM barangay and use a 12+ character password with upper/lowercase, number and symbol.");
+    const fieldIssue =
+      (fullName.length < 5 || fullName.length > 160 ? "Enter your full official name (5 to 160 characters)." : null) ||
+      getRegistrationEmailError(email) ||
+      (form.password.length < 12 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) ||
+       !/[0-9]/.test(form.password) || !/[^a-zA-Z0-9]/.test(form.password)
+        ? "Use a password with at least 12 characters, uppercase, lowercase, a number and a symbol." : null) ||
+      (office.length < 3 || office.length > 160 ? "Enter your official LGU office or department (3 to 160 characters)." : null) ||
+      (position.length < 3 || position.length > 120 ? "Enter your LGU job position (3 to 120 characters)." : null) ||
+      (reference.length < 5 || reference.length > 160 ? "Enter your valid appointment or employment reference (5 to 160 characters)." : null) ||
+      (!SJDM_BARANGAYS.includes(form.barangay) ? "Choose your valid San Jose del Monte barangay." : null);
+    if (fieldIssue) {
+      setError(fieldIssue);
       return;
     }
     setBusy(true);
@@ -51,7 +59,7 @@ export default function LguStaffApplication() {
     }catch(err:any){
       // Roll back newly created Auth account when Firestore application fails.
       if(newUser)await deleteUser(newUser).catch(()=>undefined);
-      setError(err?.message||"Could not submit your request. No administrative access has been granted.");
+      setError(userFacingError(err, "Unable to submit your application. No Admin access has been granted. Please try again."));
     }finally{
       await signOut(candidateAuth).catch(()=>undefined);
       await deleteApp(app).catch(()=>undefined);
