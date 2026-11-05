@@ -1,0 +1,43 @@
+name: READ ONLY Smoke Test System Updates and Barangay Announcements Preview
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/smoke-system-updates-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  verify-public-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check exact preview revision, live source unchanged, new Super Admin and LGU URLs
+        env:
+          PREVIEW_ORIGIN: https://volunserve-3aa5b--announcements-livebased-20261105-84rgzbt0.web.app
+          EXACT_REVISION: 3b887c14ad38dd4f58d3105c5f4ba48475bf6e01
+          EXACT_LIVE_BASE: 8cf5141d6fc51b29e443878efb8619fb7186b086
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const base=process.env.PREVIEW_ORIGIN;
+            const suffix='?cache_bust='+Date.now();
+            const [a,b,c]=await Promise.all([
+              fetch(base+'/volunserve-preview.json'+suffix,{headers:{'cache-control':'no-cache'}}),
+              fetch(base+'/volunserve-release.json'+suffix,{headers:{'cache-control':'no-cache'}}),
+              fetch('https://volunserve.com/volunserve-release.json'+suffix,{headers:{'cache-control':'no-cache'}})
+            ]);
+            for(const x of [a,b,c])assert.equal(x.status,200,'preview or live revision endpoint failed');
+            const [preview,release,live]=await Promise.all([a.json(),b.json(),c.json()]);
+            assert.equal(preview.revision,process.env.EXACT_REVISION);
+            assert.equal(preview.basedOnLive,process.env.EXACT_LIVE_BASE);
+            assert.equal(release.revision,process.env.EXACT_REVISION);
+            assert.equal(live.revision,process.env.EXACT_LIVE_BASE);
+            console.log('PASS exact NEW system update preview build: '+release.revision);
+            console.log('PASS live VolunServe latest Login/Signup source preserved: '+live.revision);
+            for(const route of ['login','signup','admin-login','admin-request','system-updates','create-announcement','notifications']){
+              const res=await fetch(base+'/'+route,{redirect:'follow'});
+              assert.equal(res.status,200,'preview route /'+route+' failed');
+              console.log('PASS preview route /'+route+': HTTP 200');
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
