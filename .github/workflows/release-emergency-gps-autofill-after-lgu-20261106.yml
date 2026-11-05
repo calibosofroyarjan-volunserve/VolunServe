@@ -1,0 +1,223 @@
+name: Guarded LIVE Emergency GPS Address Auto-Fill (Hosting ONLY)
+on:
+  push:
+    branches: [release/emergency-gps-address-after-lgu-live-20261106]
+    paths: [".github/workflows/release-emergency-gps-autofill-after-lgu-20261106.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded GPS address Hosting-only release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "8339df486c7aaad60d8ee5721b07aaed8f1a4f8e"
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW_CHANNEL: "gps-address-preview-lgu-1106"
+      BACKUP_CHANNEL: "backup-before-gps-lgu-1106"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-gps-lgu-sa-1106.json"
+
+    steps:
+      - name: Checkout exact release based on latest live
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Guard live ancestor and exact three-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/gps-change-list.txt"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const actual=fs.readFileSync(process.env.RUNNER_TEMP+'/gps-change-list.txt','utf8').split('\n').filter(Boolean).sort();
+          const allowed=[
+            '.github/workflows/release-emergency-gps-autofill-after-lgu-20261106.yml',
+            'components/DisasterResponse.native.tsx',
+            'components/DisasterResponse.web.tsx'
+          ].sort();
+          assert.deepEqual(actual, allowed, 'STOP: change scope includes a protected module or is incomplete');
+          console.log('PASS exact latest live ancestor and only the two Emergency Reports components + release workflow');
+          NODE
+
+      - name: Prepare live revision guard (both domains)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/guard-live-gps.cjs" <<'NODE'
+          const expected = process.argv[2];
+          if (!expected || !/^[0-9a-f]{40}$/.test(expected)) process.exit(1);
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const response=await fetch(origin+'/volunserve-release.json?gps_guard='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok) throw Error('STOP: live marker unavailable '+origin+' HTTP '+response.status);
+              const info=await response.json();
+              if(info.revision!==expected) throw Error('STOP: newer or mismatched LIVE release '+origin+' actual '+info.revision+' expected '+expected);
+              console.log('PASS live version '+origin+' '+info.revision);
+            }
+          })().catch(error=>{console.error(error);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+
+      - name: Install project dependencies and verify protected UX
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --test scripts/test-clean-emergency-report-header.cjs
+          for file in \
+            scripts/test-unified-login-routing.cjs \
+            scripts/test-login-field-validation.cjs \
+            scripts/test-signup-prod.cjs \
+            scripts/test-signup-google-oauth.cjs \
+            scripts/test-notification-clickthrough-polish-20261106.cjs \
+            scripts/test-lgu-clean-announcements-live.cjs \
+            scripts/test-admin-staff-login.cjs \
+            scripts/test-superadmin-accounts-directory.cjs; do
+            test -f "$file"
+            node "$file"
+          done
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const web=fs.readFileSync('components/DisasterResponse.web.tsx','utf8');
+          const native=fs.readFileSync('components/DisasterResponse.native.tsx','utf8');
+          assert(web.includes('autoFillGpsAddress')&&web.includes('value={incidentAddress}'));
+          assert(native.includes('reverseGeocodeAsync')&&native.includes('setIncidentAddress(address)'));
+          console.log('PASS GPS address autofill present in web and native report forms');
+          NODE
+          npx tsc --noEmit --pretty false
+
+      - name: Clean web export and verify exact release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          for(const route of ['login','signup','admin-login','admin-request','notifications','announcements','assistance-requests','disaster-response']){
+            assert(['dist/'+route+'.html','dist/'+route+'/index.html'].some(x=>fs.existsSync(x)),'STOP missing route '+route);
+          }
+          console.log('PASS protected web routes and exact hosting fingerprint');
+          NODE
+
+      - name: Verify Firebase credentials belong to production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const cred=JSON.parse(process.env.FIREBASE_SA);
+          if(cred.type!=='service_account'||cred.project_id!==process.env.PROJECT)throw Error('STOP wrong Firebase project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS Firebase Hosting project identity');
+          NODE
+
+      - name: Deploy isolated preview ONLY (not production)
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: gps-address-preview-lgu-1106
+          expires: 3d
+
+      - name: Verify preview fingerprint and protected routes before live
+        shell: bash
+        env:
+          PREVIEW_URLS: ${{ steps.preview.outputs.urls }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const raw=(process.env.PREVIEW_URLS||'').trim();
+          let urls;
+          try{const parsed=JSON.parse(raw);urls=Array.isArray(parsed)?parsed:[parsed];}
+          catch{urls=raw.split(/[,\s]+/).filter(Boolean);}
+          const origin=urls.map(x=>String(x)).find(x=>x.startsWith('https://')&&x.includes('.web.app'));
+          if(!origin)throw Error('STOP: Firebase preview URL missing from deployment output');
+          (async()=>{
+            let ok=false;
+            for(let attempt=0;attempt<10;attempt++){
+              try {
+                const marker=await fetch(origin.replace(/\/$/,'')+'/volunserve-release.json?gps_preview='+Date.now(),{signal:AbortSignal.timeout(25000)}).then(x=>x.json());
+                if(marker.revision!==process.env.GITHUB_SHA)throw Error('Unexpected preview revision '+marker.revision);
+                for(const route of ['/login','/signup','/admin-login','/admin-request','/notifications','/announcements','/assistance-requests','/disaster-response']){
+                  const r=await fetch(origin.replace(/\/$/,'')+route,{signal:AbortSignal.timeout(25000)});
+                  if(!r.ok || !String(r.headers.get('content-type')).includes('html'))throw Error('Missing preview route '+route);
+                }
+                ok=true;break;
+              } catch(e) {
+                if(attempt===9)throw e;
+                await new Promise(resolve=>setTimeout(resolve,6000));
+              }
+            }
+            if(!ok)throw Error('STOP: preview verification failed');
+            console.log('PASS preview contains exact build and protected routes; production untouched');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Recheck live SHA and backup existing live Hosting before promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+          touch "$RUNNER_TEMP/gps-hosting-backup-ready"
+          echo "Existing live Hosting backed up to $BACKUP_CHANNEL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promote verified preview to LIVE only if live is still unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          pass=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node "$RUNNER_TEMP/guard-live-gps.cjs" "$GITHUB_SHA"; then
+              pass=1
+              break
+            fi
+            sleep 8
+          done
+          test "$pass" = 1 || { echo "::error::Live Hosting revision not verified on both domains"; exit 1; }
+          VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs
+          echo "SUCCESS: GPS address autofill published to live Hosting, original live modules preserved" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Safe rollback only if this deployment currently owns live
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          if [ ! -f "$RUNNER_TEMP/gps-hosting-backup-ready" ]; then
+            echo "No backup exists; no production promotion was attempted."
+            exit 0
+          fi
+          if node "$RUNNER_TEMP/guard-live-gps.cjs" "$GITHUB_SHA"; then
+            node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+            echo "Restored prior Hosting revision after failed GPS promotion."
+          else
+            echo "Do not overwrite unexpected new live release; inspect Hosting history manually."
+          fi
