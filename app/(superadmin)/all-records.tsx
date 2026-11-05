@@ -759,6 +759,48 @@ export default function AllRecords() {
       );
     }
 
+    // Assistance Requests must never fall through to the Certificate template.
+    // These fields are read from assistanceRequests; no writes or data migration.
+    if (activeTab === "assistance") {
+      return (
+        <RecordCard
+          key={item.id}
+          icon="medkit-outline"
+          title={firstText(
+            item.title,
+            item.categoryLabel,
+            "Assistance Request"
+          )}
+          subtitle={`Request ID: ${firstText(item.requestId, item.id)}`}
+          status={firstText(item.status, "pending")}
+          rows={[
+            {
+              label: "Requested By",
+              value: firstText(item.requesterName, item.requesterUid),
+            },
+            {
+              label: "Assistance Type",
+              value: firstText(
+                item.categoryLabel,
+                item.category,
+                Array.isArray(item.preferredAssistanceTypes)
+                  ? item.preferredAssistanceTypes.join(", ")
+                  : ""
+              ),
+            },
+            {
+              label: "Barangay",
+              value: firstText(item.requesterBarangay),
+            },
+            {
+              label: "Submitted",
+              value: readableDate(item.createdAt),
+            },
+          ]}
+        />
+      );
+    }
+
     if (
       activeTab ===
       "assignments"
@@ -1059,6 +1101,7 @@ export default function AllRecords() {
       );
     }
 
+    if (activeTab === "certificates") {
     const status =
       firstText(
         item.verificationStatus,
@@ -1113,6 +1156,19 @@ export default function AllRecords() {
             ),
           },
         ]}
+      />
+    );
+    }
+
+    // Future record types must not be rendered as Volunteer Certificates.
+    return (
+      <RecordCard
+        key={item.id}
+        icon="document-text-outline"
+        title="System Record"
+        subtitle={item.id}
+        status={firstText(item.status, "unknown")}
+        rows={[{ label: "Record ID", value: item.id }]}
       />
     );
   };
