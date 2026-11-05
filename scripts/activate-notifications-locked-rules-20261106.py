@@ -18,7 +18,7 @@ API = "https://firebaserules.googleapis.com/v1/"
 RELEASE = f"projects/{PROJECT}/releases/cloud.firestore"
 EXPECTED_OLD = f"projects/{PROJECT}/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
 EXPECTED_OLD_HASH = "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
-EXPECTED_HOSTING = "473e824f7b941fffcaea631d5f0d4beb5d83ac85"
+EXPECTED_HOSTING = "5d3c0a4c9a3906a728d0e24fff992460ba919143"
 RUNNER_TEMP = os.environ.get("RUNNER_TEMP", ".")
 MANIFEST_FILE = os.path.join(RUNNER_TEMP, "notifications-locked-rules-release.json")
 SOURCE_MANIFEST = os.path.join(RUNNER_TEMP, "notification-rules-manifest.json")
@@ -73,10 +73,13 @@ def manifest():
         return json.load(file)
 
 def patch_pointer(name):
+    # Firebase Rules PATCH expects updateMask in the JSON REQUEST BODY,
+    # not only as a URL query argument. Never create a second Release.
     response = request(
-        RELEASE + "?updateMask=rulesetName",
+        RELEASE,
         method="PATCH",
-        payload={"release": {"name": RELEASE, "rulesetName": name}},
+        payload={"release": {"name": RELEASE, "rulesetName": name},
+                 "updateMask": "rulesetName"},
     )
     if response.get("rulesetName") != name:
         raise RuntimeError("Unexpected Firebase Rules release update response")
