@@ -57,3 +57,5 @@ jobs:
 # Read-only post-release verification for UI-only picker removal SHA 32fcbfad3582922dd7988359d59b2e7e587fc442.
 
 # Independent read-only post-release check for 473e824f7b941fffcaea631d5f0d4beb5d83ac85: no Firestore writes.
+
+# Read-only baseline verification before November 6 notification inbox redesign.
