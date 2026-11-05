@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - fix/emergency-volunteer-from-live-20261106
+      - release/emergency-volunteer-from-live-20261106
   pull_request:
     branches:
       - baseline/live-volunserve-20261106
