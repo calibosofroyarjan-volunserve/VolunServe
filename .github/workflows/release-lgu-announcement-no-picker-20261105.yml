@@ -173,3 +173,5 @@ jobs:
       - name: Report explicit release boundary
         run: |
           echo 'SUCCESS: Hosting-only UI update; Firestore Rules/Auth/Data/Functions/Storage, Super Admin, Signup, and Login were not deployed or modified.'
+
+# One-shot user-requested UI-only release: remove redundant recipient picker, preserve all deployed protected modules.
