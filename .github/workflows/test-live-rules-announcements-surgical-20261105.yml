@@ -1,0 +1,99 @@
+name: Test Surgical Announcements Fix Against Actual LIVE Rules (EMULATOR ONLY)
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/test-live-rules-announcements-surgical-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  emulator-tests-no-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Download actual active Ruleset and modify ONLY its Announcements block in temp runner
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=20) as r:return json.load(r)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          ruleset=get(release['rulesetName'])
+          candidates=[x for x in ruleset.get('source',{}).get('files',[]) if x.get('name','').endswith('firestore.rules')]
+          if not candidates and len(ruleset.get('source',{}).get('files',[]))==1:candidates=ruleset['source']['files']
+          if len(candidates)!=1:raise Exception('Unexpected live rules source')
+          live=candidates[0]['content']
+          old="""      allow read: if isAdminOrSuperAdmin()
+                  || (
+                    approved()
+                    && resource.data.publishAt is timestamp
+                    && resource.data.publishAt <= request.time
+                  );"""
+          # Normalize indentation from the real source. No other rule is changed.
+          original="""      allow read: if isAdminOrSuperAdmin()
+                  || (
+                    approved()
+                    && resource.data.publishAt is timestamp
+                    && resource.data.publishAt <= request.time
+                  );"""
+          pattern="""      allow read: if isAdminOrSuperAdmin()
+        || (
+          approved()
+          && resource.data.publishAt is timestamp
+          && resource.data.publishAt <= request.time
+        );"""
+          replacement="""      // Explicit city-wide or own-barangay scope for all member reads.
+      function ownAnnouncementArea() {
+        return resource.data.audience == 'all'
+          || resource.data.audience == profile().get('barangay', '');
+      }
+      allow get: if isAdminOrSuperAdmin()
+        || (approved()
+          && ownAnnouncementArea()
+          && resource.data.publishAt is timestamp
+          && resource.data.publishAt <= request.time);
+      // Query authorization is audience-scoped; the query also constrains publishAt.
+      // Future-scheduled announcements require a separate published-state policy.
+      allow list: if isAdminOrSuperAdmin()
+        || (approved() && ownAnnouncementArea());"""
+          if live.count(pattern)!=1:raise Exception('STOP: Published announcement rule differs from expected. No changes attempted.')
+          candidate=live.replace(pattern,replacement,1)
+          before=live.split('match /announcements/{announcementId}')[0]
+          after=live.split('match /announcements/{announcementId}')[1].split('match /',1)[-1]
+          if not candidate.startswith(before):raise Exception('Pre-announcement code changed')
+          with open('firestore.rules','w') as f:f.write(candidate)
+          print('VERIFIED actual active Ruleset: '+release['rulesetName'])
+          print('ORIGINAL SHA256: '+hashlib.sha256(live.encode()).hexdigest())
+          print('SURGICAL CANDIDATE SHA256: '+hashlib.sha256(candidate.encode()).hexdigest())
+          print('Rules altered ONLY in isolated CI working copy; no Cloud Rules deployment')
+          PY
+      - name: Retrieve existing reviewed emulator regression test (read-only Git fetch)
+        run: |
+          git fetch --no-tags origin feature/announcements-on-verified-live-20261105
+          git show FETCH_HEAD:scripts/test-announcements-audience-security.cjs > scripts/test-announcements-audience-security.cjs
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify own-barangay, global, cross-barangay, scheduled and unauthorized reads
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-announcements-audience-security.cjs'
+      - name: Verify original Admin publishing flow still passes
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Explicitly confirm no production deployment was attempted
+        run: echo 'PASS: emulator only. LIVE Firebase Rules, Hosting, Auth, data, Functions unchanged.'
