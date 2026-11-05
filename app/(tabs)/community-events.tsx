@@ -476,7 +476,7 @@ const errorText = (error: unknown) => {
   }
 
   if (message.includes("Failed to fetch") || message.includes("Network request failed")) {
-    return "Could not connect to the Community Event photo service. Check the backend and try again.";
+    return "Unable to connect to VolunServe services. Check your connection and try again.";
   }
   return message;
 };
@@ -1507,12 +1507,12 @@ export default function CommunityEventsScreen() {
         firebaseMessage.includes("Missing or insufficient permissions")
       ) {
         setNotice(
-          "Proposal was rejected by Firestore (permission-denied). Open DevTools Console for the original Firebase error and field-size diagnostics. Your account access alone does not guarantee the proposal passes every create rule."
+          "Your account cannot submit this proposal right now. Confirm you have Resident access, then try again or contact a VolunServe administrator."
         );
       } else {
         setNotice(
           firebaseCode
-            ? `Proposal failed (${firebaseCode}): ${firebaseMessage}`
+            ? "Unable to submit your proposal right now. Please try again or contact a VolunServe administrator."
             : errorText(error)
         );
       }
