@@ -1,0 +1,203 @@
+name: Release Live-Based Resident and Volunteer Announcements (Guarded)
+on:
+  push:
+    branches:
+      - hotfix/live-announcement-feed-inbox-20261106
+    paths:
+      - .github/workflows/release-live-announcements-20261106.yml
+
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EXPECTED_LIVE_SHA: b7f1c0a0e8f12468ab7fbe6ae99407a6ed4aae5b
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Guard current production source and protected modules
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const cp = require('node:child_process');
+          const files = cp.execFileSync('git',
+            ['diff','--name-only',process.env.EXPECTED_LIVE_SHA,'HEAD'],
+            {encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const allowed = new Set([
+            'components/home/Home.web.tsx',
+            'components/notifications/NotificationDropdown.tsx',
+            'app/(tabs)/announcements.tsx',
+            'app/(tabs)/notifications.tsx',
+            'lib/useAnnouncementAlerts.ts',
+            'functions/announcementAudience.js',
+            'functions/announcementNotifications.js',
+            'functions/index.js',
+            'firestore.rules',
+            'scripts/test-live-announcement-flow.cjs',
+            'scripts/test-live-announcements-firestore.cjs',
+            '.github/workflows/verify-live-announcements-hotfix-20261106.yml',
+            '.github/workflows/release-live-announcements-20261106.yml',
+          ]);
+          for(const file of files) assert.ok(allowed.has(file),
+            'Protected live module changed: '+file);
+          assert.ok(files.length > 0);
+          console.log('PASS only approved announcement paths changed from live SHA.');
+          NODE
+      - name: Install exact app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate recipient roles and bell integration
+        run: |
+          node scripts/test-live-announcement-flow.cjs
+          node --check functions/announcementAudience.js
+          node --check functions/announcementNotifications.js
+      - name: Test Firestore rules in emulator (no production writes)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcements-firestore.cjs"
+      - name: Verify TypeScript and export the complete live-based site
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web --clear --max-workers 1
+          node scripts/verify-hosting-release.cjs
+      - name: Stop if Hosting has changed since the verified baseline
+        env:
+          EXPECTED: ${{ env.EXPECTED_LIVE_SHA }}
+        run: |
+          node <<'NODE'
+          (async () => {
+            const assert = require('node:assert/strict');
+            const response = await fetch(
+              'https://volunserve.com/volunserve-release.json?guard=' + Date.now(),
+              {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(18000)}
+            );
+            assert.equal(response.status,200,'Cannot verify live Hosting.');
+            const marker = await response.json();
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b','Wrong site project.');
+            assert.equal(marker.revision,process.env.EXPECTED,
+              'Production Hosting moved since source was captured. STOP to protect newer live features.');
+            console.log('PASS current live Hosting revision matches pinned baseline.');
+          })().catch(e => {console.error(e.message);process.exit(1);});
+          NODE
+      - name: Validate service account is for VolunServe production
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const raw=process.env.FIREBASE_SA;
+          assert.ok(raw,'No Firebase deploy service account secret; release aborted.');
+          const account=JSON.parse(raw);
+          assert.equal(account.type,'service_account');
+          assert.equal(account.project_id,'volunserve-3aa5b');
+          const dest=process.env.RUNNER_TEMP+'/volunserve-release-sa.json';
+          fs.writeFileSync(dest,raw,{mode:0o600});
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            'GOOGLE_APPLICATION_CREDENTIALS='+dest+'\n');
+          console.log('PASS scoped production credential project.');
+          NODE
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ env.FIREBASE_SA }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Patch ONLY the active production announcement LIST rule
+        run: |
+          node <<'NODE'
+          (async () => {
+            const assert=require('node:assert/strict');
+            const fs=require('node:fs');
+            const cp=require('node:child_process');
+            const token=cp.execFileSync('gcloud',['auth','print-access-token'],{encoding:'utf8'}).trim();
+            async function api(url) {
+              const response=await fetch(url,{headers:{Authorization:'Bearer '+token},
+                signal:AbortSignal.timeout(20000)});
+              if(!response.ok) throw Error('Firebase Rules API read failed HTTP '+response.status);
+              return response.json();
+            }
+            const base='https://firebaserules.googleapis.com/v1/';
+            const releaseUrl=base+'projects/volunserve-3aa5b/releases/cloud.firestore';
+            const release=await api(releaseUrl);
+            const ruleset=await api(base+release.rulesetName);
+            const files=ruleset.source?.files || [];
+            assert.equal(files.length,1,'Multiple active Firestore rules sources. Stop.');
+            const active=String(files[0].content||'').replace(/\r\n/g,'\n');
+            const marker='    match /announcements/{announcementId} {';
+            assert.equal(active.split(marker).length,2,
+              'Current rules differ: cannot safely identify announcement block.');
+            const block=active.slice(active.indexOf(marker),active.indexOf(marker)+2000);
+            assert.ok(block.includes('allow read: if isAdminOrSuperAdmin()') &&
+              block.includes('request.resource.data.audience == profile().barangay'),
+              'Current announcement rules changed; stop rather than overwrite them.');
+            let patched=active;
+            const hasList=block.includes('allow list: if approved();');
+            if(!hasList) patched=active.replace(marker,
+              marker+'\n      allow list: if approved();');
+            fs.writeFileSync('firestore.rules',patched);
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/announcements-active-rules-release.txt',
+              release.rulesetName,{mode:0o600});
+            fs.appendFileSync(process.env.GITHUB_ENV,
+              'ANNOUNCEMENT_RULES_CHANGED='+(hasList?'no':'yes')+'\n');
+            console.log(hasList?
+              'PASS active production already grants approved announcement lists.' :
+              'PASS current active rules copied and ONLY announcement allow-list added.');
+          })().catch(e => {console.error(e.message);process.exit(1);});
+          NODE
+      - name: Reject concurrent Firestore rules releases
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const fs=require('node:fs');
+            const cp=require('node:child_process');
+            const token=cp.execFileSync('gcloud',['auth','print-access-token'],{encoding:'utf8'}).trim();
+            const r=await fetch('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',
+              {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+            if(!r.ok)throw Error('Cannot recheck production rules release');
+            const live=(await r.json()).rulesetName;
+            const expected=fs.readFileSync(process.env.RUNNER_TEMP+'/announcements-active-rules-release.txt','utf8');
+            if(live!==expected)throw Error('Another rules deploy occurred; refuse to overwrite it.');
+            console.log('PASS production Firestore rules have not changed since patch.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Deploy the scoped announcement rule (no other Firebase service)
+        if: env.ANNOUNCEMENT_RULES_CHANGED == 'yes'
+        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+      - name: Publish verified live-based website only
+        run: npx firebase-tools deploy --only hosting --project volunserve-3aa5b --non-interactive
+      - name: Verify production is now serving this exact release
+        run: |
+          node <<'NODE'
+          (async () => {
+            const assert=require('node:assert/strict');
+            for(let i=0;i<12;i++){
+              try{
+                const r=await fetch('https://volunserve.com/volunserve-release.json?release='+Date.now(),
+                  {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(12000)});
+                if(r.ok){
+                  const marker=await r.json();
+                  if(marker.revision===process.env.GITHUB_SHA){
+                    console.log('PASS live volunserve.com release '+process.env.GITHUB_SHA);
+                    return;
+                  }
+                }
+              }catch{}
+              await new Promise(resolve=>setTimeout(resolve,5000));
+            }
+            throw Error('Hosting deploy ran but custom domain did not verify expected SHA.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
