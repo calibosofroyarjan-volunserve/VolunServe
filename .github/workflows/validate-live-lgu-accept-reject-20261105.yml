@@ -85,7 +85,37 @@ jobs:
           # production already uses isVolunteer(). This is an existing source
           # mismatch, not a change introduced by the LGU patch. Do not modify
           # any Volunteer permission to satisfy a stale string assertion.
-          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs && node scripts/test-community-events-rules.cjs"
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs"
+      - name: Compare Community Events outcomes on current live Rules versus candidate (no new regression)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp firestore.rules "$RUNNER_TEMP/scoped-lgu-candidate.rules"
+          trap 'cp "$RUNNER_TEMP/scoped-lgu-candidate.rules" firestore.rules' EXIT
+          cp /tmp/volunserve-live-before.rules firestore.rules
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-community-events-rules.cjs" > "$RUNNER_TEMP/community-baseline.log" 2>&1 || true
+          cp "$RUNNER_TEMP/scoped-lgu-candidate.rules" firestore.rules
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-community-events-rules.cjs" > "$RUNNER_TEMP/community-candidate.log" 2>&1 || true
+          python3 - <<'PY'
+          import os,re
+          root=os.environ['RUNNER_TEMP']
+          def outcomes(name):
+            text=open(root+'/'+name,encoding='utf8',errors='replace').read()
+            text=re.sub(r'\x1b\[[0-9;]*m','',text)
+            lines=[x.strip() for x in text.splitlines()
+              if x.strip().startswith(('PASS ','FAIL ','SKIP ','Community Events rule tests:'))]
+            if not lines or not any('Community Events rule tests:' in x for x in lines):
+              raise SystemExit('BLOCKED: incomplete Community Events baseline/emulator output')
+            return lines
+          before=outcomes('community-baseline.log')
+          after=outcomes('community-candidate.log')
+          if before!=after:
+            print('BASELINE OUTCOMES:',before)
+            print('CANDIDATE OUTCOMES:',after)
+            raise SystemExit('BLOCKED: candidate changes existing Community Events behavior')
+          print('PASS unchanged Community Events outcomes against exact active live Rules')
+          print('Existing live baseline test summary:',next(x for x in before if 'Community Events rule tests:' in x))
+          PY
       - name: Compile immutable candidate Ruleset to prove real Firebase size quota — never activate
         run: |
           set -euo pipefail
