@@ -35,7 +35,7 @@ end = original.find("    match /", start + len("match /announcements/{announceme
 if end < 0:
     raise SystemExit("STOP: announcement block boundary missing")
 block = original[start:end]
-if "allow create: if isAdmin()" not in block or "allow read:" not in block:
+if "allow create: if isAdmin()" not in block or not any(permission in block for permission in ("allow read:", "allow get:", "allow list:")):
     raise SystemExit("STOP: live announcement structure changed; manual review required")
 if "LGU_RECIPIENT_CHOICES_20261105" in original:
     raise SystemExit("STOP: recipient rule already exists; inspect released policy")
