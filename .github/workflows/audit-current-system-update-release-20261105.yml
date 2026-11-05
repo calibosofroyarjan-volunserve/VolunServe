@@ -1,0 +1,45 @@
+name: READ ONLY Audit Concurrent Firebase Rules and Hosting Releases
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/audit-current-system-update-release-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read actual active Firestore ruleset and current Hosting revision, do not modify
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,subprocess,urllib.request,re
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=25) as response:return json.load(response)
+          api='https://firebaserules.googleapis.com/v1/'
+          release=get(api+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          rules=get(api+release['rulesetName'])
+          fs=rules.get('source',{}).get('files',[])
+          source=next((x.get('content','') for x in fs if x.get('name','').endswith('firestore.rules')),fs[0].get('content','') if len(fs)==1 else '')
+          if not source:raise SystemExit('Could not determine live Rules source')
+          start=source.find('match /announcements/{announcementId} {')
+          end=source.find('    match /',start+len('match /announcements/{announcementId} {'))
+          block=source[start:end] if start>=0 and end>start else ''
+          print('ACTIVE_RULESET_NAME='+release['rulesetName'])
+          print('ACTIVE_RULESET_SHA256='+hashlib.sha256(source.encode()).hexdigest())
+          print('HAS_ROLE_SCOPED_READ='+str('function ownAnnouncementArea()' in block))
+          print('HAS_SUPERADMIN_GLOBAL_CREATE='+str(bool(re.search(r'allow create:\s*if isSuperAdmin\(\)',block))))
+          print('BLOCKS_INVALID_LGU_ALL_AREA='+str("profile().get('barangay', '') != 'all'" in block))
+          hosting=urllib.request.urlopen('https://volunserve.com/volunserve-release.json?audit='+str(len(source)),timeout=25)
+          stamp=json.load(hosting)
+          print('LIVE_HOSTING_REVISION='+str(stamp.get('revision')))
+          print('READ ONLY. No changes to Firebase, Authentication, Hosting, Functions or database.')
+          PY
