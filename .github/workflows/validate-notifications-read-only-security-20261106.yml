@@ -103,3 +103,5 @@ jobs:
           if current!=os.environ['RULESET']:raise SystemExit('STOP live Ruleset changed during read-only validation')
           print('PASS no production Rules activation or data changes; safe to proceed to guarded rules-only release')
           PY
+
+# Revalidate mechanically equivalent signedIn auth inlining on exact latest live source without production writes.
