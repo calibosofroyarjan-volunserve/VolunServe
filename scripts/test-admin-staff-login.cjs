@@ -32,7 +32,7 @@ assert(owner.includes("setIdentityMatched") &&
   owner.includes("setLguEmploymentConfirmed") &&
   owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&
   owner.includes('actionType === "promote" && !reviewComplete') &&
-  owner.includes('return "Promote Verified Staff"'),
+  owner.includes('return "Approve Verified Staff"'),
   "Admin promotion must require official staff credential verification");
 assert(owner.includes("lguAdminCredentialReviews") &&
   owner.includes('reviewStatus: "verified"') &&
