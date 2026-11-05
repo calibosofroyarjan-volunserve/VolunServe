@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -24,6 +25,7 @@ import {
 import {
   db,
 } from "../../lib/firebase";
+import { isApprovedProfile } from "../../lib/firebaseAuth";
 
 import {
   useUserSession,
@@ -51,6 +53,7 @@ type Announcement = {
 export default function AnnouncementsScreen() {
   const {
     loading: sessionLoading,
+    user,
     profile,
   } = useUserSession();
 
@@ -62,109 +65,92 @@ export default function AnnouncementsScreen() {
 
   const [error, setError] =
     useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const canReadAnnouncements = Boolean(user && isApprovedProfile(profile));
 
   const barangay =
     typeof profile?.barangay === "string"
       ? profile.barangay.trim()
       : "";
 
+  // The published-only query uses a point-in-time cutoff. Refreshing its
+  // subscription is necessary to include notices created AFTER its initial
+  // cutoff; otherwise new posts never enter an already-open feed.
   useEffect(() => {
-    /*
-     * Only already-published announcements
-     * are loaded.
-     *
-     * This also matches the existing
-     * Firestore announcement read rule.
-     */
+    if (!canReadAnnouncements) return;
+    const timer = setInterval(() => setRefreshKey(value => value + 1), 30_000);
+    return () => clearInterval(timer);
+  }, [canReadAnnouncements, user?.uid]);
+
+  useEffect(() => {
+    // Never query Firestore while Firebase Auth or the account profile is loading:
+    // an unauthenticated listener can fail once with permission-denied and remain dead.
+    if (sessionLoading) return;
+    if (!canReadAnnouncements) {
+      setAnnouncements([]);
+      setLoading(false);
+      setError(user
+        ? "We couldn't verify access to your announcements. Reopen your account session and try again."
+        : "Sign in to view your community announcements.");
+      return;
+    }
+
+    if (refreshKey === 0) {
+      setLoading(true);
+    }
+    setError("");
+
     const announcementQuery = query(
       collection(db, "announcements"),
-      where(
-        "publishAt",
-        "<=",
-        Timestamp.now()
-      ),
-      orderBy(
-        "publishAt",
-        "desc"
-      )
+      where("publishAt", "<=", Timestamp.now()),
+      orderBy("publishAt", "desc")
     );
 
     const unsubscribe = onSnapshot(
       announcementQuery,
       (snapshot) => {
-        const rows: Announcement[] =
-          snapshot.docs.map((snapshotDoc) => {
-            const data = snapshotDoc.data();
-
-            return {
-              id: snapshotDoc.id,
-
-              title:
-                typeof data.title === "string"
-                  ? data.title
-                  : "Announcement",
-
-              message:
-                typeof data.message === "string"
-                  ? data.message
-                  : "",
-
-              audience:
-                typeof data.audience === "string"
-                  ? data.audience
-                  : "",
-
-              priority:
-                typeof data.priority === "string"
-                  ? data.priority
-                  : "normal",
-
-              imageUrl:
-                typeof data.imageUrl === "string"
-                  ? data.imageUrl
-                  : "",
-
-              linkUrl:
-                typeof data.linkUrl === "string"
-                  ? data.linkUrl
-                  : "",
-
-              publishAt:
-                data.publishAt,
-
-              createdAt:
-                data.createdAt,
-
-              updatedAt:
-                data.updatedAt,
-
-              createdBy:
-                typeof data.createdBy === "string"
-                  ? data.createdBy
-                  : "",
-            };
-          });
+        const rows: Announcement[] = snapshot.docs.map((snapshotDoc) => {
+          const data = snapshotDoc.data();
+          return {
+            id: snapshotDoc.id,
+            title: typeof data.title === "string" ? data.title : "Announcement",
+            message: typeof data.message === "string" ? data.message : "",
+            audience: typeof data.audience === "string" ? data.audience : "",
+            priority: typeof data.priority === "string" ? data.priority : "normal",
+            imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
+            linkUrl: typeof data.linkUrl === "string" ? data.linkUrl : "",
+            publishAt: data.publishAt,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
+          };
+        });
 
         setAnnouncements(rows);
         setLoading(false);
         setError("");
       },
-      (snapshotError) => {
-        console.error(
-          "Announcements listener error:",
-          snapshotError
-        );
-
-        setError(
-          "Unable to load announcements."
-        );
-
+      (snapshotError: any) => {
+        // Surface actionable text; never expose raw Firestore stack traces to users.
+        const code = String(snapshotError?.code || "").toLowerCase();
+        const message =
+          code === "permission-denied" || code === "unauthenticated"
+            ? "Your session cannot access announcements. Sign in again and check that your account is approved."
+            : code === "failed-precondition"
+              ? "Announcements are temporarily unavailable because a required database index is missing. Contact system support."
+              : code === "unavailable" || code === "deadline-exceeded"
+                ? "Could not connect to announcements. Check your connection, then tap Retry."
+                : "Announcements could not be loaded. Tap Retry to reconnect.";
+        console.warn("Announcement feed listener failed", { code: code || "unknown" });
+        setError(message);
         setLoading(false);
       }
     );
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      unsubscribe();
+    };
+  }, [sessionLoading, user?.uid, canReadAnnouncements, refreshKey]);
 
   /*
    * USER VISIBILITY
@@ -276,9 +262,14 @@ export default function AnnouncementsScreen() {
 
       {error ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorText}>
+          <Text accessibilityRole="alert" style={styles.errorText}>
             {error}
           </Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry loading announcements"
+            onPress={() => setRefreshKey(value => value + 1)}
+            style={{ marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: "#FDE8E8", alignSelf: "flex-start" }}>
+            <Text style={{ color: "#991B1B", fontWeight: "800" }}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 
