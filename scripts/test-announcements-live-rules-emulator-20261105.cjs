@@ -15,6 +15,11 @@ const rules = fs.readFileSync(rulesFile, "utf8");
 if (!rules.includes("match /announcements/{announcementId}") ||
     !rules.includes("request.resource.data.audience == profile().barangay"))
   throw Error("STOP: published announcement authorization differs from expected live baseline");
+const beginning=rules.indexOf("match /announcements/{announcementId}");
+const ending=rules.indexOf("    match /",beginning+16);
+if(beginning<0 || ending<0)throw Error("Published announcement rule block missing");
+console.log("ACTIVE FIRESTORE ANNOUNCEMENT RULE (read-only snapshot):");
+console.log(rules.slice(beginning,ending).slice(0,5000));
 const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
 const announcement = (creator, area, title = "Community Event Reminder") => ({
   title,
