@@ -1,0 +1,41 @@
+name: Validate Resident Assistance Word Limits
+
+on:
+  push:
+    branches: [ux/resident-assistance-word-validation-20261106]
+  pull_request:
+    paths:
+      - "app/(tabs)/resident.tsx"
+      - "lib/assistanceRequestTextValidation.ts"
+      - "scripts/test-resident-assistance-word-validation.cjs"
+      - ".github/workflows/validate-resident-assistance-words-20261106.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resident-word-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate new Resident request form and existing security contracts
+        run: |
+          node scripts/test-resident-assistance-word-validation.cjs
+          node scripts/test-assistance-validation.cjs
+          node scripts/test-assistance-compact-review.cjs
+          npx tsc --noEmit --pretty false
+      - name: Clean Expo web export (no deployment)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs

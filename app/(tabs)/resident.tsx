@@ -34,6 +34,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth, db } from "../../lib/firebase";
 import { getUserProfile } from "../../lib/firebaseAuth";
+import {
+  assistanceWordCount,
+  assistanceTextError,
+  ASSISTANCE_TITLE_MIN_WORDS,
+  ASSISTANCE_TITLE_MAX_WORDS,
+  ASSISTANCE_DESCRIPTION_MIN_WORDS,
+  ASSISTANCE_DESCRIPTION_MAX_WORDS,
+} from "../../lib/assistanceRequestTextValidation";
 
 type AssistanceCategory =
   | "disaster_recovery"
@@ -526,6 +534,9 @@ export default function AssistanceRequestScreen() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [descriptionTouched, setDescriptionTouched] = useState(false);
+  const [detailsValidationAttempted, setDetailsValidationAttempted] = useState(false);
   const [estimatedAmount, setEstimatedAmount] = useState("");
   const [releasePreference,setReleasePreference]=useState<ReleasePreference>("gcash");
   const [currentSituation, setCurrentSituation] = useState("");
@@ -621,6 +632,13 @@ export default function AssistanceRequestScreen() {
       ? otherSituation.trim()
       : currentSituation.trim();
 
+  const titleWordCount = assistanceWordCount(title);
+  const descriptionWordCount = assistanceWordCount(description);
+  const titleWordError = assistanceTextError(title, "title");
+  const descriptionWordError = assistanceTextError(description, "description");
+  const showTitleWordError = (titleTouched || detailsValidationAttempted) && !!titleWordError;
+  const showDescriptionWordError = (descriptionTouched || detailsValidationAttempted) && !!descriptionWordError;
+
   useEffect(() => {
     let mounted = true;
 
@@ -711,6 +729,9 @@ export default function AssistanceRequestScreen() {
     setRelationshipToBeneficiary("");
     setTitle("");
     setDescription("");
+    setTitleTouched(false);
+    setDescriptionTouched(false);
+    setDetailsValidationAttempted(false);
     setEstimatedAmount("");
     setCurrentSituation("");
     setOtherSituation("");
@@ -1260,16 +1281,11 @@ export default function AssistanceRequestScreen() {
         }
       }
 
-      if (
-        title.trim().length < 5
-      ) {
-        return "Enter a clear request title using at least 5 characters.";
+      if (titleWordError) {
+        return titleWordError;
       }
-
-      if (
-        description.trim().length < 20
-      ) {
-        return "Describe the situation using at least 20 characters.";
+      if (descriptionWordError) {
+        return descriptionWordError;
       }
 
       if (requiresEstimatedAmount) {
@@ -1334,6 +1350,7 @@ export default function AssistanceRequestScreen() {
   };
 
   const goNext = () => {
+    if (step === 2) setDetailsValidationAttempted(true);
     const problem =
       validateStep(step);
 
@@ -1384,6 +1401,7 @@ export default function AssistanceRequestScreen() {
       return;
     }
 
+    setDetailsValidationAttempted(true);
     for (
       const targetStep of [1, 2, 3]
     ) {
@@ -3145,68 +3163,59 @@ export default function AssistanceRequestScreen() {
                     </View>
                   )}
 
-                  <FieldLabel
-                    label="Title / short description"
-                    required
-                  />
-
+                  <FieldLabel label="Title / short description" required />
                   <TextInput
-                    style={
-                      styles.input
-                    }
+                    style={[styles.input, showTitleWordError && styles.assistanceTextFieldInvalid]}
                     value={title}
-                    onChangeText={(
-                      value,
-                    ) =>
-                      setTitle(
-                        value.slice(
-                          0,
-                          160,
-                        ),
-                      )
-                    }
-                    placeholder="e.g. Financial assistance for hospital bills"
+                    onChangeText={(value) => setTitle(value.slice(0, 160))}
+                    onBlur={() => setTitleTouched(true)}
+                    placeholder="e.g. Food and Veterinary Assistance for Rescued Dogs"
                     placeholderTextColor="#94A3B8"
+                    maxLength={160}
                   />
+                  <View style={styles.assistanceWordCountRow}>
+                    <Text style={styles.assistanceWordHelp}>
+                      {ASSISTANCE_TITLE_MIN_WORDS}–{ASSISTANCE_TITLE_MAX_WORDS} words required
+                    </Text>
+                    <Text style={[styles.assistanceWordCount, showTitleWordError && styles.assistanceWordCountInvalid]}>
+                      {titleWordCount}/{ASSISTANCE_TITLE_MAX_WORDS} words
+                    </Text>
+                  </View>
+                  {showTitleWordError && (
+                    <View style={styles.assistanceWordErrorRow}>
+                      <Ionicons name="alert-circle-outline" size={15} color="#B42318" />
+                      <Text style={styles.assistanceWordErrorText}>{titleWordError}</Text>
+                    </View>
+                  )}
 
-                  <FieldLabel
-                    label="Detailed description"
-                    required
-                  />
-
+                  <FieldLabel label="Detailed description" required />
                   <TextInput
-                    style={[
-                      styles.input,
-                      styles.textArea,
-                    ]}
-                    value={
-                      description
-                    }
-                    onChangeText={(
-                      value,
-                    ) =>
-                      setDescription(
-                        value.slice(
-                          0,
-                          2000,
-                        ),
-                      )
-                    }
-                    placeholder="Explain the current need, what assistance is required, and relevant background."
+                    style={[styles.input, styles.textArea, showDescriptionWordError && styles.assistanceTextFieldInvalid]}
+                    value={description}
+                    onChangeText={(value) => setDescription(value.slice(0, 2000))}
+                    onBlur={() => setDescriptionTouched(true)}
+                    placeholder="Explain who needs help, why assistance is needed, and what the funds will cover."
                     placeholderTextColor="#94A3B8"
+                    maxLength={2000}
                     multiline
                     textAlignVertical="top"
                   />
-
-                  <Text
-                    style={
-                      styles.characterCount
-                    }
-                  >
-                    {
-                      description.length
-                    }
-                    /2000
+                  <View style={styles.assistanceWordCountRow}>
+                    <Text style={styles.assistanceWordHelp}>
+                      {ASSISTANCE_DESCRIPTION_MIN_WORDS}–{ASSISTANCE_DESCRIPTION_MAX_WORDS} words required
+                    </Text>
+                    <Text style={[styles.assistanceWordCount, showDescriptionWordError && styles.assistanceWordCountInvalid]}>
+                      {descriptionWordCount}/{ASSISTANCE_DESCRIPTION_MAX_WORDS} words
+                    </Text>
+                  </View>
+                  {showDescriptionWordError && (
+                    <View style={styles.assistanceWordErrorRow}>
+                      <Ionicons name="alert-circle-outline" size={15} color="#B42318" />
+                      <Text style={styles.assistanceWordErrorText}>{descriptionWordError}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.assistanceCharacterHelp}>
+                    {description.length}/2000 characters maximum
                   </Text>
 
                   <View
@@ -6063,6 +6072,35 @@ function RequestDetailsModal({
 
 const styles =
   StyleSheet.create({
+    assistanceTextFieldInvalid: {
+      borderColor: "#DC2626",
+      borderWidth: 1.5,
+      backgroundColor: "#FFF9F9",
+    },
+    assistanceWordCountRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 5,
+      marginBottom: 13,
+    },
+    assistanceWordHelp: { fontSize: 11, color: "#64748B" },
+    assistanceWordCount: { fontSize: 11, fontWeight: "700", color: "#475569" },
+    assistanceWordCountInvalid: { color: "#B42318" },
+    assistanceWordErrorRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 6,
+      marginBottom: 12,
+    },
+    assistanceWordErrorText: {
+      color: "#B42318", fontSize: 11.5, fontWeight: "600", lineHeight: 17, flex: 1,
+    },
+    assistanceCharacterHelp: {
+      fontSize: 10.5, color: "#94A3B8", textAlign: "right", marginBottom: 8,
+    },
     flex: {
       flex: 1,
     },

@@ -1,0 +1,261 @@
+name: Guarded LIVE Resident Assistance Word Validation (Hosting ONLY)
+
+on:
+  push:
+    branches: [ux/resident-assistance-word-validation-20261106]
+    paths: [".github/workflows/release-resident-assistance-words-20261106.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded Resident Word Validation Hosting-only release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "b0adf469a24789f08ce7493680daeeef6eab4010"
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW: "simple-assistance-review-preview-1106"
+      BACKUP: "backup-simple-assistance-review-1106"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-clear-assistance-sa-1106.json"
+
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Guard exact latest live ancestor and five-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/assistance-release-files.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/assistance-release-files.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(tabs)/resident.tsx',
+            'lib/assistanceRequestTextValidation.ts',
+            'scripts/test-resident-assistance-word-validation.cjs',
+            '.github/workflows/validate-resident-assistance-words-20261106.yml',
+            '.github/workflows/release-resident-assistance-words-20261106.yml',
+          ]);
+          assert(changed.length===5 && changed.length===allowed.size,'STOP incomplete or unexpected release scope');
+          assert.deepEqual(changed.filter(p=>!allowed.has(p)),[],'STOP protected live file changed');
+          assert.deepEqual([...allowed].filter(p=>!changed.includes(p)),[],'STOP required release file missing');
+          console.log('PASS release derived from exact live base; only Resident Assistance text validation, its test and workflows changed');
+          console.log('PASS Login, Signup, Google OAuth, Announcements, Notifications, Super Admin, LGU Admin access, Firebase Rules and configuration unchanged');
+          NODE
+
+      - name: Validate live SHA on BOTH Hosting domains before touching Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?assistance_guard='+Date.now(),{
+                headers:{'cache-control':'no-cache'},
+                signal:AbortSignal.timeout(25000)
+              });
+              if(!r.ok)throw Error('STOP cannot read active Hosting marker '+domain+': '+r.status);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP newer live deployment detected on '+domain+': '+j.revision);
+              console.log('PASS exact active live Hosting version: '+domain+' '+j.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate Assistance behavior and all protected live UX contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-resident-assistance-word-validation.cjs
+          node scripts/test-simple-assistance-admin-review.cjs
+          node scripts/test-assistance-compact-review.cjs
+          node scripts/test-assistance-validation.cjs
+          npx tsc --noEmit --pretty false
+          for test in \
+            scripts/test-unified-login-routing.cjs \
+            scripts/test-login-field-validation.cjs \
+            scripts/test-signup-prod.cjs \
+            scripts/test-signup-google-oauth.cjs \
+            scripts/test-notification-clickthrough-polish-20261106.cjs \
+            scripts/test-lgu-clean-announcements-live.cjs \
+            scripts/test-announcement-firebase-cleanup-20261105.cjs \
+            scripts/test-lgu-admin-navigation-groups.cjs \
+            scripts/test-admin-staff-login.cjs \
+            scripts/test-admin-navigation-contract.cjs; do
+            test -f "$test" || { echo "::error::Required live regression test missing: $test"; exit 1; }
+            node "$test"
+          done
+
+      - name: Clean web build with exact GitHub SHA and protected route check
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const stamp=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(stamp.revision,process.env.GITHUB_SHA,'Refuse unmatched build assets');
+          const required=['login','signup','admin-login','admin-request','notifications','announcements','assistance-requests'];
+          for(const route of required){
+            const found=[
+              'dist/'+route+'.html',
+              'dist/'+route+'/index.html',
+            ].some(x=>fs.existsSync(x));
+            assert(found,'STOP missing protected static route: '+route);
+          }
+          console.log('PASS exact built revision and protected routes');
+          NODE
+
+      - name: Require production project credentials before any Hosting write
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase Hosting credentials missing; no deploy attempted"; exit 1; fi
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const cred=JSON.parse(process.env.FIREBASE_SA);
+          if(cred.type!=='service_account'||cred.project_id!==process.env.PROJECT)throw Error('STOP wrong Firebase project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS correct Firebase project; no secrets shown');
+          NODE
+
+      - name: Deploy to isolated PREVIEW channel only
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: simple-assistance-review-preview-1106
+          expires: 3d
+
+      - name: Verify preview exact commit and protected routes
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then ok=1; break; fi
+            sleep 8
+          done
+          test "$ok" = 1 || { echo "::error::Preview failed exact release validation"; exit 1; }
+          node - <<'NODE'
+          (async()=>{
+            const origin=process.env.VOLUNSERVE_HOSTING_URL?.replace(/\/$/,'');
+            if(!origin?.startsWith('https://'))throw Error('Invalid preview origin');
+            for(const route of ['/assistance-requests','/signup','/login','/admin-login','/admin-request','/notifications','/announcements','/create-announcement']){
+              const r=await fetch(origin+route,{signal:AbortSignal.timeout(25000)});
+              if(!r.ok || !String(r.headers.get('content-type')).includes('html'))throw Error('STOP preview route missing '+route);
+              console.log('PASS preview '+route);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Recheck live unchanged, then backup current live Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in "https://volunserve.com" "https://volunserve-3aa5b.web.app"; do
+            VOLUNSERVE_HOSTING_URL="$domain" VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          done
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          touch "$RUNNER_TEMP/assistance-hosting-backup-ready"
+          echo "Backup created: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Final live guard, promote EXACT preview to LIVE, verify both domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in "https://volunserve.com" "https://volunserve-3aa5b.web.app"; do
+            VOLUNSERVE_HOSTING_URL="$domain" VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          done
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              if VOLUNSERVE_HOSTING_URL="https://volunserve-3aa5b.web.app" VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+                echo "SUCCESS: Hosting-only Resident Assistance word validation release $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+                echo "Super Admin, Signup, Login, LGU approval, Announcements, Notifications, Firebase Rules and live data preserved." >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            sleep 8
+          done
+          echo "::error::Hosting promotion not confirmed on both public domains"
+          exit 1
+
+      - name: Guarded rollback of ONLY this deployment on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          if [ ! -f "$RUNNER_TEMP/assistance-hosting-backup-ready" ]; then
+            echo "Production was not promoted. Hosting unchanged."
+            exit 0
+          fi
+          CURRENT="$(node - <<'NODE'
+          (async()=>{
+            try{
+              const urls=['https://volunserve.com','https://volunserve-3aa5b.web.app'];
+              const markers=[];
+              for(const url of urls){
+                const r=await fetch(url+'/volunserve-release.json?rollback='+Date.now(),{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+                markers.push((await r.json()).revision||'unknown');
+              }
+              const acceptable=[process.env.LIVE_BASE,process.env.GITHUB_SHA];
+              if(markers.some(x=>!acceptable.includes(x)))process.stdout.write('other');
+              else if(markers.includes(process.env.GITHUB_SHA))process.stdout.write('ours');
+              else process.stdout.write('original');
+            }catch(e){process.stdout.write('other')}
+          })()
+          NODE
+          )"
+          if [ "$CURRENT" = ours ]; then
+            node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            echo "::warning::Restored previous live Hosting after this workflow failed"
+          elif [ "$CURRENT" = original ]; then
+            echo "Original live Hosting remained active"
+          else
+            echo "::error::Concurrent/unknown live revision; REFUSE blind rollback"
+            exit 1
+          fi
+
+      - name: Hosting-only release boundary
+        run: |
+          echo "Only Hosting assets changed. No Firestore Rules, Auth, Functions, Storage or data deployments." >> "$GITHUB_STEP_SUMMARY"
+
+# Inert unless an explicit final one-shot commit with the expected message updates this workflow.
+
+# Explicit one-shot release of validated Assistance Requests from exact latest live; do not repeat this commit.
+
+# One-shot deployment requested: simplify Verify & Decide while preserving every other live VolunServe module.
+
+# One-shot release of plain-language decision-only Assistance review after passing CI.
+
+# One-shot Hosting-only release of clear red Reject Request action, after preflight checks.
+
+# One-time Resident Assistance request word validation Hosting-only release after passing CI.
