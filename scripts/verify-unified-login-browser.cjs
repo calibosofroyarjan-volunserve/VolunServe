@@ -21,7 +21,7 @@ let ws,seq=0;
 const pending=new Map(),exceptions=[];
 async function main(){
   let page;
-  for(let i=0;i<25;i++){
+  for(let i=0;i<140;i++){
     try{
       const r=await fetch(endpoint+"/json/list");
       const pages=await r.json();
