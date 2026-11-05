@@ -62,6 +62,13 @@ type UserAccount =
     adminUpdatedBy?: string;
   };
 
+type BarangayRequest = {
+  id: string; uid: string; desiredBarangay: string;
+  office: string; position: string; appointmentReference: string;
+  status: "pending" | "approved" | "rejected";
+  submittedAt?: any;
+};
+
 type AdminFilter =
   | "all"
   | "active"
@@ -147,10 +154,12 @@ export default function AdminAccounts() {
   const [adminPage, setAdminPage] = useState(1);
   const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
   const [barangayTarget, setBarangayTarget] = useState<UserAccount | null>(null);
-  const [chosenOfficialBarangay, setChosenOfficialBarangay] = useState("");
-  const [barangayFilter, setBarangayFilter] = useState("");
+  const [barangayRequests, setBarangayRequests] = useState<BarangayRequest[]>([]);
+  const [barangayRejectReason, setBarangayRejectReason] = useState("");
   const [barangayVerified, setBarangayVerified] = useState(false);
   const [barangayError, setBarangayError] = useState("");
+  const pendingAreaRequestFor = (account: UserAccount) =>
+    barangayRequests.find(request => request.id === account.id && request.status === "pending");
   const compactDirectory = viewportWidth < 1180;
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter, sort]);
@@ -209,6 +218,7 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
+    SJDM_BARANGAYS.includes(actionTarget?.barangay || "") &&
     credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
 
   React.useEffect(() => {
@@ -276,6 +286,20 @@ export default function AdminAccounts() {
     sessionLoading,
     isSuperAdmin,
   ]);
+
+  // LGU staff choose the requested area; programmers verify official appointment only.
+  React.useEffect(() => {
+    if (!isSuperAdmin) {
+      setBarangayRequests([]);
+      return;
+    }
+    return onSnapshot(collection(db, "lguBarangayRequests"), snapshot => {
+      setBarangayRequests(snapshot.docs.map(item => ({
+        id: item.id,
+        ...(item.data() as Omit<BarangayRequest, "id">),
+      })));
+    }, () => setBarangayRequests([]));
+  }, [isSuperAdmin]);
 
   const adminAccounts =
     useMemo(() => {
@@ -599,52 +623,68 @@ export default function AdminAccounts() {
     );
   };
 
-  // Assignment is a privileged authorization action, not self-selected.
   const openBarangayReview = (account: UserAccount) => {
-    if (!verifySuperAdmin() || account.role !== "admin") return;
+    if (!verifySuperAdmin() || account.role !== "admin" || !pendingAreaRequestFor(account)) return;
     setBarangayTarget(account);
-    setChosenOfficialBarangay(SJDM_BARANGAYS.includes(account.barangay || "") ? account.barangay! : "");
-    setBarangayFilter("");
     setBarangayVerified(false);
+    setBarangayRejectReason("");
     setBarangayError("");
   };
   const closeBarangayReview = () => {
     if (savingUid) return;
     setBarangayTarget(null);
     setBarangayVerified(false);
+    setBarangayRejectReason("");
     setBarangayError("");
   };
-  const commitBarangayReview = async () => {
+  const commitBarangayReview = async (approve: boolean) => {
     const verified = verifySuperAdmin();
     const account = barangayTarget;
-    const next = chosenOfficialBarangay.trim();
-    if (!verified || !account || account.role !== "admin") return;
-    if (!barangayVerified || !SJDM_BARANGAYS.includes(next) || account.barangay === next) {
-      setBarangayError("Choose and verify a different official SJDM barangay before confirming.");
+    const request = account ? pendingAreaRequestFor(account) : undefined;
+    if (!verified || !account || !request || account.role !== "admin") return;
+    const next = request.desiredBarangay;
+    if (approve && (!barangayVerified || !SJDM_BARANGAYS.includes(next) ||
+        !!String(account.barangay || "").trim())) {
+      setBarangayError("Verify the LGU appointment first. An already assigned area cannot be replaced here.");
+      return;
+    }
+    if (!approve && barangayRejectReason.trim().length < 10) {
+      setBarangayError("Enter a rejection reason of at least 10 characters.");
       return;
     }
     setSavingUid(account.id);
     setBarangayError("");
     try {
-      const targetRef = doc(db, "users", account.id);
-      const latest = await getDoc(targetRef);
-      if (!latest.exists() || latest.data().role !== "admin" ||
-          String(latest.data().barangay || "") !== String(account.barangay || "")) {
-        throw new Error("Admin profile changed. Reopen this action and review the latest record.");
+      const userRef = doc(db, "users", account.id);
+      const requestRef = doc(db, "lguBarangayRequests", account.id);
+      const [latestUser, latestRequest] = await Promise.all([getDoc(userRef), getDoc(requestRef)]);
+      if (!latestUser.exists() || latestUser.data().role !== "admin" ||
+          !!String(latestUser.data().barangay || "").trim() ||
+          !latestRequest.exists() || latestRequest.data().status !== "pending" ||
+          latestRequest.data().uid !== account.id ||
+          latestRequest.data().desiredBarangay !== next) {
+        throw new Error("Admin profile or area request changed. Review the latest records.");
       }
       const batch = writeBatch(db);
-      batch.update(targetRef, {
+      batch.update(requestRef, {
+        status: approve ? "approved" : "rejected",
+        reviewedBy: verified.current.uid,
+        reviewedAt: serverTimestamp(),
+        rejectionReason: approve ? "" : barangayRejectReason.trim(),
+      });
+      if (approve) batch.update(userRef, {
         barangay: next,
         adminUpdatedBy: verified.current.uid,
         adminUpdatedAt: serverTimestamp(),
       });
       batch.set(doc(collection(db, "adminLogs")), {
-        actionType: "admin_barangay_assigned",
-        targetType: "user",
-        targetId: account.id,
+        actionType: approve ? "admin_barangay_verified" : "admin_barangay_request_rejected",
+        targetType: "user", targetId: account.id,
         adminUid: verified.current.uid,
         adminName: verified.current.displayName || verified.current.email || "Super Admin",
-        description: `Verified assigned barangay for ${nameFor(account)}: ${account.barangay || "Unassigned"} → ${next}.`,
+        description: approve
+          ? "Verified official LGU request for " + nameFor(account) + ": " + next
+          : "Rejected unverified LGU area request for " + nameFor(account),
         createdAt: serverTimestamp(),
       });
       await batch.commit();
@@ -1403,12 +1443,16 @@ export default function AdminAccounts() {
                   <Text style={styles.dirNote}>Actions require confirmation and are recorded in the audit log.</Text>
                 </View>
                 <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
-                  <TouchableOpacity disabled={isSaving} accessibilityRole="button"
-                    accessibilityLabel={"Verify and assign LGU barangay to " + nameFor(account)}
-                    style={styles.dirAction} onPress={() => openBarangayReview(account)}>
-                    <Ionicons name="location-outline" size={15} color="#087C5E"/>
-                    <Text style={styles.dirActionText}>{account.barangay ? "Change Barangay" : "Assign Barangay"}</Text>
-                  </TouchableOpacity>
+                  {pendingAreaRequestFor(account) ? (
+                    <TouchableOpacity disabled={isSaving} accessibilityRole="button"
+                      accessibilityLabel={"Review submitted barangay request for " + nameFor(account)}
+                      style={styles.dirAction} onPress={() => openBarangayReview(account)}>
+                      <Ionicons name="shield-checkmark-outline" size={15} color="#087C5E"/>
+                      <Text style={styles.dirActionText}>Verify Area Request</Text>
+                    </TouchableOpacity>
+                  ) : !SJDM_BARANGAYS.includes(account.barangay || "") ? (
+                    <Text style={styles.dirNote}>Awaiting official area request from LGU Admin</Text>
+                  ) : null}
                   <TouchableOpacity disabled={isSaving} style={styles.dirAction}
                     onPress={()=>openAdminAction(suspended?"activate":"suspend",account)}>
                     <Ionicons name={suspended?"checkmark-circle-outline":"pause-circle-outline"} size={15} color="#087C5E"/>
