@@ -194,6 +194,10 @@ export default function WebHome() {
       orderBy("publishAt", "desc")
     );
 
+    // Local announcements are addressed to a BARANGAY, not an account role.
+    // Match the visibility rules used by the full Announcements page.
+    const residentBarangay = String(profile?.barangay || "").trim().toLowerCase();
+
     return onSnapshot(
       announcementsQuery,
       (snapshot) => {
@@ -202,18 +206,20 @@ export default function WebHome() {
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
           }))
-          .filter(
-            (item) =>
-              !item.audience ||
-              item.audience === "all" ||
-              item.audience === profile?.role
-          );
+          .filter((item) => {
+            const audience = String(item.audience || "").trim().toLowerCase();
+            return audience === "all" ||
+              (residentBarangay.length > 0 && audience === residentBarangay);
+          });
 
         setAnnouncements(nextAnnouncements);
       },
-      () => setAnnouncements([])
+      (error) => {
+        console.error("Resident community announcements listener error:", error);
+        setAnnouncements([]);
+      }
     );
-  }, [profile?.role]);
+  }, [profile?.barangay]);
 
   useEffect(() => {
     if (!user) {
