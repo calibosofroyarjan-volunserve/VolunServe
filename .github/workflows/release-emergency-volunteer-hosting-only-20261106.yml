@@ -177,3 +177,5 @@ jobs:
           else
             echo "Production was never confirmed as our revision; not rolling back a newer or different deploy."
           fi
+
+# Explicit user-authorized, guarded VolunServe Emergency Volunteer Hosting-only release.
