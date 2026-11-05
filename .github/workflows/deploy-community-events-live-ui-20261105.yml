@@ -67,7 +67,7 @@ jobs:
           # replace the exact live-derived source in the working tree.
           git init -q
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin e7c2cc8 >/dev/null
+          git fetch --no-tags --depth=1 origin e7c2cc84afcc1b0a8885ce94a41a9a444dcfe751 >/dev/null
           git cat-file -e e7c2cc8:lib/firebaseAuth.ts
       - name: Require exact live baseline before preparing any release
         env:
