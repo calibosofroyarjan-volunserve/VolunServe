@@ -65,7 +65,15 @@ def update_pointer(new_name):
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "publish":
-        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
+        candidate_raw = open(CANDIDATE, encoding="utf8", newline="").read()
+        # Firebase API canonicalizes CRLF to LF when storing immutable Ruleset
+        # sources. Require BOTH the audited byte-exact original and compiled
+        # canonical fingerprint, never silently normalize unknown differences.
+        if sha(candidate_raw) != "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba":
+            raise RuntimeError("BLOCKED: candidate source changed from emulator-tested exact bytes")
+        candidate = candidate_raw.replace("\r\n", "\n")
+        if sha(candidate) != "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673":
+            raise RuntimeError("BLOCKED: normalized candidate differs from Firebase-compiled audited Ruleset")
         old = open(OLD_FILE, encoding="utf8", newline="").read()
         if sha(old) != OLD_SHA:
             raise RuntimeError("Local backup of the original audited rules has changed")
@@ -75,7 +83,7 @@ def main():
         # This immutable Ruleset was pre-compiled by the separate validation CI
         # against Firebase's hard 256KB executable quota. No speculative upload.
         new_name = "projects/volunserve-3aa5b/rulesets/26e27c96-ca08-4e5e-ace5-437ee4df086b"
-        expected_candidate_sha = "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba"
+        expected_candidate_sha = "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673"
         if sha(candidate) != expected_candidate_sha:
             raise RuntimeError("BLOCKED: compact LGU policy differs from compiled audited Ruleset")
         check = request("GET", new_name)
@@ -96,7 +104,10 @@ def main():
         print("No Rules release deleted, no user data accessed, no Storage/Functions/index changes")
     elif mode == "verify":
         _, active_name, active_content = release_state()
-        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
+        candidate_raw = open(CANDIDATE, encoding="utf8", newline="").read()
+        candidate = candidate_raw.replace("\r\n", "\n")
+        if sha(candidate_raw) != "485d47bcd06a168201156ee66a0f8c05f65e4199a6000e477715ae53f65cd5ba" or sha(candidate) != "094fcc25048d47d5016b35d35334b9eff0be7e577dcc409f7c8dd3b3170f8673":
+            raise RuntimeError("Candidate Rules fingerprint mismatch")
         if active_content != candidate:
             raise RuntimeError("Live Rules verification failed")
         print("PASS exact surgical LGU staff Rules published", active_name)
@@ -109,7 +120,7 @@ def main():
         if active_name != new_name:
             print("Skip rule rollback: another ruleset is live; never overwrite it")
             return
-        candidate = open(CANDIDATE, encoding="utf8", newline="").read()
+        candidate = open(CANDIDATE, encoding="utf8", newline="").read().replace("\r\n", "\n")
         if active != candidate:
             print("Skip rule rollback: published source differs from our candidate")
             return
