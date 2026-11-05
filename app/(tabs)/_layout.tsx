@@ -252,10 +252,6 @@ export default function TabLayout() {
                 <Ionicons name="person-outline" size={18} color="#12325D" />
                 <Text style={styles.mobileAccountActionText}>My Profile</Text>
               </Pressable>
-              <Pressable onPress={() => {setMobileProfileOpen(false); router.push({ pathname: "/(tabs)/profile", params: { edit: "1" } });}} style={styles.mobileAccountAction}>
-                <Ionicons name="settings-outline" size={18} color="#12325D" />
-                <Text style={styles.mobileAccountActionText}>Account Settings</Text>
-              </Pressable>
               {canSwitchMode ? (
                 <Pressable onPress={() => void switchMobileMode()} style={styles.mobileAccountAction}>
                   <Ionicons name="swap-horizontal" size={18} color="#12325D" />
