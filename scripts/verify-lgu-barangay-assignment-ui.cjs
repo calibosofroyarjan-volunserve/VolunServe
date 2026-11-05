@@ -30,6 +30,6 @@ assert(!accounts.includes("Change Barangay"));
 assert(!announce.includes("Assign Barangay"));
 assert(application.includes("barangay:form.barangay"));
 assert(policy.includes("getAfter(__REQUEST_PATH__).data.status == 'approved'"));
-assert(policy.includes("request.resource.data.barangay == getAfter"));
+assert(policy.includes("get(__REQUEST_PATH__).data.desiredBarangay == request.resource.data.barangay"));
 assert(policy.includes("profile().get('barangay','') == ''"));
 console.log("PASS: official barangay comes from LGU submission; programmer only approves/rejects; missing-area publishing remains guarded.");
