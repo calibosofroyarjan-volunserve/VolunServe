@@ -1,0 +1,76 @@
+name: Validate Super Admin System Updates and LGU Barangay Announcements (No Deploy)
+on:
+  push:
+    branches: [feature/role-separated-system-barangay-announcements-20261105]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Confirm exact latest live base and protected files unchanged
+        env:
+          VERIFIED_LIVE: 8cf5141d6fc51b29e443878efb8619fb7186b086
+        run: |
+          git merge-base --is-ancestor "$VERIFIED_LIVE" HEAD
+          git diff --name-only "$VERIFIED_LIVE" HEAD > "$RUNNER_TEMP/changes.txt"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/changes.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'app/(superadmin)/_layout.tsx',
+            'app/(superadmin)/system-updates.tsx',
+            'app/(tabs)/notifications.tsx',
+            'app/(tabs)/announcements.tsx',
+            'components/home/Home.web.tsx',
+            'components/home/Home.native.tsx',
+            'lib/useCommunityAnnouncements.ts',
+            'scripts/test-system-updates-firebase-roles.cjs',
+            'scripts/prepare-system-updates-live-rules.py',
+            '.github/workflows/validate-role-separated-announcements-20261105.yml',
+            '.github/workflows/stage-role-separated-announcements-rules-inactive.yml',
+            '.github/workflows/preview-role-separated-announcements-20261105.yml'
+          ]);
+          const bad=changed.filter(x=>!allowed.has(x));
+          if(bad.length)throw Error('Changes outside announcement-specific files: '+bad.join(', '));
+          console.log('PASS: Login, Signup, Google, Super Admin account modules, LGU approvals, Firestore production source, and all other modules unchanged');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Validate current supported account routing and Login field checks (auth source unmodified)
+        run: |
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-admin-staff-login.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read exact production Ruleset and build surgical permission candidate in emulator (no deploy)
+        run: python3 scripts/prepare-system-updates-live-rules.py
+      - name: Verify Super Admin only publishes system-wide, LGU Admin only barangay
+        run: REVIEWED_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-system-updates-firebase-roles.cjs'
+      - name: Verify existing LGU Admin announcements and suspended-role behavior
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Verify web export without Hosting deployment
+        run: npx expo export --platform web
+      - name: Confirm all deployed services were untouched
+        run: |
+          echo 'NO PRODUCTION DEPLOY: UI branch and emulator-only Rules candidate.'
+          echo 'No Hosting, Cloud Rules, authentication users, Firestore data or Cloud Functions modified.'

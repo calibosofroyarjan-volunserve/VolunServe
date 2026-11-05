@@ -1,0 +1,84 @@
+name: One-Time Compile System Updates Rules (INACTIVE ONLY — No Deploy)
+on:
+  push:
+    branches: [feature/role-separated-system-barangay-announcements-20261105]
+    paths: [".github/workflows/stage-role-separated-announcements-rules-inactive.yml"]
+permissions:
+  contents: read
+jobs:
+  stage:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Compile current published Ruleset with Super Admin global authority after concurrent release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Prepare from exact currently active Cloud Rules and latest Hosting source (no deploy)
+        run: python3 scripts/prepare-system-updates-live-rules.py
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test System Updates Super Admin and LGU authority (Firestore emulator only)
+        run: REVIEWED_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-system-updates-firebase-roles.cjs'
+      - name: Verify existing LGU Admin publishing unchanged
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Compile NEW immutable Ruleset without activating current release
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,urllib.request,urllib.error
+          tmp=os.environ['RUNNER_TEMP']
+          manifest=json.load(open(tmp+'/system-update-rules-manifest.json'))
+          source=open('firestore.rules','rb').read().decode('utf8')
+          if hashlib.sha256(source.encode('utf8')).hexdigest()!=manifest['newSourceSha']:
+              raise SystemExit('STOP: emulator-tested Rules source changed')
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          old=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          if old.get('rulesetName')!=manifest['oldRuleset']:raise SystemExit('STOP: different production Cloud Ruleset active, inactive compiler halted')
+          payload={'source':{'files':[{'name':manifest['sourceFile'],'content':source}]}}
+          request=urllib.request.Request(base+'projects/volunserve-3aa5b/rulesets',
+              data=json.dumps(payload).encode('utf8'),
+              headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method='POST')
+          try:
+              with urllib.request.urlopen(request,timeout=40) as response:staged=json.load(response)
+          except urllib.error.HTTPError as exc:
+              print('Firebase compiler rejected candidate HTTP '+str(exc.code))
+              print(exc.read().decode('utf8',errors='replace')[:2000])
+              raise
+          name=staged.get('name','')
+          if not name.startswith('projects/volunserve-3aa5b/rulesets/'):
+              raise SystemExit('STOP: invalid staged Ruleset response')
+          active=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          if active.get('rulesetName')!=manifest['oldRuleset']:
+              raise SystemExit('ALERT: production Ruleset changed concurrently by another workflow')
+          print('PASS compiled NEW INACTIVE role-separated Ruleset: '+name)
+          print('PASS candidate sha256: '+manifest['newSourceSha'])
+          print('PASS old LIVE Ruleset remains '+active['rulesetName'])
+          print('No live Rules, Hosting, Auth, user records, Functions or Storage modified.')
+          PY
+      - name: Recheck production release after test even on failure
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=20) as r:active=json.load(r)
+          expected='projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec'
+          if active.get('rulesetName') != expected:raise SystemExit('ALERT different active Ruleset; release NOT attempted by this workflow')
+          print('PASS active Cloud Ruleset unchanged')
+          PY
