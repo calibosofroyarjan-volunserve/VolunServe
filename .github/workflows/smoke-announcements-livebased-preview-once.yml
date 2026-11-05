@@ -13,7 +13,7 @@ jobs:
       - name: Confirm exact preview revision and latest live Login/Signup/Admin routes
         env:
           PREVIEW_URL: https://volunserve-3aa5b--announcements-livebased-20261105-84rgzbt0.web.app
-          EXPECTED_SHA: 03aca637b4890e8b72a333876f0c6f2e2d020f2f
+          EXPECTED_SHA: c714adf9bb26d000752260ae21f8fb178cb8a65d
           BASE_SHA: 579bed559b1ba81e2045ba420847f8635e8f182c
         shell: bash
         run: |
@@ -28,6 +28,12 @@ jobs:
             assert.equal(revision.basedOnLive,process.env.BASE_SHA);
             assert.equal(revision.scope,'announcements-ui-only');
             assert.equal(revision.noProductionRulesChanges,true);
+            const releaseResponse=await fetch(url+'/volunserve-release.json?readonly='+Date.now(),{headers:{'cache-control':'no-cache'}});
+            assert.equal(releaseResponse.status,200);
+            const official=await releaseResponse.json();
+            assert.equal(official.revision,process.env.EXPECTED_SHA,'official preview release must be exact new build');
+            assert.equal(official.app,'VolunServe');
+            console.log('PASS OFFICIAL production-ready preview revision marker: '+official.revision);
             console.log('PASS exact NEW announcement preview commit: '+revision.revision);
             console.log('PASS based on actual production Hosting source: '+revision.basedOnLive);
             const live=await fetch('https://volunserve.com/volunserve-release.json?read_only='+Date.now(),{headers:{'cache-control':'no-cache'}});
