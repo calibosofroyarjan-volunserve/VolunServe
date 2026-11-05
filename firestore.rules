@@ -701,9 +701,9 @@ service cloud.firestore {
           && resource.data.publishAt is timestamp
           && resource.data.publishAt <= request.time
         );
+      // Admin notices have a fixed SJDM-wide audience; no barangay
+      // assignment is needed. "all" remains unavailable to Admins.
       allow create: if isAdmin()
-        && profile().barangay is string
-        && profile().barangay.size() > 0
         && request.resource.data.keys().hasOnly([
           'title',
           'message',
@@ -730,15 +730,27 @@ service cloud.firestore {
         ]
         && request.resource.data.publishAt is timestamp
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.audience == profile().barangay;
+        && request.resource.data.audience == 'sjdm';
+      // Keep legacy barangay posts editable by their previously authorized
+      // administrators. New city notices are editable only by their author.
       allow update: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay
+        && (
+          (resource.data.audience == 'sjdm'
+            && resource.data.createdBy == request.auth.uid)
+          || (profile().get('barangay', '') is string
+            && profile().get('barangay', '') != ''
+            && resource.data.audience == profile().get('barangay', ''))
+        )
         && request.resource.data.audience == resource.data.audience
         && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay;
+        && (
+          (resource.data.audience == 'sjdm'
+            && resource.data.createdBy == request.auth.uid)
+          || (profile().get('barangay', '') is string
+            && profile().get('barangay', '') != ''
+            && resource.data.audience == profile().get('barangay', ''))
+        );
     }
     match /identityVerifications/{uid} {
       function userAfterReview() {
