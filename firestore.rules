@@ -5433,14 +5433,16 @@ service cloud.firestore {
         ).data;
       }
 
-      // Allow a Volunteer to read only their own deterministic document,
-      // including when it does not exist yet (first-time Join transaction).
+      // Volunteers may read their OWN participation history even after
+      // switching to Resident mode. Revoking Volunteer approval still denies
+      // access. Keep the deterministic get and owner-scoped list restrictions.
+      // Volunteer writes continue to require the active Volunteer mode below.
       allow get: if isAdminOrSuperAdmin()
-        || (isVolunteer()
+        || (hasVolunteerAccess()
           && participantId.matches('^.+_' + request.auth.uid + '$'));
-      // Query permissions remain unchanged: query must filter uid == auth.uid.
+      // Firestore queries must include where("uid", "==", auth.uid).
       allow list: if isAdminOrSuperAdmin()
-        || (isVolunteer() && resource.data.uid == request.auth.uid);
+        || (hasVolunteerAccess() && resource.data.uid == request.auth.uid);
 
       // The participant's document ID is eventId_uid.
       allow create: if isVolunteer()
