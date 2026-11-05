@@ -1,5 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 import {
   ActivityIndicator,
@@ -20,6 +21,8 @@ import {
 import {
   addDoc,
   collection,
+  doc,
+  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -43,6 +46,10 @@ export default function CreateAnnouncement() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [barangayOpen, setBarangayOpen] = useState(false);
   const [chosenBarangay, setChosenBarangay] = useState("");
+  const [initialBarangay, setInitialBarangay] = useState("");
+  const [barangaySearch, setBarangaySearch] = useState("");
+  const [areaConfirmed, setAreaConfirmed] = useState(false);
+  const [settingArea, setSettingArea] = useState(false);
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
@@ -115,6 +122,33 @@ export default function CreateAnnouncement() {
   // Server security rules permit LGU Admin publishing only to the barangay
   // assigned in their verified profile. Never show an unauthorized audience.
   const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
+  const activeApprovedAdmin = profile?.status === "approved" &&
+    String((profile as any)?.adminStatus || "active") !== "suspended";
+  const setOfficialArea = async () => {
+    if (!user || !activeApprovedAdmin || barangay || settingArea) return;
+    if (!areaConfirmed || !SJDM_BARANGAYS.includes(initialBarangay)) {
+      Alert.alert("Official Barangay Required", "Choose your official LGU barangay and confirm that it matches your appointment.");
+      return;
+    }
+    try {
+      setSettingArea(true);
+      // One-time declaration only. Server rules must reject later area changes.
+      await updateDoc(doc(db, "users", user.uid), {
+        barangay: initialBarangay,
+        barangayDeclaredAt: serverTimestamp(),
+        barangayDeclaredBy: user.uid,
+      });
+      Alert.alert("Barangay Saved", "Your official LGU area was recorded. You can now publish local announcements for that barangay.");
+      setAreaConfirmed(false);
+    } catch (error: any) {
+      Alert.alert("Unable to Save Barangay",
+        error?.code === "permission-denied"
+          ? "This account cannot complete area registration with the current security rules. No changes were saved."
+          : "Could not save your official barangay. Check your connection and retry.");
+    } finally {
+      setSettingArea(false);
+    }
+  };
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
@@ -122,9 +156,14 @@ export default function CreateAnnouncement() {
     if (!publishBarangay || publishBarangay !== barangay) {
       Alert.alert(
         "Barangay Required",
-        "Your Admin account does not have an assigned barangay."
+        "Complete the official LGU barangay setup below before publishing."
       );
 
+      return;
+    }
+
+    if (!activeApprovedAdmin) {
+      Alert.alert("Publishing Unavailable", "Only approved, active LGU Admin accounts can publish.");
       return;
     }
 
@@ -213,7 +252,7 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Barangay Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
         <Text style={styles.scopeLabel}>
@@ -228,7 +267,7 @@ export default function CreateAnnouncement() {
           onPress={() => setBarangayOpen(value => !value)}
           style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
         >
-          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
+          <Text style={styles.scopeValue}>{publishBarangay || "Complete official barangay setup below"}</Text>
           <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
         </TouchableOpacity>
         {barangayOpen && barangay ? (
@@ -243,10 +282,52 @@ export default function CreateAnnouncement() {
         ) : null}
 
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area. Other barangays cannot be selected without additional official authorization.
+          LGU Admin announcements are restricted to the official barangay saved in your account.
+          You cannot publish to another barangay. Programmers do not assign announcement recipients.
         </Text>
       </View>
+
+      {!barangay ? (
+        <View style={styles.formCard}>
+          <Text style={styles.noteTitle}>Complete My Official Barangay</Text>
+          <Text style={styles.scopeHelp}>
+            Your approved LGU Admin account needs its official area saved once.
+            Select the barangay stated in your LGU appointment. This self-declaration is
+            recorded on your account and cannot be changed from announcements afterward.
+            No Super Admin assignment is needed.
+          </Text>
+          <Text style={styles.inputLabel}>OFFICIAL BARANGAY *</Text>
+          <TextInput style={styles.input} value={barangaySearch}
+            onChangeText={setBarangaySearch} placeholder="Search official SJDM barangay"
+            placeholderTextColor="#94A3B8" accessibilityLabel="Search official LGU barangay"/>
+          <ScrollView style={{maxHeight:170,borderColor:"#CBD5E1",borderWidth:1,borderRadius:10}} nestedScrollEnabled>
+            {SJDM_BARANGAYS.filter(area => area.toLowerCase().includes(barangaySearch.trim().toLowerCase())).map(area => (
+              <TouchableOpacity key={area} accessibilityRole="radio"
+                accessibilityState={{checked:initialBarangay===area}}
+                onPress={()=>{setInitialBarangay(area);setAreaConfirmed(false);}}
+                style={{padding:11,borderBottomColor:"#E2E8F0",borderBottomWidth:1,
+                  backgroundColor:initialBarangay===area?"#EAF8F6":"#FFFFFF"}}>
+                <Text style={{color:"#173D32",fontWeight:initialBarangay===area?"700":"400"}}>
+                  {area}{initialBarangay===area?" · Selected":""}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity accessibilityRole="checkbox"
+            accessibilityState={{checked:areaConfirmed}}
+            onPress={()=>setAreaConfirmed(value=>!value)}
+            style={{flexDirection:"row",alignItems:"center",gap:9,paddingVertical:13}}>
+            <Text style={{color:"#173D32",fontSize:13}}>
+              {areaConfirmed?"☑":"☐"} I confirm that this is my official LGU appointment area.
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.submitButton,(!activeApprovedAdmin||settingArea||!areaConfirmed||!initialBarangay)&&styles.submitButtonDisabled]}
+            disabled={!activeApprovedAdmin||settingArea||!areaConfirmed||!initialBarangay}
+            onPress={()=>void setOfficialArea()}>
+            <Text style={styles.submitText}>{settingArea?"Saving...":"Save Official Barangay"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={styles.formCard}>
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
@@ -302,10 +383,10 @@ export default function CreateAnnouncement() {
         <TouchableOpacity
           style={[
             styles.submitButton,
-            submitting &&
+            (submitting || !barangay || !activeApprovedAdmin) &&
               styles.submitButtonDisabled,
           ]}
-          disabled={submitting}
+          disabled={submitting || !barangay || !activeApprovedAdmin}
           onPress={handleSubmit}
         >
           {submitting ? (
