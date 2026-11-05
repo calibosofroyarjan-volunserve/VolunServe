@@ -1123,7 +1123,7 @@ export default function VolunteerTasksWeb() {
                         activeOpacity={0.85}
                       >
                         <Ionicons name="close" size={20} color="#123047" />
-                        <Text style={styles.declineButtonText}>Decline</Text>
+                        <Text style={styles.declineButtonText}>Reject</Text>
                       </TouchableOpacity>
                     </>
                   )}
