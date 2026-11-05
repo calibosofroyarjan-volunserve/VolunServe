@@ -4556,7 +4556,7 @@ function DecisionTab({
         <>
           <SectionCard
         title="Residency / Address Verification"
-        subtitle="Use Google Maps only to check whether the Resident-declared address is geographically consistent. A map match does not prove residency."
+        subtitle="Confirm the address using official records or supporting proof. Map lookup is not required."
         icon="location-outline"
       >
         <View style={styles.addressVerificationFlow}>
@@ -4616,13 +4616,7 @@ function DecisionTab({
             )}
           </View>
 
-          <EmbeddedGoogleMap
-            title="Resident Address Check"
-            query={privateMapSearchQuery}
-            badge="LGU PRIVATE"
-            emptyText="Press Search Address to check the Resident-declared address inside VolunServe."
-            privacyText="This map is only an address consistency check. It does not prove that the Resident lives at the mapped point, and it is never shown on the public Donation page."
-          />
+          <Text style={styles.simpleCopy}>Use official records or supporting documents to verify the address. No map needed.</Text>
 
           <Divider />
 
@@ -5018,13 +5012,7 @@ function DecisionTab({
             />
             <ReviewValidationHint message={supportIssue("locationAddress")} />
 
-            <EmbeddedGoogleMap
-              title="LGU-Approved Coordination Point"
-              query={publicMapQuery}
-              badge="PUBLIC COORDINATION POINT"
-              emptyText="Enter the public coordination location and address to preview it inside VolunServe."
-              privacyText="Only this LGU-approved public coordination point may be shown to Residents or donors. The beneficiary home address remains private."
-            />
+            <Text style={styles.simpleCopy}>No map required. Use an authorized public office address only.</Text>
 
             <LabelText>Instructions / schedule</LabelText>
             <TextInput
@@ -5103,151 +5091,6 @@ function DecisionTab({
     </View>
   );
 }
-
-function EmbeddedGoogleMap({
-  title,
-  query,
-  badge,
-  emptyText,
-  privacyText,
-}: {
-  title: string;
-  query: string;
-  badge: string;
-  emptyText: string;
-  privacyText: string;
-}) {
-  const cleanQuery = String(query || "").trim();
-
-  const openExternalMap = async () => {
-    if (!cleanQuery) return;
-
-    try {
-      await Linking.openURL(
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQuery)}`,
-      );
-    } catch {
-      Alert.alert(
-        "Map Unavailable",
-        "Google Maps could not be opened in a new browser tab.",
-      );
-    }
-  };
-
-  return (
-    <View style={styles.embeddedMapCard}>
-      <View style={styles.embeddedMapHeader}>
-        <View style={styles.embeddedMapTitleRow}>
-          <View style={styles.embeddedMapIcon}>
-            <Ionicons
-              name="map-outline"
-              size={17}
-              color="#2563EB"
-            />
-          </View>
-
-          <View style={styles.embeddedMapTitleCopy}>
-            <Text style={styles.embeddedMapTitle}>
-              {title}
-            </Text>
-            <Text style={styles.embeddedMapQuery} numberOfLines={2}>
-              {cleanQuery || "Location preview not available yet"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.embeddedMapBadge}>
-          <Text style={styles.embeddedMapBadgeText}>
-            {badge}
-          </Text>
-        </View>
-      </View>
-
-      {cleanQuery ? (
-        Platform.OS === "web" ? (
-          <View style={styles.embeddedMapFrame}>
-            {React.createElement(
-              "iframe",
-              {
-                title,
-                src: `https://www.google.com/maps?q=${encodeURIComponent(cleanQuery)}&output=embed`,
-                loading: "lazy",
-                allowFullScreen: true,
-                referrerPolicy: "no-referrer-when-downgrade",
-                style: {
-                  width: "100%",
-                  height: "100%",
-                  border: 0,
-                  display: "block",
-                },
-              } as any,
-            )}
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.embeddedMapNativeFallback}
-            onPress={() => void openExternalMap()}
-            activeOpacity={0.82}
-          >
-            <Ionicons
-              name="map-outline"
-              size={24}
-              color="#2563EB"
-            />
-            <Text style={styles.embeddedMapNativeFallbackTitle}>
-              Open map preview
-            </Text>
-            <Text style={styles.embeddedMapNativeFallbackText}>
-              Embedded Google Maps is available on the web admin portal. Tap to open this location in Maps.
-            </Text>
-          </TouchableOpacity>
-        )
-      ) : (
-        <View style={styles.embeddedMapEmpty}>
-          <Ionicons
-            name="location-outline"
-            size={24}
-            color="#94A3B8"
-          />
-          <Text style={styles.embeddedMapEmptyText}>
-            {emptyText}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.embeddedMapFooter}>
-        <View style={styles.embeddedMapPrivacy}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={15}
-            color="#0F766E"
-          />
-          <Text style={styles.embeddedMapPrivacyText}>
-            {privacyText}
-          </Text>
-        </View>
-
-        {!!cleanQuery && Platform.OS === "web" && (
-          <TouchableOpacity
-            style={styles.embeddedMapExternalButton}
-            onPress={() => void openExternalMap()}
-            activeOpacity={0.82}
-          >
-            <Ionicons
-              name="open-outline"
-              size={14}
-              color="#475569"
-            />
-            <Text style={styles.embeddedMapExternalButtonText}>
-              Open in Google Maps
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-}
-
 
 // Guided choice keeps the existing Firestore string field and supports
 // unusual accredited facilities without misclassifying them.
