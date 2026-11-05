@@ -19,7 +19,7 @@ assert(source.includes('id: "residentAccounts"') && source.includes('id: "volunt
   "Separate resident and volunteer account views must remain");
 assert(source.includes('accountAudienceForUser(item) === view.audience') &&
        source.includes('activeViewId,') &&
-       source.includes('const scopedRecords = activeTab === "users"'),
+       source.includes('const scoped = activeTab === "users"'),
   "User records must be scoped to the selected service-area audience");
 assert(source.includes('accessibilityLabel="Choose record section"') &&
        source.includes('accessibilityLabel="Record service areas"') &&
@@ -29,10 +29,16 @@ assert(source.includes('accessibilityLabel="Choose record section"') &&
   "Restore accessible grouped dropdown and in-section view selector");
 assert(source.includes("const PAGE_SIZE = 5") &&
        source.includes("pagedRecords = visibleRecords.slice(") &&
-       source.includes("pagedRecords.map(renderRecord)") &&
+       source.includes("pagedRecords.map((item, index)") &&
+       source.includes("{renderRecord(item)}") &&
        source.includes("<ListPagination page={activePage} total={visibleRecords.length} pageSize={PAGE_SIZE} onChange={setPage} />") &&
        pager.includes("pageSize = 5"),
   "Preserve the already working five-record pagination, Previous/Next and counts");
+assert(source.includes('id: "disputes", label: "Response Disputes"') &&
+       source.indexOf('id: "disputes", label: "Response Disputes"') > source.indexOf('id: "operations", label: "Response & Outcomes"') &&
+       source.includes('onPress={() => setExpandedRecordId(isExpanded ? null : item.id)}') &&
+       source.includes('styles.directoryColumns') && source.includes('styles.directoryRow'),
+  "Read-only compact directory must show detail expansion and group Response Disputes in operations");
 assert(source.includes("setSearch(value); setPage(1);") &&
        source.includes('setPage(1);') &&
        source.includes("const activePage = Math.max(1, Math.min(page, totalPages))"),
