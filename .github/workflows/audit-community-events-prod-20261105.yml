@@ -79,6 +79,18 @@ jobs:
             }
             const old=await githubRules(process.env.OLD_SHA);
             const next=await githubRules(process.env.NEW_SHA);
+            const liveRules=await githubRules('8cf5141d6fc51b29e443878efb8619fb7186b086');
+            console.log('ACTIVE size '+current.length+' bytes / '+current.split('\\n').length+' lines');
+            console.log('LIVE_SOURCE size '+liveRules.length+' bytes / '+liveRules.split('\\n').length+' lines');
+            console.log('LIVE_SOURCE sha256 '+hash(liveRules));
+            console.log('ACTIVE matches live Hosting source rules '+(current===liveRules));
+            const marker='match /communityEventProposals/{proposalId}';
+            const pos=current.indexOf(marker);
+            console.log('ACTIVE proposal rule present '+(pos>=0));
+            if(pos>=0){
+              const gate=current.slice(pos,pos+2600).match(/allow get, list:[\\s\\S]{0,300}?;/);
+              console.log('ACTIVE proposal read condition '+(gate?gate[0].replace(/\\s+/g,' '):'not found'));
+            }
             console.log('ACTIVE sha256 '+hash(current));
             console.log('PREVIOUS_MAIN sha256 '+hash(old));
             console.log('REVIEWED_MAIN sha256 '+hash(next));
