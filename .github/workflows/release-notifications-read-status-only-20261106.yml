@@ -41,8 +41,10 @@ jobs:
           node - <<'NODE'
           const fs=require('node:fs'),assert=require('node:assert/strict');
           const files=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
-          assert.deepEqual(files,['.github/workflows/release-notifications-read-status-only-20261106.yml'],
-            'STOP any changed source is prohibited');
+          assert.deepEqual(files.sort(),[
+            '.github/workflows/release-notifications-read-status-only-20261106.yml',
+            'scripts/activate-notifications-locked-rules-20261106.py'
+          ].sort(),'STOP any unrelated source changed');
           console.log('PASS exact LIVE base; Super Admin, Admin, Login, Signup, Notifications UI, Firestore snapshot and Functions untouched');
           NODE
       - name: Install locked dependencies
@@ -115,11 +117,10 @@ jobs:
           with open(os.path.join(os.environ['RUNNER_TEMP'],'original-notifications-live.rules'),'w',encoding='utf8',newline='') as f:f.write(source)
           print('PASS original full live Rules backup retained for safety, no production writes')
           PY
-      - name: Activate ONLY firestore:rules using official Firebase CLI
-        run: |
-          set -euo pipefail
-          node node_modules/firebase-tools/lib/bin/firebase.js deploy --only firestore:rules --project "$FIREBASE_PROJECT" --non-interactive
-          echo 'firebase-rules-deploy-attempted' > "$RUNNER_TEMP/notification-rules-attempt.txt"
+      - name: Stage new immutable Ruleset from exact tested notification-only candidate (INACTIVE)
+        run: python3 scripts/activate-notifications-locked-rules-20261106.py stage
+      - name: Activate ONLY staged notification security via documented Firebase Rules PATCH
+        run: python3 scripts/activate-notifications-locked-rules-20261106.py activate
       - name: Verify ACTIVE published Rules are exactly the emulator-tested candidate
         run: |
           python3 - <<'PY'
@@ -145,28 +146,10 @@ jobs:
       - name: Final explicit release boundary
         run: |
           echo 'SUCCESS Firestore Rules ONLY; no Hosting, Functions, Auth, Storage, database user records, Super Admin, Admin, Login, Signup or Announcements changes.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Safe rollback only if this workflow changed the active Ruleset
+      - name: Guarded rollback of THIS workflow Ruleset only, if activation occurred
         if: failure()
         run: |
-          set +e
-          if [ ! -f "$RUNNER_TEMP/original-notifications-live.rules" ]; then
-            echo 'Original live Rules never backed up; no deploy was attempted.'
-            exit 0
-          fi
-          python3 - <<'PY'
-          import json,subprocess,urllib.request,os
-          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
-          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
-          try:
-            with urllib.request.urlopen(req,timeout=30) as r:live=json.load(r)['rulesetName']
-            if live==os.environ['RULESET_BASE']:
-              print('Original Rules are still active. No rollback required.')
-              raise SystemExit(0)
-            print('WARNING active Ruleset changed to '+live+'; do not blindly overwrite concurrent releases. Manual verification required.')
-          except Exception as error:print('Could not confirm active Rules state: '+str(error)[:300])
-          PY
-          echo 'Fail-closed: no automatic rollback on unknown concurrent Ruleset revision.'
+          python3 scripts/activate-notifications-locked-rules-20261106.py rollback
 
-# One-shot requested security hotfix: only approved notification recipient read:true; preserve all other rules.
-
-# Exact newly verified live Hosting 5d3c0a4 and unchanged active Firestore Rules; one-shot rules-only release.
+# Only the original live notification read/update policy is modified.
+# Super Admin, Admin, Signup, Login, other rules and Hosting source remain unchanged.
