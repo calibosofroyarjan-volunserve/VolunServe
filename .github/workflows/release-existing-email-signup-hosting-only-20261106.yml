@@ -281,3 +281,5 @@ jobs:
           fi
 
 # This release is opt-in only after green Signup CI; exact live SHA and Hosting version guard mandatory.
+
+# Authorized one-shot guarded Hosting-only signup validation release.
