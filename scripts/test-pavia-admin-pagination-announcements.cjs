@@ -61,17 +61,23 @@ assert(incident.includes('detailTab === "map" && Platform.OS === "web"') &&
   "Emergency Report Map tab must embed the SAME existing authorized SJDM Live Map, scoped to the selected case");
 
 const announce = read("app/(admin)/create-announcement.tsx");
+const residentAnnouncements = read("app/(tabs)/announcements.tsx");
 const rules = read("firestore.rules");
-assert(announce.includes('accessibilityLabel="Choose authorized announcement barangay"') &&
-       announce.includes("cleanMessage.length < 10") &&
-       announce.includes("audience: publishBarangay") &&
-       announce.includes("publishBarangay !== barangay"),
-       "LGU announcement selector must not grant cross-barangay publishing");
-assert(rules.includes("request.resource.data.audience == profile().barangay") &&
-       rules.includes("request.resource.data.message.size() >= 10"),
-       "Announcement backend must match UI scope and validation");
+assert(announce.includes('audience: "sjdm"') &&
+        announce.includes("cleanMessage.length < 10") &&
+        !announce.includes("publishBarangay") &&
+        !announce.includes("chosenBarangay") &&
+        !announce.includes("No barangay assigned"),
+        "Approved LGU Admin must publish to SJDM without a barangay assignment");
+assert(residentAnnouncements.includes('audience === "all" || audience === "sjdm"'),
+        "Resident/Volunteer feed must display city-wide LGU notices and system updates");
+assert(rules.includes("request.resource.data.audience == 'sjdm'") &&
+        !rules.includes("request.resource.data.audience == profile().barangay") &&
+        rules.includes("request.resource.data.message.size() >= 10") &&
+        rules.includes("resource.data.createdBy == request.auth.uid"),
+        "Firestore must enforce fixed SJDM audience and author-only city announcement edits");
 const superAdmin = read("app/(superadmin)/_layout.tsx");
 assert(superAdmin.includes('accessibilityLabel="Super Admin profile dropdown"'),"Keep approved Super Admin UI");
 assert(read("app/signup.web.tsx").includes("verification link"),"Keep signup verification");
 assert(read("app/(tabs)/disaster-response.tsx").includes("MapTracking"),"Keep SJDM emergency map");
-console.log("PASS Sir Pavia Admin pagination, event-date and scoped-announcement regression audit");
+console.log("PASS Sir Pavia Admin pagination, event-date and city-wide announcement regression audit");
