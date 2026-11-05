@@ -40,6 +40,7 @@ const existing = (uid, area) => ({
      const users = [
        ["super", { role: "superadmin", status: "approved", fullName: "DEMO Programmer" }],
        ["admin", { role: "admin", status: "approved", adminStatus: "active", barangay: "Muzon East" }],
+       ["malformed-global-admin", { role: "admin", status: "approved", adminStatus: "active", barangay: "all" }],
        ["suspended", { role: "admin", status: "approved", adminStatus: "suspended", barangay: "Muzon East" }],
        ["muzon", { role: "resident", status: "approved", barangay: "Muzon East" }],
        ["tungko", { role: "volunteer", status: "approved", barangay: "Tungko" }],
@@ -62,6 +63,10 @@ const existing = (uid, area) => ({
    await assertFails(superadmin.collection("announcements").add({...payload("super"),createdBy:"admin"}));
    await assertFails(superadmin.collection("announcements").add({...payload("super"),priority:"invalid"}));
    await assertFails(superadmin.collection("announcements").add({...payload("super"),untrusted:"field"}));
+   const malformedGlobalAdmin=auth("malformed-global-admin");
+   await assertFails(malformedGlobalAdmin.collection("announcements").add(payload("malformed-global-admin","all")));
+   await assertFails(malformedGlobalAdmin.doc("announcements/system").update({message:"Tampering with global notice from a fake all-area LGU Admin."}));
+   await assertFails(malformedGlobalAdmin.doc("announcements/system").delete());
    await assertFails(admin.collection("announcements").add(payload("admin","all")));
    await assertSucceeds(admin.collection("announcements").add(payload("admin","Muzon East")));
    await assertFails(suspended.collection("announcements").add(payload("suspended","Muzon East")));
