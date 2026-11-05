@@ -2176,7 +2176,6 @@ service cloud.firestore {
           'location',
           'latitude',
           'longitude',
-          'locationSource',
           'gpsAccuracyMeters',
           'locationCapturedAt',
           'details',
@@ -2252,11 +2251,6 @@ service cloud.firestore {
         && request.resource.data.longitude is number
         && request.resource.data.longitude >= -180
         && request.resource.data.longitude <= 180
-        // New clients identify manual map picks vs device GPS; old clients remain compatible.
-        && (
-          !('locationSource' in request.resource.data)
-          || request.resource.data.locationSource in ['device_gps', 'manual_map']
-        )
         && (
           request.resource.data.gpsAccuracyMeters == null
           || request.resource.data.gpsAccuracyMeters is number
