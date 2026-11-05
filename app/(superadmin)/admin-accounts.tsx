@@ -1493,47 +1493,46 @@ export default function AdminAccounts() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard,{width:"94%",maxWidth:620,maxHeight:viewportHeight*0.87,padding:20}]}>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12,paddingBottom:12}}>
-              <Text style={styles.modalTitle}>Assign Official LGU Barangay</Text>
+              <Text style={styles.modalTitle}>Review LGU-Submitted Barangay</Text>
               <Text style={styles.dirNote}>LGU Admin: {barangayTarget ? nameFor(barangayTarget) : ""}</Text>
-              <Text style={styles.dirNote}>Currently: {barangayTarget?.barangay || "No barangay assigned"}</Text>
-              <Text style={{color:"#475569",lineHeight:20}}>
-                Verify the official LGU appointment and exact assigned barangay first.
-                This is an authorization change, not a choice the Admin can make.
+              <Text style={styles.dirNote}>Current account area: {barangayTarget?.barangay || "Not verified"}</Text>
+              <Text style={{fontWeight:"700",color:"#173D32",fontSize:16}}>
+                Requested area: {barangayTarget ? pendingAreaRequestFor(barangayTarget)?.desiredBarangay || "None" : "None"}
               </Text>
-              <TextInput accessibilityLabel="Search official San Jose del Monte barangays"
-                placeholder="Search official barangay" value={barangayFilter} onChangeText={setBarangayFilter}
-                style={[styles.searchInput,{borderColor:"#CBD5E1",borderWidth:1,borderRadius:10,paddingHorizontal:12,minHeight:46}]}/>
-              <ScrollView nestedScrollEnabled style={{maxHeight:240,borderWidth:1,borderColor:"#CBD5E1",borderRadius:10}}>
-                {SJDM_BARANGAYS.filter(a=>a.toLowerCase().includes(barangayFilter.trim().toLowerCase()))
-                  .map(a=><TouchableOpacity key={a} accessibilityRole="radio"
-                    accessibilityState={{checked:chosenOfficialBarangay===a}}
-                    style={{padding:11,flexDirection:"row",alignItems:"center",gap:9,borderBottomWidth:1,borderColor:"#E2E8F0"}}
-                    onPress={()=>{setChosenOfficialBarangay(a);setBarangayVerified(false);setBarangayError("");}}>
-                    <Ionicons name={chosenOfficialBarangay===a?"radio-button-on":"radio-button-off"} size={19} color="#08795B"/>
-                    <Text style={{color:"#173D32",fontWeight:chosenOfficialBarangay===a?"700":"400"}}>{a}</Text>
-                  </TouchableOpacity>)}
-              </ScrollView>
-              <Text style={{fontWeight:"700",color:"#173D32"}}>Selected: {chosenOfficialBarangay || "None"}</Text>
-              <TouchableOpacity accessibilityRole="checkbox"
-                accessibilityState={{checked:barangayVerified}}
+              <Text style={styles.reviewHelp}>Office: {barangayTarget ? pendingAreaRequestFor(barangayTarget)?.office || "Not submitted" : ""}</Text>
+              <Text style={styles.reviewHelp}>Position: {barangayTarget ? pendingAreaRequestFor(barangayTarget)?.position || "Not submitted" : ""}</Text>
+              <Text style={styles.reviewHelp}>Appointment reference: {barangayTarget ? pendingAreaRequestFor(barangayTarget)?.appointmentReference || "Not submitted" : ""}</Text>
+              <Text style={{color:"#475569",lineHeight:20}}>
+                Confirm the applicant's LGU appointment and the exact area independently with an official source.
+                Programmers can only approve or reject the requested area; no barangay picker exists here.
+              </Text>
+              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{checked:barangayVerified}}
                 onPress={()=>setBarangayVerified(v=>!v)}
                 style={{flexDirection:"row",alignItems:"flex-start",gap:9,paddingVertical:6}}>
                 <Ionicons name={barangayVerified?"checkbox":"square-outline"} size={22} color="#08795B"/>
                 <Text style={{flex:1,lineHeight:20,color:"#334155"}}>
-                  I verified the staff member's official LGU barangay assignment and authorize this audited change.
+                  I independently verified the official LGU appointment, position and requested barangay.
                 </Text>
               </TouchableOpacity>
+              <Text style={styles.inputLabel}>REJECTION REASON (if rejecting)</Text>
+              <TextInput style={styles.searchInput} value={barangayRejectReason}
+                onChangeText={setBarangayRejectReason} maxLength={300}
+                placeholder="Which official details could not be verified?" />
               {!!barangayError && <Text accessibilityRole="alert" style={{color:"#B91C1C"}}>{barangayError}</Text>}
               <View style={{flexDirection:"row",justifyContent:"flex-end",gap:10,flexWrap:"wrap"}}>
                 <TouchableOpacity style={[styles.dirAction,{padding:11}]} disabled={!!savingUid} onPress={closeBarangayReview}>
                   <Text style={styles.dirActionText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button"
-                  disabled={!!savingUid||!barangayVerified||!chosenOfficialBarangay||chosenOfficialBarangay===barangayTarget?.barangay}
-                  onPress={()=>void commitBarangayReview()}
-                  style={[styles.dirAction,{padding:11,backgroundColor:"#08795B",
-                    opacity:(!barangayVerified||!chosenOfficialBarangay||!!savingUid||chosenOfficialBarangay===barangayTarget?.barangay)?0.5:1}]}>
-                  <Text style={{fontWeight:"700",color:"#FFFFFF"}}>{savingUid?"Saving...":"Confirm Assignment"}</Text>
+                  disabled={!!savingUid||barangayRejectReason.trim().length<10}
+                  style={[styles.dirAction,{padding:11}]}
+                  onPress={()=>void commitBarangayReview(false)}>
+                  <Text style={styles.dirActionText}>Reject Request</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" disabled={!!savingUid||!barangayVerified}
+                  onPress={()=>void commitBarangayReview(true)}
+                  style={[styles.dirAction,{padding:11,backgroundColor:"#08795B",opacity:(!barangayVerified||!!savingUid)?0.5:1}]}>
+                  <Text style={{fontWeight:"700",color:"#FFFFFF"}}>{savingUid?"Saving...":"Approve Verified Area"}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
