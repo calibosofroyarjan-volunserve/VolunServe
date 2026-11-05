@@ -1,0 +1,133 @@
+name: Guarded LIVE Super Admin LGU Review Simplification (Hosting Only)
+on:
+  push:
+    branches: [release/superadmin-lgu-review-live-20261106]
+    paths: [.github/workflows/release-superadmin-lgu-review-20261106.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  safe-hosting:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "6ff922f81c6b9e9db1a310eed797ee7217a93f36"
+      PROJECT: "volunserve-3aa5b"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-superadmin-lgu-review-20261106.json"
+    steps:
+      - name: Check out exact live-derived patch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Block unrelated source modifications
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/lgu-review-files.txt"
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+'/lgu-review-files.txt','utf8').trim().split('\n').filter(Boolean).sort();
+          const required=['app/(superadmin)/admin-accounts.tsx','.github/workflows/release-superadmin-lgu-review-20261106.yml'].sort();
+          assert.deepEqual(paths,required,'STOP: only Super Admin LGU review UI and this deployment gate may change');
+          const accounts=fs.readFileSync('app/(superadmin)/admin-accounts.tsx','utf8');
+          for(const v of ['Pending LGU Admin Applications','View Credentials','Verify & Review Access',
+            'setLguOffice(String((account as any).lguOffice','setLguPosition(String((account as any).lguPosition',
+            'setLguReference(String((account as any).appointmentReference',
+            'credentialsConfirmed && identityMatched && lguEmploymentConfirmed',
+            'lguAdminCredentialReviews','batch.commit()']) {
+            assert(accounts.includes(v),'STOP LGU access safeguard absent: '+v);
+          }
+          console.log('PASS exactly two-file release from observed live: no Login, Signup, Notifications, Announcements, Admin modules, backend, or Firebase rules changes');
+          NODE
+      - name: Guard both production domains before building
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in "https://volunserve.com" "https://volunserve-3aa5b.web.app"; do
+            VOLUNSERVE_HOSTING_URL="$domain" VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          done
+      - name: Install pinned dependencies and run protected regression tests
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          for test in \
+            scripts/test-admin-navigation-contract.cjs \
+            scripts/test-admin-staff-login.cjs \
+            scripts/test-superadmin-accounts-directory.cjs \
+            scripts/test-superadmin-premium-restoration.cjs \
+            scripts/test-unified-login-routing.cjs \
+            scripts/test-login-field-validation.cjs \
+            scripts/test-signup-prod.cjs \
+            scripts/test-signup-google-oauth.cjs \
+            scripts/test-notification-clickthrough-polish-20261106.cjs \
+            scripts/test-lgu-clean-announcements-live.cjs; do
+            test -f "$test" || { echo "::error::Missing required regression test: $test"; exit 1; }
+            node "$test"
+          done
+          npx tsc --noEmit --pretty false
+      - name: Clean exact web build and stamp revision
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const release=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(release.revision,process.env.GITHUB_SHA,'STOP release fingerprint mismatch');
+          for(const route of ['login','signup','admin-login','admin-request','notifications','announcements']){
+            assert(fs.existsSync('dist/'+route+'.html')||fs.existsSync('dist/'+route+'/index.html'),'STOP protected route missing: '+route);
+          }
+          console.log('PASS protected routes and exact release SHA');
+          NODE
+      - name: Validate project credentials and make current-live backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::No Firebase credentials; no live deployment"; exit 1; fi
+          node <<'NODE'
+          const fs=require('node:fs');const cred=JSON.parse(process.env.FIREBASE_SA);
+          if(cred.type!=='service_account'||cred.project_id!==process.env.PROJECT)throw Error('STOP wrong Firebase project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS correct Firebase project');
+          NODE
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:backup-superadmin-lgu-review-1106" --project "$PROJECT" --non-interactive
+      - name: Block deployment if live moved during build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in "https://volunserve.com" "https://volunserve-3aa5b.web.app"; do
+            VOLUNSERVE_HOSTING_URL="$domain" VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          done
+      - name: Publish exact reviewed web assets to live Hosting only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify exact live web revision
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Super Admin LGU Review simplified on LIVE; no other source files modified"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::Hosting update may have occurred, but exact live revision not confirmed"
+          exit 1
