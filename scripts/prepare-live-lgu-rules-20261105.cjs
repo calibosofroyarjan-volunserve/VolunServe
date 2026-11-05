@@ -74,7 +74,7 @@ target=target.replace("      allow create: if isSuperAdmin()",createStaff+"     
 // approved-user branch is byte-identical and retains its exact semantics.
 // Match line breaks and indentation from the LIVE Cloud Rules snapshot, not
 // GitHub's stale formatting. Stop unless exactly ONE original grant case exists.
-const legacyGrantPattern=/([ \\t]*)resource\\.data\\.status == 'approved'(\\r?\\n)([ \\t]*)&& request\\.resource\\.data\\.role == 'admin'/g;
+const legacyGrantPattern=/([ \t]*)resource\.data\.status == 'approved'(\r?\n)([ \t]*)&& request\.resource\.data\.role == 'admin'/g;
 const originalGrantMatches=[...target.matchAll(legacyGrantPattern)];
 assert.equal(originalGrantMatches.length,1,"BLOCKED: unexpected existing Super Admin promotion shape");
 const oldGrantCondition=originalGrantMatches[0][0];
