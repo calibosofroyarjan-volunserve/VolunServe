@@ -1,0 +1,161 @@
+name: Safe Hosting-Only Community Events UI Fix (Preserve LIVE Login and Admin)
+
+on:
+  push:
+    branches: [release/community-events-live-ui-20261105]
+    paths: [.github/workflows/deploy-community-events-live-ui-20261105.yml]
+
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-preview-and-promote:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      LIVE_BASE: '8cf5141d6fc51b29e443878efb8619fb7186b086'
+      SOURCE_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-community-events-ui-sa.json
+    steps:
+      - name: Confirm only the current LIVE Community Events UI file changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const repo=process.env.GITHUB_REPOSITORY;
+          const base=process.env.LIVE_BASE;
+          const head=process.env.SOURCE_SHA;
+          (async()=>{
+            const res=await fetch('https://api.github.com/repos/'+repo+'/compare/'+base+'...'+head,{
+              headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'},
+              signal:AbortSignal.timeout(20000)});
+            assert.equal(res.status,200,'GitHub comparison must succeed');
+            const compare=await res.json();
+            assert.equal(compare.status,'ahead');
+            assert.equal(compare.behind_by,0);
+            assert.equal(compare.files.length,2,'Only Community Events UI and one release workflow may change');
+            assert.deepEqual(compare.files.map(f=>f.filename).sort(),[
+              '.github/workflows/deploy-community-events-live-ui-20261105.yml',
+              'app/(tabs)/community-events.tsx'
+            ]);
+            console.log('PASS: no changes to Login, Signup, Admin, Super Admin, Auth, backend, Firebase config, security rules or database.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Fetch exact LIVE-derived candidate source without legacy gitlink checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            -o "$RUNNER_TEMP/volunserve-live-ui-candidate.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-live-ui-candidate.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json && test -f app/login.web.tsx && test -f firebase.json
+      - name: Require exact live baseline before preparing any release
+        env:
+          VOLUNSERVE_EXPECTED_SHA: 8cf5141d6fc51b29e443878efb8619fb7186b086
+        run: node scripts/check-live-hosting.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify unchanged Login/Signup and full TypeScript project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+      - name: Export fresh web source, no local cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          GITHUB_SHA="$SOURCE_SHA" node scripts/verify-hosting-release.cjs
+          test "$(node -p "JSON.parse(require('fs').readFileSync('dist/volunserve-release.json','utf8')).revision")" = "$SOURCE_SHA"
+      - name: Require credentials for exact Firebase project, no live writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing Firebase Hosting credentials"; exit 1; fi
+          node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(process.env.FIREBASE_SA);
+          if(p.type!=='service_account'||p.project_id!=='volunserve-3aa5b')throw Error('Wrong Firebase project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          NODE
+      - name: Deploy only Hosting assets to preview; no production change
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        id: preview
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: community-events-safe-1105
+          expires: 3d
+      - name: Verify preview routes and exact candidate revision
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 7
+          done
+          echo "::error::Preview verification failed; refusing live promotion."
+          exit 1
+      - name: Verify real browser Login hydration on preview
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          test -n "$CHROME"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --remote-allow-origins='*' --remote-debugging-port=9223 \
+            --user-data-dir=/tmp/volunserve-ce-ui-cdp about:blank >/tmp/volunserve-ce-cdp.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+      - name: Backup exact live Hosting and promote preview ONLY (no rules or data)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PROJECT=volunserve-3aa5b
+          BACKUP=backup-ce-live-1105
+          PREVIEW=community-events-safe-1105
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Hosting backup channel: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$SOURCE_SHA" node scripts/check-live-hosting.cjs; then
+              echo "SUCCESS: Community Events UI Hosting released at $SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "Rules, backend, Functions, Storage, Auth and Firestore records unchanged." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Hosting promotion not verified. Inspect live revision before any rollback."
+          exit 1
