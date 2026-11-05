@@ -1,0 +1,48 @@
+name: Read-only LGU Rules Compiler Footprint Analysis
+on:
+  push:
+    branches: [audit/optimized-lgu-firestore-compiler-20261106]
+    paths: [.github/workflows/audit-lgu-rules-compiler-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Analyze existing inactive candidate function footprint, without writes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re,hashlib,subprocess,urllib.request,json,collections
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+t})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          active=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          assert active['rulesetName']=='projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164','STOP live rules moved'
+          paths={
+            'CURRENT_LIVE':active['rulesetName'],
+            'OPTIMIZED_LGU':'projects/volunserve-3aa5b/rulesets/cde63147-6c23-446b-9880-c4f8d0c35ff8'}
+          for label,path in paths.items():
+            raw=get(path)['source']['files'][0]['content']
+            print('SOURCE',label,'BYTES',len(raw.encode()),'LINES',len(raw.splitlines()),'NORMALIZED_SHA',hashlib.sha256(raw.replace('\r\n','\n').encode()).hexdigest())
+            names=[]
+            for match in re.finditer(r'(?m)^    function (\w+)\s*\(',raw):
+              name=match.group(1)
+              total=len(re.findall(r'\b'+re.escape(name)+r'\s*\(',raw))
+              names.append((name,total))
+            print('ROOT_HELPERS',label,json.dumps(names))
+            print('UNREFERENCED_ROOT_HELPERS',label,json.dumps([n for n,k in names if k==1]))
+            print('ROOT_HELPER_COUNT',label,len(names))
+            blocks=collections.Counter()
+            for m in re.finditer(r'(?m)^\s*match\s+([^\{\n]+)\s*\{',raw):blocks[m.group(1).strip()]+=1
+            print('TOP_MATCHES',label,json.dumps(blocks.most_common(12)))
+          print('PASS immutable READ_ONLY policy audit complete; production unchanged')
+          PY
