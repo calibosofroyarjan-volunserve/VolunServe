@@ -2007,7 +2007,7 @@ This still does not automatically create a Donation Campaign.`,
     setQuickAction(null);
   };
 
-  const quickChecklist = [
+  const quickChecklist: { label: string; done: boolean; stage: ReviewStage }[] = [
     {
       label: "Documents reviewed and consistent",
       done: reviewDraft?.documentConsistencyStatus === "consistent",
