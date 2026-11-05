@@ -92,11 +92,17 @@ export default function LguStaffApplication() {
       await uploadLguProof(candidateStorage,newUser.uid,"appointment-letter",appointmentImage!);
       void sendEmailVerification(newUser).catch(()=>undefined);
       setForm({fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",appointmentReference:"",barangay:""});
+      setStaffIdImage(null);
+      setAppointmentImage(null);
       setSuccess(true);
     }catch(err:any){
-      // Roll back newly created Auth account when Firestore application fails.
-      if(newUser)await deleteUser(newUser).catch(()=>undefined);
-      setError(userFacingError(err, "Unable to submit your application. No Admin access has been granted. Please try again."));
+      // Never delete a pending profile if an image upload fails. That profile
+      // remains unprivileged, and its owner can retry with the same credentials.
+      if(createdAuth && !profileCreated && newUser)await deleteUser(newUser).catch(()=>undefined);
+      const hint=profileCreated
+        ? " The pending application has no Admin access. Retry with the SAME email and password and both images."
+        : "";
+      setError(userFacingError(err, "Unable to submit your application.")+hint);
     }finally{
       await signOut(candidateAuth).catch(()=>undefined);
       await deleteApp(app).catch(()=>undefined);
@@ -125,12 +131,12 @@ export default function LguStaffApplication() {
           </View>
         </View>
         {success ? <>
-          <Text style={styles.success}>Your LGU staff information was submitted for review. Your account is PENDING with no Admin privileges. Our programmer Super Admin team will independently verify your identity, employment and authorization with official LGU sources. Only after successful confirmation may they promote this account to LGU Admin. Check your email for verification instructions.</Text>
+          <Text style={styles.success}>Your LGU staff information was submitted for review. Your account is PENDING with no Admin privileges. Our programmer Super Admin team will independently verify your identity, employment and authorization with official LGU sources. Only after successful confirmation may they promote this account to LGU Admin. Your two private credential photos were submitted for Super Admin review. Check your email for verification instructions.</Text>
           <TouchableOpacity style={styles.submit} onPress={()=>router.replace("/admin-login")}>
             <Text style={styles.submitText}>Return to Admin Login</Text>
           </TouchableOpacity>
         </> : <>
-          <Text style={styles.notice}>Fields marked with a red * are required. STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Do not submit sensitive ID scans or passwords as proof.</Text>
+          <Text style={styles.notice}>Fields marked with a red * are required. STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Attach two images: a clear valid ID and your appointment/employment document. These are private to Super Admin reviewers. Never upload passwords.</Text>
           {fields.map(([key,label,hint,secret])=><View key={key} style={styles.field}>
             <Text style={styles.label}>{label} <Text style={styles.required}>*</Text></Text>
             <TextInput style={styles.input} placeholder={hint} placeholderTextColor="#8CA89A"
