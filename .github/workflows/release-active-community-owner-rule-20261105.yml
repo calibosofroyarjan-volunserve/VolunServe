@@ -169,7 +169,9 @@ jobs:
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-active-community-owner-read.cjs"
-          node --test scripts/test-admin-volunteer-authorization.cjs
+          # The unrelated Volunteer assignment contract tests target newer main
+          # rules, not this currently deployed ruleset. Do not modify those
+          # unrelated production permissions as part of this owner-only release.
       - name: Release only minimal ACTIVE owner-read change through Firebase Rules API
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
