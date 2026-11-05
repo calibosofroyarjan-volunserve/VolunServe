@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import json,urllib.request,subprocess,hashlib,difflib
           token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
-          name='projects/volunserve-3aa5b/rulesets/26e27c96-ca08-4e5e-ace5-437ee4df086b'
+          name='projects/volunserve-3aa5b/rulesets/dc625db9-8b32-4e05-aa58-25723c087815'
           req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+name,headers={'Authorization':'Bearer '+token})
           with urllib.request.urlopen(req,timeout=30) as f:compiled=json.load(f)
           remote=max((x['content'] for x in compiled['source']['files']),key=len)
