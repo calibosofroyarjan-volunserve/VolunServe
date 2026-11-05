@@ -5,7 +5,7 @@ const login=read("app/login.tsx"),web=read("app/login.web.tsx"),old=read("app/ad
 const apply=read("app/admin-request.tsx"),owner=read("app/(superadmin)/admin-accounts.tsx");
 const rules=read("firestore.rules"),shell=read("components/auth/PremiumAuthShell.tsx");
 const policy=read("lib/unifiedLoginRouting.ts");
-assert(shell.includes("VolunServe Login") && !shell.includes("styles.switcher") &&
+assert(shell.includes("Welcome Back") && !shell.includes("styles.switcher") &&
   login.includes("<PremiumAuthShell>") && web.includes("<PremiumAuthShell>"),
   "One clear Login must replace two login-role tabs");
 assert(login.includes("unifiedPasswordDestination(profile)") && web.includes("unifiedPasswordDestination(profile)") &&
