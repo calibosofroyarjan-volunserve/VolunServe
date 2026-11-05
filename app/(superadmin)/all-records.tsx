@@ -268,7 +268,6 @@ const recordSections: SystemRecordSection[] = [
       { id: "residentAccounts", label: "Resident Accounts", icon: "people-outline", source: "users", audience: "resident" },
       { id: "cases", label: "Emergency Reports", icon: "warning-outline", source: "cases" },
       { id: "assistance", label: "Assistance Requests", icon: "medkit-outline", source: "assistance" },
-      { id: "disputes", label: "Disputes", icon: "alert-circle-outline", source: "disputes" },
     ],
   },
   {
@@ -290,6 +289,7 @@ const recordSections: SystemRecordSection[] = [
     views: [
       { id: "assignments", label: "Response Assignments", icon: "navigate-outline", source: "assignments" },
       { id: "contributions", label: "Verified Help", icon: "checkmark-done-outline", source: "contributions" },
+      { id: "disputes", label: "Response Disputes", icon: "alert-circle-outline", source: "disputes" },
     ],
   },
   {
@@ -346,6 +346,7 @@ export default function AllRecords() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<RecordStatusFilter>("all");
   const [recordSort, setRecordSort] = useState<RecordSort>("newest");
+  const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
   const PAGE_SIZE = 5;
 
   const [
@@ -569,6 +570,7 @@ export default function AllRecords() {
     setSearch("");
     setStatusFilter("all");
     setRecordSort("newest");
+    setExpandedRecordId(null);
     setPage(1);
   };
   const showRecordSection = (section: SystemRecordSection) => {
@@ -1225,9 +1227,7 @@ export default function AllRecords() {
             styles.subtitle
           }
         >
-          Read-only oversight of
-          VolunServe&apos;s core
-          operational records.
+          Browse authorized system records by service area. Detailed records are view-only; decisions remain with LGU Admins.
         </Text>
       </View>
 
@@ -1253,22 +1253,15 @@ export default function AllRecords() {
         />
 
         <SummaryCard
-          label="Verified Help"
-          value={
-            records
-              .contributions.length
-          }
-          icon={
-            "checkmark-done-outline"
-          }
+          label="Community Events"
+          value={records.events.length}
+          icon="calendar-outline"
         />
 
         <SummaryCard
-          label="Disputes"
-          value={
-            records.disputes.length
-          }
-          icon="alert-circle-outline"
+          label="Assistance Requests"
+          value={records.assistance.length}
+          icon="medkit-outline"
         />
 
         <SummaryCard
@@ -1357,7 +1350,7 @@ export default function AllRecords() {
 
         <TextInput
           value={search}
-          onChangeText={(value) => { setSearch(value); setPage(1); }}
+          onChangeText={(value) => { setSearch(value); setExpandedRecordId(null); setPage(1); }}
           placeholder={
             "Search current records..."
           }
@@ -1379,7 +1372,7 @@ export default function AllRecords() {
           { value: "completed", label: "Completed / Issued" },
           { value: "rejected", label: "Rejected / Cancelled" },
         ]}
-        onFilterChange={value => { setStatusFilter(value); setPage(1); }}
+        onFilterChange={value => { setStatusFilter(value); setExpandedRecordId(null); setPage(1); }}
         sortValue={recordSort}
         sortOptions={[
           { value: "newest", label: "Newest first" },
@@ -1387,7 +1380,7 @@ export default function AllRecords() {
           { value: "name_asc", label: "Name A–Z" },
           { value: "name_desc", label: "Name Z–A" },
         ]}
-        onSortChange={value => { setRecordSort(value); setPage(1); }}
+        onSortChange={value => { setRecordSort(value); setExpandedRecordId(null); setPage(1); }}
       />
 
       {errors[activeTab] ? (
@@ -1487,7 +1480,87 @@ export default function AllRecords() {
               </Text>
             </View>
           ) : (
-            pagedRecords.map(renderRecord)
+            <View style={styles.directory}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                accessibilityLabel={activeView.label + " record directory"}
+                contentContainerStyle={styles.directoryHorizontal}>
+                <View style={styles.directoryInner}>
+                  <View style={styles.directoryColumns}>
+                    <Text style={[styles.directoryColumn, styles.directoryMain]}>RECORD</Text>
+                    <Text style={[styles.directoryColumn, styles.directoryCategory]}>CATEGORY</Text>
+                    <Text style={[styles.directoryColumn, styles.directoryStatus]}>STATUS</Text>
+                    <Text style={[styles.directoryColumn, styles.directoryDate]}>LAST UPDATED</Text>
+                    <Text style={[styles.directoryColumn, styles.directoryAction]}>DETAILS</Text>
+                  </View>
+                  {pagedRecords.map((item, index) => {
+                    const recordName = firstText(
+                      activeTab === "assistance" ? item.title : "",
+                      item.fullName, item.displayName, item.title, item.name,
+                      item.caseTitle, item.volunteerName, item.recipientName,
+                      activeTab === "disputes" ? "Response Dispute" : "",
+                      activeView.label
+                    );
+                    const recordReference = firstText(item.requestId, item.certificateId, item.id);
+                    const category = firstText(
+                      item.categoryLabel, item.category, item.role,
+                      item.contributionType, activeView.label
+                    ).replace(/_/g, " ");
+                    const recordState = firstText(
+                      item.status, item.adminStatus, item.verificationStatus,
+                      item.applicationStatus, "Not recorded"
+                    );
+                    const statusTheme = statusColor(recordState);
+                    const updated = readableDate(item.updatedAt || item.createdAt ||
+                      item.completedAt || item.issuedAt || item.reviewedAt ||
+                      item.resolvedAt || item.verifiedAt);
+                    const isExpanded = expandedRecordId === item.id;
+                    return (
+                      <View key={activeTab + ":" + item.id}>
+                        <View style={[styles.directoryRow, index % 2 === 1 && styles.directoryAltRow]}>
+                          <View style={styles.directoryMain}>
+                            <Text style={styles.directoryName} numberOfLines={2}>{recordName}</Text>
+                            <Text style={styles.directoryReference} numberOfLines={1}>
+                              Ref: {recordReference}
+                            </Text>
+                          </View>
+                          <Text style={[styles.directoryValue, styles.directoryCategory]} numberOfLines={2}>
+                            {category}
+                          </Text>
+                          <View style={styles.directoryStatus}>
+                            <View style={[styles.directoryBadge, { backgroundColor: statusTheme.background }]}>
+                              <Text style={[styles.directoryBadgeText, { color: statusTheme.text }]} numberOfLines={2}>
+                                {recordState.replace(/_/g, " ")}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.directoryValue, styles.directoryDate]} numberOfLines={2}>
+                            {updated}
+                          </Text>
+                          <View style={styles.directoryAction}>
+                            <TouchableOpacity
+                              accessibilityRole="button"
+                              accessibilityLabel={(isExpanded ? "Hide details for " : "View details for ") + recordName}
+                              accessibilityState={{ expanded: isExpanded }}
+                              style={[styles.directoryViewButton, isExpanded && styles.directoryViewButtonActive]}
+                              onPress={() => setExpandedRecordId(isExpanded ? null : item.id)}
+                            >
+                              <Text style={styles.directoryViewText}>{isExpanded ? "Hide" : "View"}</Text>
+                              <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color="#0F7158" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        {isExpanded ? (
+                          <View style={styles.directoryExpanded}>
+                            <Text style={styles.directoryExpandedLabel}>READ-ONLY RECORD DETAILS</Text>
+                            {renderRecord(item)}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
           )}
         </>
       )}
@@ -1723,13 +1796,14 @@ const styles =
     },
 
     header: {
-      marginBottom: 20,
+      marginBottom: 14, backgroundColor: "#074638", borderRadius: 13,
+      paddingHorizontal: 22, paddingVertical: 19, borderWidth: 1, borderColor: "#145F4C",
     },
 
     eyebrow: {
       fontSize: 11,
       fontWeight: "900",
-      color: "#0F766E",
+      color: "#A9EBD2",
       letterSpacing: 1.3,
     },
 
@@ -1737,13 +1811,11 @@ const styles =
       marginTop: 4,
       fontSize: 30,
       fontWeight: "700",
-      color: "#173D32",
+      color: "#FFFFFF",
     },
 
     subtitle: {
-      marginTop: 5,
-      color: "#64748B",
-      lineHeight: 20,
+      marginTop: 5, color: "#D5EDE5", lineHeight: 20, fontSize: 12,
     },
 
     summaryRow: {
@@ -1756,11 +1828,12 @@ const styles =
     summaryCard: {
       flexGrow: 1,
       minWidth: 150,
-      backgroundColor: "transparent",
-      borderRadius: 0,
-      padding: 14,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      backgroundColor: "#FFFFFF",
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: "#DDEAE5",
     },
 
     summaryIcon: {
@@ -1911,23 +1984,18 @@ const styles =
     } as any,
 
     sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-      marginBottom: 10,
+      flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+      justifyContent: "space-between", gap: 8,
+      marginBottom: 0, paddingHorizontal: 14, paddingVertical: 13,
+      backgroundColor: "#0A4639", borderTopLeftRadius: 10, borderTopRightRadius: 10,
     },
 
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: "900",
-      color: "#173D32",
+      fontSize: 15, fontWeight: "900", color: "#FFFFFF",
     },
 
     recordCount: {
-      color: "#64748B",
-      fontSize: 12,
-      fontWeight: "700",
+      color: "#B8F0D7", fontSize: 12, fontWeight: "800",
     },
 
     recordCard: {
@@ -2072,4 +2140,36 @@ const styles =
       lineHeight: 19,
       fontSize: 12,
     },
+    directory: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DCE8E2",
+      borderTopWidth: 0, borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+      overflow: "hidden", marginBottom: 4 },
+    directoryHorizontal: { flexGrow: 1 },
+    directoryInner: { width: "100%", minWidth: 790 },
+    directoryColumns: { flexDirection: "row", alignItems: "center", minHeight: 39,
+      paddingHorizontal: 14, backgroundColor: "#F0F5F2", borderBottomWidth: 1,
+      borderBottomColor: "#DEE9E3" },
+    directoryColumn: { fontSize: 10, fontWeight: "900", color: "#3C6756", letterSpacing: 0.2 },
+    directoryRow: { flexDirection: "row", alignItems: "center", minHeight: 70,
+      paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1,
+      borderBottomColor: "#EAF0EB" },
+    directoryAltRow: { backgroundColor: "#FCFDFC" },
+    directoryMain: { flex: 2.6, minWidth: 0, paddingRight: 12 },
+    directoryCategory: { flex: 1.45, minWidth: 0, paddingRight: 12 },
+    directoryStatus: { flex: 1.4, minWidth: 0, paddingRight: 12, alignItems: "flex-start" },
+    directoryDate: { flex: 1.35, minWidth: 0, paddingRight: 10 },
+    directoryAction: { width: 85, alignItems: "flex-end" },
+    directoryName: { fontSize: 12.5, fontWeight: "800", color: "#193C30", lineHeight: 19 },
+    directoryReference: { fontSize: 10, color: "#84988E", marginTop: 3 },
+    directoryValue: { fontSize: 11.5, color: "#486559", lineHeight: 17 },
+    directoryBadge: { maxWidth: "100%", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6 },
+    directoryBadgeText: { fontSize: 10.5, fontWeight: "800", textTransform: "capitalize" },
+    directoryViewButton: { flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 4, minHeight: 33, minWidth: 72, borderRadius: 7, borderWidth: 1,
+      borderColor: "#CDE4D8", backgroundColor: "#F4FAF6", paddingHorizontal: 8 },
+    directoryViewButtonActive: { backgroundColor: "#E5F7ED", borderColor: "#9BD5BA" },
+    directoryViewText: { color: "#0C6A52", fontWeight: "800", fontSize: 11 },
+    directoryExpanded: { padding: 13, backgroundColor: "#F5FAF7", borderBottomWidth: 1,
+      borderColor: "#E1EBE5" },
+    directoryExpandedLabel: { fontSize: 9, fontWeight: "900", letterSpacing: 0.7,
+      color: "#567A67", marginBottom: 7 },
   });
