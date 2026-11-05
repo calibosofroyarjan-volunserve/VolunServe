@@ -6,6 +6,11 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/provision-announcements-index-manual.yml"
+  # One-time read-only verification after index creation. Never provisions on push.
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/provision-announcements-index-manual.yml"
   workflow_dispatch:
     inputs:
       confirmation:
@@ -27,7 +32,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (
         (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'CREATE_INDEX_ONLY') ||
-        (github.event_name == 'push' && github.event.head_commit.message == 'Retry VolunServe announcements index one-time after IAM role confirmed')
+        (github.event_name == 'push' && github.event.head_commit.message == 'Verify announcements index state one time read only')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -79,7 +84,8 @@ jobs:
           const path = process.env.RUNNER_TEMP + '/volunserve-indexes.json';
           const indexes = JSON.parse(fs.readFileSync(path, 'utf8'));
           const match = indexes.find(index => {
-            if (index.collectionGroup !== 'announcements' || index.queryScope !== 'COLLECTION') return false;
+            const group = index.collectionGroup || String(index.name || '').match(/\/collectionGroups\/([^/]+)\/indexes\//)?.[1];
+            if (group !== 'announcements' || index.queryScope !== 'COLLECTION') return false;
             const fields = (index.fields || []).filter(field => field.fieldPath !== '__name__');
             return fields.length === 2 &&
               fields[0].fieldPath === 'audience' && fields[0].order === 'ASCENDING' &&
@@ -94,13 +100,13 @@ jobs:
           } else if (match) {
             throw Error('Index exists in unexpected state (' + match.state + '). Manual review required.');
           } else {
-            console.log('Exact index does not exist; authorize creation of one index.');
+            console.log('Exact index does not exist. Create it only through manual workflow dispatch.');
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'action=create\n');
           }
           NODE
 
       - name: Create ONLY the missing announcements composite index
-        if: steps.inspect.outputs.action == 'create'
+        if: github.event_name == 'workflow_dispatch' && steps.inspect.outputs.action == 'create'
         shell: bash
         run: |
           gcloud firestore indexes composite create \
@@ -120,5 +126,5 @@ jobs:
             --database='(default)' \
             --filter='collectionGroup:announcements' \
             --format='table(collectionGroup,queryScope,state,fields)'
-          echo 'Provisioning only. If CREATING, wait until READY before publishing new queries.'
+          echo 'Inspection only on push; manual dispatch can create a missing index. If CREATING, wait for READY.'
           echo 'No Firestore security rules, Hosting, Functions, or application code were deployed.'
