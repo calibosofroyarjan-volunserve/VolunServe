@@ -1,0 +1,22 @@
+name: Chrome DevTools Inspect Unified Login (READ ONLY)
+on:
+  push:
+    branches: [review/unified-login-roles-20261105]
+    paths: [.github/workflows/inspect-unified-login-cdp-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch Chrome DevTools and inspect hydrated public preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable)"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-cdp-profile about:blank > /tmp/chrome.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-unified-login-browser.cjs https://volunserve-3aa5b--unified-login-1105-us83azmw.web.app
