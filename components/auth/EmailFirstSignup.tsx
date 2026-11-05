@@ -297,7 +297,7 @@ export default function EmailFirstSignup() {
         if (signedInUser && !resumeMode) {
           throw new Error("A registration session is already active. Resume it or sign out first.");
         }
-        const user = await authenticateEmailSignup(email, password, resumeMode);
+        const user = await authenticateEmailSignup(email, password, resumeMode, !resumeMode);
         const state = await inspectSignupUser(user);
         showRegistrationState(state);
         setShowErrors(false); setPassword(""); setConfirmPassword("");
