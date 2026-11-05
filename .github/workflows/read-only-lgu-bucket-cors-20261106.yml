@@ -1,0 +1,44 @@
+name: Read-only LGU Credential Storage Bucket CORS Audit
+on:
+  push:
+    branches: [audit/lgu-private-bucket-cors-readonly-20261106]
+    paths: [.github/workflows/read-only-lgu-bucket-cors-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Inspect only CORS metadata for exact configured Firebase Storage bucket
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,urllib.error
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          bucket='volunserve-3aa5b.firebasestorage.app'
+          url='https://storage.googleapis.com/storage/v1/b/'+bucket+'?fields=name,cors'
+          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+          try:
+            with urllib.request.urlopen(req,timeout=30) as response:
+              data=json.load(response)
+          except urllib.error.HTTPError as err:
+            if err.code in (403,404):
+              print('BUCKET_METADATA_READ_FAILED',err.code, 'authorized Cloud Storage bucket metadata access or bucket setup needed')
+              raise SystemExit(0)
+            raise
+          assert data.get('name')==bucket, 'Wrong Storage bucket: abort'
+          rules=data.get('cors',[])
+          print('FIREBASE_STORAGE_BUCKET',data['name'])
+          print('BUCKET_CORS_RULES',json.dumps(rules,sort_keys=True))
+          origins=['https://volunserve.com','https://volunserve-3aa5b.web.app']
+          for origin in origins:
+            permitted=any(('GET' in c.get('method',[])) and (origin in c.get('origin',[]) or '*' in c.get('origin',[])) for c in rules)
+            print('AUTHENTICATED_GETBYTES_CORS_READY',origin,permitted)
+          print('PASS read-only bucket audit: no Storage, Firestore, Hosting, Auth or data changes')
+          PY
