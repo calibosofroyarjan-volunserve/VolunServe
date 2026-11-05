@@ -82,6 +82,14 @@ addition="""
         && request.resource.data.imageUrl is string;
 """
 patched_block=block[:insert_at]+addition+block[insert_at:]
+# A malformed Admin profile with barangay 'all' must never impersonate
+# a global System Update publisher or edit/delete system-wide notices.
+for operation in ("create", "update", "delete"):
+    base = "allow " + operation + ": if isAdmin()"
+    if patched_block.count(base) != 1:
+        raise SystemExit("STOP: Unexpected LGU announcement " + operation + " rule")
+    patched_block = patched_block.replace(
+        base, base + " && profile().get('barangay', '') != 'all'", 1)
 candidate=original[:start]+patched_block+original[end:]
 if not candidate.startswith(original[:start]) or not candidate.endswith(original[end:]):
     raise SystemExit("STOP: unrelated published Firestore rules would be touched")
