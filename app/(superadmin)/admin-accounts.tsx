@@ -500,7 +500,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Review & Approve LGU Admin";
+      return "Review & Accept LGU Admin";
     }
 
     if (action === "reject") {
@@ -558,7 +558,7 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Approve Verified Staff";
+      return "Accept Verified Staff";
     }
     if (action === "reject") {
       return "Reject Application";
@@ -1253,7 +1253,7 @@ export default function AdminAccounts() {
                         onPress={() => openAdminAction("promote", account)}
                       >
                         <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.pendingReviewButtonText}>Review & Approve</Text>
+                        <Text style={styles.pendingReviewButtonText}>Review & Accept</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         accessibilityRole="button"
