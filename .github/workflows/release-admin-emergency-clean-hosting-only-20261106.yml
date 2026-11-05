@@ -37,7 +37,7 @@ jobs:
           git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/emergency-admin-changes.txt"
           node <<'NODE'
           const fs=require('node:fs'),assert=require('node:assert/strict');
-          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-admin-changes.txt','utf8').trim().split('\\n').filter(Boolean).sort();
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-admin-changes.txt','utf8').trim().split(String.fromCharCode(10)).filter(Boolean).sort();
           const expected=[
             '.github/workflows/release-admin-emergency-clean-hosting-only-20261106.yml',
             'app/(admin)/admin-cases.tsx',
@@ -78,14 +78,7 @@ jobs:
           npm ci --no-audit --no-fund
           node --test scripts/test-clean-emergency-report-header.cjs
           node --test scripts/test-embedded-emergency-map-navigation.cjs
-          for t in \\
-            scripts/test-unified-login-routing.cjs \\
-            scripts/test-login-field-validation.cjs \\
-            scripts/test-signup-prod.cjs \\
-            scripts/test-signup-google-oauth.cjs \\
-            scripts/test-admin-staff-login.cjs \\
-            scripts/test-notification-clickthrough-polish-20261106.cjs \\
-            scripts/test-lgu-clean-announcements-live.cjs; do
+          for t in scripts/test-unified-login-routing.cjs scripts/test-login-field-validation.cjs scripts/test-signup-prod.cjs scripts/test-signup-google-oauth.cjs scripts/test-admin-staff-login.cjs scripts/test-notification-clickthrough-polish-20261106.cjs scripts/test-lgu-clean-announcements-live.cjs; do
             test -f "$t"
             node "$t"
           done
