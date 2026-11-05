@@ -4010,11 +4010,6 @@ export default function WebMapTracking() {
     router.replace("/disaster-response?view=tracking" as any);
   };
 
-  const residentResponderLastShared = residentActiveVolunteerPins.reduce(
-    (latest, point) => Math.max(latest, point.lastShared || 0),
-    0,
-  );
-
   const residentDisplayedAssignment =
     isResidentMode &&
     residentPrimaryAssignment &&
@@ -6859,7 +6854,7 @@ export default function WebMapTracking() {
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#8C321C"}}>
                     Call 911 · Emergency
                   </a>
-                  <a href="tel:09366000119" className="secondary-button"
+                  <a href="tel:09326000119" className="secondary-button"
                     style={{padding:"9px 12px",borderRadius:9,background:"#E7F4EF",
                       textDecoration:"none",fontSize:12,fontWeight:750,color:"#17674F"}}>
                     Call SJDM CDRRMO
@@ -6869,7 +6864,7 @@ export default function WebMapTracking() {
 
               {residentAssignmentStatus === "completed" && (
                 <div className="clean-info-block">
-                  <strong>Volunteer support completed</strong>
+                  <strong>Volunteer response completed</strong>
                   <p>Confirm the assistance from My Reports when requested.</p>
                 </div>
               )}
