@@ -1,0 +1,39 @@
+name: Validate One-Form Assistance Review Without Maps
+on:
+  push:
+    branches: [ux/one-form-assistance-no-maps-20261106]
+  pull_request:
+    paths:
+      - "app/(admin)/assistance-requests.tsx"
+      - "scripts/test-assistance-single-form-no-maps.cjs"
+      - "scripts/test-simple-assistance-admin-review.cjs"
+      - ".github/workflows/validate-assistance-one-form-no-maps-20261106.yml"
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify single form, secured actions, amount rules and current Admin UI
+        run: |
+          node scripts/test-assistance-single-form-no-maps.cjs
+          node scripts/test-simple-assistance-admin-review.cjs
+          node scripts/test-assistance-validation.cjs
+          node scripts/test-assistance-compact-review.cjs
+          npx tsc --noEmit --pretty false
+      - name: Clean Expo web export (no deployment)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
