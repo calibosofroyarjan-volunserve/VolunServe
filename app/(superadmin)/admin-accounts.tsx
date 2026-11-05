@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 
 import {
   db,
@@ -62,6 +63,8 @@ type AdminFilter =
   | "all"
   | "active"
   | "suspended";
+
+type AdminSort = "newest" | "oldest" | "name_asc" | "name_desc";
 
 type AdminAction =
   | "promote"
@@ -132,13 +135,14 @@ export default function AdminAccounts() {
     filter,
     setFilter,
   ] = useState<AdminFilter>("all");
+  const [sort, setSort] = useState<AdminSort>("newest");
 
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
   const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
   const compactDirectory = viewportWidth < 1180;
   const ADMIN_PAGE_SIZE = 5;
-  React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter]);
+  React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter, sort]);
 
   const [
     showAddAdmin,
@@ -311,11 +315,18 @@ export default function AdminAccounts() {
             term
           );
         }
-      );
+      ).sort((a, b) => {
+        if (sort === "name_asc") return nameFor(a).localeCompare(nameFor(b));
+        if (sort === "name_desc") return nameFor(b).localeCompare(nameFor(a));
+        const aTime = timestampValue(a.createdAt || a.adminCreatedAt);
+        const bTime = timestampValue(b.createdAt || b.adminCreatedAt);
+        return sort === "oldest" ? aTime - bTime : bTime - aTime;
+      });
     }, [
       users,
       search,
       filter,
+      sort,
     ]);
 
   const adminPageCount = Math.max(1, Math.ceil(adminAccounts.length / ADMIN_PAGE_SIZE));
@@ -1112,54 +1123,24 @@ export default function AdminAccounts() {
           />
         </View>
 
-        <View
-          style={
-            styles.filterRow
-          }
-        >
-          {(
-            [
-              "all",
-              "active",
-              "suspended",
-            ] as AdminFilter[]
-          ).map((value) => {
-            const active =
-              filter === value;
-
-            return (
-              <TouchableOpacity
-                key={value}
-                style={[
-                  styles.filterButton,
-
-                  active &&
-                    styles.filterButtonActive,
-                ]}
-                onPress={() =>
-                  setFilter(value)
-                }
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-
-                    active &&
-                      styles.filterTextActive,
-                  ]}
-                >
-                  {value === "all"
-                    ? "All Admins"
-                    : value ===
-                        "active"
-                      ? "Active"
-                      : "Suspended"}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
+        <SuperAdminFilterSort
+          accessibilityContext="Admin accounts"
+          filterValue={filter}
+          filterOptions={[
+            { value: "all", label: "All Admins" },
+            { value: "active", label: "Active" },
+            { value: "suspended", label: "Suspended" },
+          ]}
+          onFilterChange={setFilter}
+          sortValue={sort}
+          sortOptions={[
+            { value: "newest", label: "Newest first" },
+            { value: "oldest", label: "Oldest first" },
+            { value: "name_asc", label: "Name A–Z" },
+            { value: "name_desc", label: "Name Z–A" },
+          ]}
+          onSortChange={setSort}
+        />
 
         <View style={styles.directoryPanel}>
           <View style={styles.dirHeading}>
