@@ -93,7 +93,7 @@ jobs:
           VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
         run: node scripts/check-live-hosting.cjs
 
-      - name: Actual browser: unified Welcome Back Login and multi-step premium Signup
+      - name: "Actual browser: unified Welcome Back Login and multi-step premium Signup"
         env:
           PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
         shell: bash
