@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
+import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 
 import {
   collection,
@@ -36,6 +37,9 @@ type RecordType =
   | "donations"
   | "events"
   | "certificates";
+
+type RecordStatusFilter = "all" | "pending" | "approved" | "active" | "completed" | "rejected";
+type RecordSort = "newest" | "oldest" | "name_asc" | "name_desc";
 
 type GenericRecord = {
   id: string;
@@ -156,6 +160,31 @@ const firstText = (
   }
 
   return "-";
+};
+
+const recordStatus = (item: GenericRecord) => firstText(
+  item.status, item.verificationStatus, item.adminStatus,
+  item.applicationStatus, item.volunteerStatus, item.approvalStatus,
+).toLowerCase().replace(/_/g, " ");
+
+const recordTimestamp = (item: GenericRecord) => Math.max(
+  ...["updatedAt", "createdAt", "completedAt", "issuedAt", "reviewedAt", "resolvedAt", "verifiedAt"]
+    .map(key => timestampValue(item[key])),
+);
+
+const recordSortLabel = (item: GenericRecord) => firstText(
+  item.fullName, item.title, item.name, item.volunteerName,
+  item.recipientName, item.donorName, item.id,
+).toLowerCase();
+
+const matchesRecordStatus = (item: GenericRecord, category: RecordStatusFilter) => {
+  if (category === "all") return true;
+  const status = recordStatus(item);
+  if (category === "pending") return /pending|awaiting|in progress|assigned|offered|responding|open/.test(status);
+  if (category === "approved") return /approved|verified|accepted/.test(status);
+  if (category === "active") return /active|ongoing|started|on site|onsite/.test(status);
+  if (category === "completed") return /complete|finished|resolved|issued|credited|success/.test(status);
+  return /reject|denied|failed|suspend|cancel|dispute|not helped/.test(status);
 };
 
 const statusColor = (
@@ -315,6 +344,8 @@ export default function AllRecords() {
   const [activeViewId, setActiveViewId] = useState("residentAccounts");
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<RecordStatusFilter>("all");
+  const [recordSort, setRecordSort] = useState<RecordSort>("newest");
   const PAGE_SIZE = 5;
 
   const [
@@ -503,52 +534,27 @@ export default function AllRecords() {
     };
   }, []);
 
-  const visibleRecords =
-    useMemo(() => {
-      const view = recordSections.flatMap(section => section.views).find(item => item.id === activeViewId);
-      const source = records[activeTab];
-      const scopedRecords = activeTab === "users" && view?.audience
-        ? source.filter(item => accountAudienceForUser(item) === view.audience)
-        : source;
-
-      const term =
-        search
-          .trim()
-          .toLowerCase();
-
-      if (!term) {
-        return scopedRecords;
-      }
-
-      return scopedRecords.filter(
-        (item) => {
-          const searchable =
-            Object.values(
-              item
-            )
-              .filter(
-                (value) =>
-                  typeof value ===
-                    "string" ||
-                  typeof value ===
-                    "number" ||
-                  typeof value ===
-                    "boolean"
-              )
-              .join(" ")
-              .toLowerCase();
-
-          return searchable.includes(
-            term
-          );
-        }
-      );
-    }, [
-      records,
-      activeTab,
-      activeViewId,
-      search,
-    ]);
+  const visibleRecords = useMemo(() => {
+    const view = recordSections.flatMap(section => section.views).find(item => item.id === activeViewId);
+    const source = records[activeTab];
+    const scoped = activeTab === "users" && view?.audience
+      ? source.filter(item => accountAudienceForUser(item) === view.audience)
+      : source;
+    const needle = search.trim().toLowerCase();
+    return scoped.filter(item => {
+      if (!matchesRecordStatus(item, statusFilter)) return false;
+      if (!needle) return true;
+      return Object.values(item).filter(value =>
+        typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+      ).join(" ").toLowerCase().includes(needle);
+    }).sort((a, b) => {
+      if (recordSort === "name_asc") return recordSortLabel(a).localeCompare(recordSortLabel(b));
+      if (recordSort === "name_desc") return recordSortLabel(b).localeCompare(recordSortLabel(a));
+      return recordSort === "oldest"
+        ? recordTimestamp(a) - recordTimestamp(b)
+        : recordTimestamp(b) - recordTimestamp(a);
+    });
+  }, [records, activeTab, activeViewId, search, statusFilter, recordSort]);
 
   const totalPages = Math.max(1, Math.ceil(visibleRecords.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
@@ -561,6 +567,8 @@ export default function AllRecords() {
     setActiveViewId(view.id);
     setActiveTab(view.source);
     setSearch("");
+    setStatusFilter("all");
+    setRecordSort("newest");
     setPage(1);
   };
   const showRecordSection = (section: SystemRecordSection) => {
@@ -1303,6 +1311,28 @@ export default function AllRecords() {
           }
         />
       </View>
+
+      <SuperAdminFilterSort
+        accessibilityContext={activeView.label}
+        filterValue={statusFilter}
+        filterOptions={[
+          { value: "all", label: "All statuses" },
+          { value: "pending", label: "Pending" },
+          { value: "approved", label: "Approved / Verified" },
+          { value: "active", label: "Active" },
+          { value: "completed", label: "Completed / Issued" },
+          { value: "rejected", label: "Rejected / Cancelled" },
+        ]}
+        onFilterChange={value => { setStatusFilter(value); setPage(1); }}
+        sortValue={recordSort}
+        sortOptions={[
+          { value: "newest", label: "Newest first" },
+          { value: "oldest", label: "Oldest first" },
+          { value: "name_asc", label: "Name A–Z" },
+          { value: "name_desc", label: "Name Z–A" },
+        ]}
+        onSortChange={value => { setRecordSort(value); setPage(1); }}
+      />
 
       {errors[activeTab] ? (
         <View
