@@ -1074,8 +1074,7 @@ export default function WebDisasterReport() {
         location: value("location"),
         latitude: pin.latitude,
         longitude: pin.longitude,
-        locationSource: pin.source,
-        gpsAccuracyMeters: pin.source === "device_gps" ? pin.accuracy : null,
+                gpsAccuracyMeters: pin.source === "device_gps" ? pin.accuracy : null,
         locationCapturedAt: serverTimestamp(),
 
         details: value("details"),
@@ -1094,6 +1093,7 @@ export default function WebDisasterReport() {
         videoEvidenceCount: videoFile ? 1 : 0,
 
         verification: {
+          locationSource: pin.source,
           accountApproved: true,
           reporterTrust:
             identityVerified
