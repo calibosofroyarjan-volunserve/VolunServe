@@ -5283,7 +5283,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Volunteer Task Assignments</Text>
+                              <Text style={styles.personnelCleanTitle}>Send Volunteer Task Offers</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5291,7 +5291,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Select an approved Volunteer and send a task offer. It appears with the resident's incident photo in New, where they may Accept or Decline. These are community support tasks, not official dispatch.
+                              Choose an approved Volunteer. They receive the incident photo and task in New, then choose Accept or Decline.
                             </Text>
                           </View>
                         </View>
@@ -5305,7 +5305,7 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Any approved SJDM Volunteer may receive a task offer, even with another task. Volunteers choose Accept or Decline; live response starts only with their consent.
+                          Approved SJDM Volunteers can receive offers. Only accepted offers become active tasks.
                         </Text>
                       </View>
 
@@ -5437,7 +5437,7 @@ export default function AdminCases() {
                       <View style={styles.personnelSupportDivider} />
 
                       <View style={styles.personnelActiveSupportHeader}>
-                        <Text style={styles.personnelListHeading}>Assigned Volunteer Support</Text>
+                        <Text style={styles.personnelListHeading}>Volunteer Task Status</Text>
                         <View style={styles.personnelCountBadgeMuted}>
                           <Text style={styles.personnelCountBadgeMutedText}>{activeAssignments.length}</Text>
                         </View>
@@ -5447,7 +5447,7 @@ export default function AdminCases() {
                         <View style={styles.personnelSupportEmpty}>
                           <Text style={styles.personnelSupportEmptyIcon}>♧</Text>
                           <View>
-                            <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
+                            <Text style={styles.personnelCleanEmptyTitle}>No task offers sent yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
                               Send an offer to an approved Volunteer, even offline. Android push requires a registered device; the Volunteer must accept to respond.
                             </Text>
