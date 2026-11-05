@@ -1,0 +1,177 @@
+name: FINAL RELEASE LGU Accept Reject by Updating Existing Firestore Rules Release
+on:
+  push:
+    branches: [release/lgu-admin-decisions-live-20261105]
+    paths: [.github/workflows/publish-lgu-approved-rules-rest-20261105.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: volunserve-3aa5b
+      LIVE_BASE: '579bed559b1ba81e2045ba420847f8635e8f182c'
+      TESTED_WEB_REVISION: 'd4974f8765f1687dcc870d8f47f2a21296355cd1'
+      PREVIEW_URL: 'https://volunserve-3aa5b--lgu-accept-reject-1105-r16422si.web.app'
+      ORIG_RULES_SHA: '67fb37a13603b172c9a9c8bea6037fb75243907dd8a98bd18d90466681816db0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Require that reviewed UI candidate has not changed after successful preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$TESTED_WEB_REVISION" HEAD
+          git diff --exit-code "$TESTED_WEB_REVISION" HEAD -- 'app' 'components' 'lib' 'firestore.rules' 'storage.rules' 'firebase.json' '.firebaserc' 'backend' 'functions'
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/admin-request.tsx' 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(tabs)' 'lib/firebaseAuth.ts' 'storage.rules' 'firestore.rules' 'functions' 'backend' 'firebase.json' '.firebaserc'
+          echo "PASS: tested Super Admin UI exactly unchanged; no other modules changed."
+
+      - name: Verify exact current Hosting and tested preview revisions before any modifications
+        shell: bash
+        run: |
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          VOLUNSERVE_HOSTING_URL="$PREVIEW_URL" VOLUNSERVE_EXPECTED_SHA="$TESTED_WEB_REVISION" node scripts/check-live-hosting.cjs
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Backup the actual deployed immutable Firestore Rules source and prepare surgical candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib,os
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(u):
+            req=urllib.request.Request(u,headers={'Authorization':'Bearer '+t})
+            with urllib.request.urlopen(req,timeout=25) as response:return json.load(response)
+          base='https://firebaserules.googleapis.com/v1/'
+          rel=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          if rel.get('rulesetName')!='projects/volunserve-3aa5b/rulesets/b52b3100-43b9-4a01-aa2f-0c803022436e':
+            raise SystemExit('BLOCKED: live Firestore Rules release ID changed')
+          src=get(base+rel['rulesetName'])['source']['files']
+          content=max((x.get('content','') for x in src),key=len)
+          if hashlib.sha256(content.encode()).hexdigest()!=os.environ['ORIG_RULES_SHA']:
+            raise SystemExit('BLOCKED: live Firestore Rules content changed')
+          open('/tmp/volunserve-lgu-before.rules','w').write(content)
+          print('PASS original production Firestore rules backed up without writes')
+          PY
+          node scripts/prepare-surgical-lgu-rules.cjs /tmp/volunserve-lgu-before.rules /tmp/volunserve-lgu-candidate.rules
+          cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+
+      - name: Install for repeatable emulator security check and Hosting backup tools
+        run: npm ci --no-audit --no-fund
+
+      - name: Recheck LGU Accept/Reject UI contracts and actual live-scoped policy permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-superadmin-lgu-review-ui.cjs
+          node scripts/test-admin-staff-login.cjs
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs"
+
+      - name: Chrome browser verifies previously tested exact Hosting preview still serves correct Signup Login and request fields
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable)"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/lgu-final-rest-check about:blank > /tmp/lgu-final-browser.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-lgu-pending-browser.cjs "$PREVIEW_URL"
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_URL"
+          node scripts/verify-premium-signup-browser.cjs "$PREVIEW_URL"
+
+      - name: Backup current live Hosting; require unchanged Rules and live source immediately before release
+        id: backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          python3 - <<'PY'
+          import json,hashlib,subprocess,urllib.request,os
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(u):
+            req=urllib.request.Request(u,headers={'Authorization':'Bearer '+t})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          base='https://firebaserules.googleapis.com/v1/'
+          r=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          src=get(base+r['rulesetName'])
+          txt=max((x.get('content','') for x in src['source']['files']),key=len)
+          if hashlib.sha256(txt.encode()).hexdigest()!=os.environ['ORIG_RULES_SHA']:
+            raise SystemExit('BLOCKED: deployed Rules changed before release')
+          print('PASS exact original live Rules still deployed')
+          PY
+          npx firebase hosting:clone "$PROJECT:live" "$PROJECT:backup-lgu-rest-1105" --project "$PROJECT" --non-interactive
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          echo "Live Hosting backed up to backup-lgu-rest-1105" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create immutable validated LGU Ruleset and PATCH existing cloud.firestore release only
+        id: rules_patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/publish-surgical-lgu-rules-rest.py publish
+
+      - name: Verify Firebase Rules exact candidate and approved staff isolation before web promotion
+        id: rules_verify
+        run: python3 scripts/publish-surgical-lgu-rules-rest.py verify
+
+      - name: Promote exact already Chrome-verified preview to production Hosting
+        id: promote
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          npx firebase hosting:clone "$PROJECT:lgu-accept-reject-1105" "$PROJECT:live" --project "$PROJECT" --non-interactive
+
+      - name: Verify live revision, Login, Signup and request page after release
+        id: postverify
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$TESTED_WEB_REVISION" node scripts/check-live-hosting.cjs; then
+              python3 scripts/publish-surgical-lgu-rules-rest.py verify
+              echo "SUCCESS: Reviewed Super Admin LGU Accept and Reject deployed with scoped Firestore rules." >> "$GITHUB_STEP_SUMMARY"
+              echo "Live Hosting source: $TESTED_WEB_REVISION" >> "$GITHUB_STEP_SUMMARY"
+              echo "Previous Hosting backup: backup-lgu-rest-1105; old Ruleset kept intact." >> "$GITHUB_STEP_SUMMARY"
+              echo "No Storage, Functions, users, records or other Admin modules touched." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 7
+          done
+          echo "::error::Live revision or routes did not verify; conservative rollback next"
+          exit 1
+
+      - name: On failure restore ONLY our deployed Hosting and Rules if still unchanged
+        if: failure() && steps.backup.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          if VOLUNSERVE_EXPECTED_SHA="$TESTED_WEB_REVISION" node scripts/check-live-hosting.cjs; then
+            npx firebase hosting:clone "$PROJECT:backup-lgu-rest-1105" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            echo "Hosting recovery attempted from backup-lgu-rest-1105" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 scripts/publish-surgical-lgu-rules-rest.py rollback
+          echo "Check rollback logs; never assume that recovery succeeded without verification." >> "$GITHUB_STEP_SUMMARY"
