@@ -1,0 +1,22 @@
+name: Inspect Firebase Project Storage Bucket Names (Read Only)
+on:
+  push:
+    branches: [feature/lgu-staff-documents-review-20261105]
+    paths: [.github/workflows/list-lgu-firebase-buckets-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: List project bucket names only, no changes
+        run: |
+          gcloud storage buckets list --project volunserve-3aa5b --format="value(name)" || true
+          gcloud storage buckets describe gs://volunserve-3aa5b.appspot.com --format='value(name)' || true
+          gcloud storage buckets describe gs://volunserve-3aa5b.firebasestorage.app --format='value(name)' || true
+          echo "READ ONLY - no bucket, object or IAM changes."
