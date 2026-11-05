@@ -33,6 +33,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -593,6 +594,7 @@ export default function AdminCases() {
   const [volunteerPage, setVolunteerPage] = useState(1);
   const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
   const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
+  const [fieldReportPage, setFieldReportPage] = useState(1);
   const [photoPage, setPhotoPage] = useState(1);
   const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -3622,6 +3624,11 @@ export default function AdminCases() {
             {[selectedCase].map((incident) => {
           const incidentAssignments = assignmentsForCase(incident.id);
           const activeAssignments = activeAssignmentsForCase(incident.id);
+          const publicCaseStatus = emergencyTaskStatusLabel(
+            incident.status,
+            incident.verificationStatus,
+            activeAssignments[0]?.status || incidentAssignments.find(item => item.status === "completed")?.status,
+          );
           const incidentFieldReports = fieldReportsForCase(incident.id);
           const incidentLguFieldReports = lguFieldReports.filter(
             (report) => report.caseId === incident.id
@@ -3637,6 +3644,15 @@ export default function AdminCases() {
             officialLguResponseStatus ===
             "completed_pending_admin_review";
           const volunteerSupportAvailable = activeAssignments.length === 0;
+          const volunteerProgressStatus = incident.status === "closed" ? "CASE CLOSED"
+            : incident.status === "resolved" ? "COMPLETED"
+            : activeAssignments.some(item => item.status === "on_site") ? "VOLUNTEER ON SITE"
+            : activeAssignments.some(item => item.status === "responding") ? "VOLUNTEER IN PROGRESS"
+            : activeAssignments.some(item => item.status === "accepted") ? "VOLUNTEER ACCEPTED"
+            : activeAssignments.some(item => item.status === "offered") ? "WAITING FOR VOLUNTEER"
+            : incidentAssignments.some(item => item.status === "completed") ? "AWAITING ADMIN REVIEW"
+            : incident.status === "validated" ? "APPROVED · READY TO ASSIGN"
+            : "NO ACTIVE VOLUNTEER";
           const photoUrl = firstIncidentImage(incident.attachments);
           const note = notes[incident.id] ?? incident.adminNote ?? "";
 
@@ -3915,7 +3931,7 @@ export default function AdminCases() {
                     </View>
 
                     <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>Volunteer Support</Text>
+                      <Text style={styles.metaLabel}>Volunteer Assignment</Text>
                       <Text style={styles.metaValue}>
                         {activeAssignments.length > 0
                           ? `${activeAssignments.length} active`
@@ -3923,16 +3939,7 @@ export default function AdminCases() {
                       </Text>
                     </View>
 
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>LGU LIVE OWNER</Text>
-                      <Text style={styles.metaValue}>
-                        {incident.activeLguResponderUid
-                          ? lguOwnerFresh
-                            ? incident.activeLguResponderName || "Active LGU responder"
-                            : "Takeover available · previous session stale"
-                          : "Available"}
-                      </Text>
-                    </View>
+
                   </View>
                 </View>
               </View>
@@ -3943,8 +3950,8 @@ export default function AdminCases() {
                     ["overview", "Overview"],
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["response", "Response"],
-                    ["personnel", "Volunteer Assignments"],
+                    ["response", "Task Progress"],
+                    ["personnel", "Assign Volunteer"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -4005,7 +4012,7 @@ export default function AdminCases() {
                   <View style={styles.overviewCard}>
                     <View style={styles.overviewCardHeader}>
                       <Text style={styles.overviewCardIcon}>◉</Text>
-                      <Text style={styles.overviewCardTitle}>Case Status</Text>
+                      <Text style={styles.overviewCardTitle}>Report Status: {publicCaseStatus}</Text>
                     </View>
 
                     {[
@@ -4478,10 +4485,10 @@ export default function AdminCases() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
                       <Text style={styles.responseControlTitle}>
-                        LGU Response Control
+                        Volunteer Task Coordination
                       </Text>
                       <Text style={styles.responseControlSubtitle}>
-                        Review approved Volunteers and send support offers even while they are offline. Volunteers must accept before responding.
+                        Admin reviews reports, assigns approved Volunteers, and monitors community task progress. This is not official emergency dispatch.
                       </Text>
                     </View>
 
@@ -4489,19 +4496,8 @@ export default function AdminCases() {
                       <Text style={styles.responseStatusDot}>●</Text>
                       <Text style={styles.responseStatusText}>
                         {lguFieldReviewPending
-                          ? "LGU REPORT PENDING REVIEW"
-                          : officialLguResponseStatus === "reviewed" &&
-                              incident.status === "in_progress"
-                            ? "READY FOR ADMIN DECISION"
-                            : incident.status === "validated"
-                              ? "READY FOR RESPONSE"
-                              : incident.status === "assigned"
-                                ? "SUPPORT REQUESTED"
-                                : incident.status === "in_progress"
-                                  ? "LGU RESPONSE ACTIVE"
-                                  : incident.status === "resolved"
-                                    ? "RESOLVED"
-                                    : "CLOSED"}
+                          ? "LEGACY FIELD REPORT PENDING REVIEW"
+                          : volunteerProgressStatus}
                       </Text>
                     </View>
                   </View>
@@ -4520,11 +4516,9 @@ export default function AdminCases() {
                       }}
                     >
                       <Text style={styles.supportButtonTitle}>
-                        {assignmentPanelOpen
-                          ? "Hide Volunteer Support"
-                          : activeAssignments.length > 0
-                            ? "View Volunteer Support"
-                            : "Request Volunteer Support"}
+                        {activeAssignments.length > 0
+                          ? "View Assigned Volunteer"
+                          : "Assign Volunteer"}
                       </Text>
                       <Text style={styles.supportButtonSub}>
                         {activeAssignments.length > 0
