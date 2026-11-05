@@ -85,17 +85,20 @@ export default function LguStaffApplication() {
             <Text style={styles.submitText}>Return to Admin Login</Text>
           </TouchableOpacity>
         </> : <>
-          <Text style={styles.notice}>STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Do not submit sensitive ID scans or passwords as proof.</Text>
+          <Text style={styles.notice}>Fields marked with a red * are required. STEP 1 · Submit your LGU staff information. STEP 2 · The programmer Super Admin team reviews it and independently confirms your employment and authorization with the official LGU office. STEP 3 · Only verified staff may be promoted to LGU Admin. Unverified applicants have no administrative access. Do not submit sensitive ID scans or passwords as proof.</Text>
           {fields.map(([key,label,hint,secret])=><View key={key} style={styles.field}>
-            <Text style={styles.label}>{label}</Text>
+            <Text style={styles.label}>{label} <Text style={styles.required}>*</Text></Text>
             <TextInput style={styles.input} placeholder={hint} placeholderTextColor="#8CA89A"
               value={form[key]} onChangeText={v=>update(key,v)} editable={!busy}
-              autoCapitalize={key==="email"?"none":"sentences"}
+              autoCapitalize={key==="email" || key==="appointmentReference"?"none":"sentences"}
               autoCorrect={false} secureTextEntry={secret}
-              keyboardType={key==="email"?"email-address":"default"}/>
+              autoComplete={key==="email"?"email":key==="password"?"new-password":"off"}
+              importantForAutofill={key==="appointmentReference"?"no":"auto"}
+              nativeID={"lgu-request-"+key}
+              keyboardType={key==="email"?"email-address":"default"}/> 
           </View>)}
           <View style={styles.field}>
-            <Text style={styles.label}>Assigned barangay (San Jose del Monte)</Text>
+            <Text style={styles.label}>Assigned barangay (San Jose del Monte) <Text style={styles.required}>*</Text></Text>
             <ScrollView style={styles.barangays} nestedScrollEnabled>
               {SJDM_BARANGAYS.map(name=><TouchableOpacity key={name} accessibilityRole="radio"
                 accessibilityState={{checked:form.barangay===name}}
@@ -126,6 +129,7 @@ const styles=StyleSheet.create({
  title:{fontSize:23,fontWeight:"900",color:"#153B31"},requestSubtitle:{fontSize:12,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize:12,lineHeight:19,color:"#57776A",
    backgroundColor:"#EDF8F1",borderRadius:11,padding:14,marginBottom:9},
  field:{gap:6,marginBottom:6},label:{fontSize:12,fontWeight:"800",color:"#2D5747"},
+ required:{color:"#DC2626",fontWeight:"900"},
  input:{borderWidth:1,borderColor:"#D6E6DD",backgroundColor:"#FAFCFA",borderRadius:10,
    paddingHorizontal:13,minHeight:45,color:"#173B2E"},
  barangays:{maxHeight:142,borderWidth:1,borderColor:"#D6E6DD",borderRadius:10},
