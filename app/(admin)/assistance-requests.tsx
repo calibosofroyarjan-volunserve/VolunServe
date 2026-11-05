@@ -2156,11 +2156,12 @@ This still does not automatically create a Donation Campaign.`,
               </Text>
             )}
             <View style={styles.assistanceQuickButtons}>
-              <ActionButton label="Cancel" icon="close-outline" variant="secondary" onPress={() => setQuickAction(null)} />
+              <ActionButton label="Cancel" icon="close-outline" variant="secondary" loading={false} onPress={() => setQuickAction(null)} />
               <ActionButton
                 label={quickAction === "reject" ? "Confirm Rejection" : "Send Request"}
                 icon={quickAction === "reject" ? "close-circle-outline" : "send-outline"}
                 variant={quickAction === "reject" ? "danger" : "primary"}
+                loading={savingAction === (quickAction === "reject" ? "reject" : "more_info")}
                 disabled={!verificationReview || !!savingAction ||
                   (quickAction === "reject" ? rejectionReason.trim().length < 3 : adminNote.trim().length < 10)}
                 onPress={quickAction === "reject" ? rejectRequest : requestMoreInformation}
