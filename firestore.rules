@@ -695,7 +695,12 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
-      allow read: if isAdminOrSuperAdmin()
+      // Announcements are community notices, not private account records.
+      // Approved members may LIST notices so Firestore can return a query.
+      // Clients display only already-published notices for their barangay.
+      // Admin create/update/delete rules below are unchanged.
+      allow list: if approved();
+      allow get: if isAdminOrSuperAdmin()
         || (
           approved()
           && resource.data.publishAt is timestamp
