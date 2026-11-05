@@ -1,7 +1,7 @@
-name: Validate Minimized LGU Accept Reject Rules (NO LIVE DEPLOY)
+name: Validate Single-Branch LGU Accept Reject Rules (NO LIVE DEPLOY)
 on:
   push:
-    branches: [fix/lgu-accept-reject-reduced-compiled-20261105]
+    branches: [fix/lgu-accept-reject-smaller-rules-20261105]
     paths:
       - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
       - scripts/prepare-live-lgu-rules-20261105.cjs
