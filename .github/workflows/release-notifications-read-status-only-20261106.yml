@@ -165,3 +165,5 @@ jobs:
           except Exception as error:print('Could not confirm active Rules state: '+str(error)[:300])
           PY
           echo 'Fail-closed: no automatic rollback on unknown concurrent Ruleset revision.'
+
+# One-shot requested security hotfix: only approved notification recipient read:true; preserve all other rules.
