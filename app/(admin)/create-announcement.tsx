@@ -1,5 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 import {
   ActivityIndicator,
@@ -114,15 +115,16 @@ export default function CreateAnnouncement() {
 
   // Server security rules permit LGU Admin publishing only to the barangay
   // assigned in their verified profile. Never show an unauthorized audience.
+  const validOfficialBarangay = SJDM_BARANGAYS.includes(barangay);
   const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!publishBarangay || publishBarangay.toLowerCase() === "all" || publishBarangay !== barangay) {
+    if (!validOfficialBarangay || !publishBarangay || publishBarangay.toLowerCase() === "all" || publishBarangay !== barangay) {
       Alert.alert(
         "Barangay Required",
-        "Your Admin account does not have an assigned barangay."
+        "This account has no verified LGU barangay. Ask the Super Admin to assign the correct area in Administrator Directory > Manage > Assign Barangay."
       );
 
       return;
@@ -224,11 +226,11 @@ export default function CreateAnnouncement() {
           accessibilityRole="button"
           accessibilityLabel="Choose authorized announcement barangay"
           accessibilityState={{ expanded: barangayOpen }}
-          disabled={!barangay || submitting}
+          disabled={!validOfficialBarangay || submitting}
           onPress={() => setBarangayOpen(value => !value)}
           style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
         >
-          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
+          <Text style={styles.scopeValue}>{validOfficialBarangay ? publishBarangay : "No verified barangay assigned"}</Text>
           <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
         </TouchableOpacity>
         {barangayOpen && barangay ? (
@@ -243,8 +245,8 @@ export default function CreateAnnouncement() {
         ) : null}
 
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area. If no barangay is assigned, ask the Super Admin to verify the LGU profile and assign an official barangay. Other barangays cannot be selected without authorization.
+          Ordinary LGU Admin accounts can only publish
+          announcements for their verified assigned area. The Super Admin must verify the official LGU assignment in Administrator Directory → Manage → Assign Barangay. No self-selection is allowed.
         </Text>
       </View>
 
@@ -263,6 +265,15 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
+        {!validOfficialBarangay ? (
+          <View style={{padding:12,borderRadius:10,backgroundColor:"#FFF4E5",marginBottom:10}}>
+            <Text style={{color:"#92400E",fontWeight:"700"}}>Publishing disabled: Official barangay not assigned</Text>
+            <Text style={{color:"#92400E",marginTop:5,lineHeight:19}}>
+              Ask your Super Admin to verify your LGU appointment and assign your barangay in
+              Administrator Directory → Manage → Assign Barangay.
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
         <Text style={styles.inputLabel}>
           TITLE
@@ -302,10 +313,10 @@ export default function CreateAnnouncement() {
         <TouchableOpacity
           style={[
             styles.submitButton,
-            submitting &&
+            (submitting || !validOfficialBarangay) &&
               styles.submitButtonDisabled,
           ]}
-          disabled={submitting}
+          disabled={submitting || !validOfficialBarangay}
           onPress={handleSubmit}
         >
           {submitting ? (
