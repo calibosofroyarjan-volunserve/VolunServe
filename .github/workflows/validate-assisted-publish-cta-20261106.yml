@@ -1,0 +1,37 @@
+name: Validate Verified Assistance Publish CTA
+on:
+  push:
+    branches: [ux/verified-assistance-publish-cta-20261106]
+  pull_request:
+    paths:
+      - "app/(admin)/assistance-requests.tsx"
+      - "scripts/test-assistance-publish-cta-20261106.cjs"
+      - ".github/workflows/validate-assisted-publish-cta-20261106.yml"
+permissions:
+  contents: read
+jobs:
+  publish-cta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Assert verified Assistance to Donation Campaign gates
+        run: |
+          node scripts/test-assistance-publish-cta-20261106.cjs
+          node scripts/test-simple-assistance-admin-review.cjs
+          node scripts/test-assistance-validation.cjs
+          npx tsc --noEmit --pretty false
+      - name: Validate Expo web build
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
