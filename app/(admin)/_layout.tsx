@@ -34,6 +34,7 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { userFacingError } from "../../lib/userFacingError";
 
 const WEB_PORTAL_URL =
   "https://volunserve-3aa5b.web.app";
@@ -177,7 +178,7 @@ export default function AdminLayout() {
       ) {
         Alert.alert(
           "Sign Out Failed",
-          error?.message ||
+          userFacingError(error, "Unable to sign out. Please try again.") ||
             "Unable to sign out.",
         );
       }

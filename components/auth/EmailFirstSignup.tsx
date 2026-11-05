@@ -26,6 +26,7 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
   EMAIL_VERIFICATION_INSTRUCTIONS,
@@ -106,13 +107,7 @@ function safeAuthError(error: unknown): string {
   if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
     return "Incorrect email or password. If you started registration, check your details and try Resume Registration.";
   }
-  const message = String((error as {message?: string} | null)?.message || "");
-  if (
-    message.length < 260 &&
-    message &&
-    !/firebase|auth\/|firestore|permission-denied|\[[^\]]+\]|Error \(/i.test(message)
-  ) return message;
-  return "Unable to complete this action. Check your details and try again.";
+  return userFacingError(error, "Unable to complete this registration step. Check your details and try again.");
 }
 
 type FieldProps = {

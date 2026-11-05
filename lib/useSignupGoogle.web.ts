@@ -1,10 +1,6 @@
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "./firebase";
+import { connectGoogleAccountWeb } from "./firebaseAuth";
 
+/** Use the same verified Firebase popup and safe error mapping as web Login. */
 export function useSignupGoogle() {
-  return async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({prompt: "select_account"});
-    return (await signInWithPopup(auth, provider)).user;
-  };
+  return connectGoogleAccountWeb;
 }

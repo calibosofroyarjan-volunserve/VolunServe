@@ -4,6 +4,8 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { userFacingError } from "../lib/userFacingError";
+import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -11,7 +13,7 @@ import {
   browserSessionPersistence,
   setPersistence,
 } from "firebase/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -34,6 +36,26 @@ import {
   logoutUser,
 } from "../lib/firebaseAuth";
 
+/**
+ * Persist only a safe explanation across a Firebase sign-out / route remount.
+ * No email addresses, tokens, UIDs or technical error payloads are stored.
+ */
+const GOOGLE_LOGIN_NOTICE_KEY = "volunserve.google-login-notice";
+
+function rememberGoogleLoginNotice(message: string) {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.setItem(GOOGLE_LOGIN_NOTICE_KEY, message); } catch { /* storage disabled */ }
+}
+
+function consumeGoogleLoginNotice(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const message = window.sessionStorage.getItem(GOOGLE_LOGIN_NOTICE_KEY) || "";
+    window.sessionStorage.removeItem(GOOGLE_LOGIN_NOTICE_KEY);
+    return message;
+  } catch { return ""; }
+}
+
 export default function WebLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -46,6 +68,12 @@ export default function WebLogin() {
   >(null);
   const [loading, setLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<"login" | "google" | null>(null);
+  const [googleFeedback, setGoogleFeedback] = useState("");
+  const [googleProgress, setGoogleProgress] = useState("");
+  useEffect(() => {
+    const pending = consumeGoogleLoginNotice();
+    if (pending) setGoogleFeedback(pending);
+  }, []);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
@@ -70,7 +98,11 @@ export default function WebLogin() {
     if (loading) return;
     setAttemptedLogin(true);
     clearFeedback();
-    if (getLoginEmailError(email) || !password) return;
+    const emailError = getLoginEmailError(email);
+    if (emailError || !password) {
+      showError(emailError || "Enter your password.");
+      return;
+    }
     try {
       setLoading(true);
       setPendingAction("login");
@@ -88,7 +120,7 @@ export default function WebLogin() {
       }
       router.replace(destination as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
+      showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
       setLoading(false);
       setPendingAction(null);
@@ -97,63 +129,66 @@ export default function WebLogin() {
   const handleGoogleLogin = async () => {
     if (loading) return;
     clearFeedback();
+    setGoogleFeedback("");
+    setGoogleProgress("Opening your Google account chooser...");
+    // Clear an older attempt's notice without creating a new error.
+    consumeGoogleLoginNotice();
+    let selectedUid: string | null = null;
     try {
       setLoading(true);
       setPendingAction("google");
       await applySessionPersistence();
 
       const googleUser = await connectGoogleAccountWeb();
+      selectedUid = googleUser.uid;
+      setGoogleProgress("Google account connected. Checking your VolunServe account...");
+
       let profile;
       try {
         profile = await getUserProfile(googleUser.uid);
-      } catch (profileError: any) {
-        if (String(profileError?.message || "").trim() === "Profile not found.") {
-          // A Google identity is not a completed Resident account.
-          // Keep the Firebase session so Signup can prefill Google details.
+      } catch (profileError: unknown) {
+        if (profileError instanceof Error && profileError.message === "Profile not found.") {
+          // Auth-only Google users must finish registration; preserve that session.
+          setGoogleProgress("Your Google email is verified. Complete your VolunServe registration.");
           router.replace("/signup");
           return;
         }
-        throw profileError;
+        throw new Error(userFacingError(profileError, "We could not check your VolunServe registration. Check your connection and try again."));
       }
 
-      if (!isApprovedProfile(profile)) {
-        await logoutUser();
-
-        if (profile.status === "rejected") {
-          throw new Error(
-            profile.rejectedReason
-              ? `Registration rejected: ${profile.rejectedReason}`
-              : "Your registration was rejected. Please contact an administrator."
-          );
-        }
-
-        if (profile.status === "suspended") {
-          throw new Error(
-            "Your account is suspended. Please contact an administrator."
-          );
-        }
-
-        throw new Error(
-          "This legacy account is still pending administrative review."
-        );
-      }
-
+      // Staff access must remain password-only, regardless of approval status.
       if (profile.role === "admin" || profile.role === "superadmin") {
-        await logoutUser();
-        throw new Error("Staff accounts must use email and password. Use the fields above.");
+        throw new Error("This Google account belongs to an Admin or Super Admin. Use your VolunServe email and password to sign in.");
       }
-      router.replace(homeRouteForProfile(profile) as any);
-    } catch (error: any) {
-      try {
-        if (!String(error?.message || "").toLowerCase().includes("cancelled")) {
-          await logoutUser();
+      if (!isApprovedProfile(profile)) {
+        if (profile.status === "rejected") {
+          throw new Error("Your registration was rejected. Contact the VolunServe administrator for details.");
         }
-      } catch {
-        // Keep the original authentication error as the user-facing message.
+        if (profile.status === "suspended") {
+          throw new Error("This account is suspended. Contact the VolunServe administrator.");
+        }
+        throw new Error("This account is still pending review. You cannot sign in yet.");
       }
 
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      setGoogleProgress("Sign-in approved. Opening your account...");
+      router.replace(homeRouteForProfile(profile) as any);
+    } catch (error: unknown) {
+      const message = googleSignInErrorMessage(error);
+      // Preserve every Google failure (including a cancelled or blocked popup)
+      // across any auth-driven remount, not only a successfully selected UID.
+      rememberGoogleLoginNotice(message);
+      if (selectedUid && auth.currentUser?.uid === selectedUid) {
+        // Authentication succeeded but VolunServe authorization failed.
+        // Save feedback BEFORE sign-out: the global auth guard may remount Login.
+        try {
+          await logoutUser();
+        } catch {
+          // Keep the account blocked from protected views by existing guards.
+        }
+      }
+      setGoogleFeedback(message);
     } finally {
+      setGoogleProgress("");
       setLoading(false);
       setPendingAction(null);
     }
@@ -259,6 +294,16 @@ export default function WebLogin() {
             </View>
           )}
         </TouchableOpacity>
+        {!!googleProgress && (
+          <Text style={styles.googleProgress} accessibilityRole="text">{googleProgress}</Text>
+        )}
+        {!!googleFeedback && (
+          <AuthFeedback
+            title="Google sign-in could not continue"
+            message={googleFeedback}
+            onDismiss={() => { setGoogleFeedback(""); consumeGoogleLoginNotice(); }}
+          />
+        )}
         <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
           disabled={loading}
           style={[styles.outlineButton, authCornerCut(10), (loading) && styles.disabled]}>
@@ -307,6 +352,7 @@ const styles = StyleSheet.create({
   invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
   fieldError: {color:"#C62828",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
   fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  googleProgress: {fontSize:12,color:"#075B44",fontWeight:"700",textAlign:"center",marginTop:7},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},

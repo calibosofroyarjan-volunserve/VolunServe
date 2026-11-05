@@ -24,6 +24,8 @@ import {
 import { auth, db } from "./firebase";
 import { Platform } from "react-native";
 import { disableAndroidPhoneAlerts } from "./androidNativePush";
+import { googleSignInErrorMessage } from "./googleSignInFeedback";
+import { userFacingError } from "./userFacingError";
 
 export const connectGoogleAccountWeb = async () => {
   try {
@@ -33,16 +35,8 @@ export const connectGoogleAccountWeb = async () => {
     });
     const result = await signInWithPopup(auth, provider);
     return result.user;
-  } catch (err: any) {
-    if (err?.code === "auth/popup-closed-by-user") {
-      throw new Error("Google sign-in was cancelled.");
-    }
-    if (err?.code === "auth/popup-blocked") {
-      throw new Error(
-        "The Google sign-in popup was blocked. Allow popups for localhost and try again."
-      );
-    }
-    throw new Error(friendlyAuthError(err));
+  } catch (err: unknown) {
+    throw new Error(googleSignInErrorMessage(err));
   }
 };
 
@@ -445,15 +439,12 @@ function friendlyAuthError(err: any) {
   if (code === "auth/too-many-requests") {
     return "Too many login attempts. Please try again later.";
   }
-  return err?.message || "Something went wrong.";
+  return userFacingError(err, "Unable to verify your account. Please try again.");
 }
 
 function friendlyFirestoreError(err: any) {
   const code = err?.code;
-  if (code === "permission-denied") {
-    return "Firestore permission denied. Check Firestore Rules.";
-  }
-  return err?.message || "Firestore error.";
+  return userFacingError(err, "Unable to access your account details. Please try again or contact an administrator.");
 }
 
 export const signUpUser = async (
