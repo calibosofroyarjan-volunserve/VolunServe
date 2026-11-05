@@ -149,6 +149,32 @@ async function main() {
       await check("Different resident cannot read private proposal", () =>
         other.doc("communityEventProposals/" + eventId).get(), true);
 
+      // Regression: the UI falls back to Resident when volunteer access is
+      // revoked but activeMode is still "volunteer" in the user profile.
+      // The owner must still be able to read their proposal history.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await ctx.firestore().doc("users/" + residentUid).update({
+          activeMode: "volunteer",
+          volunteerAccess: false,
+          volunteerStatus: "not_applied",
+        });
+      });
+      await check("Owner reads own proposal after stale volunteer-mode fallback", () =>
+        proposalRef.get());
+      await check("Owner query remains readable after stale volunteer-mode fallback", () =>
+        resident.collection("communityEventProposals")
+          .where("proposedBy", "==", residentUid).get());
+      await check("Owner cannot query another resident's private proposals", () =>
+        resident.collection("communityEventProposals")
+          .where("proposedBy", "==", otherUid).get(), true);
+      await check("Stale volunteer mode still cannot create new proposals", () =>
+        resident.doc("communityEventProposals/stale-mode-create").set(proposalPayload()), true);
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await ctx.firestore().doc("users/" + residentUid).update({
+          activeMode: "resident",
+        });
+      });
+
       const published = await check("ADMIN APPROVES AND PUBLISHES ATOMICALLY", () =>
         admin.runTransaction(async (tx) => {
           const p = admin.doc("communityEventProposals/" + eventId);
