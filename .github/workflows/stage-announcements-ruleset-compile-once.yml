@@ -1,0 +1,96 @@
+name: One-Time Compile Announcement-Only Ruleset (INACTIVE, NO DEPLOY)
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/stage-announcements-ruleset-compile-once.yml"]
+permissions:
+  contents: read
+jobs:
+  compile-inactive-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot compile inactive VolunServe announcement Ruleset after emulator tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Generate announcement-only candidate from pinned ACTUAL live Rules (NO DEPLOY)
+        run: python3 scripts/prepare-live-announcements-rules-candidate.py
+      - name: Fetch reviewed announcement emulator tests from draft feature branch
+        run: |
+          git fetch --no-tags origin feature/announcements-on-verified-live-20261105
+          git show FETCH_HEAD:scripts/test-announcements-audience-security.cjs > scripts/test-announcements-audience-security.cjs
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify members only read own area or city-wide
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-announcements-audience-security.cjs'
+      - name: Verify prior Admin publishing works and suspended admins cannot publish
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Compile as one NEW UNUSED immutable Ruleset; NEVER ACTIVATE live release
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess, urllib.request, urllib.error
+          t=os.environ["RUNNER_TEMP"]
+          metadata=json.load(open(t+"/candidate-metadata.json"))
+          candidate=open("firestore.rules",encoding="utf8").read()
+          if hashlib.sha256(candidate.encode()).hexdigest()!=metadata["candidateSha"]:
+              raise SystemExit("STOP: candidate changed since emulator tests")
+          token=subprocess.check_output(["gcloud","auth","print-access-token"],text=True).strip()
+          base="https://firebaserules.googleapis.com/v1/"
+          def req(path,method="GET",payload=None):
+              body=None if payload is None else json.dumps(payload).encode()
+              headers={"Authorization":"Bearer "+token}
+              if body: headers["Content-Type"]="application/json"
+              request=urllib.request.Request(base+path,data=body,headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(request,timeout=35) as response: return json.load(response)
+              except urllib.error.HTTPError as error:
+                  reason=error.read().decode("utf8",errors="replace")
+                  print("Firebase Rules REST error code:",error.code)
+                  print("Firebase Rules compiler response:",reason[:3000])
+                  raise
+          current=req("projects/volunserve-3aa5b/releases/cloud.firestore")
+          if current["rulesetName"]!=metadata["previousRuleset"]:raise SystemExit("STOP: active release changed; no compilation attempted")
+          print("Compiling candidate as new INACTIVE immutable Ruleset ONLY.")
+          created=req("projects/volunserve-3aa5b/rulesets","POST",{"source":{"files":[{"name":metadata["filename"],"content":candidate}]}})
+          name=created.get("name","")
+          if not name.startswith("projects/volunserve-3aa5b/rulesets/"):raise SystemExit("STOP: unexpected staged ruleset response")
+          print("STAGED_COMPILED_RULESET="+name)
+          print("CANDIDATE_SHA256="+metadata["candidateSha"])
+          with open(t+"/staged-ruleset-name","w") as f:f.write(name)
+          after=req("projects/volunserve-3aa5b/releases/cloud.firestore")
+          if after["rulesetName"]!=metadata["previousRuleset"]:raise SystemExit("ALERT: active release changed by another process; stopped")
+          print("PASS: live Cloud Firestore release still points to PREVIOUS Ruleset; no deployment.")
+          PY
+      - name: Confirm current production Rules still point to original Ruleset even after failure
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request
+          token=subprocess.check_output(["gcloud","auth","print-access-token"],text=True).strip()
+          request=urllib.request.Request("https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore",headers={"Authorization":"Bearer "+token})
+          with urllib.request.urlopen(request,timeout=20) as r:current=json.load(r)
+          expected="projects/volunserve-3aa5b/rulesets/b52b3100-43b9-4a01-aa2f-0c803022436e"
+          if current["rulesetName"]!=expected:
+              print("ALERT: live Ruleset differs from pre-test pinned version; possible external deploy.")
+              raise SystemExit(1)
+          print("PASS: no change to active Firestore Rules release:",current["rulesetName"])
+          PY
+      - name: Explicitly confirm no release
+        if: success()
+        run: echo 'COMPILED INACTIVE RULESET ONLY. Firestore Rules release, Hosting, Auth, Functions, data and Storage not changed.'
