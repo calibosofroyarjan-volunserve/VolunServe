@@ -3582,18 +3582,31 @@ function CompactAssistanceReview({
         <Text style={styles.simpleSection}>3. Choose a decision</Text>
         <Text style={styles.simpleCopy}>Your review is recorded when you submit a decision. No extra Save button.</Text>
         <View style={styles.simpleButtons}>
-          <ActionButton label="Verify Request" icon="shield-checkmark-outline" variant="success"
-            loading={savingAction==="verify"} disabled={!reviewRecord||locked} onPress={onVerify} />
+          <ActionButton
+            label="Verify Request"
+            icon="shield-checkmark-outline"
+            variant="success"
+            loading={savingAction === "verify"}
+            disabled={!reviewRecord || locked}
+            onPress={onVerify}
+          />
+          <ActionButton
+            label="Reject Request"
+            icon="close-circle-outline"
+            variant="danger"
+            loading={savingAction === "reject"}
+            disabled={!reviewRecord || locked}
+            onPress={() => setAction((current) => current === "reject" ? null : "reject")}
+          />
         </View>
+        <Text style={styles.simpleCopy}>
+          Verifying confirms the need. To publish a donation campaign, complete Donation Support separately after verification.
+        </Text>
         {!reviewRecord && <Text style={styles.simpleCopy}>Choose Begin Review above to unlock decisions.</Text>}
         <View style={styles.simpleSecondary}>
           <TouchableOpacity accessibilityRole="button" disabled={!!savingAction}
-            onPress={()=>setAction(action==="more_info"?null:"more_info")}>
+            onPress={() => setAction((current) => current === "more_info" ? null : "more_info")}>
             <Text style={styles.simpleLinkText}>Ask for more information</Text>
-          </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" disabled={!!savingAction}
-            onPress={()=>setAction(action==="reject"?null:"reject")}>
-            <Text style={styles.simpleRejectText}>Reject request</Text>
           </TouchableOpacity>
         </View>
         {action && <View style={styles.simpleField}>
@@ -5486,9 +5499,9 @@ function ActionButton({
       textColor: "#334155",
     },
     danger: {
-      backgroundColor: "#FFF1F2",
-      borderColor: "#FDA4AF",
-      textColor: "#B42318",
+      backgroundColor: "#B42318",
+      borderColor: "#B42318",
+      textColor: "#FFFFFF",
     },
     success: {
       backgroundColor: "#ECFDF3",
