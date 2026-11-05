@@ -26,8 +26,10 @@ assert(rules.includes("request.resource.data.role == 'applicant'") &&
   rules.includes("hasFreshLguCredentialReview()"),
   "Rules must continue to prohibit public privilege elevation");
 assert(apply.includes("LGU Staff Verification Application") &&
-  apply.includes("Submit LGU Information for Verification"),
-  "Existing LGU staff form must remain unchanged");
+  apply.includes("Submit for Super Admin Verification") &&
+  apply.includes("uploadLguProofFiles") &&
+  apply.includes("Resume Proof Upload"),
+  "LGU staff application must require limited private proofs and preserve safe pending-account resume");
 assert(owner.includes("setIdentityMatched") &&
   owner.includes("setLguEmploymentConfirmed") &&
   owner.includes("credentialsConfirmed && identityMatched && lguEmploymentConfirmed") &&
