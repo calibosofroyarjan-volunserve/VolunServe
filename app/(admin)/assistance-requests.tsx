@@ -1523,7 +1523,7 @@ export default function AssistanceRequestsAdmin() {
     }
     const verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
     if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
-      Alert.alert("Amount needs checking", "This request has no verified unpaid amount. Review the official bill and recorded assistance before creating a donation campaign.");
+      Alert.alert("Donation budget not yet set", "This verified request has no LGU-approved donation amount yet. Confirm the needed items and estimated total cost before starting a monetary campaign.");
       return false;
     }
     const savedPlace = String(selected.assignedLocationName || "").trim();
@@ -3528,13 +3528,13 @@ function CompactVerifiedAssistance({
                 <View style={styles.simpleReviewAmountNotice}>
                   <Ionicons name="information-circle-outline" color="#92400E" size={17} />
                   <Text style={[styles.simpleCopy,{ flex: 1 }]}>
-                    No unpaid amount was verified for this request. Check the official bill and previous assistance with the LGU before preparing monetary donations.
+                    No donation budget has been approved yet. For food, pet care, or supplies, confirm the needed items and estimated prices with the LGU before raising money.
                   </Text>
                 </View>
               )}
               {cap > 0 && (
                 <Text style={styles.simpleCopy}>
-                  Taken from the completed LGU review. No need to enter the amount again.
+                  Approved amount from the LGU review. No need to enter it again.
                 </Text>
               )}
 
@@ -3583,7 +3583,7 @@ function CompactVerifiedAssistance({
               label={choice === "donation" ? "Continue to Donation Campaign" : "Save Support Choice"}
               icon={choice === "donation" ? "heart-outline" : "checkmark-circle-outline"}
               variant="success"
-              disabled={busy || (choice === "donation" && cap <= 0)}
+              disabled={busy}
               loading={submitting}
               onPress={() => { void submit(); }}
             />
@@ -4383,7 +4383,7 @@ function DecisionTab({
 
       <SectionCard
         title="Verified Cost / Remaining Need"
-        subtitle="The Resident's entered amount is only a claim. Use an official bill, quotation, facility confirmation, or other verifiable basis before confirming a monetary shortage."
+        subtitle="Confirm costs using evidence appropriate to the request, such as item quantities, current price estimates, receipts, quotations, or provider confirmation. Deduct assistance already received."
         icon="calculator-outline"
       >
         <InfoGrid>
@@ -4433,7 +4433,7 @@ function DecisionTab({
             <TextInput
               value={reviewDraft.costReferenceNumber}
               onChangeText={(value) => onReviewChange("costReferenceNumber", value)}
-              placeholder="Official billing / quotation / case reference"
+              placeholder="Receipt, quotation, price estimate, or other reference (if available)"
               placeholderTextColor="#94A3B8"
               editable={!reviewLocked}
               style={styles.input}
