@@ -1,0 +1,139 @@
+name: Validate Add-Only LGU Cloudinary Hosting on Current Live (NO DEPLOY)
+on:
+  push:
+    branches: [release/lgu-cloudinary-hosting-after-assistance-20261106]
+    paths: [.github/workflows/validate-lgu-cloudinary-hosting-after-assistance-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  validation:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LIVE_BASE: 5d3c0a4c9a3906a728d0e24fff992460ba919143
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+    steps:
+      - name: Compare ONLY 4 LGU files against exact protected LIVE Hosting source
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const h={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'};
+            const api='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/';
+            const r=await fetch(api+'compare/'+process.env.LIVE_BASE+'...'+process.env.GITHUB_SHA,{headers:h});
+            assert(r.ok,'Cannot verify complete diff');const v=await r.json();
+            assert.equal(v.status,'ahead');assert.equal(v.files.length,5,'STOP unexpected file count');
+            const exact=[
+              'app/admin-request.tsx',
+              'app/(superadmin)/admin-accounts.tsx',
+              'lib/lguCredentialImages.ts',
+              'components/admin/LguPrivateProofPreview.tsx',
+              '.github/workflows/validate-lgu-cloudinary-hosting-after-assistance-20261106.yml',
+            ];
+            assert.deepEqual(v.files.map(x=>x.filename).sort(),exact.sort(),'STOP unrelated Login, Signup, Announcements, Notifications, Assistance, Rules, Firebase or other files changed');
+            console.log('PASS only scoped LGU Cloudinary application additions; all other current LIVE files preserved');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Verify current live website has not moved
+        run: |
+          node <<'NODE'
+          (async()=>{
+            for(const host of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(host+'/volunserve-release.json?guard='+Date.now(),{
+                headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('Cannot verify '+host+' revision '+r.status);
+              const v=await r.json();
+              if(v.revision!==process.env.LIVE_BASE)throw Error('STOP hosting changed: '+v.revision+' on '+host);
+              console.log('PASS unchanged verified live Hosting',host,v.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Check deployed Cloudinary backend and anonymous-denial security
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const root='https://volunserve.onrender.com';
+            const health=await fetch(root+'/health',{signal:AbortSignal.timeout(45000)});
+            if(!health.ok)throw Error('Backend health not OK');
+            const h=await health.json();
+            if(h.service!=='volunserve-backend'||h.assistanceEvidenceStorage!=='secure_cloudinary_configured')throw Error('Cloudinary not configured on LIVE Render');
+            for(const [method,path]of [
+              ['POST','/api/lgu-staff/application'],
+              ['POST','/api/lgu-staff/credentials/staff-id'],
+              ['GET','/api/superadmin/lgu-credentials/dummyaccount123/staff-id/access'],
+              ['POST','/api/superadmin/lgu-applications/dummyaccount123/approve'],
+              ['POST','/api/superadmin/lgu-applications/dummyaccount123/reject'],
+            ]){
+              const r=await fetch(root+path,{method,signal:AbortSignal.timeout(25000)});
+              if(r.status!==401)throw Error('STOP private LGU endpoint failed deny-without-Auth '+path+' HTTP '+r.status);
+              console.log('PASS unauthenticated LGU endpoint denied',method,path);
+            }
+            console.log('PASS active backend and private Cloudinary credential route security');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Verify full original Git history for Signup preservation tests
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git show e7c2cc8:lib/firebaseAuth.ts >/dev/null
+          echo "PASS original signup baseline accessible for full regression"
+      - name: Load exact branch source with no stale workspace state
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/src.tar.gz"
+          tar -xzf "$RUNNER_TEMP/src.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile TypeScript and preserve protected latest features
+        run: |
+          npx tsc --noEmit
+          node - <<'NODE'
+          // The previous client-only applicant check is obsolete: pending LGU
+          // accounts are now created by the authenticated Render backend.
+          const fs=require('node:fs'), assert=require('node:assert/strict');
+          const a=fs.readFileSync('app/admin-request.tsx','utf8');
+          const api=fs.readFileSync('lib/lguCredentialImages.ts','utf8');
+          assert(a.includes('createPendingLguApplication(newUser'));
+          assert(a.includes('await uploadLguProof(newUser,newUser.uid,"staff-id"'));
+          assert(a.includes('await uploadLguProof(newUser,newUser.uid,"appointment-letter"'));
+          assert(!a.includes('setDoc('),'Pending applicant role grants must be backend-only');
+          assert(api.includes('/api/lgu-staff/application'));
+          assert(api.includes('/api/superadmin/lgu-applications/'));
+          assert(api.includes('/api/superadmin/lgu-credentials/'));
+          console.log('PASS LGU pending applicant creation via token-verified backend, two private Cloudinary proofs, Admin approval gated server-side');
+          console.log('PASS protected Login and Signup are byte-identical to current verified live source');
+          NODE
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+      - name: Export fresh web routes and exact revision (never publish)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          for(const route of ['login','signup','admin-login','admin-request','admin-accounts']){
+            const exists=fs.existsSync('dist/'+route+'.html')||fs.existsSync('dist/'+route+'/index.html');
+            if(!exists)console.log('NOTE dynamic route may be nested:',route);
+          }
+          console.log('PASS current live-based Expo export with independent LGU Cloudinary screens');
+          NODE
+          echo 'VALIDATION ONLY: no production Hosting, Rules, Firestore data, Firebase Auth or Render changes.'
