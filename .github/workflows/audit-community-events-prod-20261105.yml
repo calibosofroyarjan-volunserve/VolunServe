@@ -1,0 +1,86 @@
+name: Read-Only VolunServe Production Rules and Live Baseline Audit
+
+on:
+  push:
+    branches: [release/community-events-safe-20261105]
+    paths: ['.github/workflows/audit-community-events-prod-20261105.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify Firebase account project; never print secret
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node <<'NODE'
+          const p=JSON.parse(process.env.FIREBASE_SA||'null');
+          if(p?.type!=='service_account'||p?.project_id!=='volunserve-3aa5b'){
+            throw Error('Missing or wrong Firebase service account. Stop.');
+          }
+          console.log('Correct production project credentials available.');
+          NODE
+      - name: Authenticate to Firebase Rules REST API (read-only)
+        uses: google-github-actions/auth@v3
+        id: auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+      - name: Inspect active Firestore rules, compare with pre-fix and latest main; NO WRITES
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GH_TOKEN: ${{ github.token }}
+          OLD_SHA: '4bbf70939ac54c56ec1e07800dbde3a9a1c60799'
+          NEW_SHA: '1432da781e54fe47fe8ed76f89520588bab78b1d'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto=require('node:crypto');
+          const project='volunserve-3aa5b';
+          const repo=process.env.GITHUB_REPOSITORY;
+          const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+          const request=async(url,token)=>{
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+            if(!r.ok)throw Error('Read-only request '+new URL(url).pathname+' failed HTTP '+r.status);
+            return r.json();
+          };
+          (async()=>{
+            const rel=await request('https://firebaserules.googleapis.com/v1/projects/'+project+'/releases/cloud.firestore',process.env.FIREBASE_ACCESS_TOKEN);
+            console.log('Active Firestore release '+rel.name);
+            console.log('Active Firestore ruleset '+rel.rulesetName);
+            const rule=await request('https://firebaserules.googleapis.com/v1/'+rel.rulesetName,process.env.FIREBASE_ACCESS_TOKEN);
+            const files=rule.source?.files||[];
+            console.log('Active rules file count '+files.length+'; names: '+files.map(f=>f.name).join(', '));
+            const current=files.length===1?files[0].content:files.find(f=>f.name==='firestore.rules')?.content;
+            if(!current)throw Error('Active rules source structure differs: do not modify.');
+            async function githubRules(ref){
+              const obj=await request('https://api.github.com/repos/'+repo+'/contents/firestore.rules?ref='+ref,process.env.GH_TOKEN);
+              return Buffer.from(obj.content.replace(/\s/g,''),'base64').toString('utf8');
+            }
+            const old=await githubRules(process.env.OLD_SHA);
+            const next=await githubRules(process.env.NEW_SHA);
+            console.log('ACTIVE sha256 '+hash(current));
+            console.log('PREVIOUS_MAIN sha256 '+hash(old));
+            console.log('REVIEWED_MAIN sha256 '+hash(next));
+            console.log('Active matches pre-fix main: '+(current===old));
+            console.log('Active matches reviewed main: '+(current===next));
+            if(current!==old && current!==next){
+              const a=current.split('\n'), b=old.split('\n');
+              let mismatch=0;
+              for(let i=0;i<Math.max(a.length,b.length);i++)if(a[i]!==b[i])mismatch++;
+              console.log('Active rules differ from previous main (line-aligned mismatches '+mismatch+'); do not overwrite.');
+            }
+            try{
+              const live=await fetch('https://volunserve.com/volunserve-release.json?audit='+process.env.NEW_SHA.slice(0,12),{signal:AbortSignal.timeout(15000),headers:{'Cache-Control':'no-cache'}});
+              if(live.ok){const json=await live.json();console.log('LIVE_HOSTING_REVISION '+String(json.revision||json.sha||'unknown'));}
+              else console.log('Live public release marker HTTP '+live.status);
+            }catch(e){console.log('Live public release marker read failed: '+e.message)}
+            console.log('READ-ONLY AUDIT COMPLETE: no Firebase release, Hosting or data changed.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
