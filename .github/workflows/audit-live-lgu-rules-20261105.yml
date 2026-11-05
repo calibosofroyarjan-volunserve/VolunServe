@@ -1,0 +1,58 @@
+name: Audit Live Firestore Rules Before LGU Rejection Release (READ ONLY)
+on:
+  push:
+    branches: [release/lgu-pending-approve-reject-ui-20261105]
+    paths: [.github/workflows/audit-live-lgu-rules-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read live Firestore Rules source and compare exact deployed base, no updates
+        env:
+          PROJECT: volunserve-3aa5b
+          LIVE_BASE: 4520b201c9f6e86f810d2b7c3c1377c158ac424e
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,hashlib,subprocess,urllib.request,urllib.error
+          project=os.environ['PROJECT']
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(url):
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=25) as response:
+                  return json.load(response)
+          release=get(base+'projects/'+project+'/releases/cloud.firestore')
+          ruleset=release.get('rulesetName')
+          if not ruleset: raise SystemExit('BLOCKED: live Firestore ruleset missing')
+          result=get(base+ruleset)
+          files=result.get('source',{}).get('files',[])
+          baseline=subprocess.check_output(['git','show',os.environ['LIVE_BASE']+':firestore.rules'])
+          base_hash=hashlib.sha256(baseline).hexdigest()
+          for item in files:
+              if item.get('name','').endswith('firestore.rules'):
+                  raw=item.get('content','').encode()
+                  remote_hash=hashlib.sha256(raw).hexdigest()
+                  print('LIVE_FIRESTORE_RELEASE:',release.get('name'))
+                  print('RULESET_ID:',ruleset)
+                  print('LIVE_SHA256:',remote_hash)
+                  print('BASE_SHA256:',base_hash)
+                  if raw!=baseline:
+                      raise SystemExit('BLOCKED: live Firestore Rules differ from the audited source; do not overwrite')
+                  print('PASS: live Firestore Rules exactly match audited latest deployed base')
+                  break
+          else:
+              raise SystemExit('BLOCKED: Firestore Rules source not found')
+          PY
+      - name: State result
+        run: echo "No production rules or data were modified."
