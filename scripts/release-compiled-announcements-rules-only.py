@@ -54,8 +54,9 @@ def digest(text):
     return hashlib.sha256(text.encode("utf8")).hexdigest()
 
 def patch_release(name):
-    result = api(RELEASE + "?updateMask=rulesetName", "PATCH",
-                 {"release": {"name": RELEASE, "rulesetName": name}})
+    result = api(RELEASE, "PATCH",
+                 {"release": {"name": RELEASE, "rulesetName": name},
+                  "updateMask": "rulesetName"})
     if result.get("rulesetName") != name:
         raise RuntimeError("Unexpected Firebase release PATCH response")
 
@@ -100,6 +101,16 @@ try:
     final = get_live()
     if final.get("rulesetName") != STAGED_NEW:
         raise RuntimeError("Activation reply not consistent; attempt guarded rollback")
+    # Public route check is read-only; it does not exercise authentication.
+    for route in ("login", "signup", "admin-login"):
+        request = urllib.request.Request(
+            "https://volunserve.com/" + route,
+            headers={"cache-control": "no-cache"}
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            if response.status != 200:
+                raise RuntimeError("Post-release public route failed: " + route)
+            print("PASS live public route /" + route + ": HTTP 200")
     print("SUCCESS: activated surgically reviewed announcements Ruleset ONLY:", STAGED_NEW)
     print("Original immutable Ruleset retained for rollback:", EXPECTED_OLD)
 except Exception as error:
