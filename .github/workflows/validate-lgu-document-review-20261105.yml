@@ -1,0 +1,60 @@
+name: Validate Private LGU Staff Document Review (No Production Deploy)
+on:
+  push:
+    branches: [feature/lgu-staff-documents-review-20261105]
+    paths: [.github/workflows/validate-lgu-document-review-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      PRESERVED_LIVE_BASE: "4520b201c9f6e86f810d2b7c3c1377c158ac424e"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Check protected Admin and Signup modules stayed identical to latest live
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$PRESERVED_LIVE_BASE" HEAD
+          git diff --exit-code "$PRESERVED_LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(tabs)' 'lib/firebaseAuth.ts' 'lib/signupFeature.ts' 'firestore.rules' 'backend' 'functions'
+          echo "PASS Login, Signup, Admin, resident, Firestore rules and backend unchanged."
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile TypeScript and check legacy authentication regression
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-admin-staff-login.cjs
+      - name: Firestore and Storage emulator security verification
+        run: npx firebase emulators:exec --only firestore,storage --config firebase.lgu-proof-tests.json --project demo-volunserve --non-interactive "node scripts/test-lgu-proof-storage-security.cjs"
+      - name: Export web without changing production
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Static confidentiality check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n 'getDownloadURL(' lib/lguProofDocuments.ts components/admin/LguApplicantProofReview.tsx; then
+            echo "::error::Never expose bearer-token credential URLs"
+            exit 1
+          fi
+          echo "PASS no public LGU document URLs."
+          echo "NO PRODUCTION DEPLOY: Storage rules and LGU applicant credentials untouched."
