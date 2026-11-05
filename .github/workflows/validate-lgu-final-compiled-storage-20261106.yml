@@ -2,7 +2,10 @@ name: Final Optimized LGU Firestore and Storage Integrated Security (NO LIVE DEP
 on:
   push:
     branches: [audit/lgu-final-scoped-storage-integration-20261106]
-    paths: [.github/workflows/validate-lgu-final-compiled-storage-20261106.yml]
+    paths:
+      - .github/workflows/validate-lgu-final-compiled-storage-20261106.yml
+      - storage.rules
+      - scripts/test-lgu-all-in-one-credential-integration.cjs
 permissions:
   contents: read
 jobs:
