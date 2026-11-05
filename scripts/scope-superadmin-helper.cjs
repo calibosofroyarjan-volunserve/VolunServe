@@ -98,9 +98,10 @@ assert.equal((output.match(/function isSuperAdmin\(\)/g)||[]).length,
   headers.length,"All and only authorized collection scopes receive the same helper.");
 // Remove the exact repeated insertion and restore original root helper.
 // If any unrelated byte changed, including line endings, fail closed.
-const n = output.split(insertion.trimEnd()).length-1;
+const injectedSegment=insertion.trimEnd()+nl;
+const n = output.split(injectedSegment).length-1;
 assert.equal(n,headers.length, "Scoped helper marker count mismatch");
-const reverseNoRoot=output.split(insertion.trimEnd()).join("");
+const reverseNoRoot=output.split(injectedSegment).join("");
 assert.equal(reverseNoRoot,noRoot,"Helper relocation unexpectedly modified unrelated rules.");
 const restored=reverseNoRoot.slice(0,rootStart)+rootBlock+reverseNoRoot.slice(rootStart);
 assert.equal(restored,original,"Full reversible byte-exact policy equality failed");
