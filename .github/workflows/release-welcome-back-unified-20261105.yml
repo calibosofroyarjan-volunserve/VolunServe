@@ -1,0 +1,150 @@
+name: Release Welcome Back Unified Login with Latest Admin and Signup (Hosting Only)
+on:
+  push:
+    branches: [release/unified-welcome-back-live-20261105]
+    paths: [.github/workflows/release-welcome-back-unified-20261105.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-preview-backup-and-live:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      VERIFIED_LIVE_BASE: '61110074569aebf8dcc1e43f3e4b68d00450a3ba'
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-welcome-release-sa.json
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Prove unchanged latest live Admin, Super Admin, Signup and production data policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
+          git diff --name-only "$VERIFIED_LIVE_BASE" HEAD | while IFS= read -r file; do
+            case "$file" in
+              app/login.tsx|app/login.web.tsx|app/admin-login.tsx|components/auth/PremiumAuthShell.tsx|lib/unifiedLoginRouting.ts|scripts/test-unified-login-routing.cjs|scripts/test-premium-auth-portal.cjs|scripts/test-login-ui-release.cjs|scripts/test-admin-staff-login.cjs|scripts/verify-unified-login-browser.cjs|scripts/verify-premium-signup-browser.cjs|.github/workflows/release-welcome-back-unified-20261105.yml) ;;
+              *) echo "::error::Unexpected changed file $file"; exit 1;;
+            esac
+          done
+          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/(admin)' 'app/(superadmin)' 'app/(tabs)' 'components/admin' 'components/volunteer' 'app/signup.tsx' 'app/signup.web.tsx' 'components/auth/EmailFirstSignup.tsx' 'lib/firebaseAuth.ts' 'lib/loginInputValidation.ts' 'lib/registrationEmailPolicy.ts' 'lib/signupFeature.ts' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: only unified Login UI/logic and test helpers changed; all latest production modules are preserved."
+
+      - name: Verify no newer Admin or Super Admin deployment has replaced live Hosting
+        run: VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Test unified staff credentials, Login validation, Signup and TypeScript
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node --test scripts/test-login-ui-release.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+
+      - name: Build web with verified Signup retained
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+
+      - name: Require isolated Firebase Hosting credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase credentials missing; no deploy"; exit 1; fi
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Deploy exact candidate to Firebase Hosting PREVIEW
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: unified-welcome-1105
+          expires: 3d
+
+      - name: Confirm preview fingerprint and public route accessibility
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
+
+      - name: Actual browser: unified Welcome Back Login and multi-step premium Signup
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME" ]; then echo "::error::Chrome missing"; exit 1; fi
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-welcome-cdp about:blank > /tmp/welcome-chrome.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          if ! node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"; then tail -n 45 /tmp/welcome-chrome.log || true; exit 1; fi
+          if ! node scripts/verify-premium-signup-browser.cjs "$PREVIEW_ORIGIN"; then tail -n 45 /tmp/welcome-chrome.log || true; exit 1; fi
+
+      - name: Backup existing live Hosting and promote exact tested preview only if live unchanged
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+          PROJECT="volunserve-3aa5b"
+          BACKUP="backup-welcome-1105"
+          PREVIEW="unified-welcome-1105"
+
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+          echo "Backing up live Hosting into $BACKUP..."
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Live Hosting backup channel: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+          echo "Promoting only the tested unified Login and Signup preview..."
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+
+          confirmed=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              confirmed=1
+              break
+            fi
+            sleep 8
+          done
+
+          if [ "$confirmed" -ne 1 ]; then
+            echo "::error::Live verification failed. Checking if safe rollback is possible."
+            live_revision="$(node -e '(async()=>{try{const x=await fetch("https://volunserve.com/volunserve-release.json?rb="+Date.now(),{headers:{"cache-control":"no-cache"}});const j=await x.json();process.stdout.write(j.revision||"unknown")}catch(e){process.stdout.write("unknown")}})()')"
+            if [ "$live_revision" = "$GITHUB_SHA" ]; then
+              echo "::warning::Rolling back only our own revision from preserved live Hosting backup"
+              $CLI hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "Hosting-only rollback attempted from $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Unexpected newer/unknown live revision: no automatic overwrite. Manual review required."
+            fi
+            exit 1
+          fi
+          echo "SUCCESS: current live site is unified Welcome Back version $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Hosting only. Firestore Rules, users, Functions, Storage and production records untouched." >> "$GITHUB_STEP_SUMMARY"
