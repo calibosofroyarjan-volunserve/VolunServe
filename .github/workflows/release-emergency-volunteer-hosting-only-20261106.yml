@@ -1,7 +1,7 @@
 name: Guarded VolunServe Emergency Volunteer Hosting ONLY
 on:
   push:
-    branches: [release/volunteer-photo-tasks-from-live-20261106]
+    branches: [release/emergency-safe-offers-map-from-live-20261106]
     paths: [".github/workflows/release-emergency-volunteer-hosting-only-20261106.yml"]
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       PROJECT: volunserve-3aa5b
-      LIVE_BASE: 2b596300a2c4e0c12793bae106017d372b69abdd
+      LIVE_BASE: b7f1c0a0e8f12468ab7fbe6ae99407a6ed4aae5b
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-emergency-volunteer-prod.json
     steps:
@@ -47,20 +47,25 @@ jobs:
             'components/tabs/MapTracking.native.tsx','components/tabs/MapTracking.web.tsx',
             'components/tabs/ResponseFlow.web.tsx','lib/emergencyTaskStatus.ts',
             'components/volunteer/VolunteerInvitationInbox.tsx',
+            'components/admin/EmergencyIncidentMap.tsx',
+            'components/admin/EmergencyIncidentMap.web.tsx',
+            'components/admin/EmergencyIncidentMap.native.tsx',
             'scripts/test-emergency-volunteer-live-20261106.cjs',
             'scripts/test-clean-emergency-report-header.cjs',
             'scripts/test-isolated-emergency-volunteer-release.cjs'
           ]);
           const files=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-change-list.txt','utf8').split('\n').filter(Boolean);
-          // Deploy only changes to the Volunteer task cards and Admin's
-          // assignment button. Preserve the newer Resident Assistance release.
+          // Strict scope: Emergency task offers, Volunteer task acceptance
+          // and the standalone map preview. No unrelated production files.
           const expected=new Set([
             '.github/workflows/validate-emergency-volunteer-live-20261106.yml',
             '.github/workflows/release-emergency-volunteer-hosting-only-20261106.yml',
             'app/(admin)/admin-cases.tsx',
             'app/(tabs)/volunteer.tsx',
             'app/(tabs)/volunteer.web.tsx',
-            'components/volunteer/VolunteerInvitationInbox.tsx',
+            'components/admin/EmergencyIncidentMap.tsx',
+            'components/admin/EmergencyIncidentMap.web.tsx',
+            'components/admin/EmergencyIncidentMap.native.tsx',
             'scripts/test-emergency-volunteer-live-20261106.cjs',
             'scripts/test-isolated-emergency-volunteer-release.cjs'
           ]);
