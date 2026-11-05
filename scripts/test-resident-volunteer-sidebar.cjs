@@ -5,6 +5,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const read=f=>fs.readFileSync(path.resolve(__dirname,"..",f),"utf8");
 const layout=read("app/(tabs)/_layout.tsx");
+const homeWeb=read("components/home/Home.web.tsx");
 const profile=read("app/(tabs)/profile.tsx");
 const progress=read("app/(tabs)/volunteer-impact.tsx");
 const web=read("app/(tabs)/volunteer.web.tsx");
@@ -31,13 +32,16 @@ test("Volunteer navigation exposes Emergency Tasks not redundant progress or ale
  assert.match(web,/Emergency Tasks/);
  assert.match(native,/Emergency Tasks/);
 });
-test("No mode switch, account settings or logout in desktop sidebar footer",()=>{
+test("Resident and Volunteer account menus omit duplicate settings while keeping the sidebar clean",()=>{
  const region=layout.slice(layout.indexOf("function DesktopTabBar("),layout.indexOf("function CustomTabBar("));
  assert.doesNotMatch(region,/Switch to (Volunteer|Resident) Mode|onPress=\{requestConfirmedResidentLogout\}|>Account Settings</);
  assert.match(region,/showOnboardingShortcut/);
  const header=layout.slice(layout.indexOf("const residentMobileTabs"),layout.indexOf("function DesktopTabBar("));
  assert.match(header,/requestConfirmedResidentLogout/);
- assert.match(header,/mobileAccountActionText}>Account Settings/);
+ assert.doesNotMatch(header,/mobileAccountActionText}>Account Settings/);
+ assert.doesNotMatch(homeWeb,/title="Account Settings"/);
+ assert.match(homeWeb,/title="My Profile"/);
+ assert.match(header,/mobileAccountActionText}>My Profile/);
  assert.match(header,/Switch to \{mode ===/);
 });
 test("Volunteer progress is LIVE inside profile, not a blank link",()=>{
