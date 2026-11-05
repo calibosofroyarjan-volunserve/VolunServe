@@ -1,0 +1,45 @@
+name: Read-Only Smoke Test Verified Live-Based Announcements Preview
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/smoke-announcements-livebased-preview-once.yml"]
+permissions:
+  contents: read
+jobs:
+  read-only-preview-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Confirm exact preview revision and latest live Login/Signup/Admin routes
+        env:
+          PREVIEW_URL: https://volunserve-3aa5b--announcements-livebased-20261105-84rgzbt0.web.app
+          EXPECTED_SHA: 03aca637b4890e8b72a333876f0c6f2e2d020f2f
+          BASE_SHA: 579bed559b1ba81e2045ba420847f8635e8f182c
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url=process.env.PREVIEW_URL;
+            const stamp=await fetch(url+'/volunserve-preview.json?read_only='+Date.now(),{headers:{'cache-control':'no-cache'}});
+            assert.equal(stamp.status,200);
+            const revision=await stamp.json();
+            assert.equal(revision.revision,process.env.EXPECTED_SHA);
+            assert.equal(revision.basedOnLive,process.env.BASE_SHA);
+            assert.equal(revision.scope,'announcements-ui-only');
+            assert.equal(revision.noProductionRulesChanges,true);
+            console.log('PASS exact NEW announcement preview commit: '+revision.revision);
+            console.log('PASS based on actual production Hosting source: '+revision.basedOnLive);
+            const live=await fetch('https://volunserve.com/volunserve-release.json?read_only='+Date.now(),{headers:{'cache-control':'no-cache'}});
+            assert.equal(live.status,200);
+            assert.equal((await live.json()).revision,process.env.BASE_SHA);
+            console.log('PASS live Hosting has not been overwritten');
+            for (const route of ['login','signup','admin-login','admin-request']) {
+              const response=await fetch(url+'/'+route,{redirect:'follow'});
+              assert.equal(response.status,200,'preview /'+route+' HTTP 200 required');
+              const body=await response.text();
+              assert.ok(body.length>200,'missing route response /'+route);
+              console.log('PASS preview /'+route+': HTTP 200');
+            }
+          })().catch(err=>{console.error(err);process.exit(1);});
+          NODE
