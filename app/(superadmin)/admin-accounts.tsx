@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   writeBatch,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -144,6 +146,11 @@ export default function AdminAccounts() {
   // Remock requirement: display only five Admin accounts per page.
   const [adminPage, setAdminPage] = useState(1);
   const [expandedAdminId, setExpandedAdminId] = useState<string | null>(null);
+  const [barangayTarget, setBarangayTarget] = useState<UserAccount | null>(null);
+  const [chosenOfficialBarangay, setChosenOfficialBarangay] = useState("");
+  const [barangayFilter, setBarangayFilter] = useState("");
+  const [barangayVerified, setBarangayVerified] = useState(false);
+  const [barangayError, setBarangayError] = useState("");
   const compactDirectory = viewportWidth < 1180;
   const ADMIN_PAGE_SIZE = 5;
   React.useEffect(() => { setAdminPage(1); setExpandedAdminId(null); }, [search, filter, sort]);
@@ -590,6 +597,64 @@ export default function AdminAccounts() {
       error?.message ||
       "Unable to update this Admin account."
     );
+  };
+
+  // Assignment is a privileged authorization action, not self-selected.
+  const openBarangayReview = (account: UserAccount) => {
+    if (!verifySuperAdmin() || account.role !== "admin") return;
+    setBarangayTarget(account);
+    setChosenOfficialBarangay(SJDM_BARANGAYS.includes(account.barangay || "") ? account.barangay! : "");
+    setBarangayFilter("");
+    setBarangayVerified(false);
+    setBarangayError("");
+  };
+  const closeBarangayReview = () => {
+    if (savingUid) return;
+    setBarangayTarget(null);
+    setBarangayVerified(false);
+    setBarangayError("");
+  };
+  const commitBarangayReview = async () => {
+    const verified = verifySuperAdmin();
+    const account = barangayTarget;
+    const next = chosenOfficialBarangay.trim();
+    if (!verified || !account || account.role !== "admin") return;
+    if (!barangayVerified || !SJDM_BARANGAYS.includes(next) || account.barangay === next) {
+      setBarangayError("Choose and verify a different official SJDM barangay before confirming.");
+      return;
+    }
+    setSavingUid(account.id);
+    setBarangayError("");
+    try {
+      const targetRef = doc(db, "users", account.id);
+      const latest = await getDoc(targetRef);
+      if (!latest.exists() || latest.data().role !== "admin" ||
+          String(latest.data().barangay || "") !== String(account.barangay || "")) {
+        throw new Error("Admin profile changed. Reopen this action and review the latest record.");
+      }
+      const batch = writeBatch(db);
+      batch.update(targetRef, {
+        barangay: next,
+        adminUpdatedBy: verified.current.uid,
+        adminUpdatedAt: serverTimestamp(),
+      });
+      batch.set(doc(collection(db, "adminLogs")), {
+        actionType: "admin_barangay_assigned",
+        targetType: "user",
+        targetId: account.id,
+        adminUid: verified.current.uid,
+        adminName: verified.current.displayName || verified.current.email || "Super Admin",
+        description: `Verified assigned barangay for ${nameFor(account)}: ${account.barangay || "Unassigned"} → ${next}.`,
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
+      setBarangayTarget(null);
+      setBarangayVerified(false);
+    } catch (e: any) {
+      setBarangayError(readableAdminError(e));
+    } finally {
+      setSavingUid(null);
+    }
   };
 
   const confirmAdminAction =
@@ -1338,6 +1403,12 @@ export default function AdminAccounts() {
                   <Text style={styles.dirNote}>Actions require confirmation and are recorded in the audit log.</Text>
                 </View>
                 <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
+                  <TouchableOpacity disabled={isSaving} accessibilityRole="button"
+                    accessibilityLabel={"Verify and assign LGU barangay to " + nameFor(account)}
+                    style={styles.dirAction} onPress={() => openBarangayReview(account)}>
+                    <Ionicons name="location-outline" size={15} color="#087C5E"/>
+                    <Text style={styles.dirActionText}>{account.barangay ? "Change Barangay" : "Assign Barangay"}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity disabled={isSaving} style={styles.dirAction}
                     onPress={()=>openAdminAction(suspended?"activate":"suspend",account)}>
                     <Ionicons name={suspended?"checkmark-circle-outline":"pause-circle-outline"} size={15} color="#087C5E"/>
@@ -1373,6 +1444,58 @@ export default function AdminAccounts() {
         </View>
       </ScrollView>
 
+      <Modal visible={!!barangayTarget} transparent animationType="fade"
+        onRequestClose={closeBarangayReview}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard,{width:"94%",maxWidth:620,maxHeight:viewportHeight*0.87,padding:20}]}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12,paddingBottom:12}}>
+              <Text style={styles.modalTitle}>Assign Official LGU Barangay</Text>
+              <Text style={styles.dirNote}>LGU Admin: {barangayTarget ? nameFor(barangayTarget) : ""}</Text>
+              <Text style={styles.dirNote}>Currently: {barangayTarget?.barangay || "No barangay assigned"}</Text>
+              <Text style={{color:"#475569",lineHeight:20}}>
+                Verify the official LGU appointment and exact assigned barangay first.
+                This is an authorization change, not a choice the Admin can make.
+              </Text>
+              <TextInput accessibilityLabel="Search official San Jose del Monte barangays"
+                placeholder="Search official barangay" value={barangayFilter} onChangeText={setBarangayFilter}
+                style={[styles.searchInput,{borderColor:"#CBD5E1",borderWidth:1,borderRadius:10,paddingHorizontal:12,minHeight:46}]}/>
+              <ScrollView nestedScrollEnabled style={{maxHeight:240,borderWidth:1,borderColor:"#CBD5E1",borderRadius:10}}>
+                {SJDM_BARANGAYS.filter(a=>a.toLowerCase().includes(barangayFilter.trim().toLowerCase()))
+                  .map(a=><TouchableOpacity key={a} accessibilityRole="radio"
+                    accessibilityState={{checked:chosenOfficialBarangay===a}}
+                    style={{padding:11,flexDirection:"row",alignItems:"center",gap:9,borderBottomWidth:1,borderColor:"#E2E8F0"}}
+                    onPress={()=>{setChosenOfficialBarangay(a);setBarangayVerified(false);setBarangayError("");}}>
+                    <Ionicons name={chosenOfficialBarangay===a?"radio-button-on":"radio-button-off"} size={19} color="#08795B"/>
+                    <Text style={{color:"#173D32",fontWeight:chosenOfficialBarangay===a?"700":"400"}}>{a}</Text>
+                  </TouchableOpacity>)}
+              </ScrollView>
+              <Text style={{fontWeight:"700",color:"#173D32"}}>Selected: {chosenOfficialBarangay || "None"}</Text>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:barangayVerified}}
+                onPress={()=>setBarangayVerified(v=>!v)}
+                style={{flexDirection:"row",alignItems:"flex-start",gap:9,paddingVertical:6}}>
+                <Ionicons name={barangayVerified?"checkbox":"square-outline"} size={22} color="#08795B"/>
+                <Text style={{flex:1,lineHeight:20,color:"#334155"}}>
+                  I verified the staff member's official LGU barangay assignment and authorize this audited change.
+                </Text>
+              </TouchableOpacity>
+              {!!barangayError && <Text accessibilityRole="alert" style={{color:"#B91C1C"}}>{barangayError}</Text>}
+              <View style={{flexDirection:"row",justifyContent:"flex-end",gap:10,flexWrap:"wrap"}}>
+                <TouchableOpacity style={[styles.dirAction,{padding:11}]} disabled={!!savingUid} onPress={closeBarangayReview}>
+                  <Text style={styles.dirActionText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button"
+                  disabled={!!savingUid||!barangayVerified||!chosenOfficialBarangay||chosenOfficialBarangay===barangayTarget?.barangay}
+                  onPress={()=>void commitBarangayReview()}
+                  style={[styles.dirAction,{padding:11,backgroundColor:"#08795B",
+                    opacity:(!barangayVerified||!chosenOfficialBarangay||!!savingUid||chosenOfficialBarangay===barangayTarget?.barangay)?0.5:1}]}>
+                  <Text style={{fontWeight:"700",color:"#FFFFFF"}}>{savingUid?"Saving...":"Confirm Assignment"}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <CreateLguAdminModal
         visible={showCreateIndependentAdmin}
         onClose={() => setShowCreateIndependentAdmin(false)}
