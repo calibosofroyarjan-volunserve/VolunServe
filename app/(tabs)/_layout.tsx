@@ -326,15 +326,10 @@ export default function TabLayout() {
   }
 
   return (
-    <View style={styles.desktopWorkspace}>
-      <Tabs
-        screenOptions={{ headerShown: false, tabBarPosition: "left" }}
-        tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
-      />
-      <View style={styles.desktopBellAnchor}>
-        <NotificationDropdown />
-      </View>
-    </View>
+    <Tabs
+      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+      tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
+    />
   );
 }
 
@@ -648,8 +643,6 @@ function CustomTabBar({
 }
 
 const styles = StyleSheet.create({
-  desktopWorkspace: { flex: 1 },
-  desktopBellAnchor: { position: "absolute", top: 20, right: 22, zIndex: 70 },
   journeyAction: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#226859", minHeight: 42, paddingHorizontal: 12, marginBottom: 10, borderRadius: 9 },
   journeyActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
