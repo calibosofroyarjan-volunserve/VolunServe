@@ -1,0 +1,83 @@
+name: Validate Super Admin LGU Barangay Assignment (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/superadmin-assign-lgu-barangay-20261105]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-lgu-barangay-assignment-readonly-20261105
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Ensure source is an isolated extension of prior System Updates preview
+        env:
+          REVIEWED_PARENT: a18d39fdadac9cc0f88a39fe12ba4304d5a23f07
+        run: |
+          git merge-base --is-ancestor "$REVIEWED_PARENT" HEAD
+          git diff --name-only "$REVIEWED_PARENT" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const changed=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(admin)/create-announcement.tsx',
+            'app/(superadmin)/admin-accounts.tsx',
+            'scripts/prepare-lgu-barangay-assignment-live-rules.py',
+            'scripts/test-lgu-barangay-assignment-emulator.cjs',
+            'scripts/verify-lgu-barangay-assignment-ui.cjs',
+            '.github/workflows/validate-lgu-barangay-assignment-20261105.yml'
+          ]);
+          const illegal=changed.filter(p=>!allowed.has(p));
+          if(illegal.length)throw Error('STOP: protected files changed: '+illegal.join(','));
+          console.log('PASS: existing Login, Signup, Google Auth, Super Admin approval and other modules are unchanged.');
+          NODE
+      - name: Install locked npm dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript + UI integration checks
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/verify-lgu-barangay-assignment-ui.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Prepare temporary candidate from EXACT CURRENT published Cloud Rules
+        run: python3 scripts/prepare-lgu-barangay-assignment-live-rules.py
+      - name: Firestore emulator checks for Super Admin area assignment versus Admin self-assignment
+        run: LGU_ASSIGNMENT_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-lgu-barangay-assignment-emulator.cjs'
+      - name: Existing LGU Admin publishing and suspended Admin regression
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Build production web bundle (NO HOSTING DEPLOY)
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Verify no production Rules release changed during test
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          manifest=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'lgu-barangay-rules-manifest.json')))
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          r=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(r,timeout=25) as response:current=json.load(response)
+          if current['rulesetName']!=manifest['originalRuleset']:
+              raise SystemExit('STOP: concurrent published Firestore Rules changed; no production deployment attempted')
+          print('PASS actual Cloud Rules release UNCHANGED:',current['rulesetName'])
+          PY
+      - name: Confirm no production writes or permissions activated
+        run: echo 'Validated only in isolated emulator. NO LIVE Firebase Rules, Hosting, user records or Auth changes.'
