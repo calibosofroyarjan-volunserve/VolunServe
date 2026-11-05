@@ -1,6 +1,10 @@
 // Private, idempotent inbox delivery for new published community announcements.
 // No client can choose recipients: recipient UIDs are obtained from Firestore.
-const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
+const {
+  getFirestore,
+  FieldValue,
+  FieldPath,
+} = require("firebase-admin/firestore");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 
