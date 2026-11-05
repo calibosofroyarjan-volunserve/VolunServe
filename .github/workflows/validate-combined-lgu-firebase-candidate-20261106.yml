@@ -56,7 +56,9 @@ jobs:
           print('PASS active Firestore remains unchanged',current['rulesetName'])
           fire=get(api+os.environ['RULESET'],True)['source']['files'][0]['content']
           sha=lambda s:hashlib.sha256(s.encode()).hexdigest()
-          assert sha(fire.replace('\\r\\n','\\n'))==os.environ['RULES_SHA'], 'STOP tested inactive Firestore candidate normalized SHA mismatch'
+          print('FIRESTORE_RAW_SHA256',sha(fire))
+          print('FIRESTORE_CRLF_NORMALIZED_SHA256',sha(fire.replace(chr(13)+chr(10),chr(10))))
+          assert sha(fire.replace(chr(13)+chr(10),chr(10)))==os.environ['RULES_SHA'], 'STOP tested inactive Firestore candidate normalized SHA mismatch'
           image=get(api+os.environ['STORAGE_RULESET'],True)['source']['files'][0]['content']
           assert sha(image)==os.environ['STORAGE_SHA'], 'STOP tested inactive Storage policy SHA mismatch'
           with open('storage.rules',encoding='utf8',newline='') as f:repo_rules=f.read()
