@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 34
     env:
       LIVE_BASE: "12f840178b6fce3ff642ef33f036e2f8ed4d37cf"
+      EXPECTED_LIVE_HOSTING: "5d3c0a4c9a3906a728d0e24fff992460ba919143"
       RULESET_BASE: "projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
       RULES_BASE_SHA: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
       FIREBASE_PROJECT: "volunserve-3aa5b"
@@ -72,7 +73,7 @@ jobs:
                 {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
               if(!r.ok)throw Error('STOP Hosting revision inaccessible at '+domain);
               const m=await r.json();
-              if(m.revision!==process.env.LIVE_BASE)throw Error('STOP newer Hosting release, prevent out-of-date rules promotion');
+              if(m.revision!==process.env.EXPECTED_LIVE_HOSTING)throw Error('STOP newer Hosting release, prevent out-of-date rules promotion');
               console.log('PASS current production Hosting '+domain);
             }
           })().catch(e=>{console.error(e);process.exit(1)});
