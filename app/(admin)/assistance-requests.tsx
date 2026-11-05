@@ -61,6 +61,7 @@ type ReviewTab =
 
 type ReviewStage = "checks" | "costs" | "residency" | "decision" | "support";
 type ReviewStageFocus = { stage: ReviewStage; ticket: number };
+type DonationBudgetDraft = { total: string; alreadyReceived: string; basis: string };
 
 type StoredDocument = {
   documentType?: string;
@@ -1392,7 +1393,13 @@ export default function AssistanceRequestsAdmin() {
 
       let payload: Record<string, any> = {};
 
-      if (actionKey === "resource_assessment") {
+      if (actionKey === "approve_donation_budget") {
+        payload = {
+          approvedGrossCost: Number(values.approvedGrossCost),
+          confirmedExistingAssistanceAmount: Number(values.confirmedExistingAssistanceAmount || 0),
+          budgetEvidenceNote: String(values.budgetEvidenceNote || "").trim(),
+        };
+      } else if (actionKey === "resource_assessment") {
         payload = {
           supportDecision: String(values.supportDecision || ""),
           remainingAmount: Number(values.remainingAmount || 0),
@@ -1512,6 +1519,7 @@ export default function AssistanceRequestsAdmin() {
   const continueToDonationCampaign = async (
     publicOfficeName: string,
     publicOfficeAddress: string,
+    budget: DonationBudgetDraft,
   ): Promise<boolean> => {
     if (!selected || selected.verificationStatus !== "verified" || !verificationReview) {
       Alert.alert("Review first", "This request must be verified before setting up donations.");
@@ -1521,10 +1529,31 @@ export default function AssistanceRequestsAdmin() {
       router.push({ pathname: "/donation-list", params: { assistanceRequestId: selected.id } } as any);
       return true;
     }
-    const verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
+    let verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
     if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
-      Alert.alert("Donation budget not yet set", "This verified request has no LGU-approved donation amount yet. Confirm the needed items and estimated total cost before starting a monetary campaign.");
-      return false;
+      const canApprove = Number(selected.estimatedAmount || 0) === 0 &&
+        Number(verificationReview.verifiedGrossCost || 0) === 0 &&
+        verificationReview.costVerificationRequired !== true &&
+        !verificationReview.postApprovalBudgetAt;
+      if (!canApprove) {
+        Alert.alert("No remaining budget", "A completed monetary review cannot be overwritten. A new verified request is needed for additional funding.");
+        return false;
+      }
+      const gross = Number(budget.total);
+      const previous = Number(budget.alreadyReceived || 0);
+      const basis = budget.basis.trim();
+      const centsOk = (amount: number) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.00001;
+      if (!Number.isFinite(gross) || gross <= 0 || gross > 100000000 ||
+          !Number.isFinite(previous) || previous < 0 || previous >= gross ||
+          !centsOk(gross) || !centsOk(previous) || basis.length < 20 || basis.length > 800) {
+        Alert.alert("Check donation budget", "Enter the item total, other assistance received and an itemized price explanation.");
+        return false;
+      }
+      const approved = await updateRequest("approve_donation_budget", {
+        approvedGrossCost: gross, confirmedExistingAssistanceAmount: previous, budgetEvidenceNote: basis,
+      }, true);
+      if (!approved) return false;
+      verifiedAmount = Math.round((gross - previous) * 100) / 100;
     }
     const savedPlace = String(selected.assignedLocationName || "").trim();
     const savedAddress = String(selected.assignedLocationAddress || "").trim();
@@ -3440,7 +3469,7 @@ function CompactVerifiedAssistance({
   publicOfficeAddress: string;
   setPublicOfficeAddress: (value: string) => void;
   savingAction: string;
-  onDonation: (name: string, address: string) => Promise<boolean>;
+  onDonation: (name: string, address: string, budget: DonationBudgetDraft) => Promise<boolean>;
   onSaveOtherSupport: (choice: string) => Promise<boolean>;
   onOpenCampaign: () => void;
 }) {
@@ -3450,7 +3479,22 @@ function CompactVerifiedAssistance({
   );
   const [submitting, setSubmitting] = useState(false);
   const [locationAttempted, setLocationAttempted] = useState(false);
+  const [budgetAttempted, setBudgetAttempted] = useState(false);
+  const [budgetTotal, setBudgetTotal] = useState("");
+  const [alreadyReceived, setAlreadyReceived] = useState("0");
+  const [budgetBasis, setBudgetBasis] = useState("");
   const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
+  const canSetBudget = cap <= 0 && Number(request.estimatedAmount || 0) === 0 &&
+    Number(reviewRecord?.verifiedGrossCost || 0) === 0 &&
+    reviewRecord?.costVerificationRequired !== true && !reviewRecord?.postApprovalBudgetAt;
+  const numericTotal = Number(budgetTotal);
+  const numericAlreadyReceived = Number(alreadyReceived || 0);
+  const currencyOk = (amount: number) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.00001;
+  const budgetIsValid = Number.isFinite(numericTotal) && numericTotal > 0 &&
+    numericTotal <= 100000000 && Number.isFinite(numericAlreadyReceived) &&
+    numericAlreadyReceived >= 0 && numericAlreadyReceived < numericTotal &&
+    currencyOk(numericTotal) && currencyOk(numericAlreadyReceived) &&
+    budgetBasis.trim().length >= 20 && budgetBasis.trim().length <= 800;
   const hasOffice = String(request.assignedLocationName || "").trim().length >= 3 &&
     String(request.assignedLocationAddress || "").trim().length >= 5;
   const locationError = locationAttempted &&
@@ -3458,13 +3502,17 @@ function CompactVerifiedAssistance({
   const busy = submitting || !!savingAction;
   const submit = async () => {
     if (busy) return;
+    if (choice === "donation" && cap <= 0) {
+      setBudgetAttempted(true);
+      if (!canSetBudget || !budgetIsValid) return;
+    }
     if (choice === "donation" && !hasOffice) {
       setLocationAttempted(true);
       if (publicOfficeName.trim().length < 3 || publicOfficeAddress.trim().length < 5) return;
     }
     setSubmitting(true);
     try {
-      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress);
+      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress, { total: budgetTotal, alreadyReceived, basis: budgetBasis });
       else await onSaveOtherSupport(choice === "lgu" ? "internal_support" : "not_required");
     } finally {
       setSubmitting(false);
