@@ -79,11 +79,12 @@ export function useAnnouncementAlerts() {
   const barangay = profile?.barangay || "";
   const approved = Boolean(uid && profile && isApprovedProfile(profile));
   useEffect(() => {
-    setNotices([]);
     if (sessionLoading || !approved || !uid) {
+      setNotices([]);
       setLoading(false);
       return;
     }
+    // Retain the last good announcements while a newer time window subscribes.
     setLoading(true);
     const q = query(
       collection(db, "announcements"),
