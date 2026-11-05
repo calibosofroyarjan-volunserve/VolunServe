@@ -472,11 +472,11 @@ const errorText = (error: unknown) => {
     message.includes("permission-denied") ||
     message.includes("Missing or insufficient permissions")
   ) {
-    return "Firestore access denied. Community Events security rules must be configured before this action can work.";
+    return "We couldn't load this information. Refresh the page or contact your VolunServe administrator if this continues.";
   }
 
   if (message.includes("Failed to fetch") || message.includes("Network request failed")) {
-    return "Could not connect to the Community Event photo service. Check the backend and try again.";
+    return "Unable to connect to VolunServe services. Check your connection and try again.";
   }
   return message;
 };
@@ -952,6 +952,7 @@ export default function CommunityEventsScreen() {
   useEffect(() => {
     if (!user || !canPropose) {
       setProposals([]);
+      setRecordError("");
       return;
     }
 
@@ -975,6 +976,11 @@ export default function CommunityEventsScreen() {
         setRecordError("");
       },
       (error) => {
+        // Keep technical diagnostics out of the UI but available to developers.
+        console.error("[Community Events] Proposal history read failed", {
+          collection: "communityEventProposals",
+          code: error.code || "unknown",
+        });
         setRecordError(errorText(error));
       }
     );
@@ -984,6 +990,7 @@ export default function CommunityEventsScreen() {
   useEffect(() => {
     if (!user || !isVolunteer) {
       setParticipations([]);
+      setRecordError("");
       return;
     }
 
@@ -1007,6 +1014,10 @@ export default function CommunityEventsScreen() {
         setRecordError("");
       },
       (error) => {
+        console.error("[Community Events] Volunteer history read failed", {
+          collection: "communityEventParticipants",
+          code: error.code || "unknown",
+        });
         setRecordError(errorText(error));
       }
     );
@@ -1496,12 +1507,12 @@ export default function CommunityEventsScreen() {
         firebaseMessage.includes("Missing or insufficient permissions")
       ) {
         setNotice(
-          "Proposal was rejected by Firestore (permission-denied). Open DevTools Console for the original Firebase error and field-size diagnostics. Your account access alone does not guarantee the proposal passes every create rule."
+          "Your account cannot submit this proposal right now. Confirm you have Resident access, then try again or contact a VolunServe administrator."
         );
       } else {
         setNotice(
           firebaseCode
-            ? `Proposal failed (${firebaseCode}): ${firebaseMessage}`
+            ? "Unable to submit your proposal right now. Please try again or contact a VolunServe administrator."
             : errorText(error)
         );
       }
@@ -2450,7 +2461,7 @@ export default function CommunityEventsScreen() {
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>
             {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
-            {!!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
+            {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && canPropose && !residentDetailsId && (
               <View style={styles.ruiFilterBar}>
                 <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.ruiFilterLabel}>{category === "All" ? "All Categories" : category}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
@@ -3014,7 +3025,7 @@ export default function CommunityEventsScreen() {
           </View>
         )}
 
-        {!!recordError && (
+        {section === "mine" && !!recordError && (
           <View style={styles.notice}>
             <Text style={styles.errorText}>
               {recordError}
