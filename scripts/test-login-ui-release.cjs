@@ -3,7 +3,7 @@ const {test}=require("node:test"),assert=require("node:assert/strict"),fs=requir
 const read=p=>fs.readFileSync(path.resolve(__dirname,"..",p),"utf8");
 test("Unified premium sign-in retains carousel and one clear login card",()=>{
   const s=read("components/auth/PremiumAuthShell.tsx");
-  assert.match(s,/VolunServe Login/);
+  assert.match(s,/Welcome Back/);
   assert.match(s,/styles\.formCard/);
   assert.match(s,/styles\.photoBadge/);
   assert.match(s,/SLIDES\.map/);
