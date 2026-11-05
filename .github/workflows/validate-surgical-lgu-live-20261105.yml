@@ -1,0 +1,80 @@
+name: Validate Surgical Live LGU Accept Reject Rules and Existing Modules (No Deploy)
+on:
+  push:
+    branches: [release/lgu-admin-decisions-live-20261105]
+    paths: [.github/workflows/validate-surgical-lgu-live-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      VERIFIED_LIVE_HOSTING: "579bed559b1ba81e2045ba420847f8635e8f182c"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Preserve latest Signup, Login, LGU Admin, Resident and Volunteer code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_HOSTING" HEAD
+          git diff --exit-code "$VERIFIED_LIVE_HOSTING" HEAD -- 'app/admin-request.tsx' 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(tabs)' 'lib/firebaseAuth.ts' 'storage.rules' 'firestore.rules' 'functions' 'backend' 'firebase.json' '.firebaserc'
+          echo "PASS: protected production modules and rules still unchanged in GitHub"
+      - name: Require latest live Hosting version unchanged
+        run: VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_HOSTING" node scripts/check-live-hosting.cjs
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fetch exact live Firestore rules to temporary runner; read-only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+            req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=get(base+'projects/volunserve-3aa5b/releases/cloud.firestore')
+          source=get(base+release['rulesetName'])['source']['files']
+          txt=max((f.get('content','') for f in source),key=len)
+          with open('/tmp/volunserve-live-firestore-before.rules','w') as out:out.write(txt)
+          print('READ_ONLY: retrieved current production Firestore policy',release['rulesetName'])
+          PY
+      - name: Compose minimal, independently audited pending review rules onto live snapshot
+        run: |
+          node scripts/prepare-surgical-lgu-rules.cjs /tmp/volunserve-live-firestore-before.rules /tmp/volunserve-lgu-candidate.rules
+          cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile and test latest Signup, Login, and Super Admin approval UI
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-superadmin-lgu-review-ui.cjs
+      - name: Emulator security checks against SURGICAL patched current live rules (never production)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs"
+      - name: Export full web with latest Signup Login Admin unchanged
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: State no production changes
+        run: echo "PASS candidate only. NO production Firestore Rules, Hosting, Storage or user records have been changed."
