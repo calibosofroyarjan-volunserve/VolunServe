@@ -41,7 +41,7 @@ export default function SuperAdminDashboard() {
   const [auditRows,setAuditRows] = useState<Partial<Record<AuditSource,AuditItem[]>>>({});
   const [auditLoaded,setAuditLoaded] = useState<Partial<Record<AuditSource,boolean>>>({});
   const [auditErrors,setAuditErrors] = useState<Partial<Record<AuditSource,boolean>>>({});
-  const [staffStats, setStaffStats] = useState({ active: 0, suspended: 0 });
+  const [staffStats, setStaffStats] = useState({ active: 0, suspended: 0, pending: 0 });
   const [adminActivityPage, setAdminActivityPage] = useState(1);
   const [systemChangesPage, setSystemChangesPage] = useState(1);
   const [errors, setErrors] = useState<Partial<Record<Source, boolean>>>({});
@@ -52,7 +52,7 @@ export default function SuperAdminDashboard() {
       setCounts({});
       setApproved(null);
       setAdminUids([]);
-      setStaffStats({ active: 0, suspended: 0 });
+      setStaffStats({ active: 0, suspended: 0, pending: 0 });
       setErrors({});
       setLoaded({});
       return;
@@ -68,6 +68,7 @@ export default function SuperAdminDashboard() {
           setStaffStats({
             active: accounts.filter(item => item.role === "admin" && item.status === "approved" && item.adminStatus !== "suspended").length,
             suspended: accounts.filter(item => item.role === "admin" && item.adminStatus === "suspended").length,
+            pending: accounts.filter(item => item.role === "applicant" && item.status === "pending_review").length,
           });
         }
         setErrors((old) => ({ ...old, [key]: false }));
@@ -171,7 +172,7 @@ export default function SuperAdminDashboard() {
         {([
           { key:"users",label:"Registered Accounts",value:total,icon:"people" as const,detail:"Total system users" },
           { key:"active",label:"Active LGU Admins",value:staffStats.active,icon:"shield-checkmark" as const,detail:"Authorized personnel" },
-          { key:"adminAccounts",label:"Admin Accounts",value:staffStats.active + staffStats.suspended,icon:"people-circle" as const,detail:"Managed LGU Admin access" },
+          { key:"pendingLgu",label:"Pending LGU Applications",value:staffStats.pending,icon:"document-text" as const,detail:"Awaiting credential verification" },
           { key:"suspended",label:"Suspended Admins",value:staffStats.suspended,icon:"lock-closed" as const,detail:"Restricted access accounts" },
         ]).map(item => (
           <View key={item.key} style={[styles.metric,compact && styles.metricCompact]}>
@@ -190,6 +191,25 @@ export default function SuperAdminDashboard() {
           </View>
         ))}
       </View>
+
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Review pending LGU Admin applications and submitted credentials"
+        style={styles.pendingShortcut}
+        onPress={() => router.push("/(superadmin)/admin-accounts" as any)}
+      >
+        <Ionicons name="shield-checkmark-outline" size={19} color="#0B7659" />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pendingShortcutTitle}>LGU Staff Applications</Text>
+          <Text style={styles.pendingShortcutHelp}>
+            {loaded.users && !errors.users
+              ? `${staffStats.pending} pending review · View submitted credentials and confirm official authorization`
+              : "Review pending applications after account data loads"}
+          </Text>
+        </View>
+        <Text style={styles.pendingShortcutAction}>Review Applications</Text>
+        <Ionicons name="chevron-forward" size={16} color="#0B7659" />
+      </TouchableOpacity>
 
       <View style={styles.graphCard}>
         <WorkspaceBarChart
@@ -369,4 +389,10 @@ const styles = StyleSheet.create({
   emptyState:{minHeight:142,gap:10,alignItems:"center",justifyContent:"center",padding:18},
   emptyText:{color:"#6A8278",fontSize:12,textAlign:"center"},
   error:{color:"#AA3D2B",fontSize:12,marginTop:12},
+  pendingShortcut:{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10,
+    backgroundColor:"#F3FBF6",borderWidth:1,borderColor:"#CEE7D8",
+    borderRadius:11,paddingHorizontal:14,paddingVertical:13,marginBottom:13},
+  pendingShortcutTitle:{fontSize:12,fontWeight:"900",color:"#184D3A"},
+  pendingShortcutHelp:{fontSize:10.5,lineHeight:16,color:"#557B69",marginTop:3},
+  pendingShortcutAction:{fontSize:11,fontWeight:"900",color:"#0B7659"},
 });
