@@ -69,6 +69,7 @@ type AdminSort = "newest" | "oldest" | "name_asc" | "name_desc";
 
 type AdminAction =
   | "promote"
+  | "reject"
   | "suspend"
   | "activate"
   | "revoke";
@@ -183,6 +184,7 @@ export default function AdminAccounts() {
   const [lguReference, setLguReference] = useState("");
   const [lguVerificationMethod, setLguVerificationMethod] = useState("");
   const [credentialsConfirmed, setCredentialsConfirmed] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const [identityMatched, setIdentityMatched] = useState(false);
   const [lguEmploymentConfirmed, setLguEmploymentConfirmed] = useState(false);
   const clearCredentialReview = () => {
@@ -193,6 +195,7 @@ export default function AdminAccounts() {
     setCredentialsConfirmed(false);
     setIdentityMatched(false);
     setLguEmploymentConfirmed(false);
+    setRejectReason("");
   };
   const reviewComplete =
     lguOffice.trim().length >= 3 && lguOffice.trim().length <= 160 &&
@@ -497,7 +500,11 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Verify Staff and Promote to Admin";
+      return "Review & Approve LGU Admin";
+    }
+
+    if (action === "reject") {
+      return "Reject LGU Staff Application";
     }
 
     if (action === "suspend") {
@@ -523,7 +530,10 @@ export default function AdminAccounts() {
       nameFor(account);
 
     if (action === "promote") {
-      return `Promote ${name} to LGU Admin only after confirming their identity, legitimate LGU employment and official authorization?`;
+      return `Approve ${name} as LGU Admin only after reviewing credentials and independently verifying employment and authorization?`;
+    }
+    if (action === "reject") {
+      return `Reject ${name}'s LGU Admin application? The user will NOT receive Admin permissions. This action is recorded in the audit log.`;
     }
 
     if (action === "suspend") {
@@ -548,7 +558,10 @@ export default function AdminAccounts() {
     action: AdminAction | null
   ) => {
     if (action === "promote") {
-      return "Promote Verified Staff";
+      return "Approve Verified Staff";
+    }
+    if (action === "reject") {
+      return "Reject Application";
     }
 
     if (action === "suspend") {
@@ -616,8 +629,17 @@ export default function AdminAccounts() {
 
       if (action === "promote" && !reviewComplete) {
         setActionError(
-          "Verify staff identity and official LGU employment, complete all review fields, and confirm the verification before promoting this applicant to Admin."
+          "Review the applicant's credentials and independently confirm LGU employment and authority before approving Admin access."
         );
+        return;
+      }
+      if (action === "reject" && (
+        account.role !== "applicant" ||
+        account.status !== "pending_review" ||
+        rejectReason.trim().length < 10 ||
+        rejectReason.trim().length > 300
+      )) {
+        setActionError("Enter a clear rejection reason (10–300 characters) for a pending LGU staff application.");
         return;
       }
 
@@ -711,6 +733,23 @@ export default function AdminAccounts() {
               `${nameFor(
                 account
               )} was granted Admin access.`,
+          };
+        } else if (action === "reject") {
+          // Reject the application without deleting the Auth account or altering
+          // other roles. Firestore rules enforce pending-only, no elevated access.
+          batch.update(doc(db, "users", account.id), {
+            status: "rejected",
+            rejectedReason: rejectReason.trim(),
+            reviewedAt: serverTimestamp(),
+            reviewedBy: verified.current.uid,
+          });
+          logPayload = {
+            actionType: "lgu_admin_application_rejected",
+            targetType: "user",
+            targetId: account.id,
+            adminUid: verified.current.uid,
+            adminName: verified.current.displayName || verified.current.email || "Super Admin",
+            description: `LGU Admin application rejected for ${nameFor(account)}. Reason: ${rejectReason.trim()}`,
           };
         } else if (
           action === "suspend"
@@ -1214,7 +1253,17 @@ export default function AdminAccounts() {
                         onPress={() => openAdminAction("promote", account)}
                       >
                         <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.pendingReviewButtonText}>Verify & Review Access</Text>
+                        <Text style={styles.pendingReviewButtonText}>Review & Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={"Reject LGU staff application for " + nameFor(account)}
+                        disabled={!!savingUid}
+                        style={[styles.pendingReviewButton, styles.pendingRejectButton, !!savingUid && { opacity: 0.5 }]}
+                        onPress={() => openAdminAction("reject", account)}
+                      >
+                        <Ionicons name="close-circle-outline" size={16} color="#B42318" />
+                        <Text style={styles.pendingRejectText}>Reject</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1670,7 +1719,9 @@ export default function AdminAccounts() {
                   actionType ===
                     "revoke" ||
                   actionType ===
-                    "suspend"
+                    "suspend" ||
+                  actionType ===
+                    "reject"
                     ? "#B45309"
                     : "#0F766E"
                 }
@@ -1725,6 +1776,28 @@ export default function AdminAccounts() {
               </View>
             )}
 
+            {actionType === "reject" && (
+              <View style={styles.credentialReview}>
+                <Text style={styles.reviewKicker}>STEP 2 · REJECT AFTER CREDENTIAL REVIEW</Text>
+                <Text style={styles.reviewHelp}>
+                  Check the applicant's submitted LGU office, position, official email and appointment reference before rejection.
+                  Do not request or record passwords. A reason is required for the audit log.
+                </Text>
+                <Text style={styles.reviewLabel}>Rejection Reason <Text style={styles.rejectRequired}>*</Text></Text>
+                <TextInput
+                  accessibilityLabel="Rejection reason"
+                  style={[styles.reviewInput, styles.rejectInput]}
+                  value={rejectReason}
+                  placeholder="Explain which LGU employment or authorization requirement was not met"
+                  placeholderTextColor="#8A9C94"
+                  multiline
+                  maxLength={300}
+                  onChangeText={setRejectReason}
+                  editable={!savingUid}
+                />
+                <Text style={styles.reviewHint}>{rejectReason.trim().length}/300 characters · Minimum 10</Text>
+              </View>
+            )}
             {actionType === "promote" ? (
               <View style={styles.credentialReview}>
                 <Text style={styles.reviewKicker}>STEP 2 OF 3 · VERIFY LGU CREDENTIALS</Text>
@@ -1900,16 +1973,18 @@ export default function AdminAccounts() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                disabled={!!savingUid || (actionType === "promote" && !reviewComplete)}
+                disabled={!!savingUid || (actionType === "promote" && !reviewComplete) || (actionType === "reject" && rejectReason.trim().length < 10)}
                 style={[
                   styles.confirmButton,
                   actionType ===
                     "revoke" ||
                   actionType ===
-                    "suspend"
+                    "suspend" ||
+                  actionType ===
+                    "reject"
                     ? styles.confirmDangerButton
                     : styles.confirmPrimaryButton,
-                  (actionType === "promote" && !reviewComplete) && styles.confirmDisabled,
+                  ((actionType === "promote" && !reviewComplete) || (actionType === "reject" && rejectReason.trim().length < 10)) && styles.confirmDisabled,
                 ]}
                 onPress={() =>
                   void confirmAdminAction()
@@ -1978,6 +2053,10 @@ const styles =
     reviewField: { marginBottom: 17 },
     reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 },
     reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
+    rejectInput: { minHeight: 92, textAlignVertical: "top", paddingVertical: 12 },
+    rejectRequired: { color: "#DC2626", fontWeight: "900" },
+    pendingRejectButton: { backgroundColor: "#FFF5F3", borderColor: "#F3B9B3", borderWidth: 1 },
+    pendingRejectText: { color: "#B42318", fontSize: 11, fontWeight: "800" },
     confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
     reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
