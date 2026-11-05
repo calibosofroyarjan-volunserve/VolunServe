@@ -1,0 +1,22 @@
+name: Inspect Bucket CORS for Private LGU Proofs (Read Only)
+on:
+  push:
+    branches: [feature/lgu-staff-documents-review-20261105]
+    paths: [.github/workflows/inspect-lgu-bucket-cors-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Describe existing Google Cloud Storage CORS without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud storage buckets describe gs://volunserve-3aa5b.firebasestorage.app --format=json | python3 -c 'import sys,json; d=json.load(sys.stdin); print("BUCKET_CORS:",json.dumps(d.get("cors_config",d.get("cors",[]))));print("BUCKET:",d.get("name","unknown"))'
+          echo "READ ONLY: No CORS or bucket configuration changed."
