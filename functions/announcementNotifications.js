@@ -36,11 +36,12 @@ exports.notifyAnnouncementAudience = onDocumentCreated(
       let delivered = 0;
       let eligibleRecipients = 0;
       let lastUser = null;
+      let moreUsers = true;
 
       // Paginate user profiles so mixed-case barangay labels still receive
       // the same notices shown by the Resident web announcement feed.
       // Never accept a recipient UID supplied by the publishing client.
-      while (true) {
+      while (moreUsers) {
         let userPageQuery = database.collection("users")
             .orderBy(FieldPath.documentId()).limit(200);
         if (lastUser) userPageQuery = userPageQuery.startAfter(lastUser);
@@ -79,7 +80,7 @@ exports.notifyAnnouncementAudience = onDocumentCreated(
             delivered += pending;
           }
         }
-        if (page.size < 200) break;
+        moreUsers = page.size === 200;
       }
 
       logger.info("Announcement inbox delivery complete", {
