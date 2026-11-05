@@ -38,6 +38,20 @@ service firebase.storage {
         );
     }
 
+    function isSuperAdmin() {
+      return signedIn() && profile().role == 'superadmin' && profile().status == 'approved';
+    }
+
+    match /lguStaffProof/{uid}/{proofName} {
+      allow get: if isSuperAdmin();
+      allow list, delete: if false;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && profile().role == 'applicant' && profile().status == 'pending_review'
+        && proofName in ['staff-id','appointment-letter']
+        && request.resource.size <= 3145728
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
     match /disasterCases/{caseId}/{fileName} {
       allow write: if approved()
         && fileName.matches(request.auth.uid + '-.*')
