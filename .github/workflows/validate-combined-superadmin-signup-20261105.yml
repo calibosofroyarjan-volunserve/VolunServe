@@ -1,0 +1,48 @@
+name: Validate Combined Super Admin + Signup (No Deploy)
+on:
+  push:
+    branches: [review/combined-superadmin-signup-20261105]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      PRESERVED_LIVE_SHA: "08ff6d0a2e1c9d72a84a8216e6413bd42e4aeb01"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Prove latest successful live Hosting release is the parent and protected files are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$PRESERVED_LIVE_SHA" HEAD
+          git diff --exit-code "$PRESERVED_LIVE_SHA" HEAD -- 'app/(superadmin)' 'app/(admin)' 'components/admin' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: latest live Super Admin/Admin, Rules, Firebase config and server code unchanged."
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript and Signup/Login contracts
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
+      - name: Export combined premium Signup web preview (no deploy)
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Confirm no deployment performed and strict Rules NOT cut over
+        run: |
+          echo "This workflow only validates a WEB PREVIEW candidate. No Firebase Hosting, Firestore Rules, Functions, or data changes."
+          echo "Current live Firestore Rules remain unchanged; mandatory verified-only server enforcement is NOT claimed."
+          echo "Do not publish live until combined preview and real email/login tests pass."

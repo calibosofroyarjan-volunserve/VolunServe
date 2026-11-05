@@ -5,6 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 type AuthFeedbackProps = {
   message: string;
   type?: "error" | "success";
+  title?: string;
   onDismiss?: () => void;
 };
 
@@ -14,6 +15,7 @@ type AuthFeedbackProps = {
 export default function AuthFeedback({
   message,
   type = "error",
+  title,
   onDismiss,
 }: AuthFeedbackProps) {
   if (!message) return null;
@@ -31,7 +33,7 @@ export default function AuthFeedback({
       />
       <View style={styles.copy}>
         <Text style={[styles.title, success ? styles.successTitle : styles.errorTitle]}>
-          {success ? "Request received" : "Unable to continue"}
+          {title || (success ? "Request received" : "Unable to continue")}
         </Text>
         <Text style={[styles.message, success ? styles.successText : styles.errorText]}>
           {message}

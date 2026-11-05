@@ -1,3 +1,5 @@
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -420,7 +422,7 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
   );
 }
 
-export default function Signup() {
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -631,7 +633,7 @@ export default function Signup() {
     }
     try {
       setLoadingSubmit(true);
-      await signUpUser({
+      const registeredUser = await signUpUser({
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
@@ -650,11 +652,13 @@ export default function Signup() {
       });
 
       Alert.alert(
-        googleBound ? "Basic Account Created" : "Verify Your Email",
+        registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email",
         googleBound
           ? "Your Google account is ready. Complete Resident Identity Verification later for protected services."
-          : "We sent a verification link to your email address. Open your inbox (or Spam), verify your email, then sign in with your email and password.",
-        [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
+          : registeredUser.emailVerified
+            ? "Your Basic Resident profile is ready. Sign in to continue."
+            : "Verification email requested. Open the verification link in your Inbox or Spam, then return to this form and submit again with the same email and password. Your details stay in this open form. If you already completed a profile, sign in after verifying.",
+        [{ text: "Continue", onPress: () => { if (registeredUser.emailVerified) router.replace(googleBound ? "/(tabs)" : "/login"); } }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
@@ -1210,3 +1214,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   }, 
 })
+export default function Signup() {
+  return EMAIL_FIRST_SIGNUP_ENABLED ? <EmailFirstSignup /> : <LegacySignup />;
+}

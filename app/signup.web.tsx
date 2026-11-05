@@ -1,3 +1,5 @@
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -411,7 +413,7 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
   );
 }
 
-export default function Signup() {
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -660,7 +662,7 @@ export default function Signup() {
     try {
       setLoadingSubmit(true);
 
-      await signUpUser({
+      const registeredUser = await signUpUser({
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
@@ -680,17 +682,19 @@ export default function Signup() {
         occupationOther: formData.occupationOther || "",
       });
 
-      const successTitle = googleBound ? "Basic Account Created" : "Verify Your Email";
+      const successTitle = registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email";
       const successMessage = googleBound
         ? "Your Google account is ready without a separate password. Complete Resident Identity Verification later for protected services."
-        : "We sent a verification link to your email. Verify your email address before signing in, then complete Identity Verification for protected Resident services.";
+        : registeredUser.emailVerified
+          ? "Your Basic Resident profile is ready. Sign in to continue."
+          : "Verification email requested. Open the verification link in your Inbox or Spam, then return to this form and submit again with the same email and password. Your details stay in this open form. If you already completed a profile, sign in after verifying.";
 
       if (Platform.OS === "web") {
         window.alert(`${successTitle}\n\n${successMessage}`);
-        router.replace(googleBound ? "/(tabs)" : "/login");
+        if (registeredUser.emailVerified) router.replace(googleBound ? "/(tabs)" : "/login");
       } else {
         Alert.alert(successTitle, successMessage, [
-          { text: "OK", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") },
+          { text: "OK", onPress: () => { if (registeredUser.emailVerified) router.replace(googleBound ? "/(tabs)" : "/login"); } },
         ]);
       }
     } catch (e: any) {
@@ -1744,3 +1748,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   }, 
 });
+export default function Signup() {
+  return EMAIL_FIRST_SIGNUP_ENABLED ? <EmailFirstSignup /> : <LegacySignup />;
+}
