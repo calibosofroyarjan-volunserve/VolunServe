@@ -1,0 +1,113 @@
+name: Validate Live-Based LGU Announcements and Sidebar (NO PRODUCTION DEPLOY)
+on:
+  push:
+    branches: [release/announcements-clean-nav-live-20261105]
+    paths: [".github/workflows/validate-lgu-announcements-clean-live-20261105.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: validate-lgu-announcements-clean-20261105
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 42
+    env:
+      LIVE_BASE: "905c0442b43a683bffe5b740ea061994cd94e8f2"
+      RULES_BASE_SHA: "600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Verify exact LIVE ancestry and strict changed-file allowlist
+        run: |
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict");
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+"/changed.txt","utf8").split("\n").filter(Boolean);
+          const allowed=new Set([
+            "app/(admin)/_layout.tsx",
+            "app/(admin)/create-announcement.tsx",
+            "scripts/test-admin-navigation-contract.cjs",
+            "scripts/test-lgu-admin-navigation-groups.cjs",
+            "scripts/prepare-lgu-recipient-live-rules.py",
+            "scripts/test-lgu-announcement-recipient-emulator.cjs",
+            ".github/workflows/validate-lgu-announcements-clean-live-20261105.yml",
+            ".github/workflows/release-lgu-announcements-clean-live-20261105.yml",
+            "scripts/activate-lgu-announcements-rules-20261105.py"
+          ]);
+          assert(paths.every(p=>allowed.has(p)),"STOP: disallowed changes "+paths.filter(p=>!allowed.has(p)).join(", "));
+          assert(paths.includes("app/(admin)/_layout.tsx") && paths.includes("app/(admin)/create-announcement.tsx"));
+          console.log("PASS live-only extension: NO edits to Super Admin, Signup, Login, Auth, other Admin modules, Resident/Volunteer, Firebase config, database or backend.");
+          NODE
+      - name: Ensure actual production Hosting has not changed since baseline
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const url of ["https://volunserve.com/volunserve-release.json","https://volunserve-3aa5b.web.app/volunserve-release.json"]){
+              const r=await fetch(url+"?safety_check="+Date.now(),{headers:{"cache-control":"no-cache"},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error("Live revision unavailable "+url);
+              const d=await r.json();
+              if(d.revision!==process.env.LIVE_BASE)throw Error("STOP: live source changed to "+d.revision);
+              console.log("PASS exact live revision "+url+": "+d.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Full TypeScript, core Login/Signup, announcement and admin sidebar regression
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Prepare emulator-only candidate from EXACT active Firestore Rules
+        run: |
+          python3 scripts/prepare-lgu-recipient-live-rules.py
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/lgu-recipient-manifest.json'));
+          assert.equal(x.originalSha,process.env.RULES_BASE_SHA,"STOP: deployed Firestore Rules changed");
+          assert.equal(x.publishedRuleset,"projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec");
+          console.log("PASS immutable actual production Rules source remains exact");
+          NODE
+      - name: Emulator one-time approved LGU area and scoped announcement permissions
+        run: LGU_RECIPIENT_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-lgu-announcement-recipient-emulator.cjs'
+      - name: Emulator existing Admin announcements and suspended restrictions
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Build exact web export and verified revision marker WITHOUT deployment
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const d=JSON.parse(fs.readFileSync('dist/volunserve-release.json'));
+          assert.equal(d.revision,process.env.GITHUB_SHA);
+          console.log("PASS fresh Expo web bundle revision "+d.revision);
+          NODE
+      - name: No production writes
+        run: echo 'VALIDATION ONLY. No Firestore Rules, Hosting, Auth, Super Admin, Login, Signup or production data updates.'
