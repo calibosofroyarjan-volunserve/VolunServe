@@ -91,7 +91,7 @@ jobs:
             scripts/test-notification-clickthrough-polish-20261106.cjs \
             scripts/test-lgu-clean-announcements-live.cjs \
             scripts/test-admin-staff-login.cjs \
-            scripts/test-superadmin-accounts-directory.cjs; do
+            scripts/test-admin-navigation-contract.cjs; do
             test -f "$file"
             node "$file"
           done
