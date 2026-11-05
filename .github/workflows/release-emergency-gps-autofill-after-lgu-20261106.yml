@@ -135,89 +135,113 @@ jobs:
           console.log('PASS Firebase Hosting project identity');
           NODE
 
-      - name: Deploy isolated preview ONLY (not production)
-        id: preview
+      - name: Snapshot exact prior LIVE Firebase Hosting version for rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+          cat > "$RUNNER_TEMP/gps-hosting-api.cjs" <<'NODE'
+          const fs=require('node:fs');
+          const crypto=require('node:crypto');
+          const project=process.env.PROJECT;
+          const mode=process.argv[2];
+          const credentials=JSON.parse(process.env.FIREBASE_SA);
+          const priorPath=process.env.RUNNER_TEMP+'/gps-prior-hosting-version.txt';
+          const api='https://firebasehosting.googleapis.com/v1beta1/sites/'+project;
+          const encodeJson=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const header={alg:'RS256',typ:'JWT'};
+            const payload={
+              iss:credentials.client_email,
+              scope:'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/cloud-platform',
+              aud:credentials.token_uri,
+              iat:now,
+              exp:now+3000
+            };
+            const unsigned=encodeJson(header)+'.'+encodeJson(payload);
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(unsigned),credentials.private_key).toString('base64url');
+            const response=await fetch(credentials.token_uri,{
+              method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion:unsigned+'.'+signature
+              }),signal:AbortSignal.timeout(25000)
+            });
+            if(!response.ok)throw Error('Could not authenticate Hosting version snapshot: '+response.status);
+            const data=await response.json();
+            if(!data.access_token)throw Error('Missing Hosting REST access token');
+            return data.access_token;
+          }
+          (async()=>{
+            const access=await token();
+            if(mode==='snapshot'){
+              const response=await fetch(api+'/releases?pageSize=1',{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('STOP cannot snapshot prior Firebase Hosting version: '+response.status);
+              const result=await response.json();
+              const version=String(result.releases?.[0]?.version?.name||'');
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('STOP prior live version missing');
+              fs.writeFileSync(priorPath,version+'\n',{mode:0o600});
+              console.log('PASS existing live Hosting version snapshotted for rollback');
+            }else if(mode==='restore'){
+              const version=fs.readFileSync(priorPath,'utf8').trim();
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('Unsafe backup reference');
+              const response=await fetch(api+'/releases?versionName='+encodeURIComponent(version),{
+                method:'POST',headers:{Authorization:'Bearer '+access},
+                signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('Hosting rollback failed: '+response.status);
+              console.log('RESTORED prior live Hosting version from immutable Firebase version history');
+            }else throw Error('Unknown Hosting API mode');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/gps-hosting-api.cjs" snapshot
+
+      - name: Final check of both live domains before Hosting-only deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/gps-prior-hosting-version.txt"
+          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
+          echo "PASS exact live version unchanged; only Hosting dist will be published"
+
+      - name: Publish tested web assets to LIVE Hosting ONLY
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ env.FIREBASE_SA }}
           projectId: volunserve-3aa5b
-          channelId: gps-address-preview-lgu-1106
-          expires: 3d
+          channelId: live
 
-      - name: Verify preview fingerprint and protected routes before live
-        shell: bash
-        env:
-          PREVIEW_URLS: ${{ steps.preview.outputs.urls }}
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const raw=(process.env.PREVIEW_URLS||'').trim();
-          let urls;
-          try{const parsed=JSON.parse(raw);urls=Array.isArray(parsed)?parsed:[parsed];}
-          catch{urls=raw.split(/[,\s]+/).filter(Boolean);}
-          const origin=urls.map(x=>String(x)).find(x=>x.startsWith('https://')&&x.includes('.web.app'));
-          if(!origin)throw Error('STOP: Firebase preview URL missing from deployment output');
-          (async()=>{
-            let ok=false;
-            for(let attempt=0;attempt<10;attempt++){
-              try {
-                const marker=await fetch(origin.replace(/\/$/,'')+'/volunserve-release.json?gps_preview='+Date.now(),{signal:AbortSignal.timeout(25000)}).then(x=>x.json());
-                if(marker.revision!==process.env.GITHUB_SHA)throw Error('Unexpected preview revision '+marker.revision);
-                for(const route of ['/login','/signup','/admin-login','/admin-request','/notifications','/announcements','/assistance-requests','/disaster-response']){
-                  const r=await fetch(origin.replace(/\/$/,'')+route,{signal:AbortSignal.timeout(25000)});
-                  if(!r.ok || !String(r.headers.get('content-type')).includes('html'))throw Error('Missing preview route '+route);
-                }
-                ok=true;break;
-              } catch(e) {
-                if(attempt===9)throw e;
-                await new Promise(resolve=>setTimeout(resolve,6000));
-              }
-            }
-            if(!ok)throw Error('STOP: preview verification failed');
-            console.log('PASS preview contains exact build and protected routes; production untouched');
-          })().catch(e=>{console.error(e);process.exit(1)});
-          NODE
-
-      - name: Recheck live SHA and backup existing live Hosting before promotion
+      - name: Verify expected revision on both production domains
         shell: bash
         run: |
           set -euo pipefail
-          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
-          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
-          touch "$RUNNER_TEMP/gps-hosting-backup-ready"
-          echo "Existing live Hosting backed up to $BACKUP_CHANNEL" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Promote verified preview to LIVE only if live is still unchanged
-        shell: bash
-        run: |
-          set -euo pipefail
-          node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
-          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
-          pass=0
+          ok=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if node "$RUNNER_TEMP/guard-live-gps.cjs" "$GITHUB_SHA"; then
-              pass=1
+              ok=1
               break
             fi
             sleep 8
           done
-          test "$pass" = 1 || { echo "::error::Live Hosting revision not verified on both domains"; exit 1; }
+          test "$ok" = 1 || { echo "::error::Published Hosting release is not confirmed on both domains"; exit 1; }
           VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs
-          echo "SUCCESS: GPS address autofill published to live Hosting, original live modules preserved" >> "$GITHUB_STEP_SUMMARY"
+          echo "SUCCESS: GPS address autofill LIVE from latest LGU Super Admin baseline; other modules preserved" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Safe rollback only if this deployment currently owns live
+      - name: Restore previous Hosting version only if this release still owns live
         if: failure()
         shell: bash
         run: |
           set +e
-          if [ ! -f "$RUNNER_TEMP/gps-hosting-backup-ready" ]; then
-            echo "No backup exists; no production promotion was attempted."
+          if [ ! -s "$RUNNER_TEMP/gps-prior-hosting-version.txt" ]; then
+            echo "No previous Hosting version snapshot: production was not promoted by this run."
             exit 0
           fi
           if node "$RUNNER_TEMP/guard-live-gps.cjs" "$GITHUB_SHA"; then
-            node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+            node "$RUNNER_TEMP/gps-hosting-api.cjs" restore
             node "$RUNNER_TEMP/guard-live-gps.cjs" "$LIVE_BASE"
-            echo "Restored prior Hosting revision after failed GPS promotion."
           else
-            echo "Do not overwrite unexpected new live release; inspect Hosting history manually."
+            echo "Cannot safely identify active deployment; leave newer/other live releases untouched, inspect Hosting history."
           fi
