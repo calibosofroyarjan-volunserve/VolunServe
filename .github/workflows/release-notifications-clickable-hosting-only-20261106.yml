@@ -116,6 +116,8 @@ jobs:
             raise SystemExit('STOP: published Firebase Rules content differs from tested version')
           print('PASS exact active Firestore Rules preserved; NO permissions or data changes')
           PY
+      - name: Build stricter notification rules in EMULATOR ONLY (not activated)
+        run: python3 scripts/prepare-notification-read-only-rules-20261106.py
       - name: Emulator verifies recipient read:true only, safe private inbox, no content forgery
         run: |
           LIVE_NOTIFICATION_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
