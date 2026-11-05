@@ -33,7 +33,7 @@ check("Unauthorized LGU personnel blocked",()=>assert.throws(()=>route(p("lgu_pe
 check("Suspended Super Admin blocked",()=>assert.throws(()=>route(p("superadmin",{status:"suspended"})),/not approved/));
 const shell=fs.readFileSync("components/auth/PremiumAuthShell.tsx","utf8");
 check("One premium card, no role selector",()=>{
-  assert(shell.includes("VolunServe Login"));
+  assert(shell.includes("Welcome Back"));
   assert(shell.includes("styles.formCard"));
   assert(!shell.includes("styles.switcher"));
   assert(!shell.includes("styles.roleRow"));
