@@ -627,6 +627,7 @@ export default function AssistanceRequestsAdmin() {
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
+  const [simpleReviewMode, setSimpleReviewMode] = useState(true);
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -963,6 +964,7 @@ export default function AssistanceRequestsAdmin() {
     setValidationIntent(null);
     setReasonAttempt(null);
     setSupportValidationAttempt(null);
+    setSimpleReviewMode(true);
   };
 
   useEffect(() => {
@@ -1035,6 +1037,7 @@ export default function AssistanceRequestsAdmin() {
     setReviewTab("case");
     setReviewFocusStage(null);
     setQuickAction(null);
+    setSimpleReviewMode(true);
     setScreenMode("detail");
   };
 
@@ -2023,6 +2026,7 @@ This still does not automatically create a Donation Campaign.`,
 
 
   const openReviewStage = (stage: ReviewStage = "checks") => {
+    setSimpleReviewMode(false);
     // A new ticket makes even a repeated click on the same checklist entry
     // navigate back to its corresponding verification step.
     setReviewFocusStage((current) => ({ stage, ticket: (current?.ticket ?? 0) + 1 }));
@@ -2204,8 +2208,13 @@ This still does not automatically create a Donation Campaign.`,
         {reviewTab === "case" && (
           <>
             <CaseReviewTab request={selected} />
-            {renderQuickChecklist()}
-            {renderQuickActions()}
+            {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
+              <View style={styles.simpleSummaryAction}>
+                <Text style={styles.simpleReviewCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
+                <ActionButton label="Open Verify & Decide" icon="shield-checkmark-outline" variant="success" loading={false}
+                  onPress={() => {setReviewTab("decision");setSimpleReviewMode(true);}} />
+              </View>
+            )}
           </>
         )}
 
@@ -2233,8 +2242,28 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderDecisionRail = () => {
     if (!selected) return null;
-
+    if (simpleReviewMode && !["verified","rejected"].includes(String(selected.verificationStatus || ""))) {
+      return <CompactAssistanceReview
+        request={selected} reviewDraft={reviewDraft} reviewRecord={verificationReview}
+        reviewLoading={verificationReviewLoading} validationIntent={validationIntent}
+        reasonAttempt={reasonAttempt} adminNote={adminNote} setAdminNote={setAdminNote}
+        rejectionReason={rejectionReason} setRejectionReason={setRejectionReason}
+        savingAction={savingAction} onReviewChange={updateReviewDraft}
+        onStartReview={startReview} onSave={saveVerificationDraft} onVerify={verifyNeed}
+        onMoreInfo={requestMoreInformation} onReject={rejectRequest}
+        onDocuments={() => setReviewTab("evidence")} onResident={() => setReviewTab("resident")}
+        onAdditional={() => {setSimpleReviewMode(false);setReviewFocusStage({stage:"checks",ticket:1});}}
+      />;
+    }
     return (
+      <>
+      {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
+        <TouchableOpacity accessibilityRole="button" style={styles.simpleReturnButton}
+          onPress={() => setSimpleReviewMode(true)}>
+          <Ionicons name="arrow-back-outline" size={17} color="#0F766E" />
+          <Text style={styles.simpleReturnText}>Back to simple review</Text>
+        </TouchableOpacity>
+      )}
       <DecisionTab
         request={selected}
         reviewDraft={reviewDraft}
@@ -2273,6 +2302,7 @@ This still does not automatically create a Donation Campaign.`,
         onSaveLocation={saveOfficialLocation}
         onClearLocation={clearOfficialLocation}
       />
+      </>
     );
   };
 
