@@ -52,6 +52,7 @@ jobs:
             });
             if (!response.ok) throw Error("Cannot verify live Hosting revision; no deploy");
             const release = await response.json();
+            console.log("Observed live Hosting revision:", release.revision || "(missing)");
             if (release.app !== "VolunServe" ||
                 release.firebaseProject !== "volunserve-3aa5b" ||
                 release.revision !== process.env.AUDITED_LIVE_SHA) {
