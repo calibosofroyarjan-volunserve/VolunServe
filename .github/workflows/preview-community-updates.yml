@@ -1,0 +1,58 @@
+name: VolunServe Community Updates Hosting Preview (No Live Deploy)
+on:
+  push:
+    branches:
+      - feature/community-updates-notifications-20261105
+    paths:
+      - ".github/workflows/preview-community-updates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-community-updates-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out PR feature branch (do not touch main)
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --pretty false
+      - name: Export web only
+        run: npx expo export --platform web
+      - name: Stamp the precise preview revision
+        run: |
+          node -e "require('node:fs').writeFileSync('dist/volunserve-preview.json',JSON.stringify({sha:process.env.GITHUB_SHA,scope:'community-updates-preview',project:'volunserve-3aa5b'}))"
+      - name: Validate Firebase service-account project before preview
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const account = JSON.parse(process.env.FIREBASE_SA || '{}');
+          assert.equal(account.type,'service_account');
+          assert.equal(account.project_id,'volunserve-3aa5b');
+          console.log('Firebase project verified. Hosting preview only; live channel excluded.');
+          NODE
+      - name: Deploy temporary Firebase Hosting PREVIEW channel only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: community-updates-preview-20261105
+          expires: 1d
+      - name: No production publication
+        run: |
+          echo 'Temporary preview channel published; live Hosting, Firestore rules, Functions, Auth, and data untouched.'
