@@ -26,7 +26,7 @@ type GpsPoint = {
   updatedAt: number;
 };
 
-const MAP_HTML = \`<!doctype html>
+const MAP_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -95,7 +95,7 @@ const MAP_HTML = \`<!doctype html>
   })();
   </script>
 </body>
-</html>\`;
+</html>`;
 
 const milliseconds = (value: any): number =>
   typeof value?.toMillis === "function" ? value.toMillis()
