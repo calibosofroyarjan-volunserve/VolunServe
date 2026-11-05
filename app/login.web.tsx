@@ -6,6 +6,7 @@ import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import { userFacingError } from "../lib/userFacingError";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
+import { useSignupGoogle } from "../lib/useSignupGoogle";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -28,7 +29,6 @@ import {
 import { auth } from "../lib/firebase";
 import PremiumAuthShell, { authCornerCut } from "../components/auth/PremiumAuthShell";
 import {
-  connectGoogleAccountWeb,
   getUserProfile,
   homeRouteForProfile,
   isApprovedProfile,
@@ -58,6 +58,7 @@ function consumeGoogleLoginNotice(): string {
 
 export default function WebLogin() {
   const router = useRouter();
+  const signInGoogle = useSignupGoogle();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -139,7 +140,7 @@ export default function WebLogin() {
       setPendingAction("google");
       await applySessionPersistence();
 
-      const googleUser = await connectGoogleAccountWeb();
+      const googleUser = await signInGoogle();
       selectedUid = googleUser.uid;
       setGoogleProgress("Google account connected. Checking your VolunServe account...");
 
