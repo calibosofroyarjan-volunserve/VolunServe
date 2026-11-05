@@ -126,37 +126,67 @@ def do_stage():
     print("PASS compiled immutable INACTIVE Ruleset:", new)
     print("NO production Rules release changed yet")
 
+def firebase_rules_only_deploy():
+    # Firebase CLI uses the supported deployment API and is limited to rules.
+    # firestore.rules is the EXACT prior live Ruleset with only notifications
+    # read/update restrictions changed; no indexes or other modules deployed.
+    args = [
+        "node", "node_modules/firebase-tools/lib/bin/firebase.js",
+        "deploy", "--only", "firestore:rules", "--project", PROJECT,
+        "--non-interactive",
+    ]
+    subprocess.run(args, check=True, timeout=210)
+
+
 def do_activate():
     info = manifest()
-    if info.get("old") != EXPECTED_OLD or info.get("oldHash") != EXPECTED_OLD_HASH or info.get("hostingBase") != EXPECTED_HOSTING:
-        raise RuntimeError("STOP stage manifest differs from release guard")
+    if (info.get("old") != EXPECTED_OLD or
+        info.get("oldHash") != EXPECTED_OLD_HASH or
+        info.get("hostingBase") != EXPECTED_HOSTING):
+        raise RuntimeError("STOP staged release manifest mismatches expected production baseline")
     verify_hosting()
     if current() != EXPECTED_OLD:
-        raise RuntimeError("STOP production Rules changed before activation")
-    _, staged_source = content_for(info["new"])
+        raise RuntimeError("STOP active Firestore Rules changed before deploy")
     candidate = open("firestore.rules", "rb").read().decode("utf8")
+    _, staged_source = content_for(info["new"])
     if canonical(staged_source) != canonical(candidate) or sha(candidate) != info["newHash"]:
-        raise RuntimeError("STOP previously compiled source no longer matches tested candidate")
-    patch_pointer(info["new"])
-    if current() != info["new"]:
-        raise RuntimeError("STOP activation could not be verified")
-    print("PASS activated notification read-only-content restriction only:", info["new"])
+        raise RuntimeError("STOP candidate differs from emulator-tested immutable staged Ruleset")
+    firebase_rules_only_deploy()
+    active = current()
+    _, new_source = content_for(active)
+    if canonical(new_source) != canonical(candidate):
+        raise RuntimeError("STOP active Firestore Rules source does not match tested candidate")
+    info["cliDeployedRuleset"] = active
+    with open(MANIFEST_FILE, "w", encoding="utf8") as file:
+        json.dump(info, file)
+    print("PASS activated Firebase RULES-ONLY content integrity policy:", active)
+
 
 def do_rollback():
     if not os.path.isfile(MANIFEST_FILE):
-        print("NO RULES ROLLBACK: stage manifest does not exist")
+        print("NO RULES ROLLBACK: no stage manifest")
         return
     info = manifest()
     active = current()
     if active == info["old"]:
-        print("NO RULES ROLLBACK: old Ruleset still active")
+        print("NO RULES ROLLBACK: original active Ruleset untouched")
         return
-    if active != info["new"]:
-        raise RuntimeError("STOP: unrelated Ruleset now active; do not overwrite it")
-    patch_pointer(info["old"])
-    if current() != info["old"]:
-        raise RuntimeError("CRITICAL: old Ruleset rollback did not verify")
-    print("PASS safely rolled back ONLY this run's Ruleset activation")
+    old_name, original = content_for(info["old"])
+    if sha(original) != info["oldHash"]:
+        raise RuntimeError("STOP cannot verify old known-safe Ruleset for rollback")
+    # Do not overwrite a concurrent developer's unrelated Rules deployment.
+    _, active_source = content_for(active)
+    if sha(canonical(active_source)) != sha(canonical(open("firestore.rules", "rb").read().decode("utf8"))):
+        raise RuntimeError("STOP different Ruleset now active: refuse concurrent overwrite")
+    with open("firestore.rules", "w", encoding="utf8", newline="\n") as file:
+        file.write(original)
+    firebase_rules_only_deploy()
+    after = current()
+    _, restored = content_for(after)
+    if canonical(restored) != canonical(original):
+        raise RuntimeError("CRITICAL: rollback source content verification failed")
+    print("PASS original safe Cloud Firestore policies restored via rules-only CLI deployment")
+
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) == 2 else ""
