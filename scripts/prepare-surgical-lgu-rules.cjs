@@ -96,25 +96,15 @@ onlyOnce(target,superAdminUpdate,"live Super Admin update permission");
 target=target.replace(superAdminUpdate,guardedGrant+reject+superAdminUpdate);
 // 4) Deny operational LGU Admin from reviewing LGU STAFF applications
 // while preserving existing resident and volunteer application paths.
-const existingAdminApplicant=`      allow update: if isAdmin()
-        && resource.data.role == 'applicant'
-        && request.resource.data`;
-const restrictedAdminApplicant=`      allow update: if isAdmin()
-        && resource.data.role == 'applicant'
-        && !('lguOffice' in resource.data)
-        && request.resource.data`;
-// Some earlier live Firestore releases predate the LGU STAFF applicant path entirely.
-// The old release has no such operational Admin applicant transition to restrict;
-// in that case the separate Super Admin-only approval/rejection rules below suffice.
-// Emulator tests MUST still prove LGU Admin cannot access this path.
-const adminApplicantCount=target.split(existingAdminApplicant).length-1;
-assert(adminApplicantCount<=1,"Unexpected duplicate Admin applicant transition");
-if(adminApplicantCount===1){
- target=target.replace(existingAdminApplicant,restrictedAdminApplicant);
- console.log("Restricted legacy LGU Admin applicant transitions for staff only");
-} else {
- console.log("PASS live LGU Admin rules have no applicant-update clause to change");
-}
+// The deployed Admin applicant rule has slightly different indentation than
+// the latest source. Match it by syntax, never by a speculative literal string.
+const adminApplicantRegex=/([ \t]*allow update: if isAdmin\(\)\r?\n[ \t]*&& resource\.data\.role == 'applicant'\r?\n)([ \t]*&& request\.resource\.data)/g;
+const matches=[...target.matchAll(adminApplicantRegex)];
+assert.equal(matches.length,1,"BLOCKED: cannot uniquely identify production LGU Admin applicant-update clause");
+const newline=target.includes("\r\n")?"\r\n":"\n";
+const lguStaffGuard="        && !('lguOffice' in resource.data)"+newline;
+target=target.replace(adminApplicantRegex,(_,head,tail)=>head+lguStaffGuard+tail);
+console.log("PASS current LGU Admin applicant handler now excludes LGU STAFF profiles");
 // 5) Extract the audited private review-record validation block. Never store ID files here.
 const reviewMatch=slice(hardened,
 "    // Private human-verified LGU credentials: reference only, never ID scans.",
@@ -130,7 +120,7 @@ let reversed=target
  .replace(createStaff,"")
  .replace(guardedGrant,"")
  .replace(reject,"")
- .replace(restrictedAdminApplicant,existingAdminApplicant)
+ .replace(lguStaffGuard,"")
  .replace(reviewMatch,"");
 assert.equal(reversed,original,"Surgical patch altered unrelated live rules");
 assert(target.length>original.length+3000,"Expected reviewed LGU rules were not added");
