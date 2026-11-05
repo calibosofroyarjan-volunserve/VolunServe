@@ -64,11 +64,21 @@ jobs:
               "      allow list: if isAdminOrSuperAdmin()",
               "        || (approved() && ownAnnouncementArea());",
           ])
-          if live.count(pattern)!=1:raise Exception('STOP: Published announcement rule differs from expected. No changes attempted.')
-          candidate=live.replace(pattern,replacement,1)
-          before=live.split('match /announcements/{announcementId}')[0]
-          after=live.split('match /announcements/{announcementId}')[1].split('match /',1)[-1]
-          if not candidate.startswith(before):raise Exception('Pre-announcement code changed')
+          import re
+          segment_start=live.find('match /announcements/{announcementId} {')
+          if segment_start<0:raise Exception('Active announcements block not found')
+          segment_end=live.find('match /',segment_start+len('match /announcements/{announcementId} {'))
+          if segment_end<0:raise Exception('Could not find next rule block boundary')
+          block=live[segment_start:segment_end]
+          exact_read=re.compile(
+              r'(?m)^[ \t]*allow read:\s*if isAdminOrSuperAdmin\(\)\s*\|\|\s*\(\s*approved\(\)\s*&&\s*resource\.data\.publishAt\s+is\s+timestamp\s*&&\s*resource\.data\.publishAt\s*<=\s*request\.time\s*\);'
+          )
+          found=list(exact_read.finditer(block))
+          if len(found)!=1:raise Exception('STOP: Active announcement read condition unexpected. No changes attempted.')
+          match=found[0]
+          candidate=live[:segment_start]+block[:match.start()]+replacement+block[match.end():]+live[segment_end:]
+          if candidate[:segment_start]!=live[:segment_start] or not candidate.endswith(live[segment_end:]):
+              raise Exception('STOP: Change would touch another Rules block')
           with open('firestore.rules','w') as f:f.write(candidate)
           print('VERIFIED actual active Ruleset: '+release['rulesetName'])
           print('ORIGINAL SHA256: '+hashlib.sha256(live.encode()).hexdigest())
