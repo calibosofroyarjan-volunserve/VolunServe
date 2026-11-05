@@ -89,3 +89,36 @@ test("retired dedicated personnel portal is not exposed and Admin remains intact
   assert.match(adminCases, /const assignVolunteerToCase = async/);
 });
 
+
+
+test("Emergency statuses, native opt-in GPS, and Volunteer task completion stay separate from LGU dispatch", () => {
+  const labels = read("lib/emergencyTaskStatus.ts");
+  const nativeMap = read("components/tabs/MapTracking.native.tsx");
+  const webMap = read("components/tabs/MapTracking.web.tsx");
+  const webFlow = read("components/tabs/ResponseFlow.web.tsx");
+  const adminCases = read("app/(admin)/admin-cases.tsx");
+  const nativeReport = read("components/DisasterResponse.native.tsx");
+  const webReport = read("components/DisasterResponse.web.tsx");
+  for (const label of ["Pending", "Approved", "Assigned", "In Progress", "Completed", "Rejected"]) {
+    assert.ok(labels.includes('"' + label + '"'), "Missing UI status " + label);
+  }
+  assert.match(labels, /report === "resolved"/);
+  assert.match(webMap, /Last Volunteer GPS update/);
+  assert.match(webMap, /VOLUNTEER GPS LIVE/);
+  assert.match(nativeMap, /trackedVolunteerCaseIds/);
+  assert.match(nativeMap, /doc\(db, "responseAssignments", assignmentId\)/);
+  assert.match(nativeMap, /doc\(db, "responseLocations", CURRENT_USER_ID\)/);
+  assert.match(nativeMap, /volunteerGpsConsent/);
+  assert.match(nativeMap, /Share GPS for This Task/);
+  assert.match(nativeMap, /Stop GPS Sharing/);
+  assert.match(nativeMap, /deleteDoc\(gpsRef\)/);
+  assert.doesNotMatch(nativeMap, /visibleLguVehiclePins/, "Native map must not depend on LGU Personnel responder GPS");
+  assert.match(webFlow, /const activeStates = \["responding", "on_site"\]/);
+  assert.match(webFlow, /deleteDoc\(locationRef\)/);
+  assert.match(adminCases, /confirmVolunteerCompletion/);
+  assert.match(adminCases, /reportStatus !== "reviewed"/);
+  assert.match(webReport, /if \(!pin\)/, "Web report must require an actual GPS pin");
+  assert.match(nativeReport, /if \(!pin\)/, "Native report must require an actual GPS pin");
+  assert.match(webReport, /photoFiles.length === 0/);
+  assert.match(nativeReport, /photos.length === 0/);
+});
