@@ -121,3 +121,5 @@ jobs:
           echo 'Guarded rollback check completed; no production user document writes.' >> "$GITHUB_STEP_SUMMARY"
 
 # One-shot user-approved notification content-integrity hardening, tested against exact published Firestore Rules.
+
+# One-shot retry using supported Firebase CLI rules-only deployment after successful emulator validation.
