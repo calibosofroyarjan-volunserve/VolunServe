@@ -122,7 +122,11 @@ jobs:
               headers['Content-Type']='application/json'
               data=json.dumps(body).encode()
             req=urllib.request.Request(BASE+path,headers=headers,data=data,method=method)
-            with urllib.request.urlopen(req,timeout=35) as r:return json.load(r)
+            try:
+              with urllib.request.urlopen(req,timeout=35) as r:return json.load(r)
+            except urllib.error.HTTPError as exc:
+              print('FIREBASE_RELEASE_API_ERROR',exc.code,exc.read().decode('utf8',errors='replace')[:1400])
+              raise
           old=os.environ['OLD_RULESET'];new=os.environ['NEW_RULESET']
           def state():
             return request('GET',release)['rulesetName']
