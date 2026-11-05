@@ -48,6 +48,8 @@ type ReviewTab =
   | "resident"
   | "decision";
 
+type ReviewStage = "checks" | "costs" | "residency" | "decision" | "support";
+
 type StoredDocument = {
   documentType?: string;
   label?: string;
@@ -2010,15 +2012,7 @@ This still does not automatically create a Donation Campaign.`,
           />
         )}
 
-        {reviewTab === "decision" && (
-          <PrivateVerificationOverview
-            request={selected}
-            reviewDraft={reviewDraft}
-            loading={verificationReviewLoading}
-            ready={allChecksComplete}
-            reviewRecord={verificationReview}
-          />
-        )}
+        {reviewTab === "decision" && renderDecisionRail()}
       </>
     );
   };
@@ -2102,25 +2096,25 @@ This still does not automatically create a Donation Campaign.`,
 
         <View style={styles.mockDetailTabs}>
           <ReviewTabButton
-            label="Details"
+            label="1. Request"
             icon="document-text-outline"
             active={reviewTab === "case"}
             onPress={() => setReviewTab("case")}
           />
           <ReviewTabButton
-            label={`Documents (${selected.documents?.length || 0})`}
+            label={`2. Documents (${selected.documents?.length || 0})`}
             icon="images-outline"
             active={reviewTab === "evidence"}
             onPress={() => setReviewTab("evidence")}
           />
           <ReviewTabButton
-            label="Resident Info"
+            label="3. Resident"
             icon="person-outline"
             active={reviewTab === "resident"}
             onPress={() => setReviewTab("resident")}
           />
           <ReviewTabButton
-            label="Review & Decision"
+            label="4. Review & Decide"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
             onPress={() => setReviewTab("decision")}
@@ -2389,37 +2383,6 @@ This still does not automatically create a Donation Campaign.`,
               </ScrollView>
             </View>
 
-            <View style={styles.detailEvaluationPanel}>
-              <View style={styles.evaluationRailHeader}>
-                <View style={styles.evaluationRailHeaderIcon}>
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={18}
-                    color="#4338CA"
-                  />
-                </View>
-                <View style={styles.evaluationRailHeaderCopy}>
-                  <Text style={styles.evaluationRailEyebrow}>
-                    LGU EVALUATION
-                  </Text>
-                  <Text style={styles.evaluationRailTitle}>
-                    Verification & Decision
-                  </Text>
-                  <Text style={styles.evaluationRailSubtitle}>
-                    Review, verify, assess resources, and assign only an authorized public service point.
-                  </Text>
-                </View>
-              </View>
-
-              <ScrollView
-                style={styles.detailEvaluationScroll}
-                contentContainerStyle={styles.detailEvaluationContent}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              >
-                {renderDecisionRail()}
-              </ScrollView>
-            </View>
           </View>
         </View>
       ) : (
@@ -2434,26 +2397,6 @@ This still does not automatically create a Donation Campaign.`,
             {renderReviewMain()}
           </View>
 
-          <View style={styles.mobileEvaluationSection}>
-            <View style={styles.evaluationRailHeader}>
-              <View style={styles.evaluationRailHeaderIcon}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={18}
-                  color="#4338CA"
-                />
-              </View>
-              <View style={styles.evaluationRailHeaderCopy}>
-                <Text style={styles.evaluationRailEyebrow}>
-                  LGU EVALUATION
-                </Text>
-                <Text style={styles.evaluationRailTitle}>
-                  Verification & Decision
-                </Text>
-              </View>
-            </View>
-            {renderDecisionRail()}
-          </View>
         </ScrollView>
       )}
 
@@ -2609,126 +2552,6 @@ function MockQueueRow({
         color="#94A3B8"
       />
     </TouchableOpacity>
-  );
-}
-
-function PrivateVerificationOverview({
-  request,
-  reviewDraft,
-  reviewRecord,
-  loading,
-  ready,
-}: {
-  request: AssistanceRequest;
-  reviewDraft: PrivateReviewDraft | null;
-  reviewRecord: Record<string, any> | null;
-  loading: boolean;
-  ready: boolean;
-}) {
-  if (loading) {
-    return (
-      <View style={styles.tabContent}>
-        <SectionCard
-          title="Private LGU Verification"
-          subtitle="Loading the protected verification record."
-          icon="shield-checkmark-outline"
-        >
-          <ActivityIndicator color="#4F46E5" />
-        </SectionCard>
-      </View>
-    );
-  }
-
-  if (!reviewDraft) {
-    return (
-      <View style={styles.tabContent}>
-        <SectionCard
-          title="Private LGU Verification"
-          subtitle="Start Review to create the protected verification record for this case."
-          icon="shield-checkmark-outline"
-        >
-          <Text style={styles.emptyText}>No private verification record is loaded yet.</Text>
-        </SectionCard>
-      </View>
-    );
-  }
-
-  const gross = safeNumber(reviewDraft.verifiedGrossCost);
-  const existing = safeNumber(reviewDraft.confirmedExistingAssistanceAmount);
-  const uncovered = Math.max(0, gross - existing);
-  const riskFlags = reviewDraft.riskFlags
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return (
-    <View style={styles.tabContent}>
-      <SectionCard
-        title="Private LGU Verification Summary"
-        subtitle="This protected record is visible only to authorized LGU/Admin roles. It is the gate behind Verify Need."
-        icon="shield-checkmark-outline"
-      >
-        <InfoGrid>
-          <InfoItem label="Review Record" value={reviewRecord ? "Created" : "Not saved yet"} />
-          <InfoItem label="Document Consistency" value={reviewDraft.documentConsistencyStatus} />
-          <InfoItem label="Duplicate Check" value={reviewDraft.duplicateCheckStatus} />
-          <InfoItem label="Beneficiary Check" value={reviewDraft.beneficiaryCheckStatus} />
-          <InfoItem label="Residency Verification" value={reviewDraft.residencyVerificationStatus} />
-          <InfoItem
-            label="Facility Verification"
-            value={
-              reviewDraft.facilityVerificationRequired
-                ? reviewDraft.facilityVerificationStatus
-                : "Not required"
-            }
-          />
-          <InfoItem
-            label="Cost Verification"
-            value={
-              reviewDraft.costVerificationRequired
-                ? reviewDraft.costVerificationStatus
-                : "Not required"
-            }
-          />
-          <InfoItem label="Risk Flags" value={String(riskFlags.length)} attention={riskFlags.length > 0} />
-        </InfoGrid>
-
-        {reviewDraft.costVerificationRequired && (
-          <>
-            <Divider />
-            <InfoGrid>
-              <InfoItem label="Resident Estimate" value={money(request.estimatedAmount)} />
-              <InfoItem label="LGU Verified Gross Cost" value={money(gross)} />
-              <InfoItem label="Confirmed Existing Assistance" value={money(existing)} />
-              <InfoItem label="Verified Uncovered Amount" value={money(uncovered)} />
-            </InfoGrid>
-          </>
-        )}
-
-        <View
-          style={[
-            styles.checkSummary,
-            ready && styles.checkSummaryComplete,
-          ]}
-        >
-          <Ionicons
-            name={ready ? "checkmark-circle" : "alert-circle-outline"}
-            size={19}
-            color={ready ? "#15803D" : "#9A6700"}
-          />
-          <Text
-            style={[
-              styles.checkSummaryText,
-              ready && styles.checkSummaryTextComplete,
-            ]}
-          >
-            {ready
-              ? "All rule-backed verification conditions are ready for final LGU verification."
-              : "Verify Need remains locked until every required private verification condition is satisfied."}
-          </Text>
-        </View>
-      </SectionCard>
-    </View>
   );
 }
 
@@ -3507,6 +3330,28 @@ function DecisionTab({
   const router = useRouter();
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
+  const [reviewStage, setReviewStage] = useState<ReviewStage>(
+    request.verificationStatus === "verified" ? "support" :
+    request.verificationStatus === "rejected" ? "decision" : "checks",
+  );
+
+  useEffect(() => {
+    setReviewStage(
+      request.verificationStatus === "verified" ? "support" :
+      request.verificationStatus === "rejected" ? "decision" : "checks",
+    );
+  }, [request.id, request.verificationStatus]);
+
+  const reviewStages: { id: ReviewStage; label: string }[] = [
+    { id: "checks", label: "1. Basic Checks" },
+    { id: "costs", label: "2. Facility & Amount" },
+    { id: "residency", label: "3. Address & Extra Checks" },
+    { id: "decision", label: "4. Decision" },
+    ...(verified ? [{ id: "support" as ReviewStage, label: "5. Support Plan" }] : []),
+  ];
+  const currentStageIndex = reviewStages.findIndex((stage) => stage.id === reviewStage);
+  const nextStage = reviewStages[currentStageIndex + 1];
+  const previousStage = reviewStages[currentStageIndex - 1];
   const reviewLocked = ["verified", "rejected"].includes(
     String(reviewRecord?.finalDecision || ""),
   );
@@ -3661,7 +3506,60 @@ function DecisionTab({
 
   return (
     <View style={styles.tabContent}>
-      <SectionCard
+      <View style={styles.reviewJourney}>
+        <View style={styles.reviewJourneyHeading}>
+          <Ionicons name="checkbox-outline" size={20} color="#0F766E" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reviewJourneyTitle}>Review this request step by step</Text>
+            <Text style={styles.reviewJourneySubtitle}>
+              Check the Resident's request and documents in the tabs above, then complete the LGU review here. Only verified needs may proceed to support.
+            </Text>
+          </View>
+        </View>
+        <View style={styles.reviewStepBar}>
+          {reviewStages.map((stage) => (
+            <TouchableOpacity
+              key={stage.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: reviewStage === stage.id }}
+              disabled={!!savingAction}
+              onPress={() => setReviewStage(stage.id)}
+              style={[
+                styles.reviewStepPill,
+                reviewStage === stage.id && styles.reviewStepPillActive,
+              ]}
+            >
+              <Text style={[
+                styles.reviewStepText,
+                reviewStage === stage.id && styles.reviewStepTextActive,
+              ]}>
+                {stage.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {!reviewRecord && !verified && !rejected && request.status === "pending" && (
+          <View style={styles.reviewStartPrompt}>
+            <Text style={styles.reviewJourneySubtitle}>
+              Start the LGU review to create a private record before saving verification details.
+            </Text>
+            <ActionButton
+              label="Start Review"
+              icon="play-circle-outline"
+              variant="primary"
+              loading={savingAction === "start_review"}
+              onPress={onStartReview}
+            />
+          </View>
+        )}
+        <Text style={styles.reviewJourneyHint}>
+          Switching steps keeps your draft on this page. Select Save Progress to store it securely before leaving the request.
+        </Text>
+      </View>
+
+      {reviewStage === "checks" && (
+        <>
+          <SectionCard
         title="Private Verification"
         subtitle="Check the evidence, duplicate history, beneficiary, residency, and any required facility or cost details before making a decision."
         icon="shield-checkmark-outline"
@@ -3757,7 +3655,11 @@ function DecisionTab({
         />
       </SectionCard>
 
-      <SectionCard
+        </>
+      )}
+      {reviewStage === "costs" && (
+        <>
+          <SectionCard
         title="Facility / Hospital / Clinic Verification"
         subtitle={
           reviewDraft.facilityVerificationRequired
@@ -3935,7 +3837,11 @@ function DecisionTab({
         )}
       </SectionCard>
 
-      <SectionCard
+        </>
+      )}
+      {reviewStage === "residency" && (
+        <>
+          <SectionCard
         title="Residency / Address Verification"
         subtitle="Use Google Maps only to check whether the Resident-declared address is geographically consistent. A map match does not prove residency."
         icon="location-outline"
@@ -4152,7 +4058,11 @@ function DecisionTab({
         )}
       </SectionCard>
 
-      <SectionCard
+        </>
+      )}
+      {reviewStage === "decision" && (
+        <>
+          <SectionCard
         title="Risk Flags & Internal LGU Notes"
         subtitle="Flags must describe concrete inconsistencies or unresolved verification issues. They are not a personality score and they block final verification until resolved."
         icon="warning-outline"
@@ -4178,15 +4088,6 @@ function DecisionTab({
           style={styles.textArea}
         />
 
-        {!reviewLocked && (
-          <ActionButton
-            label="Save Verification Progress"
-            icon="save-outline"
-            variant="secondary"
-            loading={savingAction === "save_private_review"}
-            onPress={onSaveVerificationDraft}
-          />
-        )}
       </SectionCard>
 
       <SectionCard
@@ -4272,7 +4173,9 @@ function DecisionTab({
         </SectionCard>
       )}
 
-      {verified && (
+        </>
+      )}
+      {reviewStage === "support" && verified && (
         <>
           <SectionCard
             title="Choose Support"
@@ -4422,7 +4325,7 @@ function DecisionTab({
         </>
       )}
 
-      {rejected && (
+      {reviewStage === "decision" && rejected && (
         <View style={styles.rejectedCard}>
           <Ionicons name="close-circle-outline" size={22} color="#B42318" />
           <View style={styles.noteCopy}>
@@ -4431,6 +4334,38 @@ function DecisionTab({
           </View>
         </View>
       )}
+
+      <View style={styles.reviewStepFooter}>
+        {previousStage && (
+          <TouchableOpacity
+            style={styles.reviewPreviousButton}
+            onPress={() => setReviewStage(previousStage.id)}
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={16} color="#475569" />
+            <Text style={styles.reviewPreviousText}>Previous step</Text>
+          </TouchableOpacity>
+        )}
+        {!reviewLocked && !!reviewRecord && reviewStage !== "support" && (
+          <ActionButton
+            label="Save Progress"
+            icon="save-outline"
+            variant="secondary"
+            loading={savingAction === "save_private_review"}
+            onPress={onSaveVerificationDraft}
+          />
+        )}
+        {nextStage && (
+          <TouchableOpacity
+            style={styles.reviewNextButton}
+            onPress={() => setReviewStage(nextStage.id)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.reviewNextText}>Next: {nextStage.label}</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -5689,6 +5624,101 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: 16,
     gap: 13,
+  },
+  reviewJourney: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#DCE6E5",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+  },
+  reviewJourneyHeading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  reviewJourneyTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#12382D",
+    marginBottom: 4,
+  },
+  reviewJourneySubtitle: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: "#52637A",
+  },
+  reviewJourneyHint: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: "#64748B",
+  },
+  reviewStepBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  reviewStepPill: {
+    borderRadius: 9,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+  },
+  reviewStepPillActive: {
+    borderColor: "#0F766E",
+    backgroundColor: "#E7F5F1",
+  },
+  reviewStepText: {
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  reviewStepTextActive: {
+    color: "#115E59",
+  },
+  reviewStartPrompt: {
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#BFDCD1",
+    borderRadius: 10,
+    backgroundColor: "#F0FAF5",
+  },
+  reviewStepFooter: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    paddingVertical: 10,
+  },
+  reviewPreviousButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    padding: 12,
+  },
+  reviewPreviousText: {
+    color: "#475569",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  reviewNextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 9,
+    paddingHorizontal: 17,
+    paddingVertical: 14,
+    backgroundColor: "#0F766E",
+  },
+  reviewNextText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 12,
   },
 
   sectionCard: {
