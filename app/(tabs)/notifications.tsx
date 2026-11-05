@@ -6,6 +6,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
+import { useUserSession } from "../../lib/useUserSession";
+import { useCommunityAnnouncements } from "../../lib/useCommunityAnnouncements";
 
 type NotificationItem = {
   id: string;
@@ -15,9 +17,10 @@ type NotificationItem = {
   type?: string;
   read?: boolean;
   createdAt?: any;
+  sourceLabel?: string;
 };
-type Filter = "All" | "Unread" | "Emergency" | "Events" | "Donations" | "Account";
-const FILTERS: Filter[] = ["All", "Unread", "Emergency", "Events", "Donations", "Account"];
+type Filter = "All" | "Unread" | "Announcements" | "Emergency" | "Events" | "Donations" | "Account";
+const FILTERS: Filter[] = ["All", "Unread", "Announcements", "Emergency", "Events", "Donations", "Account"];
 const PAGE_SIZE = 5;
 
 const timestamp = (value: any): number => {
@@ -30,14 +33,30 @@ const timestamp = (value: any): number => {
 };
 const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> => {
   const raw = String(item.type || "").toLowerCase();
+  if (/announcement|bulletin|notice|system_update/.test(raw)) return "Announcements";
   if (/emergency|disaster|rescue|incident|response|evacuat/.test(raw)) return "Emergency";
   if (/event|volunteer|attendance|certificate|schedule|task/.test(raw)) return "Events";
   if (/donat|assistance|fund|campaign|payment|release|receipt/.test(raw)) return "Donations";
   return "Account";
 };
 
+const rawSystemUpdate = (item: NotificationItem) => String(item.type || "").toLowerCase() === "system_update";
+const categoryAppearance = (item: NotificationItem): { icon: keyof typeof Ionicons.glyphMap; color: string; background: string } => {
+  const category = categoryOf(item);
+  if (rawSystemUpdate(item)) return { icon: "settings-outline", color: "#1D5FAE", background: "#E5F0FE" };
+  if (category === "Announcements") return { icon: "megaphone-outline", color: "#087D60", background: "#E2F6EA" };
+  if (category === "Emergency") return { icon: "alert-circle-outline", color: "#B42318", background: "#FEE9E7" };
+  if (category === "Events") return { icon: "calendar-outline", color: "#1D5FAE", background: "#E5F0FE" };
+  if (category === "Donations") return /assistance|request|support/i.test(String(item.type || ""))
+    ? { icon: "hand-left-outline", color: "#098057", background: "#E6F7ED" }
+    : { icon: "heart-outline", color: "#B42356", background: "#FCEAF1" };
+  return { icon: "shield-checkmark-outline", color: "#5B4DB1", background: "#EEEBFB" };
+};
+
 export default function NotificationsScreen() {
   const [uid, setUid] = useState<string | null>(null);
+  const { profile } = useUserSession();
+  const { announcements, error: announcementError } = useCommunityAnnouncements(profile?.barangay, Boolean(uid && profile));
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,10 +91,26 @@ export default function NotificationsScreen() {
     });
   }, [uid]);
 
+  // Announcements are read-only community feed entries. They do not alter
+  // account notification documents or the user's unread count.
+  const activityFeed = useMemo<NotificationItem[]>(() => {
+    const noticeRows: NotificationItem[] = announcements.map(item => ({
+      id: "announcement:" + item.id,
+      userId: uid || "",
+      title: item.title,
+      message: item.message,
+      type: item.audience === "all" ? "system_update" : "announcement",
+      sourceLabel: item.audience === "all" ? "VolunServe System Update" : "Barangay Announcement • " + item.audience,
+      read: true,
+      createdAt: item.publishAt || item.createdAt,
+    }));
+    return [...notifications, ...noticeRows]
+      .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
+  }, [announcements, notifications, uid]);
   const unread = useMemo(() => notifications.filter(item => !item.read).length, [notifications]);
-  const filtered = useMemo(() => notifications.filter(item =>
+  const filtered = useMemo(() => activityFeed.filter(item =>
     filter === "All" || (filter === "Unread" ? !item.read : categoryOf(item) === filter)
-  ), [notifications, filter]);
+  ), [activityFeed, filter]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -166,6 +201,7 @@ export default function NotificationsScreen() {
     </ScrollView>
 
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+    {!!announcementError && <Text accessibilityRole="alert" style={styles.error}>{announcementError}</Text>}
     {loading ? <View style={styles.state}><ActivityIndicator color="#087D60" /><Text style={styles.emptyText}>Loading notifications...</Text></View>
       : filtered.length === 0 ? <View style={styles.state}>
         <Ionicons name="mail-open-outline" size={32} color="#82A898" />
@@ -173,17 +209,19 @@ export default function NotificationsScreen() {
         <Text style={styles.emptyText}>Relevant updates will appear here automatically.</Text>
       </View> : <>
         <Text style={styles.resultCount}>{filtered.length} {filtered.length === 1 ? "notification" : "notifications"} • Showing {Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(safePage * PAGE_SIZE, filtered.length)}</Text>
-        {visible.map(item => <View key={item.id} style={[styles.card, !item.read && styles.unreadCard]}>
+        {visible.map(item => {
+          const appearance = categoryAppearance(item);
+          return <View key={item.id} style={[styles.card, !item.read && styles.unreadCard]}>
           <View style={styles.cardTop}>
-            <View style={[styles.typeIcon, !item.read && styles.typeIconUnread]}>
-              <Ionicons name={categoryOf(item) === "Emergency" ? "alert-circle-outline" : categoryOf(item) === "Events" ? "calendar-outline" : categoryOf(item) === "Donations" ? "heart-outline" : "shield-checkmark-outline"} size={19} color="#087D60"/>
+            <View style={[styles.typeIcon, { backgroundColor: appearance.background }]}>
+              <Ionicons name={appearance.icon} size={20} color={appearance.color}/>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.titleRow}>
                 <Text style={styles.cardTitle}>{item.title || "VolunServe update"}</Text>
                 {!item.read && <View style={styles.newDot} accessibilityLabel="Unread" />}
               </View>
-              <Text style={styles.category}>{categoryOf(item)} • {timestamp(item.createdAt) ? new Date(timestamp(item.createdAt)).toLocaleString() : "Just now"}</Text>
+              <Text style={styles.category}>{item.sourceLabel || categoryOf(item)} • {timestamp(item.createdAt) ? new Date(timestamp(item.createdAt)).toLocaleString() : "Just now"}</Text>
               <Text style={styles.message}>{item.message || "You have a new update."}</Text>
               {!item.read && <TouchableOpacity disabled={updating} accessibilityRole="button"
                 style={styles.readButton} onPress={() => void markAsRead([item.id])}>
@@ -191,7 +229,8 @@ export default function NotificationsScreen() {
               </TouchableOpacity>}
             </View>
           </View>
-        </View>)}
+        </View>;
+        })}
         <View style={styles.pagination}>
           <TouchableOpacity accessibilityRole="button" disabled={safePage <= 1} style={[styles.pageButton, safePage <= 1 && styles.disabled]}
             onPress={() => setPage(p => Math.max(1, p - 1))}><Text style={styles.pageText}>Previous</Text></TouchableOpacity>
