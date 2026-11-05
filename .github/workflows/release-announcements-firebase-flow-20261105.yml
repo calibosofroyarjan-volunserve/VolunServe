@@ -44,6 +44,7 @@ jobs:
             'scripts/test-announcements-live-rules-emulator-20261105.cjs',
             'scripts/test-announcement-firebase-cleanup-20261105.cjs',
             '.github/workflows/validate-announcements-firebase-flow-20261105.yml',
+            '.github/workflows/audit-announcements-preview-route-parity-20261105.yml',
             '.github/workflows/release-announcements-firebase-flow-20261105.yml'
           ]);
           assert.deepEqual(files.filter(x=>!allowed.has(x)),[],'STOP: unrelated or protected files changed');
@@ -137,7 +138,18 @@ jobs:
           VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
           VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
         run: |
-          node scripts/check-live-hosting.cjs
+          set -euo pipefail
+          ready=0
+          # Firebase preview channels can briefly return 404s during propagation.
+          # Require every existing route and exact release marker; do not bypass.
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if node scripts/check-live-hosting.cjs; then ready=1; break; fi
+            sleep 8
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::Preview failed protected route checks after retries"
+            exit 1
+          fi
           node - <<'NODE'
           (async()=>{
             const origin=process.env.VOLUNSERVE_HOSTING_URL;
