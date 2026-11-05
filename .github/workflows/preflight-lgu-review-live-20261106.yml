@@ -1,0 +1,53 @@
+name: Preflight LGU Review Against Live (No Deploy)
+on:
+  push:
+    branches: [release/lgu-review-live-guard-20261106]
+    paths: [.github/workflows/preflight-lgu-review-live-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Compare live revision against isolated candidate (READ ONLY)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node <<'NODE'
+          const get=async(url,headers={})=>{
+            const r=await fetch(url,{headers,signal:AbortSignal.timeout(12000)});
+            if(!r.ok)throw Error('HTTP '+r.status+' from '+url.split('?')[0]);
+            return r.json();
+          };
+          const fail=message=>{console.error('BLOCKED: '+message);process.exitCode=1};
+          (async()=>{
+            const main=await get('https://api.github.com/repos/'+process.env.REPO+'/branches/main',
+              {Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'});
+            const mainSha=main.commit.sha;
+            console.log('Current main: '+mainSha);
+            if(mainSha!=='1f26f07ed3cf35262f763a170396c92dc14dddd4')return fail('main advanced; do not overwrite');
+            const live=await get('https://volunserve.com/volunserve-release.json?preflight='+process.env.SOURCE_SHA,{'Cache-Control':'no-cache'});
+            const revision=String(live.revision||live.sha||'');
+            console.log('Live revision: '+revision);
+            if(!/^[0-9a-f]{40}$/.test(revision))return fail('No valid Git revision in live manifest');
+            const compare=await get('https://api.github.com/repos/'+process.env.REPO+'/compare/'+revision+'...'+process.env.SOURCE_SHA,
+              {Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'});
+            if(!['ahead','identical'].includes(compare.status) || compare.ahead_by>50 || compare.files?.length>=300)
+              return fail('live revision is not a close ancestor of candidate');
+            const allowed=new Set([
+              'app/(superadmin)/admin-accounts.tsx','firestore.rules',
+              'scripts/test-admin-navigation-contract.cjs','scripts/test-admin-staff-login.cjs',
+              'backend/lguCredentialRoutes.js','backend/server.js',
+              '.github/workflows/validate-lgu-render-backend-only-20261106.yml',
+              '.github/workflows/preflight-lgu-review-live-20261106.yml'
+            ]);
+            const changes=(compare.files||[]).map(f=>f.filename);
+            console.log('Changes since live: '+JSON.stringify(changes));
+            const unsafe=changes.filter(name=>!allowed.has(name));
+            if(unsafe.length)return fail('unrelated source files differ from live: '+JSON.stringify(unsafe));
+            console.log('PASS: only allowed changes since live; this is preflight only and did not deploy.');
+          })().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1});
+          NODE
