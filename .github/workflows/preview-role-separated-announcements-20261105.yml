@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   preview-only:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot preview System Updates and Barangay Announcements on exact latest live source'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Rebuild final role-separated Announcements preview with invalid LGU all-area blocked'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
