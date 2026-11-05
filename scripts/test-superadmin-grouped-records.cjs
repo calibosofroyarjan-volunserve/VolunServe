@@ -39,7 +39,7 @@ assert(source.includes('id: "disputes", label: "Response Disputes"') &&
        source.includes('onPress={() => setExpandedRecordId(isExpanded ? null : item.id)}') &&
        source.includes('styles.directoryColumns') && source.includes('styles.directoryRow'),
   "Read-only compact directory must show detail expansion and group Response Disputes in operations");
-assert(source.includes("setSearch(value); setPage(1);") &&
+assert(source.includes("setSearch(value); setExpandedRecordId(null); setPage(1);") &&
        source.includes('setPage(1);') &&
        source.includes("const activePage = Math.max(1, Math.min(page, totalPages))"),
   "Search and section changes must reset page and clamp to valid page after updates");
