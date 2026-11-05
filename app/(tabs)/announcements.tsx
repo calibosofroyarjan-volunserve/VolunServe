@@ -1,7 +1,5 @@
 import React, {
-  useEffect,
   useMemo,
-  useState,
 } from "react";
 
 import {
@@ -12,18 +10,7 @@ import {
   View,
 } from "react-native";
 
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  where,
-} from "firebase/firestore";
-
-import {
-  db,
-} from "../../lib/firebase";
+import { useCommunityAnnouncements } from "../../lib/useCommunityAnnouncements";
 
 import {
   useUserSession,
@@ -54,117 +41,17 @@ export default function AnnouncementsScreen() {
     profile,
   } = useUserSession();
 
-  const [announcements, setAnnouncements] =
-    useState<Announcement[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
   const barangay =
     typeof profile?.barangay === "string"
       ? profile.barangay.trim()
       : "";
 
-  useEffect(() => {
-    /*
-     * Only already-published announcements
-     * are loaded.
-     *
-     * This also matches the existing
-     * Firestore announcement read rule.
-     */
-    const announcementQuery = query(
-      collection(db, "announcements"),
-      where(
-        "publishAt",
-        "<=",
-        Timestamp.now()
-      ),
-      orderBy(
-        "publishAt",
-        "desc"
-      )
-    );
-
-    const unsubscribe = onSnapshot(
-      announcementQuery,
-      (snapshot) => {
-        const rows: Announcement[] =
-          snapshot.docs.map((snapshotDoc) => {
-            const data = snapshotDoc.data();
-
-            return {
-              id: snapshotDoc.id,
-
-              title:
-                typeof data.title === "string"
-                  ? data.title
-                  : "Announcement",
-
-              message:
-                typeof data.message === "string"
-                  ? data.message
-                  : "",
-
-              audience:
-                typeof data.audience === "string"
-                  ? data.audience
-                  : "",
-
-              priority:
-                typeof data.priority === "string"
-                  ? data.priority
-                  : "normal",
-
-              imageUrl:
-                typeof data.imageUrl === "string"
-                  ? data.imageUrl
-                  : "",
-
-              linkUrl:
-                typeof data.linkUrl === "string"
-                  ? data.linkUrl
-                  : "",
-
-              publishAt:
-                data.publishAt,
-
-              createdAt:
-                data.createdAt,
-
-              updatedAt:
-                data.updatedAt,
-
-              createdBy:
-                typeof data.createdBy === "string"
-                  ? data.createdBy
-                  : "",
-            };
-          });
-
-        setAnnouncements(rows);
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        console.error(
-          "Announcements listener error:",
-          snapshotError
-        );
-
-        setError(
-          "Unable to load announcements."
-        );
-
-        setLoading(false);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
+  // Legacy details route remains available for bookmarks and older links.
+  // It now uses the same Firestore audience-scoped listener as Notifications.
+  const { announcements, error } = useCommunityAnnouncements(
+    barangay, !sessionLoading && Boolean(profile)
+  );
+  const loading = sessionLoading;
 
   /*
    * USER VISIBILITY
