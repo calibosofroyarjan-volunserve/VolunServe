@@ -60,16 +60,14 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
   { label: "Announcements", icon: "megaphone-outline", route: "/(admin)/create-announcement" },
-  { label: "Disputes", icon: "shield-checkmark-outline", route: "/(admin)/admin-disputes" },
 ];
 
-type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
+type NavSectionId = "people" | "response" | "events" | "funds";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
   { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "LGU Operations"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests"] },
   { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
-  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
@@ -410,6 +408,26 @@ export default function AdminLayout() {
               })}
             </View> : null}
           </View>;
+        })}
+        {NAV_ITEMS.filter(item => item.label === "Announcements").map((item) => {
+          const selected = navActive(item, pathname);
+          return (
+            <TouchableOpacity key={item.route}
+              accessibilityRole="button"
+              accessibilityLabel="Announcements"
+              accessibilityState={{ selected }}
+              activeOpacity={0.82}
+              onPress={() => openRoute(item.route)}
+              style={[
+                styles.navItem,
+                { marginTop: 8, paddingHorizontal: 13, minHeight: 46 },
+                selected && styles.navItemActive,
+              ]}>
+              <Ionicons name={item.icon} size={18} color={selected ? "#FFFFFF" : "#BAD9CF"} />
+              <Text style={[styles.navLabel, selected && styles.navLabelActive]}>Announcements</Text>
+              {selected ? <View style={styles.activeIndicator} /> : null}
+            </TouchableOpacity>
+          );
         })}
       </ScrollView>
       <View style={styles.sidebarUtility}>
