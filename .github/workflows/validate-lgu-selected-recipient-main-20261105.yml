@@ -48,8 +48,9 @@ jobs:
       - name: TypeScript + protected login tests
         run: |
           npx tsc --noEmit --pretty false
-          node scripts/test-unified-login-routing.cjs
-          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-premium-auth-portal.cjs
       - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
