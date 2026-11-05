@@ -1,0 +1,185 @@
+name: One-Time Safe VolunServe Community Events Production Release
+
+on:
+  push:
+    branches: [release/community-events-safe-20261105]
+    paths:
+      - '.github/workflows/release-community-events-production-20261105.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verify-and-release:
+    if: >-
+      github.repository == 'calibosofroyarjan-volunserve/VolunServe' &&
+      github.ref == 'refs/heads/release/community-events-safe-20261105' &&
+      github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: '1432da781e54fe47fe8ed76f89520588bab78b1d'
+      EXPECTED_RULES_BLOB: '4a32d559b6b5f76da75b6e177fec1f6d585b88bf'
+    steps:
+      - name: Refuse stale or modified main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          if [ "$CURRENT" != "$SOURCE_SHA" ]; then
+            echo "::error::Main moved after review; refuse to deploy old source."
+            exit 1
+          fi
+          BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)"
+          if [ "$BLOB" != "$EXPECTED_RULES_BLOB" ]; then
+            echo "::error::Firestore rules changed since emulator validation; refuse deployment."
+            exit 1
+          fi
+          echo "Pinned to reviewed main SHA $SOURCE_SHA and owner-only Firestore rules blob."
+      - name: Download exactly the reviewed main source (avoid invalid legacy gitlink)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            -o "$RUNNER_TEMP/volunserve-current-main.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-current-main.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f firestore.rules && test -f package-lock.json && test -f firebase.json
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          assert.equal(JSON.parse(fs.readFileSync('.firebaserc','utf8')).projects.default,'volunserve-3aa5b');
+          assert.equal(JSON.parse(fs.readFileSync('firebase.json','utf8')).hosting.public,'dist');
+          console.log('Verified original Firebase project and Hosting dist config.');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Community Events and existing Admin security in isolated Firestore emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+          npx tsc --noEmit --pretty false
+      - name: Export complete latest-main web build (not deployed yet)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web
+          GITHUB_SHA="$SOURCE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Safeguard existing live Hosting revision before overwriting
+        id: live
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');
+          const github=process.env.GITHUB_REPOSITORY;
+          const target=process.env.SOURCE_SHA;
+          const token=process.env.GH_TOKEN;
+          const out=process.env.GITHUB_OUTPUT;
+          const report=(safe,reason)=>{
+            fs.appendFileSync(out,'safe='+(safe?'true':'false')+'\n');
+            console.log(safe?'WEB HOSTING VERIFIED SAFE: '+reason:'WEB HOSTING RELEASE BLOCKED: '+reason);
+          };
+          (async()=>{
+            try {
+              const response=await fetch('https://volunserve.com/volunserve-release.json?release='+target.slice(0,12),{
+                headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)
+              });
+              if(!response.ok) return report(false,'live release manifest not available (HTTP '+response.status+')');
+              const marker=await response.json();
+              if(marker.app!=='VolunServe'||marker.firebaseProject!=='volunserve-3aa5b'||
+                 !/^[0-9a-f]{40}$/.test(String(marker.revision||''))) {
+                return report(false,'live release marker missing or different schema');
+              }
+              const current=await fetch('https://api.github.com/repos/'+github+'/compare/'+marker.revision+'...'+target,{
+                headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github+json'},
+                signal:AbortSignal.timeout(15000)
+              });
+              if(!current.ok)return report(false,'cannot verify existing deployed revision ancestry');
+              const compare=await current.json();
+              if(!['identical','ahead'].includes(compare.status)) {
+                return report(false,'live release is not an ancestor of reviewed main; do not replace newer work');
+              }
+              report(true,'live '+marker.revision+' is ancestral to reviewed main '+target);
+            }catch(error){report(false,String(error.message||error))}
+          })();
+          NODE
+      - name: Authenticate correct Firebase project without printing credentials
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Firebase service-account secret missing; no production deploy."
+            exit 1
+          fi
+          node <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const p=JSON.parse(process.env.FIREBASE_SA);
+          assert.equal(p.type,'service_account');
+          assert.equal(p.project_id,'volunserve-3aa5b');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-prod-sa.json',process.env.FIREBASE_SA,{mode:0o600});
+          console.log('Firebase production project verified.');
+          NODE
+      - name: Publish ONLY validated Firestore security rules; no data changes
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-prod-sa.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)" = "$EXPECTED_RULES_BLOB"
+          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+          echo 'Firestore rules only deployed: Authentication, Storage, Functions, Hosting and Firestore records unchanged.'
+      - name: Publish complete reviewed Hosting source only if existing release is verified
+        if: steps.live.outputs.safe == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-prod-sa.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+          npx firebase-tools deploy --only hosting --project volunserve-3aa5b --non-interactive
+      - name: Verify exact Hosting revision and critical public routes
+        if: steps.live.outputs.safe == 'true'
+        env:
+          VOLUNSERVE_EXPECTED_SHA: 1432da781e54fe47fe8ed76f89520588bab78b1d
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo 'Production Hosting verified at exact merged main revision.'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Hosting deployment started but public site revision could not be confirmed."
+          exit 1
+      - name: Report protected Hosting skip when ancestry cannot be verified
+        if: steps.live.outputs.safe != 'true'
+        run: |
+          echo 'Firestore rules release attempted/completed above.'
+          echo 'Hosting deliberately NOT deployed because the exact live baseline could not be verified.'
+          echo 'This protects any uncommitted or newer live login, signup, Super Admin or other features.'
