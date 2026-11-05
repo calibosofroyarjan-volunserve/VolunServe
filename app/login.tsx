@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
 import * as AuthSession from "expo-auth-session";
@@ -96,7 +97,7 @@ export default function Login() {
     // Staff accounts use a separate email/password portal, never community Google OAuth.
     if (profile.role === "admin" || profile.role === "superadmin") {
       await firebaseSignOut(auth);
-      throw new Error("LGU Admin and system staff must use Admin Login with their issued email and password.");
+      throw new Error("Staff accounts must use email and password. Use the fields above.");
     }
 
     if (!isApprovedProfile(profile)) {
@@ -144,13 +145,13 @@ export default function Login() {
         password
       );
 
-      if (profile.role === "admin" || profile.role === "superadmin") {
+      let destination;
+      try {
+        destination = unifiedPasswordDestination(profile);
+      } catch (accessError) {
         await firebaseSignOut(auth);
-        throw new Error("Use the LGU Admin Login tab for staff accounts.");
+        throw accessError;
       }
-      const destination =
-        homeRouteForProfile(profile);
-
       router.replace(destination as any);
     } catch (error: any) {
       showError(error?.message || "Unable to sign in. Please try again.");
@@ -213,16 +214,15 @@ export default function Login() {
     }
   };
 
-  // Shared premium shell supplies the real two-route tab switcher.
-  // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
+  // Shared premium shell for all roles; Google OAuth stays community-only.
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <PremiumAuthShell active="resident">
+      <PremiumAuthShell>
         <Text style={styles.label}>Email Address</Text>
         <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused, !!inlineEmailError && styles.invalidInput]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
-            accessibilityLabel="Resident or volunteer email address"
+            accessibilityLabel="Email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
             textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
@@ -234,7 +234,7 @@ export default function Login() {
         <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused, !!inlinePasswordError && styles.invalidInput]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
           <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
-            accessibilityLabel="Resident or volunteer password"
+            accessibilityLabel="Password"
             placeholder="Password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
             editable={!loading && !googleLoading} returnKeyType="done"
@@ -282,7 +282,7 @@ export default function Login() {
             </View>
           ) :
             <View style={styles.centerRow}>
-              <Text style={styles.signInText}>Login as Resident / Volunteer</Text>
+              <Text style={styles.signInText}>Sign In</Text>
               <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
             </View>}
         </Pressable>
@@ -323,7 +323,14 @@ export default function Login() {
           disabled={loading || googleLoading}
           style={styles.createButton}>
           <Ionicons name="person-add-outline" color="#08785D" size={19} />
-          <Text style={styles.createLink}>Create An Account</Text>
+          <Text style={styles.createLink}>Sign Up</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Request LGU Admin Access"
+          onPress={() => router.push("/admin-request")}
+          disabled={loading || googleLoading}
+          style={styles.staffRequest}>
+          <Text style={styles.staffRequestText}>LGU staff? <Text style={styles.staffRequestLink}>Request Admin Access</Text></Text>
         </TouchableOpacity>
       </PremiumAuthShell>
       <PasswordResetDialog
@@ -369,5 +376,8 @@ const styles = StyleSheet.create({
     flexDirection:"row",alignItems:"center",justifyContent:"center",gap:11,
     backgroundColor:"rgba(255,255,255,.36)"},
   createLink:{fontSize:15,fontWeight:"800",color:"#075B44"},
+  staffRequest:{alignItems:"center",justifyContent:"center",minHeight:38,paddingHorizontal:10,marginTop:1},
+  staffRequestText:{fontSize:12,color:"#527766"},
+  staffRequestLink:{fontSize:12,fontWeight:"800",color:"#076B51"},
   disabled:{opacity:0.55},
 });

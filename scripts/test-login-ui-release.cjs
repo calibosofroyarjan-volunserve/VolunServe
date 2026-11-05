@@ -1,60 +1,46 @@
 "use strict";
-const {test}=require("node:test");
-const assert=require("node:assert/strict");
-const fs=require("node:fs");
-const path=require("node:path");
-const root=path.resolve(__dirname,"..");
-const read=p=>fs.readFileSync(path.join(root,p),"utf8");
-test("Approved Sir Pavia login shell replaces old right-side form without removing left carousel",()=>{
- const s=read("components/auth/PremiumAuthShell.tsx");
- assert.match(s,/Resident & Volunteer Login/);
- assert.match(s,/LGU & System Administration Login/);
- assert.match(s,/Residents & Volunteers/);
- assert.match(s,/LGU & System Admin/);
- assert.match(s,/styles\.formCard/);
- assert.match(s,/styles\.roleRow/);
- assert.match(s,/styles\.photoBadge/);
- assert.match(s,/SLIDES\.map/);
- assert.match(s,/router\.replace\("\/login"\)/);
- assert.match(s,/router\.replace\("\/admin-login"\)/);
- assert.doesNotMatch(s,/auth-resident-hero\.webp|auth-admin-hero\.webp/);
+const {test}=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path");
+const read=p=>fs.readFileSync(path.resolve(__dirname,"..",p),"utf8");
+test("Unified premium sign-in retains carousel and one clear login card",()=>{
+  const s=read("components/auth/PremiumAuthShell.tsx");
+  assert.match(s,/VolunServe Login/);
+  assert.match(s,/styles\.formCard/);
+  assert.match(s,/styles\.photoBadge/);
+  assert.match(s,/SLIDES\.map/);
+  assert.doesNotMatch(s,/styles\.switcher|styles\.roleRow|Choose account sign-in/);
+  assert.doesNotMatch(s,/auth-resident-hero\.webp|auth-admin-hero\.webp/);
 });
-test("Resident web/mobile sign-in keep Firebase, login error feedback and modal password reset",()=>{
- const web=read("app/login.web.tsx");
- const native=read("app/login.tsx");
- const feedback=read("components/auth/AuthFeedback.tsx");
- for(const src of [web,native]){
-   assert.match(src,/AuthFeedback/);
-   assert.match(src,/PremiumAuthShell active="resident"/);
-   assert.match(src,/homeRouteForProfile/);
-   assert.match(src,/loginUser/);
-   assert.doesNotMatch(src,/(^|[^\w.])alert\s*\(|window\.confirm\s*\(/m);
- }
- assert.match(web,/browserLocalPersistence/);
- assert.match(web,/browserSessionPersistence/);
- const modal=read("components/auth/PasswordResetDialog.tsx");
- assert.match(web,/PasswordResetDialog/);
- assert.match(native,/PasswordResetDialog/);
- assert.match(web,/setResetOpen\(true\)/);
- assert.match(native,/setResetOpen\(true\)/);
- assert.doesNotMatch(web,/sendPasswordResetEmail/);
- assert.doesNotMatch(native,/sendPasswordResetEmail/);
- assert.match(modal,/await sendPasswordResetEmail\(auth, address\)/);
- assert.match(modal,/Check your email/);
- assert.match(modal,/Send reset link/);
- assert.match(web,/connectGoogleAccountWeb/);
- assert.match(feedback,/accessibilityRole="alert"/);
+test("Web and native password Login authorize by approved role, not a selector",()=>{
+  for(const s of [read("app/login.web.tsx"),read("app/login.tsx")]){
+    assert.match(s,/unifiedPasswordDestination\(profile\)/);
+    assert.match(s,/AuthFeedback/);
+    assert.match(s,/<PremiumAuthShell>/);
+    assert.match(s,/loginUser/);
+    assert.match(s,/router\.push\("\/admin-request"\)/);
+    assert.match(s,/router\.push\("\/signup"\)/);
+    assert.doesNotMatch(s,/(^|[^\w.])alert\s*\(|window\.confirm\s*\(/m);
+  }
 });
-test("LGU and Super Admin preserve separate credential-only access and staff application",()=>{
- const admin=read("app/admin-login.tsx");
- const root=read("app/_layout.tsx");
- assert.match(admin,/PremiumAuthShell active="admin"/);
- assert.match(admin,/isApprovedProfile\(profile\)/);
- assert.match(admin,/profile\.adminStatus !== "suspended"/);
- assert.match(admin,/signOut\(auth\)/);
- assert.match(admin,/\/\(superadmin\)/);
- assert.match(admin,/\/\(admin\)\/command-center/);
- assert.match(admin,/router\.push\("\/admin-request"\)/);
- assert.doesNotMatch(admin,/GoogleAuthProvider|connectGoogleAccountWeb/);
- assert.match(root,/AppDialogHost/);
+test("Reset, Google and Guest continue working",()=>{
+  const web=read("app/login.web.tsx"),native=read("app/login.tsx");
+  const modal=read("components/auth/PasswordResetDialog.tsx");
+  assert.match(web,/browserLocalPersistence/);
+  assert.match(web,/browserSessionPersistence/);
+  for(const s of [web,native]){
+    assert.match(s,/PasswordResetDialog/);
+    assert.match(s,/setResetOpen\(true\)/);
+    assert.match(s,/router\.replace\("\/public"\)/);
+    assert.match(s,/handleGoogleLogin/);
+    assert.doesNotMatch(s,/sendPasswordResetEmail/);
+  }
+  assert.match(modal,/await sendPasswordResetEmail\(auth, address\)/);
+  assert.match(web,/connectGoogleAccountWeb/);
+  assert.match(read("components/auth/AuthFeedback.tsx"),/accessibilityRole="alert"/);
+});
+test("Staff entrypoint no longer duplicates login and keeps existing bookmarks",()=>{
+  const legacy=read("app/admin-login.tsx"),root=read("app/_layout.tsx"),policy=read("lib/unifiedLoginRouting.ts");
+  assert.match(legacy,/<Redirect href="\/login" \/>/);
+  assert.doesNotMatch(legacy,/loginUser|TextInput/);
+  assert.match(root,/AppDialogHost/);
+  assert.match(policy,/isAdminProfile|isSuperAdminProfile|isApprovedProfile/);
 });

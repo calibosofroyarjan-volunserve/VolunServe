@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import Svg, { Path } from "react-native-svg";
 import {
@@ -8,11 +7,9 @@ import {
 } from "react-native";
 
 /**
- * Shared premium login frame. Both sign-in routes use the same visual shell;
- * only their permitted authentication methods differ.
- *
- * Sharp/chamfered geometry is CSS clip-path on web. Native gets safe,
- * accessible near-square corners instead of unsupported browser styles.
+ * One clean premium sign-in frame for all VolunServe roles.
+ * No user-selectable privilege; verified profiles and protected routes decide access.
+ * Web-only chamfered geometry has a native-safe fallback.
  */
 const SLIDES = [
   require("../../assets/images/slide1.jpg"),
@@ -29,10 +26,9 @@ export const authCornerCut = (n: number) => Platform.OS === "web"
     } as any)
   : ({ borderRadius: 9 } as any);
 
-type Props = { active: "resident" | "admin"; children: React.ReactNode };
+type Props = { children: React.ReactNode };
 
-export default function PremiumAuthShell({ active, children }: Props) {
-  const router = useRouter();
+export default function PremiumAuthShell({ children }: Props) {
   const { width, height } = useWindowDimensions();
   const compact = width < 900;
   const narrow = width < 480;
@@ -44,7 +40,6 @@ export default function PremiumAuthShell({ active, children }: Props) {
   }, []);
 
   const heroHeight = compact ? (narrow ? 325 : 355) : Math.max(height, 710);
-  const selected = active === "resident";
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -121,36 +116,18 @@ export default function PremiumAuthShell({ active, children }: Props) {
           />
         </View>
 
-        {/* The community carousel stays intact; the right panel uses the approved role-specific design. */}
+        {/* One credential form; no role-selection tabs. */}
         <View style={[styles.right, compact && styles.rightCompact]}>
-          <View style={styles.switcher} accessibilityLabel="Choose account sign-in">
-            <TouchableOpacity accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              accessibilityLabel="Resident & Volunteer Login"
-              onPress={() => { if (!selected) router.replace("/login"); }}
-              style={[styles.switchTab, selected && styles.selectedTab]}>
-              <Ionicons name="people-outline" color={selected ? "#FFFFFF" : "#286A55"} size={16} />
-              <Text style={[styles.switchText, selected && styles.selectedText]}>Residents & Volunteers</Text>
-            </TouchableOpacity>
-            <TouchableOpacity accessibilityRole="tab"
-              accessibilityState={{ selected: !selected }}
-              accessibilityLabel="LGU & System Administration Login"
-              onPress={() => { if (selected) router.replace("/admin-login"); }}
-              style={[styles.switchTab, !selected && styles.selectedTab]}>
-              <Ionicons name="business-outline" color={!selected ? "#FFFFFF" : "#286A55"} size={16} />
-              <Text style={[styles.switchText, !selected && styles.selectedText]}>LGU & System Admin</Text>
-            </TouchableOpacity>
-          </View>
           <View style={styles.formCard}>
             <View style={styles.photoFrame}>
               <LinearGradient
-                colors={selected ? ["#064E3E", "#128D6C", "#8DDDB1"] : ["#073C35", "#0C6A58", "#9BDDC2"]}
+                colors={["#064E3E", "#128D6C", "#8DDDB1"]}
                 start={{x:0,y:0}} end={{x:1,y:1}}
                 style={styles.photo}
               >
                 <Ionicons name="leaf-outline" color="rgba(224,255,238,0.28)" size={135} style={styles.photoLeaf}/>
                 <View style={styles.photoBadge}>
-                  <Ionicons name={selected ? "people-outline" : "shield-checkmark-outline"} size={15} color="#D6FFE7"/>
+                  <Ionicons name="shield-checkmark-outline" size={15} color="#D6FFE7"/>
                   <Text style={styles.photoBadgeText}>VOLUNSERVE · SAN JOSE DEL MONTE</Text>
                 </View>
               </LinearGradient>
@@ -162,52 +139,22 @@ export default function PremiumAuthShell({ active, children }: Props) {
             </View>
             <View style={styles.heroIcon}>
               <LinearGradient colors={["#0F7654", "#004B39"]} style={styles.heroIconGradient}>
-                <Ionicons name={selected ? "people" : "shield-checkmark"}
+                <Ionicons name="shield-checkmark"
                   color="#FFFFFF" size={32} />
               </LinearGradient>
             </View>
             <View style={styles.formHeading}>
-              <Text style={[styles.formTitle, narrow && styles.formTitleNarrow]}>
-                {selected ? "Resident & Volunteer Login" : "LGU & System\nAdministration Login"}
-              </Text>
-              <Text style={styles.formSubtitle}>
-                {selected
-                  ? "Access community services, join events, request assistance, and make a difference."
-                  : "Access administrative tools, manage operations, and maintain the VolunServe platform."}
-              </Text>
+              <Text style={[styles.formTitle, narrow && styles.formTitleNarrow]}>VolunServe Login</Text>
+              <Text style={styles.formSubtitle}>Sign in securely with your account credentials.</Text>
             </View>
             <View style={[styles.formFields, narrow && styles.formFieldsNarrow]}>
               {children}
-            </View>
-            <View style={styles.roleRow}>
-              {selected ? (
-                <>
-                  <AuthRole icon="home" label={"Basic\nResident"} />
-                  <AuthRole icon="shield-checkmark" label={"Verified\nResident"} />
-                  <AuthRole icon="people" label="Volunteer" />
-                </>
-              ) : (
-                <>
-                  <AuthRole icon="business" label={"LGU\nAdmin"} />
-                  <View style={styles.roleSeparator} />
-                  <AuthRole icon="settings" label={"Super\nAdmin"} />
-                </>
-              )}
             </View>
           </View>
           <Text style={styles.location}>VolunServe · City of San Jose del Monte, Bulacan</Text>
         </View>
       </View>
     </ScrollView>
-  );
-}
-
-function AuthRole({ icon, label }: {icon: React.ComponentProps<typeof Ionicons>["name"]; label: string}) {
-  return (
-    <View style={styles.role}>
-      <Ionicons name={icon} size={25} color="#07513D" />
-      <Text style={styles.roleText}>{label}</Text>
-    </View>
   );
 }
 
@@ -256,14 +203,6 @@ const styles = StyleSheet.create({
   right: {flex: 1, minWidth: 0, justifyContent: "center", alignItems: "center",
     paddingHorizontal: 22, paddingVertical: 16, backgroundColor: "#E8F7F1"},
   rightCompact: {paddingHorizontal: 13, paddingVertical: 20},
-  switcher: {width: "100%", maxWidth: 620, flexDirection: "row", gap: 4, padding: 4,
-    backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1,
-    borderColor: "#C4E2D2", marginBottom: 12},
-  switchTab: {flex: 1, minHeight: 43, borderRadius: 11, flexDirection: "row",
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 4, gap: 6},
-  selectedTab: {backgroundColor: "#087A5A"},
-  switchText: {fontSize: 11, color: "#245B48", fontWeight: "800", textAlign: "center"},
-  selectedText: {color: "#FFFFFF"},
   formCard: {width: "100%", maxWidth: 620, backgroundColor: "#E8FBEF",
     borderRadius: 21, overflow: "hidden", borderWidth: 1, borderColor: "#C6E4D4",
     shadowColor: "#0F5B47", shadowOffset: {width: 0, height: 8},
@@ -289,11 +228,5 @@ const styles = StyleSheet.create({
     marginTop: 6, maxWidth: 440, textAlign: "center"},
   formFields: {width: "100%", paddingHorizontal: 26, paddingTop: 6, paddingBottom: 10, gap: 8},
   formFieldsNarrow: {paddingHorizontal: 17},
-  roleRow: {flexDirection: "row", justifyContent: "space-evenly",
-    alignItems: "center", gap: 6, paddingHorizontal: 12,
-    paddingTop: 5, paddingBottom: 14},
-  role: {flex: 1, alignItems: "center", gap: 4},
-  roleText: {color: "#154C3E", fontSize: 11, fontWeight: "700", textAlign: "center", lineHeight: 14},
-  roleSeparator: {height: 38, width: 1, backgroundColor: "#C6DED4"},
   location: {textAlign: "center", paddingTop: 11, fontSize: 10, color: "#6C8B80"},
 });
