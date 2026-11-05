@@ -250,3 +250,5 @@ jobs:
           echo "Only Hosting assets changed. No Firestore Rules, Auth, Functions, Storage or data deployments." >> "$GITHUB_STEP_SUMMARY"
 
 # Inert unless an explicit final one-shot commit with the expected message updates this workflow.
+
+# Explicit one-shot release of validated Assistance Requests from exact latest live; do not repeat this commit.
