@@ -1,0 +1,124 @@
+name: One-Time Preview LGU Admin Barangay Assignment (NO LIVE)
+on:
+  push:
+    branches: [fix/superadmin-assign-lgu-barangay-20261105]
+    paths: [".github/workflows/preview-lgu-barangay-assignment-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  source-and-build:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot UI-only preview of verified Super Admin LGU barangay assignment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Verify exact latest live base, announcement parent and protected files
+        env:
+          LIVE_SHA: 905c0442b43a683bffe5b740ea061994cd94e8f2
+          PARENT_SHA: a18d39fdadac9cc0f88a39fe12ba4304d5a23f07
+        run: |
+          git merge-base --is-ancestor "$LIVE_SHA" HEAD
+          git merge-base --is-ancestor "$PARENT_SHA" HEAD
+          git diff --name-only "$PARENT_SHA" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const files=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          const allowed=new Set([
+            'app/(superadmin)/admin-accounts.tsx',
+            'app/(admin)/create-announcement.tsx',
+            'scripts/verify-lgu-barangay-assignment-ui.cjs',
+            'scripts/prepare-lgu-barangay-assignment-live-rules.py',
+            'scripts/test-lgu-barangay-assignment-emulator.cjs',
+            '.github/workflows/validate-lgu-barangay-assignment-20261105.yml',
+            '.github/workflows/preview-lgu-barangay-assignment-20261105.yml'
+          ]);
+          const bad=files.filter(f=>!allowed.has(f));
+          if(bad.length)throw Error('UNSAFE protected files changed: '+bad.join(', '));
+          console.log('PASS unchanged Login, Signup, Auth, unrelated Admin/Super Admin, Resident/Volunteer modules.');
+          NODE
+          node - <<'NODE'
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?preview_guard='+Date.now(),{headers:{'cache-control':'no-cache'}});
+            if(!r.ok)throw Error('Live revision unreadable');
+            const j=await r.json();
+            if(j.revision!==process.env.LIVE_SHA)throw Error('STOP: Latest LIVE changed; refuse stale preview.');
+            console.log('PASS actual production Hosting base '+j.revision);
+          })().catch(e=>{console.error(e);process.exit(1);});
+          NODE
+      - name: Build web and verify UI + TypeScript
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+          node scripts/verify-lgu-barangay-assignment-ui.cjs
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Verify existing official release file stamp
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');const stamp=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          if(stamp.revision!==process.env.GITHUB_SHA)throw Error('Outdated output! Expected '+process.env.GITHUB_SHA);
+          console.log('PASS preview app revision '+stamp.revision);
+          NODE
+  preview-only:
+    needs: source-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Build exact approved preview source
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+      - name: Stamp preview as UI-only with backend assignment permission NOT activated
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          fs.writeFileSync('dist/volunserve-preview.json',JSON.stringify({
+            revision:process.env.GITHUB_SHA,
+            basedOnLive:'905c0442b43a683bffe5b740ea061994cd94e8f2',
+            scope:'superadmin-verified-lgu-barangay-assignment',
+            activeRulesAssignmentPermission:false
+          }));
+          NODE
+      - name: Update existing TEMPORARY preview channel ONLY
+        id: hosting-preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: system-barangay-preview-v2-1105
+          expires: 1d
+      - name: Read-only verify exact preview build and core routes
+        env:
+          PREVIEW_URL: ${{ steps.hosting-preview.outputs.details_url }}
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const base=process.env.PREVIEW_URL?.replace(/\/$/,'');
+            if(!base)throw Error('Preview URL missing');
+            const r=await fetch(base+'/volunserve-preview.json?cache='+Date.now());
+            assert.equal(r.status,200);
+            const stamp=await r.json();
+            assert.equal(stamp.revision,process.env.GITHUB_SHA);
+            assert.equal(stamp.activeRulesAssignmentPermission,false);
+            for(const path of ['login','signup','admin-accounts','create-announcement','system-updates']){
+              const p=await fetch(base+'/'+path);
+              assert.equal(p.status,200,'Preview route missing: '+path);
+            }
+            console.log('PASS temp preview only '+base);
+          })().catch(e=>{console.error(e);process.exit(1);});
+          NODE
+      - name: Confirm production services untouched
+        run: echo 'Only PREVIEW CHANNEL updated; live Hosting, Firebase Rules, Functions, Auth and production documents unchanged.'
