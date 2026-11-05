@@ -1,0 +1,64 @@
+name: Validate Resident Volunteer Notification Dropdown (NO DEPLOY)
+on:
+  push:
+    branches: [feature/notification-dropdown-polish-defense-20261106]
+    paths:
+      - "app/(tabs)/_layout.tsx"
+      - "app/(tabs)/notifications.tsx"
+      - "components/notifications/NotificationDropdown.tsx"
+      - ".github/workflows/validate-notification-dropdown-defense-20261106.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Clean install and protected module contracts
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+          for script in \
+            scripts/test-unified-login-routing.cjs \
+            scripts/test-login-field-validation.cjs \
+            scripts/test-signup-prod.cjs \
+            scripts/test-signup-google-oauth.cjs \
+            scripts/test-lgu-clean-announcements-live.cjs \
+            scripts/test-admin-staff-login.cjs \
+            scripts/test-admin-navigation-contract.cjs; do
+            test -f "$script"
+            node "$script"
+          done
+      - name: Compile TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Export web (preview build only)
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const layout=fs.readFileSync('app/(tabs)/_layout.tsx','utf8');
+          const menu=fs.readFileSync('components/notifications/NotificationDropdown.tsx','utf8');
+          const page=fs.readFileSync('app/(tabs)/notifications.tsx','utf8');
+          assert(layout.includes('<NotificationDropdown />'));
+          for(const part of ['See all notifications','where("userId", "==", uid)', 'read: true', 'onSnapshot', 'slice(0, 5)'])
+            assert(menu.includes(part),'Missing dropdown behavior: '+part);
+          assert(page.includes('const PAGE_SIZE = 5')&&page.includes('destinationFor(item,volunteerMode)'));
+          for(const route of ['login','signup','admin-login','admin-request','notifications','announcements','disaster-response']){
+            assert(['dist/'+route+'.html','dist/'+route+'/index.html'].some(p=>fs.existsSync(p)), 'Missing protected web route: '+route);
+          }
+          console.log('PASS: dropdown, five latest, read state, see-all, routing, existing protected routes.');
+          NODE
