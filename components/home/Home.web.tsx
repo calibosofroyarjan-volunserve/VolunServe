@@ -33,6 +33,7 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import NotificationDropdown from "../notifications/NotificationDropdown";
 
 type Announcement = {
   id: string;
@@ -68,11 +69,6 @@ type VolunteerAssignmentSummary = {
   status?: string;
   createdAt?: any;
   updatedAt?: any;
-};
-
-type NotificationItem = {
-  id: string;
-  read?: boolean;
 };
 
 type WeatherState = {
@@ -146,7 +142,6 @@ export default function WebHome() {
     AssistanceRequest[]
   >([]);
   const [assignments, setAssignments] = useState<VolunteerAssignmentSummary[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [weather, setWeather] = useState<WeatherState | null>(null);
 
@@ -219,7 +214,6 @@ export default function WebHome() {
     if (!user) {
       setCases([]);
       setAssistanceRequests([]);
-      setNotifications([]);
       setAssignments([]);
       setLoading(false);
       return;
@@ -273,22 +267,6 @@ export default function WebHome() {
       () => setAssistanceRequests([])
     );
 
-    const unsubscribeNotifications = onSnapshot(
-      query(
-        collection(db, "notifications"),
-        where("userId", "==", user.uid)
-      ),
-      (snapshot) => {
-        setNotifications(
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            ...(item.data() as Omit<NotificationItem, "id">),
-          }))
-        );
-      },
-      () => setNotifications([])
-    );
-
     let unsubscribeAssignments = () => {};
 
     if (volunteerMode) {
@@ -320,7 +298,6 @@ export default function WebHome() {
     return () => {
       unsubscribeCases();
       unsubscribeAssistance();
-      unsubscribeNotifications();
       unsubscribeAssignments();
     };
   }, [user, volunteerMode]);
@@ -401,11 +378,6 @@ export default function WebHome() {
   const latestCase = cases[0];
   const latestAssistance = assistanceRequests[0];
   const latestAssignment = assignments[0];
-
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.read).length,
-    [notifications]
-  );
 
   const reportStatus = latestCase
     ? formatStatus(latestCase.status)
@@ -574,28 +546,7 @@ export default function WebHome() {
                   </Pressable>
                 ) : null}
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open notifications"
-                  style={({ pressed }) => [
-                    styles.notificationButton,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() => router.push("/notifications")}
-                >
-                  <Ionicons
-                    name="notifications-outline"
-                    size={23}
-                    color="#122B55"
-                  />
-                  {unreadCount > 0 ? (
-                    <View style={styles.notificationBadge}>
-                      <Text style={styles.notificationBadgeText}>
-                        {unreadCount > 9 ? "9+" : unreadCount}
-                      </Text>
-                    </View>
-                  ) : null}
-                </Pressable>
+                <NotificationDropdown variant="home" />
 
                 <Pressable
                   accessibilityRole="button"
