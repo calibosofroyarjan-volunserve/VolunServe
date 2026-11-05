@@ -47,7 +47,7 @@ jobs:
           node scripts/test-login-field-validation.cjs
           node scripts/test-signup-prod.cjs
           node scripts/test-admin-staff-login.cjs
-          node scripts/test-superadmin-pending-lgu-ui.cjs
+          node scripts/test-superadmin-lgu-review-ui.cjs
       - name: Emulator test LGU applicant rejected and approved roles
         run: npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-lgu-admin-rules.cjs"
       - name: Build full web including preserved premium Signup
