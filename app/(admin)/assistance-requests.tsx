@@ -3425,6 +3425,177 @@ function ResidentReviewTab({
 
 
 
+
+function CompactVerifiedAssistance({
+  request, reviewRecord, reviewLoading, publicOfficeName, setPublicOfficeName,
+  publicOfficeAddress, setPublicOfficeAddress, savingAction,
+  onDonation, onSaveOtherSupport, onOpenCampaign,
+}: {
+  request: AssistanceRequest;
+  reviewRecord: Record<string, any> | null;
+  reviewLoading: boolean;
+  publicOfficeName: string;
+  setPublicOfficeName: (value: string) => void;
+  publicOfficeAddress: string;
+  setPublicOfficeAddress: (value: string) => void;
+  savingAction: string;
+  onDonation: (name: string, address: string) => Promise<boolean>;
+  onSaveOtherSupport: (choice: string) => Promise<boolean>;
+  onOpenCampaign: () => void;
+}) {
+  const [choice, setChoice] = useState<"donation" | "lgu" | "none">(
+    request.supportDecision === "internal_support" ? "lgu" :
+      request.supportDecision === "not_required" ? "none" : "donation",
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [locationAttempted, setLocationAttempted] = useState(false);
+  const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
+  const hasOffice = String(request.assignedLocationName || "").trim().length >= 3 &&
+    String(request.assignedLocationAddress || "").trim().length >= 5;
+  const locationError = locationAttempted &&
+    (!hasOffice && (publicOfficeName.trim().length < 3 || publicOfficeAddress.trim().length < 5));
+  const busy = submitting || !!savingAction;
+  const submit = async () => {
+    if (busy) return;
+    if (choice === "donation" && !hasOffice) {
+      setLocationAttempted(true);
+      if (publicOfficeName.trim().length < 3 || publicOfficeAddress.trim().length < 5) return;
+    }
+    setSubmitting(true);
+    try {
+      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress);
+      else await onSaveOtherSupport(choice === "lgu" ? "internal_support" : "not_required");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (reviewLoading || !reviewRecord) {
+    return <View style={styles.simplePanel}>
+      <ActivityIndicator color="#059669" />
+      <Text style={styles.simpleCopy}>Checking the approved request...</Text>
+    </View>;
+  }
+  return (
+    <View style={styles.simplePanel}>
+      <View style={styles.simpleHead}>
+        <View style={styles.simpleIcon}>
+          <Ionicons name="checkmark-circle" size={21} color="#047857" />
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={styles.simpleTitle}>Request Verified</Text>
+          <Text style={styles.simpleCopy}>The LGU review is complete. Choose what happens next.</Text>
+        </View>
+      </View>
+
+      {request.donationCampaignId ? (
+        <View style={styles.simpleField}>
+          <Text style={styles.simpleSection}>Donation campaign linked</Text>
+          <ActionButton label="Open Donation Campaign" icon="heart-outline" variant="success"
+            loading={false} onPress={onOpenCampaign} />
+        </View>
+      ) : (
+        <>
+          <Text style={styles.simpleSection}>How will this request be supported?</Text>
+          <View style={styles.simpleOptions}>
+            {([
+              ["donation", "Raise Donations"],
+              ["lgu", "LGU / Partner Help"],
+              ["none", "No More Help Needed"],
+            ] as const).map(([key,label]) => (
+              <TouchableOpacity
+                key={key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: choice === key }}
+                disabled={busy}
+                onPress={() => setChoice(key)}
+                style={[styles.simpleOption, choice === key && styles.simpleOptionYes]}
+              >
+                <Ionicons name={choice === key ? "radio-button-on" : "radio-button-off"}
+                  size={16} color={choice === key ? "#047857" : "#64748B"} />
+                <Text style={styles.simpleOptionLabel}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {choice === "donation" && (
+            <View style={styles.simpleField}>
+              <Text style={styles.simpleSection}>Amount for donation campaign</Text>
+              {cap > 0 ? (
+                <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
+              ) : (
+                <View style={styles.simpleReviewAmountNotice}>
+                  <Ionicons name="information-circle-outline" color="#92400E" size={17} />
+                  <Text style={[styles.simpleCopy,{ flex: 1 }]}>
+                    No unpaid amount was verified for this request. Check the official bill and previous assistance with the LGU before preparing monetary donations.
+                  </Text>
+                </View>
+              )}
+              {cap > 0 && (
+                <Text style={styles.simpleCopy}>
+                  Taken from the completed LGU review. No need to enter the amount again.
+                </Text>
+              )}
+
+              {hasOffice ? (
+                <View style={styles.simpleReviewOfficeCard}>
+                  <Ionicons name="business-outline" size={17} color="#047857" />
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={styles.simpleCheckTitle}>Public coordination office saved</Text>
+                    <Text style={styles.simpleCopy}>
+                      {request.assignedLocationName} — {request.assignedLocationAddress}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.simpleField}>
+                  <Text style={styles.simpleSection}>Public coordination office</Text>
+                  <Text style={styles.simpleCopy}>
+                    Enter the LGU office or authorized clinic where donors can coordinate. Do not use the Resident's home.
+                  </Text>
+                  <Text style={styles.simpleCheckTitle}>Office or clinic name</Text>
+                  <TextInput
+                    value={publicOfficeName}
+                    onChangeText={setPublicOfficeName}
+                    editable={!busy}
+                    placeholder="e.g. City Social Welfare Office"
+                    placeholderTextColor="#94A3B8"
+                    style={[styles.input, locationError && styles.assistanceFieldInvalid]}
+                  />
+                  <Text style={styles.simpleCheckTitle}>Public office address</Text>
+                  <TextInput
+                    value={publicOfficeAddress}
+                    onChangeText={setPublicOfficeAddress}
+                    editable={!busy}
+                    placeholder="Street, barangay, city"
+                    placeholderTextColor="#94A3B8"
+                    style={[styles.input, locationError && styles.assistanceFieldInvalid]}
+                  />
+                  {locationError && <ReviewValidationHint message="Enter the actual public office name and address before continuing." />}
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={styles.simpleDecision}>
+            <ActionButton
+              label={choice === "donation" ? "Continue to Donation Campaign" : "Save Support Choice"}
+              icon={choice === "donation" ? "heart-outline" : "checkmark-circle-outline"}
+              variant="success"
+              disabled={busy || (choice === "donation" && cap <= 0)}
+              loading={submitting}
+              onPress={() => { void submit(); }}
+            />
+            {choice === "donation" && <Text style={styles.simpleCopy}>
+              This opens the campaign setup. It does not publish or collect donations automatically.
+            </Text>}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
 function CompactReviewSelect({
   value, options, onChange, disabled = false, error = false,
 }: {
@@ -5726,6 +5897,10 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
+  simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
+  simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
+
   simpleReviewSectionHeading: { gap: 5 },
   clearReviewDropdownWrap: { gap: 4 },
   clearReviewDropdown: { minHeight: 44, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
