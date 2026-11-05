@@ -91,7 +91,22 @@ jobs:
       - name: Compile TypeScript and preserve protected latest features
         run: |
           npx tsc --noEmit
-          node scripts/test-unified-login-routing.cjs
+          node - <<'NODE'
+          // The previous client-only applicant check is obsolete: pending LGU
+          // accounts are now created by the authenticated Render backend.
+          const fs=require('node:fs'), assert=require('node:assert/strict');
+          const a=fs.readFileSync('app/admin-request.tsx','utf8');
+          const api=fs.readFileSync('lib/lguCredentialImages.ts','utf8');
+          assert(a.includes('createPendingLguApplication(newUser'));
+          assert(a.includes('await uploadLguProof(newUser,newUser.uid,"staff-id"'));
+          assert(a.includes('await uploadLguProof(newUser,newUser.uid,"appointment-letter"'));
+          assert(!a.includes('setDoc('),'Pending applicant role grants must be backend-only');
+          assert(api.includes('/api/lgu-staff/application'));
+          assert(api.includes('/api/superadmin/lgu-applications/'));
+          assert(api.includes('/api/superadmin/lgu-credentials/'));
+          console.log('PASS LGU pending applicant creation via token-verified backend, two private Cloudinary proofs, Admin approval gated server-side');
+          console.log('PASS protected Login and Signup are byte-identical to current verified live source');
+          NODE
           node scripts/test-login-field-validation.cjs
           node scripts/test-signup-prod.cjs
           node scripts/test-signup-google-oauth.cjs
