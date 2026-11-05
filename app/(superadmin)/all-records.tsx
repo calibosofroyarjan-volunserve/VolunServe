@@ -772,11 +772,11 @@ export default function AllRecords() {
             "Assistance Request"
           )}
           subtitle={`Request ID: ${firstText(item.requestId, item.id)}`}
-          status={firstText(item.status, "pending")}
+          status={firstText(item.status, "not recorded")}
           rows={[
             {
               label: "Requested By",
-              value: firstText(item.requesterName, item.requesterUid),
+              value: firstText(item.requesterName, "Not recorded"),
             },
             {
               label: "Assistance Type",
