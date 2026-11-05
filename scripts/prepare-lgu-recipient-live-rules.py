@@ -53,6 +53,8 @@ addition = """
       // Operational LGU Admin selects a local SJDM recipient per announcement.
       // Does NOT modify any user's assigned barangay or Super Admin system notice grants.
       allow create: if isAdmin()
+        && profile().get('status', 'approved') == 'approved'
+        && profile().get('adminStatus', 'active') != 'suspended'
         && request.resource.data.keys().hasOnly([
           'title','message','linkUrl','imageUrl','audience','priority',
           'publishAt','createdBy','createdAt','updatedAt'
