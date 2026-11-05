@@ -41,13 +41,11 @@ export default function CreateAnnouncement() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
-  const [barangayOpen, setBarangayOpen] = useState(false);
-  const [chosenBarangay, setChosenBarangay] = useState("");
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
     { label: "Volunteer Schedule Update", title: "Volunteer Schedule Update", body: "Volunteers, please review your assigned activities and any schedule updates in VolunServe." },
-    { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official barangay service advisory and follow instructions from authorized LGU personnel." },
+    { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official city service advisory and follow instructions from authorized LGU personnel." },
   ];
 
   const [submitting, setSubmitting] =
@@ -107,26 +105,9 @@ export default function CreateAnnouncement() {
     );
   }
 
-  const barangay =
-    typeof profile?.barangay === "string"
-      ? profile.barangay.trim()
-      : "";
-
-  // Server security rules permit LGU Admin publishing only to the barangay
-  // assigned in their verified profile. Never show an unauthorized audience.
-  const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
-
-    if (!publishBarangay || publishBarangay !== barangay) {
-      Alert.alert(
-        "Barangay Required",
-        "Your Admin account does not have an assigned barangay."
-      );
-
-      return;
-    }
 
     if (cleanTitle.length < 3) {
       Alert.alert(
@@ -156,13 +137,9 @@ export default function CreateAnnouncement() {
 
           message: cleanMessage,
 
-          /*
-           * Local Admin announcement.
-           *
-           * audience stores the Admin's
-           * assigned barangay.
-           */
-          audience: publishBarangay,
+          // Admin notices reach all SJDM residents and volunteers.
+          // Keep "all" exclusively for existing Super Admin system updates.
+          audience: "sjdm",
 
           priority: "normal",
 
@@ -190,7 +167,7 @@ export default function CreateAnnouncement() {
 
       Alert.alert(
         "Announcement Posted",
-        `The announcement was published for ${publishBarangay}.`
+        "The announcement was published for residents and volunteers across San Jose del Monte City."
       );
     } catch (error: any) {
       console.error(
@@ -213,38 +190,13 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Publish official local notices to residents and volunteers throughout San Jose del Monte City." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
-        <Text style={styles.scopeLabel}>
-          ANNOUNCEMENT AREA
-        </Text>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Choose authorized announcement barangay"
-          accessibilityState={{ expanded: barangayOpen }}
-          disabled={!barangay || submitting}
-          onPress={() => setBarangayOpen(value => !value)}
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-        >
-          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
-          <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
-        </TouchableOpacity>
-        {barangayOpen && barangay ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
-            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
-            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
-          >
-            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
-          </TouchableOpacity>
-        ) : null}
-
+        <Text style={styles.scopeLabel}>ANNOUNCEMENT COVERAGE</Text>
+        <Text style={styles.scopeValue}>San Jose del Monte City</Text>
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area. Other barangays cannot be selected without additional official authorization.
+          Visible to residents and volunteers in all SJDM barangays. No barangay assignment is required for an approved Admin account.
         </Text>
       </View>
 
@@ -263,7 +215,7 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
-        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
+        <Text style={styles.scopeHelp}>Templates are editable. Verify all details before publishing official city-wide LGU notices.</Text>
         <Text style={styles.inputLabel}>
           TITLE
         </Text>
@@ -314,7 +266,7 @@ export default function CreateAnnouncement() {
             />
           ) : (
             <Text style={styles.submitText}>
-              Publish Local Announcement
+              Publish SJDM Announcement
             </Text>
           )}
         </TouchableOpacity>
@@ -326,9 +278,9 @@ export default function CreateAnnouncement() {
         </Text>
 
         <Text style={styles.noteText}>
-          This page is for local operational
-          announcements only. System-wide announcements
-          are controlled by the Super Admin.
+          Approved Admins publish SJDM local government notices
+          for all barangays. System updates remain controlled
+          by the Super Admin.
         </Text>
       </View>
     </ScrollView>
