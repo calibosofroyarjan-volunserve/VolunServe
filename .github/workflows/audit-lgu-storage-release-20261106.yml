@@ -1,0 +1,56 @@
+name: READ ONLY Identify LGU Storage Release and Firestore Blockers
+on:
+  push:
+    branches: [audit/lgu-production-storage-release-20261106]
+    paths: [.github/workflows/audit-lgu-storage-release-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: READ ONLY live release names and proof access
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import subprocess,urllib.request,urllib.error,json,hashlib
+          auth=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(url):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+url,headers={'Authorization':'Bearer '+auth,'Cache-Control':'no-cache'})
+            with urllib.request.urlopen(req,timeout=20) as resp:return json.load(resp)
+          next_token=''
+          releases=[]
+          while True:
+            path='projects/volunserve-3aa5b/releases?pageSize=100'
+            if next_token:
+              from urllib.parse import quote
+              path+='&pageToken='+quote(next_token,safe='')
+            response=get(path)
+            releases+=response.get('releases',[])
+            next_token=response.get('nextPageToken','')
+            if not next_token: break
+          print('ACTIVE_RULES_RELEASE_COUNT',len(releases))
+          storage=[r for r in releases if 'storage' in r.get('name','').lower()]
+          print('ACTIVE_STORAGE_RELEASE_COUNT',len(storage))
+          for r in storage:
+            name=r['name'];ruleset=r.get('rulesetName','')
+            source=get(ruleset)['source']['files'][0]['content']
+            print('STORAGE_RELEASE',name)
+            print('STORAGE_RULESET',ruleset)
+            print('STORAGE_RULES_SHA256',hashlib.sha256(source.encode()).hexdigest())
+            print('STORAGE_PRIVATE_LGU_PROOF_MATCH', 'lguStaffProof' in source)
+            print('STORAGE_DENY_PUBLIC_LGU_PROOF', 'allow get: if isSuperAdmin()' in source)
+          current=next((r for r in releases if r.get('name','').endswith('/cloud.firestore')),None)
+          if current:
+            source=get(current['rulesetName'])['source']['files'][0]['content']
+            print('FIRESTORE_ACTIVE_RULESET',current['rulesetName'])
+            print('FIRESTORE_LGU_CREDENTIAL_REVIEW_RULE', 'match /lguAdminCredentialReviews' in source)
+          print('READ_ONLY COMPLETE: NO RELEASES UPDATED')
+          PY
