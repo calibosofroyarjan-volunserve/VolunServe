@@ -1,0 +1,47 @@
+name: Verify Live Login Signup Super Admin and Firestore Rules (READ ONLY)
+on:
+  push:
+    branches: [release/lgu-accept-reject-guarded-live-20261105-2308]
+    paths: [.github/workflows/check-live-lgu-before-deploy-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect-current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read only existing Firestore Rules release and live public Hosting manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,subprocess,hashlib,json
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',
+            headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=20) as r: rel=json.load(r)
+          ruleset=rel['rulesetName']
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+ruleset,
+            headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=20) as r: rules=json.load(r)
+          content=rules['source']['files'][0]['content']
+          sha=hashlib.sha256(content.encode()).hexdigest()
+          req=urllib.request.Request('https://volunserve.com/volunserve-release.json?read_only_check=20261105',
+            headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=20) as r: manifest=json.load(r)
+          assert manifest.get('firebaseProject')=='volunserve-3aa5b'
+          print('LIVE_RULESET',ruleset)
+          print('LIVE_RULES_SOURCE_SHA256',sha)
+          print('LIVE_HOSTING_REVISION',manifest.get('revision'))
+          print('LIVE_HOSTING_BUILT',manifest.get('builtAt'))
+          for p in ['/','/login','/signup','/admin-login']:
+            req=urllib.request.Request('https://volunserve.com'+p,headers={'Cache-Control':'no-cache'})
+            with urllib.request.urlopen(req,timeout=20) as r: status=r.status
+            print('PUBLIC_ROUTE',p,status)
+          print('READ_ONLY_AUDIT_COMPLETE no Firestore writes, no Hosting changes')
+          PY
