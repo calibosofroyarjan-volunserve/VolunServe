@@ -99,8 +99,10 @@ const rejectCase=`          || (
             ])
           )
 `;
-const superAdminEnd="        );\n      allow update: if isAdmin()\n        && resource.data.role == 'applicant'";
-onlyOnce(target,superAdminEnd,"end of existing Super Admin update + legacy Admin applicant rule");
+const superAdminEndRegex=/[ \t]*\);\r?\n[ \t]*allow update: if isAdmin\(\)\r?\n[ \t]*&& resource\.data\.role == 'applicant'/g;
+const superAdminMatches=[...target.matchAll(superAdminEndRegex)];
+assert.equal(superAdminMatches.length,1,"BLOCKED: unexpected existing Super Admin update + legacy Admin boundary");
+const superAdminEnd=superAdminMatches[0][0];
 target=target.replace(superAdminEnd,rejectCase+superAdminEnd);
 // 4) Deny operational LGU Admin from reviewing LGU STAFF applications
 // while preserving existing resident and volunteer application paths.
