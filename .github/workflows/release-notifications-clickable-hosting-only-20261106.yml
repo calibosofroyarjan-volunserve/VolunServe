@@ -1,0 +1,217 @@
+name: Guarded LIVE Clickable Notifications (Hosting ONLY)
+on:
+  push:
+    branches: [release/notifications-clickable-hosting-only-20261106]
+    paths: [".github/workflows/release-notifications-clickable-hosting-only-20261106.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot guarded Hosting-only clickable Notifications'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "473e824f7b941fffcaea631d5f0d4beb5d83ac85"
+      RULES_BASE_SHA: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW: "notifications-polished-ui-1106"
+      BACKUP: "backup-notifications-ui-1106"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-notifications-sa-1106.json"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Fail closed if ANY protected live-source file changed
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/release-changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+'/release-changed.txt','utf8').split('\n').filter(Boolean);
+          const allow=new Set([
+            'app/(tabs)/notifications.tsx',
+            'scripts/test-notification-clickthrough-polish-20261106.cjs',
+            'scripts/test-notifications-private-emulator-20261106.cjs',
+            'scripts/prepare-notification-read-only-rules-20261106.py',
+            'scripts/activate-notifications-locked-rules-20261106.py',
+            '.github/workflows/validate-notifications-clickable-20261106.yml',
+            '.github/workflows/release-notifications-clickable-20261106.yml',
+            '.github/workflows/release-notifications-clickable-hosting-only-20261106.yml'
+          ]);
+          const bad=paths.filter(x=>!allow.has(x));assert.deepEqual(bad,[],'STOP protected source modified');
+          console.log('PASS exact live ancestor; only private Notifications UI and isolated security tests/release scripts changed');
+          console.log('PASS unchanged Super Admin, Login, Signup, Google authentication, Auth, Admin records, other community modules and Firebase config');
+          NODE
+      - name: Confirm active live Hosting revision on both domains
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?before_notifications_1106='+Date.now(),{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP live Hosting marker unreadable '+domain);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP newer live revision detected: '+j.revision);
+              console.log('PASS current live Hosting '+domain+': '+j.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, 13 notification routes, protected Login/Signup, and sidebar tests
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Require exact project service account before production changes
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing production Firebase credentials"; exit 1; fi
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
+          if(sa.type!=='service_account'||sa.project_id!==process.env.PROJECT)throw Error('Wrong Firebase account/project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS verified Firebase project, no credentials printed');
+          NODE
+      - name: Verify exact ACTIVE Firebase Rules without changing any rules
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def fetch(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          expected='projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164'
+          if fetch('projects/volunserve-3aa5b/releases/cloud.firestore').get('rulesetName')!=expected:
+            raise SystemExit('STOP: active Firebase Rules changed')
+          files=fetch(expected).get('source',{}).get('files',[])
+          rules=[f for f in files if f.get('name','').endswith('firestore.rules')]
+          if not rules and len(files)==1:rules=files
+          if len(rules)!=1 or hashlib.sha256(rules[0]['content'].encode('utf8')).hexdigest()!='f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d':
+            raise SystemExit('STOP: published Firebase Rules content differs from tested version')
+          print('PASS exact active Firestore Rules preserved; NO permissions or data changes')
+          PY
+      - name: Emulator verifies recipient read:true only, safe private inbox, no content forgery
+        run: |
+          LIVE_NOTIFICATION_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
+      - name: Clean web build and release SHA stamp (no cache)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const release=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(release.revision,process.env.GITHUB_SHA);
+          console.log('PASS static build from exact tested source '+release.revision);
+          NODE
+      - name: Deploy to TEMPORARY preview ONLY; live remains unchanged
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        id: preview
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: notifications-clickable-1106
+          expires: 3d
+      - name: Verify preview exact revision and all protected routes with propagation retries
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if node scripts/check-live-hosting.cjs; then ready=1; break; fi
+            sleep 8
+          done
+          if [ "$ready" -ne 1 ]; then echo "::error::Preview failed verified source/route check"; exit 1; fi
+          node - <<'NODE'
+          (async()=>{
+            const origin=process.env.VOLUNSERVE_HOSTING_URL;
+            if(!origin||!origin.startsWith('https://'))throw Error('Preview URL unavailable');
+            const paths=['/notifications','/announcements','/login','/signup','/admin-login','/admin-accounts','/my-cases','/community-events','/volunteer','/certificate'];
+            for(const path of paths){
+              let ok=false;
+              for(let attempt=1;attempt<=5;attempt++){
+                const response=await fetch(origin.replace(/\/$/,'')+path,{signal:AbortSignal.timeout(25000)});
+                if(response.status===200){ok=true;break;}
+                await new Promise(resolve=>setTimeout(resolve,1500));
+              }
+              if(!ok)throw Error('STOP missing protected preview route '+path);
+              console.log('PASS preview route '+path);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Backup live Hosting before promotion (no data changes)
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "verified" > "$RUNNER_TEMP/notifications-ui-hosting-backed-up.txt"
+          echo "Backup: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+      - name: Guard live revision AGAIN, promote exactly tested preview to LIVE
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          verified=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then verified=1; break; fi
+            sleep 7
+          done
+          if [ "$verified" -ne 1 ]; then echo "::error::Live Hosting not confirmed at exact revision"; exit 1; fi
+          echo "SUCCESS: volunserve.com now serves exact guarded Notifications revision $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Confirm Hosting-only scope
+        run: |
+          echo 'Notifications UI-only. Cloud Rules, Firebase Auth, data, Functions, Super Admin and Login/Signup unchanged.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Safe rollback only this run's Hosting on failure
+        if: failure()
+        run: |
+          set +e
+          if [ -f "$RUNNER_TEMP/notifications-ui-hosting-backed-up.txt" ]; then
+            CURRENT="$(node - <<'NODE'
+          (async()=>{try{const r=await fetch('https://volunserve.com/volunserve-release.json?rollback='+Date.now(),{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(20000)});const j=await r.json();process.stdout.write(j.revision||'unknown');}catch(e){process.stdout.write('unknown')}})()
+          NODE
+          )"
+            if [ "$CURRENT" = "$GITHUB_SHA" ]; then
+              node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "::warning::Rolled back only this workflow's Hosting version"
+            elif [ "$CURRENT" = "$LIVE_BASE" ]; then
+              echo "Original live Hosting still active"
+            else
+              echo "::error::Unknown/concurrent Hosting revision; refuse to overwrite another deployment"
+            fi
+          fi
+          echo 'No Firebase Rules were activated in this workflow.'
+          echo 'Guarded recovery attempted; inspect current live revision and Rules pointer.'
+
+# Inert unless its exact one-shot commit message is explicitly triggered after validation.
+
+# One-shot scoped release requested: clickable Notifications UI + notification content read-only security only.
+
+# One-shot retry: preserve all guards and report Firebase Rules activation error body if blocked.
