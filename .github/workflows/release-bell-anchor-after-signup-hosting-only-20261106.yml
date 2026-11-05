@@ -278,3 +278,5 @@ jobs:
           fi
 
 # One-shot release trigger after green notification UI tests; baseline guard remains required.
+
+# Explicit one-shot approval: correct the original Home bell anchor without changing latest Signup or Firebase Rules.
