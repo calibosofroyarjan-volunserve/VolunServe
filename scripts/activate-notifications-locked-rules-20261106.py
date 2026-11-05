@@ -41,8 +41,22 @@ def request(path, method="GET", payload=None):
         with urllib.request.urlopen(req, timeout=45) as reply:
             return json.load(reply)
     except urllib.error.HTTPError as error:
+        # Log only sanitized diagnostic words from the Firebase error message.
+        # Never echo raw credentials, URLs, emails, JSON or request headers.
+        import re
         details = error.read().decode("utf8", errors="replace")
-        raise RuntimeError("Firebase Rules API HTTP " + str(error.code) + ": " + details[:1400]) from error
+        try:
+            payload = json.loads(details)
+            error_body = payload.get("error", {})
+            status = str(error_body.get("status", "unknown"))
+            message = str(error_body.get("message", "unknown"))
+        except Exception:
+            status, message = "unparsed", "unavailable"
+        safe_words = " ".join(re.findall(r"[A-Za-z_]+", message)[:45])
+        raise RuntimeError(
+            "Firebase Rules API HTTP " + str(error.code) +
+            " status=" + status + " message_words=" + safe_words[:400]
+        ) from error
 
 def current():
     return request(RELEASE)["rulesetName"]
@@ -126,66 +140,74 @@ def do_stage():
     print("PASS compiled immutable INACTIVE Ruleset:", new)
     print("NO production Rules release changed yet")
 
-def firebase_rules_only_deploy():
-    # Firebase CLI uses the supported deployment API and is limited to rules.
-    # firestore.rules is the EXACT prior live Ruleset with only notifications
-    # read/update restrictions changed; no indexes or other modules deployed.
-    args = [
-        "node", "node_modules/firebase-tools/lib/bin/firebase.js",
-        "deploy", "--only", "firestore:rules", "--project", PROJECT,
-        "--non-interactive",
-    ]
-    subprocess.run(args, check=True, timeout=210)
-
-
 def do_activate():
     info = manifest()
     if (info.get("old") != EXPECTED_OLD or
         info.get("oldHash") != EXPECTED_OLD_HASH or
         info.get("hostingBase") != EXPECTED_HOSTING):
-        raise RuntimeError("STOP staged release manifest mismatches expected production baseline")
+        raise RuntimeError("STOP stage manifest differs from release guard")
     verify_hosting()
     if current() != EXPECTED_OLD:
-        raise RuntimeError("STOP active Firestore Rules changed before deploy")
-    candidate = open("firestore.rules", "rb").read().decode("utf8")
+        raise RuntimeError("STOP active Firestore Rules changed before activation")
     _, staged_source = content_for(info["new"])
+    candidate = open("firestore.rules", "rb").read().decode("utf8")
     if canonical(staged_source) != canonical(candidate) or sha(candidate) != info["newHash"]:
-        raise RuntimeError("STOP candidate differs from emulator-tested immutable staged Ruleset")
-    firebase_rules_only_deploy()
-    active = current()
-    _, new_source = content_for(active)
-    if canonical(new_source) != canonical(candidate):
-        raise RuntimeError("STOP active Firestore Rules source does not match tested candidate")
-    info["cliDeployedRuleset"] = active
-    with open(MANIFEST_FILE, "w", encoding="utf8") as file:
-        json.dump(info, file)
-    print("PASS activated Firebase RULES-ONLY content integrity policy:", active)
+        raise RuntimeError("STOP immutable staged candidate differs from emulator-tested source")
+
+    # The first variant is the exact PATCH shape used in VolunServe's previous
+    # successful LGU Rules-only activation. Additional documented API shapes
+    # are safe fallbacks only if the preceding request leaves the old Rules active.
+    variants = [
+        (RELEASE + "?updateMask=rulesetName", {
+            "release": {"name": RELEASE, "rulesetName": info["new"]}
+        }),
+        (RELEASE, {
+            "release": {"name": RELEASE, "rulesetName": info["new"]}
+        }),
+        (RELEASE, {
+            "release": {"name": RELEASE, "rulesetName": info["new"]},
+            "updateMask": "rulesetName"
+        }),
+    ]
+    messages = []
+    for index, (url, payload) in enumerate(variants, start=1):
+        if current() != EXPECTED_OLD:
+            if current() == info["new"]:
+                print("PASS new Ruleset is already active from the previous update attempt")
+                return
+            raise RuntimeError("STOP a different Ruleset became active during activation")
+        try:
+            response = request(url, method="PATCH", payload=payload)
+            if response.get("rulesetName") != info["new"] or current() != info["new"]:
+                raise RuntimeError("STOP unexpected Firebase release update response")
+            print("PASS activated notification content-protection only:", info["new"])
+            return
+        except Exception as exc:
+            if current() == info["new"]:
+                print("PASS verified active Ruleset even though update response failed")
+                return
+            messages.append("variant " + str(index) + ": " + str(exc)[:550])
+    raise RuntimeError("STOP no Firebase Rules PATCH form succeeded. " + " | ".join(messages))
 
 
 def do_rollback():
     if not os.path.isfile(MANIFEST_FILE):
-        print("NO RULES ROLLBACK: no stage manifest")
+        print("NO RULES ROLLBACK: stage manifest missing")
         return
     info = manifest()
     active = current()
     if active == info["old"]:
-        print("NO RULES ROLLBACK: original active Ruleset untouched")
+        print("NO RULES ROLLBACK: old Ruleset remains active")
         return
-    old_name, original = content_for(info["old"])
-    if sha(original) != info["oldHash"]:
-        raise RuntimeError("STOP cannot verify old known-safe Ruleset for rollback")
-    # Do not overwrite a concurrent developer's unrelated Rules deployment.
-    _, active_source = content_for(active)
-    if sha(canonical(active_source)) != sha(canonical(open("firestore.rules", "rb").read().decode("utf8"))):
-        raise RuntimeError("STOP different Ruleset now active: refuse concurrent overwrite")
-    with open("firestore.rules", "w", encoding="utf8", newline="\n") as file:
-        file.write(original)
-    firebase_rules_only_deploy()
-    after = current()
-    _, restored = content_for(after)
-    if canonical(restored) != canonical(original):
-        raise RuntimeError("CRITICAL: rollback source content verification failed")
-    print("PASS original safe Cloud Firestore policies restored via rules-only CLI deployment")
+    if active != info["new"]:
+        raise RuntimeError("STOP unrelated Ruleset active; refuse to overwrite")
+    # Reuse exact known-successful release PATCH form to restore the previous
+    # immutable Ruleset, never reading stale checked-in Firestore rules.
+    response = request(RELEASE + "?updateMask=rulesetName", method="PATCH",
+                       payload={"release": {"name": RELEASE, "rulesetName": info["old"]}})
+    if response.get("rulesetName") != info["old"] or current() != info["old"]:
+        raise RuntimeError("CRITICAL old Ruleset rollback not verified")
+    print("PASS reverted only this workflow's Ruleset pointer to old version")
 
 
 if __name__ == "__main__":
