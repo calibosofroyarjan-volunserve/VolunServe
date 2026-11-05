@@ -1,0 +1,38 @@
+name: Validate Assistance Request UI, Sort and Review Gates
+
+on:
+  pull_request:
+    paths:
+      - "app/(admin)/assistance-requests.tsx"
+      - "lib/assistanceReviewQueue.ts"
+      - "lib/assistanceReviewValidation.ts"
+      - "scripts/test-assistance-validation.cjs"
+      - "scripts/test-assistance-compact-review.cjs"
+      - ".github/workflows/assistance-review-regression.yml"
+  push:
+    branches:
+      - "ux/assistance-guided-admin-review-20261106"
+
+permissions:
+  contents: read
+
+jobs:
+  queue-and-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the proposed version
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test exact queue sorting, filters, pagination and review safety contracts
+        run: |
+          node scripts/test-assistance-compact-review.cjs
+          node scripts/test-assistance-validation.cjs
+      - name: Check TypeScript types
+        run: npx tsc --noEmit --pretty false
