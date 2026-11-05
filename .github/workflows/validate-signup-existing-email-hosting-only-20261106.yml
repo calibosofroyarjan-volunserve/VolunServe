@@ -1,0 +1,56 @@
+name: Validate Existing Email Signup on Latest LIVE Base (NO DEPLOY)
+on:
+  push:
+    branches: [release/signup-registered-only-from-notification-live-20261106]
+    paths: [".github/workflows/validate-signup-existing-email-hosting-only-20261106.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      EXPO_NO_TELEMETRY: "1"
+      LIVE_BASE: "93db3ae83dfec6b1166fb872872de60aa34340fc"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Check original latest live source and isolated signup changes
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+          const files=execFileSync('git',['diff','--name-only',process.env.LIVE_BASE,'HEAD'],{encoding:'utf8'}).trim().split(/\r?\n/).filter(Boolean).sort();
+          const permitted=['components/auth/EmailFirstSignup.tsx','lib/signupRegistration.ts','scripts/test-signup-prod.cjs','.github/workflows/validate-signup-existing-email-hosting-only-20261106.yml'].sort();
+          assert.deepEqual(files,permitted,'STOP: unrelated module changes');
+          console.log('PASS only signup conflict validation and test changes');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Existing email, recovery, Google and login regression
+        run: |
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Build enabled email-first web application WITHOUT deployment
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          for(const route of ['signup','login','notifications','admin-login','admin-request'])
+            assert(fs.existsSync('dist/'+route+'.html')||fs.existsSync('dist/'+route+'/index.html'),'Missing '+route);
+          console.log('PASS email-first static web export, Login, notifications and staff routes intact');
+          NODE
