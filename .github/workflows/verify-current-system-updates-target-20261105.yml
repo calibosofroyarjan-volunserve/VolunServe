@@ -1,0 +1,44 @@
+name: Read-Only Verify Current Production for System Updates Integration
+on:
+  push:
+    branches: [audit/live-base-announcement-20261105]
+    paths: [".github/workflows/verify-current-system-updates-target-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read live Hosting revision, actual Cloud Rules release, and preview state (NO WRITES)
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,subprocess,urllib.request
+          urls=['https://volunserve.com/volunserve-release.json','https://volunserve-3aa5b.web.app/volunserve-release.json']
+          for url in urls:
+              req=urllib.request.Request(url+'?inspection=roleflow',headers={'cache-control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=22) as response:
+                  j=json.load(response)
+              print('HOSTING_DOMAIN='+url.split('/')[2])
+              print('LIVE_SHA='+str(j.get('revision')))
+              print('BUILT_AT='+str(j.get('builtAt')))
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(p):
+              r=urllib.request.Request(base+p,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(r,timeout=22) as response:return json.load(response)
+          rel=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          files=get(rel['rulesetName']).get('source',{}).get('files',[])
+          sources=[f for f in files if f.get('name','').endswith('firestore.rules')]
+          if len(sources)!=1:raise SystemExit('STOP unexpected live Rules source shape')
+          src=sources[0]['content']
+          print('CURRENT_LIVE_RULESET='+rel['rulesetName'])
+          print('CURRENT_LIVE_RULES_SHA256='+hashlib.sha256(src.encode()).hexdigest())
+          print('CURRENT_LIVE_RULES_SIZE_BYTES='+str(len(src.encode())))
+          print('SYSTEM_UPDATES_RULES_PRESENT='+str('match /systemUpdates/' in src))
+          PY
