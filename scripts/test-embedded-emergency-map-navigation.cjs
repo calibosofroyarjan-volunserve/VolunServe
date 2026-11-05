@@ -44,3 +44,33 @@ test("hospital location/photo data and original premium hospital cards survive n
   assert.match(map, /facility-detail-panel/);
   assert.match(map, /function openFacilityDetails/);
 });
+
+
+test("Resident tracking shows the case map without requiring an LGU Personnel response", () => {
+  const map = read("components/tabs/MapTracking.web.tsx");
+  const admin = read("app/(admin)/admin-cases.tsx");
+  const volunteer = read("app/(tabs)/volunteer.web.tsx");
+
+  const pinsStart = map.indexOf("const mapResponderPins = isAdministrator");
+  const pinsEnd = map.indexOf("const residentShareMode:", pinsStart);
+  assert.ok(pinsStart >= 0 && pinsEnd > pinsStart, "Missing role-scoped responder map logic");
+  const responderMap = map.slice(pinsStart, pinsEnd);
+  assert.match(responderMap, /isResidentMode\s*\?\s*residentActiveVolunteerPins/);
+  assert.doesNotMatch(responderMap, /residentLguPin/, "Resident must not depend on LGU Personnel GPS");
+
+  assert.match(map, /incidents:\s*mapIncidentCases\.map/, "Saved incidents must be visible without responder GPS");
+  assert.match(map, /No valid in-city GPS coordinate is saved/, "Do not invent a precise pin from an address");
+  assert.match(map, /VOLUNTEER GPS LIVE/);
+  assert.match(map, /const residentVolunteerStatus = normalize\(residentPrimaryAssignment\?\.status\)/);
+  assert.match(map, /const residentShareCanPublish =\s*isResidentMode &&\s*!!residentShareAssignment/);
+  assert.match(map, /const residentCanStartShare =\s*isResidentMode &&\s*!!residentShareAssignment/);
+
+  assert.match(admin, /const assignVolunteerToCase = async/);
+  assert.match(admin, /Volunteer Response Progress/);
+  assert.match(admin, /Volunteer Completion Reports/);
+  assert.doesNotMatch(admin, /<Text style=\{styles\.personnelCleanTitle\}>LGU Primary Responder<\/Text>/);
+  for (const transition of ['"accepted"', '"responding"', '"on_site"', '"completed"']) {
+    assert.ok(volunteer.includes(transition), "Missing Volunteer task state " + transition);
+  }
+});
+
