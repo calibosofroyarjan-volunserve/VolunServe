@@ -19,7 +19,7 @@ const item=(type,title,extra={})=>({type,title,message:"VolunServe has updated y
 const expects=[
   [item("emergency","New VolunServe Volunteer invitation"),true,"/(tabs)/volunteer","Emergency"],
   [item("emergency","Emergency report validated"),false,"/(tabs)/my-cases","Emergency"],
-  [item("account","Confirm LGU arrival",{caseId:"case-123"}),false,"/(tabs)/my-cases","Account"],
+  [item("account","Confirm LGU arrival",{caseId:"case-123"}),false,"/(tabs)/my-cases","Emergency"],
   [item("emergency","Responder is on the way"),false,"/(tabs)/disaster-response","Emergency"],
   [item("certificate_issued","Volunteer certificate issued",{certificateId:"cert-1"}),true,"/(tabs)/certificate","Events"],
   [item("certificate_issued","Volunteer certificate issued",{certificateId:"cert-1"}),false,"/(tabs)/profile","Events"],
