@@ -55,7 +55,8 @@ exports.notifyAnnouncementAudience = onDocumentCreated(
         const batchRecipients = recipients.slice(i, i + 200);
         const references = batchRecipients.map((userDoc) =>
           database.collection("notifications")
-              .doc(`announcement_${event.params.announcementId}_${userDoc.id}`));
+              .doc(`announcement_${event.params.announcementId}_` +
+                userDoc.id));
         const existing = await database.getAll(...references);
         const batch = database.batch();
         let pending = 0;
