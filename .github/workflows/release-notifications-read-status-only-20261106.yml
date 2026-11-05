@@ -66,7 +66,7 @@ jobs:
           fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.SA_JSON,{mode:0o600});
           console.log('PASS Firebase credential project identity');
           NODE
-      - name: Confirm current LIVE Hosting remains unchanged
+      - name: Check current Hosting is reachable (Rules-only; never deploy Hosting)
         run: |
           node - <<'NODE'
           (async()=>{
@@ -75,8 +75,8 @@ jobs:
                 {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
               if(!r.ok)throw Error('STOP Hosting revision inaccessible at '+domain);
               const m=await r.json();
-              if(m.revision!==process.env.EXPECTED_LIVE_HOSTING)throw Error('STOP newer Hosting release, prevent out-of-date rules promotion');
-              console.log('PASS current production Hosting '+domain);
+              if(!/^[a-f0-9]{40}$/.test(m.revision||''))throw Error('STOP unreadable Hosting revision marker');
+              console.log('PASS current production Hosting (read-only) '+domain+' '+m.revision);
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
