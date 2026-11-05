@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - fix/emergency-volunteer-from-live-20261106
+      - release/emergency-safe-offers-map-from-live-20261106
       - release/volunteer-photo-tasks-from-live-20261106
   pull_request:
     branches:
