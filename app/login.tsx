@@ -4,15 +4,12 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
+import { useSignupGoogle } from "../lib/useSignupGoogle";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
-import * as AuthSession from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
-  GoogleAuthProvider,
-  signInWithCredential,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -39,20 +36,16 @@ import {
   loginUser,
 } from "../lib/firebaseAuth";
 
-WebBrowser.maybeCompleteAuthSession();
-
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "com.froyarjan123.volunserve",
-});
-
 export default function Login() {
   const router = useRouter();
+  const signInGoogle = useSignupGoogle();
   const emailInputRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
@@ -74,24 +67,17 @@ export default function Login() {
   };
 
 
-  const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
-    webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
-    androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
-    redirectUri,
-    scopes: ["openid", "profile", "email"],
-  });
-
   const routeSignedInProfile = async (uid: string) => {
     let profile;
 
     try {
       profile = await getUserProfile(uid);
-    } catch {
+    } catch (error) {
       await firebaseSignOut(auth);
-
-      throw new Error(
-        "No VolunServe profile was found for this account. Please register first."
-      );
+      if (error instanceof Error && error.message === "Profile not found.") {
+        throw new Error("No VolunServe profile was found for this account. Please register first.");
+      }
+      throw new Error("Unable to check your VolunServe account. Check your connection and try again.");
     }
 
     // Staff accounts use a separate email/password portal, never community Google OAuth.
@@ -129,7 +115,12 @@ export default function Login() {
   const handleLogin = async () => {
     const cleanEmail = email.trim();
     setAttemptedLogin(true);
-    if (getLoginEmailError(email) || !password) return;
+    const emailError = getLoginEmailError(email);
+    if (emailError || !password) {
+      showError(emailError || "Enter your password.");
+      return;
+    }
+    setGoogleError("");
 
     if (loading || googleLoading) {
       return;
@@ -167,48 +158,24 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!googleRequest || loading || googleLoading) {
-      return;
-    }
+    if (loading || googleLoading) return;
 
+    let authenticatedUid: string | null = null;
     try {
       clearFeedback();
+      setGoogleError("");
       setGoogleLoading(true);
-
-      const result = await promptGoogleAsync();
-
-      if (result.type !== "success") {
-        if (result.type !== "dismiss" && result.type !== "cancel") {
-          showError("Google sign-in was not completed. Please try again.");
-        }
-        return;
-      }
-
-      const idToken = result.params?.id_token;
-
-      if (!idToken) {
-        throw new Error(
-          "Google did not return a valid sign-in token. Please try again."
-        );
-      }
-
       await applyRememberMe();
-      const credential =
-        GoogleAuthProvider.credential(idToken);
 
-      const userCredential =
-        await signInWithCredential(
-          auth,
-          credential
-        );
-
-      await routeSignedInProfile(
-        userCredential.user.uid
-      );
-    } catch (error: any) {
-      await firebaseSignOut(auth).catch(() => undefined);
-
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      const user = await signInGoogle();
+      authenticatedUid = user.uid;
+      await routeSignedInProfile(user.uid);
+    } catch (error) {
+      // Do not sign out a pre-existing session when the popup was merely cancelled.
+      if (authenticatedUid && auth.currentUser?.uid === authenticatedUid) {
+        await firebaseSignOut(auth).catch(() => undefined);
+      }
+      setGoogleError(googleSignInErrorMessage(error));
     } finally {
       setGoogleLoading(false);
     }
@@ -292,9 +259,9 @@ export default function Login() {
           <View style={styles.dividerLine} />
         </View>
         <TouchableOpacity accessibilityRole="button" onPress={() => void handleGoogleLogin()}
-          disabled={!googleRequest || loading || googleLoading}
+          disabled={loading || googleLoading}
           style={[styles.outlineButton,
-            (!googleRequest || loading || googleLoading) && styles.disabled]}>
+            (loading || googleLoading) && styles.disabled]}>
           {googleLoading ? (
             <View style={styles.centerRow}>
               <ActivityIndicator color="#087F66" />
@@ -306,6 +273,13 @@ export default function Login() {
               <Text style={styles.outlineText}>Continue with Google</Text>
             </View>}
         </TouchableOpacity>
+        {!!googleError && (
+          <AuthFeedback
+            title="Google sign-in issue"
+            message={googleError}
+            onDismiss={() => setGoogleError("")}
+          />
+        )}
         <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
           disabled={loading || googleLoading}
           style={[styles.outlineButton, authCornerCut(10), (loading || googleLoading) && styles.disabled]}>
