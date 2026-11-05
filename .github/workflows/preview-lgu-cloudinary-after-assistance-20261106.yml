@@ -35,8 +35,9 @@ jobs:
             '.github/workflows/validate-lgu-cloudinary-hosting-after-assistance-20261106.yml',
             '.github/workflows/preview-lgu-cloudinary-after-assistance-20261106.yml',
           ];
-          assert.deepEqual(files.sort(),allowed.sort(),'STOP unrelated production code changed');
-          for(const name of allowed.slice(0,4)){
+          assert.deepEqual([...files].sort(),[...allowed].sort(),'STOP unrelated production code changed');
+          for(const name of ['app/admin-request.tsx','app/(superadmin)/admin-accounts.tsx',
+            'components/admin/LguPrivateProofPreview.tsx','lib/lguCredentialImages.ts']){
             const expected=cp.execFileSync('git',['rev-parse',process.env.VERIFIED_SHA+':'+name],{encoding:'utf8'}).trim();
             const actual=cp.execFileSync('git',['rev-parse','HEAD:'+name],{encoding:'utf8'}).trim();
             assert.equal(actual,expected,'STOP changed tested LGU file '+name);
