@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -176,6 +177,10 @@ export default function MapTracking() {
     return result.slice(0,100);
   }, [sjdmBoundary,lguFacilities]);
   const [volunteerTaskPins, setVolunteerTaskPins] = useState<Record<string, VolunteerTaskGps>>({});
+  const [myTaskStatus, setMyTaskStatus] = useState("");
+  const [volunteerGpsConsent, setVolunteerGpsConsent] = useState(false);
+  const lastVolunteerCoordinatesRef = useRef<{ coords: UserLocation; receivedAt: number } | null>(null);
+  const nativeGpsWriteQueue = useRef<Promise<unknown>>(Promise.resolve());
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -475,6 +480,92 @@ export default function MapTracking() {
       lastReading <= gpsClock + 10000 &&
       inCity(point.latitude, point.longitude);
   });
+
+  // Only the Admin-issued assignment authorizes a native Volunteer task.
+  useEffect(() => {
+    setMyTaskStatus("");
+    setVolunteerGpsConsent(false);
+    const assignmentId = focusedIncident?.activeVolunteerSupportAssignmentId;
+    if (userRole !== "volunteer" || !CURRENT_USER_ID || !assignmentId ||
+      focusedIncident?.activeVolunteerSupportUid !== CURRENT_USER_ID) return;
+    return onSnapshot(doc(db, "responseAssignments", assignmentId), snapshot => {
+      const data = snapshot.exists() ? snapshot.data() : null;
+      const status = data?.volunteerId === CURRENT_USER_ID &&
+        data?.caseId === focusedCaseId ? String(data?.status || "") : "";
+      setMyTaskStatus(status);
+      if (!["responding", "on_site"].includes(status)) setVolunteerGpsConsent(false);
+    }, () => {
+      setMyTaskStatus("");
+      setVolunteerGpsConsent(false);
+    });
+  }, [userRole, CURRENT_USER_ID, focusedCaseId,
+    focusedIncident?.activeVolunteerSupportAssignmentId,
+    focusedIncident?.activeVolunteerSupportUid]);
+
+  const canPublishVolunteerGps =
+    userRole === "volunteer" &&
+    volunteerGpsConsent &&
+    !!CURRENT_USER_ID && !!focusedCaseId &&
+    focusedIncident?.activeVolunteerSupportUid === CURRENT_USER_ID &&
+    !!focusedIncident?.activeVolunteerSupportAssignmentId &&
+    ["responding", "on_site"].includes(myTaskStatus);
+
+  // Sharing stops on withdrawal, mission completion/cancellation, or map exit.
+  useEffect(() => {
+    if (!canPublishVolunteerGps || !CURRENT_USER_ID) return;
+    let stopped = false;
+    const gpsRef = doc(db, "responseLocations", CURRENT_USER_ID);
+    const assignmentId = String(focusedIncident?.activeVolunteerSupportAssignmentId || "");
+    const volunteerId = CURRENT_USER_ID;
+    const caseId = focusedCaseId;
+    const publish = () => {
+      const reading = lastVolunteerCoordinatesRef.current;
+      if (stopped || !reading || Date.now() - reading.receivedAt > 30000 ||
+        !inCity(reading.coords.latitude, reading.coords.longitude)) return;
+      const { latitude, longitude } = reading.coords;
+      nativeGpsWriteQueue.current = nativeGpsWriteQueue.current
+        .catch(() => {})
+        .then(async () => {
+          if (stopped) return;
+          await setDoc(gpsRef, {
+            caseId, assignmentId, volunteerId,
+            latitude, longitude, accuracy: null,
+            updatedAt: serverTimestamp(),
+          });
+        })
+        .catch(() => {
+          if (!stopped) {
+            Alert.alert("GPS Sharing Paused", "Your GPS could not be shared. Check your connection and location permission.");
+            setVolunteerGpsConsent(false);
+          }
+        });
+    };
+    publish();
+    const ticker = setInterval(publish, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(ticker);
+      nativeGpsWriteQueue.current = nativeGpsWriteQueue.current
+        .catch(() => {})
+        .then(() => deleteDoc(gpsRef))
+        .catch(() => {});
+    };
+  }, [canPublishVolunteerGps,
+    focusedIncident?.activeVolunteerSupportAssignmentId,
+    CURRENT_USER_ID, focusedCaseId, userRole, sjdmBoundary]);
+
+  const requestVolunteerGpsConsent = async () => {
+    if (!["responding", "on_site"].includes(myTaskStatus)) {
+      Alert.alert("Start Task First", "Open Emergency Tasks and start your assigned task first.");
+      return;
+    }
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== "granted") {
+      Alert.alert("Location Not Allowed", "Your location will not be shared without permission.");
+      return;
+    }
+    setVolunteerGpsConsent(true);
+  };
 
   const nearestCenter = useMemo(() => {
     if (!location || !inCity(location.latitude, location.longitude) || centers.length === 0) return null;
@@ -798,6 +889,7 @@ export default function MapTracking() {
           };
 
           setLocation(initialLocation);
+          lastVolunteerCoordinatesRef.current = { coords: initialLocation, receivedAt: Date.now() };
         }
       } catch (error) {
         console.log("Last known location unavailable:", error);
@@ -814,6 +906,7 @@ export default function MapTracking() {
         };
 
         setLocation(initialLocation);
+          lastVolunteerCoordinatesRef.current = { coords: initialLocation, receivedAt: Date.now() };
       } catch (error) {
         console.log("Current location error:", error);
 
@@ -866,6 +959,7 @@ export default function MapTracking() {
           };
 
           setLocation(updatedLoc);
+          lastVolunteerCoordinatesRef.current = { coords: updatedLoc, receivedAt: Date.now() };
 
           if (followUserRef.current && modeRef.current === "map" &&
               cityBoundaryRef.current &&
@@ -904,31 +998,12 @@ export default function MapTracking() {
       const role = userRoleRef.current;
 
       if (role === "volunteer") {
-        const volunteerRef = doc(
-          db,
-          "volunteers_live_locations",
-          CURRENT_USER_ID
-        );
-
-        const payload: any = {
-          name: CURRENT_USER_NAME,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          updatedAt: serverTimestamp(),
-        };
-
-        // Preserve responding/offline state during GPS updates.
-        // Only a brand-new volunteer document starts as available.
+        // Do not publish GPS to a general-purpose Volunteer feed.
+        // GPS for emergency tasks is opt-in and case-scoped below.
         if (initializeVolunteerRecord) {
-          const existing = await getDoc(volunteerRef);
-
-          if (!existing.exists()) {
-            payload.status = "available";
-            payload.assignedIncidentId = "";
-          }
+          await deleteDoc(doc(db, "volunteers_live_locations", CURRENT_USER_ID)).catch(() => {});
         }
-
-        await setDoc(volunteerRef, payload, { merge: true });
+        return;
       } else {
         await setDoc(
           doc(db, "users_live_locations", CURRENT_USER_ID),
@@ -1382,6 +1457,44 @@ export default function MapTracking() {
             </TouchableOpacity>
           ) : null}
         </View>
+        {userRole === "resident" && focusedIncident && (
+          <View style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: "#E7F4ED", borderRadius: 8, marginTop: 8 }}>
+            <Text style={{ color: "#15553F", fontWeight: "700", fontSize: 12 }}>
+              Reported incident location · Volunteer GPS is optional
+            </Text>
+            <Text style={{ color: "#42695B", fontSize: 11, marginTop: 3 }}>
+              {(() => {
+                const reading = visibleVolunteerTaskPins.find(point => point.caseId === focusedIncident.id);
+                return reading?.updatedAt?.toMillis
+                  ? `Last Volunteer GPS: ${new Date(reading.updatedAt.toMillis()).toLocaleString("en-PH")}`
+                  : "Volunteer GPS has not been shared yet";
+              })()}
+            </Text>
+          </View>
+        )}
+        {userRole === "volunteer" &&
+          focusedIncident?.activeVolunteerSupportUid === CURRENT_USER_ID && (
+          <View style={{ padding: 10, borderRadius: 8, backgroundColor: "#E7F4ED", marginTop: 8 }}>
+            <Text style={{ color: "#134E3D", fontSize: 12, fontWeight: "700" }}>
+              Assigned task: {myTaskStatus ? myTaskStatus.replace(/_/g, " ") : "Waiting"}
+            </Text>
+            <Text style={{ color: "#42695B", fontSize: 11, marginVertical: 5 }}>
+              Community assistance only, not official emergency dispatch.
+              Location is shared only after you start the task and consent.
+            </Text>
+            {["responding", "on_site"].includes(myTaskStatus) && (
+              <TouchableOpacity accessibilityRole="button"
+                onPress={() => volunteerGpsConsent
+                  ? setVolunteerGpsConsent(false) : void requestVolunteerGpsConsent()}
+                style={{ borderRadius: 8, padding: 10,
+                  backgroundColor: volunteerGpsConsent ? "#994536" : "#087A62" }}>
+                <Text style={{ textAlign: "center", fontWeight: "800", color: "#FFFFFF" }}>
+                  {volunteerGpsConsent ? "Stop GPS Sharing" : "Share GPS for This Task"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </SafeAreaView>
 
       {/* =====================================================
