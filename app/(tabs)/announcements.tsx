@@ -62,11 +62,18 @@ export default function AnnouncementsScreen() {
 
   const [error, setError] =
     useState("");
+  const [announcementQueryTime, setAnnouncementQueryTime] = useState(() => Date.now());
 
   const barangay =
     typeof profile?.barangay === "string"
       ? profile.barangay.trim()
       : "";
+
+  // A fixed now-bound query misses announcements posted later in the session.
+  useEffect(() => {
+    const timer = setInterval(() => setAnnouncementQueryTime(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     /*
@@ -81,7 +88,7 @@ export default function AnnouncementsScreen() {
       where(
         "publishAt",
         "<=",
-        Timestamp.now()
+        Timestamp.fromMillis(announcementQueryTime)
       ),
       orderBy(
         "publishAt",
@@ -164,7 +171,7 @@ export default function AnnouncementsScreen() {
     );
 
     return unsubscribe;
-  }, []);
+  }, [announcementQueryTime]);
 
   /*
    * USER VISIBILITY
