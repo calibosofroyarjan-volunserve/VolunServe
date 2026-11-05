@@ -82,6 +82,7 @@ jobs:
           a=old['source']['files'][0]['content'];b=new['source']['files'][0]['content']
           sha=lambda v:hashlib.sha256(v.encode()).hexdigest()
           assert sha(a)==os.environ['OLD_SHA'],'BLOCKED: live baseline hash changed'
+          print('REMOTE_NEW_RULESET_SHA',sha(b),'REMOTE_SIZE_BYTES',len(b.encode()),'EXPECTED_NEW_SHA',os.environ['NEW_SHA'])
           assert sha(b)==os.environ['NEW_SHA'],'BLOCKED: compiled candidate content hash changed'
           with open('/tmp/lgu-before.rules','w',encoding='utf8',newline='') as f:f.write(a)
           with open('/tmp/lgu-compiled.rules','w',encoding='utf8',newline='') as f:f.write(b)
