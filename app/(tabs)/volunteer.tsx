@@ -255,6 +255,7 @@ export default function VolunteerTasks() {
 
   const [assignments, setAssignments] =
     useState<ResponseAssignment[]>([]);
+  const [legacyPendingCount, setLegacyPendingCount] = useState(0);
 
   const [casesById, setCasesById] =
     useState<Record<string, DisasterCase>>({});
@@ -430,7 +431,7 @@ export default function VolunteerTasks() {
     const newCount =
       assignments.filter(
         (item) => item.status === "offered"
-      ).length;
+      ).length + legacyPendingCount;
 
     const activeCount =
       assignments.filter((item) =>
@@ -448,9 +449,9 @@ export default function VolunteerTasks() {
       new: newCount,
       active: activeCount,
       completed: completedCount,
-      all: assignments.length,
+      all: assignments.length + legacyPendingCount,
     };
-  }, [assignments]);
+  }, [assignments, legacyPendingCount]);
 
   const visibleAssignments =
     useMemo(() => {
@@ -1176,7 +1177,13 @@ export default function VolunteerTasks() {
         })}
       </ScrollView>
 
-      <VolunteerInvitationInbox />
+      {/* Earlier invitations live inside the same New task-card area.
+          New assignments display the actual resident evidence photo. */}
+      <VolunteerInvitationInbox
+        visible={filter === "new" || filter === "all"}
+        assignedCaseIds={caseIds}
+        onPendingCountChange={setLegacyPendingCount}
+      />
 
       {!!error && (
         <View style={styles.errorBox}>
@@ -1202,8 +1209,8 @@ export default function VolunteerTasks() {
             Loading assignments...
           </Text>
         </View>
-      ) : visibleAssignments.length ===
-        0 ? (
+      ) : visibleAssignments.length === 0 &&
+        !((filter === "new" || filter === "all") && legacyPendingCount > 0) ? (
         <View style={styles.emptyCard}>
           <Ionicons
             name="shield-checkmark-outline"
