@@ -45,9 +45,29 @@ const residentCreate=target.indexOf(usersFunctionEnd,functionStart);
 assert(residentCreate>functionStart && residentCreate-functionStart<450,"Unexpected resident create placement");
 target=target.slice(0,residentCreate)+verifyFn+target.slice(residentCreate);
 // 2) Exactly one new applicant-only create clause; resident and legacy workflows remain untouched.
-const createStaff=slice(hardened,
-"      // Staff applications never receive operational permissions at signup.",
-"      // Direct privileged account creation is intentionally disabled.");
+// Compact but still exact-schema, unprivileged applicant-only create rule.
+// Only the authenticated email owner can submit; status and privileges are fixed.
+const createStaff=`      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.auth.token.get('email', '') == request.resource.data.email
+        && request.resource.data.keys().hasOnly([
+          'uid','email','fullName','age','phoneNumber','role','status',
+          'residentAccess','volunteerAccess','region','province','city',
+          'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid','email','fullName','role','status','residentAccess',
+          'volunteerAccess','lguOffice','lguPosition','appointmentReference','createdAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'applicant'
+        && request.resource.data.status == 'pending_review'
+        && request.resource.data.residentAccess == false
+        && request.resource.data.volunteerAccess == false
+        && request.resource.data.province == 'Bulacan'
+        && request.resource.data.city == 'City of San Jose del Monte'
+        && request.resource.data.createdAt == request.time;
+`;
 onlyOnce(target,"      allow create: if isSuperAdmin()","live Super Admin user creation");
 target=target.replace("      allow create: if isSuperAdmin()",createStaff+"      allow create: if isSuperAdmin()");
 // 3) Independent Super Admin-only pending approval, with a fresh review in the same write batch.
@@ -106,9 +126,28 @@ const lguStaffGuard="        && !('lguOffice' in resource.data)"+newline;
 target=target.replace(adminApplicantRegex,(_,head,tail)=>head+lguStaffGuard+tail);
 console.log("PASS current LGU Admin applicant handler now excludes LGU STAFF profiles");
 // 5) Extract the audited private review-record validation block. Never store ID files here.
-const reviewMatch=slice(hardened,
-"    // Private human-verified LGU credentials: reference only, never ID scans.",
-"    match /adminLogs/{logId}");
+// Confidential reviewer-written reference metadata. Review requires an approved
+// Super Admin and a same-commit verifiedAt timestamp; not client-controlled proof.
+const reviewMatch=`    match /lguAdminCredentialReviews/{targetUid} {
+      allow read: if isSuperAdmin();
+      allow create, update: if isSuperAdmin()
+        && request.auth.uid != targetUid
+        && request.resource.data.keys().hasOnly([
+          'targetUid','accountEmail','reviewStatus','office','position',
+          'credentialReference','verificationMethod','verifiedBy','verifiedAt'
+        ])
+        && request.resource.data.targetUid == targetUid
+        && request.resource.data.reviewStatus == 'verified'
+        && request.resource.data.accountEmail is string
+        && request.resource.data.office is string
+        && request.resource.data.position is string
+        && request.resource.data.credentialReference is string
+        && request.resource.data.verificationMethod is string
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedAt == request.time;
+      allow delete: if false;
+    }
+`;
 onlyOnce(target,"    match /adminLogs/{logId}","live Admin audit log rule");
 if(target.includes("match /lguAdminCredentialReviews/"))throw Error("Review match already exists unexpectedly");
 target=target.replace("    match /adminLogs/{logId}",reviewMatch+"    match /adminLogs/{logId}");
