@@ -5,6 +5,8 @@ on:
     paths:
       - "app/(admin)/assistance-requests.tsx"
       - "lib/assistanceReviewQueue.ts"
+      - "lib/assistanceReviewValidation.ts"
+      - "scripts/test-assistance-validation.cjs"
       - "scripts/test-assistance-compact-review.cjs"
       - ".github/workflows/assistance-review-regression.yml"
   push:
@@ -29,6 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Test exact queue sorting, filters, pagination and review safety contracts
-        run: node scripts/test-assistance-compact-review.cjs
+        run: |
+          node scripts/test-assistance-compact-review.cjs
+          node scripts/test-assistance-validation.cjs
       - name: Check TypeScript types
         run: npx tsc --noEmit --pretty false
