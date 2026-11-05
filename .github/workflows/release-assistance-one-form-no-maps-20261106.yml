@@ -263,3 +263,5 @@ jobs:
 # One-shot guarded release of Resident Assistance word validation onto newest live, no other modules changed.
 
 # One-time current live hosting-only Resident word validation deployment after passing all latest checks.
+
+# Explicit one-shot release of simplified LGU Assistance without Google Maps; preserve all existing live modules.
