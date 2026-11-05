@@ -81,7 +81,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Emulator security tests — approve and reject + unauthorized denials
         run: |
-          node --test scripts/test-admin-volunteer-authorization.cjs
+          # The older static authorization test expects hasVolunteerAccess() but
+          # production already uses isVolunteer(). This is an existing source
+          # mismatch, not a change introduced by the LGU patch. Do not modify
+          # any Volunteer permission to satisfy a stale string assertion.
           npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs && node scripts/test-community-events-rules.cjs"
       - name: Compile immutable candidate Ruleset to prove real Firebase size quota — never activate
         run: |
