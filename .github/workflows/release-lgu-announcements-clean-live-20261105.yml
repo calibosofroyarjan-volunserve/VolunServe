@@ -1,0 +1,208 @@
+name: Guarded LIVE LGU Announcements + Clean Sidebar (Preserve Auth and Super Admin)
+on:
+  push:
+    branches: [release/announcements-clean-nav-live-20261105]
+    paths: [".github/workflows/release-lgu-announcements-clean-live-20261105.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot guarded release of tested LGU Announcements and clean sidebar to live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "905c0442b43a683bffe5b740ea061994cd94e8f2"
+      RULES_BASE_SHA: "600047206fac3d6aed4b955d6178aa2c0536d1b502a6df7ec9d3a02b6635c584"
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW: "lgu-announcements-clean-1105"
+      BACKUP: "backup-lgu-announcements-1105"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-lgu-announcements-sa-1105.json"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Fail closed if ANY protected live-source file changed
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/release-changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const paths=fs.readFileSync(process.env.RUNNER_TEMP+'/release-changed.txt','utf8').split('\n').filter(Boolean);
+          const allow=new Set([
+            'app/(admin)/_layout.tsx',
+            'app/(admin)/create-announcement.tsx',
+            'scripts/test-admin-navigation-contract.cjs',
+            'scripts/test-lgu-admin-navigation-groups.cjs',
+            'scripts/test-lgu-clean-announcements-live.cjs',
+            'scripts/prepare-lgu-recipient-live-rules.py',
+            'scripts/test-lgu-announcement-recipient-emulator.cjs',
+            'scripts/activate-lgu-announcements-rules-20261105.py',
+            '.github/workflows/validate-lgu-announcements-clean-live-20261105.yml',
+            '.github/workflows/release-lgu-announcements-clean-live-20261105.yml'
+          ]);
+          const bad=paths.filter(x=>!allow.has(x));assert.deepEqual(bad,[],'STOP protected source modified');
+          console.log('PASS exact live ancestor; only LGU Announcements UI, Admin navigation, and isolated tests/release scripts changed');
+          console.log('PASS unchanged Super Admin, Login, Signup, Google authentication, Auth, Admin records, other community modules and Firebase config');
+          NODE
+      - name: Confirm active live Hosting revision on both domains
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?before_lgu_1105='+Date.now(),{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP live Hosting marker unreadable '+domain);
+              const j=await r.json();
+              if(j.revision!==process.env.LIVE_BASE)throw Error('STOP newer live revision detected: '+j.revision);
+              console.log('PASS current live Hosting '+domain+': '+j.revision);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript, Login/Signup, Google, sidebar and LGU authorization
+        run: |
+          npx tsc --noEmit --pretty false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-lgu-clean-announcements-live.cjs
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Require exact project service account before production changes
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing production Firebase credentials"; exit 1; fi
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
+          if(sa.type!=='service_account'||sa.project_id!==process.env.PROJECT)throw Error('Wrong Firebase account/project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS verified Firebase project, no credentials printed');
+          NODE
+      - name: Candidate from exact active Firestore rules, not checked-in snapshot
+        run: |
+          python3 scripts/prepare-lgu-recipient-live-rules.py
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/lgu-recipient-manifest.json','utf8'));
+          assert.equal(x.originalSha,process.env.RULES_BASE_SHA,'STOP cloud Rules changed');
+          assert.equal(x.publishedRuleset,'projects/volunserve-3aa5b/rulesets/aae59e6b-d298-40a7-b4c3-f7a8f77e31ec');
+          console.log('PASS source reconstructed from verified exact live Rules');
+          NODE
+      - name: Firestore emulator verifies scoped LGU area and existing announcements
+        run: |
+          LGU_RECIPIENT_RULES_FILE=firestore.rules npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-lgu-announcement-recipient-emulator.cjs'
+          npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-pavia-admin-announcement-emulator.cjs'
+      - name: Clean web build and release SHA stamp (no cache)
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const release=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(release.revision,process.env.GITHUB_SHA);
+          console.log('PASS static build from exact tested source '+release.revision);
+          NODE
+      - name: Deploy to TEMPORARY preview ONLY; live remains unchanged
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        id: preview
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: lgu-announcements-clean-1105
+          expires: 3d
+      - name: Verify preview serves exact compiled source and protected routes
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node scripts/check-live-hosting.cjs
+          node - <<'NODE'
+          (async()=>{
+            const u=process.env.VOLUNSERVE_HOSTING_URL;
+            if(!u||!u.startsWith('https://'))throw Error('Preview URL missing');
+            for(const route of ['/login','/signup','/admin-login','/create-announcement','/admin-accounts']){
+              const r=await fetch(u.replace(/\/$/,'')+route,{signal:AbortSignal.timeout(25000)});
+              if(r.status!==200)throw Error('Missing protected preview route '+route+' HTTP '+r.status);
+              console.log('PASS preview protected route '+route);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Compile new immutable Cloud Ruleset INACTIVE only
+        run: python3 scripts/activate-lgu-announcements-rules-20261105.py stage
+      - name: Backup live Hosting before promotion (no data changes)
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "verified" > "$RUNNER_TEMP/lgu-hosting-backed-up.txt"
+          echo "Backup: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+      - name: Activate ONLY staged one-time LGU area permission after final guards
+        run: python3 scripts/activate-lgu-announcements-rules-20261105.py activate
+      - name: Guard live revision AGAIN, promote exactly tested preview to LIVE
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$LIVE_BASE" node scripts/check-live-hosting.cjs
+          node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          verified=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then verified=1; break; fi
+            sleep 7
+          done
+          if [ "$verified" -ne 1 ]; then echo "::error::Live Hosting not confirmed at exact revision"; exit 1; fi
+          echo "SUCCESS: volunserve.com now serves exact guarded LGU Announcements revision $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify exact active new Ruleset and no Auth/Functions/Data deployment
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          m=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'lgu-one-time-live-rules-release.json')))
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+t})
+          with urllib.request.urlopen(req,timeout=30) as resp: r=json.load(resp)
+          if r.get('rulesetName')!=m['new']:raise SystemExit('STOP active Ruleset pointer differs from reviewed candidate')
+          print('PASS active compiled Ruleset matches previously tested LGU self-setup')
+          PY
+          echo 'Hosting + one LGU self-setup rule only. No Super Admin, Login, Signup, Auth, Functions, Storage or user data changed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Safe rollback only this run's Hosting and Rules changes on failure
+        if: failure()
+        run: |
+          set +e
+          if [ -f "$RUNNER_TEMP/lgu-hosting-backed-up.txt" ]; then
+            CURRENT="$(node - <<'NODE'
+          (async()=>{try{const r=await fetch('https://volunserve.com/volunserve-release.json?rollback='+Date.now(),{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(20000)});const j=await r.json();process.stdout.write(j.revision||'unknown');}catch(e){process.stdout.write('unknown')}})()
+          NODE
+          )"
+            if [ "$CURRENT" = "$GITHUB_SHA" ]; then
+              node node_modules/firebase-tools/lib/bin/firebase.js hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "::warning::Rolled back only this workflow's Hosting version"
+            elif [ "$CURRENT" = "$LIVE_BASE" ]; then
+              echo "Original live Hosting still active"
+            else
+              echo "::error::Unknown/concurrent Hosting revision; refuse to overwrite another deployment"
+            fi
+          fi
+          python3 scripts/activate-lgu-announcements-rules-20261105.py rollback
+          echo 'Guarded recovery attempted; inspect current live revision and Rules pointer.'
