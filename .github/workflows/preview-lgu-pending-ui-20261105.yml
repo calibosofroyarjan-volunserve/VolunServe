@@ -1,0 +1,79 @@
+name: PREVIEW Red Asterisk and LGU Pending Approve Reject (Never Live)
+on:
+  push:
+    branches: [release/lgu-pending-approve-reject-ui-20261105]
+    paths: [.github/workflows/preview-lgu-pending-ui-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: 'true'
+      LIVE_BASE: '4520b201c9f6e86f810d2b7c3c1377c158ac424e'
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require latest released Admin Login Signup base, no unwanted diffs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(tabs)' 'storage.rules' 'functions' 'backend' '.firebaserc' 'firebase.json'
+      - name: Build and test scoped LGU UI
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --incremental false
+          node scripts/test-superadmin-lgu-review-ui.cjs
+          node scripts/test-admin-staff-login.cjs
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require Hosting credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase credentials missing"; exit 1; fi
+      - name: Publish isolated Hosting preview (Firestore Rules remain live unchanged)
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: lgu-approve-reject-1105
+          expires: 3d
+      - name: Confirm preview serves exact build, Login and Signup
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 7
+          done
+          echo "::error::Preview fingerprint or routes not available"
+          exit 1
+      - name: Real browser verifies LGU red required form and intact Login
+        env:
+          PREVIEW_ORIGIN: ${{ steps.preview.outputs.details_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable)"
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-allow-origins='*' --remote-debugging-port=9223 --user-data-dir=/tmp/volunserve-lgu-pending-cdp about:blank > /tmp/chrome-lgu.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          node scripts/verify-lgu-pending-browser.cjs "$PREVIEW_ORIGIN"
+          node scripts/verify-unified-login-browser.cjs "$PREVIEW_ORIGIN"
+      - name: Preview result
+        run: echo "PREVIEW ONLY. Super Admin actions not yet live; Firestore Rules, Storage, users and records unchanged."
