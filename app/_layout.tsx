@@ -411,28 +411,14 @@ export default function RootLayout() {
 
   useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
-  if (
+  // The root navigator must mount on the very first render so Expo Router
+  // can safely process redirects after Firebase finishes initializing.
+  // Keep the account-checking UI as an overlay instead of replacing <Stack />.
+  const startupLoading =
     (!fontsLoaded && !fontError) ||
     !authChecked ||
     profileLoading ||
-    guardLoading
-  ) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color="#078C83"
-        />
-        <Text style={styles.loadingText}>
-          {!authChecked ||
-          profileLoading ||
-          guardLoading
-            ? "Checking your account..."
-            : "Loading VolunServe..."}
-        </Text>
-      </View>
-    );
-  }
+    guardLoading;
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -453,6 +439,16 @@ export default function RootLayout() {
         <Stack.Screen name="(lgu)" />
       </Stack>
       <AppDialogHost />
+      {startupLoading && (
+        <View style={[styles.loadingScreen, styles.loadingOverlay]}>
+          <ActivityIndicator size="large" color="#078C83" />
+          <Text style={styles.loadingText}>
+            {!authChecked || profileLoading || guardLoading
+              ? "Checking your account..."
+              : "Loading VolunServe..."}
+          </Text>
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -460,6 +456,10 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
   loadingScreen: {
     flex: 1,
