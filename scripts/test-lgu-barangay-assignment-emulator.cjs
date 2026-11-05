@@ -52,8 +52,9 @@ try{
  await assertSucceeds(batch.commit());
  const after=await assertSucceeds(adminDb.doc("users/staff").get());
  assert.equal(after.data().barangay,"Muzon East");
- const log=await env.withSecurityRulesDisabled(async ctx=>ctx.firestore().doc("adminLogs/demo-audit").get());
- assert.equal(log.data().actionType,"admin_barangay_assigned");
+ let log;
+ await env.withSecurityRulesDisabled(async ctx=>{log=await ctx.firestore().doc("adminLogs/demo-audit").get();});
+ assert.equal(log?.data()?.actionType,"admin_barangay_assigned");
  await assertFails(adminDb.doc("users/staff").update({barangay:"Tungkong Mangga"}));
  console.log("PASS: Super Admin may assign verified SJDM LGU barangay with audit; self, resident, spoofed and invalid assignment blocked.");
 }finally{await env.cleanup();}
