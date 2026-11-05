@@ -8,6 +8,8 @@ on:
       - app/(superadmin)/admin-accounts.tsx
       - firestore.rules
       - scripts/test-superadmin-lgu-approval-rejection.cjs
+      - scripts/test-superadmin-lgu-review-ui.cjs
+      - scripts/test-admin-staff-login.cjs
 permissions:
   contents: read
 jobs:
