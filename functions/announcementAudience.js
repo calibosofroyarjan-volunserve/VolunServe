@@ -1,11 +1,21 @@
 "use strict";
 
-// Pure matching logic shared by the notification sender and its regression tests.
-// Keep this in sync with the Resident announcements page's case-insensitive scope.
+// Match the Resident announcements page's case-insensitive scope.
+/**
+ * Normalize an announcement audience or account barangay.
+ * @param {*} value Raw scope value.
+ * @return {string} A trimmed, lowercase scope.
+ */
 function normalizeScope(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+/**
+ * Check whether an account may receive a private announcement alert.
+ * @param {Object} profile Authenticated account profile.
+ * @param {string} audience Authorized announcement audience.
+ * @return {boolean} Whether this profile can receive the alert.
+ */
 function eligibleRecipient(profile, audience) {
   if (!profile || typeof profile !== "object") return false;
   const role = normalizeScope(profile.role);
