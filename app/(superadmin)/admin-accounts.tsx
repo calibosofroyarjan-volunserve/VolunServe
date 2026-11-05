@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
+import LguPrivateProofPreview from "../../components/admin/LguPrivateProofPreview";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -177,9 +178,13 @@ export default function AdminAccounts() {
     setActionError,
   ] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [proofReady, setProofReady] = useState<{ uid: string; complete: boolean } | null>(null);
+  const onProofReady = React.useCallback((uid: string, complete: boolean) => {
+    setProofReady({ uid, complete });
+  }, []);
 
   // LGU staff authorization requires an independent human credential check.
-  // Never collect photographs or secret document values in this review.
+  // View uploaded credentials privately; never store passwords or public media tokens.
   const [lguOffice, setLguOffice] = useState("");
   const [lguPosition, setLguPosition] = useState("");
   const [lguReference, setLguReference] = useState("");
@@ -204,7 +209,8 @@ export default function AdminAccounts() {
     (!lguVerificationMethod.startsWith("Other official source:") || lguVerificationMethod.replace("Other official source:", "").trim().length >= 8) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
     actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
-    credentialsConfirmed && identityMatched && lguEmploymentConfirmed;
+    credentialsConfirmed && identityMatched && lguEmploymentConfirmed &&
+    proofReady?.uid === actionTarget?.id && proofReady.complete;
 
   React.useEffect(() => {
     if (sessionLoading) {
@@ -1245,6 +1251,7 @@ export default function AdminAccounts() {
                         </View>
                       ))}
                     </View>
+                    <LguPrivateProofPreview uid={account.id} onReady={onProofReady}/>
                     <View style={styles.pendingReviewFooter}>
                       <Text style={styles.pendingReviewNote}>
                         Submitted information is self-declared. Confirm employment, identity and appointment with an independent LGU source. Never request passwords.
