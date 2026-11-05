@@ -23,6 +23,7 @@ const allowed = new Set([
   ".github/workflows/validate-emergency-volunteer-live-20261106.yml",
   ".github/workflows/release-emergency-volunteer-hosting-only-20261106.yml",
   "scripts/test-clean-emergency-report-header.cjs",
+  "scripts/test-isolated-emergency-volunteer-release.cjs",
   "scripts/test-emergency-map-volunteer-privacy.cjs",
 ]);
 test("all changes remain scoped to the exact live baseline", () => {
