@@ -2732,3 +2732,6 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+// Private, barangay-scoped notification delivery after announcement publishing.
+exports.notifyAnnouncementAudience =
+  require("./announcementNotifications").notifyAnnouncementAudience;
