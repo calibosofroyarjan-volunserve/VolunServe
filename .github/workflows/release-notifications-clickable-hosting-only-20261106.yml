@@ -138,7 +138,7 @@ jobs:
         with:
           firebaseServiceAccount: ${{ env.FIREBASE_SA }}
           projectId: volunserve-3aa5b
-          channelId: notifications-clickable-1106
+          channelId: notifications-polished-ui-1106
           expires: 3d
       - name: Verify preview exact revision and all protected routes with propagation retries
         env:
