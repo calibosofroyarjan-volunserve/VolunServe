@@ -1,5 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 import {
   ActivityIndicator,
@@ -42,7 +43,8 @@ export default function CreateAnnouncement() {
   const [message, setMessage] = useState("");
   const [templateOpen, setTemplateOpen] = useState(false);
   const [barangayOpen, setBarangayOpen] = useState(false);
-  const [chosenBarangay, setChosenBarangay] = useState("");
+  const [recipientBarangay, setRecipientBarangay] = useState("");
+  const [barangaySearch, setBarangaySearch] = useState("");
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
@@ -112,19 +114,24 @@ export default function CreateAnnouncement() {
       ? profile.barangay.trim()
       : "";
 
-  // Server security rules permit LGU Admin publishing only to the barangay
-  // assigned in their verified profile. Never show an unauthorized audience.
-  const publishBarangay = chosenBarangay === barangay ? chosenBarangay : barangay;
+  // LGU Admin selects the recipient of each local announcement.
+  // Author and SJDM audience are validated by server rules, not Super Admin assignment.
+  useEffect(() => {
+    if (SJDM_BARANGAYS.includes(barangay)) setRecipientBarangay(barangay);
+  }, [barangay]);
+  const publishBarangay = SJDM_BARANGAYS.includes(recipientBarangay) ? recipientBarangay : "";
+  const approvedOperationalAdmin = profile?.status === "approved" &&
+    String((profile as any)?.adminStatus || "active") !== "suspended";
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
-    if (!publishBarangay || publishBarangay !== barangay) {
-      Alert.alert(
-        "Barangay Required",
-        "Your Admin account does not have an assigned barangay."
-      );
-
+    if (!approvedOperationalAdmin) {
+      Alert.alert("Publishing Unavailable", "Only an active approved LGU Admin can publish.");
+      return;
+    }
+    if (!publishBarangay) {
+      Alert.alert("Choose Recipient Barangay", "Select an official SJDM barangay for this announcement.");
       return;
     }
 
@@ -200,8 +207,9 @@ export default function CreateAnnouncement() {
 
       Alert.alert(
         "Unable to Post",
-        error?.message ||
-          "The announcement could not be published."
+        error?.code === "permission-denied"
+          ? "Publishing is not yet enabled for the selected area. Contact LGU system support."
+          : "The announcement could not be published. Check your connection and try again."
       );
     } finally {
       setSubmitting(false);
@@ -213,38 +221,43 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers within your assigned barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
+      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Barangay Announcements" subtitle="Prepare and publish official barangay notices to residents and volunteers to your selected recipient barangay." icon="megaphone-outline" tag="LOCAL COMMUNICATION" />
 
       <View style={styles.scopeCard}>
-        <Text style={styles.scopeLabel}>
-          ANNOUNCEMENT AREA
-        </Text>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Choose authorized announcement barangay"
+        <Text style={styles.scopeLabel}>RECIPIENT BARANGAY *</Text>
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Select announcement recipient barangay"
           accessibilityState={{ expanded: barangayOpen }}
-          disabled={!barangay || submitting}
-          onPress={() => setBarangayOpen(value => !value)}
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-        >
-          <Text style={styles.scopeValue}>{publishBarangay || "No barangay assigned"}</Text>
+          disabled={submitting || !approvedOperationalAdmin}
+          onPress={() => setBarangayOpen(open => !open)}
+          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+          <Text style={styles.scopeValue}>{publishBarangay || "Select recipient barangay"}</Text>
           <Text style={styles.scopeValue}>{barangayOpen ? "▲" : "▼"}</Text>
         </TouchableOpacity>
-        {barangayOpen && barangay ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Publish to assigned barangay ${barangay}`}
-            onPress={() => { setChosenBarangay(barangay); setBarangayOpen(false); }}
-            style={{ borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#FFFFFF", borderRadius: 9, padding: 13, marginBottom: 8 }}
-          >
-            <Text style={styles.scopeValue}>{barangay} · Authorized</Text>
-          </TouchableOpacity>
+        {barangayOpen ? (
+          <View style={{borderWidth:1,borderColor:"#C7EAE5",backgroundColor:"#FFFFFF",borderRadius:10,padding:8,marginBottom:12}}>
+            <TextInput accessibilityLabel="Search official SJDM barangays" placeholder="Search barangay..."
+              placeholderTextColor="#94A3B8" value={barangaySearch} onChangeText={setBarangaySearch}
+              style={[styles.input,{marginBottom:4}]} />
+            <ScrollView nestedScrollEnabled style={{maxHeight:205}}>
+              {SJDM_BARANGAYS.filter(area => area.toLowerCase().includes(barangaySearch.trim().toLowerCase())).map(area => (
+                <TouchableOpacity key={area} accessibilityRole="radio"
+                  accessibilityState={{checked:recipientBarangay===area}}
+                  onPress={() => {setRecipientBarangay(area);setBarangayOpen(false);setBarangaySearch("");}}
+                  style={{padding:12,borderBottomWidth:1,borderBottomColor:"#EDF3EF",
+                    backgroundColor:recipientBarangay===area?"#EAF8F6":"#FFFFFF"}}>
+                  <Text style={{color:"#173D32",fontWeight:recipientBarangay===area?"800":"500"}}>
+                    {area}{recipientBarangay===area?" · Selected":""}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
-
         <Text style={styles.scopeHelp}>
-          Ordinary Admin accounts can only publish
-          announcements for their assigned area. Other barangays cannot be selected without additional official authorization.
+          Choose the barangay that should receive your official LGU notice.
+          Publishing is available to active, approved LGU Admin accounts only.
+          The programmer Super Admin does not assign announcement recipients.
         </Text>
       </View>
 
@@ -263,7 +276,7 @@ export default function CreateAnnouncement() {
               <Text style={{ color: "#173D32" }}>{item.label}</Text>
             </TouchableOpacity>)}
         </View>}
-        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements stay within your assigned barangay.</Text>
+        <Text style={styles.scopeHelp}>Templates are editable. Confirm current and accurate information before publishing; announcements go only to your selected recipient barangay.</Text>
         <Text style={styles.inputLabel}>
           TITLE
         </Text>
@@ -302,10 +315,10 @@ export default function CreateAnnouncement() {
         <TouchableOpacity
           style={[
             styles.submitButton,
-            submitting &&
+            (submitting || !approvedOperationalAdmin || !publishBarangay) &&
               styles.submitButtonDisabled,
           ]}
-          disabled={submitting}
+          disabled={submitting || !approvedOperationalAdmin || !publishBarangay}
           onPress={handleSubmit}
         >
           {submitting ? (
@@ -314,7 +327,7 @@ export default function CreateAnnouncement() {
             />
           ) : (
             <Text style={styles.submitText}>
-              Publish Local Announcement
+              Publish Barangay Announcement
             </Text>
           )}
         </TouchableOpacity>
@@ -326,9 +339,8 @@ export default function CreateAnnouncement() {
         </Text>
 
         <Text style={styles.noteText}>
-          This page is for local operational
-          announcements only. System-wide announcements
-          are controlled by the Super Admin.
+          LGU Admins publish to their selected recipient barangay. System-wide
+          platform updates are managed separately.
         </Text>
       </View>
     </ScrollView>
