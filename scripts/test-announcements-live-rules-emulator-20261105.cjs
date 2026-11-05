@@ -68,17 +68,38 @@ const announcement = (creator, area, title = "Community Event Reminder") => ({
     await assertFails(resident.collection("announcements")
       .add(announcement("resident","Francisco Homes-Narra")));
 
-    // Exact query used by the resident/volunteer feed, including published-time
-    // bound and matching orderBy (single-field index only).
-    const publishedOnly=db => db.collection("announcements")
-      .where("publishAt","<=",firebase.firestore.Timestamp.now())
-      .orderBy("publishAt","desc");
-    const residentSnapshot=await assertSucceeds(publishedOnly(resident).get());
-    const volunteerSnapshot=await assertSucceeds(publishedOnly(volunteer).get());
-    assert(residentSnapshot.docs.some(x=>x.id===created.id),"Resident cannot see published notice");
-    assert(volunteerSnapshot.docs.some(x=>x.id===created.id),"Volunteer cannot see published notice");
-    await assertFails(publishedOnly(guest).get());
-    await assertFails(publishedOnly(pending).get());
+    // The published active LIST rule checks resource.data.audience. This exact
+    // UI query constrains all result audiences using one indexed field only.
+    await env.withSecurityRulesDisabled(async ctx => {
+      const db = ctx.firestore();
+      await db.collection("announcements").doc("global-test").set({
+        ...announcement("system", "all"),
+        title: "Official city-wide update",
+        publishAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+        createdAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+        updatedAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+      });
+      await db.collection("announcements").doc("other-area-test").set({
+        ...announcement("other-admin", "Muzon East"),
+        title: "Another area announcement",
+        publishAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+        createdAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+        updatedAt: firebase.firestore.Timestamp.fromMillis(Date.now()-60_000),
+      });
+    });
+    const feedQuery=db => db.collection("announcements")
+      .where("audience","in",["all","Francisco Homes-Narra"]);
+    const residentSnapshot=await assertSucceeds(feedQuery(resident).get());
+    const volunteerSnapshot=await assertSucceeds(feedQuery(volunteer).get());
+    for(const snapshot of [residentSnapshot,volunteerSnapshot]){
+      assert(snapshot.docs.some(x=>x.id===created.id),"Missing local LGU notice");
+      assert(snapshot.docs.some(x=>x.id==="global-test"),"Missing System Update");
+      assert(!snapshot.docs.some(x=>x.id==="other-area-test"),"Cross-barangay notice leaked");
+    }
+    await assertFails(feedQuery(guest).get());
+    await assertFails(feedQuery(pending).get());
+    await assertFails(resident.collection("announcements").get());
+    await assertFails(volunteer.collection("announcements").where("audience","in",["all","Muzon East"]).get());
     console.log("PASS exact live Firestore rules: Admin create, local-only audience, resident/volunteer published feed, denied unauthorized access.");
     console.log("NO production Firebase write was attempted.");
   } finally {
