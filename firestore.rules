@@ -100,7 +100,11 @@ service cloud.firestore {
           && review.verifiedAt == request.time
           && review.accountEmail == request.resource.data.email;
       }
+      // New community profiles require server-issued email ownership proof.
+      // This create-only guard leaves existing account and staff permissions intact.
       allow create: if signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.resource.data.email == request.auth.token.get('email', '').lower()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
         && request.resource.data.province in [
