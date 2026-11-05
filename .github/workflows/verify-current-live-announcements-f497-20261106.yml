@@ -1,0 +1,72 @@
+name: Verify Actual Live Announcements Hotfix (No Deploy)
+on:
+  push:
+    branches:
+      - hotfix/current-live-announcements-f497-20261106
+    paths:
+      - 'components/home/Home.web.tsx'
+      - 'components/notifications/NotificationDropdown.tsx'
+      - 'app/(tabs)/notifications.tsx'
+      - 'lib/useAnnouncementAlerts.ts'
+      - 'firestore.rules'
+      - 'app/(tabs)/announcements.tsx'
+      - 'scripts/test-live-announcement-flow.cjs'
+      - 'scripts/test-live-announcements-firestore.cjs'
+      - '.github/workflows/verify-current-live-announcements-f497-20261106.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Guard exact deployed baseline and protected modules
+        shell: bash
+        run: |
+          node <<'NODE'
+          const cp=require('node:child_process');
+          const assert=require('node:assert/strict');
+          const baseline='f4977098ae1a3f5568294164860f480520b85b89';
+          const changed=cp.execFileSync('git',['diff','--name-only',baseline,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const allowed=new Set([
+            'components/home/Home.web.tsx',
+            'components/notifications/NotificationDropdown.tsx',
+            'app/(tabs)/notifications.tsx',
+            'lib/useAnnouncementAlerts.ts',
+            'firestore.rules',
+            'app/(tabs)/announcements.tsx',
+            'scripts/test-live-announcement-flow.cjs',
+            'scripts/test-live-announcements-firestore.cjs',
+            '.github/workflows/verify-current-live-announcements-f497-20261106.yml',
+          ]);
+          for (const file of changed) assert.ok(allowed.has(file),'Protected live file unexpectedly changed: '+file);
+          assert.ok(changed.length>0,'Expected scoped hotfix files');
+          console.log('PASS exact live source baseline; only allowed announcement files changed');
+          NODE
+      - run: npm ci --no-audit --no-fund
+      - name: Validate direct Admin to Resident/Volunteer bell and inbox flow
+        run: node scripts/test-live-announcement-flow.cjs
+      - name: Firestore permissions for published announcements (emulator only)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcements-firestore.cjs"
+      - name: Verify complete live TypeScript project
+        run: npx tsc --noEmit --pretty false
+      - name: Export complete live-based website (NO DEPLOY)
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          npx expo export --platform web --clear --max-workers 1
+          node scripts/verify-hosting-release.cjs
