@@ -102,7 +102,7 @@ jobs:
             scripts/test-announcement-firebase-cleanup-20261105.cjs \
             scripts/test-lgu-admin-navigation-groups.cjs \
             scripts/test-admin-staff-login.cjs \
-            scripts/test-superadmin-grouped-records.cjs; do
+            scripts/test-admin-navigation-contract.cjs; do
             test -f "$test" || { echo "::error::Required live regression test missing: $test"; exit 1; }
             node "$test"
           done
