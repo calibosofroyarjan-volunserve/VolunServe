@@ -137,6 +137,8 @@ export default function WebHome() {
   const { user, profile } = useUserSession();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementQueryTime, setAnnouncementQueryTime] = useState(() => Date.now());
+  const [announcementsError, setAnnouncementsError] = useState(false);
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -182,12 +184,20 @@ export default function WebHome() {
   const profileVerified = profile?.identityVerified === true || profile?.identityStatus === "verified";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
+  // A fixed published-at cutoff would miss posts published after page load.
+  useEffect(() => {
+    const timer = setInterval(() => setAnnouncementQueryTime(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
+      where("publishAt", "<=", Timestamp.fromMillis(announcementQueryTime)),
       orderBy("publishAt", "desc")
     );
+
+    const residentBarangay = String(profile?.barangay || "").trim().toLowerCase();
 
     return onSnapshot(
       announcementsQuery,
@@ -197,18 +207,22 @@ export default function WebHome() {
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
           }))
-          .filter(
-            (item) =>
-              !item.audience ||
-              item.audience === "all" ||
-              item.audience === profile?.role
-          );
+          .filter((item) => {
+            const audience = String(item.audience || "").trim().toLowerCase();
+            return audience === "all" ||
+              (residentBarangay.length > 0 && audience === residentBarangay);
+          });
 
         setAnnouncements(nextAnnouncements);
+        setAnnouncementsError(false);
       },
-      () => setAnnouncements([])
+      (error) => {
+        console.warn("Community Updates listener error", { code: String(error?.code || "unknown") });
+        setAnnouncements([]);
+        setAnnouncementsError(true);
+      }
     );
-  }, [profile?.role]);
+  }, [profile?.barangay, announcementQueryTime]);
 
   useEffect(() => {
     if (!user) {
@@ -489,7 +503,7 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                      {announcementsError ? "Unable to load community updates. Check your connection." : announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
                     </Text>
                     <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
                       <Text style={styles.mobileSlideActionText}>View announcements</Text>
@@ -871,10 +885,10 @@ export default function WebHome() {
                   </View>
                   <View style={styles.emptyUpdatesCopy}>
                     <Text style={styles.emptyUpdatesTitle}>
-                      No published updates
+                      {announcementsError ? "Unable to load updates" : "No published updates"}
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementsError ? "Please refresh or check your connection." : "Official announcements will appear here."}
                     </Text>
                   </View>
                 </View>
