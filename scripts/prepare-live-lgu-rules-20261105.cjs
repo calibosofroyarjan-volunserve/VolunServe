@@ -52,10 +52,10 @@ const createStaff=`      allow create: if signedIn()
           'residentAccess','volunteerAccess','region','province','city',
           'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
         ])
-        && request.resource.data.keys().hasAll([
-          'uid','email','fullName','role','status','residentAccess',
-          'volunteerAccess','lguOffice','lguPosition','appointmentReference','createdAt'
-        ])
+        && request.resource.data.fullName is string
+        && request.resource.data.lguOffice is string
+        && request.resource.data.lguPosition is string
+        && request.resource.data.appointmentReference is string
         && request.resource.data.uid == uid
         && request.resource.data.role == 'applicant'
         && request.resource.data.status == 'pending_review'
@@ -126,11 +126,6 @@ const reviewMatch=`    match /lguAdminCredentialReviews/{targetUid} {
         ])
         && request.resource.data.targetUid == targetUid
         && request.resource.data.reviewStatus == 'verified'
-        && request.resource.data.accountEmail is string
-        && request.resource.data.office is string
-        && request.resource.data.position is string
-        && request.resource.data.credentialReference is string
-        && request.resource.data.verificationMethod is string
         && request.resource.data.verifiedBy == request.auth.uid
         && request.resource.data.verifiedAt == request.time;
       allow update, delete: if false;
