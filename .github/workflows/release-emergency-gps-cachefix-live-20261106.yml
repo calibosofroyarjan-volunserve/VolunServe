@@ -1,0 +1,263 @@
+name: Guarded LIVE Emergency Reports Route Cache Fix (Hosting ONLY)
+on:
+  push:
+    branches: [release/emergency-gps-html-cache-live-20261106]
+    paths: [".github/workflows/release-emergency-gps-cachefix-live-20261106.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'Trigger guarded Emergency Reports HTML cache fix Hosting-only release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      LIVE_BASE: "7c1142bec57ec01ab9dffc8e6cc7e3ad979ece16"
+      PROJECT: "volunserve-3aa5b"
+      PREVIEW_CHANNEL: "gps-address-preview-lgu-1106"
+      BACKUP_CHANNEL: "backup-before-gps-lgu-1106"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/volunserve-gps-lgu-sa-1106.json"
+
+    steps:
+      - name: Checkout exact release based on latest live
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Guard live ancestor and exact three-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/gps-cachefix-change-list.txt"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const actual=fs.readFileSync(process.env.RUNNER_TEMP+'/gps-cachefix-change-list.txt','utf8').split('\n').filter(Boolean).sort();
+          const allowed=[
+            '.github/workflows/release-emergency-gps-cachefix-live-20261106.yml',
+            'firebase.json'
+          ].sort();
+          assert.deepEqual(actual, allowed, 'STOP: change scope includes a protected module or is incomplete');
+          console.log('PASS latest live unchanged; only Firebase Hosting route cache config + release workflow');
+          NODE
+
+      - name: Prepare live revision guard (both domains)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/guard-live-cachefix.cjs" <<'NODE'
+          const expected = process.argv[2];
+          if (!expected || !/^[0-9a-f]{40}$/.test(expected)) process.exit(1);
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const response=await fetch(origin+'/volunserve-release.json?gps_cachefix_guard='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok) throw Error('STOP: live marker unavailable '+origin+' HTTP '+response.status);
+              const info=await response.json();
+              if(info.revision!==expected) throw Error('STOP: newer or mismatched LIVE release '+origin+' actual '+info.revision+' expected '+expected);
+              console.log('PASS live version '+origin+' '+info.revision);
+            }
+          })().catch(error=>{console.error(error);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+
+      - name: Install project dependencies and verify protected UX
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --test scripts/test-clean-emergency-report-header.cjs
+          for file in \
+            scripts/test-unified-login-routing.cjs \
+            scripts/test-login-field-validation.cjs \
+            scripts/test-signup-prod.cjs \
+            scripts/test-signup-google-oauth.cjs \
+            scripts/test-notification-clickthrough-polish-20261106.cjs \
+            scripts/test-lgu-clean-announcements-live.cjs \
+            scripts/test-admin-staff-login.cjs \
+            scripts/test-admin-navigation-contract.cjs; do
+            test -f "$file"
+            node "$file"
+          done
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const web=fs.readFileSync('components/DisasterResponse.web.tsx','utf8');
+          const native=fs.readFileSync('components/DisasterResponse.native.tsx','utf8');
+          assert(web.includes('autoFillGpsAddress')&&web.includes('value={incidentAddress}'));
+          assert(native.includes('reverseGeocodeAsync')&&native.includes('setIncidentAddress(address)'));
+          console.log('PASS GPS address autofill present in web and native report forms');
+          NODE
+          npx tsc --noEmit --pretty false
+
+      - name: Clean web export and verify exact release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .expo
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          for(const route of ['login','signup','admin-login','admin-request','notifications','announcements','assistance-requests','disaster-response']){
+            assert(['dist/'+route+'.html','dist/'+route+'/index.html'].some(x=>fs.existsSync(x)),'STOP missing route '+route);
+          }
+          const config=JSON.parse(fs.readFileSync('firebase.json','utf8'));
+          const header=config.hosting.headers.find(h=>h.source==='/disaster-response');
+          assert(header?.headers?.some(h=>h.key==='Cache-Control' && h.value.includes('no-store')),
+            'STOP /disaster-response must opt out of browser cache');
+          console.log('PASS protected web routes, exact fingerprint and Emergency Reports cache policy');
+          NODE
+
+      - name: Verify Firebase credentials belong to production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const cred=JSON.parse(process.env.FIREBASE_SA);
+          if(cred.type!=='service_account'||cred.project_id!==process.env.PROJECT)throw Error('STOP wrong Firebase project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS Firebase Hosting project identity');
+          NODE
+
+      - name: Snapshot exact prior LIVE Firebase Hosting version for rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+          cat > "$RUNNER_TEMP/gps-cachefix-hosting-api.cjs" <<'NODE'
+          const fs=require('node:fs');
+          const crypto=require('node:crypto');
+          const project=process.env.PROJECT;
+          const mode=process.argv[2];
+          const credentials=JSON.parse(process.env.FIREBASE_SA);
+          const priorPath=process.env.RUNNER_TEMP+'/gps-cachefix-prior-hosting-version.txt';
+          const api='https://firebasehosting.googleapis.com/v1beta1/sites/'+project;
+          const encodeJson=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const header={alg:'RS256',typ:'JWT'};
+            const payload={
+              iss:credentials.client_email,
+              scope:'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/cloud-platform',
+              aud:credentials.token_uri,
+              iat:now,
+              exp:now+3000
+            };
+            const unsigned=encodeJson(header)+'.'+encodeJson(payload);
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(unsigned),credentials.private_key).toString('base64url');
+            const response=await fetch(credentials.token_uri,{
+              method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion:unsigned+'.'+signature
+              }),signal:AbortSignal.timeout(25000)
+            });
+            if(!response.ok)throw Error('Could not authenticate Hosting version snapshot: '+response.status);
+            const data=await response.json();
+            if(!data.access_token)throw Error('Missing Hosting REST access token');
+            return data.access_token;
+          }
+          (async()=>{
+            const access=await token();
+            if(mode==='snapshot'){
+              const response=await fetch(api+'/releases?pageSize=1',{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('STOP cannot snapshot prior Firebase Hosting version: '+response.status);
+              const result=await response.json();
+              const version=String(result.releases?.[0]?.version?.name||'');
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('STOP prior live version missing');
+              fs.writeFileSync(priorPath,version+'\n',{mode:0o600});
+              console.log('PASS existing live Hosting version snapshotted for rollback');
+            }else if(mode==='restore'){
+              const version=fs.readFileSync(priorPath,'utf8').trim();
+              if(!version.startsWith('sites/'+project+'/versions/'))throw Error('Unsafe backup reference');
+              const response=await fetch(api+'/releases?versionName='+encodeURIComponent(version),{
+                method:'POST',headers:{Authorization:'Bearer '+access},
+                signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('Hosting rollback failed: '+response.status);
+              console.log('RESTORED prior live Hosting version from immutable Firebase version history');
+            }else throw Error('Unknown Hosting API mode');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          node "$RUNNER_TEMP/gps-cachefix-hosting-api.cjs" snapshot
+
+      - name: Final check of both live domains before Hosting-only deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/gps-cachefix-prior-hosting-version.txt"
+          node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+          echo "PASS exact live version unchanged; only Hosting dist will be published"
+
+      - name: Publish tested web assets to LIVE Hosting ONLY
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+
+      - name: Verify expected revision on both production domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$GITHUB_SHA"; then
+              ok=1
+              break
+            fi
+            sleep 8
+          done
+          test "$ok" = 1 || { echo "::error::Published Hosting release is not confirmed on both domains"; exit 1; }
+          VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs
+          node <<'NODE'
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const response=await fetch(origin+'/disaster-response?cachefix='+Date.now(),{
+                headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)
+              });
+              if(!response.ok)throw Error('Missing Emergency Reports route: '+origin);
+              const header=response.headers.get('cache-control')||'';
+              if(!header.includes('no-store'))throw Error('Emergency Reports HTML still cacheable: '+origin+' '+header);
+              console.log('PASS no-store Emergency Reports route on '+origin);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          echo "SUCCESS: GPS address autofill LIVE from latest LGU Super Admin baseline; other modules preserved" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore previous Hosting version only if this release still owns live
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          if [ ! -s "$RUNNER_TEMP/gps-cachefix-prior-hosting-version.txt" ]; then
+            echo "No previous Hosting version snapshot: production was not promoted by this run."
+            exit 0
+          fi
+          if node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$GITHUB_SHA"; then
+            node "$RUNNER_TEMP/gps-cachefix-hosting-api.cjs" restore
+            node "$RUNNER_TEMP/guard-live-cachefix.cjs" "$LIVE_BASE"
+          else
+            echo "Cannot safely identify active deployment; leave newer/other live releases untouched, inspect Hosting history."
+          fi
