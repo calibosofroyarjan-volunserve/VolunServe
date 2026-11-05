@@ -194,7 +194,7 @@ export default function AdminAccounts() {
     submittedReference.length >= 5 && submittedReference.length <= 160 &&
     verificationMethods.includes(lguVerificationMethod) &&
     !!actionTarget?.email && actionTarget.email.length >= 5 &&
-    actionTarget.role === "applicant" && actionTarget.status === "pending_review" &&
+    actionTarget?.role === "applicant" && actionTarget?.status === "pending_review" &&
     reviewConfirmed;
 
   React.useEffect(() => {
@@ -1218,10 +1218,6 @@ export default function AdminAccounts() {
                 onPress={() => openAdminAction("promote", applicant)}>
                 <Text style={styles.dirManageText}>Review</Text>
               </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="button" style={[styles.dirManage, { borderColor: "#E7CAC6" }]}
-                onPress={() => openAdminAction("reject", applicant)}>
-                <Text style={[styles.dirManageText, { color: "#A84C46" }]}>Reject</Text>
-              </TouchableOpacity>
             </View>
           ))}
           {applicationPageCount > 1 && (
@@ -1797,6 +1793,15 @@ export default function AdminAccounts() {
                 </Text>
               </TouchableOpacity>
 
+              {actionType === "promote" && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={!!savingUid}
+                  style={[styles.confirmButton, styles.confirmDangerButton]}
+                  onPress={() => { setActionError(""); setActionType("reject"); }}>
+                  <Text style={styles.confirmPrimaryText}>Reject</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 disabled={!!savingUid || (actionType === "promote" && !reviewComplete) || (actionType === "reject" && rejectionReason.trim().length < 10)}
                 style={[
