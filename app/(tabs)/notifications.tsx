@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, type Href } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
@@ -244,25 +243,22 @@ export default function NotificationsScreen() {
   </View>;
 
   return <ScrollView style={styles.root} contentContainerStyle={[styles.container, compact && styles.containerCompact]}>
-    <LinearGradient colors={["#064735", "#08775B", "#159A73"]}
-      start={{x:0,y:0}} end={{x:1,y:1}} style={styles.heading}>
-      <View pointerEvents="none" style={styles.heroDecor}>
-        <Ionicons name="notifications-outline" color="rgba(255,255,255,0.10)" size={160}/>
+    <View style={styles.heading}>
+      <View style={styles.headingIcon}>
+        <Ionicons name="notifications-outline" size={22} color="#0B805E"/>
       </View>
-      <View style={styles.headingIcon}><Ionicons name="notifications-outline" size={22} color="#FFFFFF"/></View>
       <View style={styles.headingText}>
-        <Text style={styles.kicker}>YOUR VOLUNSERVE INBOX</Text>
         <Text style={styles.title}>Notifications</Text>
-        <Text style={styles.subtitle}>Open an update to go to the related page.</Text>
+        <Text style={styles.subtitle}>Your VolunServe updates, all in one place.</Text>
       </View>
-    </LinearGradient>
+    </View>
 
     <View style={[styles.summary, compact && styles.summaryCompact]}>
       <View style={styles.summaryText}>
         <Text style={styles.metric}>{unread}</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.metricLabel}>{unread === 1 ? "Unread update" : "Unread updates"}</Text>
-          <Text style={styles.metricHelper}>{notifications.length} total · Updates are private to your account</Text>
+          <Text style={styles.metricHelper}>{notifications.length} total · Private to your account</Text>
         </View>
       </View>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Mark all unread notifications as read"
@@ -370,7 +366,7 @@ export default function NotificationsScreen() {
                 {unreadItem&&<View style={styles.newPill}><Text style={styles.newPillText}>NEW</Text></View>}
               </View>
               <Text style={styles.cardTitle}>{item.title||"VolunServe update"}</Text>
-              <Text style={styles.message}>{item.message||"You have a new update."}</Text>
+              <Text style={styles.message} numberOfLines={2}>{item.message||"You have a new update."}</Text>
               <View style={styles.destinationLine}>
                 <Text style={styles.destinationText}>{destination.label}</Text>
                 <Ionicons name="arrow-forward-outline" size={15} color="#08765B"/>
@@ -407,28 +403,27 @@ export default function NotificationsScreen() {
 }
 
 const styles=StyleSheet.create({
-  root:{flex:1,backgroundColor:"#F4F8F5"},
-  container:{width:"100%",maxWidth:940,alignSelf:"center",paddingHorizontal:20,paddingTop:22,paddingBottom:52,gap:0},
-  containerCompact:{paddingHorizontal:12,paddingTop:12},
-  heading:{flexDirection:"row",alignItems:"center",gap:14,paddingVertical:21,paddingHorizontal:23,
-    borderRadius:19,overflow:"hidden"},
-  heroDecor:{position:"absolute",right:-12,top:-34},
-  headingIcon:{width:46,height:46,borderRadius:14,backgroundColor:"rgba(255,255,255,0.17)",
+  root:{flex:1,backgroundColor:"#F6F8F7"},
+  container:{width:"100%",maxWidth:850,alignSelf:"center",paddingHorizontal:19,paddingTop:26,paddingBottom:55,gap:0},
+  containerCompact:{paddingHorizontal:12,paddingTop:13},
+  heading:{flexDirection:"row",alignItems:"center",gap:13,paddingVertical:14,paddingHorizontal:16,
+    borderRadius:16,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E1EAE4"},
+  headingIcon:{width:43,height:43,borderRadius:13,backgroundColor:"#E7F4EC",
     alignItems:"center",justifyContent:"center"},
   headingText:{flex:1},
-  kicker:{color:"#C7F3E0",fontSize:10,fontWeight:"800",letterSpacing:1.1},
-  title:{color:"#FFFFFF",fontSize:26,fontWeight:"900",marginTop:3},
-  subtitle:{color:"#E6F8EE",fontSize:12,lineHeight:18,marginTop:4},
-  summary:{backgroundColor:"#FFFFFF",borderRadius:15,borderColor:"#E1EBE5",borderWidth:1,
-    padding:17,marginTop:14,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10},
+  title:{color:"#183E31",fontSize:23,fontWeight:"900"},
+  subtitle:{color:"#738D7E",fontSize:12,lineHeight:18,marginTop:3},
+  summary:{backgroundColor:"#FFFFFF",borderRadius:14,borderColor:"#E2EBE4",borderWidth:1,
+    paddingHorizontal:16,paddingVertical:12,marginTop:12,flexDirection:"row",
+    alignItems:"center",justifyContent:"space-between",gap:10},
   summaryCompact:{flexWrap:"wrap"},
-  summaryText:{flexDirection:"row",gap:12,alignItems:"center",flexShrink:1,flexGrow:1},
-  metric:{fontSize:30,color:"#087D60",fontWeight:"900",minWidth:30},
-  metricLabel:{fontSize:14,color:"#204B3B",fontWeight:"900"},
-  metricHelper:{fontSize:11,color:"#688475",marginTop:3,lineHeight:16},
-  markAll:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:"#E5F5EB",borderRadius:10,
-    paddingHorizontal:14,paddingVertical:11},
-  markAllText:{fontSize:12,color:"#08745A",fontWeight:"800"},
+  summaryText:{flexDirection:"row",gap:11,alignItems:"center",flexShrink:1,flexGrow:1},
+  metric:{fontSize:23,color:"#087D60",fontWeight:"900",minWidth:25},
+  metricLabel:{fontSize:13,color:"#234A3B",fontWeight:"800"},
+  metricHelper:{fontSize:10.5,color:"#738D7F",marginTop:3,lineHeight:15},
+  markAll:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:"#EAF6EF",borderRadius:9,
+    paddingHorizontal:12,paddingVertical:9},
+  markAllText:{fontSize:11,color:"#08745A",fontWeight:"800"},
   disabled:{opacity:.35},
   phoneCard:{marginTop:12,flexDirection:"row",gap:12,backgroundColor:"#FFFFFF",padding:15,borderRadius:13,
     borderColor:"#DFEBE4",borderWidth:1},
@@ -443,13 +438,13 @@ const styles=StyleSheet.create({
   phoneButtonText:{color:"#FFFFFF",fontSize:12,fontWeight:"800"},
   phoneOffButton:{borderColor:"#D7E7DC",borderWidth:1,borderRadius:9,paddingHorizontal:12,paddingVertical:10},
   phoneOffText:{color:"#346751",fontSize:12,fontWeight:"700"},
-  toolbar:{marginTop:19,gap:12},
-  searchWrap:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE8E0",borderRadius:12,
+  toolbar:{marginTop:16,gap:10},
+  searchWrap:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E0E9E3",borderRadius:11,
     flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:13,minHeight:44},
   searchInput:{color:"#214B3A",fontSize:13,flex:1,paddingVertical:9},
   filterScroll:{maxHeight:47},
   filters:{gap:8,paddingBottom:7},
-  filterPill:{backgroundColor:"#FFFFFF",borderColor:"#DDE8E0",borderWidth:1,borderRadius:30,
+  filterPill:{backgroundColor:"#FFFFFF",borderColor:"#E0E9E3",borderWidth:1,borderRadius:30,
     paddingHorizontal:15,paddingVertical:9,minHeight:36},
   filterActive:{backgroundColor:"#0B7B60",borderColor:"#0B7B60"},
   filterLabel:{color:"#4D6D5C",fontSize:12,fontWeight:"800"},
@@ -460,14 +455,14 @@ const styles=StyleSheet.create({
   retryButton:{paddingHorizontal:10,paddingVertical:8,backgroundColor:"#FCE5DA",borderRadius:7},
   retryText:{fontWeight:"800",fontSize:12,color:"#9A3A2E"},
   listHeader:{flexDirection:"row",alignItems:"baseline",justifyContent:"space-between",
-    gap:10,marginTop:17,marginBottom:11,flexWrap:"wrap"},
+    gap:10,marginTop:17,marginBottom:9,flexWrap:"wrap"},
   sectionTitle:{fontSize:16,fontWeight:"900",color:"#214B3A"},
   resultCount:{fontSize:12,color:"#718C7B"},
-  card:{borderRadius:14,backgroundColor:"#FFFFFF",borderColor:"#E1EBE5",borderWidth:1,
-    marginBottom:10,overflow:"hidden"},
-  unreadCard:{backgroundColor:"#FCFFFD",borderColor:"#88D2AB",borderLeftWidth:4},
-  cardMain:{flexDirection:"row",alignItems:"flex-start",gap:12,padding:16,minHeight:116},
-  typeIcon:{borderRadius:11,width:40,height:40,alignItems:"center",justifyContent:"center",
+  card:{borderRadius:12,backgroundColor:"#FFFFFF",borderColor:"#E4EAE6",borderWidth:1,
+    marginBottom:8,overflow:"hidden"},
+  unreadCard:{backgroundColor:"#F2FAF5",borderColor:"#B7DFC8",borderLeftWidth:3},
+  cardMain:{flexDirection:"row",alignItems:"flex-start",gap:11,padding:13,minHeight:91},
+  typeIcon:{borderRadius:12,width:38,height:38,alignItems:"center",justifyContent:"center",
     backgroundColor:"#EDF6EF"},
   typeIconUnread:{backgroundColor:"#DDF5E5"},
   cardContent:{flex:1},
@@ -475,11 +470,11 @@ const styles=StyleSheet.create({
   category:{fontSize:11,color:"#6B8C7B",fontWeight:"700",flexShrink:1},
   newPill:{backgroundColor:"#E0F7E8",borderRadius:5,paddingHorizontal:7,paddingVertical:3},
   newPillText:{fontSize:9,color:"#067D58",fontWeight:"900",letterSpacing:.5},
-  cardTitle:{fontSize:14,fontWeight:"900",color:"#173F31",marginTop:7},
-  message:{fontSize:13,lineHeight:20,color:"#466657",marginTop:6},
-  destinationLine:{flexDirection:"row",gap:5,alignItems:"center",marginTop:12},
-  destinationText:{fontWeight:"800",color:"#08765B",fontSize:12},
-  cardFooter:{borderTopWidth:1,borderColor:"#EAF0EC",alignItems:"flex-end",paddingHorizontal:13,paddingVertical:7},
+  cardTitle:{fontSize:13,fontWeight:"900",color:"#173F31",marginTop:5},
+  message:{fontSize:12,lineHeight:18,color:"#5D7869",marginTop:4},
+  destinationLine:{flexDirection:"row",gap:5,alignItems:"center",marginTop:8},
+  destinationText:{fontWeight:"800",color:"#08765B",fontSize:11},
+  cardFooter:{borderTopWidth:1,borderColor:"#EBF0EC",alignItems:"flex-end",paddingHorizontal:12,paddingVertical:3},
   readButton:{flexDirection:"row",gap:4,alignItems:"center",paddingHorizontal:5,paddingVertical:5},
   readText:{color:"#08765B",fontWeight:"800",fontSize:12},
   pagination:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:9,marginTop:7},
