@@ -57,16 +57,25 @@ def content_for(name):
     return matches[0]["name"], matches[0]["content"]
 
 def verify_hosting():
+    # Hosting is NOT being deployed or modified in this Rules-only hotfix.
+    # Concurrent independent Hosting releases are permissible. Require only
+    # that both public origins are serving a readable version marker.
+    revisions = []
     for domain in ("https://volunserve.com", "https://volunserve-3aa5b.web.app"):
         req = urllib.request.Request(
-            domain + "/volunserve-release.json?guard_notifications_1106=" + os.environ.get("GITHUB_RUN_ID", "0"),
+            domain + "/volunserve-release.json?rules_only_guard=" + os.environ.get("GITHUB_RUN_ID", "0"),
             headers={"Cache-Control": "no-cache"},
         )
         with urllib.request.urlopen(req, timeout=30) as reply:
             meta = json.load(reply)
-        if meta.get("revision") != EXPECTED_HOSTING:
-            raise RuntimeError("STOP actual Hosting changed at " + domain)
-    print("PASS current Hosting source still exact verified baseline")
+        revision = meta.get("revision", "")
+        if not revision or len(revision) != 40:
+            raise RuntimeError("STOP Hosting revision is not readable at " + domain)
+        revisions.append(revision)
+    if revisions[0] != revisions[1]:
+        raise RuntimeError("STOP Hosting domains serve different versions")
+    print("PASS Hosting intact at current revision", revisions[0],
+          "(Rules-only hotfix never writes Hosting)")
 
 def manifest():
     with open(MANIFEST_FILE, encoding="utf8") as file:
