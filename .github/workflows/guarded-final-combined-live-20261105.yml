@@ -1,0 +1,135 @@
+name: Guarded Final VolunServe Admin + Signup Hosting Release
+on:
+  push:
+    branches:
+      - release/final-combined-admin-signup-20261105
+    paths:
+      - .github/workflows/guarded-final-combined-live-20261105.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  publish-exact-tested-preview:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+      VERIFIED_LIVE_BASE: "195984a90343d77910b398ef14b83522f0313f79"
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/volunserve-deploy-sa.json
+      GOOGLE_CLOUD_PROJECT: volunserve-3aa5b
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Assert latest enterprise Super Admin and all protected modules are intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
+          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/(superadmin)' 'app/(admin)' 'app/(tabs)' 'components/admin' 'components/volunteer' 'firestore.rules' 'firebase.json' '.firebaserc' 'storage.rules' 'functions' 'backend'
+          echo "PASS: updated Super Admin, LGU Admin, community workspaces, production Rules, backend and Functions unchanged."
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify CURRENT LIVE Hosting exactly matches latest deployed Super Admin
+        run: |
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+
+      - name: Check Signup, Login, Google and TypeScript
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+          node scripts/test-login-field-validation.cjs
+
+      - name: Build combined Expo premium Signup with current Admin
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+
+      - name: Require service account before any Hosting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase Hosting credentials not configured. No deploy."; exit 1; fi
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Deploy and fingerprint an isolated final PREVIEW
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: combined-final-1105
+          expires: 3d
+
+      - name: Prove preview serves exact combined source and all public routes
+        env:
+          VOLUNSERVE_HOSTING_URL: ${{ steps.preview.outputs.details_url }}
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/check-live-hosting.cjs
+
+      - name: Backup live Hosting and promote exact preview ONLY if live is unchanged
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PROJECT=volunserve-3aa5b
+          BACKUP=backup-1105-final
+          PREVIEW=combined-final-1105
+          CLI="node node_modules/firebase-tools/lib/bin/firebase.js"
+
+          # Guard against a newer Admin/Super Admin deployment after build.
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+
+          echo "Backing up the current live Hosting version to preview channel $BACKUP"
+          $CLI hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          echo "Hosting backup channel: $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+
+          # One final live-revision check before writing the live channel.
+          VOLUNSERVE_EXPECTED_SHA="$VERIFIED_LIVE_BASE" node scripts/check-live-hosting.cjs
+
+          echo "Promoting only the exact previously-tested combined preview"
+          $CLI hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+
+          verified=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA" node scripts/check-live-hosting.cjs; then
+              verified=1
+              break
+            fi
+            echo "Live release propagation not confirmed, check $attempt"
+            sleep 8
+          done
+
+          if [ "$verified" -ne 1 ]; then
+            echo "::error::Live website verification failed; checking for safe rollback"
+            live_revision="$(node -e '(async()=>{try{let r=await fetch("https://volunserve.com/volunserve-release.json?rollback="+Date.now(),{headers:{"cache-control":"no-cache"}});let j=await r.json();process.stdout.write(j.revision||"unknown");}catch(e){process.stdout.write("unknown")}})()')"
+            if [ "$live_revision" = "$GITHUB_SHA" ]; then
+              echo "::warning::Rolling back only our own published version"
+              $CLI hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive
+              echo "Rollback performed from $BACKUP" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Unexpected live revision; not overwriting external changes. Manual Hosting recovery may be necessary."
+            fi
+            exit 1
+          fi
+
+          echo "SUCCESS: live volunserve.com now serves $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Hosting-only: Firestore Rules, Functions, Storage and user data unchanged." >> "$GITHUB_STEP_SUMMARY"
