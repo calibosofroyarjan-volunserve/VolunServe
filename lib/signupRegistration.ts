@@ -6,18 +6,21 @@ import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
 
 /** No profile writes, credential linking, password changes, or local PII storage. */
-export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false): Promise<User> {
+export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false, rejectExisting = false): Promise<User> {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !password) throw new Error("Enter your registration email and password.");
   let user: User;
   if (resumeOnly) {
     user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
   } else {
-    // A new registration must never silently sign in an existing account.
-    // Let auth/email-already-in-use reach the signup screen so it can show
-    // the existing-account message without navigating away.
-    // Only the explicit Resume Registration action can sign in a pending UID.
-    user = (await createUserWithEmailAndPassword(auth, normalized, password)).user;
+    try {
+      user = (await createUserWithEmailAndPassword(auth, normalized, password)).user;
+    } catch (error) {
+      if ((error as {code?: string}).code !== "auth/email-already-in-use" || rejectExisting) throw error;
+      // The legacy profile-first form must keep its existing same-UID recovery.
+      // The email-first Create Account button sets rejectExisting=true instead.
+      user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
+    }
   }
   if (auth.currentUser?.uid !== user.uid || user.email?.toLowerCase() !== normalized) {
     throw new Error("Your registration session changed. Sign in again to resume.");
