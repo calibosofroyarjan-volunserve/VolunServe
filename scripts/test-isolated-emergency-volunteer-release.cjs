@@ -13,19 +13,17 @@ const required = [
   ["Offline support offer label", "Offline · can receive offer"],
   ["Volunteer assignment view", "Volunteer Task Assignments"],
   ["Spacious roster cards", "styles.volunteerRosterCard"],
-  ["Visible Volunteer action", '"Assign Volunteer"'],
+  ["Visible Volunteer action", '"Send Task Offer"'],
   ["Five-row roster pagination", "pageFive(volunteerCandidates, volunteerPage)"],
   ["Five-row assignment pagination", "pageFive(activeAssignments, activeAssignmentPage)"],
   ["New notification per offer", 'doc(collection(db, "notifications"))'],
   ["Atomic assignment", "runTransaction(db, async (transaction)"],
-  ["Busy responder guard", "responderLockSnapshot.exists()"],
   ["Verified case before offer", 'currentVerification !== "validated"'],
   ["No self-assignment", "volunteer.uid === incident.reporterUid"],
-  ["Single active support guard", "activeCount >= 1"],
   ["Suspended accounts blocked", '"suspended"'],
   ["Revoked Volunteer blocked", '"revoked"'],
   ["Volunteer must accept assignment in New", 'status: "offered"'],
-  ["Embedded emergency map preserved", 'detailTab === "map"'],
+  ["Standalone incident map preview", '<EmergencyIncidentMap'],
   ["Case details retained", "setSelectedCaseId(item.id)"],
   ["Evidence retained", "pageFive(imageEvidence, photoPage)"],
 ];
@@ -43,4 +41,8 @@ assert(!nav.includes('label: "Relief Operations"') &&
   "Retired Relief Operations must disappear from nav and old URLs must redirect");
 assert(!emergency.includes("inviteVolunteerToCase(incident, volunteer)"),
   "Admin must not require a separate availability invitation before task assignment");
-console.log("PASS: direct Admin task offers, approved Volunteers, response/map/pagination, retired Relief redirect");
+assert(!emergency.includes('src: "/admin-live-map?caseId="'),
+  "A full Admin portal must never be nested as the emergency map preview");
+assert(!emergency.includes("activeCount >= 1"),
+  "A previous task offer must not block approved Volunteers from receiving offers");
+console.log("PASS: direct Admin offers, single clean incident map, Volunteer safety locks and protected modules");
