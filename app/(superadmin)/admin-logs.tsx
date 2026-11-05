@@ -7,6 +7,7 @@ import {
   TouchableOpacity, View,
 } from "react-native";
 import ListPagination from "../../components/ui/ListPagination";
+import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import { db } from "../../lib/firebase";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -46,6 +47,8 @@ export default function AdminLogs() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [kind, setKind] = useState<"all" | "lgu" | "system" | "access">("all");
+  const [sort, setSort] = useState<"newest" | "oldest" | "actor" | "action">("newest");
   const sources = ["adminLogs", "adminActivityLogs"];
 
   useEffect(() => {
@@ -92,12 +95,19 @@ export default function AdminLogs() {
   );
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return logs;
-    return logs.filter((item) =>
-      [item.actionType, item.adminName, item.adminUid, item.targetType,
-        item.targetId, item.description].join(" ").toLowerCase().includes(needle),
-    );
-  }, [logs, search]);
+    return logs.filter(item => {
+      if (kind === "lgu" && item.source !== "adminActivityLogs") return false;
+      if (kind === "system" && item.source !== "adminLogs") return false;
+      if (kind === "access" && !/account|access|suspend|activat|revok|promot/i.test(item.actionType)) return false;
+      return !needle || [item.actionType, item.adminName, item.adminUid, item.targetType,
+        item.targetId, item.description, item.source].join(" ").toLowerCase().includes(needle);
+    }).sort((a, b) => {
+      if (sort === "oldest") return eventTime(a.createdAt) - eventTime(b.createdAt);
+      if (sort === "actor") return (a.adminName || a.adminUid).localeCompare(b.adminName || b.adminUid);
+      if (sort === "action") return prettyAction(a.actionType).localeCompare(prettyAction(b.actionType));
+      return eventTime(b.createdAt) - eventTime(a.createdAt);
+    });
+  }, [logs, search, kind, sort]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -137,6 +147,25 @@ export default function AdminLogs() {
         placeholderTextColor="#94A3B8" autoCapitalize="none"
       />
     </View>
+    <SuperAdminFilterSort
+      accessibilityContext="audit logs"
+      filterValue={kind}
+      filterOptions={[
+        { value: "all", label: "All activity" },
+        { value: "lgu", label: "LGU Admin activity" },
+        { value: "system", label: "System changes" },
+        { value: "access", label: "Account access" },
+      ]}
+      onFilterChange={value => { setKind(value); setPage(1); }}
+      sortValue={sort}
+      sortOptions={[
+        { value: "newest", label: "Newest first" },
+        { value: "oldest", label: "Oldest first" },
+        { value: "actor", label: "User A–Z" },
+        { value: "action", label: "Action A–Z" },
+      ]}
+      onSortChange={value => { setSort(value); setPage(1); }}
+    />
     {Object.entries(errors).map(([source, message]) =>
       <View key={source} style={styles.error}>
         <Text style={styles.errorText}>Unable to load {source}: {message}</Text>
