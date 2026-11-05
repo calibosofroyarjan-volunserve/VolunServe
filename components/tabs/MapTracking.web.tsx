@@ -578,7 +578,7 @@ const mapDocument = `
             label.className = "destination-label";
             label.textContent = item.residentSelf
               ? "RESIDENT · YOU"
-              : "RESIDENT DESTINATION";
+              : "REPORTED INCIDENT LOCATION";
             label.style.color = "#15803d";
             wrapper.appendChild(label);
           }
@@ -1829,9 +1829,11 @@ const mapDocument = `
 `;
 
 function numericCoordinate(value: unknown) {
-  const number =
-    typeof value === "number" ? value : Number(value);
+  // Never convert missing coordinates into a fabricated (0,0) map pin.
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" && !value.trim()) return null;
 
+  const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
 }
 

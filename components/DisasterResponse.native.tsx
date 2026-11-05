@@ -42,6 +42,7 @@ type Pin = {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  source: "device_gps" | "manual_map";
 };
 
 type EvidenceAsset = {
@@ -407,7 +408,8 @@ export default function DisasterResponse() {
     latitude: number,
     longitude: number,
     accuracy: number | null = null,
-    center = true
+    center = true,
+    source: "device_gps" | "manual_map" = "manual_map"
   ) => {
     if (
       !Number.isFinite(latitude) ||
@@ -422,6 +424,7 @@ export default function DisasterResponse() {
       latitude,
       longitude,
       accuracy,
+      source,
     };
 
     // Reject stale address lookups when the pin changes or gets dragged.
@@ -477,7 +480,9 @@ export default function DisasterResponse() {
       const revision = setIncidentPin(
         latitude,
         longitude,
-        position.coords.accuracy
+        position.coords.accuracy,
+        true,
+        "device_gps"
       );
 
       if (typeof revision === "number") {
@@ -1246,8 +1251,8 @@ export default function DisasterResponse() {
           latitude: pin.latitude,
           longitude: pin.longitude,
 
-          gpsAccuracyMeters:
-            pin.accuracy,
+                    gpsAccuracyMeters:
+            pin.source === "device_gps" ? pin.accuracy : null,
 
           locationCapturedAt:
             serverTimestamp(),
@@ -1283,6 +1288,7 @@ export default function DisasterResponse() {
             video ? 1 : 0,
 
           verification: {
+          locationSource: pin.source,
             accountApproved: true,
 
             reporterTrust:
@@ -1305,7 +1311,7 @@ export default function DisasterResponse() {
               contactNumber !==
               "Unavailable",
 
-            gpsProvided: true,
+            gpsProvided: pin.source === "device_gps",
 
             photoEvidenceProvided: true,
 

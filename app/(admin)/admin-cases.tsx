@@ -107,8 +107,10 @@ interface DisasterCase {
   };
 
   location: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: "device_gps" | "manual_map" | "unknown";
+  gpsAccuracyMeters?: number | null;
   details: string;
 
   affectedPeople?: number;
@@ -180,6 +182,8 @@ type ResponseAssignment = {
   volunteerName: string;
   caseTitle: string;
   status: AssignmentStatus;
+  residentConfirmationStatus?: string;
+  residentConfirmationOutcome?: string;
   createdAt?: any;
   updatedAt?: any;
 };
@@ -933,18 +937,6 @@ export default function AdminCases() {
   const isAuthorized = role === "admin";
 
   useEffect(() => {
-    if (
-      !isAuthorized ||
-      detailTab !== "response" ||
-      !selectedCaseId
-    ) {
-      return;
-    }
-
-    void loadLguFieldReports(selectedCaseId);
-  }, [isAuthorized, detailTab, selectedCaseId]);
-
-  useEffect(() => {
     if (!isAuthorized) return;
 
     const casesQuery = query(
@@ -996,8 +988,10 @@ export default function AdminCases() {
                 : {},
 
             location: data.location || "",
-            latitude: Number(data.latitude),
-            longitude: Number(data.longitude),
+            latitude: data.latitude === null || data.latitude === undefined || data.latitude === "" ? null : Number(data.latitude),
+            longitude: data.longitude === null || data.longitude === undefined || data.longitude === "" ? null : Number(data.longitude),
+            locationSource: data.verification?.locationSource === "device_gps" || data.verification?.locationSource === "manual_map" ? data.verification.locationSource : "unknown",
+            gpsAccuracyMeters: Number.isFinite(data.gpsAccuracyMeters) ? data.gpsAccuracyMeters : null,
             details: data.details || "",
 
             affectedPeople: Number(data.affectedPeople || 0),
@@ -1253,6 +1247,8 @@ export default function AdminCases() {
             volunteerName: data.volunteerName || "Volunteer",
             caseTitle: data.caseTitle || "Incident",
             status: data.status || "offered",
+            residentConfirmationStatus: String(data.residentConfirmationStatus || ""),
+            residentConfirmationOutcome: String(data.residentConfirmationOutcome || ""),
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           };
@@ -2140,6 +2136,13 @@ export default function AdminCases() {
       if (!fieldSnapshot.exists() || fieldSnapshot.data().reportStatus !== "reviewed") {
         throw new Error("Review the Volunteer's completion report before confirming.");
       }
+      const finalAssignment = assignmentSnapshot.data();
+      if (String(finalAssignment.residentConfirmationStatus || "") !== "resident_confirmed") {
+        throw new Error("Wait for the Resident to confirm receiving assistance in My Reports.");
+      }
+      if (String(finalAssignment.residentConfirmationOutcome || "") !== "fully_helped") {
+        throw new Error("Assistance is incomplete or disputed. Keep the report open for Admin follow-up.");
+      }
       if (assignmentsForCase(incident.id).some((item) =>
         ["offered", "accepted", "responding", "on_site"].includes(String(item.status))
       )) {
@@ -2163,7 +2166,7 @@ export default function AdminCases() {
       });
       Alert.alert(
         "Completion Confirmed",
-        "The Volunteer task was reviewed and the emergency report is marked Completed. Close the case when appropriate.",
+        "The Volunteer report and Resident confirmation were reviewed. The case is Resolved and can now be closed.",
       );
     } catch (cause) {
       Alert.alert(
@@ -3892,8 +3895,8 @@ export default function AdminCases() {
                     ["overview", "Overview"],
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["response", "Task Progress"],
-                    ["personnel", "Assign Volunteer"],
+                    ["response", "Review & Close"],
+                    ["personnel", "Assign Volunteers"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -4054,7 +4057,14 @@ export default function AdminCases() {
                   <Text style={styles.locationActionCoords}>
                     {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
                       ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                      : "GPS coordinates unavailable"}
+                      : "Incident coordinates unavailable"}
+                  </Text>
+                  <Text style={styles.locationActionCoords}>
+                    {incident.locationSource === "device_gps"
+                      ? `Device GPS · accuracy ${incident.gpsAccuracyMeters == null ? "unknown" : Math.round(incident.gpsAccuracyMeters) + " m"} · unverified`
+                      : incident.locationSource === "manual_map"
+                        ? "Manual map pin · not live GPS"
+                        : "Location source unknown · confirm with Resident"}
                   </Text>
                 </View>
 
@@ -4159,7 +4169,7 @@ export default function AdminCases() {
                       {Number.isFinite(incident.latitude) &&
                       Number.isFinite(incident.longitude)
                         ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                        : "No GPS coordinates"}
+                        : "No incident coordinates"}
                     </Text>
                   </View>
 
@@ -4446,7 +4456,7 @@ export default function AdminCases() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
                       <Text style={styles.responseControlTitle}>
-                        Volunteer Task Coordination
+                        Case Review & Completion
                       </Text>
                       <Text style={styles.responseControlSubtitle}>
                         Admin reviews reports, assigns approved Volunteers, and monitors community task progress. This is not official emergency dispatch.
@@ -4456,9 +4466,7 @@ export default function AdminCases() {
                     <View style={styles.responseStatusPill}>
                       <Text style={styles.responseStatusDot}>●</Text>
                       <Text style={styles.responseStatusText}>
-                        {lguFieldReviewPending
-                          ? "LEGACY FIELD REPORT PENDING REVIEW"
-                          : volunteerProgressStatus}
+                        {volunteerProgressStatus}
                       </Text>
                     </View>
                   </View>
@@ -4544,280 +4552,18 @@ export default function AdminCases() {
                     </View>
                   )}
 
-                  {(lguFieldReportsLoading ||
-                    lguFieldReportsError ||
-                    latestLguFieldReport ||
-                    lguFieldReviewPending) && (
-                    <View style={styles.lguOfficialReportSection}>
-                      <View style={styles.lguOfficialReportHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.lguOfficialReportEyebrow}>
-                            OFFICIAL LGU FIELD REPORT
-                          </Text>
-                          <Text style={styles.lguOfficialReportTitle}>
-                            Field Response Review
-                          </Text>
-                          <Text style={styles.lguOfficialReportSubtitle}>
-                            Review the official responder's completed field report before deciding whether the emergency can be resolved or needs follow-up.
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          disabled={lguFieldReportsLoading}
-                          style={[
-                            styles.lguReportRefreshButton,
-                            lguFieldReportsLoading && styles.disabledButton,
-                          ]}
-                          onPress={() =>
-                            void loadLguFieldReports(incident.id)
-                          }
-                        >
-                          <Text style={styles.lguReportRefreshText}>
-                            {lguFieldReportsLoading
-                              ? "Loading…"
-                              : "Refresh"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {!!lguFieldReportsError && (
-                        <View style={styles.lguReportErrorBox}>
-                          <Text style={styles.lguReportErrorTitle}>
-                            Unable to load official field report
-                          </Text>
-                          <Text style={styles.lguReportErrorText}>
-                            {lguFieldReportsError}
-                          </Text>
-                        </View>
-                      )}
-
-                      {!lguFieldReportsLoading &&
-                        !lguFieldReportsError &&
-                        lguFieldReviewPending &&
-                        !latestLguFieldReport && (
-                          <View style={styles.lguReportWaitingBox}>
-                            <Text style={styles.lguReportWaitingTitle}>
-                              Field report is pending
-                            </Text>
-                            <Text style={styles.lguReportWaitingText}>
-                              The case is marked as awaiting Admin review, but the official field report is not available yet. Refresh this section before taking a final action.
-                            </Text>
-                          </View>
-                        )}
-
-                      {latestLguFieldReport && (() => {
-                        const report = latestLguFieldReport;
-                        const reviewStatus = String(
-                          report.adminReviewStatus || "pending"
-                        )
-                          .trim()
-                          .toLowerCase();
-                        const reviewed = reviewStatus === "reviewed";
-                        const reviewBusy =
-                          busyKey ===
-                          `lgu_field_review_${report.id}`;
-                        const reviewNote =
-                          lguFieldReviewNotes[report.id] ??
-                          report.adminReviewNote ??
-                          "";
-                        const followUpOutcome = [
-                          "referred",
-                          "needs_follow_up",
-                        ].includes(
-                          String(report.outcome || "")
-                            .trim()
-                            .toLowerCase()
-                        );
-
-                        return (
-                          <View style={styles.lguOfficialReportCard}>
-                            <View style={styles.lguOfficialReportTopRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.lguOfficialResponderName}>
-                                  {report.personnelName ||
-                                    "Official LGU Responder"}
-                                </Text>
-                                <Text style={styles.lguOfficialResponderMeta}>
-                                  {[report.department, report.position]
-                                    .filter(Boolean)
-                                    .join(" · ") ||
-                                    "Official LGU Personnel"}
-                                </Text>
-                                <Text style={styles.lguOfficialReportMeta}>
-                                  Submitted {formatApiDate(report.submittedAt)}
-                                  {" · "}Assignment {report.assignmentId}
-                                </Text>
-                              </View>
-
-                              <View
-                                style={[
-                                  styles.lguOfficialReviewBadge,
-                                  reviewed
-                                    ? styles.lguOfficialReviewBadgeDone
-                                    : styles.lguOfficialReviewBadgePending,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.lguOfficialReviewBadgeText,
-                                    reviewed &&
-                                      styles.lguOfficialReviewBadgeTextDone,
-                                  ]}
-                                >
-                                  {reviewed
-                                    ? "REVIEWED"
-                                    : "PENDING REVIEW"}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={styles.lguOfficialReportGrid}>
-                              <View style={styles.lguOfficialReportInfoCard}>
-                                <Text style={styles.metaLabel}>
-                                  Situation Summary
-                                </Text>
-                                <Text style={styles.lguOfficialReportValue}>
-                                  {report.situationSummary ||
-                                    "No situation summary submitted."}
-                                </Text>
-                              </View>
-
-                              <View style={styles.lguOfficialReportInfoCard}>
-                                <Text style={styles.metaLabel}>
-                                  Actions Taken
-                                </Text>
-                                <Text style={styles.lguOfficialReportValue}>
-                                  {report.actionsTaken ||
-                                    "No response actions recorded."}
-                                </Text>
-                              </View>
-
-                              <View style={styles.lguOfficialReportInfoCard}>
-                                <Text style={styles.metaLabel}>
-                                  People Assisted
-                                </Text>
-                                <Text style={styles.lguOfficialReportValueStrong}>
-                                  {report.peopleAssisted}
-                                </Text>
-                              </View>
-
-                              <View style={styles.lguOfficialReportInfoCard}>
-                                <Text style={styles.metaLabel}>
-                                  Field Outcome
-                                </Text>
-                                <Text style={styles.lguOfficialReportValueStrong}>
-                                  {lguFieldOutcomeLabel(report.outcome)}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {followUpOutcome && (
-                              <View style={styles.lguFollowUpWarning}>
-                                <Text style={styles.lguFollowUpWarningTitle}>
-                                  Follow-up is still indicated
-                                </Text>
-                                <Text style={styles.lguFollowUpWarningText}>
-                                  The responder marked this field outcome as{" "}
-                                  {lguFieldOutcomeLabel(report.outcome)}.
-                                  Review the remaining need before resolving the case.
-                                </Text>
-                              </View>
-                            )}
-
-                            {!!report.remainingNeeds && (
-                              <View style={styles.lguOfficialNeedsBox}>
-                                <Text style={styles.metaLabel}>
-                                  REMAINING NEEDS / REFERRAL
-                                </Text>
-                                <Text style={styles.lguOfficialNeedsText}>
-                                  {report.remainingNeeds}
-                                </Text>
-                              </View>
-                            )}
-
-                            {!!report.notes && (
-                              <View style={styles.lguOfficialNotesBox}>
-                                <Text style={styles.metaLabel}>
-                                  ADDITIONAL FIELD NOTES
-                                </Text>
-                                <Text style={styles.lguOfficialNotesText}>
-                                  {report.notes}
-                                </Text>
-                              </View>
-                            )}
-
-                            {!reviewed ? (
-                              <View style={styles.lguOfficialReviewArea}>
-                                <Text style={styles.controlLabel}>
-                                  Admin review note · optional
-                                </Text>
-                                <TextInput
-                                  style={[
-                                    styles.input,
-                                    styles.lguOfficialReviewInput,
-                                  ]}
-                                  multiline
-                                  maxLength={1500}
-                                  value={reviewNote}
-                                  placeholder="Record follow-up instructions, verification details, or the basis for the Admin decision…"
-                                  placeholderTextColor="#94a3b8"
-                                  onChangeText={(value) =>
-                                    setLguFieldReviewNotes(
-                                      (current) => ({
-                                        ...current,
-                                        [report.id]: value,
-                                      })
-                                    )
-                                  }
-                                />
-
-                                <View style={styles.lguOfficialReviewActions}>
-                                  <TouchableOpacity
-                                    disabled={reviewBusy}
-                                    style={[
-                                      styles.lguMarkReviewedButton,
-                                      reviewBusy && styles.disabledButton,
-                                    ]}
-                                    onPress={() =>
-                                      void reviewLguFieldReport(report)
-                                    }
-                                  >
-                                    <Text style={styles.primaryButtonText}>
-                                      {reviewBusy
-                                        ? "Saving Review…"
-                                        : "Mark Official Report Reviewed"}
-                                    </Text>
-                                  </TouchableOpacity>
-
-                                  <Text style={styles.lguReviewDecisionHint}>
-                                    Reviewing the report does not close the emergency. After review, choose Resolve Case only if the incident is fully handled.
-                                  </Text>
-                                </View>
-                              </View>
-                            ) : (
-                              <View style={styles.lguReviewedSummary}>
-                                <Text style={styles.lguReviewedSummaryTitle}>
-                                  ✓ Official report reviewed
-                                </Text>
-                                <Text style={styles.lguReviewedSummaryText}>
-                                  Reviewed {formatApiDate(report.reviewedAt)}.
-                                  {report.adminReviewNote
-                                    ? ` Admin note: ${report.adminReviewNote}`
-                                    : " No additional Admin note was recorded."}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })()}
-                    </View>
-                  )}
-
                   <View style={styles.responseLifecycleRow}>
                     {["assigned", "in_progress"].includes(incident.status) &&
                       incidentAssignments.some((item) => item.status === "completed") && (
                       <TouchableOpacity
-                        disabled={busyKey === `confirm_completed_${incident.id}`}
+                        disabled={
+                          busyKey === `confirm_completed_${incident.id}` ||
+                          !incidentAssignments.some((item) =>
+                            item.status === "completed" &&
+                            item.residentConfirmationStatus === "resident_confirmed" &&
+                            item.residentConfirmationOutcome === "fully_helped"
+                          )
+                        }
                         style={styles.resolveButton}
                         onPress={() => {
                           const completed = incidentAssignments.find((item) => item.status === "completed");
@@ -4827,7 +4573,18 @@ export default function AdminCases() {
                         <Text style={styles.primaryButtonText}>
                           {busyKey === `confirm_completed_${incident.id}`
                             ? "Confirming…"
-                            : "Confirm Volunteer Completion"}
+                            : incidentAssignments.some((item) =>
+                                item.status === "completed" &&
+                                item.residentConfirmationStatus === "resident_confirmed" &&
+                                item.residentConfirmationOutcome === "fully_helped"
+                              )
+                              ? "Review & Resolve Case"
+                              : incidentAssignments.some((item) =>
+                                  item.status === "completed" &&
+                                  ["partially_helped", "not_helped"].includes(String(item.residentConfirmationOutcome || ""))
+                                )
+                                ? "Follow-up Required · Keep Case Open"
+                                : "Awaiting Resident Confirmation"}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -5541,7 +5298,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Volunteer Task Assignments</Text>
+                              <Text style={styles.personnelCleanTitle}>Send Volunteer Task Offers</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5549,7 +5306,7 @@ export default function AdminCases() {
                               </View>
                             </View>
                             <Text style={styles.personnelCleanSubtitle}>
-                              Select an approved Volunteer and send a task offer. It appears with the resident's incident photo in New, where they may Accept or Decline. These are community support tasks, not official dispatch.
+                              Choose an approved Volunteer. They receive the incident photo and task in New, then choose Accept or Decline.
                             </Text>
                           </View>
                         </View>
@@ -5563,7 +5320,7 @@ export default function AdminCases() {
                           </Text>
                         </View>
                         <Text style={styles.personnelBarangayHint}>
-                          Any approved SJDM Volunteer may receive a task offer, even with another task. Volunteers choose Accept or Decline; live response starts only with their consent.
+                          Approved SJDM Volunteers can receive offers. Only accepted offers become active tasks.
                         </Text>
                       </View>
 
@@ -5695,7 +5452,7 @@ export default function AdminCases() {
                       <View style={styles.personnelSupportDivider} />
 
                       <View style={styles.personnelActiveSupportHeader}>
-                        <Text style={styles.personnelListHeading}>Assigned Volunteer Support</Text>
+                        <Text style={styles.personnelListHeading}>Volunteer Task Status</Text>
                         <View style={styles.personnelCountBadgeMuted}>
                           <Text style={styles.personnelCountBadgeMutedText}>{activeAssignments.length}</Text>
                         </View>
@@ -5705,7 +5462,7 @@ export default function AdminCases() {
                         <View style={styles.personnelSupportEmpty}>
                           <Text style={styles.personnelSupportEmptyIcon}>♧</Text>
                           <View>
-                            <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
+                            <Text style={styles.personnelCleanEmptyTitle}>No task offers sent yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
                               Send an offer to an approved Volunteer, even offline. Android push requires a registered device; the Volunteer must accept to respond.
                             </Text>
