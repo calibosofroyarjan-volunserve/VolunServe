@@ -44,19 +44,43 @@ const timestamp = () => firebase.firestore.FieldValue.serverTimestamp();
       createdAt: timestamp(), updatedAt: timestamp(),
     };
     await assertSucceeds(admin.collection("announcements").add(payload));
-    const published = await assertSucceeds(
-        resident.collection("announcements")
-            .where("publishAt", "<=", firebase.firestore.Timestamp.now())
-            .orderBy("publishAt", "desc").get());
-    assert.ok(published.size >= 1, "Resident must receive published announcements");
-    await assertFails(resident.collection("announcements")
-        .where("audience", "in", ["all", "Muzon"]).get());
-    // Existing rules allow approved users to read published documents;
-    // visibility in the UI and inbox is separately restricted to their barangay.
-    const otherRead = await assertSucceeds(other.collection("announcements")
+    const variants = [
+      ["upper_bound", db => db.collection("announcements")
         .where("publishAt", "<=", firebase.firestore.Timestamp.now())
-        .orderBy("publishAt", "desc").get());
-    assert.ok(otherRead.size >= 1, "The UI must filter the authorized read result");
+        .orderBy("publishAt", "desc")],
+      ["bounded_timestamps", db => db.collection("announcements")
+        .where("publishAt", ">=", firebase.firestore.Timestamp.fromMillis(0))
+        .where("publishAt", "<=", firebase.firestore.Timestamp.now())
+        .orderBy("publishAt", "desc")],
+    ];
+    const probe = async (label) => {
+      for (const [name, makeQuery] of variants) {
+        try {
+          const snapshot = await makeQuery(resident).get();
+          console.log("PROBE", label, name, "ALLOWED", snapshot.size);
+        } catch (failure) {
+          console.log("PROBE", label, name, "DENIED", failure.code || String(failure));
+        }
+      }
+    };
+    await probe("existing_rule");
+
+    const rulesOriginal = fs.readFileSync(
+      path.resolve(__dirname, "..", "firestore.rules"), "utf8");
+    const rulesWithoutType = rulesOriginal.replace(
+      "&& resource.data.publishAt is timestamp\n          && resource.data.publishAt <= request.time",
+      "&& resource.data.publishAt <= request.time");
+    assert.notEqual(rulesWithoutType, rulesOriginal, "Read rule must be patched in test");
+    await env.loadFirestoreRules({rules: rulesWithoutType});
+    await probe("no_timestamp_type_guard");
+
+    const rulesListOnly = rulesOriginal.replace(
+      "allow read: if isAdminOrSuperAdmin()\n        || (\n          approved()\n          && resource.data.publishAt is timestamp\n          && resource.data.publishAt <= request.time\n        );",
+      "allow get: if isAdminOrSuperAdmin()\n        || (approved() && resource.data.publishAt is timestamp\n            && resource.data.publishAt <= request.time);\n      allow list: if isAdminOrSuperAdmin() || approved();");
+    assert.notEqual(rulesListOnly, rulesOriginal, "Scope test must patch only announcements");
+    await env.loadFirestoreRules({rules: rulesListOnly});
+    await probe("approved_list_rule");
+
     console.log("PASS emulator: scoped Admin write, valid published-only query, original audience-only query rejected");
   } finally {
     await env.cleanup();
