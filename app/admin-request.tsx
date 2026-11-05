@@ -1,16 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { createUserWithEmailAndPassword, getAuth, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import React, { useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { userFacingError } from "../lib/userFacingError";
-import { pickLguProofImage, uploadLguProof, type LguProofImage } from "../lib/lguCredentialImages";
+import { createPendingLguApplication, pickLguProofImage, uploadLguProof, type LguProofImage } from "../lib/lguCredentialImages";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -57,51 +55,38 @@ export default function LguStaffApplication() {
     setBusy(true);
     const app=initializeApp(firebaseConfig,"lgu-application-"+Date.now());
     const candidateAuth=getAuth(app);
-    const candidateDb=getFirestore(app);
-    const candidateStorage=getStorage(app);
     let newUser:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;
-    let profileCreated=false, createdAuth=false;
+    let profileCreated=false;
     try{
       try{
         newUser=(await createUserWithEmailAndPassword(candidateAuth,email,form.password)).user;
-        createdAuth=true;
       }catch(authError:any){
         if(authError?.code!=="auth/email-already-in-use")throw authError;
         // Retrying an incomplete upload requires the ORIGINAL email and password.
         newUser=(await signInWithEmailAndPassword(candidateAuth,email,form.password)).user;
       }
-      if(createdAuth){
-        await setDoc(doc(candidateDb,"users",newUser.uid),{
-        uid:newUser.uid,email,fullName,age:0,phoneNumber:"",
-        role:"applicant",status:"pending_review",residentAccess:false,volunteerAccess:false,
-        region:"Region III – Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",
-        barangay:form.barangay,lguOffice:office,lguPosition:position,
-          appointmentReference:reference,createdAt:serverTimestamp(),
-        });
-        profileCreated=true;
-      }else{
-        const prior=await getDoc(doc(candidateDb,"users",newUser.uid));
-        const data=prior.data();
-        if(!prior.exists() || data?.role!=="applicant" || data.status!=="pending_review" ||
-            String(data.email).toLowerCase()!==email)
-          throw new Error("This email is not a pending LGU staff application.");
-        profileCreated=true;
-      }
-      // Use secondary-app Auth for uploads, not the resident's active session.
-      await uploadLguProof(candidateStorage,newUser.uid,"staff-id",staffIdImage!);
-      await uploadLguProof(candidateStorage,newUser.uid,"appointment-letter",appointmentImage!);
+      // The existing Render backend verifies this Firebase Auth token, creates
+      // only a pending applicant, and prevents duplicate account promotion.
+      // Cloudinary image uploads remain private and require no Blaze bucket.
+      await createPendingLguApplication(newUser, {
+        fullName, lguOffice: office, lguPosition: position,
+        appointmentReference: reference, barangay: form.barangay,
+      });
+      profileCreated=true;
+      await uploadLguProof(newUser,newUser.uid,"staff-id",staffIdImage!);
+      await uploadLguProof(newUser,newUser.uid,"appointment-letter",appointmentImage!);
       void sendEmailVerification(newUser).catch(()=>undefined);
       setForm({fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",appointmentReference:"",barangay:""});
       setStaffIdImage(null);
       setAppointmentImage(null);
       setSuccess(true);
     }catch(err:any){
-      // Never delete a pending profile if an image upload fails. That profile
-      // remains unprivileged, and its owner can retry with the same credentials.
-      if(createdAuth && !profileCreated && newUser)await deleteUser(newUser).catch(()=>undefined);
+      // If the network fails after the backend creates a pending profile, do
+      // not delete its Auth account or orphan its secure LGU application.
+      // An interrupted application can resume with the SAME email and password.
       const hint=profileCreated
-        ? " The pending application has no Admin access. Retry with the SAME email and password and both images."
-        : "";
+        ? " Your LGU account remains pending with no Admin access. Retry with the SAME email and password and both images."
+        : " Retry with the SAME email and password. No Admin access has been granted.";
       setError(userFacingError(err, "Unable to submit your application.")+hint);
     }finally{
       await signOut(candidateAuth).catch(()=>undefined);

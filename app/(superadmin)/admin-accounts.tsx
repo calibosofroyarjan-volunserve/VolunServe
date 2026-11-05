@@ -28,6 +28,7 @@ import {
 
 import CreateLguAdminModal from "../../components/admin/CreateLguAdminModal";
 import LguPrivateProofPreview from "../../components/admin/LguPrivateProofPreview";
+import { reviewPendingLguApplication } from "../../lib/lguCredentialImages";
 import SuperAdminFilterSort from "../../components/ui/SuperAdminFilterSort";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -665,106 +666,39 @@ export default function AdminAccounts() {
       setActionError("");
 
       try {
+        if (action === "promote" || action === "reject") {
+          // Firebase Admin SDK validates the REAL Super Admin session,
+          // requires both private Cloudinary documents before approval,
+          // and atomically records the role change + audit log. Firestore
+          // client-side Rules never need to grant direct privileged writes.
+          await reviewPendingLguApplication(
+            verified.current, account.id,
+            action === "promote" ? "approve" : "reject",
+            action === "promote" ? {
+              office: lguOffice.trim(),
+              position: lguPosition.trim(),
+              credentialReference: lguReference.trim(),
+              verificationMethod: lguVerificationMethod.trim(),
+              identityMatched, lguEmploymentConfirmed, credentialsConfirmed,
+            } : { reason: rejectReason.trim() }
+          );
+          if (action === "promote") {
+            setShowAddAdmin(false);
+            setPromoteSearch("");
+          }
+          setActionType(null);
+          setActionTarget(null);
+          setActionError("");
+          setRejectReason("");
+          clearCredentialReview();
+          return;
+        }
         const batch =
           writeBatch(db);
 
         let logPayload: AdminAuditPayload;
 
         if (
-          action === "promote"
-        ) {
-          // Atomic grant: Firestore rules require this fresh review record
-          // in the same batch as the role change.
-          batch.set(doc(db, "lguAdminCredentialReviews", account.id), {
-            targetUid: account.id,
-            accountEmail: account.email,
-            reviewStatus: "verified",
-            office: lguOffice.trim(),
-            position: lguPosition.trim(),
-            credentialReference: lguReference.trim(),
-            verificationMethod: lguVerificationMethod.trim(),
-            verifiedBy: verified.current.uid,
-            verifiedAt: serverTimestamp(),
-          });
-          batch.update(
-            doc(
-              db,
-              "users",
-              account.id
-            ),
-            {
-              previousRole:
-                account.role ||
-                "resident",
-
-              previousPrimaryRole:
-                account.primaryRole ||
-                account.role ||
-                "resident",
-
-              role: "admin",
-
-              adminStatus:
-                "active",
-
-              status:
-                "approved",
-
-              adminCreatedAt:
-                serverTimestamp(),
-
-              adminCreatedBy:
-                verified.current.uid,
-
-              adminUpdatedAt:
-                serverTimestamp(),
-
-              adminUpdatedBy:
-                verified.current.uid,
-            }
-          );
-
-          logPayload = {
-            actionType:
-              "admin_account_created",
-
-            targetType:
-              "user",
-
-            targetId:
-              account.id,
-
-            adminUid:
-              verified.current.uid,
-
-            adminName:
-              verified.current
-                .displayName ||
-              verified.current
-                .email ||
-              "Super Admin",
-
-            description:
-              `${nameFor(
-                account
-              )} was granted Admin access.`,
-          };
-        } else if (action === "reject") {
-          batch.update(doc(db, "users", account.id), {
-            status: "rejected",
-            reviewedBy: verified.current.uid,
-            reviewedAt: serverTimestamp(),
-            rejectedReason: rejectReason.trim(),
-          });
-          logPayload = {
-            actionType: "lgu_admin_application_rejected",
-            targetType: "user",
-            targetId: account.id,
-            adminUid: verified.current.uid,
-            adminName: verified.current.displayName || verified.current.email || "Super Admin",
-            description: `${nameFor(account)} LGU staff application was rejected after review.`,
-          };
-        } else if (
           action === "suspend"
         ) {
           batch.update(
@@ -941,18 +875,6 @@ export default function AdminAccounts() {
           createdAt: serverTimestamp(),
         });
         await batch.commit();
-
-        if (
-          action === "promote"
-        ) {
-          setShowAddAdmin(
-            false
-          );
-
-          setPromoteSearch(
-            ""
-          );
-        }
 
         setActionType(null);
         setActionTarget(null);
