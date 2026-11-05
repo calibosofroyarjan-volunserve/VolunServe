@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Guarded immutable compile, activate and rollback of ONLY notification read-only-content security.
+"""Guarded immutable compile, activate and rollback of ONLY notification content security.
 
-Never deploys Hosting, writes Firestore documents, changes sign-in or touches
-any programmer Super Admin or LGU Admin authorization rules. Must be used with a tested candidate built from
-the exact active production rules source.
+Never deploys Hosting, writes Firestore documents, changes sign-in or alters
+programmer Super Admin / LGU Admin authorization. Compile from the exact active
+Cloud Rules source, test with the emulator, then update ONLY the release pointer.
+The Firebase Rules REST PATCH updateMask belongs in the JSON body, not URL.
 """
 import hashlib
 import json
@@ -18,7 +19,7 @@ API = "https://firebaserules.googleapis.com/v1/"
 RELEASE = f"projects/{PROJECT}/releases/cloud.firestore"
 EXPECTED_OLD = f"projects/{PROJECT}/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
 EXPECTED_OLD_HASH = "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
-EXPECTED_HOSTING = "473e824f7b941fffcaea631d5f0d4beb5d83ac85"
+EXPECTED_HOSTING = "5d3c0a4c9a3906a728d0e24fff992460ba919143"
 RUNNER_TEMP = os.environ.get("RUNNER_TEMP", ".")
 MANIFEST_FILE = os.path.join(RUNNER_TEMP, "notifications-locked-rules-release.json")
 SOURCE_MANIFEST = os.path.join(RUNNER_TEMP, "notification-rules-manifest.json")
@@ -40,8 +41,22 @@ def request(path, method="GET", payload=None):
         with urllib.request.urlopen(req, timeout=45) as reply:
             return json.load(reply)
     except urllib.error.HTTPError as error:
+        # Log only sanitized diagnostic words from the Firebase error message.
+        # Never echo raw credentials, URLs, emails, JSON or request headers.
+        import re
         details = error.read().decode("utf8", errors="replace")
-        raise RuntimeError("Firebase Rules API HTTP " + str(error.code) + ": " + details[:1400]) from error
+        try:
+            payload = json.loads(details)
+            error_body = payload.get("error", {})
+            status = str(error_body.get("status", "unknown"))
+            message = str(error_body.get("message", "unknown"))
+        except Exception:
+            status, message = "unparsed", "unavailable"
+        safe_words = " ".join(re.findall(r"[A-Za-z_]+", message)[:45])
+        raise RuntimeError(
+            "Firebase Rules API HTTP " + str(error.code) +
+            " status=" + status + " message_words=" + safe_words[:400]
+        ) from error
 
 def current():
     return request(RELEASE)["rulesetName"]
@@ -74,9 +89,12 @@ def manifest():
 
 def patch_pointer(name):
     response = request(
-        RELEASE + "?updateMask=rulesetName",
+        RELEASE,
         method="PATCH",
-        payload={"release": {"name": RELEASE, "rulesetName": name}},
+        payload={
+            "release": {"name": RELEASE, "rulesetName": name},
+            "updateMask": "rulesetName",
+        },
     )
     if response.get("rulesetName") != name:
         raise RuntimeError("Unexpected Firebase Rules release update response")
@@ -124,35 +142,73 @@ def do_stage():
 
 def do_activate():
     info = manifest()
-    if info.get("old") != EXPECTED_OLD or info.get("oldHash") != EXPECTED_OLD_HASH or info.get("hostingBase") != EXPECTED_HOSTING:
+    if (info.get("old") != EXPECTED_OLD or
+        info.get("oldHash") != EXPECTED_OLD_HASH or
+        info.get("hostingBase") != EXPECTED_HOSTING):
         raise RuntimeError("STOP stage manifest differs from release guard")
     verify_hosting()
     if current() != EXPECTED_OLD:
-        raise RuntimeError("STOP production Rules changed before activation")
+        raise RuntimeError("STOP active Firestore Rules changed before activation")
     _, staged_source = content_for(info["new"])
     candidate = open("firestore.rules", "rb").read().decode("utf8")
     if canonical(staged_source) != canonical(candidate) or sha(candidate) != info["newHash"]:
-        raise RuntimeError("STOP previously compiled source no longer matches tested candidate")
-    patch_pointer(info["new"])
-    if current() != info["new"]:
-        raise RuntimeError("STOP activation could not be verified")
-    print("PASS activated notification read-only-content restriction only:", info["new"])
+        raise RuntimeError("STOP immutable staged candidate differs from emulator-tested source")
+
+    # The first variant is the exact PATCH shape used in VolunServe's previous
+    # successful LGU Rules-only activation. Additional documented API shapes
+    # are safe fallbacks only if the preceding request leaves the old Rules active.
+    variants = [
+        (RELEASE + "?updateMask=rulesetName", {
+            "release": {"name": RELEASE, "rulesetName": info["new"]}
+        }),
+        (RELEASE, {
+            "release": {"name": RELEASE, "rulesetName": info["new"]}
+        }),
+        (RELEASE, {
+            "release": {"name": RELEASE, "rulesetName": info["new"]},
+            "updateMask": "rulesetName"
+        }),
+    ]
+    messages = []
+    for index, (url, payload) in enumerate(variants, start=1):
+        if current() != EXPECTED_OLD:
+            if current() == info["new"]:
+                print("PASS new Ruleset is already active from the previous update attempt")
+                return
+            raise RuntimeError("STOP a different Ruleset became active during activation")
+        try:
+            response = request(url, method="PATCH", payload=payload)
+            if response.get("rulesetName") != info["new"] or current() != info["new"]:
+                raise RuntimeError("STOP unexpected Firebase release update response")
+            print("PASS activated notification content-protection only:", info["new"])
+            return
+        except Exception as exc:
+            if current() == info["new"]:
+                print("PASS verified active Ruleset even though update response failed")
+                return
+            messages.append("variant " + str(index) + ": " + str(exc)[:550])
+    raise RuntimeError("STOP no Firebase Rules PATCH form succeeded. " + " | ".join(messages))
+
 
 def do_rollback():
     if not os.path.isfile(MANIFEST_FILE):
-        print("NO RULES ROLLBACK: stage manifest does not exist")
+        print("NO RULES ROLLBACK: stage manifest missing")
         return
     info = manifest()
     active = current()
     if active == info["old"]:
-        print("NO RULES ROLLBACK: old Ruleset still active")
+        print("NO RULES ROLLBACK: old Ruleset remains active")
         return
     if active != info["new"]:
-        raise RuntimeError("STOP: unrelated Ruleset now active; do not overwrite it")
-    patch_pointer(info["old"])
-    if current() != info["old"]:
-        raise RuntimeError("CRITICAL: old Ruleset rollback did not verify")
-    print("PASS safely rolled back ONLY this run's Ruleset activation")
+        raise RuntimeError("STOP unrelated Ruleset active; refuse to overwrite")
+    # Reuse exact known-successful release PATCH form to restore the previous
+    # immutable Ruleset, never reading stale checked-in Firestore rules.
+    response = request(RELEASE + "?updateMask=rulesetName", method="PATCH",
+                       payload={"release": {"name": RELEASE, "rulesetName": info["old"]}})
+    if response.get("rulesetName") != info["old"] or current() != info["old"]:
+        raise RuntimeError("CRITICAL old Ruleset rollback not verified")
+    print("PASS reverted only this workflow's Ruleset pointer to old version")
+
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) == 2 else ""
