@@ -7,7 +7,6 @@ import {
   onSnapshot,
   orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -33,6 +32,7 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { useCommunityAnnouncements } from "../../lib/useCommunityAnnouncements";
 
 type Announcement = {
   id: string;
@@ -140,7 +140,7 @@ export default function WebHome() {
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const { announcements, error: announcementError } = useCommunityAnnouncements(profile?.barangay, Boolean(user && profile));
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -187,33 +187,6 @@ export default function WebHome() {
   const profileVerified = profile?.identityVerified === true || profile?.identityStatus === "verified";
   const profileInitial = displayName.charAt(0).toUpperCase();
 
-  useEffect(() => {
-    const announcementsQuery = query(
-      collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
-      orderBy("publishAt", "desc")
-    );
-
-    return onSnapshot(
-      announcementsQuery,
-      (snapshot) => {
-        const nextAnnouncements = snapshot.docs
-          .map((item) => ({
-            id: item.id,
-            ...(item.data() as Omit<Announcement, "id">),
-          }))
-          .filter(
-            (item) =>
-              !item.audience ||
-              item.audience === "all" ||
-              item.audience === profile?.role
-          );
-
-        setAnnouncements(nextAnnouncements);
-      },
-      () => setAnnouncements([])
-    );
-  }, [profile?.role]);
 
   useEffect(() => {
     if (!user) {
@@ -521,10 +494,10 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                      {announcements.length ? `${announcements.length} published updates available.` : (announcementError || "No published updates yet. New community notices will appear here.")}
                     </Text>
-                    <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
-                      <Text style={styles.mobileSlideActionText}>View announcements</Text>
+                    <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/notifications")}>
+                      <Text style={styles.mobileSlideActionText}>View in Notifications</Text>
                       <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
                     </Pressable>
                   </>
@@ -902,9 +875,9 @@ export default function WebHome() {
               <PanelTitle
                 icon="megaphone"
                 title="Community Updates"
-                subtitle="Important announcements from the local response team."
+                subtitle="Published notices for your barangay and VolunServe community."
                 action="View All"
-                onAction={() => router.push("/announcements")}
+                onAction={() => router.push("/notifications")}
               />
 
               {announcements.length ? (
@@ -913,7 +886,7 @@ export default function WebHome() {
                     key={announcement.id}
                     announcement={announcement}
                     last={index === Math.min(announcements.length, 3) - 1}
-                    onPress={() => router.push("/announcements")}
+                    onPress={() => router.push("/notifications")}
                   />
                 ))
               ) : (
@@ -929,7 +902,7 @@ export default function WebHome() {
                       No published updates
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementError || "New community announcements will appear here."}
                     </Text>
                   </View>
                 </View>
@@ -1099,12 +1072,15 @@ function UpdateRow({
         ]}
       >
         <Ionicons
-          name={urgent ? "warning-outline" : "information-circle-outline"}
+          name={urgent ? "warning-outline" : announcement.audience === "all" ? "settings-outline" : "megaphone-outline"}
           size={25}
           color={urgent ? "#F03447" : "#167AF4"}
         />
       </View>
       <View style={styles.updateCopy}>
+        <Text style={[styles.updateDate, { color: announcement.audience === "all" ? "#2364B0" : "#087D60", textAlign: "left" }]}>
+          {announcement.audience === "all" ? "VOLUNSERVE SYSTEM UPDATE" : "BARANGAY ANNOUNCEMENT • " + announcement.audience}
+        </Text>
         <Text style={styles.updateTitle} numberOfLines={1}>
           {announcement.title || "VolunServe Update"}
         </Text>
