@@ -1,0 +1,80 @@
+name: Validate Email-First Signup Release (No Production Deploy)
+
+on:
+  push:
+    branches:
+      - release/signup-user-integration-20261105
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-signup-release-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Signup, TypeScript, Web, Firestore Emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - name: Check out full history for fixed main-baseline regression comparisons
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Set up Java for local Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit --incremental false
+
+      - name: Verify offline Signup and Google OAuth regressions
+        run: |
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-google-oauth.cjs
+
+      - name: Verify default-off production web export
+        env:
+          EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "false"
+        run: |
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+
+      - name: Verify opt-in premium web export
+        env:
+          EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
+        run: |
+          rm -rf dist .expo
+          npx expo export --platform web
+          node scripts/verify-hosting-release.cjs
+
+      - name: Verify Firestore rules, role access, and old-client transition on LOCAL emulators
+        run: |
+          node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec \
+            --config firebase.signup-tests.json \
+            --only auth,firestore \
+            --project demo-volunserve \
+            "node scripts/test-signup-prod-rules.cjs && node scripts/test-signup-rollout-transition.cjs"
+
+      - name: State explicit release status
+        if: success()
+        run: |
+          echo "Automated validation passed. This workflow NEVER deploys Firebase."
+          echo "Production is BLOCKED until real email/Google/Android tests and old-client compatibility decision."
