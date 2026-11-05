@@ -2210,7 +2210,7 @@ This still does not automatically create a Donation Campaign.`,
             <CaseReviewTab request={selected} />
             {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
               <View style={styles.simpleSummaryAction}>
-                <Text style={styles.simpleReviewCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
+                <Text style={styles.simpleCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
                 <ActionButton label="Open Verify & Decide" icon="shield-checkmark-outline" variant="success" loading={false}
                   onPress={() => {setReviewTab("decision");setSimpleReviewMode(true);}} />
               </View>
