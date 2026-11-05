@@ -22,6 +22,7 @@ import CaseChat from "./CaseChat.web";
 import { ResponsePanel, useResponseFlow } from "./ResponseFlow.web";
 
 import { db } from "../../lib/firebase";
+import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 import { DISPATCH_VEHICLES, vehicleInfo, isVerifiedActiveCenter, mapsDirectionsUrl } from "../../lib/emergencyMapTypes";
 import { SJDM_BOUNDARY_SOURCE, boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, routeStaysInSjdm, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { verifiedLguMapFacility, LGU_FACILITY_ICONS, type LguMapFacility } from "../../lib/lguMapFacilities";
@@ -5467,21 +5468,17 @@ export default function WebMapTracking() {
     residentDisplayedAssignment?.status,
   );
 
-  // Case status reflects the Resident → Admin → assigned Volunteer workflow.
   const residentVolunteerStatus = normalize(residentPrimaryAssignment?.status);
-  const residentFlowIndex =
-    ["resolved", "closed"].includes(normalize(residentCoordinationCase?.status)) ||
-    residentVolunteerStatus === "completed"
-      ? 5
-      : residentVolunteerStatus === "on_site"
-        ? 4
-        : residentVolunteerStatus === "responding"
-          ? 3
-          : ["offered", "accepted"].includes(residentVolunteerStatus)
-            ? 2
-            : residentCoordinationCase
-              ? 1
-              : 0;
+  const residentCaseStatus = emergencyTaskStatusLabel(
+    residentCoordinationCase?.status,
+    residentCoordinationCase?.verificationStatus,
+    residentVolunteerStatus,
+  );
+  const residentFlowIndex = residentCaseStatus === "Completed" ? 5
+    : residentCaseStatus === "In Progress" ? 4
+    : residentCaseStatus === "Assigned" ? 3
+    : residentCaseStatus === "Approved" ? 2
+    : residentCaseStatus === "Pending" ? 1 : 0;
 
   const residentNeedsCaseSelection =
     isResidentMode && !residentCoordinationCase;
@@ -5669,7 +5666,12 @@ export default function WebMapTracking() {
                     : routeLoading ? "Calculating road route…" : "GPS sharing active"
                 : "Waiting for active Volunteer GPS"}
             </strong>
-            <small>Admin can monitor but cannot activate or control a Volunteer's GPS.</small>
+            <small>
+              {adminFocusedVolunteerPin?.lastShared
+                ? `Last GPS update: ${new Date(adminFocusedVolunteerPin.lastShared).toLocaleString("en-PH")} · ${Number(adminFocusedVolunteerPin.latitude).toFixed(5)}, ${Number(adminFocusedVolunteerPin.longitude).toFixed(5)}`
+                : "No Volunteer GPS published yet"}
+              {" · "}Admin can monitor but cannot activate or control a Volunteer's GPS.
+            </small>
           </div>
         </section>
       )}
@@ -5728,7 +5730,7 @@ export default function WebMapTracking() {
         <section className="clean-flow-card resident-clean-flow" aria-label="Resident response flow">
           <div className="clean-flow-summary">
             <div>
-              <span className="clean-kicker">YOUR EMERGENCY RESPONSE</span>
+              <span className="clean-kicker">EMERGENCY REPORT · {residentCaseStatus.toUpperCase()}</span>
               <h2>{residentCoordinationCase.title || "Emergency request"}</h2>
               <p>
                 {residentUsingOwnLiveDestination
@@ -5799,7 +5801,7 @@ export default function WebMapTracking() {
           </div>
 
           <div className="clean-flow-steps">
-            {["Reported", "Assigned", "On the way", "Arrived", "Completed"].map(
+            {["Pending", "Approved", "Assigned", "In Progress", "Completed"].map(
               (label, index) => {
                 const step = index + 1;
                 const complete = residentFlowIndex > step;
@@ -6840,6 +6842,10 @@ export default function WebMapTracking() {
                 </div>
               </div>
 
+              <div className="clean-info-block">
+                <strong>Report status</strong>
+                <p>{residentCaseStatus}{residentCaseStatus === "Rejected" ? " · Admin did not approve this report" : ""}</p>
+              </div>
               <div className="clean-resident-message">
                 {routeResponderPoint
                   ? routeResponderPoint.stale
@@ -6854,6 +6860,19 @@ export default function WebMapTracking() {
                     : "Your report is saved. Admin must validate it and assign a Volunteer before tracking can start."}
               </div>
 
+              <div className="clean-info-block">
+                <strong>Last Volunteer GPS update</strong>
+                <p>
+                  {routeResponderPoint?.lastShared
+                    ? new Date(routeResponderPoint.lastShared).toLocaleString("en-PH")
+                    : "No location shared yet"}
+                </p>
+                <small>
+                  {routeResponderPoint
+                    ? `Last reported: ${Number(routeResponderPoint.latitude).toFixed(5)}, ${Number(routeResponderPoint.longitude).toFixed(5)} · ${routeResponderPoint.stale ? "GPS may be outdated" : "GPS recently updated"}`
+                    : "No live GPS until the assigned Volunteer starts the task and permits location sharing."}
+                </small>
+              </div>
               {true && (
                 <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:10,marginBottom:10}}>
                   <a href="tel:911" className="secondary-button"
