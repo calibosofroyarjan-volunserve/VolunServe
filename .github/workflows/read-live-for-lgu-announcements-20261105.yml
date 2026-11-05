@@ -1,0 +1,53 @@
+name: Read-Only Check CURRENT Live VolunServe Before LGU Announcement Release
+on:
+  push:
+    branches: [audit/current-live-announcements-safe-20261105]
+    paths: [".github/workflows/read-live-for-lgu-announcements-20261105.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read actual production Hosting revision, active Firestore Rules and relevant protected source fingerprints ONLY
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,hashlib,subprocess
+          for domain in ['https://volunserve.com','https://volunserve-3aa5b.web.app']:
+            req=urllib.request.Request(domain+'/volunserve-release.json?live_probe=20261105-2258',headers={'Cache-Control':'no-cache'})
+            with urllib.request.urlopen(req,timeout=25) as resp:
+              metadata=json.load(resp)
+              print('HOSTING_DOMAIN='+domain)
+              print('HOSTING_REVISION='+str(metadata.get('revision','MISSING')))
+              print('HOSTING_BUILD='+str(metadata.get('builtAt','MISSING')))
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=25) as resp:return json.load(resp)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          rule=get(release['rulesetName'])
+          files=rule.get('source',{}).get('files',[])
+          matched=[x for x in files if x.get('name','').endswith('firestore.rules')]
+          if not matched and len(files)==1:matched=files
+          if len(matched)!=1:raise SystemExit('STOP ambiguous Firestore Rules source')
+          src=matched[0]['content']
+          print('ACTIVE_RULESET='+release['rulesetName'])
+          print('ACTIVE_RULES_SHA256='+hashlib.sha256(src.encode()).hexdigest())
+          start=src.find('match /announcements/{announcementId} {')
+          end=src.find('    match /',start+len('match /announcements/{announcementId} {'))
+          if start<0 or end<0:raise SystemExit('STOP unexpected announcements block')
+          section=src[start:end]
+          print('ANNOUNCEMENT_POLICY_SHA256='+hashlib.sha256(section.encode()).hexdigest())
+          print('ANNOUNCEMENT_SCOPE_SAME_BARANGAY='+str('profile().barangay' in section))
+          print('ANNOUNCEMENT_BLOCK_LINES='+str(len(section.splitlines())))
+          PY
+      - name: Confirm READ ONLY no deployment
+        run: echo 'No Hosting, Firestore, auth, user data or source changes performed.'
