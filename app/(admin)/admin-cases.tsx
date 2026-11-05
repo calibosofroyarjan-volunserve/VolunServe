@@ -3919,8 +3919,8 @@ export default function AdminCases() {
                     ["overview", "Overview"],
                     ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["response", "Response"],
-                    ["personnel", "Response Team"],
+                    ["response", "Progress"],
+                    ["personnel", "Assign Volunteer"],
                     ["history", "History"],
                   ] as const
                 ).map(([key, label]) => {
@@ -3988,7 +3988,7 @@ export default function AdminCases() {
                       ["Reported", true, incident.createdAt],
                       ["Validated", verificationStatus === "validated", incident.validatedAt],
                       [
-                        "LGU Response",
+                        "Volunteer Assigned",
                         ["assigned", "in_progress", "resolved", "closed"].includes(incident.status),
                         incident.assignedAt || incident.updatedAt,
                       ],
@@ -4236,7 +4236,7 @@ export default function AdminCases() {
                     verificationStatus !== "rejected" && (
                     <View style={styles.criticalResponseNotice}>
                       <Text style={styles.criticalResponseTitle}>
-                        Critical case — official LGU response takes priority
+                        Critical case — contact emergency services when urgent
                       </Text>
                       <Text style={styles.criticalResponseText}>
                         Official LGU navigation may begin immediately while the
@@ -4254,7 +4254,7 @@ export default function AdminCases() {
                         }
                       >
                         <Text style={styles.criticalNavigateButtonText}>
-                          Start / Open Critical LGU Live Response
+                          View Emergency Map
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -4454,10 +4454,10 @@ export default function AdminCases() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
                       <Text style={styles.responseControlTitle}>
-                        LGU Response Control
+                        Volunteer Response Progress
                       </Text>
                       <Text style={styles.responseControlSubtitle}>
-                        Assign the official LGU response first. Request Volunteer support only when additional qualified help is needed.
+                        Review a validated report, assign a qualified Volunteer, and monitor the response. GPS updates appear only with permission.
                       </Text>
                     </View>
 
@@ -4474,7 +4474,7 @@ export default function AdminCases() {
                               : incident.status === "assigned"
                                 ? "SUPPORT REQUESTED"
                                 : incident.status === "in_progress"
-                                  ? "LGU RESPONSE ACTIVE"
+                                  ? "RESPONSE ACTIVE"
                                   : incident.status === "resolved"
                                     ? "RESOLVED"
                                     : "CLOSED"}
@@ -4862,7 +4862,7 @@ export default function AdminCases() {
                         style={styles.coordinationInput}
                         value={note}
                         multiline
-                        placeholder="Add a short LGU coordination note…"
+                        placeholder="Add a short Admin coordination note…"
                         placeholderTextColor="#94a3b8"
                         onChangeText={(value) =>
                           setNotes((current) => ({
@@ -5816,7 +5816,7 @@ export default function AdminCases() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Optional Volunteer Support</Text>
+                              <Text style={styles.personnelCleanTitle}>Volunteer Assignments</Text>
                               <View style={styles.personnelCountBadgePurple}>
                                 <Text style={styles.personnelCountBadgePurpleText}>
                                   {eligibleVolunteerCount} eligible
@@ -5848,7 +5848,7 @@ export default function AdminCases() {
                             One Volunteer support assignment is already active
                           </Text>
                           <Text style={styles.personnelSupportNoticeText}>
-                            Finish or cancel it before offering support to another Volunteer. LGU response continues independently.
+                            Finish or cancel the active assignment before offering this case to another Volunteer.
                           </Text>
                         </View>
                       )}
@@ -5999,7 +5999,7 @@ export default function AdminCases() {
                       <View style={styles.personnelSupportDivider} />
 
                       <View style={styles.personnelActiveSupportHeader}>
-                        <Text style={styles.personnelListHeading}>Assigned Volunteer Support</Text>
+                        <Text style={styles.personnelListHeading}>Assigned Volunteer</Text>
                         <View style={styles.personnelCountBadgeMuted}>
                           <Text style={styles.personnelCountBadgeMutedText}>{activeAssignments.length}</Text>
                         </View>
@@ -6009,7 +6009,7 @@ export default function AdminCases() {
                         <View style={styles.personnelSupportEmpty}>
                           <Text style={styles.personnelSupportEmptyIcon}>♧</Text>
                           <View>
-                            <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
+                            <Text style={styles.personnelCleanEmptyTitle}>No Volunteer assigned yet</Text>
                             <Text style={styles.personnelCleanEmptyText}>
                               Send a support offer to an approved, qualified local Volunteer, even when offline. The Volunteer must accept to respond.
                             </Text>
@@ -6099,7 +6099,7 @@ export default function AdminCases() {
 
                   {incidentAssignments.length > 0 && (
                     <View style={styles.historyAssignments}>
-                      <Text style={styles.overviewLabel}>Volunteer support history</Text>
+                      <Text style={styles.overviewLabel}>Volunteer assignment history</Text>
                       <ListPagination page={Math.max(1, Math.min(historyAssignmentPage, Math.ceil(incidentAssignments.length / 5) || 1))} total={incidentAssignments.length} pageSize={5} onChange={setHistoryAssignmentPage} />
                       {pageFive(incidentAssignments, historyAssignmentPage).map((assignment) => (
                         <View key={assignment.id} style={styles.historyAssignmentRow}>
