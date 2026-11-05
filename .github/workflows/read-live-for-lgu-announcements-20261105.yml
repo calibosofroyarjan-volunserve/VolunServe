@@ -65,3 +65,5 @@ jobs:
 # Fresh read-only verification for November 6 notification security guard after newer live Hosting.
 
 # Read-only confirm rules after blocked notification security release attempts (HTTP 400/409), no production modifications.
+
+# Read-only safety verification after Firebase Console reports error saving unpublished security rules.
