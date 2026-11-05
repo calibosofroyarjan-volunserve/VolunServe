@@ -1,0 +1,167 @@
+name: "Guarded LIVE Notification Read-Status Security Only"
+on:
+  push:
+    branches: [fix/notifications-read-status-only-rules-live-20261106]
+    paths: [".github/workflows/release-notifications-read-status-only-20261106.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-firestore-rules-production-20261106
+  cancel-in-progress: false
+jobs:
+  guarded-rules-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.head_commit.message == 'One-shot guarded notification read-status-only Firestore Rules release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 34
+    env:
+      LIVE_BASE: "12f840178b6fce3ff642ef33f036e2f8ed4d37cf"
+      RULESET_BASE: "projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164"
+      RULES_BASE_SHA: "f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d"
+      FIREBASE_PROJECT: "volunserve-3aa5b"
+      CI: "true"
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/notifications-rules-service-account.json"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Exact production source and no application-code changes
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git diff --name-only "$LIVE_BASE" HEAD > "$RUNNER_TEMP/changed.txt"
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const files=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').split('\n').filter(Boolean);
+          assert.deepEqual(files,['.github/workflows/release-notifications-read-status-only-20261106.yml'],
+            'STOP any changed source is prohibited');
+          console.log('PASS exact LIVE base; Super Admin, Admin, Login, Signup, Notifications UI, Firestore snapshot and Functions untouched');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Prepare Firebase CLI credentials for this project only
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const val=JSON.parse(process.env.SA_JSON);
+          if(val.type!=='service_account'||val.project_id!==process.env.FIREBASE_PROJECT)
+            throw Error('STOP wrong Firebase service account project');
+          fs.writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,process.env.SA_JSON,{mode:0o600});
+          console.log('PASS Firebase credential project identity');
+          NODE
+      - name: Confirm current LIVE Hosting remains unchanged
+        run: |
+          node - <<'NODE'
+          (async()=>{
+            for(const domain of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(domain+'/volunserve-release.json?rules_guard='+Date.now(),
+                {headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(25000)});
+              if(!r.ok)throw Error('STOP Hosting revision inaccessible at '+domain);
+              const m=await r.json();
+              if(m.revision!==process.env.LIVE_BASE)throw Error('STOP newer Hosting release, prevent out-of-date rules promotion');
+              console.log('PASS current production Hosting '+domain);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Prepare candidate from exact active production Rules (no writes)
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare-notification-read-only-rules-20261106.py
+          python3 - <<'PY'
+          import json,os,hashlib
+          manifest=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'notification-rules-manifest.json')))
+          if manifest['originalRuleset']!=os.environ['RULESET_BASE'] or manifest['originalSha']!=os.environ['RULES_BASE_SHA']:
+            raise SystemExit('STOP old Ruleset manifest mismatch')
+          print('PASS candidate generated from active production policy, only notification read/update restrictions changed')
+          PY
+      - name: Emulator private inbox, safe mark read, and content forgery regression
+        env:
+          LIVE_NOTIFICATION_RULES_FILE: firestore.rules
+        run: |
+          npx firebase emulators:exec --only firestore --project demo-volunserve 'node scripts/test-notifications-private-emulator-20261106.cjs'
+          node scripts/test-notification-clickthrough-polish-20261106.cjs
+      - name: Store exact pre-deployment active Rules source for guarded recovery
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,os,hashlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          active=get('projects/volunserve-3aa5b/releases/cloud.firestore')['rulesetName']
+          if active!=os.environ['RULESET_BASE']:raise SystemExit('STOP active Ruleset changed during tests')
+          files=get(active)['source']['files']
+          matches=[x for x in files if x.get('name','').endswith('firestore.rules')]
+          if not matches and len(files)==1:matches=files
+          if len(matches)!=1:raise SystemExit('STOP unexpected live Rules file arrangement')
+          source=matches[0]['content']
+          if hashlib.sha256(source.encode('utf8')).hexdigest()!=os.environ['RULES_BASE_SHA']:
+            raise SystemExit('STOP active Rules source changed')
+          with open(os.path.join(os.environ['RUNNER_TEMP'],'original-notifications-live.rules'),'w',encoding='utf8',newline='') as f:f.write(source)
+          print('PASS original full live Rules backup retained for safety, no production writes')
+          PY
+      - name: Activate ONLY firestore:rules using official Firebase CLI
+        run: |
+          set -euo pipefail
+          node node_modules/firebase-tools/lib/bin/firebase.js deploy --only firestore:rules --project "$FIREBASE_PROJECT" --non-interactive
+          echo 'firebase-rules-deploy-attempted' > "$RUNNER_TEMP/notification-rules-attempt.txt"
+      - name: Verify ACTIVE published Rules are exactly the emulator-tested candidate
+        run: |
+          python3 - <<'PY'
+          import subprocess,urllib.request,json,hashlib,os
+          tok=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+tok})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          active=get('projects/volunserve-3aa5b/releases/cloud.firestore')['rulesetName']
+          if active==os.environ['RULESET_BASE']:raise SystemExit('STOP old Firestore Rules still active')
+          files=get(active)['source']['files']
+          candidates=[x for x in files if x.get('name','').endswith('firestore.rules')]
+          if not candidates and len(files)==1:candidates=files
+          if len(candidates)!=1:raise SystemExit('STOP published Rules source ambiguous')
+          clean=lambda s:s.replace('\r\n','\n').replace('\r','\n')
+          candidate=clean(open('firestore.rules',encoding='utf8').read())
+          released=clean(candidates[0]['content'])
+          if candidate!=released:raise SystemExit('STOP deployed Rules source differs from tested candidate')
+          if 'A recipient can acknowledge a notification' not in released:raise SystemExit('STOP notification read-only protections missing')
+          print('PASS ACTIVE Firebase Rules match tested candidate; only recipient notification read:true allowed')
+          print('PUBLISHED_RULESET='+active)
+          PY
+      - name: Final explicit release boundary
+        run: |
+          echo 'SUCCESS Firestore Rules ONLY; no Hosting, Functions, Auth, Storage, database user records, Super Admin, Admin, Login, Signup or Announcements changes.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Safe rollback only if this workflow changed the active Ruleset
+        if: failure()
+        run: |
+          set +e
+          if [ ! -f "$RUNNER_TEMP/original-notifications-live.rules" ]; then
+            echo 'Original live Rules never backed up; no deploy was attempted.'
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,os
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+token})
+          try:
+            with urllib.request.urlopen(req,timeout=30) as r:live=json.load(r)['rulesetName']
+            if live==os.environ['RULESET_BASE']:
+              print('Original Rules are still active. No rollback required.')
+              raise SystemExit(0)
+            print('WARNING active Ruleset changed to '+live+'; do not blindly overwrite concurrent releases. Manual verification required.')
+          except Exception as error:print('Could not confirm active Rules state: '+str(error)[:300])
+          PY
+          echo 'Fail-closed: no automatic rollback on unknown concurrent Ruleset revision.'
