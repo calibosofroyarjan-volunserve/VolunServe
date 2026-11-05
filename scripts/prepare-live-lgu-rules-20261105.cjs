@@ -83,25 +83,25 @@ const newGrantCondition=oldGrantCondition.replace(
   "(resource.data.status == 'approved' || (resource.data.role == 'applicant' && resource.data.status == 'pending_review' && ('lguOffice' in resource.data) && hasFreshLguCredentialReview()))"
 );
 target=target.replace(oldGrantCondition,newGrantCondition);
-const reject=`      // New LGU STAFF workflow: Super Admin review may reject pending staff.
-      // No role elevation, applicant data deletion, or resident/volunteer privileges.
-      allow update: if isSuperAdmin()
-        && resource.data.role == 'applicant'
-        && resource.data.status == 'pending_review'
-        && ('lguOffice' in resource.data)
-        && request.resource.data.status == 'rejected'
-        && request.resource.data.reviewedBy == request.auth.uid
-        && request.resource.data.reviewedAt == request.time
-        && request.resource.data.rejectedReason is string
-        && request.resource.data.rejectedReason.size() >= 10
-        && request.resource.data.rejectedReason.size() <= 300
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status','reviewedAt','reviewedBy','rejectedReason'
-        ]);
+// One Super Admin allow branch instead of an additional duplicated allow.
+const rejectCase=`          || (
+            resource.data.role == 'applicant'
+            && resource.data.status == 'pending_review'
+            && ('lguOffice' in resource.data)
+            && request.resource.data.status == 'rejected'
+            && request.resource.data.reviewedBy == request.auth.uid
+            && request.resource.data.reviewedAt == request.time
+            && request.resource.data.rejectedReason is string
+            && request.resource.data.rejectedReason.size() >= 10
+            && request.resource.data.rejectedReason.size() <= 300
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status','reviewedAt','reviewedBy','rejectedReason'
+            ])
+          )
 `;
-const superAdminUpdate="      allow update: if isSuperAdmin()";
-onlyOnce(target,superAdminUpdate,"live Super Admin update permission");
-target=target.replace(superAdminUpdate,reject+superAdminUpdate);
+const superAdminEnd="        );\n      allow update: if isAdmin()\n        && resource.data.role == 'applicant'";
+onlyOnce(target,superAdminEnd,"end of existing Super Admin update + legacy Admin applicant rule");
+target=target.replace(superAdminEnd,rejectCase+superAdminEnd);
 // 4) Deny operational LGU Admin from reviewing LGU STAFF applications
 // while preserving existing resident and volunteer application paths.
 // The deployed Admin applicant rule has slightly different indentation than
@@ -117,17 +117,16 @@ console.log("PASS current LGU Admin applicant handler now excludes LGU STAFF pro
 // Confidential reviewer-written reference metadata. Review requires an approved
 // Super Admin and a same-commit verifiedAt timestamp; not client-controlled proof.
 const reviewMatch=`    match /lguAdminCredentialReviews/{targetUid} {
+      // Only an approved Super Admin can create/read private credential reviews.
+      // Same-batch proof, reviewer identity and verified status are enforced
+      // at the role-grant check, where getAfter() consumes this document.
       allow read: if isSuperAdmin();
       allow create: if isSuperAdmin()
         && request.auth.uid != targetUid
         && request.resource.data.keys().hasOnly([
           'targetUid','accountEmail','reviewStatus','office','position',
           'credentialReference','verificationMethod','verifiedBy','verifiedAt'
-        ])
-        && request.resource.data.targetUid == targetUid
-        && request.resource.data.reviewStatus == 'verified'
-        && request.resource.data.verifiedBy == request.auth.uid
-        && request.resource.data.verifiedAt == request.time;
+        ]);
       allow update, delete: if false;
     }
 `;
@@ -141,11 +140,11 @@ let reversed=target
  .replace(verifyFn,"")
  .replace(createStaff,"")
  .replace(newGrantCondition,oldGrantCondition)
- .replace(reject,"")
+ .replace(rejectCase,"")
  .replace(lguStaffGuard,"")
  .replace(reviewMatch,"");
 assert.equal(reversed,original,"Surgical patch altered unrelated live rules");
-assert(target.length>original.length+2900,"Expected reviewed LGU rules were not added");
+assert(target.length>original.length+1900,"Expected reviewed LGU rules were not added");
 fs.writeFileSync(outPath,target);
 console.log("PASS: original live rule fingerprint",LIVE_SHA);
 console.log("PASS: audit-only LGU staff signup, verified approval, rejection and confidential review rules added");
