@@ -202,3 +202,5 @@ jobs:
           echo 'SUCCESS: Hosting-only UI update; Firestore Rules/Auth/Data/Functions/Storage, Super Admin, Signup, and Login were not deployed or modified.'
 
 # Scoped fixes: announcement publishing/error feedback and resident/volunteer feed only; existing modules preserved.
+
+# One-shot user-requested functional bug fix: authorized Firestore feed and safe Admin publish error handling.
