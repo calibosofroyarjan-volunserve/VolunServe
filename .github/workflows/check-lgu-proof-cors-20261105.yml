@@ -1,0 +1,40 @@
+name: Check Existing Firebase Bucket CORS (Read Only)
+on:
+  push:
+    branches: [feature/lgu-staff-documents-review-20261105]
+    paths: [.github/workflows/check-lgu-proof-cors-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check authorized-browser origin preflight without downloading sensitive data
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const urls=[
+              "https://firebasestorage.googleapis.com/v0/b/volunserve-3aa5b.firebasestorage.app/o/lguApplicantProofs%2Fnonexistent%2Femployee-id?alt=media",
+              "https://storage.googleapis.com/volunserve-3aa5b.firebasestorage.app/lguApplicantProofs/nonexistent/employee-id"
+            ];
+            for (const url of urls){
+              for(const reqHeaders of ["authorization","authorization,content-type"]){
+                try{
+                  const r=await fetch(url,{method:"OPTIONS",headers:{
+                    "Origin":"https://volunserve.com",
+                    "Access-Control-Request-Method":"GET",
+                    "Access-Control-Request-Headers":reqHeaders
+                  },signal:AbortSignal.timeout(12000)});
+                  console.log("PREFLIGHT",new URL(url).host,r.status,
+                    "allow-origin",r.headers.get("access-control-allow-origin"),
+                    "allow-methods",r.headers.get("access-control-allow-methods"),
+                    "allow-headers",r.headers.get("access-control-allow-headers"),
+                    "requested",reqHeaders);
+                }catch(e){console.log("PREFLIGHT_ERROR",e.message);}
+              }
+            }
+            console.log("Read-only diagnostic. No bucket policy, Storage Rules or production object changed.");
+          })();
+          NODE
