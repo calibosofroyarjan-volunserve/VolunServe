@@ -4618,11 +4618,13 @@ function StatusChoiceRow({
   options,
   onChange,
   disabled,
+  error = false,
 }: {
   value: string;
   options: Array<[string, string]>;
   onChange: (value: string) => void;
   disabled?: boolean;
+  error?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selectedLabel =
@@ -4633,6 +4635,7 @@ function StatusChoiceRow({
       <TouchableOpacity
         style={[
           styles.adminDropdownButton,
+          error && styles.assistanceFieldInvalid,
           disabled && styles.adminDropdownButtonDisabled,
         ]}
         onPress={() => {
@@ -4886,13 +4889,27 @@ function InfoItem({
 
 function LabelText({
   children,
+  required = false,
 }: {
   children: React.ReactNode;
+  required?: boolean;
 }) {
   return (
     <Text style={styles.fieldLabel}>
-      {children}
+      {children}{required ? <Text style={styles.assistanceRequiredAsterisk}> *</Text> : null}
     </Text>
+  );
+}
+
+// A concise accessible error under the offending control, not a generic
+// Firebase/backend error or a premature block on incomplete draft fields.
+function ReviewValidationHint({ message }: { message?: string | null }) {
+  if (!message) return null;
+  return (
+    <View style={styles.assistanceValidationHint} accessibilityRole="alert">
+      <Ionicons name="alert-circle-outline" color="#B42318" size={15} />
+      <Text style={styles.assistanceValidationHintText}>{message}</Text>
+    </View>
   );
 }
 
@@ -5200,6 +5217,54 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  assistanceRequiredAsterisk: {
+    color: "#B42318",
+    fontWeight: "900",
+  },
+  assistanceFieldInvalid: {
+    borderColor: "#DC2626",
+    borderWidth: 1.5,
+    backgroundColor: "#FFF7F7",
+  },
+  assistanceValidationHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 2,
+  },
+  assistanceValidationHintText: {
+    flex: 1,
+    color: "#B42318",
+    fontSize: 11.5,
+    fontWeight: "600",
+    lineHeight: 17,
+  },
+  assistanceValidationSummary: {
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FFF7F7",
+    borderRadius: 12,
+    padding: 12,
+    gap: 7,
+  },
+  assistanceValidationSummaryTitle: {
+    color: "#991B1B",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  assistanceValidationSummaryLink: {
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  assistanceValidationSummaryLinkText: {
+    flex: 1,
+    color: "#B42318",
+    fontSize: 11.5,
+    lineHeight: 17,
+  },
   assistanceDesktop: {
     flex: 1,
     minHeight: 0,
