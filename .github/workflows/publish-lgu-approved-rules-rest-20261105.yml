@@ -2,7 +2,9 @@ name: FINAL RELEASE LGU Accept Reject by Updating Existing Firestore Rules Relea
 on:
   push:
     branches: [release/lgu-admin-decisions-live-20261105]
-    paths: [.github/workflows/publish-lgu-approved-rules-rest-20261105.yml]
+    paths:
+      - .github/workflows/publish-lgu-approved-rules-rest-20261105.yml
+      - scripts/publish-surgical-lgu-rules-rest.py
 permissions:
   contents: read
 concurrency:
