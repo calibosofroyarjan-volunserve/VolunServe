@@ -105,7 +105,7 @@ jobs:
             if(!revised.includes('function ownAnnouncementArea()') ||
                !revised.includes("profile().get('adminStatus', 'active') != 'suspended'"))
                throw Error('Live announcement policy not recognized; abort');
-            one('approved() && ownAnnouncementArea()', 'approved()');
+            one('|| (approved() && ownAnnouncementArea()\\n          && resource.data.publishAt is timestamp', '|| (approved()\\n          && resource.data.publishAt is timestamp');
             one('|| (approved() && ownAnnouncementArea());',
                 '|| (approved() && resource.data.publishAt is timestamp && resource.data.publishAt <= request.time);');
             one('        && profile().barangay is string\\n        && profile().barangay.size() > 0\\n','');
