@@ -16,9 +16,7 @@ import {
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 
@@ -74,10 +72,11 @@ export default function AnnouncementsScreen() {
       ? profile.barangay.trim()
       : "";
 
-  // Firestore read rules require publishAt <= request.time. Refresh the
-  // published-only query cutoff so new posts appear without reloading.
+  // One audience-constrained Firestore listener is genuinely realtime.
+  // A local clock tick only makes future-dated system notices visible when due;
+  // it does NOT reconnect Firebase or trigger repeated reads.
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 15_000);
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -99,13 +98,13 @@ export default function AnnouncementsScreen() {
     }
     setError("");
 
-    // The current Firestore rule authorizes reads only when publishAt is
-    // a past timestamp. Filtering on audience alone is not enough for that
-    // rule; filter the authorized published documents by barangay below.
+    // Critical: the active Cloud Firestore LIST rule requires a constrained
+    // audience. Querying by publishAt alone causes permission-denied. This
+    // single-field "in" query needs no new composite index or Rules release.
+    const allowedAudiences = barangay ? ["all", barangay] : ["all"];
     const announcementQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromMillis(nowMs)),
-      orderBy("publishAt", "desc")
+      where("audience", "in", allowedAudiences)
     );
 
     const unsubscribe = onSnapshot(
@@ -152,7 +151,7 @@ export default function AnnouncementsScreen() {
     return () => {
       unsubscribe();
     };
-  }, [sessionLoading, user?.uid, canReadAnnouncements, barangay, refreshKey, nowMs]);
+  }, [sessionLoading, user?.uid, canReadAnnouncements, barangay, refreshKey]);
 
   /*
    * USER VISIBILITY
