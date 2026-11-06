@@ -5,6 +5,8 @@ import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/f
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
+import { useUserSession } from "../../lib/useUserSession";
+import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
 type NotificationItem = {
@@ -16,8 +18,8 @@ type NotificationItem = {
   read?: boolean;
   createdAt?: any;
 };
-type Filter = "All" | "Unread" | "Emergency" | "Events" | "Donations" | "Account";
-const FILTERS: Filter[] = ["All", "Unread", "Emergency", "Events", "Donations", "Account"];
+type Filter = "All" | "Unread" | "Announcements" | "Emergency" | "Events" | "Donations" | "Account";
+const FILTERS: Filter[] = ["All", "Unread", "Announcements", "Emergency", "Events", "Donations", "Account"];
 const PAGE_SIZE = 5;
 
 const timestamp = (value: any): number => {
@@ -30,6 +32,7 @@ const timestamp = (value: any): number => {
 };
 const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> => {
   const raw = String(item.type || "").toLowerCase();
+  if (raw === "announcement") return "Announcements";
   if (/emergency|disaster|rescue|incident|response|evacuat/.test(raw)) return "Emergency";
   if (/event|volunteer|attendance|certificate|schedule|task/.test(raw)) return "Events";
   if (/donat|assistance|fund|campaign|payment|release|receipt/.test(raw)) return "Donations";
@@ -38,6 +41,8 @@ const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> =
 
 export default function NotificationsScreen() {
   const [uid, setUid] = useState<string | null>(null);
+  const { profile } = useUserSession();
+  const { items: announcementAlerts, markSeen } = useAnnouncementAlerts(uid, profile?.barangay);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,10 +77,11 @@ export default function NotificationsScreen() {
     });
   }, [uid]);
 
-  const unread = useMemo(() => notifications.filter(item => !item.read).length, [notifications]);
-  const filtered = useMemo(() => notifications.filter(item =>
+  const combined = useMemo(() => [...notifications, ...announcementAlerts].sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt)), [notifications, announcementAlerts]);
+  const unread = useMemo(() => combined.filter(item => !item.read).length, [combined]);
+  const filtered = useMemo(() => combined.filter(item =>
     filter === "All" || (filter === "Unread" ? !item.read : categoryOf(item) === filter)
-  ), [notifications, filter]);
+  ), [combined, filter]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -83,13 +89,18 @@ export default function NotificationsScreen() {
 
   const markAsRead = async (ids: string[]) => {
     if (!uid || !ids.length || updating) return;
-    const ownedUnread = new Set(notifications.filter(item => item.userId === uid && !item.read).map(item => item.id));
+    const ownedUnread = new Set(combined.filter(item => item.userId === uid && !item.read).map(item => item.id));
     const validIds = ids.filter(id => ownedUnread.has(id));
     if (!validIds.length) return;
     setUpdating(true);
     setError("");
     try {
-      const results = await Promise.allSettled(validIds.map(id => updateDoc(doc(db, "notifications", id), { read: true })));
+      const announcementIds = validIds.filter(id => id.startsWith("announcement:"));
+      const regularIds = validIds.filter(id => !id.startsWith("announcement:"));
+      const results = await Promise.allSettled([
+        ...regularIds.map(id => updateDoc(doc(db, "notifications", id), { read: true })),
+        ...(announcementIds.length ? [markSeen(announcementIds)] : []),
+      ]);
       if (results.some(result => result.status === "rejected")) {
         setError("Some notifications could not be updated. Please try again.");
       }
@@ -120,7 +131,7 @@ export default function NotificationsScreen() {
       <View><Text style={styles.metric}>{unread}</Text><Text style={styles.metricLabel}>Unread notifications</Text></View>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Mark all notifications as read"
         style={[styles.markAll, (!unread || updating) && styles.disabled]} disabled={!unread || updating}
-        onPress={() => void markAsRead(notifications.filter(item => !item.read).map(item => item.id))}>
+        onPress={() => void markAsRead(combined.filter(item => !item.read).map(item => item.id))}>
         <Ionicons name="checkmark-done-outline" size={18} color="#087D60" />
         <Text style={styles.markAllText}>{updating ? "Updating..." : "Mark all read"}</Text>
       </TouchableOpacity>
