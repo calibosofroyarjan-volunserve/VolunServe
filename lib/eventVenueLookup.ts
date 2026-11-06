@@ -3,14 +3,14 @@
  * A geocoder result is only a suggestion; LGU approval and explicit pin
  * confirmation are still required. Never guess coordinates from barangay alone.
  */
+import { isSjdmEventPoint } from "./communityEventSjdmScope";
+
 export type EventVenuePoint = { latitude: number; longitude: number };
 export type EventVenueResult =
   | { status: "found"; point: EventVenuePoint; label: string }
   | { status: "ambiguous" | "not-found" | "unavailable"; point?: never; label?: never };
 
-const insideSJDM = (lat: number, lng: number) =>
-  Number.isFinite(lat) && Number.isFinite(lng) &&
-  lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+const insideSJDM = (lat: number, lng: number) => isSjdmEventPoint(lat, lng);
 
 const genericVenue = /^(barangay hall|covered court|multi-purpose hall|community center|public plaza|school grounds)$/i;
 
