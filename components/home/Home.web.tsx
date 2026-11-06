@@ -5,9 +5,7 @@ import { useRouter } from "expo-router";
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
@@ -28,6 +26,7 @@ import { db } from "../../lib/firebase";
 import {
   activeModeForProfile,
   hasResidentAccess,
+  isApprovedProfile,
   hasVolunteerAccess,
   logoutUser,
   setActiveUserMode,
@@ -191,13 +190,19 @@ export default function WebHome() {
   }, []);
 
   useEffect(() => {
+    if (!user || !profile || !isApprovedProfile(profile)) {
+      setAnnouncements([]);
+      setAnnouncementsError(false);
+      return;
+    }
+    // Live Firestore rules require a barangay-scoped LIST query.
+    const barangay = String(profile.barangay || "").trim();
+    const residentBarangay = barangay.toLowerCase();
+    const audiences = barangay ? ["all", barangay] : ["all"];
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromMillis(announcementQueryTime)),
-      orderBy("publishAt", "desc")
+      where("audience", "in", audiences)
     );
-
-    const residentBarangay = String(profile?.barangay || "").trim().toLowerCase();
 
     return onSnapshot(
       announcementsQuery,
@@ -209,9 +214,15 @@ export default function WebHome() {
           }))
           .filter((item) => {
             const audience = String(item.audience || "").trim().toLowerCase();
-            return audience === "all" ||
-              (residentBarangay.length > 0 && audience === residentBarangay);
-          });
+            const publishedAt = typeof item.publishAt?.toMillis === "function"
+              ? item.publishAt.toMillis() : Number.POSITIVE_INFINITY;
+            return publishedAt <= announcementQueryTime &&
+              (audience === "all" ||
+                (residentBarangay.length > 0 && audience === residentBarangay));
+          })
+          .sort((a, b) =>
+            (b.publishAt?.toMillis?.() || 0) -
+            (a.publishAt?.toMillis?.() || 0));
 
         setAnnouncements(nextAnnouncements);
         setAnnouncementsError(false);
@@ -222,7 +233,7 @@ export default function WebHome() {
         setAnnouncementsError(true);
       }
     );
-  }, [profile?.barangay, announcementQueryTime]);
+  }, [user?.uid, profile?.barangay, profile?.status, announcementQueryTime]);
 
   useEffect(() => {
     if (!user) {
