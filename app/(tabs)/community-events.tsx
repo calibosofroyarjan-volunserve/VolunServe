@@ -3,6 +3,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
 import {Inter_400Regular,Inter_500Medium,Inter_600SemiBold,Inter_700Bold,Inter_800ExtraBold} from "@expo-google-fonts/inter";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { isSjdmEventPoint } from "../../lib/communityEventSjdmScope";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
@@ -399,41 +401,14 @@ const eventCover = (event: CommunityEvent): string | null => {
   return url || null;
 };
 
-// Google Maps links use the event's real saved coordinates, when present.
-// Without coordinates, Google Maps searches the Admin-provided venue/address.
-const eventDestination = (event: CommunityEvent): string => {
-  const latitude = Number(event.coordinates?.latitude ?? event.latitude);
-  const longitude = Number(event.coordinates?.longitude ?? event.longitude);
-  if (Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
-    return `${latitude},${longitude}`;
-  }
-  return [event.location, event.barangay, "San Jose del Monte, Bulacan, Philippines"]
-    .filter(Boolean).join(", ");
-};
-
 const eventHasCoordinates = (event: CommunityEvent): boolean => {
   const lat = Number(event.coordinates?.latitude ?? event.latitude);
   const lng = Number(event.coordinates?.longitude ?? event.longitude);
-  return Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
-    Number.isFinite(lng) && lng >= -180 && lng <= 180;
+  return isSjdmEventPoint(lat, lng);
 };
 
-const googleMapsViewUrl = (event: CommunityEvent) =>
-  `https://maps.google.com/maps?q=${encodeURIComponent(eventDestination(event))}&z=15&output=embed`;
-
-const googleMapsDirectionsUrl = (event: CommunityEvent) =>
-  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(eventDestination(event))}`;
-
-const googleMapsSearchUrl = (event: CommunityEvent) =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eventDestination(event))}`;
-
-// Browser GPS is requested only when a visitor explicitly asks for directions.
-// OpenFreeMap / OSRM works without a Google Maps Embed API key.
+// GPS is requested only after the visitor taps Show Route. Routing stays in-app.
 type RouteOrigin = { latitude: number; longitude: number };
-
-const googleMapsNavigationUrl = (event: CommunityEvent) =>
-  `${googleMapsDirectionsUrl(event)}&travelmode=driving&dir_action=navigate`;
 
 const prettyAttendanceTime = (timestamp: unknown): string => {
   const time = getTime(timestamp);
@@ -888,33 +863,62 @@ export default function CommunityEventsScreen() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeNotice, setRouteNotice] = useState("");
 
-  const showRouteInVolunServe = (event: CommunityEvent) => {
+  const showRouteInVolunServe = async (event: CommunityEvent) => {
     setRouteNotice("");
     if (!eventHasCoordinates(event)) {
-      setRouteNotice("An exact meeting-point pin has not been recorded. Use Google Maps to search the published venue, and confirm it with LGU.");
+      setRouteEventId(null);
+      setRouteOrigin(null);
+      setRouteNotice("This event has no confirmed meeting-point pin inside SJDM. Ask the organizer to confirm the venue.");
       return;
     }
+
+    const usePosition = (latitude: number, longitude: number) => {
+      if (!isSjdmEventPoint(latitude, longitude)) {
+        setRouteOrigin(null);
+        setRouteEventId(null);
+        setRouteNotice("Your current location is outside SJDM. This Community Events map shows routes within San Jose del Monte only.");
+        return;
+      }
+      setRouteOrigin({ latitude, longitude });
+      setRouteEventId(event.id);
+    };
+
+    // Only request location after the visitor taps Show Route.
+    // Neither browser nor native GPS coordinates are stored in Firestore.
+    setRouteLoading(true);
     if (Platform.OS !== "web") {
-      setRouteNotice("On mobile, use the event pin and Open in Google Maps for road navigation.");
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          setRouteNotice("Allow location permission to show an in-app route to the event.");
+          return;
+        }
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        usePosition(position.coords.latitude, position.coords.longitude);
+      } catch {
+        setRouteNotice("Device GPS is unavailable. Enable location access and try Show Route again.");
+      } finally {
+        setRouteLoading(false);
+      }
       return;
     }
+
     const geolocation = (globalThis as any).navigator?.geolocation;
     if (!geolocation) {
-      setRouteNotice("This browser cannot provide GPS location. Use Open in Google Maps instead.");
+      setRouteLoading(false);
+      setRouteNotice("This browser cannot access GPS. Enable location services to show an in-app route.");
       return;
     }
-    setRouteLoading(true);
     geolocation.getCurrentPosition(
       (position: { coords: { latitude: number; longitude: number } }) => {
-        setRouteOrigin({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-        setRouteEventId(event.id);
+        usePosition(position.coords.latitude, position.coords.longitude);
         setRouteLoading(false);
-        setRouteNotice("");
       },
       () => {
         setRouteEventId(null);
+        setRouteOrigin(null);
         setRouteLoading(false);
-        setRouteNotice("Location permission was denied or unavailable. Allow browser location access to preview the route, or use Google Maps directly.");
+        setRouteNotice("Location permission was denied or unavailable. Allow browser GPS access, then tap Show Route again.");
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
     );
@@ -1328,8 +1332,9 @@ export default function CommunityEventsScreen() {
       setNotice("At least one event site evidence photo is required. Upload Main Photo or supply a valid HTTPS image link.");
       return;
     }
-    if (form.latitude === null || form.longitude === null) {
-      setNotice("Set the exact GPS meeting point by tapping the map or using the venue's GPS.");
+    if (form.latitude === null || form.longitude === null ||
+        !isSjdmEventPoint(form.latitude, form.longitude)) {
+      setNotice("Confirm an exact event meeting-point pin inside the City of San Jose del Monte.");
       return;
     }
 
@@ -1949,19 +1954,16 @@ export default function CommunityEventsScreen() {
               <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
               <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
               {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              {renderWebMap(event)}
               {eventHasCoordinates(event) && (
-                <CommunityEventRoadMap eventId={event.id} title={event.title} category={event.category}
-                  destination={{
-                    latitude: Number(event.coordinates?.latitude ?? event.latitude),
-                    longitude: Number(event.coordinates?.longitude ?? event.longitude),
-                  }} height={230} />
+                <Pressable accessibilityRole="button" accessibilityLabel={"Show road route in VolunServe for " + event.title}
+                  disabled={routeLoading} onPress={() => void showRouteInVolunServe(event)}
+                  style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+                  <Ionicons name="map-outline" size={17} color="#FFFFFF"/>
+                  <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>{routeLoading ? "Locating…" : "Show Route"}</Text>
+                </Pressable>
               )}
-              <Pressable accessibilityRole="button" accessibilityLabel={"Navigate to " + event.title + " in Google Maps"}
-                onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
-                style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
-                <Ionicons name="navigate-outline" size={17} color="#FFFFFF"/>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Open Directions in Google Maps</Text>
-              </Pressable>
+              {!!routeNotice && <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>}
             </View>
           </View>
         )}
@@ -2173,7 +2175,7 @@ export default function CommunityEventsScreen() {
             </View>
             <View style={styles.lockedEventTapHint}>
               <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
-              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
+              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and in-app map"}</Text>
             </View>
             </Pressable>
             <View style={styles.lockedRowActions}>
@@ -2328,17 +2330,12 @@ export default function CommunityEventsScreen() {
               </View>}
               <View style={styles.lockedMapActions}>
                 {eventHasCoordinates(event) && (
-                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
-                    onPress={() => showRouteInVolunServe(event)}>
-                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating…" : "Show Road Route"}</Text>
+                  <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
+                    onPress={() => void showRouteInVolunServe(event)}>
+                    {routeLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="map-outline" size={16} color="white" />}
+                    <Text style={styles.lockedMapSolidText}>{routeLoading ? "Locating…" : "Show Route"}</Text>
                   </Pressable>
                 )}
-                <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
-                  onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
-                  <Ionicons name="navigate-outline" size={16} color="white" />
-                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
-                </Pressable>
               </View>
               <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
             </View>
@@ -2415,7 +2412,7 @@ export default function CommunityEventsScreen() {
       </View>}
       {residentDetailTab==="map" && <View style={styles.ruiDetailContent}>
         <Text style={styles.ruiSectionTitle}>Event Venue & Directions</Text>
-        <Text style={styles.ruiParagraph}>{eventDestination(event)}</Text>
+        <Text style={styles.ruiParagraph}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
         {event.proposedBy === user?.uid && (
           <CommunityEventLiveLocation
             eventId={event.id}
@@ -2429,7 +2426,7 @@ export default function CommunityEventsScreen() {
         {renderWebMap(event)}
         {eventHasCoordinates(event) && (
           <Pressable accessibilityRole="button" disabled={routeLoading}
-            onPress={() => showRouteInVolunServe(event)}
+            onPress={() => void showRouteInVolunServe(event)}
             style={[styles.ruiPrimary, { backgroundColor: "#E6F2EB", marginTop: 10 }]}>
             <Ionicons name="map-outline" size={17} color="#1E7156" />
             <Text style={[styles.ruiPrimaryText, { color: "#1E7156" }]}>
@@ -2441,20 +2438,14 @@ export default function CommunityEventsScreen() {
         {routeEventId === event.id && !!routeOrigin && (
           <Text style={styles.lockedMapFootnote}>Route estimate uses OSRM, not live traffic. GPS is not stored in VolunServe.</Text>
         )}
-        <Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}>
-          <Text style={styles.ruiPrimaryText}>Open in Google Maps</Text>
-          <Ionicons name="navigate-outline" size={16} color="white"/>
-        </Pressable>
       </View>}
       {residentDetailTab==="volunteers" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Volunteer Participation</Text><Text style={styles.ruiParagraph}>{Number(event.participantsCount||0)} of {Number(event.capacity||0)} slots filled. Approved volunteers can join in Volunteer Mode. Resident profiles are not disclosed here.</Text></View>}
       {residentDetailTab==="media" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Location / Activity Photos</Text><View style={styles.ruiMediaGallery}>{pictures.map((url,index)=><Image key={index} source={{uri:url}} style={styles.ruiGalleryPhoto} resizeMode="cover"/>)}</View>{pictures.length===0&&<Text style={styles.ruiParagraph}>No public photos have been provided.</Text>}{!!(event as any).videoUrl&&videoLinkSupported((event as any).videoUrl)&&<Pressable onPress={()=>void Linking.openURL((event as any).videoUrl)} style={styles.ruiPrimary}><Text style={styles.ruiPrimaryText}>View Optional Event Video</Text><Ionicons name="play-circle-outline" size={16} color="white"/></Pressable>}</View>}
     </View>;
   };
 
-  // Route preview uses the supported Google Maps Embed API when configured.
-  // Otherwise the old address-based map continues to show the real saved venue.
+  // Render the event's embedded map on web and native. Never navigate away from VolunServe.
   const renderWebMap = (event: CommunityEvent) => {
-    if (Platform.OS !== "web") return null;
     if (eventHasCoordinates(event)) {
       return (
         <CommunityEventRoadMap
@@ -2471,13 +2462,7 @@ export default function CommunityEventsScreen() {
         />
       );
     }
-    return React.createElement("iframe" as any, {
-      key: `${event.id}-approximate`,
-      title: `Approximate venue search for ${event.title}`,
-      src: googleMapsViewUrl(event), loading: "lazy",
-      referrerPolicy: "strict-origin-when-cross-origin",
-      style: { display: "block", width: "100%", height: "270px", border: "0", borderRadius: "11px" },
-    });
+    return <Text style={styles.lockedMapWarning}>The exact SJDM event meeting-point pin is awaiting confirmation. No unverified route is shown.</Text>;
   };
 
   return (

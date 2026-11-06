@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { isSjdmEventPoint, isSjdmEventRoute, SJDM_EVENT_BOUNDARY } from "../lib/communityEventSjdmScope";
+import { boundaryBounds } from "../lib/sjdmMapBoundary";
 
 /**
  * Public event meeting-point map. The road route is requested only after the
@@ -36,6 +38,8 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
     source: origin ? [origin.longitude, origin.latitude] : null,
     route: route?.coordinates || null,
     icon,
+    city: SJDM_EVENT_BOUNDARY.geometry,
+    bounds: boundaryBounds(SJDM_EVENT_BOUNDARY),
   }).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
@@ -57,7 +61,7 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
   </style>
 </head><body>
   <div id="map"></div><div id="credit">OpenStreetMap / OpenFreeMap · OSRM road routing</div>
-  <div id="fallback">Map tiles are unavailable. Use Open in Google Maps for directions.</div>
+  <div id="fallback">Map tiles are temporarily unavailable. Retry Show Route within VolunServe.</div>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"><\/script>
   <script>
     (() => {
@@ -67,7 +71,8 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
       try {
         const map = new maplibregl.Map({
           container: "map", style: "https://tiles.openfreemap.org/styles/liberty",
-          center: data.venue, zoom: 13.8, attributionControl: true, interactive: true
+          center: data.venue, zoom: 13.8, attributionControl: true, interactive: true,
+          maxBounds: [[data.bounds.west, data.bounds.south], [data.bounds.east, data.bounds.north]]
         });
         map.addControl(new maplibregl.NavigationControl({showCompass:false}), "top-right");
         const venue = document.createElement("div");
@@ -86,6 +91,9 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
             .addTo(map);
         }
         map.on("load", () => {
+          map.addSource("sjdm-boundary",{type:"geojson",data:{type:"Feature",properties:{},geometry:data.city}});
+          map.addLayer({id:"sjdm-boundary",type:"line",source:"sjdm-boundary",
+            paint:{"line-color":"#128064","line-width":3,"line-opacity":0.88}});
           if (data.route && data.route.length > 1) {
             map.addSource("volunserve-road-route", {
               type:"geojson", data:{type:"Feature",properties:{},
@@ -123,7 +131,9 @@ export default function CommunityEventRoadMap({
 
   useEffect(() => {
     setRoute(null);
-    if (!valid(origin) || !valid(destination)) {
+    if (!valid(origin) || !valid(destination) ||
+        !isSjdmEventPoint(origin!.latitude, origin!.longitude) ||
+        !isSjdmEventPoint(destination.latitude, destination.longitude)) {
       setStatus("place");
       return;
     }
@@ -149,6 +159,9 @@ export default function CommunityEventRoadMap({
             !Number.isFinite(entry.distance) || !Number.isFinite(entry.duration)) {
           throw new Error("Invalid road routing data");
         }
+        if (!isSjdmEventRoute(points.map((p: number[]) => ({latitude:p[1],longitude:p[0]})))) {
+          throw new Error("The suggested road route leaves the SJDM boundary");
+        }
         if (controller.signal.aborted) return;
         setRoute({
           coordinates: points, distanceMeters: entry.distance,
@@ -166,10 +179,11 @@ export default function CommunityEventRoadMap({
   }, [eventId, destination.latitude, destination.longitude, sourceLat, sourceLng]);
 
   const doc = useMemo(
-    () => mapHtml(destination, valid(origin) ? origin : null, route, venueSymbol(category)),
+    () => mapHtml(destination, valid(origin) && isSjdmEventPoint(origin!.latitude, origin!.longitude) ? origin : null, route, venueSymbol(category)),
     [destination.latitude, destination.longitude, sourceLat, sourceLng, category, route]
   );
-  if (!valid(destination)) return null;
+  if (!valid(destination) || !isSjdmEventPoint(destination.latitude,destination.longitude))
+    return <Text>Confirm an event meeting-point pin inside SJDM to use the map.</Text>;
   return (
     <View style={styles.wrapper}>
       {React.createElement("iframe" as any, {
@@ -192,9 +206,9 @@ export default function CommunityEventRoadMap({
           </Text>
           <Text style={styles.captionSub}>
             {status === "ready"
-              ? "OSRM estimate · no live traffic · external navigation available"
+              ? "OSRM estimate · no live traffic · remains inside VolunServe"
               : status === "unavailable"
-                ? "Use Open in Google Maps to navigate. Your location is not stored."
+                ? "No valid SJDM-only road route is available. Check your location and try Show Route again."
                 : status === "loading"
                   ? "Using GPS only for this route request; no Firestore write"
                   : "Select Show Route Here for a road preview from your GPS."}

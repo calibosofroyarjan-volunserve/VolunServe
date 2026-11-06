@@ -1,0 +1,57 @@
+name: Validate SJDM-Only Community Event Routes (No Deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/(tabs)/community-events.tsx'
+      - 'app/(admin)/community-events.tsx'
+      - 'backend/server.js'
+      - 'backend/sjdmEventBoundary.js'
+      - 'lib/communityEventSjdmScope.ts'
+      - 'components/CommunityEventRoadMap.*'
+      - 'components/CommunityEventPinPicker.*'
+      - 'components/InteractiveEventPinMap.web.tsx'
+      - 'scripts/test-community-events-sjdm-inapp-route.cjs'
+      - 'scripts/test-event-map-route-ux.cjs'
+      - 'scripts/test-event-pin-picker.cjs'
+      - '.github/workflows/validate-community-event-inapp-sjdm-route.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Repository contains a legacy Git gitlink with no .gitmodules entry.
+      - name: Extract exact source tarball without Git submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify city polygon, venue picker, road routes and existing event contracts
+        run: |
+          node scripts/test-community-events-sjdm-inapp-route.cjs
+          node scripts/test-event-pin-picker.cjs
+          node scripts/test-event-map-route-ux.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node backend/test-communityEventRoster.js
+          node --check backend/server.js
+      - name: Typecheck the app
+        run: npx tsc --noEmit --pretty false
+      - name: Export web UI (validation only)
+        run: npx expo export --platform web
