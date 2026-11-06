@@ -10,7 +10,7 @@ const inbox=read("app/(tabs)/notifications.tsx");
 const alerts=read("lib/useAnnouncementAlerts.ts");
 const rules=read("firestore.rules");
 const admin=read("app/(admin)/create-announcement.tsx");
-assert.match(home,/const residentBarangay = String\(profile\?\.barangay \|\| ""\)/);
+assert.match(home,/const residentBarangay = barangay\.toLowerCase\(\)/);
 assert.match(home,/where\("audience", "in", audiences\)/);
 assert.doesNotMatch(home,/item\.audience === profile\?\.role/);
 assert.match(feed,/where\("audience", "in", allowedAudiences\)/);
