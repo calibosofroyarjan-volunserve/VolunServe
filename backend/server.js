@@ -11537,6 +11537,10 @@ app.post(
     }
   },
 );
+// Read-only approved Volunteer roster; no Firestore rules or participation writes.
+require("./communityEventRoster").installCommunityEventRoster({
+  app, db, requireFirebaseUser, loadUserProfile, isApprovedAccount,
+});
 const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
