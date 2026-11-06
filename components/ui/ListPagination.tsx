@@ -1,4 +1,5 @@
 import React from "react";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
@@ -15,10 +16,12 @@ export default function ListPagination({
   pageSize?: number;
   onChange: (page: number) => void;
 }) {
-  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const safePageSize = Number.isFinite(pageSize) ? Math.max(1, Math.floor(pageSize)) : 5;
+  const recordCount = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  const pages = Math.max(1, Math.ceil(recordCount / safePageSize));
   const safePage = Math.max(1, Math.min(page, pages));
-  const first = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const last = Math.min(total, safePage * pageSize);
+  const first = recordCount === 0 ? 0 : (safePage - 1) * safePageSize + 1;
+  const last = Math.min(recordCount, safePage * safePageSize);
   const firstButton = Math.max(1, Math.min(safePage - 1, pages - 2));
   const visiblePages = Array.from(
     { length: Math.min(pages, 3) },
@@ -27,7 +30,7 @@ export default function ListPagination({
   return (
     <View style={styles.container} accessibilityLabel="Records pagination">
       <View style={styles.summaryRow}>
-        <Text style={styles.caption}>{total === 0 ? "0 records" : `${first}–${last} of ${total} records`} · {pageSize} per page</Text>
+        <Text style={styles.caption}>{recordCount === 0 ? "No records" : `${first}–${last} of ${recordCount} records`} · {safePageSize} per page</Text>
       </View>
       <View style={styles.controlsRow}>
         {pages === 1 ? (
@@ -69,18 +72,18 @@ const styles = StyleSheet.create({
     width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     justifyContent: "space-between", gap: 8, minHeight: 38,
     marginTop: 8, marginBottom: 9, paddingTop: 7,
-    borderTopWidth: 1, borderTopColor: "#E5EBE7",
+    borderTopWidth: 1, borderTopColor: ui.color.border,
   },
   summaryRow: { flex: 1, minWidth: 134, justifyContent: "center" },
-  caption: { fontSize: 11, lineHeight: 17, color: "#60756B", fontWeight: "600" },
+  caption: { fontSize: 12, lineHeight: 18, color: ui.color.muted, fontWeight: "500" },
   controlsRow: { minHeight: 34, alignItems: "flex-end", justifyContent: "center" },
-  pageStatusText: { fontSize: 11, color: "#64786C", fontWeight: "600" },
+  pageStatusText: { fontSize: 12, color: ui.color.muted, fontWeight: "500" },
   buttons: { minHeight: 34, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 4 },
-  button: { minHeight: 34, paddingHorizontal: 11, borderWidth: 1, borderColor: "#D8E5DC", borderRadius: 7, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  text: { color: "#205B45", fontSize: 11, fontWeight: "700" },
-  pagePill: { minWidth: 34, minHeight: 34, paddingHorizontal: 7, borderWidth: 1, borderColor: "#D8E5DC", borderRadius: 7, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  pageSelected: { backgroundColor: "#176E55", borderColor: "#176E55" },
-  pagePillText: { color: "#205B45", fontSize: 11, fontWeight: "700" },
+  button: { minHeight: ui.minTouchHeight, paddingHorizontal: 12, borderWidth: 1, borderColor: ui.color.border, borderRadius: ui.radius.small, backgroundColor: ui.color.surface, alignItems: "center", justifyContent: "center" },
+  text: { color: ui.color.primary, fontSize: 12, fontWeight: "600" },
+  pagePill: { minWidth: ui.minTouchHeight, minHeight: ui.minTouchHeight, paddingHorizontal: 8, borderWidth: 1, borderColor: ui.color.border, borderRadius: ui.radius.small, backgroundColor: ui.color.surface, alignItems: "center", justifyContent: "center" },
+  pageSelected: { backgroundColor: ui.color.primary, borderColor: ui.color.primary },
+  pagePillText: { color: ui.color.primary, fontSize: 12, fontWeight: "600" },
   pageSelectedText: { color: "#FFFFFF" },
   disabled: { opacity: 0.35 },
 });
