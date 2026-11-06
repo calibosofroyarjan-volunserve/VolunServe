@@ -1,0 +1,37 @@
+name: Validate Public Assistance Appeals UI (NO DEPLOY)
+on:
+  push:
+    branches: [feature/verified-assistance-in-kind-appeal-ui-20261106]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Check cross-module publisher and Resident feed
+        run: |
+          node <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict");
+          const admin=fs.readFileSync("app/(admin)/assistance-requests.tsx","utf8");
+          const resident=fs.readFileSync("app/(tabs)/donation.tsx","utf8");
+          for(const token of ["Publish Assistance Appeal","Close Published Appeal","publish_public_appeal","close_public_appeal","public-appeal","No extra form or monetary amount is needed"]){
+            assert(admin.includes(token),"Missing Admin publish connection: "+token);
+          }
+          for(const token of ["api/public/assistance/appeals","Verified Community Assistance Appeals","paymentEnabled: false","These are not monetary donation campaigns."]){
+            assert(resident.includes(token),"Missing Resident view: "+token);
+          }
+          assert(!admin.includes("budgetTotal"),"Extra budget form must remain removed");
+          assert(admin.includes('router.push({ pathname: "/donation-list"'),"Existing monetary Donations route must remain");
+          console.log("PASS assistance in-kind public appeal publishing and resident feed wiring");
+          NODE
+      - run: npx tsc --noEmit --pretty false
+      - run: npx expo export --platform web
+      - run: echo "Build only. Firebase Hosting not modified."
