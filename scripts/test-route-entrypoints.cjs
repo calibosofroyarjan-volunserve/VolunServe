@@ -38,7 +38,7 @@ assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-request" />')
 
 for (const layout of ["app/(admin)/_layout.tsx", "app/(superadmin)/_layout.tsx"]) {
   const source = read(layout);
-  assert(/router\\.replace\\(\\s*"\\/admin-login" as Href\\s*,?\\s*\\)/.test(source),
+  assert(/router\.replace\(\s*"\/admin-login" as Href\s*,?\s*\)/.test(source),
     layout + " must type Admin logout redirect, with legacy path forwarded to unified Login");
 }
 console.log("PASS Admin and Super Admin logout routes preserve typed legacy redirects");
