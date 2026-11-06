@@ -33,6 +33,7 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 
 type Announcement = {
   id: string;
@@ -139,6 +140,7 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
+  const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid, profile?.barangay);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [cases, setCases] = useState<DisasterCase[]>([]);
@@ -402,8 +404,8 @@ export default function WebHome() {
   const latestAssignment = assignments[0];
 
   const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.read).length,
-    [notifications]
+    () => notifications.filter((item) => !item.read).length + announcementAlerts.filter((item) => !item.read).length,
+    [notifications, announcementAlerts]
   );
 
   const reportStatus = latestCase
