@@ -12,6 +12,7 @@ const { reconcileCommunityEventCertificates } = require("./communityCertificates
 const { startCommunityCertificateAutoSync } = require("./communityCertificateAutoSync");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const { insideSjdmEventArea } = require("./sjdmEventBoundary");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -7718,10 +7719,8 @@ app.post(
       }
       const latitude = Number(input.latitude);
       const longitude = Number(input.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-          latitude < 14.65 || latitude > 15.0 ||
-          longitude < 120.88 || longitude > 121.30) {
-        throw makeHttpError(400, "event_pin_required", "Select an event GPS meeting point near San Jose del Monte, Bulacan.");
+      if (!insideSjdmEventArea(latitude, longitude)) {
+        throw makeHttpError(400, "event_pin_required", "Select an event GPS meeting point inside San Jose del Monte, Bulacan.");
       }
 
       const capacity = Number(input.capacity);
