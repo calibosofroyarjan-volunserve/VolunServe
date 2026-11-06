@@ -96,28 +96,20 @@ jobs:
             const activeBlock=bounds(active);
             // Preserve every deployed rule except the single announcements match.
             // Only rewrite exact, known clauses from the inspected active policy.
-            let revised=activeBlock.block;
-            let clauseNumber=0;
-            function one(before,after){
-              clauseNumber++;
-              const count=revised.split(before).length-1;
-              if(count!==1)
-                throw Error('Active announcement clause '+clauseNumber+' mismatched (found '+count+'); abort without deployment');
-              revised=revised.replace(before,after);
-            }
-            if(!revised.includes('function ownAnnouncementArea()') ||
-               !revised.includes("profile().get('adminStatus', 'active') != 'suspended'"))
-               throw Error('Live announcement policy not recognized; abort');
-            one('|| (approved() && ownAnnouncementArea()\n          && resource.data.publishAt is timestamp', '|| (approved()\n          && resource.data.publishAt is timestamp');
-            one('|| (approved() && ownAnnouncementArea());',
-                '|| (approved() && resource.data.publishAt is timestamp && resource.data.publishAt <= request.time);');
-            one('        && profile().barangay is string\n        && profile().barangay.size() > 0\n','');
-            one('&& request.resource.data.audience == profile().barangay;',
-                '&& request.resource.data.audience == "all";');
-            one('        && profile().barangay is string\n        && resource.data.audience == profile().barangay\n',
-                '        && resource.data.createdBy == request.auth.uid\n');
-            one('        && profile().barangay is string\n        && resource.data.audience == profile().barangay;',
-                '        && resource.data.createdBy == request.auth.uid;');
+            // The verified source was already tested; replace only the announcement
+            // block rather than assuming byte-identical formatting in old live rules.
+            if(!activeBlock.block.includes('function ownAnnouncementArea()') ||
+               !activeBlock.block.includes("profile().get('adminStatus', 'active') != 'suspended'") ||
+               !activeBlock.block.includes('allow create: if isAdmin()') ||
+               !activeBlock.block.includes('allow delete: if isAdmin()'))
+              throw Error('Unrecognized old live announcement authority; abort without deployment');
+            let revised=next.block;
+            if(!revised.includes('allow create: if isAdmin()') ||
+               !revised.includes('allow update: if isAdmin()') ||
+               !revised.includes('allow delete: if isAdmin()') ||
+               !revised.includes('request.resource.data.createdBy == request.auth.uid') ||
+               !revised.includes('resource.data.createdBy == request.auth.uid'))
+              throw Error('New announcement writer or ownership rules differ from audited contract');
             if(!revised.includes('request.resource.data.audience == "all"') ||
                !revised.includes('resource.data.publishAt <= request.time'))
                throw Error('Global published-only contract incomplete');
