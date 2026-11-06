@@ -13,13 +13,13 @@ export type AnnouncementAlert = {
   createdAt: any;
 };
 const keyFor = (uid: string) => `volunserve:seen-announcements:${uid}`;
-const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
+
 
 /**
  * Read-only derived alerts: no bulk user writes and no new Firestore permissions.
  * Dismissal is stored on this device; original announcements remain unchanged.
  */
-export function useAnnouncementAlerts(uid: string | null | undefined, barangay: string | null | undefined) {
+export function useAnnouncementAlerts(uid: string | null | undefined) {
   const [alerts, setAlerts] = useState<AnnouncementAlert[]>([]);
   const [seen, setSeen] = useState<string[]>([]);
 
@@ -44,11 +44,8 @@ export function useAnnouncementAlerts(uid: string | null | undefined, barangay: 
       orderBy("publishAt", "desc")
     );
     return onSnapshot(q, snapshot => {
-      const local = normalize(barangay);
       const records = snapshot.docs.flatMap(document => {
         const data = document.data();
-        const audience = normalize(data.audience);
-        if (audience !== "all" && (!local || audience !== local)) return [];
         return [{
           id: `announcement:${document.id}`,
           userId: uid,
@@ -64,7 +61,7 @@ export function useAnnouncementAlerts(uid: string | null | undefined, barangay: 
       console.warn("Could not load announcement alerts", error);
       setAlerts([]);
     });
-  }, [uid, barangay]);
+  }, [uid]);
 
   const items = alerts.map(item => ({ ...item, read: seen.includes(item.id) }));
   const markSeen = async (ids: string[]) => {
