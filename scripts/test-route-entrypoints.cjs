@@ -1,51 +1,44 @@
 /**
- * Guard explicit Expo Router entry points used by login and native home.
- * Typed Href assertions protect navigation while local .expo route manifests
- * regenerate; this test verifies those paths still have actual screen files.
+ * Guard Expo Router entry points for unified Login and Community Events.
+ * Legacy Admin bookmarks still exist but resolve to the same role-aware form.
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const exists = (file) => fs.existsSync(path.join(root, file));
-const routes = [
-  {
-    name: "LGU Admin login",
-    screen: "app/admin-login.tsx",
-    screens: ["components/auth/PremiumAuthShell.tsx"],
-    href: 'router.replace("/admin-login")',
-  },
-  {
-    name: "Resident/Volunteer community events",
-    screen: "app/(tabs)/community-events.tsx",
-    screens: ["components/home/Home.native.tsx"],
-    href: '"/(tabs)/community-events" as Href',
-  },
-];
-for (const route of routes) {
-  assert(exists(route.screen), route.name + " route file is missing: " + route.screen);
-  for (const source of route.screens) {
-    assert(read(source).includes(route.href), source + " does not navigate to " + route.name);
-  }
-  console.log("PASS " + route.name + " screen and navigation target");
+
+assert(exists("app/login.tsx") && exists("app/login.web.tsx"),
+  "Unified Login must be available on web and native");
+assert(exists("app/admin-login.tsx") &&
+  read("app/admin-login.tsx").includes('<Redirect href="/login" />'),
+  "Existing Admin login bookmarks must redirect into the unified form");
+for (const entry of ["app/login.tsx", "app/login.web.tsx"]) {
+  const login = read(entry);
+  assert(login.includes("<PremiumAuthShell>") &&
+    login.includes("unifiedPasswordDestination(profile)") &&
+    login.includes('router.push("/admin-request")'),
+    entry + " must use one role-aware login and retain LGU application access");
 }
+assert(!read("components/auth/PremiumAuthShell.tsx").includes("styles.switcher"),
+  "Unified login must not restore the old role-selection tabs");
+console.log("PASS unified Admin, Resident and Volunteer Login entrypoints");
+
+assert(exists("app/(tabs)/community-events.tsx") &&
+  read("components/home/Home.native.tsx").includes('"/(tabs)/community-events" as Href'),
+  "Native Community Events route must remain navigable");
+console.log("PASS Resident/Volunteer community events screen and navigation target");
+
 assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-login" />'),
-  "Admin login must be a registered route in the root layout");
-console.log("PASS root layout registers administrative login");
+  "Admin legacy Login route must remain registered");
 assert(read("app/_layout.tsx").includes('<Stack.Screen name="admin-request" />') &&
   read("app/_layout.tsx").includes("isAdminRequestRoute"),
-  "LGU staff applicant request page must be reachable without staff credentials");
-for (const entry of ["app/login.tsx","app/login.web.tsx"]) {
-  assert(read(entry).includes('<PremiumAuthShell active="resident">'),
-    entry + " must use shared premium resident login shell");
-}
-// Both administrative workspaces sign out to the same staff login route.
-// Keep Href typing here because local Expo typed route manifests may be stale.
+  "LGU staff application page must remain reachable without staff credentials");
+
 for (const layout of ["app/(admin)/_layout.tsx", "app/(superadmin)/_layout.tsx"]) {
   const source = read(layout);
-  assert(/router\.replace\(\s*"\/admin-login" as Href\s*,?\s*\)/.test(source),
-    layout + " must type the Admin logout redirect as Href");
+  assert(/router\\.replace\\(\\s*"\\/admin-login" as Href\\s*,?\\s*\\)/.test(source),
+    layout + " must type Admin logout redirect, with legacy path forwarded to unified Login");
 }
-console.log("PASS both Admin and Super Admin logout routes are explicitly typed");
+console.log("PASS Admin and Super Admin logout routes preserve typed legacy redirects");
