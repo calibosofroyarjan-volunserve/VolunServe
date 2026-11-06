@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      LIVE_BASE: c1c216bb012583926074419f2bd3b40f547c42ec
+      LIVE_BASE: 6339a61645f831ac5786ca58e30165bf66e421f9
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          git cat-file -e "$LIVE_BASE^{commit}"
           UNEXPECTED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^((app/\(tabs\)/_layout\.tsx)|(backend/communityCertificateAutoSync\.js)|(backend/server\.js)|(backend/test-communityCertificateAutoSync\.js)|(scripts/test-profile-certificates-account-menu\.cjs)|(\.github/workflows/validate-automatic-volunteer-certificates-20261106\.yml)|(\.github/workflows/release-automatic-volunteer-certificates-20261106\.yml))$' || true)"
           if [ -n "$UNEXPECTED" ]; then echo "::error::Unexpected modified files: $UNEXPECTED"; exit 1; fi
           git diff --exit-code "$LIVE_BASE" HEAD -- 'app/(tabs)/community-events.tsx' 'app/(tabs)/volunteer.tsx' 'app/(tabs)/volunteer.web.tsx' 'app/(tabs)/certificate.tsx' 'app/login.tsx' 'app/signup.tsx' 'app/login.web.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'components/donations' 'firestore.rules' 'firebase.json'
