@@ -401,27 +401,13 @@ const eventCover = (event: CommunityEvent): string | null => {
   return url || null;
 };
 
-// Google Maps links use the event's real saved coordinates, when present.
-// Without coordinates, Google Maps searches the Admin-provided venue/address.
-const eventDestination = (event: CommunityEvent): string => {
-  const latitude = Number(event.coordinates?.latitude ?? event.latitude);
-  const longitude = Number(event.coordinates?.longitude ?? event.longitude);
-  if (Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
-    return `${latitude},${longitude}`;
-  }
-  return [event.location, event.barangay, "San Jose del Monte, Bulacan, Philippines"]
-    .filter(Boolean).join(", ");
-};
-
 const eventHasCoordinates = (event: CommunityEvent): boolean => {
   const lat = Number(event.coordinates?.latitude ?? event.latitude);
   const lng = Number(event.coordinates?.longitude ?? event.longitude);
   return isSjdmEventPoint(lat, lng);
 };
 
-// Browser GPS is requested only when a visitor explicitly asks for directions.
-// OpenFreeMap / OSRM works without a Google Maps Embed API key.
+// GPS is requested only after the visitor taps Show Route. Routing stays in-app.
 type RouteOrigin = { latitude: number; longitude: number };
 
 const prettyAttendanceTime = (timestamp: unknown): string => {
@@ -2189,7 +2175,7 @@ export default function CommunityEventsScreen() {
             </View>
             <View style={styles.lockedEventTapHint}>
               <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
-              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
+              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and in-app map"}</Text>
             </View>
             </Pressable>
             <View style={styles.lockedRowActions}>
