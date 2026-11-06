@@ -11525,6 +11525,10 @@ app.post(
     }
   },
 );
+const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
+installPublicAssistanceAppeals({
+  app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
+});
 const port =
   Number(
     process.env.PORT ||
