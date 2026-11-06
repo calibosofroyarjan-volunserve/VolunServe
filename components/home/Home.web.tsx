@@ -202,18 +202,17 @@ export default function WebHome() {
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
           }))
-          .filter(
-            (item) =>
-              !item.audience ||
-              item.audience === "all" ||
-              item.audience === profile?.role
-          );
+          .filter((item) => {
+            const audience = String(item.audience || "").trim().toLowerCase();
+            const userBarangay = String(profile?.barangay || "").trim().toLowerCase();
+            return audience === "all" || (!!userBarangay && audience === userBarangay);
+          });
 
         setAnnouncements(nextAnnouncements);
       },
       () => setAnnouncements([])
     );
-  }, [profile?.role]);
+  }, [profile?.barangay]);
 
   useEffect(() => {
     if (!user) {
