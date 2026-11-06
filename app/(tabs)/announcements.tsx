@@ -208,10 +208,7 @@ export default function AnnouncementsScreen() {
         </Text>
 
         <Text style={styles.areaValue}>
-          Global
-          {barangay
-            ? ` + ${barangay}`
-            : ""}
+          Community-wide
         </Text>
 
         <Text style={styles.areaHelp}>
