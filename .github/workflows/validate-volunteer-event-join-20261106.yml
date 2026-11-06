@@ -1,0 +1,38 @@
+name: Validate Volunteer Community Event Join (No Deploy)
+on:
+  push:
+    branches: [fix/volunteer-community-event-join-feedback-20261106]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/(tabs)/community-events.tsx'
+      - 'lib/communityEventJoinWindow.ts'
+      - 'scripts/test-volunteer-community-event-join-20261106.cjs'
+      - '.github/workflows/validate-volunteer-event-join-20261106.yml'
+permissions:
+  contents: read
+jobs:
+  source-transaction-and-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test past/future joining, source event feedback and secured transaction
+        run: |
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+      - name: Verify TypeScript and production web export only
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs

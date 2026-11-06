@@ -41,6 +41,7 @@ import {
   hasVolunteerAccess,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { canVolunteerJoinEvent, eventScheduleHasPassed } from "../../lib/communityEventJoinWindow";
 
 type Category =
   | "Clean-up Drive"
@@ -863,6 +864,9 @@ export default function CommunityEventsScreen() {
 
   const [busy, setBusy] = useState(false);
   const [busyEvent, setBusyEvent] = useState("");
+  const [eventActionFeedback, setEventActionFeedback] = useState<{
+    eventId: string; type: "success" | "error"; message: string;
+  } | null>(null);
 
   // Volunteer self attendance (web first). Admin alone verifies participation.
   const [attendanceBusy, setAttendanceBusy] = useState("");
@@ -1544,7 +1548,16 @@ export default function CommunityEventsScreen() {
       return;
     }
 
+    if (event.status === "upcoming" && eventScheduleHasPassed(event)) {
+      setEventActionFeedback({
+        eventId: event.id, type: "error",
+        message: "This event's date has passed. Ask Admin to publish a new schedule before joining.",
+      });
+      return;
+    }
+
     setBusyEvent(event.id);
+    setEventActionFeedback(null);
     setNotice("");
 
     try {
@@ -1576,6 +1589,11 @@ export default function CommunityEventsScreen() {
           }
 
           const current = eventDoc.data();
+
+          // Recheck the actual event schedule; the list might be stale.
+          if (current.status === "upcoming" && eventScheduleHasPassed({ status: String(current.status || ""), date: String(current.date || ""), time: String(current.time || ""), endTime: String(current.endTime || "") })) {
+            throw new Error("This event's date has passed. Ask Admin to publish a new schedule.");
+          }
 
           // Check again against the latest
           // Firestore event document.
@@ -1657,13 +1675,20 @@ export default function CommunityEventsScreen() {
         }
       );
 
-      setNotice(
-        decision === "joined"
-          ? "Joined successfully! Wait for event attendance instructions."
-          : "Event declined. You can still join later while slots are open."
-      );
+      const confirmation = decision === "joined"
+        ? "Joined successfully! Check My Events for your participation and attendance instructions."
+        : "Event declined. You can still join later while slots are open.";
+      setNotice(confirmation);
+      setEventActionFeedback({ eventId: event.id, type: "success", message: confirmation });
     } catch (error) {
-      setNotice(errorText(error));
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as { code?: unknown }).code || "") : "";
+      const detail = code === "permission-denied"
+        ? "Your account is not permitted to join. Make sure Volunteer mode is approved; contact Admin if this continues."
+        : errorText(error);
+      console.error("[Community Events] Join/Decline failed", { eventId: event.id, code: code || "unknown" });
+      setNotice(detail);
+      setEventActionFeedback({ eventId: event.id, type: "error", message: detail });
     } finally {
       setBusyEvent("");
     }
@@ -1804,9 +1829,8 @@ export default function CommunityEventsScreen() {
       Number(event.participantsCount || 0) >=
       Number(event.capacity || 0);
 
-    const open =
-      event.status === "upcoming" ||
-      event.status === "active";
+    const expiredUpcoming = event.status === "upcoming" && eventScheduleHasPassed(event);
+    const open = canVolunteerJoinEvent(event);
 
     const expanded =
       expandedEvent === event.id;
@@ -1988,7 +2012,7 @@ export default function CommunityEventsScreen() {
                   : joined
                     ? "Joined"
                     : !open
-                      ? "Closed"
+                      ? (expiredUpcoming ? "Date passed" : "Closed")
                       : full
                         ? "Full"
                         : "Join Event"}
@@ -2019,6 +2043,20 @@ export default function CommunityEventsScreen() {
                 </Text>
               </Pressable>
             )}
+          </View>
+        )}
+        {isVolunteer && expiredUpcoming && !joined && (
+          <Text style={styles.webAttendanceHint}>This event date has passed. Ask Admin for a future schedule before joining.</Text>
+        )}
+        {eventActionFeedback?.eventId === event.id && (
+          <View accessibilityRole="alert" style={[styles.webAttendanceFeedbackBox,
+            eventActionFeedback.type === "error" && styles.webAttendanceFeedbackError]}>
+            <Ionicons name={eventActionFeedback.type === "error" ? "alert-circle-outline" : "checkmark-circle-outline"}
+              size={18} color={eventActionFeedback.type === "error" ? "#B42318" : "#08765D"}/>
+            <Text style={[styles.webAttendanceFeedbackText,
+              eventActionFeedback.type === "error" && styles.webAttendanceFeedbackErrorText]}>
+              {eventActionFeedback.message}
+            </Text>
           </View>
         )}
 
@@ -2072,7 +2110,8 @@ export default function CommunityEventsScreen() {
     const joined = participation?.status === "joined";
     const owned = event.proposedBy === user?.uid;
     const full = Number(event.participantsCount || 0) >= Number(event.capacity || 0);
-    const open = event.status === "active" || event.status === "upcoming";
+    const expiredUpcoming = event.status === "upcoming" && eventScheduleHasPassed(event);
+    const open = canVolunteerJoinEvent(event);
     const detailsOpen = expandedEvent === event.id;
     const selected = detailsOpen;
     const cover = eventCover(event);
@@ -2102,7 +2141,7 @@ export default function CommunityEventsScreen() {
             )}
             <View style={styles.lockedImageStatus}>
               <Ionicons name={eventStatusIcon(event.status)} color="#078B71" size={13} />
-              <Text style={styles.lockedImageStatusText}>{eventStatusText(event.status)}</Text>
+              <Text style={styles.lockedImageStatusText}>{expiredUpcoming ? "DATE PASSED" : eventStatusText(event.status)}</Text>
             </View>
           </Pressable>
           <View style={styles.lockedEventInfo}>
@@ -2155,6 +2194,26 @@ export default function CommunityEventsScreen() {
             </View>
           </View>
         </View>
+        {isVolunteer && expiredUpcoming && !joined && (
+          <View style={[styles.webAttendanceFeedbackBox, styles.webAttendanceFeedbackError]}>
+            <Ionicons name="calendar-outline" color="#B42318" size={18}/>
+            <Text style={[styles.webAttendanceFeedbackText, styles.webAttendanceFeedbackErrorText]}>
+              This event was scheduled for {eventScheduleLabel(event)} and has passed.
+              Ask Admin to publish a future schedule before joining.
+            </Text>
+          </View>
+        )}
+        {eventActionFeedback?.eventId === event.id && (
+          <View accessibilityRole="alert" style={[styles.webAttendanceFeedbackBox,
+            eventActionFeedback.type === "error" && styles.webAttendanceFeedbackError]}>
+            <Ionicons name={eventActionFeedback.type === "error" ? "alert-circle-outline" : "checkmark-circle-outline"}
+              color={eventActionFeedback.type === "error" ? "#B42318" : "#08765D"} size={18}/>
+            <Text style={[styles.webAttendanceFeedbackText,
+              eventActionFeedback.type === "error" && styles.webAttendanceFeedbackErrorText]}>
+              {eventActionFeedback.message}
+            </Text>
+          </View>
+        )}
         {detailsOpen && (
           <View style={styles.lockedInlineDetails}>
             <View style={styles.volunteerDetailHeader}>
@@ -2215,7 +2274,9 @@ export default function CommunityEventsScreen() {
             </View>}
             {isVolunteer && !owned && !joined && !open && <View style={styles.webClosedBanner}>
               <Ionicons name="lock-closed-outline" size={18} color="#657989" />
-              <Text style={styles.webClosedText}>This event is closed for new volunteers.</Text>
+              <Text style={styles.webClosedText}>{expiredUpcoming
+                 ? "This event's date has passed. Ask Admin for a new schedule."
+                 : "This event is closed for new volunteers."}</Text>
             </View>}
             {/* The organizer's live GPS is private and shown ONLY after Join.
                 The public event location and route stay available separately. */}
