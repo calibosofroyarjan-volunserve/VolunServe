@@ -2686,21 +2686,43 @@ export default function CommunityEventsScreen() {
                       </Text>
                     </View>
 
-                    {!selectedParticipation?.attendanceVerified && selectedEvent.status === "active" &&
-                      (!selectedParticipation?.checkedInAt ||
-                        (selectedParticipation?.checkedInAt && !selectedParticipation?.checkedOutAt)) && (
+                    {!selectedParticipation?.attendanceVerified && (
                       <View style={styles.webAttendanceActionArea}>
                         <Text style={styles.webAttendanceActionHelp}>
-                          {!selectedParticipation?.checkedInAt ?
-                            "At the event venue? Record your arrival to begin attendance." :
-                            "Finished your participation? Record your departure."}
+                          {selectedEvent.status !== "active"
+                            ? "Attendance opens once Admin starts the event."
+                            : selectedParticipation?.checkedOutAt
+                              ? "Your Time Out has been recorded. Await Admin verification."
+                              : selectedParticipation?.checkedInAt
+                                ? "Finished volunteering? Record your departure."
+                                : "At the event venue? Record your arrival."}
                         </Text>
-                        {attendanceConfirmation?.eventId === selectedEvent.id ? (
+                        <View style={styles.webAttendanceConfirmButtons}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Time In to community event"
+                            disabled={selectedEvent.status !== "active" || !!selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent}
+                            onPress={() => setAttendanceConfirmation({ eventId: selectedEvent.id, action: "check-in" })}
+                            style={[styles.webAttendanceActionButton, { flex: 1, justifyContent: "center", opacity: selectedEvent.status === "active" && !selectedParticipation?.checkedInAt && !selectedParticipation?.checkedOutAt ? 1 : 0.45 }]}
+                          >
+                            <Ionicons name="log-in-outline" size={18} color="white" />
+                            <Text style={styles.webAttendanceActionButtonText}>Time In</Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Time Out from community event"
+                            disabled={selectedEvent.status !== "active" || !selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent}
+                            onPress={() => setAttendanceConfirmation({ eventId: selectedEvent.id, action: "check-out" })}
+                            style={[styles.webAttendanceActionButton, { flex: 1, justifyContent: "center", backgroundColor: "#D95750", opacity: selectedEvent.status === "active" && !!selectedParticipation?.checkedInAt && !selectedParticipation?.checkedOutAt ? 1 : 0.45 }]}
+                          >
+                            <Ionicons name="log-out-outline" size={18} color="white" />
+                            <Text style={styles.webAttendanceActionButtonText}>Time Out</Text>
+                          </Pressable>
+                        </View>
+                        {attendanceConfirmation?.eventId === selectedEvent.id && (
                           <View style={styles.webAttendanceConfirmBox}>
                             <Text style={styles.webAttendanceConfirmText}>
-                              {attendanceConfirmation.action === "check-in"
-                                ? "Confirm Time In now? Your arrival time will be saved to Firestore."
-                                : "Confirm Time Out now? Your departure time will be saved to Firestore."}
+                              Confirm {attendanceConfirmation.action === "check-in" ? "Time In" : "Time Out"} using Firebase server time?
                             </Text>
                             <View style={styles.webAttendanceConfirmButtons}>
                               <Pressable accessibilityRole="button" onPress={() => setAttendanceConfirmation(null)} style={styles.webAttendanceCancelButton}>
@@ -2708,28 +2730,15 @@ export default function CommunityEventsScreen() {
                               </Pressable>
                               <Pressable
                                 accessibilityRole="button"
-                                disabled={!!attendanceBusy}
-                                onPress={() => void recordSelfAttendance(selectedEvent, attendanceConfirmation?.action === "check-out" ? "check-out" : "check-in")}
-                                style={[styles.webAttendanceActionButton, !!attendanceBusy && styles.webButtonDisabled]}
+                                disabled={!!attendanceBusy || !!busyEvent}
+                                onPress={() => void recordSelfAttendance(selectedEvent, attendanceConfirmation.action)}
+                                style={[styles.webAttendanceActionButton, (!!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
                               >
-                                <Ionicons name="checkmark-circle-outline" size={17} color="white" />
-                                <Text style={styles.webAttendanceActionButtonText}>Confirm {attendanceConfirmation.action === "check-in" ? "Time In" : "Time Out"}</Text>
+                                {attendanceBusy ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="checkmark-circle-outline" size={17} color="white" />}
+                                <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : "Confirm"}</Text>
                               </Pressable>
                             </View>
                           </View>
-                        ) : (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={!selectedParticipation?.checkedInAt ? "Time In to event" : "Time Out from event"}
-                            disabled={!!attendanceBusy || !!busyEvent}
-                            onPress={() => setAttendanceConfirmation({eventId: selectedEvent.id, action: selectedParticipation?.checkedInAt ? "check-out" : "check-in"})}
-                            style={[styles.webAttendanceActionButton, (!!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
-                          >
-                            {attendanceBusy ? <ActivityIndicator color="white" size="small" /> : <Ionicons name={selectedParticipation?.checkedInAt ? "log-out-outline" : "log-in-outline"} size={19} color="white" />}
-                            <Text style={styles.webAttendanceActionButtonText}>
-                              {attendanceBusy ? "Saving..." : selectedParticipation?.checkedInAt ? "Time Out" : "Time In"}
-                            </Text>
-                          </Pressable>
                         )}
                       </View>
                     )}
