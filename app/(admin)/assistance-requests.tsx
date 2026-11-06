@@ -61,6 +61,7 @@ type ReviewTab =
 
 type ReviewStage = "checks" | "costs" | "residency" | "decision" | "support";
 type ReviewStageFocus = { stage: ReviewStage; ticket: number };
+type MonetaryGoalDraft = { amount: string; purpose: string };
 
 type StoredDocument = {
   documentType?: string;
@@ -1525,6 +1526,7 @@ export default function AssistanceRequestsAdmin() {
   const continueToDonationCampaign = async (
     publicOfficeName: string,
     publicOfficeAddress: string,
+    draft: MonetaryGoalDraft,
   ): Promise<boolean> => {
     if (!selected || selected.verificationStatus !== "verified" || !verificationReview) {
       Alert.alert("Review first", "This request must be verified before setting up donations.");
@@ -1534,15 +1536,31 @@ export default function AssistanceRequestsAdmin() {
       router.push({ pathname: "/donation-list", params: { assistanceRequestId: selected.id } } as any);
       return true;
     }
-    const verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
+    let verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
     if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
-      const message = "This request has no LGU-approved donation amount. Choose LGU or Partner Support, or No Further Support.";
-      if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
-        (globalThis as any).alert(message);
-      } else {
-        Alert.alert("No approved donation amount", message);
+      // Restore the original monetary campaign, not a separate in-kind appeal.
+      // The Admin confirms ONE genuinely new unmet funding goal; the backend
+      // retains earlier reviewed costs and refuses duplicate goals.
+      const amount = Number(draft.amount);
+      const purpose = String(draft.purpose || "").trim();
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000 ||
+        Math.abs(amount * 100 - Math.round(amount * 100)) >= 0.00001 ||
+        purpose.length < 20 || purpose.length > 800) {
+        const message = "Enter an actual unmet donation goal and a short explanation of the needed supplies or services (20 characters minimum).";
+        if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+          (globalThis as any).alert(message);
+        } else {
+          Alert.alert("Check donation goal", message);
+        }
+        return false;
       }
-      return false;
+      const approved = await updateRequest("approve_donation_budget", {
+        approvedGrossCost: amount,
+        confirmedExistingAssistanceAmount: 0,
+        budgetEvidenceNote: purpose,
+      }, true);
+      if (!approved) return false;
+      verifiedAmount = amount;
     }
     const savedPlace = String(selected.assignedLocationName || "").trim();
     const savedAddress = String(selected.assignedLocationAddress || "").trim();
@@ -3460,7 +3478,7 @@ function CompactVerifiedAssistance({
   publicOfficeAddress: string;
   setPublicOfficeAddress: (value: string) => void;
   savingAction: string;
-  onDonation: (name: string, address: string) => Promise<boolean>;
+  onDonation: (name: string, address: string, draft: MonetaryGoalDraft) => Promise<boolean>;
   onSaveOtherSupport: (choice: string) => Promise<boolean>;
   onPublishAppeal: () => Promise<boolean>;
   onCloseAppeal: () => Promise<boolean>;
@@ -3474,6 +3492,17 @@ function CompactVerifiedAssistance({
   );
   const [submitting, setSubmitting] = useState(false);
   const [locationAttempted, setLocationAttempted] = useState(false);
+  const [goalAttempted, setGoalAttempted] = useState(false);
+  const [newGoal, setNewGoal] = useState("");
+  const [newGoalPurpose, setNewGoalPurpose] = useState(() => {
+    const description = String(request.description || request.title || "").trim();
+    return description.length >= 20 ? description.slice(0, 800) : "";
+  });
+  const numericGoal = Number(newGoal);
+  const validNewGoal = Number.isFinite(numericGoal) && numericGoal > 0 &&
+    numericGoal <= 100000000 &&
+    Math.abs(numericGoal * 100 - Math.round(numericGoal * 100)) < 0.00001 &&
+    newGoalPurpose.trim().length >= 20 && newGoalPurpose.trim().length <= 800;
   const hasOffice = String(request.assignedLocationName || "").trim().length >= 3 &&
     String(request.assignedLocationAddress || "").trim().length >= 5;
   const locationError = locationAttempted &&
@@ -3482,13 +3511,8 @@ function CompactVerifiedAssistance({
   const submit = async () => {
     if (busy) return;
     if (choice === "donation" && cap <= 0) {
-      const message = "A monetary campaign needs an approved donation amount. Select another support plan.";
-      if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
-        (globalThis as any).alert(message);
-      } else {
-        Alert.alert("No approved amount", message);
-      }
-      return;
+      setGoalAttempted(true);
+      if (!validNewGoal) return;
     }
     if (choice === "donation" && !hasOffice) {
       setLocationAttempted(true);
@@ -3496,7 +3520,7 @@ function CompactVerifiedAssistance({
     }
     setSubmitting(true);
     try {
-      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress);
+      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress, { amount: newGoal, purpose: newGoalPurpose });
       else await onSaveOtherSupport(choice === "lgu" ? "internal_support" : "not_required");
     } finally {
       setSubmitting(false);
@@ -3532,7 +3556,7 @@ function CompactVerifiedAssistance({
           <Text style={styles.simpleSection}>Choose a support plan</Text>
           <View style={styles.simpleOptions}>
             {([
-              ...(cap > 0 ? ([["donation", "Create Donation Campaign"]] as const) : []),
+              ["donation", cap > 0 ? "Create Donation Campaign" : "Start Monetary Fundraising"],
               ["lgu", "LGU or Partner Support"],
               ["none", "No Further Support"],
             ] as const).map(([key,label]) => (
@@ -3551,7 +3575,47 @@ function CompactVerifiedAssistance({
             ))}
           </View>
 
-          {cap <= 0 && (
+          {cap <= 0 && choice === "donation" && (
+            <View style={styles.assistanceGoalPanel}>
+              <Text style={styles.simpleSection}>Approved fundraising goal</Text>
+              <Text style={styles.simpleCopy}>
+                Enter only the NEW amount still needed. This opens the original Donation Campaign with its money bar and PayMongo test checkout. No hospital bill is required for food or supplies.
+              </Text>
+              <Text style={styles.simpleCheckTitle}>Amount to raise (PHP) *</Text>
+              <TextInput
+                value={newGoal}
+                onChangeText={(value) => setNewGoal(value.replace(/[^0-9.]/g, ""))}
+                editable={!busy}
+                placeholder="Enter confirmed funding goal"
+                placeholderTextColor="#94A3B8"
+                keyboardType="decimal-pad"
+                style={[styles.input, goalAttempted && !validNewGoal && styles.assistanceFieldInvalid]}
+              />
+              <Text style={styles.simpleCheckTitle}>What is this funding for? *</Text>
+              <TextInput
+                value={newGoalPurpose}
+                onChangeText={setNewGoalPurpose}
+                editable={!busy}
+                multiline
+                maxLength={800}
+                placeholder="Briefly explain the needed items or services and how the amount was determined."
+                placeholderTextColor="#94A3B8"
+                style={[styles.textArea, goalAttempted && !validNewGoal && styles.assistanceFieldInvalid]}
+              />
+              {goalAttempted && !validNewGoal && (
+                <ReviewValidationHint message="Enter a positive confirmed amount and at least 20 characters explaining the need. Do not include expenses already funded." />
+              )}
+              {validNewGoal && (
+                <Text style={styles.simpleVerifiedAmount}>Fundraising goal: {money(numericGoal)}</Text>
+              )}
+              {request.publicAppealStatus === "published" && (
+                <Text style={styles.simpleCopy}>
+                  The earlier in-kind appeal stays available until a monetary campaign is successfully published, then closes automatically.
+                </Text>
+              )}
+            </View>
+          )}
+          {cap <= 0 && choice !== "donation" && (
             <View style={styles.assistanceAppealPanel}>
               <View style={{ flex: 1, gap: 5 }}>
                 <Text style={styles.simpleSection}>
@@ -3576,11 +3640,15 @@ function CompactVerifiedAssistance({
           )}
           {choice === "donation" && (
             <View style={styles.simpleField}>
-              <Text style={styles.simpleSection}>Approved donation amount</Text>
-              <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
-              <Text style={styles.simpleCopy}>
-                Approved amount from the LGU review. You can review the campaign before publishing.
-              </Text>
+              {cap > 0 && (
+                <>
+                  <Text style={styles.simpleSection}>Approved donation amount</Text>
+                  <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
+                  <Text style={styles.simpleCopy}>
+                    Approved amount from the LGU review. You can review the campaign before publishing.
+                  </Text>
+                </>
+              )}
               {hasOffice ? (
                 <View style={styles.simpleReviewOfficeCard}>
                   <Ionicons name="business-outline" size={17} color="#047857" />
@@ -5666,6 +5734,7 @@ function DocumentPreviewModal({
 const styles = StyleSheet.create({
   simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
   assistanceAppealPanel: { gap: 12, padding: 16, borderWidth: 1, borderColor: "#D1E6DA", backgroundColor: "#F7FBF8", borderRadius: 12 },
+  assistanceGoalPanel: { gap: 10, padding: 16, borderWidth: 1, borderColor: "#D1E6DA", backgroundColor: "#F7FBF8", borderRadius: 12 },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
   simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
 
