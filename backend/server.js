@@ -9,6 +9,7 @@ const {
   FieldValue,
 } = require("./firebaseAdmin");
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
+const { startCommunityCertificateAutoSync } = require("./communityCertificateAutoSync");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
@@ -11545,6 +11546,9 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// Automatic, idempotent recovery for eligible completed event certificates.
+// Does not change attendance, roles, certificates that already exist, or rules.
+startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
 const port =
   Number(
     process.env.PORT ||

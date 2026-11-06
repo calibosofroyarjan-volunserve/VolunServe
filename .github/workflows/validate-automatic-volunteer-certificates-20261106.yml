@@ -1,0 +1,42 @@
+name: Validate Volunteer Certificates Sidebar and Automatic Issuance (No Deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/(tabs)/_layout.tsx'
+      - 'backend/server.js'
+      - 'backend/communityCertificateAutoSync.js'
+      - 'backend/test-communityCertificateAutoSync.js'
+      - '.github/workflows/validate-automatic-volunteer-certificates-20261106.yml'
+permissions:
+  contents: read
+jobs:
+  verified-certificate-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify automatic recovery, duplicate protection and sidebar
+        run: |
+          node --check backend/communityCertificateAutoSync.js
+          node --check backend/server.js
+          (cd backend && node test-communityCertificateAutoSync.js)
+          (cd backend && node test-communityCertificates.js)
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Confirm existing volunteer Join and other modules remain unmodified
+        shell: bash
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git diff --exit-code origin/main -- 'app/(tabs)/community-events.tsx' 'app/(tabs)/volunteer.tsx' 'app/(tabs)/volunteer.web.tsx' 'app/(tabs)/certificate.tsx' 'app/login.tsx' 'app/signup.tsx' 'firestore.rules' 'app/(admin)' 'app/(superadmin)'
+      - name: TypeScript and web export
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
