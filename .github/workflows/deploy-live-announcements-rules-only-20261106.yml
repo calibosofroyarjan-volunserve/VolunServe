@@ -97,9 +97,12 @@ jobs:
             // Preserve every deployed rule except the single announcements match.
             // Only rewrite exact, known clauses from the inspected active policy.
             let revised=activeBlock.block;
+            let clauseNumber=0;
             function one(before,after){
-              if(!revised.includes(before)||revised.split(before).length!==2)
-                throw Error('Unexpected live announcement policy shape; abort without deployment');
+              clauseNumber++;
+              const count=revised.split(before).length-1;
+              if(count!==1)
+                throw Error('Active announcement clause '+clauseNumber+' mismatched (found '+count+'); abort without deployment');
               revised=revised.replace(before,after);
             }
             if(!revised.includes('function ownAnnouncementArea()') ||
