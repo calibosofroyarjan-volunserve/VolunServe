@@ -11,7 +11,7 @@ const required = [
   ["Offline independent roster", "return !isReporter && skillSearchMatch;"],
   ["Volunteer name search", "volunteer.fullName.toLowerCase().includes(search)"],
   ["Offline support offer label", "Offline · can receive offer"],
-  ["Volunteer assignment view", "Volunteer Task Assignments"],
+  ["Volunteer assignment view", "Send Volunteer Task Offers"],
   ["Spacious roster cards", "styles.volunteerRosterCard"],
   ["Visible Volunteer action", '"Send Task Offer"'],
   ["Five-row roster pagination", "pageFive(volunteerCandidates, volunteerPage)"],
