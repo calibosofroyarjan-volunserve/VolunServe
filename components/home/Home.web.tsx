@@ -203,8 +203,7 @@ export default function WebHome() {
           .map((item) => ({
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
-          }))
-          ;
+          }));
 
         setAnnouncements(nextAnnouncements);
       },
