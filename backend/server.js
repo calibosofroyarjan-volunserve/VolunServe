@@ -10828,8 +10828,20 @@ app.post(
           // timestamp/person. The activity log below records who published it.
           transaction.update(assistanceRef, {
             donationCampaignId: campaignRef.id,
+            ...(assistance.publicAppealStatus === "published" ? { publicAppealStatus: "closed" } : {}),
             updatedAt: FieldValue.serverTimestamp(),
           });
+          // A monetary campaign supersedes its earlier in-kind appeal.
+          // Close the public appeal atomically, without deleting its history
+          // or touching the progress/receipts of any existing campaign.
+          if (assistance.publicAppealStatus === "published") {
+            const appealRef = db.collection("publicAssistanceAppeals").doc(sourceId);
+            transaction.set(appealRef, {
+              status: "closed",
+              closedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
           transaction.set(activityRef, {
             action: "Community Assistance Donation Campaign Published",
             campaignId: campaignRef.id,
