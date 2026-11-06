@@ -4,6 +4,7 @@ on:
     branches: [verify/live-resident-volunteer-announcement-display-20261106]
     paths:
       - .github/workflows/verify-live-resident-volunteer-announcements-20261106.yml
+      - scripts/test-live-announcement-role-display-20261106.cjs
 permissions:
   contents: read
 jobs:
