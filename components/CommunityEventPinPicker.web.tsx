@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
-import { isSjdmEventPoint } from "../lib/communityEventSjdmScope";
+import { isSjdmEventPoint, SJDM_EVENT_BOUNDARY } from "../lib/communityEventSjdmScope";
+import { boundaryBounds } from "../lib/sjdmMapBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -138,6 +139,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       if (!active || !mapContainer.current) return;
       googleRef.current = g;
       const point = draft || savedRef.current || CENTER;
+      const cityBounds = boundaryBounds(SJDM_EVENT_BOUNDARY);
       const map = new g.maps.Map(mapContainer.current, {
         center: { lat: point.latitude, lng: point.longitude },
         zoom: draft || savedRef.current ? 16 : 13,
@@ -145,6 +147,10 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         streetViewControl: false,
         fullscreenControl: true,
         gestureHandling: "greedy",
+        restriction: {latLngBounds: {
+          north: cityBounds.north, south: cityBounds.south,
+          east: cityBounds.east, west: cityBounds.west,
+        }, strictBounds: true},
       });
       mapInstance.current = map;
       map.addListener("click", (event: any) => {
