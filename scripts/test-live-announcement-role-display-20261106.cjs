@@ -43,7 +43,11 @@ async function main(){
     const cutoff=firebase.firestore.Timestamp.fromDate(new Date());
     const q=db=>db.collection("announcements").where("publishAt","<=",cutoff).orderBy("publishAt","desc");
     for(const [role,db] of [["Resident",resident],["Volunteer",volunteer]]){
-      const updates=await assertSucceeds(q(db).get());
+      // Diagnose published document reads separately from query authorization.
+      const direct=await db.collection("announcements").doc(published.id).get().then(()=>true,e=>{console.error(role+" direct get denied:",e.code);return false});
+      const unfiltered=await db.collection("announcements").limit(5).get().then(()=>true,e=>{console.error(role+" simple list denied:",e.code);return false});
+      const updates=await q(db).get().catch(e=>{console.error(role+" published-only query denied:",e.code);throw e});
+      console.log(role+" direct="+direct+" simpleList="+unfiltered);
       assert(updates.docs.some(x=>x.id===published.id),"Community Updates missing published notice: "+role);
       const notifications=await assertSucceeds(q(db).get());
       assert(notifications.docs.some(x=>x.id===published.id),"Notifications announcement feed missing notice: "+role);
