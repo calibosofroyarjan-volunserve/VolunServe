@@ -1,0 +1,75 @@
+name: Restore Volunteer Certificates Sidebar - Guarded Hosting ONLY
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-automatic-volunteer-certificates-20261106.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  scoped-certificates-navigation:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LIVE_BASE: c1c216bb012583926074419f2bd3b40f547c42ec
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check only reviewed certificate files changed since live Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          UNEXPECTED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^((app/\(tabs\)/_layout\.tsx)|(backend/communityCertificateAutoSync\.js)|(backend/server\.js)|(backend/test-communityCertificateAutoSync\.js)|(scripts/test-profile-certificates-account-menu\.cjs)|(\.github/workflows/validate-automatic-volunteer-certificates-20261106\.yml)|(\.github/workflows/release-automatic-volunteer-certificates-20261106\.yml))$' || true)"
+          if [ -n "$UNEXPECTED" ]; then echo "::error::Unexpected modified files: $UNEXPECTED"; exit 1; fi
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/(tabs)/community-events.tsx' 'app/(tabs)/volunteer.tsx' 'app/(tabs)/volunteer.web.tsx' 'app/(tabs)/certificate.tsx' 'app/login.tsx' 'app/signup.tsx' 'app/login.web.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'components/donations' 'firestore.rules' 'firebase.json'
+          echo 'PASS: unrelated original modules preserved'
+      - name: Check existing live SHA before any production changes
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test Volunteer sidebar, original certificates and production build
+        run: |
+          (cd backend && node test-communityCertificateAutoSync.js)
+          (cd backend && node test-communityCertificates.js)
+          node scripts/test-profile-certificates-account-menu.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require correct Firebase credentials and recheck live SHA
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo "::error::Missing Firebase credentials"; exit 1; }
+          node scripts/check-live-hosting.cjs
+      - name: Deploy Hosting ONLY; never touch Auth, Firestore data or rules, Render
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm new exact revision at volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Live Hosting revision verification failed"; exit 1
