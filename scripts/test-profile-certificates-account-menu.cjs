@@ -16,10 +16,13 @@ function menu(id) {
 }
 test("Resident and Volunteer sidebar menus keep only actual service modules",()=>{
  assert.deepEqual(menu("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
- assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events"]);
+ assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
  for(const id of ["residentDesktopTabs","volunteerDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
-   for(const duplicate of ["profile","certificate","volunteer-impact"])
+   for(const duplicate of ["profile","volunteer-impact"])
      assert.ok(!menu(id).includes(duplicate),duplicate+" leaked into "+id);
+ assert.ok(!menu("residentDesktopTabs").includes("certificate"));
+ assert.ok(!menu("residentMobileTabs").includes("certificate"));
+ assert.ok(!menu("volunteerMobileTabs").includes("certificate"),"Mobile sidebar uses desktop menuItems, not bottom tab shortcuts");
  assert.deepEqual(menu("residentMobileTabs"),["index","disaster-response","resident","community-events"]);
  assert.deepEqual(menu("volunteerMobileTabs"),["index","volunteer","community-events"]);
 });
