@@ -11,7 +11,17 @@ const firebase = require("firebase/compat/app");
 require("firebase/compat/firestore");
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw Error("Firestore emulator required");
 if (!process.env.ACTIVE_FIRESTORE_RULES) throw Error("Verified active production rule snapshot required");
-const source = fs.readFileSync(process.env.ACTIVE_FIRESTORE_RULES,"utf8");
+let source = fs.readFileSync(process.env.ACTIVE_FIRESTORE_RULES,"utf8");
+if(process.env.TEST_CANDIDATE_REMOVE_TIMESTAMP_TYPE === "1"){
+  const start=source.indexOf("match /announcements/{announcementId}");
+  const end=source.indexOf("match /identityVerifications/{uid}",start);
+  assert(start>=0&&end>start,"Missing announcement rule boundaries");
+  const block=source.slice(start,end);
+  const patched=block.replace(/&& resource\\.data\\.publishAt is timestamp\\s*&& resource\\.data\\.publishAt <= request\\.time/, "&& resource.data.publishAt <= request.time");
+  assert.notEqual(patched,block,"No published type guard candidate found");
+  source=source.slice(0,start)+patched+source.slice(end);
+  console.log("Candidate test removes only announcement read timestamp type proof, not published cutoff");
+}
 const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
 const approved = (uid, role, extras={}) => ({
   uid, email: uid+"@example.test", status:"approved", role, ...extras,
