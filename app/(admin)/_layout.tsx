@@ -60,16 +60,15 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
   { label: "Announcements", icon: "megaphone-outline", route: "/(admin)/create-announcement" },
-  { label: "Disputes", icon: "shield-checkmark-outline", route: "/(admin)/admin-disputes" },
 ];
 
-type NavSectionId = "people" | "response" | "events" | "funds" | "reports";
+type NavSectionId = "people" | "response" | "events" | "funds" | "updates";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
   { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "LGU Operations"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests"] },
   { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },
-  { id: "reports", title: "Communication & Reports", icon: "analytics-outline", labels: ["Announcements", "Disputes"] },
+  { id: "updates", title: "Announcements", icon: "megaphone-outline", labels: ["Announcements"] },
 ];
 const navActive = (item: NavItem, pathname: string) =>
   pathname === item.route ||
