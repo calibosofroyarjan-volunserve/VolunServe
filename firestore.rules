@@ -702,8 +702,6 @@ service cloud.firestore {
           && resource.data.publishAt <= request.time
         );
       allow create: if isAdmin()
-        && profile().barangay is string
-        && profile().barangay.size() > 0
         && request.resource.data.keys().hasOnly([
           'title',
           'message',
@@ -730,15 +728,13 @@ service cloud.firestore {
         ]
         && request.resource.data.publishAt is timestamp
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.audience == profile().barangay;
+        && request.resource.data.audience == "all";
       allow update: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay
+        && resource.data.createdBy == request.auth.uid
         && request.resource.data.audience == resource.data.audience
         && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdmin()
-        && profile().barangay is string
-        && resource.data.audience == profile().barangay;
+        && resource.data.createdBy == request.auth.uid;
     }
     match /identityVerifications/{uid} {
       function userAfterReview() {
