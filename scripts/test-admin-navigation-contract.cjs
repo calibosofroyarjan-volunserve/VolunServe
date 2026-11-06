@@ -37,7 +37,7 @@ const expectedGroups = [
   {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests"]},
   {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},
-  {title:"Communication & Reports",items:["Announcements","Disputes"]},
+  {title:"Announcements",items:["Announcements"]},
 ];
 const adminLabels = ["Command Center",...expectedGroups.flatMap(group=>group.items)];
 for (let i=0;i<adminLabels.length;i++){
