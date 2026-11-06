@@ -1,0 +1,35 @@
+name: Validate Restored Assistance Monetary Campaign Backend (NO DEPLOY)
+on:
+  push:
+    branches: [fix/restore-assistance-monetary-campaign-backend-20261106]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Syntax, budget validation and no lost monetary collection
+        run: |
+          set -euo pipefail
+          node --check backend/server.js
+          node --check backend/assistanceDonationBudget.js
+          node --test backend/tests/assistanceDonationBudget.test.js
+          node --test backend/tests/publicAssistanceAppeals.test.js
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('backend/server.js','utf8');
+          for(const term of [
+            'transaction.set(campaignRef, campaignPayload)',
+            'verifiedAmountReceived: 0',
+            'funding_goal_must_match_verified_shortage',
+            'db.collection("publicAssistanceAppeals").doc(sourceId)',
+            'transaction.set(appealRef, {',
+            'donationCampaignId: campaignRef.id',
+            'status: "closed"'
+          ]) assert(s.includes(term),"Broken payment workflow or appeal closure "+term);
+          console.log("PASS donation campaign and receipts remain on original monetary path");
+          NODE
