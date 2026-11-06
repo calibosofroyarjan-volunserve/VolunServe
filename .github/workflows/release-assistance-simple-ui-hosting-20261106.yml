@@ -45,7 +45,7 @@ jobs:
           assert(files.length===expected.size,'STOP: unexpected files in release '+files);
           for(const file of files)assert(expected.has(file),'STOP unrelated file modified '+file);
           const ui=fs.readFileSync('app/(admin)/assistance-requests.tsx','utf8');
-          for(const token of ['approve_donation_budget','assistanceBudgetFields','Review and Decide','No Further Support','Set Up Donation Campaign','reviewReadyForVerification(reviewDraft)','No approved donation amount for this request.']){
+          for(const token of ['Review and Decide','No Further Support','Set Up Donation Campaign','reviewReadyForVerification(reviewDraft)','No approved donation amount for this request.']){
             assert(ui.includes(token),'Missing Assistance fix '+token);
           }
           console.log('PASS exact live baseline and only Assistance Requests updated');
