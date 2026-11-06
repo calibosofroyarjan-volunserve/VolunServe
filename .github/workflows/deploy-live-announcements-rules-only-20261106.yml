@@ -104,6 +104,14 @@ jobs:
                !activeBlock.block.includes('allow delete: if isAdmin()'))
               throw Error('Unrecognized old live announcement authority; abort without deployment');
             let revised=next.block;
+            // Preserve the active production suspension gate even if the
+            // announcement-only source was authored before that restriction.
+            for(const operation of ['create','update','delete']){
+              const before='allow '+operation+': if isAdmin()';
+              if(revised.split(before).length!==2)throw Error('Unexpected '+operation+' authorization');
+              revised=revised.replace(before,
+                before+"\\n        && profile().get('adminStatus', 'active') != 'suspended'");
+            }
             if(!revised.includes('allow create: if isAdmin()') ||
                !revised.includes('allow update: if isAdmin()') ||
                !revised.includes('allow delete: if isAdmin()') ||
