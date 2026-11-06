@@ -1,0 +1,109 @@
+name: Safe Live Announcement Query Rule Hotfix - No Hosting or Data Changes
+on:
+  push:
+    branches: [verify/live-resident-volunteer-announcement-display-20261106]
+    paths:
+      - .github/workflows/release-live-announcement-query-hotfix-20261106.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  validate-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      ACTIVE_RULES_PATH: /tmp/active-volunserve-firestore.rules
+      PATCHED_RULES_PATH: /tmp/patched-volunserve-firestore.rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify current live frontend revision, never roll back Hosting
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 6339a61645f831ac5786ca58e30165bf66e421f9
+        run: node scripts/check-live-hosting.cjs
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Require correct service account and never use stale local rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const c=JSON.parse(process.env.FIREBASE_SA);
+          if(c.type!=='service_account'||c.project_id!=='volunserve-3aa5b') throw Error('Wrong credentials: refusing production write');
+          NODE
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ env.FIREBASE_SA }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read and patch ONLY the active live announcements rule, preserving all other rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          const headers={Authorization:'Bearer '+process.env.ACCESS_TOKEN};
+          const get=async p=>{
+            const r=await fetch('https://firebaserules.googleapis.com/v1/'+p,{headers});
+            if(!r.ok)throw Error('Active production rules unavailable: '+r.status);
+            return r.json();
+          };
+          (async()=>{
+            const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
+            assert(release.rulesetName,'Missing current ruleset');
+            const rs=await get(release.rulesetName);
+            assert(rs.source?.files?.length===1,'Active rules file shape changed');
+            const original=rs.source.files[0].content;
+            const first=original.indexOf('    match /announcements/{announcementId} {');
+            const last=original.indexOf('    match /identityVerifications/{uid} {',first);
+            assert(first>=0&&last>first,'Missing exact announcement block');
+            const block=original.slice(first,last);
+            const needle='          && resource.data.publishAt is timestamp\n';
+            assert(block.split(needle).length===2,'Expected single timestamp-type guard in active read policy');
+            assert(block.includes('resource.data.publishAt <= request.time'),'Published-only restriction missing');
+            assert(block.includes("profile().get('adminStatus', 'active') != 'suspended'"),'Suspension gate missing');
+            const changed=block.replace(needle,'');
+            const patched=original.slice(0,first)+changed+original.slice(last);
+            assert(patched.length===original.length-needle.length,'Unexpected change size');
+            assert(patched.slice(0,first)===original.slice(0,first),'Rule prefix changed');
+            assert(patched.slice(first+changed.length)===original.slice(last),'Non-announcement rules changed');
+            fs.writeFileSync(process.env.ACTIVE_RULES_PATH,original);
+            fs.writeFileSync(process.env.PATCHED_RULES_PATH,patched);
+            fs.writeFileSync('/tmp/announcement-original-active-ruleset-name',release.rulesetName);
+            console.log('Audited ONE line removal from current active rules; future-dated announcements remain restricted');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Test full Resident and Volunteer announcement display queries in emulator with patched active policy
+        env:
+          ACTIVE_FIRESTORE_RULES: /tmp/patched-volunserve-firestore.rules
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcement-role-display-20261106.cjs"
+      - name: Verify live rules have not changed since read
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          NAME="$(curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" 'https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore' | node -e "let s='';process.stdin.on('data',b=>s+=b).on('end',()=>console.log(JSON.parse(s).rulesetName||''))")"
+          test "$NAME" = "$(cat /tmp/announcement-original-active-ruleset-name)" || { echo "::error::Live rules changed: do not deploy"; exit 1; }
+      - name: Replace only local firebase.rules with tested patched active rules
+        run: cp "$PATCHED_RULES_PATH" firestore.rules
+      - name: Deploy Firestore RULES ONLY, never Hosting, Auth, database, Functions, Storage or Render
+        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+      - name: Confirm unchanged live web Hosting revision
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 6339a61645f831ac5786ca58e30165bf66e421f9
+        run: node scripts/check-live-hosting.cjs
