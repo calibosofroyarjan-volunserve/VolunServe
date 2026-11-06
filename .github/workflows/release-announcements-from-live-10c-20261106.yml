@@ -2,7 +2,7 @@ name: Release Community Announcements From Live 10c (Hosting Only)
 on:
   push:
     branches: [hotfix/announcement-live-10c-20261106]
-    paths: [.github/workflows/release-announcements-from-live-10c-20261106.yml]
+    paths: [.github/workflows/release-announcements-from-live-10c-20261106.yml, scripts/test-live-announcement-flow.cjs]
 permissions:
   contents: read
 concurrency:
