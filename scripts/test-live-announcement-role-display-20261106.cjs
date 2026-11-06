@@ -17,7 +17,7 @@ if(process.env.TEST_CANDIDATE_REMOVE_TIMESTAMP_TYPE === "1"){
   const end=source.indexOf("match /identityVerifications/{uid}",start);
   assert(start>=0&&end>start,"Missing announcement rule boundaries");
   const block=source.slice(start,end);
-  const patched=block.replace(/&& resource\\.data\\.publishAt is timestamp\\s*&& resource\\.data\\.publishAt <= request\\.time/, "&& resource.data.publishAt <= request.time");
+  const patched=block.replace("&& resource.data.publishAt is timestamp\n          && resource.data.publishAt <= request.time", "&& resource.data.publishAt <= request.time");
   assert.notEqual(patched,block,"No published type guard candidate found");
   source=source.slice(0,start)+patched+source.slice(end);
   console.log("Candidate test removes only announcement read timestamp type proof, not published cutoff");
