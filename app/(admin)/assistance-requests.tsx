@@ -1531,12 +1531,20 @@ export default function AssistanceRequestsAdmin() {
     }
     let verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
     if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
-      const canApprove = Number(selected.estimatedAmount || 0) === 0 &&
-        Number(verificationReview.verifiedGrossCost || 0) === 0 &&
-        verificationReview.costVerificationRequired !== true &&
+      const previousGross = Number(verificationReview.verifiedGrossCost || 0);
+      const previousHelp = Number(verificationReview.confirmedExistingAssistanceAmount || 0);
+      const canApprove = !selected.donationCampaignId &&
+        String(selected.status || "verified").toLowerCase() === "verified" &&
+        Number(selected.remainingAmount || 0) <= 0 &&
+        previousGross >= 0 && previousHelp >= 0 &&
+        Math.abs(previousGross - previousHelp) < 0.01 &&
         !verificationReview.postApprovalBudgetAt;
       if (!canApprove) {
-        Alert.alert("No remaining budget", "A completed monetary review cannot be overwritten. A new verified request is needed for additional funding.");
+        if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+          (globalThis as any).alert("Donation budget is not editable. This request may already have a published campaign or an approved additional budget.");
+        } else {
+          Alert.alert("Budget unavailable", "This request already has a campaign or approved additional budget.");
+        }
         return false;
       }
       const gross = Number(budget.total);
@@ -3484,9 +3492,14 @@ function CompactVerifiedAssistance({
   const [alreadyReceived, setAlreadyReceived] = useState("0");
   const [budgetBasis, setBudgetBasis] = useState("");
   const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
-  const canSetBudget = cap <= 0 && Number(request.estimatedAmount || 0) === 0 &&
-    Number(reviewRecord?.verifiedGrossCost || 0) === 0 &&
-    reviewRecord?.costVerificationRequired !== true && !reviewRecord?.postApprovalBudgetAt;
+  const originalGross = Number(reviewRecord?.verifiedGrossCost || 0);
+  const originalHelp = Number(reviewRecord?.confirmedExistingAssistanceAmount || 0);
+  const canSetBudget = cap <= 0 && !request.donationCampaignId &&
+    String(request.status || "verified").toLowerCase() === "verified" &&
+    Number(request.remainingAmount || 0) <= 0 &&
+    originalGross >= 0 && originalHelp >= 0 &&
+    Math.abs(originalGross - originalHelp) < 0.01 &&
+    !reviewRecord?.postApprovalBudgetAt;
   const numericTotal = Number(budgetTotal);
   const numericAlreadyReceived = Number(alreadyReceived || 0);
   const currencyOk = (amount: number) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.00001;
@@ -3576,12 +3589,15 @@ function CompactVerifiedAssistance({
                 <View style={styles.simpleField}>
                   <Text style={styles.simpleCopy}>
                     {canSetBudget
-                      ? "Confirm the needed items and prices. A hospital bill is not required for food or supplies."
-                      : "No remaining monetary budget is available for this verified request."}
+                      ? "Add only NEW confirmed items or expenses not covered by earlier assistance. Use prices or supplier quotations; a hospital bill is not required for food or supplies."
+                      : "This case cannot start a monetary campaign. It may already have an approved budget or a completed assistance record."}
                   </Text>
+                  {budgetAttempted && !canSetBudget && (
+                    <ReviewValidationHint message="Donation setup is unavailable because the case has no eligible new budget. Review the request status or choose LGU/Partner Support." />
+                  )}
                   {canSetBudget && (
                     <View style={styles.assistanceBudgetFields}>
-                      <Text style={styles.simpleCheckTitle}>Confirmed total cost (PHP) *</Text>
+                      <Text style={styles.simpleCheckTitle}>Additional item cost (PHP) *</Text>
                       <TextInput
                         value={budgetTotal}
                         onChangeText={(value) => setBudgetTotal(value.replace(/[^0-9.]/g, ""))}
@@ -3591,7 +3607,7 @@ function CompactVerifiedAssistance({
                         placeholderTextColor="#94A3B8"
                         style={[styles.input, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
                       />
-                      <Text style={styles.simpleCheckTitle}>Other assistance already received (PHP)</Text>
+                      <Text style={styles.simpleCheckTitle}>Support already received for these NEW items (PHP)</Text>
                       <TextInput
                         value={alreadyReceived}
                         onChangeText={(value) => setAlreadyReceived(value.replace(/[^0-9.]/g, ""))}
@@ -3601,19 +3617,19 @@ function CompactVerifiedAssistance({
                         placeholderTextColor="#94A3B8"
                         style={styles.input}
                       />
-                      <Text style={styles.simpleCheckTitle}>Item breakdown and price basis *</Text>
+                      <Text style={styles.simpleCheckTitle}>NEW items, quantities and price basis *</Text>
                       <TextInput
                         value={budgetBasis}
                         onChangeText={setBudgetBasis}
                         editable={!busy}
                         multiline
                         maxLength={800}
-                        placeholder="Example: 12 bags of dog food x PHP 300, based on local supplier prices."
+                        placeholder="Example: 12 NEW bags of dog food x PHP 300, checked at a local supplier."
                         placeholderTextColor="#94A3B8"
                         style={[styles.textArea, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
                       />
                       {budgetAttempted && !budgetIsValid && (
-                        <ReviewValidationHint message="Enter a valid item budget, any assistance already received, and the price basis (at least 20 characters)." />
+                        <ReviewValidationHint message="Please enter the additional item costs, any support received for those items, and a clear explanation of prices (at least 20 characters)." />
                       )}
                       {budgetIsValid && (
                         <Text style={styles.simpleVerifiedAmount}>
