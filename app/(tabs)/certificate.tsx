@@ -29,6 +29,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import VolunteerAttendanceSummary from "../../components/volunteers/VolunteerAttendanceSummary";
 
 import {
   isApprovedProfile,
@@ -1011,6 +1012,10 @@ export default function CertificateScreen() {
             </Text>
           </View>
         </View>
+
+        {profile?.volunteerAccess === true && user?.uid && (
+          <VolunteerAttendanceSummary uid={user.uid} />
+        )}
 
         {!!error && (
           <View style={styles.errorBox}>
