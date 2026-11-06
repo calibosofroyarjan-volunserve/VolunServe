@@ -28,8 +28,8 @@ jobs:
           python-version: '3.11'
       - name: Test OCR classification, privacy and false-positive cases
         run: |
-          python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
-          python -m py_compile identity-ai/main.py identity-ai/document_screening.py
+          python -m unittest discover -s identity-ai -p 'test_*.py' -v
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/id_portrait_selection.py
   full-client-and-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 35
