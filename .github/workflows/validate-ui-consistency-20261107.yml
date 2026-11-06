@@ -1,0 +1,43 @@
+name: Validate VolunServe UI Consistency (No Deploy)
+on:
+  push:
+    branches: [fix/ui-consistency-dialog-20261107]
+  pull_request:
+    branches: [main]
+    paths:
+      - constants/volunserveUi.ts
+      - components/admin/AdminReviewHero.tsx
+      - components/ui/AppDialogHost.tsx
+      - components/ui/ListPagination.tsx
+      - 'app/(tabs)/volunteer.tsx'
+      - 'app/(tabs)/volunteer.web.tsx'
+      - scripts/test-portal-resident-volunteer-ui-flow.cjs
+      - scripts/test-volunserve-ui-consistency-20261107.cjs
+      - .github/workflows/validate-ui-consistency-20261107.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check UI consistency and existing task/navigation contracts
+        run: |
+          node scripts/test-volunserve-ui-consistency-20261107.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node --test scripts/test-live-dialog-hotfix.cjs
+          node scripts/test-vscode-typescript-jsx.cjs
+      - name: TypeScript compile check
+        run: npx tsc --noEmit --pretty false
+      - name: Build web preview artifacts only
+        run: npx expo export --platform web
