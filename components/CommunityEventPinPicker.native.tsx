@@ -110,6 +110,6 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
       <Text style={{color:"#FFFFFF",fontWeight:"800"}}>{confirmed?"Location Confirmed ✓":"Confirm Event Pin"}</Text>
     </Pressable>
     {!!notice&&<Text accessibilityRole="alert" style={{fontSize:12,color:"#486A73",marginTop:9}}>{notice}</Text>}
-    <Text style={{fontSize:10,color:"#7A9196",marginTop:10}}>Only the confirmed event venue is shared. Live device GPS is not published. Google Maps navigation opens for Volunteers after Admin approval.</Text>
+    <Text style={{fontSize:10,color:"#7A9196",marginTop:10}}>Only the confirmed event venue is published. Volunteers can view an in-app SJDM road route after Admin approval.</Text>
   </View>;
 }
