@@ -108,15 +108,15 @@ jobs:
             if(!revised.includes('function ownAnnouncementArea()') ||
                !revised.includes("profile().get('adminStatus', 'active') != 'suspended'"))
                throw Error('Live announcement policy not recognized; abort');
-            one('|| (approved() && ownAnnouncementArea()\\n          && resource.data.publishAt is timestamp', '|| (approved()\\n          && resource.data.publishAt is timestamp');
+            one('|| (approved() && ownAnnouncementArea()\n          && resource.data.publishAt is timestamp', '|| (approved()\n          && resource.data.publishAt is timestamp');
             one('|| (approved() && ownAnnouncementArea());',
                 '|| (approved() && resource.data.publishAt is timestamp && resource.data.publishAt <= request.time);');
-            one('        && profile().barangay is string\\n        && profile().barangay.size() > 0\\n','');
+            one('        && profile().barangay is string\n        && profile().barangay.size() > 0\n','');
             one('&& request.resource.data.audience == profile().barangay;',
                 '&& request.resource.data.audience == "all";');
-            one('        && profile().barangay is string\\n        && resource.data.audience == profile().barangay\\n',
-                '        && resource.data.createdBy == request.auth.uid\\n');
-            one('        && profile().barangay is string\\n        && resource.data.audience == profile().barangay;',
+            one('        && profile().barangay is string\n        && resource.data.audience == profile().barangay\n',
+                '        && resource.data.createdBy == request.auth.uid\n');
+            one('        && profile().barangay is string\n        && resource.data.audience == profile().barangay;',
                 '        && resource.data.createdBy == request.auth.uid;');
             if(!revised.includes('request.resource.data.audience == "all"') ||
                !revised.includes('resource.data.publishAt <= request.time'))
