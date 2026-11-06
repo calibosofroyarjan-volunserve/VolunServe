@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$VERIFIED_LIVE_SHA"
+          git merge-base --is-ancestor "$VERIFIED_LIVE_SHA" HEAD
           test "$(git diff --name-only "$VERIFIED_LIVE_SHA" HEAD)" = ".github/workflows/deploy-live-announcements-rules-only-20261106.yml"
           test -n "$FIREBASE_SA"
           node <<'NODE'
@@ -54,7 +54,7 @@ jobs:
           credentials_json: ${{ env.FIREBASE_SA }}
           project_id: volunserve-3aa5b
       - uses: google-github-actions/setup-gcloud@v3
-      - name: Strictly compare production active rules with known old live baseline
+      - name: Build a surgical announcement-only patch on actual active production rules
         id: audit
         shell: bash
         env:
@@ -62,45 +62,64 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=${OLD_RULES_SHA}" --jq .content | base64 -d > /tmp/old-firestore.rules
+          cp firestore.rules /tmp/new-announcements-rules-source
           ACCESS_TOKEN="$(gcloud auth print-access-token)"
           export ACCESS_TOKEN
           node <<'NODE'
           const fs=require('fs');
-          const oldRules=fs.readFileSync('/tmp/old-firestore.rules','utf8');
-          const newRules=fs.readFileSync('firestore.rules','utf8');
-          const strip=(source)=>{
-            const start=source.indexOf('    match /announcements/{announcementId} {');
-            const end=source.indexOf('    match /identityVerifications/{uid} {',start);
-            if(start<0||end<0)throw Error('Announcement-only diff anchors not found');
-            return source.slice(0,start)+source.slice(end);
+          const original=fs.readFileSync('/tmp/old-firestore.rules','utf8');
+          const updated=fs.readFileSync('/tmp/new-announcements-rules-source','utf8');
+          const bounds=(value)=>{
+            const start=value.indexOf('    match /announcements/{announcementId} {');
+            const end=value.indexOf('    match /identityVerifications/{uid} {',start);
+            if(start<0||end<0||end<=start)throw Error('Missing exact announcements rule anchors');
+            return {start,end,block:value.slice(start,end)};
           };
-          if(strip(oldRules)!==strip(newRules))throw Error('Unrelated Firestore rules changed; no deployment');
-          if(!newRules.includes('request.resource.data.audience == "all"'))throw Error('New community-wide policy missing');
-          const base='https://firebaserules.googleapis.com/v1/';
+          const old=bounds(original), next=bounds(updated);
+          const without=(v,b)=>v.slice(0,b.start)+v.slice(b.end);
+          if(without(original,old)!==without(updated,next))throw Error('Source contains unrelated changes: abort');
+          if(!next.block.includes('request.resource.data.audience == "all"'))throw Error('Incorrect announcement target: abort');
           const auth={Authorization:'Bearer '+process.env.ACCESS_TOKEN};
-          const get=async path=>{
-            const r=await fetch(base+path,{headers:auth});
-            if(!r.ok)throw Error('Read-only production rules check failed: '+r.status+' '+(await r.text()).slice(0,200));
+          const base='https://firebaserules.googleapis.com/v1/';
+          const get=async p=>{
+            const r=await fetch(base+p,{headers:auth});
+            if(!r.ok)throw Error('Cannot verify live rules: HTTP '+r.status);
             return r.json();
           };
           (async()=>{
             const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
-            if(!release.rulesetName)throw Error('No active ruleset name');
-            const current=await get(release.rulesetName);
-            const files=current.source?.files||[];
-            const file=files.find(x=>x.name==='firestore.rules')||(files.length===1?files[0]:null);
-            if(!file||typeof file.content!=='string')throw Error('Cannot identify active rules source');
-            if(file.content===newRules){
+            if(!release.rulesetName)throw Error('Active release missing ruleset');
+            const ruleset=await get(release.rulesetName);
+            if(ruleset.source?.files?.length!==1||typeof ruleset.source.files[0].content!=='string')
+              throw Error('Unrecognized active rules file layout: abort');
+            const active=ruleset.source.files[0].content;
+            const activeBlock=bounds(active);
+            if(activeBlock.block===next.block){
               fs.appendFileSync(process.env.GITHUB_OUTPUT,'deploy=false\n');
-              console.log('Already serving the required announcement rules. No production changes.');
-            }else if(file.content===oldRules){
-              fs.appendFileSync(process.env.GITHUB_OUTPUT,'deploy=true\n');
-              console.log('Production matches exact original rules. Scoped rules-only deployment authorized.');
-            }else{
-              throw Error('Production Firestore rules do not match verified baseline; STOP without changing production.');
+              console.log('Announcements already updated in active rules; no deployment necessary.');
+              return;
             }
+            if(activeBlock.block!==old.block)throw Error('Active announcement policy differs from known baseline: do not overwrite');
+            const patched=active.slice(0,activeBlock.start)+next.block+active.slice(activeBlock.end);
+            const patchBound=bounds(patched);
+            if(without(active,activeBlock)!==without(patched,patchBound))throw Error('Non-announcement rules changed: abort');
+            fs.writeFileSync('firestore.rules',patched);
+            fs.writeFileSync('/tmp/verified-active-ruleset',release.rulesetName);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,'deploy=true\n');
+            console.log('Verified scoped patch: active non-announcement rules kept byte-for-byte.');
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
+      - name: Validate exact patched active rule set in emulator
+        if: steps.audit.outputs.deploy == 'true'
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-pavia-admin-announcement-emulator.cjs"
+      - name: Reverify active rule release has not changed since audit
+        if: steps.audit.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          NAME="$(curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" 'https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore' | node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>console.log(JSON.parse(s).rulesetName||''))")"
+          test "$NAME" = "$(cat /tmp/verified-active-ruleset)" || { echo "::error::Active rules changed during audit; no deployment"; exit 1; }
       - name: Deploy Firestore security rules ONLY (no Hosting, Auth, database, Storage or Functions)
         if: steps.audit.outputs.deploy == 'true'
         env:
