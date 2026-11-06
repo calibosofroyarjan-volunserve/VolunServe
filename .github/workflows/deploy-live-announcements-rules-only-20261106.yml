@@ -1,0 +1,109 @@
+name: Guarded Live Announcements Rules Only - No Hosting Changes
+on:
+  push:
+    branches: [hotfix/live-announcements-rules-only-20261106]
+    paths:
+      - .github/workflows/deploy-live-announcements-rules-only-20261106.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-only
+  cancel-in-progress: false
+jobs:
+  verify-and-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERIFIED_LIVE_SHA: 70b9785cd7baa9ae82933eeeedc0660ccb2a18dc
+      OLD_RULES_SHA: 53c7d9b9bc39e15ee8c25ffe0e5384d39f3d3c2f
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prove branch is the exact working live Hosting snapshot plus this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$VERIFIED_LIVE_SHA"
+          test "$(git diff --name-only "$VERIFIED_LIVE_SHA" HEAD)" = ".github/workflows/deploy-live-announcements-rules-only-20261106.yml"
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const creds=JSON.parse(process.env.FIREBASE_SA);
+          if(creds.project_id!=='volunserve-3aa5b'||creds.type!=='service_account') throw Error('Wrong Firebase project');
+          console.log('Verified project and isolated branch (no Hosting or application changes).');
+          NODE
+      - name: Install and validate exact live snapshot
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/test-pavia-admin-pagination-announcements.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-pavia-admin-announcement-emulator.cjs"
+      - name: Authenticate to production Firebase project
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ env.FIREBASE_SA }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Strictly compare production active rules with known old live baseline
+        id: audit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=${OLD_RULES_SHA}" --jq .content | base64 -d > /tmp/old-firestore.rules
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          export ACCESS_TOKEN
+          node <<'NODE'
+          const fs=require('fs');
+          const oldRules=fs.readFileSync('/tmp/old-firestore.rules','utf8');
+          const newRules=fs.readFileSync('firestore.rules','utf8');
+          const strip=(source)=>{
+            const start=source.indexOf('    match /announcements/{announcementId} {');
+            const end=source.indexOf('    match /identityVerifications/{uid} {',start);
+            if(start<0||end<0)throw Error('Announcement-only diff anchors not found');
+            return source.slice(0,start)+source.slice(end);
+          };
+          if(strip(oldRules)!==strip(newRules))throw Error('Unrelated Firestore rules changed; no deployment');
+          if(!newRules.includes('request.resource.data.audience == "all"'))throw Error('New community-wide policy missing');
+          const base='https://firebaserules.googleapis.com/v1/';
+          const auth={Authorization:'Bearer '+process.env.ACCESS_TOKEN};
+          const get=async path=>{
+            const r=await fetch(base+path,{headers:auth});
+            if(!r.ok)throw Error('Read-only production rules check failed: '+r.status+' '+(await r.text()).slice(0,200));
+            return r.json();
+          };
+          (async()=>{
+            const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
+            if(!release.rulesetName)throw Error('No active ruleset name');
+            const current=await get(release.rulesetName);
+            const files=current.source?.files||[];
+            const file=files.find(x=>x.name==='firestore.rules')||(files.length===1?files[0]:null);
+            if(!file||typeof file.content!=='string')throw Error('Cannot identify active rules source');
+            if(file.content===newRules){
+              fs.appendFileSync(process.env.GITHUB_OUTPUT,'deploy=false\n');
+              console.log('Already serving the required announcement rules. No production changes.');
+            }else if(file.content===oldRules){
+              fs.appendFileSync(process.env.GITHUB_OUTPUT,'deploy=true\n');
+              console.log('Production matches exact original rules. Scoped rules-only deployment authorized.');
+            }else{
+              throw Error('Production Firestore rules do not match verified baseline; STOP without changing production.');
+            }
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Deploy Firestore security rules ONLY (no Hosting, Auth, database, Storage or Functions)
+        if: steps.audit.outputs.deploy == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        shell: bash
+        run: npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
