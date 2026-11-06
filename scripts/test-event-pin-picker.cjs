@@ -28,8 +28,12 @@ assert(map.includes("event.source !== frame.current?.contentWindow"),
   "Iframe messages must be validated against the current frame");
 assert(map.includes('data?.token !== token.current'), "Map messages must validate a unique token");
 assert(map.includes('sandbox: "allow-scripts"'), "Fallback iframe needs a restrictive sandbox");
-assert(map.includes('lat < 14.65 || lat > 15.0') && map.includes('lng < 120.88 || lng > 121.30'),
-  "Fallback picker must enforce the same region as the proposal API");
+assert(map.includes("insideCity(lat,lng)") && map.includes("SJDM_REFERENCE_GEOMETRY"),
+  "Fallback picker must enforce the real SJDM polygon rather than a bounding rectangle");
+assert(backend.includes("insideSjdmEventArea(latitude, longitude)"),
+  "Proposal API must enforce the same SJDM polygon");
+assert(picker.includes("isSjdmEventPoint(lat, lng)") && native.includes("isSjdmEventPoint(a,b)"),
+  "Web/native event pin pickers must reject positions outside the SJDM polygon");
 assert(picker.includes("validVenue(draft.latitude,draft.longitude)"),
   "Confirmation must reject invalid out-of-region draft");
 assert(picker.includes("onChange(draft.latitude, draft.longitude)"),
